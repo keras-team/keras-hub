@@ -41,10 +41,10 @@ def get_gemma_weights_map(backbone, include_lm_head=False):
         query_kernel = decoder_layer.attention.query_dense.weights[0]
         yield f"model.layers.{i}.self_attn.q_proj.weight", query_kernel
         # Attention key projection
-        key_kernel = decoder_layer.attention.key_dense.weights[0][0]
+        key_kernel = decoder_layer.attention.key_dense.weights[0]
         yield f"model.layers.{i}.self_attn.k_proj.weight", key_kernel
         # Attention value projection
-        value_kernel = decoder_layer.attention.value_dense.weights[0][0]
+        value_kernel = decoder_layer.attention.value_dense.weights[0]
         yield f"model.layers.{i}.self_attn.v_proj.weight", value_kernel
         # Attention output projection
         out_kernel = decoder_layer.attention.output_dense.weights[0]
@@ -83,7 +83,8 @@ def get_gemma_transform_fn(backbone):
             np_tensor = np.reshape(np_tensor, (-1, backbone.hidden_dim))
             np_tensor = np.transpose(np_tensor)
         elif name.endswith("k_proj.weight") or name.endswith("v_proj.weight"):
-            np_tensor = np.transpose(np_tensor)
+            np_tensor = np.transpose(np_tensor, axes=(0, 2, 1))
+            np_tensor = np.reshape(np_tensor, (-1, backbone.hidden_dim))
         elif name.endswith("o_proj.weight"):
             np_tensor = np.transpose(np_tensor, axes=(2, 0, 1))
             np_tensor = np.reshape(np_tensor, (backbone.hidden_dim, -1))
