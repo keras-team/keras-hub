@@ -202,7 +202,7 @@ backbone_presets = {
         "metadata": {
             "description": "1 billion parameter, 26-layer, VaultGemma model.",
             "params": 1038741120,
-            "path": "gemma"
+            "path": "gemma",
         },
         "kaggle_handle": "kaggle://keras/vaultgemma/keras/vault_gemma_1b_en/2",
     },
