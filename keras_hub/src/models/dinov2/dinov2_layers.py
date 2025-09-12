@@ -277,16 +277,16 @@ class DINOV2Embedding(layers.Layer):
         )
         return config
 
-    def compute_output_shape(self, inputs_shape):
-        output_shape = [inputs_shape[0], None, self.hidden_dim]
+    def compute_output_shape(self, input_shape):
+        output_shape = [input_shape[0], None, self.hidden_dim]
         if self.data_format == "channels_last":
-            if inputs_shape[1] is not None and inputs_shape[2] is not None:
-                patch_num = inputs_shape[1] // self.patch_size
+            if input_shape[1] is not None and input_shape[2] is not None:
+                patch_num = input_shape[1] // self.patch_size
                 # 1 is for cls token.
                 output_shape[1] = 1 + self.num_register_tokens + patch_num**2
         else:
-            if inputs_shape[2] is not None and inputs_shape[3] is not None:
-                patch_num = inputs_shape[2] // self.patch_size
+            if input_shape[2] is not None and input_shape[3] is not None:
+                patch_num = input_shape[2] // self.patch_size
                 # 1 is for cls token.
                 output_shape[1] = 1 + self.num_register_tokens + patch_num**2
         return output_shape

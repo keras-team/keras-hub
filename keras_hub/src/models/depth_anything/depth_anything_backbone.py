@@ -58,7 +58,7 @@ class DepthAnythingBackbone(Backbone):
     input_data = {
         "images": np.ones(shape=(1, 518, 518, 3), dtype="float32"),
     }
-    model = keras_hub.models.DINOV2Backbone.from_preset(
+    model = keras_hub.models.DepthAnythingBackbone.from_preset(
         "depth_anything_v2_small"
     )
     model(input_data)
@@ -67,7 +67,7 @@ class DepthAnythingBackbone(Backbone):
     input_data = {
         "images": np.ones(shape=(1, 224, 224, 3), dtype="float32"),
     }
-    model = keras_hub.models.DINOV2Backbone.from_preset(
+    model = keras_hub.models.DepthAnythingBackbone.from_preset(
         "depth_anything_v2_small", image_shape=(224, 224, 3)
     )
     model(input_data)
