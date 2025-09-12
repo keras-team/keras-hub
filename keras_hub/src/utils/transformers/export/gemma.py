@@ -1,9 +1,14 @@
-import keras.ops as ops
+import numpy as np
 
 
-def get_gemma_config(backbone):
+def get_gemma_config(backbone, include_lm_head=False):
     token_embedding_layer = backbone.get_layer("token_embedding")
+    if include_lm_head:
+        architectures = ["GemmaForCausalLM"]  # Full model with LM head
+    else:
+        architectures = ["GemmaForBackbone"]  # Just backbone
     hf_config = {
+        "architectures": architectures,
         "vocab_size": backbone.vocabulary_size,
         "num_hidden_layers": backbone.num_layers,
         "num_attention_heads": backbone.num_query_heads,
@@ -22,79 +27,77 @@ def get_gemma_config(backbone):
 
 
 def get_gemma_weights_map(backbone, include_lm_head=False):
-    weights_dict = {}
-
     # Map token embedding
     token_embedding_layer = backbone.get_layer("token_embedding")
-    weights_dict["model.embed_tokens.weight"] = token_embedding_layer.weights[0]
-
+    yield "model.embed_tokens.weight", token_embedding_layer.weights[0]
     for i in range(backbone.num_layers):
         decoder_layer = backbone.get_layer(f"decoder_block_{i}")
-
         # Pre-attention normalization
-        weights_dict[f"model.layers.{i}.input_layernorm.weight"] = (
-            decoder_layer.pre_attention_norm.weights[0]
+        yield (
+            f"model.layers.{i}.input_layernorm.weight",
+            decoder_layer.pre_attention_norm.weights[0],
         )
-
         # Attention query projection
         query_kernel = decoder_layer.attention.query_dense.weights[0]
-        query_kernel = ops.transpose(query_kernel, axes=(1, 0, 2))
-        query_kernel = ops.reshape(query_kernel, (-1, backbone.hidden_dim))
-        query_kernel = ops.transpose(query_kernel)
-        weights_dict[f"model.layers.{i}.self_attn.q_proj.weight"] = query_kernel
-
+        yield f"model.layers.{i}.self_attn.q_proj.weight", query_kernel
         # Attention key projection
         key_kernel = decoder_layer.attention.key_dense.weights[0][0]
-        weights_dict[f"model.layers.{i}.self_attn.k_proj.weight"] = (
-            ops.transpose(key_kernel)
-        )
-
+        yield f"model.layers.{i}.self_attn.k_proj.weight", key_kernel
         # Attention value projection
         value_kernel = decoder_layer.attention.value_dense.weights[0][0]
-        weights_dict[f"model.layers.{i}.self_attn.v_proj.weight"] = (
-            ops.transpose(value_kernel)
-        )
-
+        yield f"model.layers.{i}.self_attn.v_proj.weight", value_kernel
         # Attention output projection
         out_kernel = decoder_layer.attention.output_dense.weights[0]
-        out_kernel = ops.transpose(out_kernel, axes=(2, 0, 1))
-        out_kernel = ops.reshape(out_kernel, (backbone.hidden_dim, -1))
-        weights_dict[f"model.layers.{i}.self_attn.o_proj.weight"] = out_kernel
-
+        yield f"model.layers.{i}.self_attn.o_proj.weight", out_kernel
         # Post-attention normalization
-        weights_dict[f"model.layers.{i}.post_attention_layernorm.weight"] = (
-            decoder_layer.pre_ffw_norm.weights[0]
+        yield (
+            f"model.layers.{i}.post_attention_layernorm.weight",
+            decoder_layer.pre_ffw_norm.weights[0],
         )
-
         # MLP gate projection
         gate_kernel = decoder_layer.gating_ffw.weights[0]
-        weights_dict[f"model.layers.{i}.mlp.gate_proj.weight"] = ops.transpose(
-            gate_kernel
-        )
-
+        yield f"model.layers.{i}.mlp.gate_proj.weight", gate_kernel
         # MLP up projection
         up_kernel = decoder_layer.gating_ffw_2.weights[0]
-        weights_dict[f"model.layers.{i}.mlp.up_proj.weight"] = ops.transpose(
-            up_kernel
-        )
-
+        yield f"model.layers.{i}.mlp.up_proj.weight", up_kernel
         # MLP down projection
         down_kernel = decoder_layer.ffw_linear.weights[0]
-        weights_dict[f"model.layers.{i}.mlp.down_proj.weight"] = ops.transpose(
-            down_kernel
-        )
-
+        yield f"model.layers.{i}.mlp.down_proj.weight", down_kernel
     # Map final normalization
-    weights_dict["model.norm.weight"] = backbone.get_layer(
-        "final_normalization"
-    ).weights[0]
-
+    yield (
+        "model.norm.weight",
+        backbone.get_layer("final_normalization").weights[0],
+    )
     # Map lm_head if embeddings are not tied
     if include_lm_head and not token_embedding_layer.tie_weights:
-        weights_dict["lm_head.weight"] = ops.transpose(
-            token_embedding_layer.reverse_embeddings
-        )
-    return weights_dict
+        lm_head = token_embedding_layer.reverse_embeddings
+        yield "lm_head.weight", lm_head
+
+
+def get_gemma_transform_fn(backbone):
+    """Return a transform function for Gemma weights."""
+
+    def transform(name, np_tensor):
+        if name.endswith("q_proj.weight"):
+            np_tensor = np.transpose(np_tensor, axes=(1, 0, 2))
+            np_tensor = np.reshape(np_tensor, (-1, backbone.hidden_dim))
+            np_tensor = np.transpose(np_tensor)
+        elif name.endswith("k_proj.weight") or name.endswith("v_proj.weight"):
+            np_tensor = np.transpose(np_tensor)
+        elif name.endswith("o_proj.weight"):
+            np_tensor = np.transpose(np_tensor, axes=(2, 0, 1))
+            np_tensor = np.reshape(np_tensor, (backbone.hidden_dim, -1))
+        elif (
+            name.endswith("gate_proj.weight")
+            or name.endswith("up_proj.weight")
+            or name.endswith("down_proj.weight")
+        ):
+            np_tensor = np.transpose(np_tensor)
+        elif name == "lm_head.weight":
+            np_tensor = np.transpose(np_tensor)
+        return np_tensor
+
+    return transform
 
 
 def get_gemma_tokenizer_config(tokenizer):
