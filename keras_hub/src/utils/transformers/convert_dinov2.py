@@ -29,6 +29,7 @@ def convert_backbone_config(transformers_config):
         "image_shape": (image_size, image_size, 3),
         "position_embedding_shape": (image_size, image_size),
         "antialias_in_interpolation": antialias_in_interpolation,
+        "apply_layernorm": transformers_config.get("apply_layernorm", False),
     }
 
 
