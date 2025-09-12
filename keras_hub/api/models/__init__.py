@@ -677,6 +677,9 @@ from keras_hub.src.models.vit.vit_image_classifier_preprocessor import (
 from keras_hub.src.models.vit_det.vit_det_backbone import (
     ViTDetBackbone as ViTDetBackbone,
 )
+from keras_hub.src.models.voxtral.voxtral_backbone import (
+    VoxTralBackbone as VoxTralBackbone,
+)
 from keras_hub.src.models.whisper.whisper_backbone import (
     WhisperBackbone as WhisperBackbone,
 )
