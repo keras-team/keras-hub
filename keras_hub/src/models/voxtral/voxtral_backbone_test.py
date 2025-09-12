@@ -21,7 +21,6 @@ class VoxTralBackboneTest(TestCase):
             "max_chunk_seconds": 1,
             "sr": 16000,
             "hop_length": 160,
-            "dtype": "float32",
         }
         # Dummy input: shape (batch, time, features)
         self.input_data = ops.ones((1, 2542, 128), dtype="float32")
@@ -29,10 +28,12 @@ class VoxTralBackboneTest(TestCase):
     def test_backbone_basics(self):
         """Test forward pass and output shape with float32."""
         mixed_precision.set_global_policy("float32")
-        model = VoxTralBackbone(**self.init_kwargs)
-        output = model(self.input_data)
-        assert tuple(output.shape) == (1, 650, 16)
-        assert output.dtype.name == "float32"
+        self.run_backbone_test(
+            cls=VoxTralBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(1, 650, 16),
+        )
 
     @pytest.mark.large
     def test_saved_model(self):
