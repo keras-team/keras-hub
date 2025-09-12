@@ -29,12 +29,17 @@ from keras_hub.src.tests.test_case import TestCase
 
 class GptOssCausalLMTest(TestCase):
     def setUp(self):
+        # Define vocabulary and merges inline like GPT-2 tests
+        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
+        self.vocab += ["<|startoftext|>", "<|endoftext|>"]
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
         self.preprocessor = GptOssCausalLMPreprocessor(
             GptOssTokenizer(
-                # Generated using create_gpt_oss_test_proto.py
-                proto=os.path.join(
-                    self.get_test_data_dir(), "gpt_oss_test_vocab.spm"
-                )
+                vocabulary=self.vocab,
+                merges=self.merges
             ),
             sequence_length=8,
         )
