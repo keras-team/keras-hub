@@ -44,7 +44,6 @@ def export_backbone(backbone, path, include_lm_head=False, max_shard_size=2.0):
         include_lm_head: bool. If True, include lm_head weights if applicable.
         max_shard_size: float. Maximum size in GB for each shard.
     """
-    backend = keras.config.backend()
     model_type = backbone.__class__.__name__
     if model_type not in MODEL_CONFIGS:
         raise ValueError(
@@ -58,14 +57,7 @@ def export_backbone(backbone, path, include_lm_head=False, max_shard_size=2.0):
         raise ValueError(f"Transformations not implemented for {model_type}")
 
     def to_numpy(tensor):
-        if backend == "jax":
-            return tensor.numpy()
-        elif backend == "torch":
-            return tensor.detach().cpu().numpy()
-        elif backend == "tensorflow":
-            return tensor.numpy()
-        else:
-            raise ValueError(f"Unsupported backend: {backend}")
+        return tensor.numpy()
 
     # Get config
     get_config_fn = MODEL_CONFIGS[model_type]
