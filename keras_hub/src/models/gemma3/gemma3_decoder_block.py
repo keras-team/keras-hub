@@ -45,6 +45,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         layer_norm_epsilon=1e-6,
         rope_wavelength=10_000.0,
         rope_scaling_factor=1.0,
+        use_bidirectional_attention=False,
         dropout=0,
         **kwargs,
     ):
@@ -66,6 +67,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.rope_wavelength = rope_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.use_bidirectional_attention = use_bidirectional_attention
         self.dropout = dropout
 
         self.pre_attention_norm = RMSNormalization(
@@ -93,6 +95,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
             rope_wavelength=rope_wavelength,
             rope_scaling_factor=rope_scaling_factor,
             dropout=dropout,
+            use_bidirectional_attention=use_bidirectional_attention,
             dtype=self.dtype_policy,
             name="attention",
         )
@@ -209,6 +212,14 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         if cache is not None:
             input_length = ops.shape(cache)[2]
 
+        if self.use_bidirectional_attention:
+            # `output_length` and `input_length` will be the same in this case
+            # because we use bidirectional attention for models like
+            # `EmbeddingGemma` which aren't used for text generation.
+            mask_1 = decoder_mask
+            mask_2 = ops.transpose(mask_1, (0, 2, 1))
+            return mask_1 * mask_2
+
         causal_mask = compute_causal_mask(
             batch_size=batch_size,
             input_length=input_length,
@@ -304,6 +315,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
                 "dropout": self.dropout,
                 "rope_wavelength": self.rope_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "use_bidirectional_attention": self.use_bidirectional_attention,
             }
         )
         return config
