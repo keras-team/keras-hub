@@ -196,6 +196,7 @@ class Gemma3Backbone(Backbone):
         global_rope_scaling_factor=1.0,
         vision_encoder=None,
         layer_norm_epsilon=1e-6,
+        use_bidirectional_attention=False,
         dropout=0,
         dtype=None,
         **kwargs,
@@ -251,6 +252,7 @@ class Gemma3Backbone(Backbone):
                 sliding_window_size=sliding_window_size,
                 rope_wavelength=rope_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
+                use_bidirectional_attention=use_bidirectional_attention,
                 dropout=dropout,
                 dtype=dtype,
                 name=f"decoder_block_{i}",
@@ -357,6 +359,7 @@ class Gemma3Backbone(Backbone):
         self.sliding_window_size = sliding_window_size
         self.local_rope_scaling_factor = local_rope_scaling_factor
         self.global_rope_scaling_factor = global_rope_scaling_factor
+        self.use_bidirectional_attention = use_bidirectional_attention
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
 
@@ -396,6 +399,7 @@ class Gemma3Backbone(Backbone):
                 "vision_encoder": None
                 if self.vision_encoder is None
                 else keras.layers.serialize(self.vision_encoder),
+                "use_bidirectional_attention": self.use_bidirectional_attention,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
             }
