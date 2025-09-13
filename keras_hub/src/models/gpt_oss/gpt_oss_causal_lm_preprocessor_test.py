@@ -13,8 +13,6 @@
 # limitations under the License.
 """Tests for GptOss Causal LM preprocessor."""
 
-import os
-
 import pytest
 
 from keras_hub.src.models.gpt_oss.gpt_oss_causal_lm_preprocessor import (
@@ -34,8 +32,7 @@ class GptOssCausalLMPreprocessorTest(TestCase):
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
         self.tokenizer = GptOssTokenizer(
-            vocabulary=self.vocab,
-            merges=self.merges
+            vocabulary=self.vocab, merges=self.merges
         )
         self.init_kwargs = {
             "tokenizer": self.tokenizer,

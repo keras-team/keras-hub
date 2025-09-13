@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 from unittest.mock import patch
 
 import pytest
@@ -37,10 +36,7 @@ class GptOssCausalLMTest(TestCase):
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
         self.preprocessor = GptOssCausalLMPreprocessor(
-            GptOssTokenizer(
-                vocabulary=self.vocab,
-                merges=self.merges
-            ),
+            GptOssTokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=8,
         )
         self.backbone = GptOssBackbone(
