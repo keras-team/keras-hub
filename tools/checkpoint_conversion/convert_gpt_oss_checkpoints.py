@@ -44,7 +44,7 @@ torch.set_default_device(device)
 
 PRESET_MAP = {
     "gpt_oss_20b_en": "openai/gpt-oss-20b",
-    #"gpt_oss_instruct_8x7b_en": "openai/gpt-oss-20b",
+    # "gpt_oss_instruct_8x7b_en": "openai/gpt-oss-20b",
 }
 
 FLAGS = flags.FLAGS
@@ -132,7 +132,7 @@ def main(_):
     print("\n-> Keras model loaded")
 
     keras_hub_params = keras_hub_backbone.count_params()
-    print(f"\n-> Parameter count comparison:")
+    print("\n-> Parameter count comparison:")
     print(f"   HuggingFace model: {hf_params:,}")
     print(f"   KerasHub model: {keras_hub_params:,}")
     print(f"   Difference: {abs(keras_hub_params - hf_params):,}")
@@ -142,11 +142,15 @@ def main(_):
     print(f"   Difference percentage: {diff_percentage:.6f}%")
 
     # For now, allow small differences and continue with output comparison
-    if abs(keras_hub_params - hf_params) > 1000000:  # Only fail if difference > 1M parameters
-        print(f"   WARNING: Large parameter count difference detected!")
+    if (
+        abs(keras_hub_params - hf_params) > 1000000
+    ):  # Only fail if difference > 1M parameters
+        print("   WARNING: Large parameter count difference detected!")
         assert keras_hub_params == hf_params
     else:
-        print(f"   INFO: Small parameter count difference, continuing with output comparison...")
+        print(
+            "   INFO: Small parameter count difference, continuing with output comparison..."
+        )
 
     keras_hub_output_logits = compute_keras_output(
         keras_hub_backbone, keras_hub_tokenizer
