@@ -10,7 +10,6 @@ from keras_hub.src.export.configs import (
     Seq2SeqLMExporterConfig,
     TextModelExporterConfig
 )
-from keras_hub.src.export.lite_rt import LiteRTExporter
 
 
 def initialize_export_registry():
@@ -22,7 +21,12 @@ def initialize_export_registry():
     ExporterRegistry.register_config("text_model", TextModelExporterConfig)
 
     # Register exporters for different formats
-    ExporterRegistry.register_exporter("lite_rt", LiteRTExporter)
+    try:
+        from keras_hub.src.export.lite_rt import LiteRTExporter
+        ExporterRegistry.register_exporter("lite_rt", LiteRTExporter)
+    except ImportError:
+        # LiteRT not available
+        pass
 
 
 def export_model(model, filepath: str, format: str = "lite_rt", **kwargs):
@@ -35,7 +39,7 @@ def export_model(model, filepath: str, format: str = "lite_rt", **kwargs):
         model: The Keras-Hub model to export
         filepath: Path where to save the exported model (without extension)
         format: Export format (currently supports "lite_rt")
-        **kwargs: Additional arguments passed to the exporter (including verbose)
+        **kwargs: Additional arguments passed to the exporter
     """
     # Ensure registry is initialized
     initialize_export_registry()
@@ -56,35 +60,35 @@ def extend_export_method_for_keras_hub():
         from keras_hub.src.models.task import Task
         import keras
         
-        # Store the original export method
-        original_export = Task.export if hasattr(Task, 'export') else keras.Model.export
+        # Store the original export method if it exists
+        original_export = getattr(Task, 'export', None) or getattr(keras.Model, 'export', None)
         
-        def keras_hub_export(self, filepath: str, format: str = "lite_rt", verbose=None, **kwargs):
+        def keras_hub_export(self, filepath: str, format: str = "lite_rt", verbose: bool = False, **kwargs):
             """Extended export method for Keras-Hub models.
             
             This method extends Keras' export functionality to properly handle
             Keras-Hub models that expect dictionary inputs.
             
             Args:
-                filepath: str. Path where to save the exported model (without extension)
-                format: str. Export format. Supports "lite_rt", "tf_saved_model", etc.
-                verbose: bool. Whether to print verbose output during export
+                filepath: Path where to save the exported model (without extension)
+                format: Export format. Supports "lite_rt", "tf_saved_model", etc.
+                verbose: Whether to print verbose output during export
                 **kwargs: Additional arguments passed to the exporter
             """
             # Check if this is a Keras-Hub model that needs special handling
             if format == "lite_rt" and self._is_keras_hub_model():
                 # Use our Keras-Hub specific export logic
-                # Make sure we don't duplicate the verbose parameter
-                if verbose is not None and 'verbose' not in kwargs:
-                    kwargs['verbose'] = verbose
+                kwargs['verbose'] = verbose
                 export_model(self, filepath, format=format, **kwargs)
             else:
                 # Fall back to the original Keras export method
-                original_export(self, filepath, format=format, verbose=verbose, **kwargs)
+                if original_export:
+                    original_export(self, filepath, format=format, verbose=verbose, **kwargs)
+                else:
+                    raise NotImplementedError(f"Export format '{format}' not supported for this model type")
         
         def _is_keras_hub_model(self):
             """Check if this model is a Keras-Hub model that needs special handling."""
-            # Check if it's a Task (most Keras-Hub models inherit from Task)
             if hasattr(self, '__class__'):
                 class_name = self.__class__.__name__
                 module_name = self.__class__.__module__
@@ -104,18 +108,17 @@ def extend_export_method_for_keras_hub():
                     
             return False
         
-        # Add the helper method to the class
+        # Add the helper method and export method to the Task class
         Task._is_keras_hub_model = _is_keras_hub_model
-        
-        # Override the export method
         Task.export = keras_hub_export
         
-        print("✅ Extended export method for Keras-Hub models")
-        
+    except ImportError:
+        # Task class not available, skip extension
+        pass
     except Exception as e:
-        print(f"⚠️  Failed to extend export method for Keras-Hub models: {e}")
-        import traceback
-        traceback.print_exc()
+        # Log error but don't fail import
+        import warnings
+        warnings.warn(f"Failed to extend export method for Keras-Hub models: {e}")
 
 
 # Initialize the registry when this module is imported

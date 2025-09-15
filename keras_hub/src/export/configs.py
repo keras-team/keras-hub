@@ -27,12 +27,16 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
             return 'CausalLM' in self.model.__class__.__name__
     
     def get_input_signature(self, sequence_length: Optional[int] = None) -> Dict[str, Any]:
-        """Get input signature for causal LM models."""
+        """Get input signature for causal LM models.
+        
+        Args:
+            sequence_length: Optional sequence length. If None, will be inferred from model.
+            
+        Returns:
+            Dictionary mapping input names to their specifications
+        """
         if sequence_length is None:
-            if hasattr(self.model, 'preprocessor') and self.model.preprocessor:
-                sequence_length = getattr(self.model.preprocessor, 'sequence_length', self.DEFAULT_SEQUENCE_LENGTH)
-            else:
-                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
+            sequence_length = self._get_sequence_length()
         
         import keras
         return {
@@ -47,6 +51,12 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
                 name='padding_mask'
             )
         }
+    
+    def _get_sequence_length(self) -> int:
+        """Get sequence length from model or use default."""
+        if hasattr(self.model, 'preprocessor') and self.model.preprocessor:
+            return getattr(self.model.preprocessor, 'sequence_length', self.DEFAULT_SEQUENCE_LENGTH)
+        return self.DEFAULT_SEQUENCE_LENGTH
 
 
 @keras_hub_export("keras_hub.export.TextClassifierExporterConfig")
@@ -62,12 +72,16 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
         return 'TextClassifier' in self.model.__class__.__name__
     
     def get_input_signature(self, sequence_length: Optional[int] = None) -> Dict[str, Any]:
-        """Get input signature for text classifier models."""
+        """Get input signature for text classifier models.
+        
+        Args:
+            sequence_length: Optional sequence length. If None, will be inferred from model.
+            
+        Returns:
+            Dictionary mapping input names to their specifications
+        """
         if sequence_length is None:
-            if hasattr(self.model, 'preprocessor') and self.model.preprocessor:
-                sequence_length = getattr(self.model.preprocessor, 'sequence_length', self.DEFAULT_SEQUENCE_LENGTH)
-            else:
-                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
+            sequence_length = self._get_sequence_length()
         
         import keras
         return {
@@ -82,6 +96,12 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
                 name='padding_mask'
             )
         }
+    
+    def _get_sequence_length(self) -> int:
+        """Get sequence length from model or use default."""
+        if hasattr(self.model, 'preprocessor') and self.model.preprocessor:
+            return getattr(self.model.preprocessor, 'sequence_length', self.DEFAULT_SEQUENCE_LENGTH)
+        return self.DEFAULT_SEQUENCE_LENGTH
 
 
 @keras_hub_export("keras_hub.export.Seq2SeqLMExporterConfig")
@@ -101,12 +121,16 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
             return 'Seq2SeqLM' in self.model.__class__.__name__
     
     def get_input_signature(self, sequence_length: Optional[int] = None) -> Dict[str, Any]:
-        """Get input signature for seq2seq models."""
+        """Get input signature for seq2seq models.
+        
+        Args:
+            sequence_length: Optional sequence length. If None, will be inferred from model.
+            
+        Returns:
+            Dictionary mapping input names to their specifications
+        """
         if sequence_length is None:
-            if hasattr(self.model, 'preprocessor') and self.model.preprocessor:
-                sequence_length = getattr(self.model.preprocessor, 'sequence_length', self.DEFAULT_SEQUENCE_LENGTH)
-            else:
-                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
+            sequence_length = self._get_sequence_length()
         
         import keras
         return {
@@ -131,6 +155,12 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
                 name='decoder_padding_mask'
             )
         }
+    
+    def _get_sequence_length(self) -> int:
+        """Get sequence length from model or use default."""
+        if hasattr(self.model, 'preprocessor') and self.model.preprocessor:
+            return getattr(self.model.preprocessor, 'sequence_length', self.DEFAULT_SEQUENCE_LENGTH)
+        return self.DEFAULT_SEQUENCE_LENGTH
 
 
 @keras_hub_export("keras_hub.export.TextModelExporterConfig")
@@ -147,12 +177,16 @@ class TextModelExporterConfig(KerasHubExporterConfig):
         return hasattr(self.model, 'preprocessor') and self.model.preprocessor and hasattr(self.model.preprocessor, 'tokenizer')
     
     def get_input_signature(self, sequence_length: Optional[int] = None) -> Dict[str, Any]:
-        """Get input signature for generic text models."""
+        """Get input signature for generic text models.
+        
+        Args:
+            sequence_length: Optional sequence length. If None, will be inferred from model.
+            
+        Returns:
+            Dictionary mapping input names to their specifications
+        """
         if sequence_length is None:
-            if hasattr(self.model, 'preprocessor') and self.model.preprocessor:
-                sequence_length = getattr(self.model.preprocessor, 'sequence_length', self.DEFAULT_SEQUENCE_LENGTH)
-            else:
-                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
+            sequence_length = self._get_sequence_length()
         
         import keras
         return {
@@ -167,3 +201,9 @@ class TextModelExporterConfig(KerasHubExporterConfig):
                 name='padding_mask'
             )
         }
+    
+    def _get_sequence_length(self) -> int:
+        """Get sequence length from model or use default."""
+        if hasattr(self.model, 'preprocessor') and self.model.preprocessor:
+            return getattr(self.model.preprocessor, 'sequence_length', self.DEFAULT_SEQUENCE_LENGTH)
+        return self.DEFAULT_SEQUENCE_LENGTH

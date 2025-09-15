@@ -28,7 +28,7 @@ class LiteRTExporter(KerasHubExporter):
     def __init__(self, config: KerasHubExporterConfig, 
                  max_sequence_length: Optional[int] = None,
                  aot_compile_targets: Optional[list] = None,
-                 verbose: Optional[int] = None,
+                 verbose: bool = False,
                  **kwargs):
         """Initialize the LiteRT exporter.
         
@@ -36,7 +36,7 @@ class LiteRTExporter(KerasHubExporter):
             config: Exporter configuration for the model
             max_sequence_length: Maximum sequence length for conversion
             aot_compile_targets: List of AOT compilation targets
-            verbose: Verbosity level
+            verbose: Enable verbose logging
             **kwargs: Additional arguments passed to the underlying exporter
         """
         super().__init__(config, **kwargs)
@@ -49,7 +49,7 @@ class LiteRTExporter(KerasHubExporter):
         
         self.max_sequence_length = max_sequence_length
         self.aot_compile_targets = aot_compile_targets
-        self.verbose = verbose or 0
+        self.verbose = verbose
         
         # Get sequence length from model if not provided
         if self.max_sequence_length is None:
@@ -69,19 +69,13 @@ class LiteRTExporter(KerasHubExporter):
             filepath: Path where to save the exported model (without extension)
         """
         if self.verbose:
-            print(f"🚀 Starting LiteRT export for {self.config.MODEL_TYPE} model...")
-            print(f"   Model: {type(self.model).__name__}")
-            print(f"   Expected inputs: {self.config.EXPECTED_INPUTS}")
-            print(f"   Sequence length: {self.max_sequence_length}")
+            print(f"Starting LiteRT export for {self.config.MODEL_TYPE} model")
         
         # Ensure model is built with correct input structure
         self._ensure_model_built(self.max_sequence_length)
         
         # Get the proper input signature for this model type
         input_signature = self.config.get_input_signature(self.max_sequence_length)
-        
-        if self.verbose:
-            print(f"   Input signature: {list(input_signature.keys())}")
         
         # Create a wrapper that adapts the Keras-Hub model to work with Keras LiteRT exporter
         wrapped_model = self._create_export_wrapper()
@@ -92,12 +86,19 @@ class LiteRTExporter(KerasHubExporter):
             input_signature=input_signature,
             max_sequence_length=self.max_sequence_length,
             aot_compile_targets=self.aot_compile_targets,
-            verbose=self.verbose,
+            verbose=1 if self.verbose else 0,
             **self.export_kwargs
         )
         
         try:
             # Export using the Keras exporter
+            keras_exporter.export(filepath)
+            
+            if self.verbose:
+                print(f"Export completed successfully to: {filepath}.tflite")
+                
+        except Exception as e:
+            raise RuntimeError(f"LiteRT export failed: {e}") from e
             keras_exporter.export(filepath)
             
             if self.verbose:
@@ -120,12 +121,11 @@ class LiteRTExporter(KerasHubExporter):
         class KerasHubModelWrapper(keras.Model):
             """Wrapper that adapts Keras-Hub models for export."""
             
-            def __init__(self, keras_hub_model, expected_inputs, input_signature, verbose=False):
+            def __init__(self, keras_hub_model, expected_inputs, input_signature):
                 super().__init__()
                 self.keras_hub_model = keras_hub_model
                 self.expected_inputs = expected_inputs
                 self.input_signature = input_signature
-                self.verbose = verbose
                 
                 # Create Input layers based on the input signature
                 self._input_layers = []
@@ -139,9 +139,6 @@ class LiteRTExporter(KerasHubExporter):
                             name=input_name
                         )
                         self._input_layers.append(input_layer)
-                        
-                        if self.verbose:
-                            print(f"Created input layer: {input_name} - shape={spec.shape} dtype={spec.dtype}")
                 
                 # Store references to the original model's variables
                 self._variables = keras_hub_model.variables
@@ -181,8 +178,8 @@ class LiteRTExporter(KerasHubExporter):
                     if i < len(inputs):
                         input_dict[input_name] = inputs[i]
                     else:
-                        # Handle missing inputs - this shouldn't happen but let's be safe
-                        print(f"⚠️  Missing input for {input_name}")
+                        # Handle missing inputs
+                        raise ValueError(f"Missing input for {input_name}")
                         
                 return self.keras_hub_model(input_dict, training=training, mask=mask)
             
@@ -193,8 +190,7 @@ class LiteRTExporter(KerasHubExporter):
         return KerasHubModelWrapper(
             self.model, 
             self.config.EXPECTED_INPUTS, 
-            self.config.get_input_signature(self.max_sequence_length),
-            verbose=self.verbose
+            self.config.get_input_signature(self.max_sequence_length)
         )
 
 

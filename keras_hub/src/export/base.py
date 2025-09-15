@@ -5,7 +5,7 @@ It follows the Optimum pattern of having different exporters for different model
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, Union, List
+from typing import Dict, Any, Optional, List, Type
 
 try:
     import keras
@@ -128,31 +128,27 @@ class KerasHubExporter(ABC):
         """
         pass
     
-    def _ensure_model_built(self, sequence_length: Optional[int] = None):
+    def _ensure_model_built(self, sequence_length: Optional[int] = None) -> None:
         """Ensure the model is properly built with correct input structure.
         
         Args:
             sequence_length: Optional sequence length for dummy inputs
         """
         if not self.model.built:
-            print("🔧 Building model with sample inputs...")
-            
             dummy_inputs = self.config.get_dummy_inputs(sequence_length)
             
             try:
                 # Build the model with the correct input structure
                 _ = self.model(dummy_inputs, training=False)
-                print("✅ Model built successfully")
             except Exception as e:
-                print(f"⚠️  Model building failed: {e}")
-                # Try alternative approach
+                # Try alternative approach using build() method
                 try:
                     input_shapes = {key: tensor.shape for key, tensor in dummy_inputs.items()}
                     self.model.build(input_shape=input_shapes)
-                    print("✅ Model built using .build() method")
-                except Exception as e2:
-                    print(f"❌ Alternative building method also failed: {e2}")
-                    raise
+                except Exception:
+                    raise ValueError(
+                        f"Failed to build model: {e}. Please ensure the model is properly constructed."
+                    )
 
 
 class ExporterRegistry:
@@ -162,7 +158,7 @@ class ExporterRegistry:
     _exporters = {}
     
     @classmethod
-    def register_config(cls, model_type: str, config_class: type):
+    def register_config(cls, model_type: str, config_class: Type[KerasHubExporterConfig]) -> None:
         """Register a configuration class for a model type.
         
         Args:
@@ -172,7 +168,7 @@ class ExporterRegistry:
         cls._configs[model_type] = config_class
     
     @classmethod
-    def register_exporter(cls, format_name: str, exporter_class: type):
+    def register_exporter(cls, format_name: str, exporter_class: Type[KerasHubExporter]) -> None:
         """Register an exporter class for a format.
         
         Args:
@@ -190,6 +186,9 @@ class ExporterRegistry:
             
         Returns:
             An appropriate exporter configuration instance
+            
+        Raises:
+            ValueError: If no configuration is found for the model type
         """
         model_type = cls._detect_model_type(model)
         
@@ -200,7 +199,7 @@ class ExporterRegistry:
         return config_class(model)
     
     @classmethod
-    def get_exporter(cls, format_name: str, config: KerasHubExporterConfig, **kwargs):
+    def get_exporter(cls, format_name: str, config: KerasHubExporterConfig, **kwargs) -> KerasHubExporter:
         """Get an exporter for the specified format.
         
         Args:
@@ -210,6 +209,9 @@ class ExporterRegistry:
             
         Returns:
             An appropriate exporter instance
+            
+        Raises:
+            ValueError: If no exporter is found for the format
         """
         if format_name not in cls._exporters:
             raise ValueError(f"No exporter found for format: {format_name}")
