@@ -237,13 +237,13 @@ class DisentangledSelfAttention(keras.layers.Layer):
             x1=rel_pos,
             x2=log_pos * sign,
         )
-        bucket_pos = ops.cast(bucket_pos, dtype="int32")
+        bucket_pos = ops.cast(bucket_pos, dtype="int")
 
         return bucket_pos
 
     def _get_rel_pos(self, num_positions):
         ids = ops.arange(num_positions)
-        ids = ops.cast(ids, dtype="int32")
+        ids = ops.cast(ids, dtype="int")
         query_ids = ops.expand_dims(ids, axis=-1)
         key_ids = ops.expand_dims(ids, axis=0)
         key_ids = ops.repeat(key_ids, repeats=num_positions, axis=0)
