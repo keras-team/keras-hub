@@ -2,6 +2,7 @@ import keras
 from absl.testing import parameterized
 from keras import ops
 from keras import random
+from keras.src import backend
 
 from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_hub.src.tests.test_case import TestCase
@@ -92,9 +93,14 @@ class TransformerEncoderTest(TestCase):
         )
         inputs = random.uniform(shape=[1, 4, 6])
         mask = ops.array([[True, True, False, False]])
-        inputs._keras_mask = mask
-        outputs = encoder(inputs)
-        self.assertAllEqual(outputs._keras_mask, mask)
+        if keras.config.backend() == "mlx":
+            backend.set_keras_mask(inputs, mask)
+            outputs = encoder(inputs)
+            self.assertAllEqual(backend.get_keras_mask(outputs), mask)
+        else:
+            inputs._keras_mask = mask
+            outputs = encoder(inputs)
+            self.assertAllEqual(outputs._keras_mask, mask)
 
     def test_attention_scores(self):
         encoder = TransformerEncoder(intermediate_dim=4, num_heads=2)
