@@ -87,6 +87,9 @@ from keras_hub.src.models.deit.deit_image_converter import (
 from keras_hub.src.models.densenet.densenet_image_converter import (
     DenseNetImageConverter as DenseNetImageConverter,
 )
+from keras_hub.src.models.depth_anything.depth_anything_image_converter import (
+    DepthAnythingImageConverter as DepthAnythingImageConverter,
+)
 from keras_hub.src.models.dinov2.dinov2_image_converter import (
     DINOV2ImageConverter as DINOV2ImageConverter,
 )
