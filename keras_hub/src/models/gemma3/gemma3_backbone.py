@@ -210,7 +210,6 @@ class Gemma3Backbone(Backbone):
                 scale=1.0,
                 mode="fan_in",
                 distribution="untruncated_normal",
-                seed=None,
             ),
             dtype=dtype,
             logit_soft_cap=final_logit_soft_cap,
