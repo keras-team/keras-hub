@@ -204,6 +204,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         return attention_output, attention_scores
 
     def _make_log_bucket_position(self, rel_pos):
+        rel_pos = ops.cast(rel_pos, dtype="int32")
         dtype = rel_pos.dtype
         sign = ops.sign(rel_pos)
         mid = self.bucket_size // 2
