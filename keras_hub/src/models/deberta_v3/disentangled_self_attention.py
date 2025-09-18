@@ -204,11 +204,9 @@ class DisentangledSelfAttention(keras.layers.Layer):
         return attention_output, attention_scores
 
     def _make_log_bucket_position(self, rel_pos):
-        rel_pos = ops.cast(rel_pos, dtype="int32")
         dtype = rel_pos.dtype
         sign = ops.sign(rel_pos)
-        mid = self.bucket_size // 2
-        mid = ops.cast(mid, dtype=dtype)
+        mid = ops.cast(self.bucket_size // 2, dtype=dtype)
 
         # If `rel_pos[i][j]` is out of bounds, assign value `mid`.
         abs_pos = ops.where(
@@ -238,13 +236,13 @@ class DisentangledSelfAttention(keras.layers.Layer):
             x1=rel_pos,
             x2=log_pos * sign,
         )
-        bucket_pos = ops.cast(bucket_pos, dtype="int")
+        bucket_pos = ops.cast(bucket_pos, dtype=dtype)
 
         return bucket_pos
 
     def _get_rel_pos(self, num_positions):
         ids = ops.arange(num_positions)
-        ids = ops.cast(ids, dtype="int")
+        ids = ops.cast(ids, dtype="int32")
         query_ids = ops.expand_dims(ids, axis=-1)
         key_ids = ops.expand_dims(ids, axis=0)
         key_ids = ops.repeat(key_ids, repeats=num_positions, axis=0)
