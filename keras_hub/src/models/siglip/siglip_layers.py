@@ -70,7 +70,7 @@ class SigLIPVisionEmbedding(layers.Layer):
         self.position_ids = self.add_weight(
             shape=(1, self.num_positions),
             initializer="zeros",
-            # Let the backend determine the int dtype. For example, tf
+            # Let the backend determine the int32 dtype. For example, tf
             # requires int64 for correct device placement, whereas jax and torch
             # don't.
             dtype="int32",
@@ -194,7 +194,7 @@ class SigLIPTextEmbedding(layers.Layer):
         self.position_ids = self.add_weight(
             shape=(1, self.sequence_length),
             initializer="zeros",
-            # Let the backend determine the int dtype. For example, tf
+            # Let the backend determine the int32 dtype. For example, tf
             # requires int64 for correct device placement, whereas jax and torch
             # don't.
             dtype="int32",
