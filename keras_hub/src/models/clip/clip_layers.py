@@ -55,7 +55,7 @@ class CLIPVisionEmbedding(layers.Layer):
             # Let the backend determine the int dtype. For example, tf
             # requires int64 for correct device placement, whereas jax and torch
             # don't.
-            dtype=int,
+            dtype="int64",
             trainable=False,
             name="position_ids",
         )
