@@ -48,78 +48,14 @@ class DiffBinBackbone(Backbone):
                 f"{image_encoder} of type {type(image_encoder)}."
             )
 
-        enc_input_shape = None
-        if getattr(image_encoder, "inputs", None):
-            try:
-                raw_shape = image_encoder.inputs[0].shape.as_list()[1:]
-            except Exception:
-                raw_shape = getattr(image_encoder, "input_shape", None)
-
-            if raw_shape:
-                cleaned = tuple(d for d in raw_shape if d is not None)
-                if cleaned:
-                    enc_input_shape = cleaned
-
-        if enc_input_shape is None:
-            enc_input_shape = (*image_shape[:2], 3)
-
-        image_data_format = keras.config.image_data_format()
-
-        if image_data_format == "channels_first":
-            inputs = keras.layers.Input(
-                shape=(3, *enc_input_shape[:2]),  # (C, H, W)
-                name="inputs",
-            )
-        else:
-            inputs = keras.layers.Input(
-                shape=(*enc_input_shape[:2], 3),  # (H, W, C)
-                name="inputs",
-            )
+        # === Functional Model ===
+        inputs = keras.layers.Input(shape=image_shape, name="inputs")
+        if image_encoder.data_format == "channels_first":
+            inputs = keras.ops.transpose(inputs, (0, 3, 1, 2))
         fpn_model = keras.Model(
-            inputs=image_encoder.inputs,
-            outputs=image_encoder.pyramid_outputs,
-            dtype=dtype,
+            inputs=image_encoder.inputs, outputs=image_encoder.pyramid_outputs
         )
-        try:
-            encoder_input_shape = image_encoder.inputs[0].shape.as_list()[1:]
-        except Exception:
-            encoder_input_shape = getattr(image_encoder, "input_shape", None)
-
-        encoder_channels_last = False
-        if encoder_input_shape:
-            encoder_channels_last = encoder_input_shape[-1] == 3
-
-        current_channels_last = image_data_format == "channels_last"
-
-        if encoder_input_shape and (
-            encoder_channels_last != current_channels_last
-        ):
-            if current_channels_last:
-                preproc = layers.Permute(
-                    (3, 1, 2), name="permute_to_channels_first"
-                )(inputs)
-            else:
-                preproc = layers.Permute(
-                    (2, 3, 1), name="permute_to_channels_last"
-                )(inputs)
-
-            raw_fpn_output = fpn_model(preproc)
-
-            converted_fpn_output = {}
-            for k, v in raw_fpn_output.items():
-                if encoder_channels_last and not current_channels_last:
-                    converted_fpn_output[k] = layers.Permute(
-                        (3, 1, 2), name=f"permute_{k}_to_channels_first"
-                    )(v)
-                elif not encoder_channels_last and current_channels_last:
-                    converted_fpn_output[k] = layers.Permute(
-                        (2, 3, 1), name=f"permute_{k}_to_channels_last"
-                    )(v)
-                else:
-                    converted_fpn_output[k] = v
-            fpn_output = converted_fpn_output
-        else:
-            fpn_output = fpn_model(inputs)
+        fpn_output = fpn_model(inputs)
         x = diffbin_fpn_model(
             fpn_output, out_channels=fpn_channels, dtype=dtype
         )
@@ -321,8 +257,6 @@ def diffbin_head(inputs, in_channels, kernel_list, name, dtype):
         dtype=dtype,
         data_format=image_data_format,
     )(x)
-    if keras.config.image_data_format() == "channels_first":
-        x = layers.Permute((2, 3, 1), name=f"{name}_permute_output")(x)
     return x
 
 

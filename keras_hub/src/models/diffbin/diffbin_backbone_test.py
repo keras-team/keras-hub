@@ -40,8 +40,6 @@ class DiffBinBackboneTest(TestCase):
             "probability_maps": (2, 640, 640, 1),
             "threshold_maps": (2, 640, 640, 1),
         }
-        backend = keras.config.backend()
-        run_data_format = True if backend != "jax" else False
 
         self.run_vision_backbone_test(
             cls=DiffBinBackbone,
@@ -50,7 +48,7 @@ class DiffBinBackboneTest(TestCase):
             expected_output_shape=expected_output_shape,
             run_mixed_precision_check=True,
             run_quantization_check=False,
-            run_data_format_check=run_data_format,
+            run_data_format_check=True,
         )
 
     @pytest.mark.large
