@@ -52,10 +52,9 @@ class CLIPVisionEmbedding(layers.Layer):
         self.position_ids = self.add_weight(
             shape=(1, self.num_positions),
             initializer="zeros",
-            # Let the backend determine the int dtype. For example, tf
-            # requires int64 for correct device placement, whereas jax and torch
-            # don't.
-            dtype="int64",
+            # dtype = int is causing failure for tensorflow backend,
+            # int32 works fine for all backends.
+            dtype="int32",
             trainable=False,
             name="position_ids",
         )
