@@ -70,9 +70,9 @@ class SigLIPVisionEmbedding(layers.Layer):
         self.position_ids = self.add_weight(
             shape=(1, self.num_positions),
             initializer="zeros",
-            # Let the backend determine the int32 dtype. For example, tf
-            # requires int64 for correct device placement, whereas jax and torch
-            # don't.
+            # Explicitly use "int32" for backend compatibility. Using `int` can
+            # lead to dtype mismatches between backends (e.g., int64 on
+            # TensorFlow), while "int32" is consistent across all backends.
             dtype="int32",
             trainable=False,
             name="position_ids",
@@ -194,9 +194,9 @@ class SigLIPTextEmbedding(layers.Layer):
         self.position_ids = self.add_weight(
             shape=(1, self.sequence_length),
             initializer="zeros",
-            # Let the backend determine the int32 dtype. For example, tf
-            # requires int64 for correct device placement, whereas jax and torch
-            # don't.
+            # Explicitly use "int32" for backend compatibility. Using `int` can
+            # lead to dtype mismatches between backends (e.g., int64 on
+            # TensorFlow), while "int32" is consistent across all backends.
             dtype="int32",
             trainable=False,
             name="position_ids",
