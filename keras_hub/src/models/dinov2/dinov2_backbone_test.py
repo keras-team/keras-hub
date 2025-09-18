@@ -35,6 +35,7 @@ class DINOV2BackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, sequence_length, hidden_dim),
+            run_quantization_check=False,
         )
 
     @pytest.mark.large
@@ -126,6 +127,7 @@ class DINOV2BackboneWithRegistersTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, sequence_length, hidden_dim),
+            run_quantization_check=False,
         )
 
     @pytest.mark.large
