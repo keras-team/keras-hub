@@ -1,5 +1,5 @@
 import keras
-from keras import ops
+from keras import ops, layers
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.reversible_embedding import (
@@ -424,3 +424,106 @@ class Gemma3Backbone(Backbone):
         )
 
         return super().from_config(config)
+
+# --- ADD/REPLACE WITH THIS CODE ---
+
+class MeanPooling(layers.Layer):
+    """
+    This layer calculates the mean of the token embeddings, ignoring
+    padded tokens.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.supports_masking = True
+
+    def call(self, inputs):
+        # --- THIS IS THE CHANGE ---
+        # Unpack inputs from a single list
+        sequence_output, padding_mask = inputs
+        # --- -------------------- ---
+
+        mask = ops.expand_dims(
+            ops.cast(padding_mask, sequence_output.dtype), axis=-1
+        )
+        masked_output = sequence_output * mask
+        sum_embeddings = ops.sum(masked_output, axis=1)
+
+        num_tokens = ops.sum(ops.cast(padding_mask, sequence_output.dtype), axis=1)
+        num_tokens = ops.expand_dims(num_tokens, axis=1)
+
+        num_tokens = ops.maximum(num_tokens, 1e-9)
+
+        mean_embeddings = sum_embeddings / num_tokens
+        return mean_embeddings
+
+    def compute_output_shape(self, input_shape):
+        # Now input_shape will correctly be a list of two shapes
+        sequence_output_shape, padding_mask_shape = input_shape
+        return (sequence_output_shape[0], sequence_output_shape[2])
+
+
+@keras_hub_export("keras_hub.models.Gemma3EmbeddingModel")
+class Gemma3EmbeddingModel(keras.Model):
+    """
+    A Gemma3 model for generating sequence embeddings.
+    (Docstring...)
+    """
+
+    def __init__(
+        self,
+        backbone: Gemma3Backbone,
+        embedding_dim: int,
+        normalize: bool = True,
+        **kwargs,
+    ):
+        # === Layers ===
+        self.backbone = backbone
+        self.pooling_layer = MeanPooling(
+            dtype=backbone.dtype, name="mean_pooling"
+        )
+        self.projection_layer = layers.Dense(
+            embedding_dim, dtype=backbone.dtype, name="embedding_projection"
+        )
+        self.normalize_output = normalize
+        if self.normalize_output:
+            self.normalization_layer = layers.UnitNormalization(
+                axis=-1, dtype=backbone.dtype, name="l2_normalization"  # <-- FIX
+            )
+
+        # === Functional Model ===
+        inputs = self.backbone.input 
+        sequence_output = self.backbone.outputs[0]
+        padding_mask = inputs["padding_mask"] 
+
+        # --- THIS IS THE CHANGE ---
+        # Pass the inputs as a single list
+        pooled_output = self.pooling_layer([sequence_output, padding_mask])
+        # --- -------------------- ---
+        
+        embedding = self.projection_layer(pooled_output)
+
+        if self.normalize_output:
+            embedding = self.normalization_layer(embedding)
+
+        super().__init__(inputs=inputs, outputs=embedding, **kwargs)
+
+        # === Config ===
+        self.embedding_dim = embedding_dim
+        self.normalize = normalize
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "backbone": keras.layers.serialize(self.backbone),
+                "embedding_dim": self.embedding_dim,
+                "normalize": self.normalize,
+            }
+        )
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        config["backbone"] = keras.layers.deserialize(config["backbone"])
+        return cls(**config)
