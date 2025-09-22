@@ -8,6 +8,7 @@ when imported.
 try:
     from keras_hub.src.export.registry import extend_export_method_for_keras_hub
     from keras_hub.src.export.registry import initialize_export_registry
+
     # Initialize export functionality
     initialize_export_registry()
     extend_export_method_for_keras_hub()

@@ -344,38 +344,42 @@ class Backbone(keras.Model):
 
     def _trackable_children(self, save_type=None, **kwargs):
         """Override to prevent _DictWrapper issues during TensorFlow export.
-        
+
         This method filters out problematic _DictWrapper objects that cause
         TypeError during SavedModel introspection, while preserving all
         essential trackable components.
         """
         children = super()._trackable_children(save_type, **kwargs)
-        
+
         # Import _DictWrapper safely
         try:
             from tensorflow.python.trackable.data_structures import _DictWrapper
         except ImportError:
             return children
-        
+
         clean_children = {}
         for name, child in children.items():
             # Handle _DictWrapper objects
             if isinstance(child, _DictWrapper):
                 try:
                     # For list-like _DictWrapper (e.g., transformer_layers)
-                    if hasattr(child, '_data') and isinstance(child._data, list):
+                    if hasattr(child, "_data") and isinstance(
+                        child._data, list
+                    ):
                         # Create a clean list of the trackable items
                         clean_list = []
                         for item in child._data:
-                            if hasattr(item, '_trackable_children'):
+                            if hasattr(item, "_trackable_children"):
                                 clean_list.append(item)
                         if clean_list:
                             clean_children[name] = clean_list
                     # For dict-like _DictWrapper
-                    elif hasattr(child, '_data') and isinstance(child._data, dict):
+                    elif hasattr(child, "_data") and isinstance(
+                        child._data, dict
+                    ):
                         clean_dict = {}
                         for k, v in child._data.items():
-                            if hasattr(v, '_trackable_children'):
+                            if hasattr(v, "_trackable_children"):
                                 clean_dict[k] = v
                         if clean_dict:
                             clean_children[name] = clean_dict
@@ -386,5 +390,5 @@ class Backbone(keras.Model):
             else:
                 # Keep non-_DictWrapper children as-is
                 clean_children[name] = child
-        
+
         return clean_children
