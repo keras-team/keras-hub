@@ -17,4 +17,3 @@ from keras_hub.src.export.configs import (
     TextModelExporterConfig as TextModelExporterConfig,
 )
 from keras_hub.src.export.lite_rt import LiteRTExporter as LiteRTExporter
-from keras_hub.src.export.lite_rt import export_lite_rt as export_lite_rt

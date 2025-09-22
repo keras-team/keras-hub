@@ -4,11 +4,8 @@ This module provides LiteRT export functionality specifically designed for
 Keras-Hub models, handling their unique input structures and requirements.
 """
 
-from typing import Optional
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporter
-from keras_hub.src.export.base import KerasHubExporterConfig
 
 try:
     from keras.src.export.lite_rt_exporter import (
@@ -32,10 +29,10 @@ class LiteRTExporter(KerasHubExporter):
 
     def __init__(
         self,
-        config: KerasHubExporterConfig,
-        max_sequence_length: Optional[int] = None,
-        aot_compile_targets: Optional[list] = None,
-        verbose: bool = False,
+        config,
+        max_sequence_length=None,
+        aot_compile_targets=None,
+        verbose=False,
         **kwargs,
     ):
         """Initialize the LiteRT exporter.
@@ -70,7 +67,7 @@ class LiteRTExporter(KerasHubExporter):
             else:
                 self.max_sequence_length = self.config.DEFAULT_SEQUENCE_LENGTH
 
-    def export(self, filepath: str) -> None:
+    def export(self, filepath):
         """Export the Keras-Hub model to LiteRT format.
 
         Args:
@@ -216,8 +213,7 @@ class LiteRTExporter(KerasHubExporter):
 
 
 # Convenience function for direct export
-@keras_hub_export("keras_hub.export.export_lite_rt")
-def export_lite_rt(model, filepath: str, **kwargs) -> None:
+def export_lite_rt(model, filepath, **kwargs):
     """Export a Keras-Hub model to LiteRT format.
 
     This is a convenience function that automatically detects the model type

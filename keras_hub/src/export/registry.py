@@ -32,7 +32,7 @@ def initialize_export_registry():
         pass
 
 
-def export_model(model, filepath: str, format: str = "lite_rt", **kwargs):
+def export_model(model, filepath, format="lite_rt", **kwargs):
     """Export a Keras-Hub model to the specified format.
 
     This is the main export function that automatically detects the model type
@@ -72,9 +72,9 @@ def extend_export_method_for_keras_hub():
 
         def keras_hub_export(
             self,
-            filepath: str,
-            format: str = "lite_rt",
-            verbose: bool = False,
+            filepath,
+            format="lite_rt",
+            verbose=False,
             **kwargs,
         ):
             """Extended export method for Keras-Hub models.

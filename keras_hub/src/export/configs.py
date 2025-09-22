@@ -4,10 +4,6 @@ This module provides specific configurations for exporting different types
 of Keras-Hub models, following the Optimum pattern.
 """
 
-from typing import Any
-from typing import Dict
-from typing import Optional
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporterConfig
 
@@ -20,8 +16,12 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
     EXPECTED_INPUTS = ["token_ids", "padding_mask"]
     DEFAULT_SEQUENCE_LENGTH = 128
 
-    def _is_model_compatible(self) -> bool:
-        """Check if model is a causal language model."""
+    def _is_model_compatible(self):
+        """Check if model is a causal language model.
+
+        Returns:
+            bool: True if compatible, False otherwise
+        """
         try:
             from keras_hub.src.models.causal_lm import CausalLM
 
@@ -30,9 +30,7 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
             # Fallback to class name checking
             return "CausalLM" in self.model.__class__.__name__
 
-    def get_input_signature(
-        self, sequence_length: Optional[int] = None
-    ) -> Dict[str, Any]:
+    def get_input_signature(self, sequence_length=None):
         """Get input signature for causal LM models.
 
         Args:
@@ -40,7 +38,8 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
                 from model.
 
         Returns:
-            Dictionary mapping input names to their specifications
+            Dict[str, Any]: Dictionary mapping input names to their
+            specifications
         """
         if sequence_length is None:
             sequence_length = self._get_sequence_length()
@@ -56,8 +55,12 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
             ),
         }
 
-    def _get_sequence_length(self) -> int:
-        """Get sequence length from model or use default."""
+    def _get_sequence_length(self):
+        """Get sequence length from model or use default.
+
+        Returns:
+            int: The sequence length
+        """
         if hasattr(self.model, "preprocessor") and self.model.preprocessor:
             return getattr(
                 self.model.preprocessor,
@@ -75,13 +78,15 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
     EXPECTED_INPUTS = ["token_ids", "padding_mask"]
     DEFAULT_SEQUENCE_LENGTH = 128
 
-    def _is_model_compatible(self) -> bool:
-        """Check if model is a text classifier."""
+    def _is_model_compatible(self):
+        """Check if model is a text classifier.
+
+        Returns:
+            bool: True if compatible, False otherwise
+        """
         return "TextClassifier" in self.model.__class__.__name__
 
-    def get_input_signature(
-        self, sequence_length: Optional[int] = None
-    ) -> Dict[str, Any]:
+    def get_input_signature(self, sequence_length=None):
         """Get input signature for text classifier models.
 
         Args:
@@ -89,7 +94,8 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
                 from model.
 
         Returns:
-            Dictionary mapping input names to their specifications
+            Dict[str, Any]: Dictionary mapping input names to their
+            specifications
         """
         if sequence_length is None:
             sequence_length = self._get_sequence_length()
@@ -105,8 +111,12 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
             ),
         }
 
-    def _get_sequence_length(self) -> int:
-        """Get sequence length from model or use default."""
+    def _get_sequence_length(self):
+        """Get sequence length from model or use default.
+
+        Returns:
+            int: The sequence length
+        """
         if hasattr(self.model, "preprocessor") and self.model.preprocessor:
             return getattr(
                 self.model.preprocessor,
@@ -129,8 +139,12 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
     ]
     DEFAULT_SEQUENCE_LENGTH = 128
 
-    def _is_model_compatible(self) -> bool:
-        """Check if model is a seq2seq language model."""
+    def _is_model_compatible(self):
+        """Check if model is a seq2seq language model.
+
+        Returns:
+            bool: True if compatible, False otherwise
+        """
         try:
             from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 
@@ -138,9 +152,7 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
         except ImportError:
             return "Seq2SeqLM" in self.model.__class__.__name__
 
-    def get_input_signature(
-        self, sequence_length: Optional[int] = None
-    ) -> Dict[str, Any]:
+    def get_input_signature(self, sequence_length=None):
         """Get input signature for seq2seq models.
 
         Args:
@@ -148,7 +160,8 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
                 from model.
 
         Returns:
-            Dictionary mapping input names to their specifications
+            Dict[str, Any]: Dictionary mapping input names to their
+            specifications
         """
         if sequence_length is None:
             sequence_length = self._get_sequence_length()
@@ -178,8 +191,12 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
             ),
         }
 
-    def _get_sequence_length(self) -> int:
-        """Get sequence length from model or use default."""
+    def _get_sequence_length(self):
+        """Get sequence length from model or use default.
+
+        Returns:
+            int: The sequence length
+        """
         if hasattr(self.model, "preprocessor") and self.model.preprocessor:
             return getattr(
                 self.model.preprocessor,
@@ -197,8 +214,12 @@ class TextModelExporterConfig(KerasHubExporterConfig):
     EXPECTED_INPUTS = ["token_ids", "padding_mask"]
     DEFAULT_SEQUENCE_LENGTH = 128
 
-    def _is_model_compatible(self) -> bool:
-        """Check if model is a text model (fallback)."""
+    def _is_model_compatible(self):
+        """Check if model is a text model (fallback).
+
+        Returns:
+            bool: True if compatible, False otherwise
+        """
         # This is a fallback config for text models that don't fit other
         # categories
         return (
@@ -207,9 +228,7 @@ class TextModelExporterConfig(KerasHubExporterConfig):
             and hasattr(self.model.preprocessor, "tokenizer")
         )
 
-    def get_input_signature(
-        self, sequence_length: Optional[int] = None
-    ) -> Dict[str, Any]:
+    def get_input_signature(self, sequence_length=None):
         """Get input signature for generic text models.
 
         Args:
@@ -217,7 +236,8 @@ class TextModelExporterConfig(KerasHubExporterConfig):
                 from model.
 
         Returns:
-            Dictionary mapping input names to their specifications
+            Dict[str, Any]: Dictionary mapping input names to their
+            specifications
         """
         if sequence_length is None:
             sequence_length = self._get_sequence_length()
@@ -233,8 +253,12 @@ class TextModelExporterConfig(KerasHubExporterConfig):
             ),
         }
 
-    def _get_sequence_length(self) -> int:
-        """Get sequence length from model or use default."""
+    def _get_sequence_length(self):
+        """Get sequence length from model or use default.
+
+        Returns:
+            int: The sequence length
+        """
         if hasattr(self.model, "preprocessor") and self.model.preprocessor:
             return getattr(
                 self.model.preprocessor,
