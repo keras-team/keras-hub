@@ -198,4 +198,12 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://google/shieldgemma/keras/shieldgemma_27b_en/2",
     },
+    "vault_gemma_1b_en": {
+        "metadata": {
+            "description": "1 billion parameter, 26-layer, VaultGemma model.",
+            "params": 1038741120,
+            "path": "gemma",
+        },
+        "kaggle_handle": "kaggle://keras/vaultgemma/keras/vault_gemma_1b_en/2",
+    },
 }
