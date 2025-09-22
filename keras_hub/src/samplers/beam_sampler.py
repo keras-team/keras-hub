@@ -95,15 +95,15 @@ class BeamSampler(Sampler):
         )
         log_probs = flatten_beams(ops.repeat(log_probs, batch_size, axis=0))
 
-        def cond(prompt, cache, index, log_probs):
+        def cond(prompt, cache, index, mask, log_probs):
             if stop_token_ids is None:
-                return True
+                return ops.convert_to_tensor(True, dtype="bool")
             # Stop if all sequences have produced a *new* stop token.
             end_tokens = any_equal(prompt, stop_token_ids, ~mask)
             prompt_done = ops.any(end_tokens, axis=-1)
             return ops.logical_not(ops.all(prompt_done))
 
-        def body(prompt, cache, index, log_probs):
+        def body(prompt, cache, index, mask, log_probs):
             # Compute the softmax distribution for the next token.
             logits, _, cache = next(prompt, cache, index)
             vocab_size = ops.shape(logits)[-1]
@@ -150,12 +150,12 @@ class BeamSampler(Sampler):
             next_token = next_token[:, None]
             prompt = ops.slice_update(prompt, [0, index], next_token)
             # Return the iteration of the loop state.
-            return (prompt, cache, index + 1, log_probs)
+            return (prompt, cache, index + 1, mask, log_probs)
 
-        prompt, _, _, log_probs = self.run_loop(
+        prompt, _, _, _, log_probs = self.run_loop(
             cond=cond,
             body=body,
-            loop_vars=(prompt, cache, index, log_probs),
+            loop_vars=(prompt, cache, index, mask, log_probs),
             maximum_iterations=(max_length - index),
             model=model,
         )
