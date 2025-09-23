@@ -54,11 +54,11 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"h.{i}.input_layernorm.weight",
         )
 
-        loader.port_weight(
-            keras_variable=decoder_layer.input_layernorm.beta,
-            hf_weight_key=f"h.{i}.input_layernorm.bias",
-        )
-
+        if decoder_layer.input_layernorm.beta is not None:
+            loader.port_weight(
+                keras_variable=decoder_layer.input_layernorm.beta,
+                hf_weight_key=f"h.{i}.input_layernorm.bias",
+            )
         # Attention layers
         loader.port_weight(
             keras_variable=decoder_layer.attention_layer.output_dense.kernel,

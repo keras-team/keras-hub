@@ -37,7 +37,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         self.hidden_dim = decoder_sequence_shape[-1]
         self.input_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
-            center=True,
+            center=True if self.use_bias else False,
             scale=True,
             dtype=self.dtype_policy,
             name="input_layernorm",
@@ -66,7 +66,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
 
         self.post_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
-            center=True,
+            center=True if self.use_bias else False,
             scale=True,
             dtype=self.dtype_policy,
             name="post_attention_layernorm",
