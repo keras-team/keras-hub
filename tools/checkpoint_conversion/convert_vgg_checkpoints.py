@@ -20,10 +20,10 @@ from absl import flags
 import keras_hub
 
 PRESET_MAP = {
-    "vgg11": "timm/vgg11.tv_in1k",
-    "vgg13": "timm/vgg13.tv_in1k",
-    "vgg16": "timm/vgg16.tv_in1k",
-    "vgg19": "timm/vgg19.tv_in1k",
+    "vgg_11_imagenet": "timm/vgg11.tv_in1k",
+    "vgg_13_imagenet": "timm/vgg13.tv_in1k",
+    "vgg_16_imagenet": "timm/vgg16.tv_in1k",
+    "vgg_19_imagenet": "timm/vgg19.tv_in1k",
     # TODO(jeffcarp): Add BN variants.
 }
 
