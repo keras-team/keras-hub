@@ -77,12 +77,22 @@ class LiteRTExporter(KerasHubExporter):
             print(f"Starting LiteRT export for {self.config.MODEL_TYPE} model")
 
         # Ensure model is built with correct input structure
-        self._ensure_model_built(self.max_sequence_length)
+        # For text models, use sequence length; for image models, use None to auto-detect
+        if self.config.MODEL_TYPE in ["causal_lm", "text_classifier", "seq2seq_lm"]:
+            build_param = self.max_sequence_length
+        else:
+            build_param = None  # Let image models auto-detect from preprocessor
+            
+        self._ensure_model_built(build_param)
 
         # Get the proper input signature for this model type
-        input_signature = self.config.get_input_signature(
-            self.max_sequence_length
-        )
+        # For text models, pass sequence length; for image models, pass None to auto-detect
+        if self.config.MODEL_TYPE in ["causal_lm", "text_classifier", "seq2seq_lm"]:
+            signature_param = self.max_sequence_length
+        else:
+            signature_param = None  # Let image models auto-detect from preprocessor
+            
+        input_signature = self.config.get_input_signature(signature_param)
 
         # Create a wrapper that adapts the Keras-Hub model to work with Keras
         # LiteRT exporter
@@ -92,7 +102,6 @@ class LiteRTExporter(KerasHubExporter):
         keras_exporter = KerasLiteRTExporter(
             wrapped_model,
             input_signature=input_signature,
-            max_sequence_length=self.max_sequence_length,
             aot_compile_targets=self.aot_compile_targets,
             verbose=1 if self.verbose else 0,
             **self.export_kwargs,
@@ -188,27 +197,86 @@ class LiteRTExporter(KerasHubExporter):
                 if not isinstance(inputs, (list, tuple)):
                     inputs = [inputs]
 
-                # Map inputs to expected dictionary structure
-                input_dict = {}
-                for i, input_name in enumerate(self.expected_inputs):
-                    if i < len(inputs):
-                        input_dict[input_name] = inputs[i]
-                    else:
-                        # Handle missing inputs
-                        raise ValueError(f"Missing input for {input_name}")
+                # For image classifiers, try the direct tensor approach first
+                # since most Keras-Hub vision models expect single tensor inputs
+                if len(self.expected_inputs) == 1 and self.expected_inputs[0] == "images":
+                    try:
+                        return self.keras_hub_model(
+                            inputs[0], training=training, mask=mask
+                        )
+                    except Exception:
+                        # Fall back to dictionary approach if that fails
+                        pass
 
-                return self.keras_hub_model(
-                    input_dict, training=training, mask=mask
-                )
+                # For LiteRT export, we need to handle the fact that different
+                # Keras Hub models expect inputs in different formats. Some
+                # expect dictionaries, others expect single tensors.
+                try:
+                    # First, try mapping to the expected input names (dictionary format)
+                    input_dict = {}
+                    if len(self.expected_inputs) == 1:
+                        input_dict[self.expected_inputs[0]] = inputs[0]
+                    else:
+                        for i, input_name in enumerate(self.expected_inputs):
+                            input_dict[input_name] = inputs[i]
+                    
+                    return self.keras_hub_model(
+                        input_dict, training=training, mask=mask
+                    )
+                except ValueError as e:
+                    error_msg = str(e)
+                    # If that fails, try direct tensor input (positional format)
+                    if ("doesn't match the expected structure" in error_msg and 
+                        "Expected: keras_tensor" in error_msg):
+                        # The model expects a single tensor, not a dictionary
+                        if len(inputs) == 1:
+                            return self.keras_hub_model(
+                                inputs[0], training=training, mask=mask
+                            )
+                        else:
+                            # Multiple inputs - try as positional arguments
+                            return self.keras_hub_model(
+                                *inputs, training=training, mask=mask
+                            )
+                    elif "Missing data for input" in error_msg:
+                        # Extract the actual expected input names from the error
+                        if "Expected the following keys:" in error_msg:
+                            # Parse the expected keys from error message
+                            start = error_msg.find("Expected the following keys: [")
+                            if start != -1:
+                                start += len("Expected the following keys: [")
+                                end = error_msg.find("]", start)
+                                if end != -1:
+                                    keys_str = error_msg[start:end]
+                                    actual_input_names = [k.strip().strip("'\"") for k in keys_str.split(",")]
+                                    
+                                    # Map inputs to actual expected names
+                                    input_dict = {}
+                                    for i, actual_name in enumerate(actual_input_names):
+                                        if i < len(inputs):
+                                            input_dict[actual_name] = inputs[i]
+                                    
+                                    return self.keras_hub_model(
+                                        input_dict, training=training, mask=mask
+                                    )
+                    
+                    # If we still can't figure it out, re-raise the original error
+                    raise
 
             def get_config(self):
                 """Return the configuration of the wrapped model."""
                 return self.keras_hub_model.get_config()
 
+        # Pass the correct parameter based on model type
+        if self.config.MODEL_TYPE in ["causal_lm", "text_classifier", "seq2seq_lm"]:
+            signature_param = self.max_sequence_length
+        else:
+            signature_param = None  # Let image models auto-detect from preprocessor
+            
         return KerasHubModelWrapper(
             self.model,
             self.config.EXPECTED_INPUTS,
-            self.config.get_input_signature(self.max_sequence_length),
+            self.config.get_input_signature(signature_param),
         )
 
 

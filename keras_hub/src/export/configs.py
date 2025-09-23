@@ -266,3 +266,241 @@ class TextModelExporterConfig(KerasHubExporterConfig):
                 self.DEFAULT_SEQUENCE_LENGTH,
             )
         return self.DEFAULT_SEQUENCE_LENGTH
+
+
+@keras_hub_export("keras_hub.export.ImageClassifierExporterConfig")
+class ImageClassifierExporterConfig(KerasHubExporterConfig):
+    """Exporter configuration for Image Classification models."""
+
+    MODEL_TYPE = "image_classifier"
+    EXPECTED_INPUTS = ["images"]
+
+    def _is_model_compatible(self):
+        """Check if model is an image classifier.
+        Returns:
+            bool: True if compatible, False otherwise
+        """
+        return "ImageClassifier" in self.model.__class__.__name__
+
+    def get_input_signature(self, image_size=None):
+        """Get input signature for image classifier models.
+        Args:
+            image_size: Optional image size. If None, will be inferred
+                from model.
+        Returns:
+            Dict[str, Any]: Dictionary mapping input names to their
+            specifications
+        """
+        if image_size is None:
+            image_size = self._get_image_size()
+        if isinstance(image_size, int):
+            image_size = (image_size, image_size)
+
+        import keras
+
+        return {
+            "images": keras.layers.InputSpec(
+                shape=(None, *image_size, 3), dtype="float32", name="images"
+            ),
+        }
+
+    def _get_image_size(self):
+        """Get image size from model preprocessor.
+        Returns:
+            tuple: The image size (height, width)
+        """
+        if hasattr(self.model, "preprocessor") and self.model.preprocessor:
+            if hasattr(self.model.preprocessor, "image_size"):
+                return self.model.preprocessor.image_size
+        
+        # If no preprocessor image_size, try to infer from model inputs
+        if hasattr(self.model, "inputs") and self.model.inputs:
+            input_shape = self.model.inputs[0].shape
+            if len(input_shape) == 4 and input_shape[1] is not None and input_shape[2] is not None:
+                # Shape is (batch, height, width, channels)
+                return (input_shape[1], input_shape[2])
+        
+        # Last resort: raise an error instead of using hardcoded values
+        raise ValueError(
+            "Could not determine image size from model. "
+            "Model should have a preprocessor with image_size attribute, "
+            "or model inputs should have concrete shapes."
+        )
+
+    def get_dummy_inputs(self, image_size=None):
+        """Generate dummy inputs for image classifier models.
+
+        Args:
+            image_size: Optional image size. If None, will be inferred from model.
+
+        Returns:
+            Dict[str, Any]: Dictionary of dummy inputs
+        """
+        if image_size is None:
+            image_size = self._get_image_size()
+        if isinstance(image_size, int):
+            image_size = (image_size, image_size)
+
+        import keras
+
+        dummy_inputs = {}
+        if "images" in self.EXPECTED_INPUTS:
+            dummy_inputs["images"] = keras.ops.ones(
+                (1, *image_size, 3), dtype="float32"
+            )
+        
+        return dummy_inputs
+
+
+@keras_hub_export("keras_hub.export.ObjectDetectorExporterConfig")
+class ObjectDetectorExporterConfig(KerasHubExporterConfig):
+    """Exporter configuration for Object Detection models."""
+
+    MODEL_TYPE = "object_detector"
+    EXPECTED_INPUTS = ["images", "image_shape"]
+
+    def _is_model_compatible(self):
+        """Check if model is an object detector.
+        Returns:
+            bool: True if compatible, False otherwise
+        """
+        return "ObjectDetector" in self.model.__class__.__name__
+
+    def get_input_signature(self, image_size=None):
+        """Get input signature for object detector models.
+        Args:
+            image_size: Optional image size. If None, will be inferred
+                from model.
+        Returns:
+            Dict[str, Any]: Dictionary mapping input names to their
+            specifications
+        """
+        if image_size is None:
+            image_size = self._get_image_size()
+        if isinstance(image_size, int):
+            image_size = (image_size, image_size)
+
+        import keras
+
+        return {
+            "images": keras.layers.InputSpec(
+                shape=(None, *image_size, 3), dtype="float32", name="images"
+            ),
+            "image_shape": keras.layers.InputSpec(
+                shape=(None, 2), dtype="int32", name="image_shape"
+            ),
+        }
+
+    def _get_image_size(self):
+        """Get image size from model preprocessor.
+        Returns:
+            tuple: The image size (height, width)
+        """
+        if hasattr(self.model, "preprocessor") and self.model.preprocessor:
+            if hasattr(self.model.preprocessor, "image_size"):
+                return self.model.preprocessor.image_size
+        
+        # If no preprocessor image_size, try to infer from model inputs
+        if hasattr(self.model, "inputs") and self.model.inputs:
+            input_shape = self.model.inputs[0].shape
+            if len(input_shape) == 4 and input_shape[1] is not None and input_shape[2] is not None:
+                # Shape is (batch, height, width, channels)
+                return (input_shape[1], input_shape[2])
+        
+        # Last resort: raise an error instead of using hardcoded values
+        raise ValueError(
+            "Could not determine image size from model. "
+            "Model should have a preprocessor with image_size attribute, "
+            "or model inputs should have concrete shapes."
+        )
+
+    def get_dummy_inputs(self, image_size=None):
+        """Generate dummy inputs for object detector models.
+        
+        Args:
+            image_size: Optional image size. If None, will be inferred
+                from model.
+        
+        Returns:
+            Dict[str, Any]: Dictionary of dummy inputs
+        """
+        if image_size is None:
+            image_size = self._get_image_size()
+        if isinstance(image_size, int):
+            image_size = (image_size, image_size)
+            
+        import keras
+        
+        dummy_inputs = {}
+        
+        # Create dummy image input
+        dummy_inputs["images"] = keras.ops.random_uniform(
+            (1, *image_size, 3), dtype="float32"
+        )
+        
+        # Create dummy image shape input  
+        dummy_inputs["image_shape"] = keras.ops.constant(
+            [[image_size[0], image_size[1]]], dtype="int32"
+        )
+        
+        return dummy_inputs
+
+
+@keras_hub_export("keras_hub.export.ImageSegmenterExporterConfig")
+class ImageSegmenterExporterConfig(KerasHubExporterConfig):
+    """Exporter configuration for Image Segmentation models."""
+
+    MODEL_TYPE = "image_segmenter"
+    EXPECTED_INPUTS = ["images"]
+
+    def _is_model_compatible(self):
+        """Check if model is an image segmenter.
+        Returns:
+            bool: True if compatible, False otherwise
+        """
+        return "ImageSegmenter" in self.model.__class__.__name__
+
+    def get_input_signature(self, image_size=None):
+        """Get input signature for image segmenter models.
+        Args:
+            image_size: Optional image size. If None, will be inferred
+                from model.
+        Returns:
+            Dict[str, Any]: Dictionary mapping input names to their
+            specifications
+        """
+        if image_size is None:
+            image_size = self._get_image_size()
+        if isinstance(image_size, int):
+            image_size = (image_size, image_size)
+
+        import keras
+
+        return {
+            "images": keras.layers.InputSpec(
+                shape=(None, *image_size, 3), dtype="float32", name="images"
+            ),
+        }
+
+    def _get_image_size(self):
+        """Get image size from model preprocessor.
+        Returns:
+            tuple: The image size (height, width)
+        """
+        if hasattr(self.model, "preprocessor") and self.model.preprocessor:
+            if hasattr(self.model.preprocessor, "image_size"):
+                return self.model.preprocessor.image_size
+        
+        # If no preprocessor image_size, try to infer from model inputs
+        if hasattr(self.model, "inputs") and self.model.inputs:
+            input_shape = self.model.inputs[0].shape
+            if len(input_shape) == 4 and input_shape[1] is not None and input_shape[2] is not None:
+                # Shape is (batch, height, width, channels)
+                return (input_shape[1], input_shape[2])
+        
+        # Last resort: raise an error instead of using hardcoded values
+        raise ValueError(
+            "Could not determine image size from model. "
+            "Model should have a preprocessor with image_size attribute, "
+            "or model inputs should have concrete shapes."
+        )

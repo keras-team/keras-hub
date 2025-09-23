@@ -6,6 +6,9 @@ exporters.
 
 from keras_hub.src.export.base import ExporterRegistry
 from keras_hub.src.export.configs import CausalLMExporterConfig
+from keras_hub.src.export.configs import ImageClassifierExporterConfig
+from keras_hub.src.export.configs import ImageSegmenterExporterConfig
+from keras_hub.src.export.configs import ObjectDetectorExporterConfig
 from keras_hub.src.export.configs import Seq2SeqLMExporterConfig
 from keras_hub.src.export.configs import TextClassifierExporterConfig
 from keras_hub.src.export.configs import TextModelExporterConfig
@@ -21,6 +24,17 @@ def initialize_export_registry():
     )
     ExporterRegistry.register_config("seq2seq_lm", Seq2SeqLMExporterConfig)
     ExporterRegistry.register_config("text_model", TextModelExporterConfig)
+
+    # Register vision model configurations
+    ExporterRegistry.register_config(
+        "image_classifier", ImageClassifierExporterConfig
+    )
+    ExporterRegistry.register_config(
+        "object_detector", ObjectDetectorExporterConfig
+    )
+    ExporterRegistry.register_config(
+        "image_segmenter", ImageSegmenterExporterConfig
+    )
 
     # Register exporters for different formats
     try:

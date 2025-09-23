@@ -259,9 +259,11 @@ class ExporterRegistry:
         try:
             from keras_hub.src.models.causal_lm import CausalLM
             from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
+            from keras_hub.src.models.object_detector import ObjectDetector
         except ImportError:
             CausalLM = None
             Seq2SeqLM = None
+            ObjectDetector = None
 
         model_class_name = model.__class__.__name__
 
@@ -273,6 +275,10 @@ class ExporterRegistry:
             return "seq2seq_lm"
         elif "ImageClassifier" in model_class_name:
             return "image_classifier"
+        elif ObjectDetector and isinstance(model, ObjectDetector):
+            return "object_detector"
+        elif "ObjectDetector" in model_class_name:
+            return "object_detector"
         else:
             # Default to text model for generic Keras-Hub models
             return "text_model"
