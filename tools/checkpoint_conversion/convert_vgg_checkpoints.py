@@ -3,7 +3,7 @@
 Optionally uploads the model to Keras if the `--upload_uri` flag is passed.
 
 python tools/checkpoint_conversion/convert_vgg_checkpoints.py \
-    --preset vgg11 --upload_uri kaggle://kerashub/vgg/keras/vgg11
+    --preset vgg_11_imagenet --upload_uri kaggle://kerashub/vgg/keras/vgg_11_imagenet
 """
 
 import os
