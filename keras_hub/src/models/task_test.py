@@ -108,7 +108,6 @@ class TestTask(TestCase):
         model.summary(print_fn=lambda x, line_break=False: summary.append(x))
         self.assertNotRegex("\n".join(summary), "Preprocessor:")
 
-    @pytest.mark.large
     @parameterized.named_parameters(
         {
             "testcase_name": "load_with_quantized_weights",
@@ -123,6 +122,7 @@ class TestTask(TestCase):
             "expected_dtype": "float32",
         },
     )
+    @pytest.mark.large
     def test_quantized_preset_loading_and_saving(
         self, load_weights, dtype_override, expected_dtype
     ):
