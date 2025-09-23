@@ -47,7 +47,7 @@ class FalconBackbone(Backbone):
     model = keras_hub.models.FalconBackbone.from_preset("falcon-7b-instruct")
     model(input_data)
 
-    model = keras_hub.models.FalconBackbone.from_preset("falcon-rw-1b") 
+    model = keras_hub.models.FalconBackbone.from_preset("falcon-rw-1b")
     model(input_data)
 
     # Randomly initialized Falcon decoder with a custom config.

@@ -53,7 +53,7 @@ absl.flags.DEFINE_string(
 def download_hf_model(hf_model_name):
     hf_model_dir = huggingface_hub.snapshot_download(
         repo_id=hf_model_name,
-        allow_patterns=["*.json", "*.bin","*.safetensors"],
+        allow_patterns=["*.json", "*.bin", "*.safetensors"],
         ignore_patterns=["onnx/*"],
         local_dir=EXTRACT_DIR,
     )
