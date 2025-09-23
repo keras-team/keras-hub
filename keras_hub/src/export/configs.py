@@ -312,14 +312,18 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
         if hasattr(self.model, "preprocessor") and self.model.preprocessor:
             if hasattr(self.model.preprocessor, "image_size"):
                 return self.model.preprocessor.image_size
-        
+
         # If no preprocessor image_size, try to infer from model inputs
         if hasattr(self.model, "inputs") and self.model.inputs:
             input_shape = self.model.inputs[0].shape
-            if len(input_shape) == 4 and input_shape[1] is not None and input_shape[2] is not None:
+            if (
+                len(input_shape) == 4
+                and input_shape[1] is not None
+                and input_shape[2] is not None
+            ):
                 # Shape is (batch, height, width, channels)
                 return (input_shape[1], input_shape[2])
-        
+
         # Last resort: raise an error instead of using hardcoded values
         raise ValueError(
             "Could not determine image size from model. "
@@ -331,7 +335,8 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
         """Generate dummy inputs for image classifier models.
 
         Args:
-            image_size: Optional image size. If None, will be inferred from model.
+            image_size: Optional image size. If None, will be inferred from
+                model.
 
         Returns:
             Dict[str, Any]: Dictionary of dummy inputs
@@ -348,7 +353,7 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
             dummy_inputs["images"] = keras.ops.ones(
                 (1, *image_size, 3), dtype="float32"
             )
-        
+
         return dummy_inputs
 
 
@@ -399,14 +404,18 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
         if hasattr(self.model, "preprocessor") and self.model.preprocessor:
             if hasattr(self.model.preprocessor, "image_size"):
                 return self.model.preprocessor.image_size
-        
+
         # If no preprocessor image_size, try to infer from model inputs
         if hasattr(self.model, "inputs") and self.model.inputs:
             input_shape = self.model.inputs[0].shape
-            if len(input_shape) == 4 and input_shape[1] is not None and input_shape[2] is not None:
+            if (
+                len(input_shape) == 4
+                and input_shape[1] is not None
+                and input_shape[2] is not None
+            ):
                 # Shape is (batch, height, width, channels)
                 return (input_shape[1], input_shape[2])
-        
+
         # Last resort: raise an error instead of using hardcoded values
         raise ValueError(
             "Could not determine image size from model. "
@@ -416,11 +425,11 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
 
     def get_dummy_inputs(self, image_size=None):
         """Generate dummy inputs for object detector models.
-        
+
         Args:
             image_size: Optional image size. If None, will be inferred
                 from model.
-        
+
         Returns:
             Dict[str, Any]: Dictionary of dummy inputs
         """
@@ -428,21 +437,21 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
             image_size = self._get_image_size()
         if isinstance(image_size, int):
             image_size = (image_size, image_size)
-            
+
         import keras
-        
+
         dummy_inputs = {}
-        
+
         # Create dummy image input
         dummy_inputs["images"] = keras.ops.random_uniform(
             (1, *image_size, 3), dtype="float32"
         )
-        
-        # Create dummy image shape input  
+
+        # Create dummy image shape input
         dummy_inputs["image_shape"] = keras.ops.constant(
             [[image_size[0], image_size[1]]], dtype="int32"
         )
-        
+
         return dummy_inputs
 
 
@@ -490,14 +499,18 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
         if hasattr(self.model, "preprocessor") and self.model.preprocessor:
             if hasattr(self.model.preprocessor, "image_size"):
                 return self.model.preprocessor.image_size
-        
+
         # If no preprocessor image_size, try to infer from model inputs
         if hasattr(self.model, "inputs") and self.model.inputs:
             input_shape = self.model.inputs[0].shape
-            if len(input_shape) == 4 and input_shape[1] is not None and input_shape[2] is not None:
+            if (
+                len(input_shape) == 4
+                and input_shape[1] is not None
+                and input_shape[2] is not None
+            ):
                 # Shape is (batch, height, width, channels)
                 return (input_shape[1], input_shape[2])
-        
+
         # Last resort: raise an error instead of using hardcoded values
         raise ValueError(
             "Could not determine image size from model. "

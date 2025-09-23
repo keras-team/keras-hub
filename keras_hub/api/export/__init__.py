@@ -8,6 +8,15 @@ from keras_hub.src.export.configs import (
     CausalLMExporterConfig as CausalLMExporterConfig,
 )
 from keras_hub.src.export.configs import (
+    ImageClassifierExporterConfig as ImageClassifierExporterConfig,
+)
+from keras_hub.src.export.configs import (
+    ImageSegmenterExporterConfig as ImageSegmenterExporterConfig,
+)
+from keras_hub.src.export.configs import (
+    ObjectDetectorExporterConfig as ObjectDetectorExporterConfig,
+)
+from keras_hub.src.export.configs import (
     Seq2SeqLMExporterConfig as Seq2SeqLMExporterConfig,
 )
 from keras_hub.src.export.configs import (

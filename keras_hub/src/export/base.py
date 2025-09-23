@@ -258,8 +258,8 @@ class ExporterRegistry:
         # Import here to avoid circular imports
         try:
             from keras_hub.src.models.causal_lm import CausalLM
-            from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
             from keras_hub.src.models.object_detector import ObjectDetector
+            from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
         except ImportError:
             CausalLM = None
             Seq2SeqLM = None
