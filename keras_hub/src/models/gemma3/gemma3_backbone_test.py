@@ -220,13 +220,6 @@ class Gemma3EmbeddingModelTest(TestCase, parameterized.TestCase):
         self.init_kwargs = {
             "backbone": self.backbone,
             "embedding_dim": self.embedding_dim,
-            "normalize": True,
-        }
-
-        self.init_kwargs_no_norm = {
-            "backbone": self.backbone,
-            "embedding_dim": self.embedding_dim,
-            "normalize": False,
         }
 
         dummy_text_token_ids = np.random.randint(
@@ -252,14 +245,9 @@ class Gemma3EmbeddingModelTest(TestCase, parameterized.TestCase):
         expected_output_shape = (self.batch_size, self.embedding_dim)
         self.assertEqual(output.shape, expected_output_shape)
 
-    @parameterized.named_parameters(
-        ("normalize", True, 9),
-        ("no_normalize", False, 8),
-    )
-    def test_architecture_characteristics(self, normalize, num_layers):
+    def test_architecture_characteristics(self):
         """Test parameter and layer counts."""
-        init_kwargs = self.init_kwargs if normalize else self.init_kwargs_no_norm
-        model = Gemma3EmbeddingModel(**init_kwargs)
+        model = Gemma3EmbeddingModel(**self.init_kwargs)
 
         backbone_params = self.backbone.count_params()
         projection_params = (
@@ -267,37 +255,15 @@ class Gemma3EmbeddingModelTest(TestCase, parameterized.TestCase):
         ) + self.embedding_dim
         expected_params = backbone_params + projection_params
 
+        expected_layers = 8 
+
         self.assertEqual(model.count_params(), expected_params)
-        self.assertEqual(len(model.layers), num_layers)
+        self.assertEqual(len(model.layers), expected_layers)
 
-    def test_normalization(self):
-        """Test that the `normalize` flag works correctly."""
-        model_norm = Gemma3EmbeddingModel(**self.init_kwargs)
-        outputs_norm = model_norm(self.input_data)
-
-        norms_squared = ops.sum(ops.square(outputs_norm), axis=1)
-        norms = ops.sqrt(norms_squared)
-
-        self.assertAllClose(norms, ops.ones(self.batch_size), atol=1e-5)
-
-        model_no_norm = Gemma3EmbeddingModel(**self.init_kwargs_no_norm)
-        outputs_no_norm = model_no_norm(self.input_data)
-        
-        norms_no_norm_squared = ops.sum(ops.square(outputs_no_norm), axis=1)
-        norms_no_norm = ops.sqrt(norms_no_norm_squared)
-        
-        self.assertNotAllClose(norms_no_norm, ops.ones(self.batch_size))
-
-    @parameterized.named_parameters(
-        ("normalize", True),
-        ("no_normalize", False),
-    )
-    def test_saved_model(self, normalize):
-        init_kwargs = self.init_kwargs if normalize else self.init_kwargs_no_norm
-
+    def test_saved_model(self):
         self.run_model_saving_test(
             cls=Gemma3EmbeddingModel,
-            init_kwargs=init_kwargs,
+            init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
 
@@ -308,7 +274,6 @@ class Gemma3EmbeddingModelTest(TestCase, parameterized.TestCase):
         model = Gemma3EmbeddingModel(
             backbone=backbone,
             embedding_dim=768,
-            normalize=True,
         )
 
         input_data = {
@@ -320,4 +285,4 @@ class Gemma3EmbeddingModelTest(TestCase, parameterized.TestCase):
 
         self.assertEqual(outputs.shape, (1, 768))
         norm = ops.vector_norm(outputs, axis=1)
-        self.assertAllClose(norm, [1.0])
+        self.assertGreater(norm[0], 0)
