@@ -4,6 +4,7 @@ This module provides specific configurations for exporting different types
 of Keras-Hub models, following the Optimum pattern.
 """
 
+import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporterConfig
 
@@ -43,8 +44,6 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
         """
         if sequence_length is None:
             sequence_length = self._get_sequence_length()
-
-        import keras
 
         return {
             "token_ids": keras.layers.InputSpec(
@@ -99,8 +98,6 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
         """
         if sequence_length is None:
             sequence_length = self._get_sequence_length()
-
-        import keras
 
         return {
             "token_ids": keras.layers.InputSpec(
@@ -165,8 +162,6 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
         """
         if sequence_length is None:
             sequence_length = self._get_sequence_length()
-
-        import keras
 
         return {
             "encoder_token_ids": keras.layers.InputSpec(
@@ -242,8 +237,6 @@ class TextModelExporterConfig(KerasHubExporterConfig):
         if sequence_length is None:
             sequence_length = self._get_sequence_length()
 
-        import keras
-
         return {
             "token_ids": keras.layers.InputSpec(
                 shape=(None, sequence_length), dtype="int32", name="token_ids"
@@ -296,8 +289,6 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
         if isinstance(image_size, int):
             image_size = (image_size, image_size)
 
-        import keras
-
         return {
             "images": keras.layers.InputSpec(
                 shape=(None, *image_size, 3), dtype="float32", name="images"
@@ -346,8 +337,6 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
         if isinstance(image_size, int):
             image_size = (image_size, image_size)
 
-        import keras
-
         dummy_inputs = {}
         if "images" in self.EXPECTED_INPUTS:
             dummy_inputs["images"] = keras.ops.ones(
@@ -384,8 +373,6 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
             image_size = self._get_image_size()
         if isinstance(image_size, int):
             image_size = (image_size, image_size)
-
-        import keras
 
         return {
             "images": keras.layers.InputSpec(
@@ -438,8 +425,6 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
         if isinstance(image_size, int):
             image_size = (image_size, image_size)
 
-        import keras
-
         dummy_inputs = {}
 
         # Create dummy image input
@@ -482,8 +467,6 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
             image_size = self._get_image_size()
         if isinstance(image_size, int):
             image_size = (image_size, image_size)
-
-        import keras
 
         return {
             "images": keras.layers.InputSpec(
