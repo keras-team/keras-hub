@@ -300,6 +300,7 @@ class GptOssTransformerDecoder(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         sliding_window=4096,
         dropout=0,
+        head_dim=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -315,6 +316,7 @@ class GptOssTransformerDecoder(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.sliding_window = sliding_window
         self.dropout = dropout
+        self.head_dim = head_dim
         self.supports_masking = True
 
     def build(self, decoder_sequence_shape):
@@ -328,6 +330,7 @@ class GptOssTransformerDecoder(keras.layers.Layer):
             sliding_window=self.sliding_window,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
+            head_dim=self.head_dim,  # Pass head_dim to attention layer
             dtype=self.dtype_policy,
             name="self_attention",
         )
@@ -457,6 +460,7 @@ class GptOssTransformerDecoder(keras.layers.Layer):
                 ),
                 "sliding_window": self.sliding_window,
                 "dropout": self.dropout,
+                "head_dim": self.head_dim,
             }
         )
         return config

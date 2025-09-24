@@ -137,7 +137,7 @@ def main(_):
     print(f"   KerasHub model: {keras_hub_params:,}")
     print(f"   Difference: {abs(keras_hub_params - hf_params):,}")
 
-    # Calculate percentage difference
+    # Calculate and display percentage difference
     diff_percentage = (abs(keras_hub_params - hf_params) / hf_params) * 100
     print(f"   Difference percentage: {diff_percentage:.6f}%")
 
@@ -155,6 +155,19 @@ def main(_):
     keras_hub_output_logits = compute_keras_output(
         keras_hub_backbone, keras_hub_tokenizer
     )
+
+    # Add detailed debugging information
+    print(f"\n-> Output comparison:")
+    print(f"   HF output shape: {hf_output_logits.shape}")
+    print(f"   KH output shape: {keras_hub_output_logits.shape}")
+    print(f"   HF output stats: min={hf_output_logits.min():.6f}, max={hf_output_logits.max():.6f}, mean={hf_output_logits.mean():.6f}")
+    print(f"   KH output stats: min={keras_hub_output_logits.min():.6f}, max={keras_hub_output_logits.max():.6f}, mean={keras_hub_output_logits.mean():.6f}")
+
+    # Calculate difference statistics
+    if hf_output_logits.shape == keras_hub_output_logits.shape:
+        diff = np.abs(hf_output_logits - keras_hub_output_logits)
+        print(f"   Absolute difference stats: min={diff.min():.6f}, max={diff.max():.6f}, mean={diff.mean():.6f}")
+        print(f"   Number of mismatched elements: {np.sum(diff > 1e-3)} / {diff.size}")
 
     try:
         np.testing.assert_allclose(
@@ -181,3 +194,4 @@ def main(_):
 if __name__ == "__main__":
     flags.mark_flag_as_required("preset")
     app.run(main)
+

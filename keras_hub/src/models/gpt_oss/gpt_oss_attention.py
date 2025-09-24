@@ -42,6 +42,8 @@ class GptOssAttention(keras.layers.Layer):
         sliding_window (int, optional): The size of the sliding window.
             Defaults to 4096.
         dropout (float, optional): The dropout rate. Defaults to 0.
+        head_dim (int, optional): Head dimension for attention. If None,
+            calculated as hidden_dim // num_query_heads. Defaults to None.
     """
 
     def __init__(
@@ -53,6 +55,7 @@ class GptOssAttention(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         sliding_window=4096,
         dropout=0,
+        head_dim=None,  # Accept but handle head_dim parameter for HF compatibility
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -60,15 +63,15 @@ class GptOssAttention(keras.layers.Layer):
         self.num_key_value_heads = num_key_value_heads
         self.sliding_window = sliding_window
         self.dropout = dropout
+        self.head_dim = head_dim  # Store for use in build()
+        self.rope_max_wavelength = rope_max_wavelength  # Needed for RotaryEmbedding
+        self.rope_scaling_factor = rope_scaling_factor
 
         self.num_key_value_groups = num_query_heads // num_key_value_heads
-        self.rope_max_wavelength = rope_max_wavelength
 
         self._kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
-
-        self.rope_scaling_factor = rope_scaling_factor
 
     def build(self, inputs_shape):
         # Einsum variables:
@@ -80,10 +83,14 @@ class GptOssAttention(keras.layers.Layer):
         # v = num key/value heads
         # h = head dim
         self._hidden_dim = inputs_shape[-1]
-        # For GPT-OSS, the head_dim is fixed at 64, not hidden_dim // num_query_heads
-        self._head_dim = (
-            64  # This is the actual head dimension in the HuggingFace model
-        )
+        # Use HF head_dim if provided, otherwise calculate dynamically
+        if self.head_dim is not None:
+            self._head_dim = self.head_dim
+            print(f"Using HF head_dim: {self._head_dim}")
+        else:
+            # Calculate head_dim dynamically based on the model configuration
+            self._head_dim = self._hidden_dim // self.num_query_heads
+            print(f"Calculated head_dim: {self._head_dim}")
         self._inv_norm_factor = 1.0 / math.sqrt(self._head_dim)
 
         # Calculate rotary dimension -
@@ -93,7 +100,9 @@ class GptOssAttention(keras.layers.Layer):
         self.query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, self._head_dim),
+            bias_axes="uh",
             kernel_initializer=self._kernel_initializer,
+            bias_initializer="zeros",
             dtype=self.dtype_policy,
             name="query",
         )
@@ -106,7 +115,9 @@ class GptOssAttention(keras.layers.Layer):
                 self.num_key_value_heads,
                 self._head_dim,
             ),
+            bias_axes="vh",
             kernel_initializer=self._kernel_initializer,
+            bias_initializer="zeros",
             dtype=self.dtype_policy,
             name="key",
         )
@@ -119,7 +130,9 @@ class GptOssAttention(keras.layers.Layer):
                 self.num_key_value_heads,
                 self._head_dim,
             ),
+            bias_axes="vh",
             kernel_initializer=self._kernel_initializer,
+            bias_initializer="zeros",
             dtype=self.dtype_policy,
             name="value",
         )
@@ -133,7 +146,9 @@ class GptOssAttention(keras.layers.Layer):
         self.output_dense = keras.layers.EinsumDense(
             equation="bquh,uhm->bqm",
             output_shape=(None, self._hidden_dim),
+            bias_axes="m",
             kernel_initializer=self._kernel_initializer,
+            bias_initializer="zeros",
             dtype=self.dtype_policy,
             name="attention_output",
         )
@@ -174,6 +189,7 @@ class GptOssAttention(keras.layers.Layer):
         query = self.query_dense(hidden_states)
 
         # Compute RoPE for queries (only apply to first _rotary_dim dimensions)
+        # Ensure RoPE is applied consistently with HuggingFace implementation
         if self._rotary_dim < self._head_dim:
             query_rot = query[..., : self._rotary_dim]
             query_rot = self.rotary_embedding_layer(
@@ -247,6 +263,19 @@ class GptOssAttention(keras.layers.Layer):
             ops.cast(self._inv_norm_factor, self.compute_dtype),
         )
 
+        # Apply sliding window mask if specified
+        if self.sliding_window is not None and self.sliding_window > 0:
+            seq_len = ops.shape(attention_scores)[-1]
+            # Create sliding window mask
+            positions = ops.arange(seq_len)
+            sliding_mask = ops.abs(positions[:, None] - positions[None, :]) > self.sliding_window
+            # Convert to large negative value for masking
+            if self.compute_dtype == "float32":
+                sliding_adder = ops.cast(-1e9, self.compute_dtype)
+            else:
+                sliding_adder = ops.cast(-1e4, self.compute_dtype)
+            attention_scores = ops.where(sliding_mask[None, None, :, :], sliding_adder, attention_scores)
+
         if attention_mask is not None:
             # The mask is a boolean tensor, True for positions to be masked.
             # We add a large negative number to the masked positions.
@@ -299,6 +328,7 @@ class GptOssAttention(keras.layers.Layer):
                 ),
                 "sliding_window": self.sliding_window,
                 "dropout": self.dropout,
+                "head_dim": self.head_dim,
             }
         )
         return config

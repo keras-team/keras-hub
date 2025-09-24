@@ -71,6 +71,15 @@ class GptOssBackbone(Backbone):
             layers in each transformer decoder. Only `sliding_window` number
             of tokens are saved in the cache and used to generate the next
             token. Defaults to `4096`.
+        head_dim (int, optional): Head dimension for attention layers. This
+            parameter is accepted for HuggingFace compatibility but ignored.
+            The head dimension is calculated dynamically as hidden_dim //
+            num_query_heads. Defaults to `None`.
+        **kwargs: Additional keyword arguments. Several HuggingFace-specific
+            parameters (hidden_act, initializer_range, max_position_embeddings,
+            attention_dropout, router_aux_loss_coef, use_cache, layer_types,
+            tie_word_embeddings, attention_bias) are accepted for compatibility
+            but ignored.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -124,8 +133,22 @@ class GptOssBackbone(Backbone):
         dropout=0,
         dtype=None,
         output_router_logits=False,
+        head_dim=None,  # Accept but ignore head_dim parameter for HF compatibility
+        # Additional HF compatibility parameters (ignored)
+        hidden_act=None,
+        initializer_range=None,
+        max_position_embeddings=None,
+        attention_dropout=None,
+        router_aux_loss_coef=None,
+        use_cache=None,
+        layer_types=None,
+        tie_word_embeddings=None,
+        attention_bias=None,
         **kwargs,
     ):
+        # Note: head_dim parameter is accepted for HuggingFace compatibility but ignored
+        # Head dimension is calculated dynamically as hidden_dim // num_query_heads
+
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
@@ -150,6 +173,7 @@ class GptOssBackbone(Backbone):
                 kernel_initializer=_gpt_oss_kernel_initializer(stddev=0.02),
                 sliding_window=sliding_window,
                 dropout=dropout,
+                head_dim=head_dim,  # Pass head_dim to decoder layers
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
@@ -196,6 +220,7 @@ class GptOssBackbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.output_router_logits = output_router_logits
+        self.head_dim = head_dim
 
     def get_config(self):
         config = super().get_config()
@@ -215,6 +240,7 @@ class GptOssBackbone(Backbone):
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
                 "output_router_logits": self.output_router_logits,
+                "head_dim": self.head_dim,  # Include for completeness
             }
         )
         return config
