@@ -16,7 +16,7 @@ from keras_hub.src.tests.test_case import TestCase
     reason="TensorFlow GPU CI OOM (ResourceExhaustedError)",
 )
 class TestTask(TestCase):
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_convert_tiny_preset(self):
         model = Qwen3MoeCausalLM.from_preset("hf://Qwen/Qwen3-30B-A3B")
         prompt = "What is the capital of France?"
