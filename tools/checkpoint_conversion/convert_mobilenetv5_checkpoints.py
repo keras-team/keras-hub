@@ -31,6 +31,7 @@ from keras_hub.src.models.mobilenetv5.mobilenetv5_image_converter import (
     MobileNetV5ImageConverter,
 )
 from keras_hub.src.models.mobilenetv5.mobilenetv5_layers import ConvNormAct
+from keras_hub.src.models.mobilenetv5.mobilenetv5_layers import RmsNorm2d
 
 PRESET_MAP = {
     "mobilenetv5_300m_enc.gemma3n": {
@@ -44,11 +45,13 @@ MODEL_CONFIGS = {
         "backbone": {
             "block_args": decode_arch_def(
                 [
+                    # Stage 0: 128x128 in
                     [
                         "er_r1_k3_s2_e4_c128",
                         "er_r1_k3_s1_e4_c128",
                         "er_r1_k3_s1_e4_c128",
                     ],
+                    # Stage 1: 256x256 in
                     [
                         "uir_r1_a3_k5_s2_e6_c256",
                         "uir_r1_a5_k0_s1_e4_c256",
@@ -56,6 +59,7 @@ MODEL_CONFIGS = {
                         "uir_r1_a5_k0_s1_e4_c256",
                         "uir_r1_a3_k0_s1_e4_c256",
                     ],
+                    # Stage 2: 640x640 in
                     [
                         "uir_r1_a5_k5_s2_e6_c640",
                         "uir_r1_a5_k0_s1_e4_c640",
@@ -95,8 +99,11 @@ MODEL_CONFIGS = {
                         "mqa_r1_k3_h12_v2_s1_d64_c640",
                         "uir_r1_a0_k0_s1_e2_c640",
                     ],
+                    # Stage 3: 1280x1280 in
                     [
                         "uir_r1_a5_k5_s2_e6_c1280",
+                        "mqa_r1_k3_h16_s1_d96_c1280",
+                        "uir_r1_a0_k0_s1_e2_c1280",
                         "mqa_r1_k3_h16_s1_d96_c1280",
                         "uir_r1_a0_k0_s1_e2_c1280",
                         "mqa_r1_k3_h16_s1_d96_c1280",
@@ -202,16 +209,18 @@ class TimmToKerasConverter:
             print(f"❓ Unexpected number of weights in layer {layer.name}")
 
     def _port_bn(self, layer, timm_prefix):
-        weights = [
-            self.state_dict[f"{timm_prefix}.weight"],
-            self.state_dict[f"{timm_prefix}.bias"],
-            self.state_dict[f"{timm_prefix}.running_mean"],
-            self.state_dict[f"{timm_prefix}.running_var"],
+        keys = [
+            f"{timm_prefix}.weight",
+            f"{timm_prefix}.bias",
+            f"{timm_prefix}.running_mean",
+            f"{timm_prefix}.running_var",
         ]
+        weights = [self.state_dict[key] for key in keys]
         layer.set_weights(weights)
 
     def _port_rms_norm(self, layer, timm_prefix):
-        layer.set_weights([self.state_dict[f"{timm_prefix}.weight"]])
+        key = f"{timm_prefix}.weight"
+        layer.set_weights([self.state_dict[key]])
 
     def _port_cna(
         self, cna_layer: ConvNormAct, timm_conv_prefix, timm_norm_prefix
@@ -253,70 +262,75 @@ class TimmToKerasConverter:
         except ValueError:
             print("  -> MSFA layer not found, skipping.")
 
-    def _port_blocks(self, backbone):
+    def _port_blocks(self, backbone: MobileNetV5Backbone):
         print("  -> Porting blocks...")
-        stack_idx = 0
-        while True:
-            try:
-                stack = backbone.get_layer(f"stack_{stack_idx}")
-                print(f"    -> Stack {stack_idx}")
-                for block_idx, block in enumerate(stack.layers):
-                    timm_prefix = f"blocks.{stack_idx}.{block_idx}"
-                    if isinstance(block, EdgeResidual):
+        block_layers = [
+            layer
+            for layer in backbone.layers
+            if isinstance(
+                layer,
+                (EdgeResidual, UniversalInvertedResidual, MobileAttention),
+            )
+        ]
+        block_counter = 0
+        for stack_idx, stack_args in enumerate(backbone.block_args):
+            print(f"    -> Stack {stack_idx}")
+            for block_idx_in_stage in range(len(stack_args)):
+                block = block_layers[block_counter]
+                timm_prefix = f"blocks.{stack_idx}.{block_idx_in_stage}"
+                if isinstance(block, EdgeResidual):
+                    self._port_cna(
+                        block.conv_exp,
+                        f"{timm_prefix}.conv_exp",
+                        f"{timm_prefix}.bn1",
+                    )
+                    self._port_cna(
+                        block.conv_pwl,
+                        f"{timm_prefix}.conv_pwl",
+                        f"{timm_prefix}.bn2",
+                    )
+                elif isinstance(block, UniversalInvertedResidual):
+                    if hasattr(block, "dw_start") and not isinstance(
+                        block.dw_start, types.FunctionType
+                    ):
                         self._port_cna(
-                            block.conv_exp,
-                            f"{timm_prefix}.conv_exp",
-                            f"{timm_prefix}.bn1",
+                            block.dw_start,
+                            f"{timm_prefix}.dw_start.conv",
+                            f"{timm_prefix}.dw_start.bn",
                         )
+                    self._port_cna(
+                        block.pw_exp,
+                        f"{timm_prefix}.pw_exp.conv",
+                        f"{timm_prefix}.pw_exp.bn",
+                    )
+                    if hasattr(block, "dw_mid") and not isinstance(
+                        block.dw_mid, types.FunctionType
+                    ):
                         self._port_cna(
-                            block.conv_pwl,
-                            f"{timm_prefix}.conv_pwl",
-                            f"{timm_prefix}.bn2",
+                            block.dw_mid,
+                            f"{timm_prefix}.dw_mid.conv",
+                            f"{timm_prefix}.dw_mid.bn",
                         )
-                        self._port_bn(block.conv_pwl.norm, f"{timm_prefix}.bn2")
-                    elif isinstance(block, UniversalInvertedResidual):
-                        if hasattr(block, "dw_start") and not isinstance(
-                            block.dw_start, types.FunctionType
-                        ):
-                            self._port_cna(
-                                block.dw_start,
-                                f"{timm_prefix}.dw_start.conv",
-                                f"{timm_prefix}.dw_start.bn",
-                            )
-                        self._port_cna(
-                            block.pw_exp,
-                            f"{timm_prefix}.pw_exp.conv",
-                            f"{timm_prefix}.pw_exp.bn",
+                    self._port_cna(
+                        block.pw_proj,
+                        f"{timm_prefix}.pw_proj.conv",
+                        f"{timm_prefix}.pw_proj.bn",
+                    )
+                    gamma_key = f"{timm_prefix}.layer_scale.gamma"
+                    if gamma_key in self.state_dict:
+                        block.layer_scale.set_weights(
+                            [self.state_dict[gamma_key]]
                         )
-                        if hasattr(block, "dw_mid") and not isinstance(
-                            block.dw_mid, types.FunctionType
-                        ):
-                            self._port_cna(
-                                block.dw_mid,
-                                f"{timm_prefix}.dw_mid.conv",
-                                f"{timm_prefix}.dw_mid.bn",
-                            )
-                        self._port_cna(
-                            block.pw_proj,
-                            f"{timm_prefix}.pw_proj.conv",
-                            f"{timm_prefix}.pw_proj.bn",
+                elif isinstance(block, MobileAttention):
+                    self._port_rms_norm(block.norm, f"{timm_prefix}.norm")
+                    gamma_key = f"{timm_prefix}.layer_scale.gamma"
+                    if gamma_key in self.state_dict:
+                        block.layer_scale.set_weights(
+                            [self.state_dict[gamma_key]]
                         )
-                        self._port_weights(
-                            block.layer_scale,
-                            f"{timm_prefix}.layer_scale.gamma",
-                        )
-                    elif isinstance(block, MobileAttention):
-                        self._port_rms_norm(block.norm, f"{timm_prefix}.norm")
-                        self._port_weights(
-                            block.layer_scale,
-                            f"{timm_prefix}.layer_scale.gamma",
-                        )
-                        attn_prefix = f"{timm_prefix}.attn"
-                        self._port_attn(block.attn, attn_prefix)
-
-                stack_idx += 1
-            except ValueError:
-                break
+                    attn_prefix = f"{timm_prefix}.attn"
+                    self._port_attn(block.attn, attn_prefix)
+                block_counter += 1
 
     def _port_attn(self, attn_layer, attn_prefix):
         self._port_weights(
@@ -330,7 +344,11 @@ class TimmToKerasConverter:
                 f"{attn_prefix}.key.down_conv.weight",
                 (2, 3, 0, 1),
             )
-            self._port_bn(attn_layer.key_layers[2], f"{attn_prefix}.key.norm")
+            key_norm_layer = attn_layer.key_layers[2]
+            if isinstance(key_norm_layer, RmsNorm2d):
+                self._port_rms_norm(key_norm_layer, f"{attn_prefix}.key.norm")
+            else:
+                self._port_bn(key_norm_layer, f"{attn_prefix}.key.norm")
         self._port_weights(
             attn_layer.key_layers[-1],
             f"{attn_prefix}.key.proj.weight",
@@ -342,9 +360,13 @@ class TimmToKerasConverter:
                 f"{attn_prefix}.value.down_conv.weight",
                 (2, 3, 0, 1),
             )
-            self._port_bn(
-                attn_layer.value_layers[2], f"{attn_prefix}.value.norm"
-            )
+            value_norm_layer = attn_layer.value_layers[2]
+            if isinstance(value_norm_layer, RmsNorm2d):
+                self._port_rms_norm(
+                    value_norm_layer, f"{attn_prefix}.value.norm"
+                )
+            else:
+                self._port_bn(value_norm_layer, f"{attn_prefix}.value.norm")
         self._port_weights(
             attn_layer.value_layers[-1],
             f"{attn_prefix}.value.proj.weight",

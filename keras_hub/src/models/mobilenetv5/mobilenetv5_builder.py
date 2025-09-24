@@ -75,10 +75,13 @@ def decode_block_str(block_str):
             )
         )
     elif block_type in ("mqa", "mha"):
+        key_dim_val = int(options.get("d", "64"))
         block_args.update(
             dict(
                 num_heads=int(options.get("h", "12")),
-                key_dim=int(options.get("d", "64")),
+                key_dim=key_dim_val,
+                value_dim=key_dim_val,
+                kv_stride=int(options.get("v", "1")),
                 use_cpe=bool(int(options.get("cpe", "0"))),
             )
         )

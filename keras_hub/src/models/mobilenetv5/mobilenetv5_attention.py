@@ -91,15 +91,23 @@ class MultiQueryAttention2d(keras.layers.Layer):
                     dtype=self.dtype_policy,
                 )
             )
-            query_layers.append(
-                norm_layer(
+            if norm_layer is RmsNorm2d:
+                norm = norm_layer(
+                    dim=dim,
+                    channel_axis=self.channel_axis,
+                    data_format=self.data_format,
+                    name="query_norm",
+                    dtype=self.dtype_policy,
+                )
+            else:
+                norm = norm_layer(
                     axis=self.channel_axis,
                     name="query_norm",
                     gamma_initializer="ones",
                     beta_initializer="zeros",
                     dtype=self.dtype_policy,
                 )
-            )
+            query_layers.append(norm)
         query_layers.append(
             keras.layers.Conv2D(
                 filters=self.num_heads * self.key_dim,
@@ -138,15 +146,23 @@ class MultiQueryAttention2d(keras.layers.Layer):
                     dtype=self.dtype_policy,
                 )
             )
-            key_layers.append(
-                norm_layer(
+            if norm_layer is RmsNorm2d:
+                norm = norm_layer(
+                    dim=dim,
+                    channel_axis=self.channel_axis,
+                    data_format=self.data_format,
+                    name="key_norm",
+                    dtype=self.dtype_policy,
+                )
+            else:
+                norm = norm_layer(
                     axis=self.channel_axis,
                     gamma_initializer="ones",
                     beta_initializer="zeros",
                     name="key_norm",
                     dtype=self.dtype_policy,
                 )
-            )
+            key_layers.append(norm)
         key_layers.append(
             keras.layers.Conv2D(
                 filters=self.key_dim,
@@ -186,15 +202,23 @@ class MultiQueryAttention2d(keras.layers.Layer):
                     dtype=self.dtype_policy,
                 )
             )
-            value_layers.append(
-                norm_layer(
+            if norm_layer is RmsNorm2d:
+                norm = norm_layer(
+                    dim=dim,
+                    channel_axis=self.channel_axis,
+                    data_format=self.data_format,
+                    name="value_norm",
+                    dtype=self.dtype_policy,
+                )
+            else:
+                norm = norm_layer(
                     axis=self.channel_axis,
                     gamma_initializer="ones",
                     beta_initializer="zeros",
                     name="value_norm",
                     dtype=self.dtype_policy,
                 )
-            )
+            value_layers.append(norm)
         value_layers.append(
             keras.layers.Conv2D(
                 filters=self.value_dim,
@@ -512,6 +536,11 @@ class MobileAttention(keras.layers.Layer):
         if num_heads is None:
             assert in_chs % key_dim == 0
             num_heads = in_chs // key_dim
+        attn_norm_layer = (
+            RmsNorm2d
+            if norm_layer == "rms_norm"
+            else keras.layers.BatchNormalization
+        )
         if use_multi_query:
             self.attn = MultiQueryAttention2d(
                 dim=in_chs,
@@ -526,7 +555,7 @@ class MobileAttention(keras.layers.Layer):
                 padding=pad_type,
                 attn_drop=attn_drop,
                 proj_drop=proj_drop,
-                norm_layer=keras.layers.BatchNormalization,
+                norm_layer=attn_norm_layer,
                 use_bias=use_bias,
                 channel_axis=self.channel_axis,
                 data_format=self.data_format,
