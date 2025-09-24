@@ -54,6 +54,9 @@ class Arange(keras.layers.Layer):
         sequence_length = keras.ops.shape(inputs)[1]
         return keras.ops.arange(sequence_length, dtype="int32")
 
+    def compute_output_shape(self, input_shape):
+        return (input_shape[1],)
+
 
 @keras_hub_export("keras_hub.models.MoonshineBackbone")
 class MoonshineBackbone(Backbone):
