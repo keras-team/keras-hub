@@ -110,7 +110,7 @@ class Phi4CausalLMTest(TestCase):
         causal_lm.compile(sampler="greedy")
         self.assertIsNone(causal_lm.generate_function)
 
-    # @pytest.mark.large
+    @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=Phi4CausalLM,

@@ -46,7 +46,7 @@ class Phi4TokenizerTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=Phi4Tokenizer,
-            preset="phi4_8b_en",
+            preset="phi4_mini_4k_instruct_en",
             input_data=["The quick brown fox."],
             expected_output=[[791, 4062, 14198, 39935, 13]],
         )
