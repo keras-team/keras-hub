@@ -36,11 +36,11 @@ PRESET_MAP = {
     "vit_large_patch16_224_imagenet": "google/vit-large-patch16-224",
     "vit_large_patch16_384_imagenet": "google/vit-large-patch16-384",
     "vit_large_patch32_384_imagenet": "google/vit-large-patch32-384",
-    "vit_base_patch16_224__imagenet21k": "google/vit-base-patch16-224-in21k",
-    "vit_base_patch32_224__imagenet21k": "google/vit-base-patch32-224-in21k",
-    "vit_large_patch16_224__imagenet21k": "google/vit-large-patch16-224-in21k",
-    "vit_large_patch32_224__imagenet21k": "google/vit-large-patch32-224-in21k",
-    "vit_huge_patch14_224__imagenet21k": "google/vit-huge-patch14-224-in21k",
+    "vit_base_patch16_224_imagenet21k": "google/vit-base-patch16-224-in21k",
+    "vit_base_patch32_224_imagenet21k": "google/vit-base-patch32-224-in21k",
+    "vit_large_patch16_224_imagenet21k": "google/vit-large-patch16-224-in21k",
+    "vit_large_patch32_224_imagenet21k": "google/vit-large-patch32-224-in21k",
+    "vit_huge_patch14_224_imagenet21k": "google/vit-huge-patch14-224-in21k",
 }
 
 flags.DEFINE_string(
