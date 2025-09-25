@@ -340,11 +340,11 @@ class TimmToKerasConverter:
         )
         if len(attn_layer.key_layers) > 1:
             self._port_weights(
-                attn_layer.key_layers[1],
+                attn_layer.key_layers[0],
                 f"{attn_prefix}.key.down_conv.weight",
                 (2, 3, 0, 1),
             )
-            key_norm_layer = attn_layer.key_layers[2]
+            key_norm_layer = attn_layer.key_layers[1]
             if isinstance(key_norm_layer, RmsNorm2d):
                 self._port_rms_norm(key_norm_layer, f"{attn_prefix}.key.norm")
             else:
@@ -356,11 +356,11 @@ class TimmToKerasConverter:
         )
         if len(attn_layer.value_layers) > 1:
             self._port_weights(
-                attn_layer.value_layers[1],
+                attn_layer.value_layers[0],
                 f"{attn_prefix}.value.down_conv.weight",
                 (2, 3, 0, 1),
             )
-            value_norm_layer = attn_layer.value_layers[2]
+            value_norm_layer = attn_layer.value_layers[1]
             if isinstance(value_norm_layer, RmsNorm2d):
                 self._port_rms_norm(
                     value_norm_layer, f"{attn_prefix}.value.norm"
@@ -419,10 +419,6 @@ def validate_output(keras_model, timm_model):
     print("🔶 Keras label:", keras_label)
     modeling_diff = np.mean(np.abs(keras_outputs - timm_outputs_pooled))
     print("🔶 Modeling difference:", modeling_diff)
-    preprocessing_diff = np.mean(
-        np.abs(np.array(keras_preprocessed) - np.array(timm_preprocessed))
-    )
-    print("🔶 Preprocessing difference:", preprocessing_diff)
 
 
 def main(_):

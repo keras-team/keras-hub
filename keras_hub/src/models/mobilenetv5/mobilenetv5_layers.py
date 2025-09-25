@@ -220,21 +220,13 @@ class ConvNormAct(keras.layers.Layer):
         super().__init__(dtype=dtype, **kwargs)
         self.channel_axis = channel_axis
         self.data_format = data_format
-        self.pad = None
         self.kernel_initializer = keras.initializers.VarianceScaling(
             scale=2.0, mode="fan_out", distribution="untruncated_normal"
         )
         self.bias_initializer = "zeros"
         padding_mode = "valid"
         if pad_type.lower() == "" or pad_type.lower() == "same":
-            if stride > 1:
-                self.pad = keras.layers.ZeroPadding2D(
-                    padding=kernel_size // 2,
-                    data_format=self.data_format,
-                    dtype=self.dtype_policy,
-                )
-            else:
-                padding_mode = "same"
+            padding_mode = "same"
 
         self.conv = keras.layers.Conv2D(
             out_chs,
@@ -279,7 +271,7 @@ class ConvNormAct(keras.layers.Layer):
         if self.apply_act:
             if act_layer == "gelu":
                 self.act = keras.layers.Activation(
-                    lambda x: keras.activations.gelu(x, approximate=True),
+                    lambda x: keras.activations.gelu(x, approximate=False),
                     dtype=self.dtype_policy,
                 )
             else:
@@ -289,22 +281,14 @@ class ConvNormAct(keras.layers.Layer):
                 )
 
     def build(self, input_shape):
-        if self.pad:
-            self.pad.build(input_shape)
-            conv_input_shape = self.pad.compute_output_shape(input_shape)
-        else:
-            conv_input_shape = input_shape
-
-        self.conv.build(conv_input_shape)
-        conv_output_shape = self.conv.compute_output_shape(conv_input_shape)
+        self.conv.build(input_shape)
+        conv_output_shape = self.conv.compute_output_shape(input_shape)
         self.norm.build(conv_output_shape)
         if self.apply_act:
             self.act.build(conv_output_shape)
         self.built = True
 
     def call(self, x, training=False):
-        if self.pad:
-            x = self.pad(x)
         x = self.conv(x)
         x = self.norm(x, training=training)
         if self.apply_act:
@@ -312,11 +296,7 @@ class ConvNormAct(keras.layers.Layer):
         return x
 
     def compute_output_shape(self, input_shape):
-        if self.pad:
-            padded_shape = self.pad.compute_output_shape(input_shape)
-            return self.conv.compute_output_shape(padded_shape)
-        else:
-            return self.conv.compute_output_shape(input_shape)
+        return self.conv.compute_output_shape(input_shape)
 
 
 class SEModule(keras.layers.Layer):

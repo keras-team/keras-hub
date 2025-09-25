@@ -73,14 +73,14 @@ class MultiQueryAttention2d(keras.layers.Layer):
         self.kv_stride = kv_stride
         self.has_query_strides = any([s > 1 for s in self.query_strides])
         self.scale = self.key_dim**-0.5
-        self.keras_padding = "same" if padding == "" else "valid"
+        self.padding = "same" if padding == "" else "valid"
         self.conv_kernel_initializer = keras.initializers.VarianceScaling(
             scale=2.0, mode="fan_out", distribution="untruncated_normal"
         )
         self.bias_initializer = "zeros"
         query_layers = []
         if self.has_query_strides:
-            pool_padding = "valid" if self.keras_padding == "valid" else "same"
+            pool_padding = "valid" if self.padding == "valid" else "same"
             query_layers.append(
                 keras.layers.AveragePooling2D(
                     pool_size=self.query_strides,
@@ -123,21 +123,12 @@ class MultiQueryAttention2d(keras.layers.Layer):
         self.query_layers = query_layers
         key_layers = []
         if kv_stride > 1:
-            if self.keras_padding == "same":
-                key_layers.append(
-                    keras.layers.ZeroPadding2D(
-                        padding=dw_kernel_size // 2,
-                        data_format=self.data_format,
-                        name="key_down_pad",
-                        dtype=self.dtype_policy,
-                    )
-                )
             key_layers.append(
                 keras.layers.DepthwiseConv2D(
                     kernel_size=dw_kernel_size,
                     strides=kv_stride,
                     dilation_rate=dilation,
-                    padding="valid",
+                    padding=self.padding,
                     data_format=self.data_format,
                     name="key_down_conv",
                     depthwise_initializer=self.conv_kernel_initializer,
@@ -179,21 +170,12 @@ class MultiQueryAttention2d(keras.layers.Layer):
         self.key_layers = key_layers
         value_layers = []
         if kv_stride > 1:
-            if self.keras_padding == "same":
-                value_layers.append(
-                    keras.layers.ZeroPadding2D(
-                        padding=dw_kernel_size // 2,
-                        data_format=self.data_format,
-                        name="value_down_pad",
-                        dtype=self.dtype_policy,
-                    )
-                )
             value_layers.append(
                 keras.layers.DepthwiseConv2D(
                     kernel_size=dw_kernel_size,
                     strides=kv_stride,
                     dilation_rate=dilation,
-                    padding="valid",
+                    padding=self.padding,
                     data_format=self.data_format,
                     name="value_down_conv",
                     depthwise_initializer=self.conv_kernel_initializer,

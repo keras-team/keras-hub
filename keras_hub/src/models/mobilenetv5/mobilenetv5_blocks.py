@@ -69,7 +69,7 @@ class UniversalInvertedResidual(keras.layers.Layer):
         self.out_chs = out_chs
         self.data_format = data_format
         self.channel_axis = channel_axis
-        keras_pad_type = "same" if pad_type == "" else "valid"
+        pad_type = "same" if pad_type == "" else "valid"
         use_bias = norm_layer == "rms_norm"
 
         if dw_kernel_size_start:
@@ -79,7 +79,7 @@ class UniversalInvertedResidual(keras.layers.Layer):
                 stride=stride if not dw_kernel_size_mid else 1,
                 dilation=dilation,
                 groups=in_chs,
-                pad_type=keras_pad_type,
+                pad_type=pad_type,
                 apply_act=False,
                 act_layer=act_layer,
                 norm_layer=norm_layer,
@@ -95,7 +95,7 @@ class UniversalInvertedResidual(keras.layers.Layer):
         self.pw_exp = ConvNormAct(
             mid_chs,
             1,
-            pad_type=keras_pad_type,
+            pad_type=pad_type,
             act_layer=act_layer,
             norm_layer=norm_layer,
             bias=use_bias,
@@ -111,7 +111,7 @@ class UniversalInvertedResidual(keras.layers.Layer):
                 stride=stride,
                 dilation=dilation,
                 groups=mid_chs,
-                pad_type=keras_pad_type,
+                pad_type=pad_type,
                 act_layer=act_layer,
                 norm_layer=norm_layer,
                 bias=use_bias,
@@ -137,7 +137,7 @@ class UniversalInvertedResidual(keras.layers.Layer):
         self.pw_proj = ConvNormAct(
             out_chs,
             1,
-            pad_type=keras_pad_type,
+            pad_type=pad_type,
             apply_act=False,
             act_layer=act_layer,
             norm_layer=norm_layer,
@@ -156,7 +156,7 @@ class UniversalInvertedResidual(keras.layers.Layer):
                 else 1,
                 dilation=dilation,
                 groups=out_chs,
-                pad_type=keras_pad_type,
+                pad_type=pad_type,
                 apply_act=False,
                 act_layer=act_layer,
                 norm_layer=norm_layer,
@@ -289,7 +289,7 @@ class EdgeResidual(keras.layers.Layer):
         self.out_chs = out_chs
         self.data_format = data_format
         self.channel_axis = channel_axis
-        keras_pad_type = "same" if pad_type == "" else "valid"
+        pad_type = "same" if pad_type == "" else "valid"
         if force_in_chs > 0:
             mid_chs = adjust_channels(force_in_chs * exp_ratio)
         else:
@@ -302,7 +302,7 @@ class EdgeResidual(keras.layers.Layer):
             stride=stride,
             dilation=dilation,
             groups=groups,
-            pad_type=keras_pad_type,
+            pad_type=pad_type,
             norm_layer=norm_layer,
             act_layer=act_layer,
             bias=use_bias,
@@ -326,7 +326,7 @@ class EdgeResidual(keras.layers.Layer):
         self.conv_pwl = ConvNormAct(
             out_chs,
             pw_kernel_size,
-            pad_type=keras_pad_type,
+            pad_type=pad_type,
             apply_act=False,
             norm_layer=norm_layer,
             act_layer=act_layer,
@@ -420,7 +420,7 @@ class CondConvResidual(keras.layers.Layer):
         )
         self.bias_initializer = "zeros"
         mid_chs = adjust_channels(in_chs * exp_ratio)
-        keras_pad_type = "same" if pad_type == "" else "valid"
+        pad_type = "same" if pad_type == "" else "valid"
         self.routing_fn = keras.layers.Dense(
             self.num_experts,
             dtype=self.dtype_policy,
@@ -434,7 +434,7 @@ class CondConvResidual(keras.layers.Layer):
             keras.layers.Conv2D(
                 filters=mid_chs,
                 kernel_size=exp_kernel_size,
-                padding=keras_pad_type,
+                padding=pad_type,
                 use_bias=True,
                 data_format=self.data_format,
                 name=f"conv_pw_expert_{i}",
@@ -448,7 +448,7 @@ class CondConvResidual(keras.layers.Layer):
             keras.layers.DepthwiseConv2D(
                 kernel_size=dw_kernel_size,
                 strides=stride,
-                padding=keras_pad_type,
+                padding=pad_type,
                 dilation_rate=dilation,
                 use_bias=True,
                 data_format=self.data_format,
@@ -463,7 +463,7 @@ class CondConvResidual(keras.layers.Layer):
             keras.layers.Conv2D(
                 filters=out_chs,
                 kernel_size=pw_kernel_size,
-                padding=keras_pad_type,
+                padding=pad_type,
                 use_bias=True,
                 data_format=self.data_format,
                 name=f"conv_pwl_expert_{i}",
@@ -682,19 +682,36 @@ class MobileNetV5MultiScaleFusionAdapter(keras.layers.Layer):
             resized_inputs, axis=self.channel_axis
         )
         img = self.ffn(channel_cat_imgs, training=training)
-        if self.data_format == "channels_first":
-            img_transposed = keras.ops.transpose(img, (0, 2, 3, 1))
-        else:
-            img_transposed = img
-        img_resized = keras.ops.image.resize(
-            img_transposed,
-            size=self.output_resolution,
-            interpolation="bilinear",
-        )
-        if self.data_format == "channels_first":
-            img = keras.ops.transpose(img_resized, (0, 3, 1, 2))
-        else:
-            img = img_resized
+        if (
+            high_resolution[0] != self.output_resolution[0]
+            or high_resolution[1] != self.output_resolution[1]
+        ):
+            h_in, w_in = high_resolution
+            h_out, w_out = self.output_resolution
+            if h_in % h_out == 0 and w_in % w_out == 0:
+                h_stride = h_in // h_out
+                w_stride = w_in // w_out
+                img = keras.ops.nn.average_pool(
+                    img,
+                    pool_size=(h_stride, w_stride),
+                    strides=(h_stride, w_stride),
+                    padding="valid",
+                    data_format=self.data_format,
+                )
+            else:
+                if self.data_format == "channels_first":
+                    img_transposed = keras.ops.transpose(img, (0, 2, 3, 1))
+                else:
+                    img_transposed = img
+                img_resized = keras.ops.image.resize(
+                    img_transposed,
+                    size=self.output_resolution,
+                    interpolation="bilinear",
+                )
+                if self.data_format == "channels_first":
+                    img = keras.ops.transpose(img_resized, (0, 3, 1, 2))
+                else:
+                    img = img_resized
         img = self.norm(img, training=training)
         return img
 
