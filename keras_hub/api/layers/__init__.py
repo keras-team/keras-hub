@@ -147,3 +147,7 @@ from keras_hub.src.models.whisper.whisper_audio_converter import (
 from keras_hub.src.models.xception.xception_image_converter import (
     XceptionImageConverter as XceptionImageConverter,
 )
+
+from keras_hub.src.layers.preprocessing.random_elastic_deformation_3d import (
+    RandomElasticDeformation3D,
+)
