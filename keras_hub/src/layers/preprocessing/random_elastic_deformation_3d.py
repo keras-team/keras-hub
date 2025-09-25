@@ -8,6 +8,7 @@ class RandomElasticDeformation3D(layers.Layer):
     """
     A high-performance 3D elastic deformation layer optimized for TPUs.
     """
+
     def __init__(self,
                  grid_size=(4, 4, 4),
                  alpha=35.0,
@@ -20,7 +21,11 @@ class RandomElasticDeformation3D(layers.Layer):
         self.sigma = sigma
         self.data_format = data_format
         if data_format not in ["channels_last", "channels_first"]:
-            raise ValueError(f"`data_format` must be one of 'channels_last' or 'channels_first'. Received: {data_format}")
+            message = (
+                "`data_format` must be one of 'channels_last' or "
+                f"'channels_first'. Received: {self.data_format}"
+            )
+            raise ValueError(message)
 
     def build(self, input_shape):
         self._alpha_tensor = ops.convert_to_tensor(self.alpha, dtype=self.compute_dtype)

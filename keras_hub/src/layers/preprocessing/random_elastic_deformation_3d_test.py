@@ -1,12 +1,16 @@
 # Add keras.utils for the random seed
-from keras import utils
 import os
-import numpy as np
+
 import keras
-from keras import Model
+import numpy as np
 from keras import Input
+from keras import Model
 from keras import ops
-from keras_hub.src.layers.preprocessing.random_elastic_deformation_3d import RandomElasticDeformation3D
+from keras import utils
+
+from keras_hub.src.layers.preprocessing.random_elastic_deformation_3d import (
+    RandomElasticDeformation3D,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -44,12 +48,15 @@ class RandomElasticDeformation3DTest(TestCase):
         model = Model(inputs=[image_input, label_input], outputs=outputs)
         original_output_image, original_output_label = model(input_data)
         path = os.path.join(self.get_temp_dir(), "model.keras")
-        
+
         # --- FIX: Remove the deprecated save_format argument ---
         model.save(path)
-        
+
         loaded_model = keras.models.load_model(
-            path, custom_objects={"RandomElasticDeformation3D": RandomElasticDeformation3D}
+            path,
+            custom_objects={
+                "RandomElasticDeformation3D": RandomElasticDeformation3D
+            },
         )
         loaded_output_image, loaded_output_label = loaded_model(input_data)
         np.testing.assert_allclose(
