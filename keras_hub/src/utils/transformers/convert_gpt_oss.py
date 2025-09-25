@@ -55,6 +55,11 @@ def convert_backbone_config(transformers_config):
     elif "head_dim" in transformers_config:
         print(f"HF model has head_dim=None, will calculate dynamically")
 
+    # Include rope_scaling for YaRN support
+    if "rope_scaling" in transformers_config and transformers_config["rope_scaling"] is not None:
+        config["rope_scaling"] = transformers_config["rope_scaling"]
+        print(f"Found YaRN rope_scaling config: {transformers_config['rope_scaling']}")
+
     return config
 
 
@@ -222,61 +227,102 @@ def convert_weights(backbone, loader, transformers_config):
                 f"model.layers.{i}.mlp.experts.down_proj_bias"
             )
 
-            # Dequantize MXFP4 weights
+            # Proper MXFP4 dequantization implementation
+            def decode_e8m0(scales_8bit: np.ndarray) -> np.ndarray:
+                """Decode 8-bit E8M0 floats (power-of-two scale factors)."""
+                s = (scales_8bit >> 7) & 0x1       # sign bit
+                e = scales_8bit & 0x7F             # 7-bit exponent (bits6..0)
+                bias = 127.0
+                sign = 1.0 - 2.0*s
+                values = sign * (2.0 ** (e.astype(np.float32) - bias))
+                return values
+
             def dequantize_mxfp4(blocks, scales):
-                # blocks: [num_experts, out_dim, num_blocks, 16]
+                """Dequantize MXFP4 weights (E2M1 4bit, packed in uint8)."""
+                scales = decode_e8m0(scales)
+                # blocks: [num_experts, out_dim, num_blocks, 16] (uint8, each value packs two 4bit numbers)
                 # scales: [num_experts, out_dim, num_blocks]
                 num_experts, out_dim, num_blocks, block_size = blocks.shape
 
-                # Reshape blocks to [num_experts, out_dim, num_blocks * block_size]
-                blocks_flat = blocks.reshape(num_experts, out_dim, -1)
-                # Expand scales to match: [num_experts, out_dim, num_blocks * block_size]
-                scales_expanded = np.repeat(scales, block_size, axis=2)
+                # Unpack 4bit values: each uint8 contains two 4bit values (high nibble, low nibble)
+                # We'll expand last dim from 16 to 32 (each 16 uint8 -> 32 4bit values)
+                # Result: [num_experts, out_dim, num_blocks, 32]
+                blocks_uint8 = blocks.astype(np.uint8)
+                high_nibble = (blocks_uint8 >> 4) & 0xF
+                low_nibble = blocks_uint8 & 0xF
+                # Stack along new last axis
+                blocks_4bit = np.stack([low_nibble, high_nibble], axis=-1)
+                # Reshape last two dims: [num_experts, out_dim, num_blocks, 16, 2] -> [num_experts, out_dim, num_blocks, 32]
+                blocks_4bit = blocks_4bit.reshape(num_experts, out_dim, num_blocks, block_size * 2)
 
+                # Now, decode E2M1 4bit: 1 sign bit, 2 exponent bits, 1 mantissa bit
+                # Format: s e e m (bit3 bit2 bit1 bit0)
+                s = (blocks_4bit >> 3) & 0x1
+                e = (blocks_4bit >> 1) & 0x3
+                m = blocks_4bit & 0x1
+
+                bias = 1.0
+                sign = 1.0 - 2.0*s                # +1 for s=0, -1 for s=1
+
+                # normal numbers (e != 0)
+                normal_mask = e != 0
+
+                values = np.empty_like(blocks_4bit, dtype=np.float32)
+
+                # normal: sign * 2^(e - bias) * (1 + m/2)
+                values[normal_mask] = (
+                    sign[normal_mask]
+                    * (2.0 ** (e[normal_mask].astype(np.float32) - bias))
+                    * (1.0 + m[normal_mask].astype(np.float32)/2.0)
+                )
+
+                # subnormal or zero: sign * 2^(1 - bias) * (m/2)
+                values[~normal_mask] = (
+                    sign[~normal_mask]
+                    * (2.0 ** (1.0 - bias))
+                    * (m[~normal_mask].astype(np.float32)/2.0)
+                )
+
+                # Reshape to [num_experts, out_dim, num_blocks * 32]
+                values = values.reshape(num_experts, out_dim, num_blocks * block_size * 2)
+                # Expand scales to match: [num_experts, out_dim, num_blocks, 1] -> [num_experts, out_dim, num_blocks, 32]
+                scales_expanded = np.repeat(scales[..., np.newaxis], block_size * 2, axis=3)
+                # Reshape to [num_experts, out_dim, num_blocks * 32]
+                scales_expanded = scales_expanded.reshape(num_experts, out_dim, num_blocks * block_size * 2)
                 # Dequantize: multiply each element by its corresponding scale
-                dequantized = blocks_flat * scales_expanded
+                dequantized = values * scales_expanded
 
                 return dequantized
 
-            # Dequantize gate_up_proj weights: [32, 5760, 90, 16] -> [32, 5760, 1440]
+            # Dequantize gate_up_proj weights: [32, 5760, 90, 16] -> [32, 5760, 2880] (32 elements per block)
             gate_up_dequantized = dequantize_mxfp4(
                 gate_up_blocks, gate_up_scales
             )
             print(f"Gate_up dequantized shape: {gate_up_dequantized.shape}")
 
             # The dequantized weights need proper reshaping based on actual dimensions
-            # gate_up_dequantized: [32, 5760, 1440] -> [32, hidden_dim, 2*intermediate_dim]
-            # We need to transpose to [32, 1440, 5760] to get [num_experts, hidden_dim, gate+up_dim]
-            gate_up_proj = np.transpose(gate_up_dequantized, (0, 2, 1))  # [32, 1440, 5760]
+            # gate_up_dequantized: [32, 5760, 2880] -> [32, hidden_dim, 2*intermediate_dim]
+            # We need to transpose to [32, 2880, 5760] to get [num_experts, hidden_dim, gate+up_dim]
+            gate_up_proj = np.transpose(gate_up_dequantized, (0, 2, 1))  # [32, 2880, 5760]
 
             # Verify the expected shape matches what we have
             expected_hidden_dim = transformers_config["hidden_size"]
             expected_intermediate_dim = transformers_config["intermediate_size"]
 
-            if gate_up_proj.shape[1] != expected_hidden_dim:
-                print(f"Warning: gate_up hidden dim mismatch. Expected {expected_hidden_dim}, got {gate_up_proj.shape[1]}")
-                # If dimensions don't match, we may need to pad or interpolate
-                if gate_up_proj.shape[1] < expected_hidden_dim:
-                    # Pad with zeros or interpolate
-                    pad_size = expected_hidden_dim - gate_up_proj.shape[1]
-                    padding = np.zeros((gate_up_proj.shape[0], pad_size, gate_up_proj.shape[2]))
-                    gate_up_proj = np.concatenate([gate_up_proj, padding], axis=1)
+            print(f"Expected hidden_dim: {expected_hidden_dim}, got: {gate_up_proj.shape[1]}")
+            print(f"Expected gate+up_dim: {2*expected_intermediate_dim}, got: {gate_up_proj.shape[2]}")
 
-            # Dequantize down_proj weights: [32, 2880, 90, 16] -> [32, 2880, 1440]
+            # Dequantize down_proj weights: [32, 2880, 90, 16] -> [32, 2880, 2880] (32 elements per block)
             down_dequantized = dequantize_mxfp4(down_blocks, down_scales)
             print(f"Down dequantized shape: {down_dequantized.shape}")
 
-            # down_dequantized: [32, 2880, 1440] -> [32, intermediate_dim, hidden_dim]
-            # We need to transpose to [32, 1440, 2880] to get [num_experts, hidden_dim, intermediate_dim]
-            down_proj = np.transpose(down_dequantized, (0, 2, 1))  # [32, 1440, 2880]
+            # down_dequantized: [32, 2880, 2880] -> [32, intermediate_dim, hidden_dim]
+            # We need to transpose to [32, 2880, 2880] to get [num_experts, hidden_dim, intermediate_dim]
+            down_proj = np.transpose(down_dequantized, (0, 2, 1))  # [32, 2880, 2880]
 
-            # Verify and fix dimensions if needed
-            if down_proj.shape[1] != expected_hidden_dim:
-                print(f"Warning: down_proj hidden dim mismatch. Expected {expected_hidden_dim}, got {down_proj.shape[1]}")
-                if down_proj.shape[1] < expected_hidden_dim:
-                    pad_size = expected_hidden_dim - down_proj.shape[1]
-                    padding = np.zeros((down_proj.shape[0], pad_size, down_proj.shape[2]))
-                    down_proj = np.concatenate([down_proj, padding], axis=1)
+            # Verify dimensions
+            print(f"Expected down_proj shape: [{transformers_config['num_local_experts']}, {expected_hidden_dim}, {expected_intermediate_dim}]")
+            print(f"Actual down_proj shape: {down_proj.shape}")
 
             # Add debugging before assignment
             print(f"Final gate_up_proj shape: {gate_up_proj.shape}")
