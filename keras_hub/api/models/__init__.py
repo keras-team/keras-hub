@@ -428,6 +428,15 @@ from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier_preprocessor import (
     MobileNetImageClassifierPreprocessor as MobileNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
+    MobileNetV5Backbone as MobileNetV5Backbone,
+)
+from keras_hub.src.models.mobilenetv5.mobilenetv5_image_classifier import (
+    MobileNetV5ImageClassifier as MobileNetV5ImageClassifier,
+)
+from keras_hub.src.models.mobilenetv5.mobilenetv5_image_classifier_preprocessor import (
+    MobileNetV5ImageClassifierPreprocessor as MobileNetV5ImageClassifierPreprocessor,
+)
 from keras_hub.src.models.moonshine.moonshine_audio_to_text import (
     MoonshineAudioToText as MoonshineAudioToText,
 )
