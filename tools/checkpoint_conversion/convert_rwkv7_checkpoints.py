@@ -447,6 +447,7 @@ def main(_):
 
     try:
         np.testing.assert_allclose(my_output, standard_output, atol=1e-4)
+        print("Successfully passed the numerical verification! 🎯✅📊")
     except AssertionError as err:
         print("\n")
         print(err.args[0])
