@@ -403,8 +403,8 @@ def main(_):
         os.path.join(FLAGS.preset, "vocab.txt"), "w", encoding="utf-8"
     ) as f:
         f.write(vocabs)
-    tokenizer = RWKVTokenizer(FLAGS.preset)
-    tokenizer.load_assets()
+    tokenizer = RWKVTokenizer()
+    tokenizer.load_assets(FLAGS.preset)
 
     # Download checkpoint
     download_path = snapshot_download(
