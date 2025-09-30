@@ -50,9 +50,8 @@ class DepthAnythingBackboneTest(TestCase):
         )
 
     @pytest.mark.kaggle_key_required
-    @pytest.mark.extra_large
+    @pytest.mark.large
     def test_smallest_preset(self):
-        self.skipTest("Presets are not uploaded yet.")
         self.run_preset_test(
             cls=DepthAnythingBackbone,
             preset="depth_anything_v2_small",
@@ -63,7 +62,6 @@ class DepthAnythingBackboneTest(TestCase):
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
-        self.skipTest("Presets are not uploaded yet.")
         for preset in DepthAnythingBackbone.presets:
             self.run_preset_test(
                 cls=DepthAnythingBackbone,

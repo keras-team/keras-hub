@@ -5,8 +5,9 @@ backbone_presets = {
     "depth_anything_v2_small": {
         "metadata": {
             "description": (
-                "Small variant of Depth Anything monocular depth estimation "
-                "(MDE) model trained on synthetic images."
+                "Small variant of Depth Anything V2 monocular depth estimation "
+                "(MDE) model trained on synthetic labeled images and real "
+                "unlabeled images."
             ),
             "params": 25_311_169,
             "path": "depth_anything",
@@ -16,8 +17,9 @@ backbone_presets = {
     "depth_anything_v2_base": {
         "metadata": {
             "description": (
-                "Base variant of Depth Anything monocular depth estimation "
-                "(MDE) model trained on synthetic images."
+                "Base variant of Depth Anything V2 monocular depth estimation "
+                "(MDE) model trained on synthetic labeled images and real "
+                "unlabeled images."
             ),
             "params": 98_522_945,
             "path": "depth_anything",
@@ -27,8 +29,9 @@ backbone_presets = {
     "depth_anything_v2_large": {
         "metadata": {
             "description": (
-                "Large variant of Depth Anything monocular depth estimation "
-                "(MDE) model trained on synthetic images."
+                "Large variant of Depth Anything V2 monocular depth estimation "
+                "(MDE) model trained on synthetic labeled images and real "
+                "unlabeled images."
             ),
             "params": 336_718_529,
             "path": "depth_anything",
