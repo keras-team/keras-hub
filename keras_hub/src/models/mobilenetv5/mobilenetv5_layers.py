@@ -218,8 +218,18 @@ class ConvNormAct(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        self.channel_axis = channel_axis
+        self.out_chs = out_chs
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.dilation = dilation
+        self.groups = groups
+        self.bias = bias
+        self.pad_type = pad_type
+        self.apply_act = apply_act
+        self.act_layer = act_layer
+        self.norm_layer = norm_layer
         self.data_format = data_format
+        self.channel_axis = channel_axis
         self.kernel_initializer = keras.initializers.VarianceScaling(
             scale=2.0, mode="fan_out", distribution="untruncated_normal"
         )
@@ -267,7 +277,6 @@ class ConvNormAct(keras.layers.Layer):
                 dtype=self.dtype_policy,
             )
 
-        self.apply_act = apply_act
         if self.apply_act:
             if act_layer == "gelu":
                 self.act = keras.layers.Activation(
@@ -297,6 +306,26 @@ class ConvNormAct(keras.layers.Layer):
 
     def compute_output_shape(self, input_shape):
         return self.conv.compute_output_shape(input_shape)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "out_chs": self.out_chs,
+                "kernel_size": self.kernel_size,
+                "stride": self.stride,
+                "dilation": self.dilation,
+                "groups": self.groups,
+                "bias": self.bias,
+                "pad_type": self.pad_type,
+                "apply_act": self.apply_act,
+                "act_layer": self.act_layer,
+                "norm_layer": self.norm_layer,
+                "data_format": self.data_format,
+                "channel_axis": self.channel_axis,
+            }
+        )
+        return config
 
 
 class SEModule(keras.layers.Layer):

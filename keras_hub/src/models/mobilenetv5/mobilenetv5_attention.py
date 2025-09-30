@@ -59,10 +59,23 @@ class MultiQueryAttention2d(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        self.data_format = data_format
-        self.channel_axis = channel_axis
-        dim_out = dim_out or dim
+        self.dim = dim
+        self.dim_out_arg = dim_out
         self.num_heads = num_heads
+        self.key_dim_arg = key_dim
+        self.value_dim_arg = value_dim
+        self.query_strides_arg = query_strides
+        self.kv_stride = kv_stride
+        self.dw_kernel_size = dw_kernel_size
+        self.dilation = dilation
+        self.padding_arg = padding
+        self.attn_drop_rate = attn_drop
+        self.proj_drop_rate = proj_drop
+        self.norm_layer = norm_layer
+        self.use_bias = use_bias
+        self.channel_axis = channel_axis
+        self.data_format = data_format
+        self.dim_out = dim_out or dim
         self.key_dim = key_dim or dim // num_heads
         self.value_dim = value_dim or dim // num_heads
         self.query_strides = (
@@ -70,7 +83,6 @@ class MultiQueryAttention2d(keras.layers.Layer):
             if isinstance(query_strides, (list, tuple))
             else (query_strides, query_strides)
         )
-        self.kv_stride = kv_stride
         self.has_query_strides = any([s > 1 for s in self.query_strides])
         self.scale = self.key_dim**-0.5
         self.padding = "same" if padding == "" else "valid"
@@ -215,7 +227,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
             )
         )
         self.value_layers = value_layers
-        self.attn_drop = keras.layers.Dropout(
+        self.attn_drop_layer = keras.layers.Dropout(
             attn_drop, dtype=self.dtype_policy
         )
         output_layers = []
@@ -231,7 +243,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
             )
         output_layers.append(
             keras.layers.Conv2D(
-                filters=dim_out,
+                filters=self.dim_out,
                 kernel_size=1,
                 use_bias=use_bias,
                 data_format=self.data_format,
@@ -283,7 +295,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
         q = q * self.scale
         attn = keras.ops.matmul(q, keras.ops.transpose(k, (0, 1, 3, 2)))
         attn = keras.ops.softmax(attn, axis=-1)
-        attn = self.attn_drop(attn, training=training)
+        attn = self.attn_drop_layer(attn, training=training)
         o = keras.ops.matmul(attn, v)
         o = keras.ops.transpose(o, (0, 2, 1, 3))
         feat_dim = self.num_heads * self.value_dim
@@ -297,6 +309,39 @@ class MultiQueryAttention2d(keras.layers.Layer):
             except TypeError:
                 x_out = layer(x_out)
         return x_out
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "dim": self.dim,
+                "dim_out": self.dim_out_arg,
+                "num_heads": self.num_heads,
+                "key_dim": self.key_dim_arg,
+                "value_dim": self.value_dim_arg,
+                "query_strides": self.query_strides_arg,
+                "kv_stride": self.kv_stride,
+                "dw_kernel_size": self.dw_kernel_size,
+                "dilation": self.dilation,
+                "padding": self.padding_arg,
+                "attn_drop": self.attn_drop_rate,
+                "proj_drop": self.proj_drop_rate,
+                "norm_layer": keras.saving.serialize_keras_object(
+                    self.norm_layer
+                ),
+                "use_bias": self.use_bias,
+                "channel_axis": self.channel_axis,
+                "data_format": self.data_format,
+            }
+        )
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        config["norm_layer"] = keras.saving.deserialize_keras_object(
+            config["norm_layer"]
+        )
+        return cls(**config)
 
 
 class Attention2d(keras.layers.Layer):
@@ -333,13 +378,15 @@ class Attention2d(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        self.data_format = data_format
-        self.channel_axis = channel_axis
-        dim_out = dim_out or dim
         self.dim = dim
-        self.dim_out = dim_out
+        self.dim_out_arg = dim_out
         self.num_heads = num_heads
         self.bias = bias
+        self.attn_drop_rate = attn_drop
+        self.proj_drop_rate = proj_drop
+        self.channel_axis = channel_axis
+        self.data_format = data_format
+        self.dim_out = dim_out or dim
         self.head_dim = dim // num_heads
         self.conv_kernel_initializer = keras.initializers.VarianceScaling(
             scale=2.0, mode="fan_out", distribution="untruncated_normal"
@@ -355,11 +402,11 @@ class Attention2d(keras.layers.Layer):
             kernel_initializer=self.conv_kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self.attn_drop = keras.layers.Dropout(
+        self.attn_drop_layer = keras.layers.Dropout(
             attn_drop, dtype=self.dtype_policy
         )
         self.proj = keras.layers.Conv2D(
-            dim_out,
+            self.dim_out,
             kernel_size=1,
             use_bias=bias,
             data_format=self.data_format,
@@ -368,7 +415,7 @@ class Attention2d(keras.layers.Layer):
             kernel_initializer=self.conv_kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self.proj_drop = keras.layers.Dropout(
+        self.proj_drop_layer = keras.layers.Dropout(
             proj_drop, dtype=self.dtype_policy
         )
 
@@ -394,7 +441,7 @@ class Attention2d(keras.layers.Layer):
         if attn_mask is not None:
             attn = attn + attn_mask
         attn = keras.ops.softmax(attn, axis=-1)
-        attn = self.attn_drop(attn, training=training)
+        attn = self.attn_drop_layer(attn, training=training)
         x = keras.ops.matmul(attn, v)
         x = keras.ops.transpose(x, (0, 1, 3, 2))
         if self.data_format == "channels_first":
@@ -402,8 +449,24 @@ class Attention2d(keras.layers.Layer):
         else:
             x = keras.ops.reshape(x, (B, H, W, -1))
         x = self.proj(x)
-        x = self.proj_drop(x, training=training)
+        x = self.proj_drop_layer(x, training=training)
         return x
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "dim": self.dim,
+                "dim_out": self.dim_out_arg,
+                "num_heads": self.num_heads,
+                "bias": self.bias,
+                "attn_drop": self.attn_drop_rate,
+                "proj_drop": self.proj_drop_rate,
+                "channel_axis": self.channel_axis,
+                "data_format": self.data_format,
+            }
+        )
+        return config
 
 
 class MobileAttention(keras.layers.Layer):
@@ -474,8 +537,29 @@ class MobileAttention(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        self.data_format = data_format
+        self.in_chs = in_chs
+        self.out_chs = out_chs
+        self.stride = stride
+        self.dw_kernel_size = dw_kernel_size
+        self.dilation = dilation
+        self.pad_type = pad_type
+        self.num_heads = num_heads
+        self.key_dim = key_dim
+        self.value_dim = value_dim
+        self.use_multi_query = use_multi_query
+        self.query_strides = query_strides
+        self.kv_stride = kv_stride
+        self.cpe_dw_kernel_size = cpe_dw_kernel_size
+        self.noskip = noskip
+        self.norm_layer_name = norm_layer
+        self.drop_path_rate = drop_path_rate
+        self.attn_drop_rate = attn_drop
+        self.proj_drop_rate = proj_drop
+        self.layer_scale_init_value = layer_scale_init_value
+        self.use_bias = use_bias
+        self.use_cpe = use_cpe
         self.channel_axis = channel_axis
+        self.data_format = data_format
         self.has_skip = (stride == 1 and in_chs == out_chs) and not noskip
         self.conv_kernel_initializer = keras.initializers.VarianceScaling(
             scale=2.0, mode="fan_out", distribution="untruncated_normal"
@@ -585,3 +669,34 @@ class MobileAttention(keras.layers.Layer):
             return self.drop_path(x_scaled, training=training) + shortcut
         else:
             return x_scaled
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "in_chs": self.in_chs,
+                "out_chs": self.out_chs,
+                "stride": self.stride,
+                "dw_kernel_size": self.dw_kernel_size,
+                "dilation": self.dilation,
+                "pad_type": self.pad_type,
+                "num_heads": self.num_heads,
+                "key_dim": self.key_dim,
+                "value_dim": self.value_dim,
+                "use_multi_query": self.use_multi_query,
+                "query_strides": self.query_strides,
+                "kv_stride": self.kv_stride,
+                "cpe_dw_kernel_size": self.cpe_dw_kernel_size,
+                "noskip": self.noskip,
+                "norm_layer": self.norm_layer_name,
+                "drop_path_rate": self.drop_path_rate,
+                "attn_drop": self.attn_drop_rate,
+                "proj_drop": self.proj_drop_rate,
+                "layer_scale_init_value": self.layer_scale_init_value,
+                "use_bias": self.use_bias,
+                "use_cpe": self.use_cpe,
+                "channel_axis": self.channel_axis,
+                "data_format": self.data_format,
+            }
+        )
+        return config

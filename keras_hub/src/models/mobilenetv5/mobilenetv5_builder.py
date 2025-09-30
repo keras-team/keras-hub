@@ -51,7 +51,16 @@ def decode_block_str(block_str):
         act_layer=act_layer,
     )
 
-    if block_type == "uir":
+    if block_type == "ir":
+        block_args.update(
+            dict(
+                dw_kernel_size=parse_ksize(options["k"]),
+                exp_ratio=float(options["e"]),
+                se_ratio=float(options.get("se", 0.0)),
+                noskip=skip is False,
+            )
+        )
+    elif block_type == "uir":
         start_kernel_size = parse_ksize(options.get("a", "0"))
         end_kernel_size = parse_ksize(options.get("p", "0"))
         block_args.update(
@@ -204,6 +213,12 @@ class MobileNetV5Builder:
                 ba["se_layer"] = None
         ba.pop("aa_layer", None)
         if bt == "ir":
+            padding = 0
+            if ba["pad_type"].lower() in ("", "same"):
+                kernel_size = ba["dw_kernel_size"]
+                if isinstance(kernel_size, (list, tuple)):
+                    kernel_size = kernel_size[0]
+                padding = (kernel_size - 1) // 2
             block = (
                 CondConvResidual(**ba)
                 if ba.get("num_experts", 0) > 0
@@ -213,6 +228,7 @@ class MobileNetV5Builder:
                     filters=ba["out_chs"],
                     kernel_size=ba["dw_kernel_size"],
                     stride=ba["stride"],
+                    padding=padding,
                     squeeze_excite_ratio=ba.pop("se_ratio", None),
                     activation=ba["act_layer"],
                 )
