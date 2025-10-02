@@ -166,6 +166,21 @@ from keras_hub.src.models.densenet.densenet_image_classifier import (
 from keras_hub.src.models.densenet.densenet_image_classifier_preprocessor import (
     DenseNetImageClassifierPreprocessor as DenseNetImageClassifierPreprocessor,
 )
+from keras_hub.src.models.depth_anything.depth_anything_backbone import (
+    DepthAnythingBackbone as DepthAnythingBackbone,
+)
+from keras_hub.src.models.depth_anything.depth_anything_depth_estimator import (
+    DepthAnythingDepthEstimator as DepthAnythingDepthEstimator,
+)
+from keras_hub.src.models.depth_anything.depth_anything_depth_estimator_preprocessor import (
+    DepthAnythingDepthEstimatorPreprocessor as DepthAnythingDepthEstimatorPreprocessor,
+)
+from keras_hub.src.models.depth_estimator import (
+    DepthEstimator as DepthEstimator,
+)
+from keras_hub.src.models.depth_estimator_preprocessor import (
+    DepthEstimatorPreprocessor as DepthEstimatorPreprocessor,
+)
 from keras_hub.src.models.dinov2.dinov2_backbone import (
     DINOV2Backbone as DINOV2Backbone,
 )
@@ -511,6 +526,15 @@ from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.qwen3.qwen3_tokenizer import (
     Qwen3Tokenizer as Qwen3Tokenizer,
+)
+from keras_hub.src.models.qwen3_moe.qwen3_moe_backbone import (
+    Qwen3MoeBackbone as Qwen3MoeBackbone,
+)
+from keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm import (
+    Qwen3MoeCausalLM as Qwen3MoeCausalLM,
+)
+from keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm_preprocessor import (
+    Qwen3MoeCausalLMPreprocessor as Qwen3MoeCausalLMPreprocessor,
 )
 from keras_hub.src.models.qwen_moe.qwen_moe_backbone import (
     QwenMoeBackbone as QwenMoeBackbone,
