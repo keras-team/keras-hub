@@ -16,8 +16,7 @@ class UniversalInvertedResidual(keras.layers.Layer):
     convolutional blocks.
 
     Args:
-        in_chs: int. The number of input channels.
-        out_chs: int. The number of output channels.
+        filters: int. The number of output channels.
         dw_kernel_size_start: int. The kernel size for the initial depthwise
             convolution. If 0, this layer is skipped.
         dw_kernel_size_mid: int. The kernel size for the middle depthwise
@@ -43,14 +42,13 @@ class UniversalInvertedResidual(keras.layers.Layer):
 
     def __init__(
         self,
-        in_chs,
-        out_chs,
+        filters,
         dw_kernel_size_start=0,
         dw_kernel_size_mid=3,
         dw_kernel_size_end=0,
         stride=1,
         dilation=1,
-        pad_type="",
+        pad_type="same",
         noskip=False,
         exp_ratio=1.0,
         act_layer="relu",
@@ -64,8 +62,7 @@ class UniversalInvertedResidual(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        self.in_chs = in_chs
-        self.out_chs = out_chs
+        self.filters = filters
         self.dw_kernel_size_start = dw_kernel_size_start
         self.dw_kernel_size_mid = dw_kernel_size_mid
         self.dw_kernel_size_end = dw_kernel_size_end
@@ -81,21 +78,26 @@ class UniversalInvertedResidual(keras.layers.Layer):
         self.layer_scale_init_value = layer_scale_init_value
         self.data_format = data_format
         self.channel_axis = channel_axis
-        self.has_skip = (in_chs == out_chs and stride == 1) and not noskip
-        pad_type_internal = "same" if pad_type == "" else "valid"
-        use_bias = norm_layer == "rms_norm"
 
-        if dw_kernel_size_start:
+    def build(self, input_shape):
+        super().build(input_shape)
+        in_chs = input_shape[self.channel_axis]
+        self.has_skip = (
+            in_chs == self.filters and self.stride == 1
+        ) and not self.noskip
+        use_bias = self.norm_layer == "rms_norm"
+
+        if self.dw_kernel_size_start:
             self.dw_start = ConvNormAct(
                 in_chs,
-                dw_kernel_size_start,
-                stride=stride if not dw_kernel_size_mid else 1,
-                dilation=dilation,
+                self.dw_kernel_size_start,
+                stride=self.stride if not self.dw_kernel_size_mid else 1,
+                dilation=self.dilation,
                 groups=in_chs,
-                pad_type=pad_type_internal,
+                pad_type=self.pad_type,
                 apply_act=False,
-                act_layer=act_layer,
-                norm_layer=norm_layer,
+                act_layer=self.act_layer,
+                norm_layer=self.norm_layer,
                 bias=use_bias,
                 data_format=self.data_format,
                 channel_axis=self.channel_axis,
@@ -104,29 +106,29 @@ class UniversalInvertedResidual(keras.layers.Layer):
         else:
             self.dw_start = lambda x, training=False: x
 
-        mid_chs = adjust_channels(in_chs * exp_ratio)
+        mid_chs = adjust_channels(in_chs * self.exp_ratio)
         self.pw_exp = ConvNormAct(
             mid_chs,
             1,
-            pad_type=pad_type_internal,
-            act_layer=act_layer,
-            norm_layer=norm_layer,
+            pad_type=self.pad_type,
+            act_layer=self.act_layer,
+            norm_layer=self.norm_layer,
             bias=use_bias,
             data_format=self.data_format,
             channel_axis=self.channel_axis,
             dtype=self.dtype_policy,
         )
 
-        if dw_kernel_size_mid:
+        if self.dw_kernel_size_mid:
             self.dw_mid = ConvNormAct(
                 mid_chs,
-                dw_kernel_size_mid,
-                stride=stride,
-                dilation=dilation,
+                self.dw_kernel_size_mid,
+                stride=self.stride,
+                dilation=self.dilation,
                 groups=mid_chs,
-                pad_type=pad_type_internal,
-                act_layer=act_layer,
-                norm_layer=norm_layer,
+                pad_type=self.pad_type,
+                act_layer=self.act_layer,
+                norm_layer=self.norm_layer,
                 bias=use_bias,
                 data_format=self.data_format,
                 channel_axis=self.channel_axis,
@@ -135,44 +137,44 @@ class UniversalInvertedResidual(keras.layers.Layer):
         else:
             self.dw_mid = lambda x, training=False: x
         self.se = (
-            se_layer(
+            self.se_layer(
                 filters=mid_chs,
                 bottleneck_filters=adjust_channels(mid_chs * 0.25),
-                squeeze_activation=act_layer,
+                squeeze_activation=self.act_layer,
                 excite_activation="sigmoid",
                 data_format=self.data_format,
                 channel_axis=self.channel_axis,
                 dtype=self.dtype_policy,
             )
-            if se_layer
+            if self.se_layer
             else (lambda x, training=False: x)
         )
         self.pw_proj = ConvNormAct(
-            out_chs,
+            self.filters,
             1,
-            pad_type=pad_type_internal,
+            pad_type=self.pad_type,
             apply_act=False,
-            act_layer=act_layer,
-            norm_layer=norm_layer,
+            act_layer=self.act_layer,
+            norm_layer=self.norm_layer,
             bias=use_bias,
             data_format=self.data_format,
             channel_axis=self.channel_axis,
             dtype=self.dtype_policy,
         )
 
-        if dw_kernel_size_end:
+        if self.dw_kernel_size_end:
             self.dw_end = ConvNormAct(
-                out_chs,
-                dw_kernel_size_end,
-                stride=stride
-                if not dw_kernel_size_start and not dw_kernel_size_mid
+                self.filters,
+                self.dw_kernel_size_end,
+                stride=self.stride
+                if not self.dw_kernel_size_start and not self.dw_kernel_size_mid
                 else 1,
-                dilation=dilation,
-                groups=out_chs,
-                pad_type=pad_type_internal,
+                dilation=self.dilation,
+                groups=self.filters,
+                pad_type=self.pad_type,
                 apply_act=False,
-                act_layer=act_layer,
-                norm_layer=norm_layer,
+                act_layer=self.act_layer,
+                norm_layer=self.norm_layer,
                 bias=use_bias,
                 data_format=self.data_format,
                 channel_axis=self.channel_axis,
@@ -183,22 +185,20 @@ class UniversalInvertedResidual(keras.layers.Layer):
 
         self.layer_scale = (
             LayerScale2d(
-                out_chs,
-                layer_scale_init_value,
+                self.filters,
+                self.layer_scale_init_value,
                 data_format=self.data_format,
                 channel_axis=self.channel_axis,
                 dtype=self.dtype_policy,
             )
-            if layer_scale_init_value is not None
+            if self.layer_scale_init_value is not None
             else lambda x: x
         )
         self.drop_path = (
-            DropPath(drop_path_rate, dtype=self.dtype_policy)
-            if drop_path_rate > 0.0
+            DropPath(self.drop_path_rate, dtype=self.dtype_policy)
+            if self.drop_path_rate > 0.0
             else (lambda x, training=False: x)
         )
-
-    def build(self, input_shape):
         current_shape = input_shape
         if hasattr(self.dw_start, "build"):
             self.dw_start.build(current_shape)
@@ -217,7 +217,6 @@ class UniversalInvertedResidual(keras.layers.Layer):
             current_shape = self.dw_end.compute_output_shape(current_shape)
         if hasattr(self.layer_scale, "build"):
             self.layer_scale.build(current_shape)
-        self.built = True
 
     def call(self, x, training=False):
         shortcut = x
@@ -248,8 +247,7 @@ class UniversalInvertedResidual(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "in_chs": self.in_chs,
-                "out_chs": self.out_chs,
+                "filters": self.filters,
                 "dw_kernel_size_start": self.dw_kernel_size_start,
                 "dw_kernel_size_mid": self.dw_kernel_size_mid,
                 "dw_kernel_size_end": self.dw_kernel_size_end,
@@ -284,14 +282,13 @@ class EdgeResidual(keras.layers.Layer):
     the inverted residual block that uses a single expansion convolution.
 
     Args:
-        in_chs: int. The number of input channels.
-        out_chs: int. The number of output channels.
+        filters: int. The number of output channels.
         exp_kernel_size: int. The kernel size for the expansion convolution.
         stride: int. The stride for the block.
         dilation: int. The dilation rate for convolutions.
         group_size: int. The group size for grouped convolutions.
         pad_type: str. The padding type for convolutions.
-        force_in_chs: int. If greater than 0, forces the number of input
+        expansion_in_chs: int. If greater than 0, forces the number of input
             channels for the expansion.
         noskip: bool. If `True`, the skip connection is disabled.
         exp_ratio: float. The expansion ratio for the middle channels.
@@ -308,14 +305,13 @@ class EdgeResidual(keras.layers.Layer):
 
     def __init__(
         self,
-        in_chs,
-        out_chs,
+        filters,
         exp_kernel_size=3,
         stride=1,
         dilation=1,
         group_size=0,
-        pad_type="",
-        force_in_chs=0,
+        pad_type="same",
+        expansion_in_chs=0,
         noskip=False,
         exp_ratio=1.0,
         pw_kernel_size=1,
@@ -329,14 +325,13 @@ class EdgeResidual(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        self.in_chs = in_chs
-        self.out_chs = out_chs
+        self.filters = filters
         self.exp_kernel_size = exp_kernel_size
         self.stride = stride
         self.dilation = dilation
         self.group_size = group_size
         self.pad_type = pad_type
-        self.force_in_chs = force_in_chs
+        self.expansion_in_chs = expansion_in_chs
         self.noskip = noskip
         self.exp_ratio = exp_ratio
         self.pw_kernel_size = pw_kernel_size
@@ -346,66 +341,68 @@ class EdgeResidual(keras.layers.Layer):
         self.drop_path_rate = drop_path_rate
         self.data_format = data_format
         self.channel_axis = channel_axis
-        self.has_skip = (in_chs == out_chs and stride == 1) and not noskip
-        pad_type_internal = "same" if pad_type == "" else "valid"
-        if force_in_chs > 0:
-            mid_chs = adjust_channels(force_in_chs * exp_ratio)
+
+    def build(self, input_shape):
+        super().build(input_shape)
+        in_chs = input_shape[self.channel_axis]
+        self.has_skip = (
+            in_chs == self.filters and self.stride == 1
+        ) and not self.noskip
+        if self.expansion_in_chs > 0:
+            mid_chs = adjust_channels(self.expansion_in_chs * self.exp_ratio)
         else:
-            mid_chs = adjust_channels(in_chs * exp_ratio)
-        groups = num_groups(group_size, mid_chs)
-        use_bias = norm_layer == "rms_norm"
+            mid_chs = adjust_channels(in_chs * self.exp_ratio)
+        groups = num_groups(self.group_size, mid_chs)
+        use_bias = self.norm_layer == "rms_norm"
         self.conv_exp = ConvNormAct(
             mid_chs,
-            exp_kernel_size,
-            stride=stride,
-            dilation=dilation,
+            self.exp_kernel_size,
+            stride=self.stride,
+            dilation=self.dilation,
             groups=groups,
-            pad_type=pad_type_internal,
-            norm_layer=norm_layer,
-            act_layer=act_layer,
+            pad_type=self.pad_type,
+            norm_layer=self.norm_layer,
+            act_layer=self.act_layer,
             bias=use_bias,
             data_format=self.data_format,
             channel_axis=self.channel_axis,
             dtype=self.dtype_policy,
         )
         self.se = (
-            se_layer(
+            self.se_layer(
                 filters=mid_chs,
                 bottleneck_filters=adjust_channels(mid_chs * 0.25),
-                squeeze_activation=act_layer,
+                squeeze_activation=self.act_layer,
                 excite_activation="sigmoid",
                 data_format=self.data_format,
                 channel_axis=self.channel_axis,
                 dtype=self.dtype_policy,
             )
-            if se_layer
+            if self.se_layer
             else (lambda x, training=False: x)
         )
         self.conv_pwl = ConvNormAct(
-            out_chs,
-            pw_kernel_size,
-            pad_type=pad_type_internal,
+            self.filters,
+            self.pw_kernel_size,
+            pad_type=self.pad_type,
             apply_act=False,
-            norm_layer=norm_layer,
-            act_layer=act_layer,
+            norm_layer=self.norm_layer,
+            act_layer=self.act_layer,
             bias=use_bias,
             data_format=self.data_format,
             channel_axis=self.channel_axis,
             dtype=self.dtype_policy,
         )
         self.drop_path = (
-            DropPath(drop_path_rate, dtype=self.dtype_policy)
-            if drop_path_rate > 0.0
+            DropPath(self.drop_path_rate, dtype=self.dtype_policy)
+            if self.drop_path_rate > 0.0
             else (lambda x, training=False: x)
         )
-
-    def build(self, input_shape):
         self.conv_exp.build(input_shape)
         conv_exp_output_shape = self.conv_exp.compute_output_shape(input_shape)
         if hasattr(self.se, "build"):
             self.se.build(conv_exp_output_shape)
         self.conv_pwl.build(conv_exp_output_shape)
-        self.built = True
 
     def call(self, x, training=False):
         shortcut = x
@@ -420,14 +417,13 @@ class EdgeResidual(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "in_chs": self.in_chs,
-                "out_chs": self.out_chs,
+                "filters": self.filters,
                 "exp_kernel_size": self.exp_kernel_size,
                 "stride": self.stride,
                 "dilation": self.dilation,
                 "group_size": self.group_size,
                 "pad_type": self.pad_type,
-                "force_in_chs": self.force_in_chs,
+                "expansion_in_chs": self.expansion_in_chs,
                 "noskip": self.noskip,
                 "exp_ratio": self.exp_ratio,
                 "pw_kernel_size": self.pw_kernel_size,
@@ -456,8 +452,7 @@ class CondConvResidual(keras.layers.Layer):
     different convolutional experts based on the input.
 
     Args:
-        in_chs: int. The number of input channels.
-        out_chs: int. The number of output channels.
+        filters: int. The number of output channels.
         dw_kernel_size: int. The kernel size for the depthwise convolution.
         stride: int. The stride for the block.
         dilation: int. The dilation rate for convolutions.
@@ -478,12 +473,11 @@ class CondConvResidual(keras.layers.Layer):
 
     def __init__(
         self,
-        in_chs,
-        out_chs,
+        filters,
         dw_kernel_size=3,
         stride=1,
         dilation=1,
-        pad_type="",
+        pad_type="same",
         noskip=False,
         exp_ratio=1.0,
         exp_kernel_size=1,
@@ -498,8 +492,7 @@ class CondConvResidual(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        self.in_chs = in_chs
-        self.out_chs = out_chs
+        self.filters = filters
         self.dw_kernel_size = dw_kernel_size
         self.stride = stride
         self.dilation = dilation
@@ -514,7 +507,6 @@ class CondConvResidual(keras.layers.Layer):
         self.drop_path_rate = drop_path_rate
         self.data_format = data_format
         self.channel_axis = channel_axis
-        self.has_skip = (in_chs == out_chs and stride == 1) and not noskip
         self.conv_kernel_initializer = keras.initializers.VarianceScaling(
             scale=2.0, mode="fan_out", distribution="untruncated_normal"
         )
@@ -522,8 +514,14 @@ class CondConvResidual(keras.layers.Layer):
             scale=1.0, mode="fan_in", distribution="uniform"
         )
         self.bias_initializer = "zeros"
-        mid_chs = adjust_channels(in_chs * exp_ratio)
-        pad_type_internal = "same" if pad_type == "" else "valid"
+
+    def build(self, input_shape):
+        super().build(input_shape)
+        in_chs = input_shape[self.channel_axis]
+        self.has_skip = (
+            in_chs == self.filters and self.stride == 1
+        ) and not self.noskip
+        mid_chs = adjust_channels(in_chs * self.exp_ratio)
         self.routing_fn = keras.layers.Dense(
             self.num_experts,
             dtype=self.dtype_policy,
@@ -536,8 +534,8 @@ class CondConvResidual(keras.layers.Layer):
         self.conv_pw_experts = [
             keras.layers.Conv2D(
                 filters=mid_chs,
-                kernel_size=exp_kernel_size,
-                padding=pad_type_internal,
+                kernel_size=self.exp_kernel_size,
+                padding=self.pad_type,
                 use_bias=True,
                 data_format=self.data_format,
                 name=f"conv_pw_expert_{i}",
@@ -549,10 +547,10 @@ class CondConvResidual(keras.layers.Layer):
         ]
         self.conv_dw_experts = [
             keras.layers.DepthwiseConv2D(
-                kernel_size=dw_kernel_size,
-                strides=stride,
-                padding=pad_type_internal,
-                dilation_rate=dilation,
+                kernel_size=self.dw_kernel_size,
+                strides=self.stride,
+                padding=self.pad_type,
+                dilation_rate=self.dilation,
                 use_bias=True,
                 data_format=self.data_format,
                 name=f"conv_dw_expert_{i}",
@@ -564,9 +562,9 @@ class CondConvResidual(keras.layers.Layer):
         ]
         self.conv_pwl_experts = [
             keras.layers.Conv2D(
-                filters=out_chs,
-                kernel_size=pw_kernel_size,
-                padding=pad_type_internal,
+                filters=self.filters,
+                kernel_size=self.pw_kernel_size,
+                padding=self.pad_type,
                 use_bias=True,
                 data_format=self.data_format,
                 name=f"conv_pwl_expert_{i}",
@@ -582,14 +580,18 @@ class CondConvResidual(keras.layers.Layer):
             gamma_initializer="ones",
             beta_initializer="zeros",
         )
-        self.act1 = keras.layers.Activation(act_layer, dtype=self.dtype_policy)
+        self.act1 = keras.layers.Activation(
+            self.act_layer, dtype=self.dtype_policy
+        )
         self.bn2 = keras.layers.BatchNormalization(
             axis=self.channel_axis,
             dtype=self.dtype_policy,
             gamma_initializer="ones",
             beta_initializer="zeros",
         )
-        self.act2 = keras.layers.Activation(act_layer, dtype=self.dtype_policy)
+        self.act2 = keras.layers.Activation(
+            self.act_layer, dtype=self.dtype_policy
+        )
         self.bn3 = keras.layers.BatchNormalization(
             axis=self.channel_axis,
             dtype=self.dtype_policy,
@@ -597,25 +599,23 @@ class CondConvResidual(keras.layers.Layer):
             beta_initializer="zeros",
         )
         self.se = (
-            se_layer(
+            self.se_layer(
                 filters=mid_chs,
                 bottleneck_filters=adjust_channels(mid_chs * 0.25),
-                squeeze_activation=act_layer,
+                squeeze_activation=self.act_layer,
                 excite_activation="sigmoid",
                 data_format=self.data_format,
                 channel_axis=self.channel_axis,
                 dtype=self.dtype_policy,
             )
-            if se_layer
+            if self.se_layer
             else (lambda x, training=False: x)
         )
         self.drop_path = (
-            DropPath(drop_path_rate, dtype=self.dtype_policy)
-            if drop_path_rate > 0.0
+            DropPath(self.drop_path_rate, dtype=self.dtype_policy)
+            if self.drop_path_rate > 0.0
             else (lambda x, training=False: x)
         )
-
-    def build(self, input_shape):
         pooled_shape = self.pool.compute_output_shape(input_shape)
         self.routing_fn.build(pooled_shape)
         for expert in self.conv_pw_experts:
@@ -636,7 +636,6 @@ class CondConvResidual(keras.layers.Layer):
             dw_out_shape
         )
         self.bn3.build(pwl_out_shape)
-        self.built = True
 
     def _apply_cond_conv(self, x, experts, routing_weights):
         outputs = []
@@ -669,8 +668,7 @@ class CondConvResidual(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "in_chs": self.in_chs,
-                "out_chs": self.out_chs,
+                "filters": self.filters,
                 "dw_kernel_size": self.dw_kernel_size,
                 "stride": self.stride,
                 "dilation": self.dilation,
@@ -707,7 +705,7 @@ class MobileNetV5MultiScaleFusionAdapter(keras.layers.Layer):
     Args:
         in_chs: list of int. A list of channel counts for each input feature
             map.
-        out_chs: int. The number of output channels.
+        filters: int. The number of output channels.
         output_resolution: int or tuple. The target output resolution.
         expansion_ratio: float. The expansion ratio for the FFN.
         interpolation_mode: str. The interpolation mode for upsampling feature
@@ -726,7 +724,7 @@ class MobileNetV5MultiScaleFusionAdapter(keras.layers.Layer):
     def __init__(
         self,
         in_chs,
-        out_chs,
+        filters,
         output_resolution,
         expansion_ratio=2.0,
         interpolation_mode="nearest",
@@ -741,7 +739,7 @@ class MobileNetV5MultiScaleFusionAdapter(keras.layers.Layer):
     ):
         super().__init__(dtype=dtype, **kwargs)
         self.in_chs = in_chs
-        self.out_chs = out_chs
+        self.filters = filters
         self.output_resolution_arg = output_resolution
         self.expansion_ratio = expansion_ratio
         self.interpolation_mode = interpolation_mode
@@ -752,14 +750,12 @@ class MobileNetV5MultiScaleFusionAdapter(keras.layers.Layer):
         self.data_format = data_format
         self.channel_axis = channel_axis
         self.in_channels = sum(in_chs)
-        self.out_channels = out_chs
         if isinstance(output_resolution, int):
             self.output_resolution = (output_resolution, output_resolution)
         else:
             self.output_resolution = output_resolution
         self.ffn = UniversalInvertedResidual(
-            in_chs=self.in_channels,
-            out_chs=self.out_channels,
+            filters=self.filters,
             dw_kernel_size_mid=0,
             exp_ratio=expansion_ratio,
             act_layer=act_layer,
@@ -772,7 +768,7 @@ class MobileNetV5MultiScaleFusionAdapter(keras.layers.Layer):
         )
         if norm_layer == "rms_norm":
             self.norm = RmsNorm2d(
-                self.out_channels,
+                self.filters,
                 data_format=self.data_format,
                 gamma_initializer="ones",
                 channel_axis=self.channel_axis,
@@ -787,6 +783,7 @@ class MobileNetV5MultiScaleFusionAdapter(keras.layers.Layer):
             )
 
     def build(self, input_shape):
+        super().build(input_shape)
         ffn_input_shape = list(input_shape[0])
         if self.data_format == "channels_first":
             ffn_input_shape[1] = self.in_channels
@@ -795,7 +792,6 @@ class MobileNetV5MultiScaleFusionAdapter(keras.layers.Layer):
         self.ffn.build(tuple(ffn_input_shape))
         norm_input_shape = self.ffn.compute_output_shape(tuple(ffn_input_shape))
         self.norm.build(norm_input_shape)
-        self.built = True
 
     def call(self, inputs, training=False):
         shape_hr = keras.ops.shape(inputs[0])
@@ -862,7 +858,7 @@ class MobileNetV5MultiScaleFusionAdapter(keras.layers.Layer):
         if self.data_format == "channels_first":
             return (
                 batch_size,
-                self.out_channels,
+                self.filters,
                 self.output_resolution[0],
                 self.output_resolution[1],
             )
@@ -871,7 +867,7 @@ class MobileNetV5MultiScaleFusionAdapter(keras.layers.Layer):
                 batch_size,
                 self.output_resolution[0],
                 self.output_resolution[1],
-                self.out_channels,
+                self.filters,
             )
 
     def get_config(self):
@@ -879,7 +875,7 @@ class MobileNetV5MultiScaleFusionAdapter(keras.layers.Layer):
         config.update(
             {
                 "in_chs": self.in_chs,
-                "out_chs": self.out_chs,
+                "filters": self.filters,
                 "output_resolution": self.output_resolution_arg,
                 "expansion_ratio": self.expansion_ratio,
                 "interpolation_mode": self.interpolation_mode,

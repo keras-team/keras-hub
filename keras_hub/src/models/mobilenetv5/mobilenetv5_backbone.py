@@ -28,7 +28,7 @@ class MobileNetV5Backbone(Backbone):
     Args:
         block_args: list. A list of lists, where each inner list contains the
             arguments for the blocks in a stage.
-        in_chans: int. The number of input channels.
+        filters: int. The number of input channels.
         stem_size: int. The number of channels in the stem convolution.
         stem_bias: bool. If `True`, a bias term is used in the stem
             convolution.
@@ -48,7 +48,8 @@ class MobileNetV5Backbone(Backbone):
         round_chs_fn: callable. A function to round the number of channels.
         drop_path_rate: float. The stochastic depth rate.
         layer_scale_init_value: float. The initial value for layer scale.
-        image_shape: tuple. The shape of the input image.
+        image_shape: tuple. The shape of the input image. Defaults to
+            `(None, None, 3)`.
         data_format: str, The data format of the image channels. Can be either
             `"channels_first"` or `"channels_last"`. If `None` is specified,
             it will use the `image_data_format` value found in your Keras
@@ -75,12 +76,12 @@ class MobileNetV5Backbone(Backbone):
     def __init__(
         self,
         block_args,
-        in_chans=3,
+        filters=3,
         stem_size=16,
         stem_bias=True,
         fix_stem=False,
         num_features=2048,
-        pad_type="",
+        pad_type="same",
         use_msfa=True,
         msfa_indices=(-2, -1),
         msfa_output_resolution=16,
@@ -141,7 +142,7 @@ class MobileNetV5Backbone(Backbone):
             ]
             msfa = MobileNetV5MultiScaleFusionAdapter(
                 in_chs=msfa_in_chs,
-                out_chs=num_features,
+                filters=num_features,
                 output_resolution=msfa_output_resolution,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
@@ -176,7 +177,7 @@ class MobileNetV5Backbone(Backbone):
 
         # === Config ===
         self.block_args = block_args
-        self.in_chans = in_chans
+        self.filters = filters
         self.stem_size = stem_size
         self.stem_bias = stem_bias
         self.fix_stem = fix_stem
@@ -199,7 +200,7 @@ class MobileNetV5Backbone(Backbone):
     def get_config(self):
         config = {
             "block_args": self.block_args,
-            "in_chans": self.in_chans,
+            "filters": self.filters,
             "stem_size": self.stem_size,
             "stem_bias": self.stem_bias,
             "fix_stem": self.fix_stem,

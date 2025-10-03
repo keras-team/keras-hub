@@ -13,9 +13,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
     value.
 
     Args:
-        dim: int. The input and output channel dimension.
-        dim_out: int. The output channel dimension. If `None`, it is set to
-            `dim`.
+        filters: int. The output channel dimension.
         num_heads: int. The number of attention heads.
         key_dim: int. The dimension of the key. If `None`, it is calculated as
             `dim // num_heads`.
@@ -39,8 +37,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
 
     def __init__(
         self,
-        dim,
-        dim_out=None,
+        filters,
         num_heads=8,
         key_dim=None,
         value_dim=None,
@@ -48,7 +45,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
         kv_stride=1,
         dw_kernel_size=3,
         dilation=1,
-        padding="",
+        padding="same",
         attn_drop=0.0,
         proj_drop=0.0,
         norm_layer=keras.layers.BatchNormalization,
@@ -59,8 +56,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        self.dim = dim
-        self.dim_out_arg = dim_out
+        self.filters = filters
         self.num_heads = num_heads
         self.key_dim_arg = key_dim
         self.value_dim_arg = value_dim
@@ -75,21 +71,27 @@ class MultiQueryAttention2d(keras.layers.Layer):
         self.use_bias = use_bias
         self.channel_axis = channel_axis
         self.data_format = data_format
-        self.dim_out = dim_out or dim
-        self.key_dim = key_dim or dim // num_heads
-        self.value_dim = value_dim or dim // num_heads
         self.query_strides = (
             query_strides
             if isinstance(query_strides, (list, tuple))
             else (query_strides, query_strides)
         )
         self.has_query_strides = any([s > 1 for s in self.query_strides])
-        self.scale = self.key_dim**-0.5
-        self.padding = "same" if padding == "" else "valid"
+        self.padding = padding
         self.conv_kernel_initializer = keras.initializers.VarianceScaling(
             scale=2.0, mode="fan_out", distribution="untruncated_normal"
         )
         self.bias_initializer = "zeros"
+        self.attn_drop_layer = keras.layers.Dropout(
+            attn_drop, dtype=self.dtype_policy
+        )
+
+    def build(self, input_shape):
+        super().build(input_shape)
+        dim = input_shape[self.channel_axis]
+        self.key_dim = self.key_dim_arg or dim // self.num_heads
+        self.value_dim = self.value_dim_arg or dim // self.num_heads
+        self.scale = self.key_dim**-0.5
         query_layers = []
         if self.has_query_strides:
             pool_padding = "valid" if self.padding == "valid" else "same"
@@ -103,8 +105,8 @@ class MultiQueryAttention2d(keras.layers.Layer):
                     dtype=self.dtype_policy,
                 )
             )
-            if norm_layer is RmsNorm2d:
-                norm = norm_layer(
+            if self.norm_layer is RmsNorm2d:
+                norm = self.norm_layer(
                     dim=dim,
                     channel_axis=self.channel_axis,
                     data_format=self.data_format,
@@ -112,7 +114,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
                     dtype=self.dtype_policy,
                 )
             else:
-                norm = norm_layer(
+                norm = self.norm_layer(
                     axis=self.channel_axis,
                     name="query_norm",
                     gamma_initializer="ones",
@@ -124,7 +126,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
             keras.layers.Conv2D(
                 filters=self.num_heads * self.key_dim,
                 kernel_size=1,
-                use_bias=use_bias,
+                use_bias=self.use_bias,
                 data_format=self.data_format,
                 name="query_proj",
                 kernel_initializer=self.conv_kernel_initializer,
@@ -134,12 +136,12 @@ class MultiQueryAttention2d(keras.layers.Layer):
         )
         self.query_layers = query_layers
         key_layers = []
-        if kv_stride > 1:
+        if self.kv_stride > 1:
             key_layers.append(
                 keras.layers.DepthwiseConv2D(
-                    kernel_size=dw_kernel_size,
-                    strides=kv_stride,
-                    dilation_rate=dilation,
+                    kernel_size=self.dw_kernel_size,
+                    strides=self.kv_stride,
+                    dilation_rate=self.dilation,
                     padding=self.padding,
                     data_format=self.data_format,
                     name="key_down_conv",
@@ -149,8 +151,8 @@ class MultiQueryAttention2d(keras.layers.Layer):
                     dtype=self.dtype_policy,
                 )
             )
-            if norm_layer is RmsNorm2d:
-                norm = norm_layer(
+            if self.norm_layer is RmsNorm2d:
+                norm = self.norm_layer(
                     dim=dim,
                     channel_axis=self.channel_axis,
                     data_format=self.data_format,
@@ -158,7 +160,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
                     dtype=self.dtype_policy,
                 )
             else:
-                norm = norm_layer(
+                norm = self.norm_layer(
                     axis=self.channel_axis,
                     gamma_initializer="ones",
                     beta_initializer="zeros",
@@ -171,7 +173,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
                 filters=self.key_dim,
                 kernel_size=1,
                 padding="valid",
-                use_bias=use_bias,
+                use_bias=self.use_bias,
                 data_format=self.data_format,
                 name="key_proj",
                 kernel_initializer=self.conv_kernel_initializer,
@@ -181,12 +183,12 @@ class MultiQueryAttention2d(keras.layers.Layer):
         )
         self.key_layers = key_layers
         value_layers = []
-        if kv_stride > 1:
+        if self.kv_stride > 1:
             value_layers.append(
                 keras.layers.DepthwiseConv2D(
-                    kernel_size=dw_kernel_size,
-                    strides=kv_stride,
-                    dilation_rate=dilation,
+                    kernel_size=self.dw_kernel_size,
+                    strides=self.kv_stride,
+                    dilation_rate=self.dilation,
                     padding=self.padding,
                     data_format=self.data_format,
                     name="value_down_conv",
@@ -196,8 +198,8 @@ class MultiQueryAttention2d(keras.layers.Layer):
                     dtype=self.dtype_policy,
                 )
             )
-            if norm_layer is RmsNorm2d:
-                norm = norm_layer(
+            if self.norm_layer is RmsNorm2d:
+                norm = self.norm_layer(
                     dim=dim,
                     channel_axis=self.channel_axis,
                     data_format=self.data_format,
@@ -205,7 +207,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
                     dtype=self.dtype_policy,
                 )
             else:
-                norm = norm_layer(
+                norm = self.norm_layer(
                     axis=self.channel_axis,
                     gamma_initializer="ones",
                     beta_initializer="zeros",
@@ -218,7 +220,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
                 filters=self.value_dim,
                 kernel_size=1,
                 padding="valid",
-                use_bias=use_bias,
+                use_bias=self.use_bias,
                 data_format=self.data_format,
                 name="value_proj",
                 kernel_initializer=self.conv_kernel_initializer,
@@ -227,9 +229,6 @@ class MultiQueryAttention2d(keras.layers.Layer):
             )
         )
         self.value_layers = value_layers
-        self.attn_drop_layer = keras.layers.Dropout(
-            attn_drop, dtype=self.dtype_policy
-        )
         output_layers = []
         if self.has_query_strides:
             output_layers.append(
@@ -243,9 +242,9 @@ class MultiQueryAttention2d(keras.layers.Layer):
             )
         output_layers.append(
             keras.layers.Conv2D(
-                filters=self.dim_out,
+                filters=self.filters,
                 kernel_size=1,
-                use_bias=use_bias,
+                use_bias=self.use_bias,
                 data_format=self.data_format,
                 name="output_proj",
                 kernel_initializer=self.conv_kernel_initializer,
@@ -254,7 +253,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
             )
         )
         output_layers.append(
-            keras.layers.Dropout(proj_drop, dtype=self.dtype_policy)
+            keras.layers.Dropout(self.proj_drop_rate, dtype=self.dtype_policy)
         )
         self.output_proj_layers = output_layers
 
@@ -314,8 +313,7 @@ class MultiQueryAttention2d(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "dim": self.dim,
-                "dim_out": self.dim_out_arg,
+                "filters": self.filters,
                 "num_heads": self.num_heads,
                 "key_dim": self.key_dim_arg,
                 "value_dim": self.value_dim_arg,
@@ -350,9 +348,7 @@ class Attention2d(keras.layers.Layer):
     This layer performs multi-head self-attention on 2D spatial inputs.
 
     Args:
-        dim: int. The input and output channel dimension.
-        dim_out: int. The output channel dimension. If `None`, it is set to
-            `dim`.
+        filters: int. The output channel dimension.
         num_heads: int. The number of attention heads.
         bias: bool. If `True`, bias terms are used in the qkv and projection
             convolutions.
@@ -366,8 +362,7 @@ class Attention2d(keras.layers.Layer):
 
     def __init__(
         self,
-        dim,
-        dim_out=None,
+        filters,
         num_heads=32,
         bias=True,
         attn_drop=0.0,
@@ -378,37 +373,39 @@ class Attention2d(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        self.dim = dim
-        self.dim_out_arg = dim_out
+        self.filters = filters
         self.num_heads = num_heads
         self.bias = bias
         self.attn_drop_rate = attn_drop
         self.proj_drop_rate = proj_drop
         self.channel_axis = channel_axis
         self.data_format = data_format
-        self.dim_out = dim_out or dim
-        self.head_dim = dim // num_heads
         self.conv_kernel_initializer = keras.initializers.VarianceScaling(
             scale=2.0, mode="fan_out", distribution="untruncated_normal"
         )
         self.bias_initializer = "zeros"
+        self.attn_drop_layer = keras.layers.Dropout(
+            attn_drop, dtype=self.dtype_policy
+        )
+
+    def build(self, input_shape):
+        super().build(input_shape)
+        dim = input_shape[self.channel_axis]
+        self.head_dim = dim // self.num_heads
         self.qkv = keras.layers.Conv2D(
             dim * 3,
             kernel_size=1,
-            use_bias=bias,
+            use_bias=self.bias,
             data_format=self.data_format,
             name="qkv",
             dtype=self.dtype_policy,
             kernel_initializer=self.conv_kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self.attn_drop_layer = keras.layers.Dropout(
-            attn_drop, dtype=self.dtype_policy
-        )
         self.proj = keras.layers.Conv2D(
-            self.dim_out,
+            self.filters,
             kernel_size=1,
-            use_bias=bias,
+            use_bias=self.bias,
             data_format=self.data_format,
             name="proj",
             dtype=self.dtype_policy,
@@ -416,7 +413,7 @@ class Attention2d(keras.layers.Layer):
             bias_initializer=self.bias_initializer,
         )
         self.proj_drop_layer = keras.layers.Dropout(
-            proj_drop, dtype=self.dtype_policy
+            self.proj_drop_rate, dtype=self.dtype_policy
         )
 
     def call(self, x, attn_mask=None, training=False):
@@ -456,8 +453,7 @@ class Attention2d(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "dim": self.dim,
-                "dim_out": self.dim_out_arg,
+                "filters": self.filters,
                 "num_heads": self.num_heads,
                 "bias": self.bias,
                 "attn_drop": self.attn_drop_rate,
@@ -476,8 +472,7 @@ class MobileAttention(keras.layers.Layer):
     It can use either standard Multi-Head Attention or Multi-Query Attention.
 
     Args:
-        in_chs: int. The number of input channels.
-        out_chs: int. The number of output channels.
+        filters: int. The number of output channels.
         stride: int. The stride for the block.
         dw_kernel_size: int. The kernel size for the depthwise convolution in
             Multi-Query Attention.
@@ -510,12 +505,11 @@ class MobileAttention(keras.layers.Layer):
 
     def __init__(
         self,
-        in_chs,
-        out_chs,
+        filters,
         stride=1,
         dw_kernel_size=3,
         dilation=1,
-        pad_type="",
+        pad_type="same",
         num_heads=8,
         key_dim=64,
         value_dim=64,
@@ -537,8 +531,7 @@ class MobileAttention(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        self.in_chs = in_chs
-        self.out_chs = out_chs
+        self.filters = filters
         self.stride = stride
         self.dw_kernel_size = dw_kernel_size
         self.dilation = dilation
@@ -560,17 +553,23 @@ class MobileAttention(keras.layers.Layer):
         self.use_cpe = use_cpe
         self.channel_axis = channel_axis
         self.data_format = data_format
-        self.has_skip = (stride == 1 and in_chs == out_chs) and not noskip
         self.conv_kernel_initializer = keras.initializers.VarianceScaling(
             scale=2.0, mode="fan_out", distribution="untruncated_normal"
         )
         self.bias_initializer = "zeros"
-        if use_cpe:
+
+    def build(self, input_shape):
+        super().build(input_shape)
+        in_chs = input_shape[self.channel_axis]
+        self.has_skip = (
+            self.stride == 1 and in_chs == self.filters
+        ) and not self.noskip
+        if self.use_cpe:
             self.conv_cpe_dw = keras.layers.DepthwiseConv2D(
-                kernel_size=cpe_dw_kernel_size,
+                kernel_size=self.cpe_dw_kernel_size,
                 strides=1,
                 padding="same",
-                dilation_rate=dilation,
+                dilation_rate=self.dilation,
                 use_bias=True,
                 data_format=self.data_format,
                 name="conv_cpe_dw",
@@ -580,7 +579,7 @@ class MobileAttention(keras.layers.Layer):
             )
         else:
             self.conv_cpe_dw = None
-        if norm_layer == "batch_norm":
+        if self.norm_layer_name == "batch_norm":
             self.norm = keras.layers.BatchNormalization(
                 axis=self.channel_axis,
                 name="norm",
@@ -588,7 +587,7 @@ class MobileAttention(keras.layers.Layer):
                 beta_initializer="zeros",
                 dtype=self.dtype_policy,
             )
-        elif norm_layer == "rms_norm":
+        elif self.norm_layer_name == "rms_norm":
             self.norm = RmsNorm2d(
                 in_chs,
                 data_format=self.data_format,
@@ -598,31 +597,31 @@ class MobileAttention(keras.layers.Layer):
                 dtype=self.dtype_policy,
             )
         else:
-            raise ValueError(f"Unsupported norm_layer: {norm_layer}")
+            raise ValueError(f"Unsupported norm_layer: {self.norm_layer_name}")
+        num_heads = self.num_heads
         if num_heads is None:
-            assert in_chs % key_dim == 0
-            num_heads = in_chs // key_dim
+            assert in_chs % self.key_dim == 0
+            num_heads = in_chs // self.key_dim
         attn_norm_layer = (
             RmsNorm2d
-            if norm_layer == "rms_norm"
+            if self.norm_layer_name == "rms_norm"
             else keras.layers.BatchNormalization
         )
-        if use_multi_query:
+        if self.use_multi_query:
             self.attn = MultiQueryAttention2d(
-                dim=in_chs,
-                dim_out=out_chs,
+                filters=self.filters,
                 num_heads=num_heads,
-                key_dim=key_dim,
-                value_dim=value_dim,
-                query_strides=query_strides,
-                kv_stride=kv_stride,
-                dw_kernel_size=dw_kernel_size,
-                dilation=dilation,
-                padding=pad_type,
-                attn_drop=attn_drop,
-                proj_drop=proj_drop,
+                key_dim=self.key_dim,
+                value_dim=self.value_dim,
+                query_strides=self.query_strides,
+                kv_stride=self.kv_stride,
+                dw_kernel_size=self.dw_kernel_size,
+                dilation=self.dilation,
+                padding=self.pad_type,
+                attn_drop=self.attn_drop_rate,
+                proj_drop=self.proj_drop_rate,
                 norm_layer=attn_norm_layer,
-                use_bias=use_bias,
+                use_bias=self.use_bias,
                 channel_axis=self.channel_axis,
                 data_format=self.data_format,
                 name="attn",
@@ -630,21 +629,20 @@ class MobileAttention(keras.layers.Layer):
             )
         else:
             self.attn = Attention2d(
-                dim=in_chs,
-                dim_out=out_chs,
+                filters=self.filters,
                 num_heads=num_heads,
-                attn_drop=attn_drop,
-                proj_drop=proj_drop,
-                bias=use_bias,
+                attn_drop=self.attn_drop_rate,
+                proj_drop=self.proj_drop_rate,
+                bias=self.use_bias,
                 channel_axis=self.channel_axis,
                 data_format=self.data_format,
                 name="attn",
                 dtype=self.dtype_policy,
             )
-        if layer_scale_init_value is not None:
+        if self.layer_scale_init_value is not None:
             self.layer_scale = LayerScale2d(
-                out_chs,
-                layer_scale_init_value,
+                self.filters,
+                self.layer_scale_init_value,
                 name="layer_scale",
                 channel_axis=self.channel_axis,
                 data_format=self.data_format,
@@ -653,8 +651,8 @@ class MobileAttention(keras.layers.Layer):
         else:
             self.layer_scale = lambda x: x
         self.drop_path = (
-            DropPath(drop_path_rate, dtype=self.dtype_policy)
-            if drop_path_rate > 0.0
+            DropPath(self.drop_path_rate, dtype=self.dtype_policy)
+            if self.drop_path_rate > 0.0
             else lambda x, training: x
         )
 
@@ -674,8 +672,7 @@ class MobileAttention(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "in_chs": self.in_chs,
-                "out_chs": self.out_chs,
+                "filters": self.filters,
                 "stride": self.stride,
                 "dw_kernel_size": self.dw_kernel_size,
                 "dilation": self.dilation,

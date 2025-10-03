@@ -88,7 +88,7 @@ class MobileNetV5ImageClassifier(ImageClassifier):
             self.conv_head = ConvNormAct(
                 out_chs=head_hidden_size,
                 kernel_size=1,
-                pad_type="",
+                pad_type="same",
                 norm_layer=backbone.norm_layer,
                 act_layer=backbone.act_layer,
                 bias=False,

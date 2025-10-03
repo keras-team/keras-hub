@@ -138,7 +138,7 @@ class MobileNetV5Builder:
     def __init__(
         self,
         output_stride=32,
-        pad_type="",
+        pad_type="same",
         round_chs_fn=round_channels,
         se_from_exp=False,
         act_layer="relu",
@@ -175,13 +175,12 @@ class MobileNetV5Builder:
     def _make_block(self, ba, block_idx, block_count):
         drop_path_rate = self.drop_path_rate * block_idx / block_count
         bt = ba.pop("block_type")
-        ba["in_chs"] = self.in_chs
-        ba["out_chs"] = self.round_chs_fn(ba["out_chs"])
+        ba["filters"] = self.round_chs_fn(ba.pop("out_chs"))
         s2d = ba.get("s2d", 0)
         if s2d > 0:
-            ba["out_chs"] *= 4
-        if "force_in_chs" in ba and ba["force_in_chs"]:
-            ba["force_in_chs"] = self.round_chs_fn(ba["force_in_chs"])
+            ba["filters"] *= 4
+        if "expansion_in_chs" in ba and ba["expansion_in_chs"]:
+            ba["expansion_in_chs"] = self.round_chs_fn(ba["expansion_in_chs"])
         ba["pad_type"] = self.pad_type
         ba["act_layer"] = (
             ba.get("act_layer")
@@ -224,8 +223,8 @@ class MobileNetV5Builder:
                 if ba.get("num_experts", 0) > 0
                 else InvertedResidualBlock(
                     expansion=ba["exp_ratio"],
-                    infilters=ba["in_chs"],
-                    filters=ba["out_chs"],
+                    infilters=self.in_chs,
+                    filters=ba["filters"],
                     kernel_size=ba["dw_kernel_size"],
                     stride=ba["stride"],
                     padding=padding,
@@ -235,8 +234,8 @@ class MobileNetV5Builder:
             )
         elif bt == "ds" or bt == "dsa":
             block = DepthwiseConvBlock(
-                infilters=ba["in_chs"],
-                filters=ba["out_chs"],
+                infilters=self.in_chs,
+                filters=ba["filters"],
                 kernel_size=ba["dw_kernel_size"],
                 stride=ba["stride"],
                 squeeze_excite_ratio=ba.pop("se_ratio", None),
@@ -246,7 +245,7 @@ class MobileNetV5Builder:
         elif bt == "er":
             block = EdgeResidual(**ba)
         elif bt == "cn":
-            block = ConvBnActBlock(**ba)
+            block = ConvBnActBlock(out_chs=ba.pop("filters"), **ba)
         elif bt == "uir":
             block = UniversalInvertedResidual(
                 **ba, layer_scale_init_value=self.layer_scale_init_value
@@ -265,7 +264,7 @@ class MobileNetV5Builder:
             )
         else:
             raise ValueError(f"Unknown block type ({bt}) while building model.")
-        self.in_chs = ba["out_chs"]
+        self.in_chs = ba["filters"]
         return block
 
     def __call__(self, in_chs, model_block_args):
