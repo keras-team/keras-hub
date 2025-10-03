@@ -38,6 +38,16 @@ class MobileNetV5BackboneTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.skip(reason="TODO: Enable once presets have been uploaded.")
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=MobileNetV5Backbone,
+            preset="mobilenetv5_300m_enc.gemma3n",
+            input_data=keras.ops.ones((1, 224, 224, 3)),
+            expected_output_shape=(1, 16, 16, 2048),
+        )
+
+    @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=MobileNetV5Backbone,
