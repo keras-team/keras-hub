@@ -38,15 +38,15 @@ def initialize_export_registry():
 
     # Register exporters for different formats
     try:
-        from keras_hub.src.export.lite_rt import LiteRTExporter
+        from keras_hub.src.export.litert import LitertExporter
 
-        ExporterRegistry.register_exporter("lite_rt", LiteRTExporter)
+        ExporterRegistry.register_exporter("litert", LitertExporter)
     except ImportError:
-        # LiteRT not available
+        # Litert not available
         pass
 
 
-def export_model(model, filepath, format="lite_rt", **kwargs):
+def export_model(model, filepath, format="litert", **kwargs):
     """Export a Keras-Hub model to the specified format.
 
     This is the main export function that automatically detects the model type
@@ -55,7 +55,7 @@ def export_model(model, filepath, format="lite_rt", **kwargs):
     Args:
         model: The Keras-Hub model to export
         filepath: Path where to save the exported model (without extension)
-        format: Export format (currently supports "lite_rt")
+        format: Export format (currently supports "litert")
         **kwargs: Additional arguments passed to the exporter
     """
     # Ensure registry is initialized
@@ -87,7 +87,7 @@ def extend_export_method_for_keras_hub():
         def keras_hub_export(
             self,
             filepath,
-            format="lite_rt",
+            format="litert",
             verbose=False,
             **kwargs,
         ):
@@ -99,13 +99,13 @@ def extend_export_method_for_keras_hub():
             Args:
                 filepath: Path where to save the exported model (without
                     extension)
-                format: Export format. Supports "lite_rt", "tf_saved_model",
+                format: Export format. Supports "litert", "tf_saved_model",
                     etc.
                 verbose: Whether to print verbose output during export
                 **kwargs: Additional arguments passed to the exporter
             """
             # Check if this is a Keras-Hub model that needs special handling
-            if format == "lite_rt" and self._is_keras_hub_model():
+            if format == "litert" and self._is_keras_hub_model():
                 # Use our Keras-Hub specific export logic
                 kwargs["verbose"] = verbose
                 export_model(self, filepath, format=format, **kwargs)

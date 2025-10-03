@@ -5,5 +5,5 @@ from keras_hub.src.export.configs import CausalLMExporterConfig
 from keras_hub.src.export.configs import Seq2SeqLMExporterConfig
 from keras_hub.src.export.configs import TextClassifierExporterConfig
 from keras_hub.src.export.configs import TextModelExporterConfig
-from keras_hub.src.export.lite_rt import LiteRTExporter
-from keras_hub.src.export.lite_rt import export_lite_rt
+from keras_hub.src.export.litert import LitertExporter
+from keras_hub.src.export.litert import export_litert

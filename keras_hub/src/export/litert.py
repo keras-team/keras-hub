@@ -8,18 +8,18 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporter
 
 try:
-    from keras.src.export.lite_rt_exporter import (
-        LiteRTExporter as KerasLiteRTExporter,
+    from keras.src.export.litert_exporter import (
+        LitertExporter as KerasLitertExporter,
     )
 
     KERAS_LITE_RT_AVAILABLE = True
 except ImportError:
     KERAS_LITE_RT_AVAILABLE = False
-    KerasLiteRTExporter = None
+    KerasLitertExporter = None
 
 
-@keras_hub_export("keras_hub.export.LiteRTExporter")
-class LiteRTExporter(KerasHubExporter):
+@keras_hub_export("keras_hub.export.LitertExporter")
+class LitertExporter(KerasHubExporter):
     """LiteRT exporter for Keras-Hub models.
 
     This exporter handles the conversion of Keras-Hub models to TensorFlow Lite
@@ -110,8 +110,17 @@ class LiteRTExporter(KerasHubExporter):
         # LiteRT exporter
         wrapped_model = self._create_export_wrapper()
 
+        # Convert input signature to list format expected by Keras exporter
+        if isinstance(input_signature, dict):
+            # Extract specs in the order expected by the model
+            signature_list = []
+            for input_name in self.config.EXPECTED_INPUTS:
+                if input_name in input_signature:
+                    signature_list.append(input_signature[input_name])
+            input_signature = signature_list
+
         # Create the Keras LiteRT exporter with the wrapped model
-        keras_exporter = KerasLiteRTExporter(
+        keras_exporter = KerasLitertExporter(
             wrapped_model,
             input_signature=input_signature,
             aot_compile_targets=self.aot_compile_targets,
@@ -313,8 +322,8 @@ class LiteRTExporter(KerasHubExporter):
 
 
 # Convenience function for direct export
-def export_lite_rt(model, filepath, **kwargs):
-    """Export a Keras-Hub model to LiteRT format.
+def export_litert(model, filepath, **kwargs):
+    """Export a Keras-Hub model to Litert format.
 
     This is a convenience function that automatically detects the model type
     and exports it using the appropriate configuration.
@@ -329,6 +338,6 @@ def export_lite_rt(model, filepath, **kwargs):
     # Get the appropriate configuration for this model
     config = ExporterRegistry.get_config_for_model(model)
 
-    # Create and use the LiteRT exporter
-    exporter = LiteRTExporter(config, **kwargs)
+    # Create and use the Litert exporter
+    exporter = LitertExporter(config, **kwargs)
     exporter.export(filepath)

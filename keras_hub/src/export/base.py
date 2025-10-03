@@ -195,7 +195,7 @@ class ExporterRegistry:
         """Register an exporter class for a format.
 
         Args:
-            format_name: The export format (e.g., "lite_rt")
+            format_name: The export format (e.g., "litert")
             exporter_class: The exporter class
         """
         cls._exporters[format_name] = exporter_class
@@ -258,12 +258,14 @@ class ExporterRegistry:
         # Import here to avoid circular imports
         try:
             from keras_hub.src.models.causal_lm import CausalLM
+            from keras_hub.src.models.image_segmenter import ImageSegmenter
             from keras_hub.src.models.object_detector import ObjectDetector
             from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
         except ImportError:
             CausalLM = None
             Seq2SeqLM = None
             ObjectDetector = None
+            ImageSegmenter = None
 
         model_class_name = model.__class__.__name__
 
@@ -279,6 +281,10 @@ class ExporterRegistry:
             return "object_detector"
         elif "ObjectDetector" in model_class_name:
             return "object_detector"
+        elif ImageSegmenter and isinstance(model, ImageSegmenter):
+            return "image_segmenter"
+        elif "ImageSegmenter" in model_class_name:
+            return "image_segmenter"
         else:
             # Default to text model for generic Keras-Hub models
             return "text_model"

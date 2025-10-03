@@ -291,9 +291,19 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
 
         return {
             "images": keras.layers.InputSpec(
-                shape=(None, *image_size, 3), dtype="float32", name="images"
+                shape=(None, *image_size, 3), dtype=self._get_input_dtype(), name="images"
             ),
         }
+
+    def _get_input_dtype(self):
+        """Get input dtype from model.
+        Returns:
+            str: The input dtype (e.g., 'float32', 'float16')
+        """
+        if hasattr(self.model, "inputs") and self.model.inputs:
+            return str(self.model.inputs[0].dtype)
+        # Default fallback
+        return "float32"
 
     def _get_image_size(self):
         """Get image size from model preprocessor.
@@ -376,12 +386,22 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
 
         return {
             "images": keras.layers.InputSpec(
-                shape=(None, *image_size, 3), dtype="float32", name="images"
+                shape=(None, *image_size, 3), dtype=self._get_input_dtype(), name="images"
             ),
             "image_shape": keras.layers.InputSpec(
                 shape=(None, 2), dtype="int32", name="image_shape"
             ),
         }
+
+    def _get_input_dtype(self):
+        """Get input dtype from model.
+        Returns:
+            str: The input dtype (e.g., 'float32', 'float16')
+        """
+        if hasattr(self.model, "inputs") and self.model.inputs:
+            return str(self.model.inputs[0].dtype)
+        # Default fallback
+        return "float32"
 
     def _get_image_size(self):
         """Get image size from model preprocessor.
@@ -470,9 +490,19 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
 
         return {
             "images": keras.layers.InputSpec(
-                shape=(None, *image_size, 3), dtype="float32", name="images"
+                shape=(None, *image_size, 3), dtype=self._get_input_dtype(), name="images"
             ),
         }
+
+    def _get_input_dtype(self):
+        """Get input dtype from model.
+        Returns:
+            str: The input dtype (e.g., 'float32', 'float16')
+        """
+        if hasattr(self.model, "inputs") and self.model.inputs:
+            return str(self.model.inputs[0].dtype)
+        # Default fallback
+        return "float32"
 
     def _get_image_size(self):
         """Get image size from model preprocessor.
