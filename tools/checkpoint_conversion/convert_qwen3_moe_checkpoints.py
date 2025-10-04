@@ -141,19 +141,15 @@ def main(_):
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
     test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
 
-    # == Validate model.generate output ==
-    validate_output(
-        keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
-    )
-    print("\n-> Tests passed!")
-
     preprocessor = keras_hub.models.Qwen3MoeCausalLMPreprocessor(
         keras_hub_tokenizer
     )
     qwen3_moe_lm = keras_hub.models.Qwen3MoeCausalLM(
         backbone=keras_hub_model, preprocessor=preprocessor, sampler="greedy"
     )
-
+    # == Validate model.generate output ==
+    validate_output(qwen3_moe_lm, hf_model, hf_tokenizer)
+    print("\n-> Tests passed!")
     qwen3_moe_lm.save_to_preset(f"./{preset}")
 
 
