@@ -41,7 +41,7 @@ def decode_block_str(block_str):
                 key, value = splits[:2]
                 options[key] = value
 
-    act_layer = options.get("n")
+    act_layer = options.get("n", "gelu")
     num_repeat = int(options["r"])
 
     block_args = dict(
@@ -106,6 +106,89 @@ def decode_arch_def(arch_def):
             stack_args.extend([deepcopy(ba) for _ in range(rep)])
         arch_args.append(stack_args)
     return arch_args
+
+
+def convert_arch_def_to_stackwise(arch_def):
+    decoded_args = decode_arch_def(arch_def)
+    stackwise_params = {
+        k: []
+        for k in [
+            "stackwise_block_types",
+            "stackwise_num_blocks",
+            "stackwise_num_filters",
+            "stackwise_strides",
+            "stackwise_act_layers",
+            "stackwise_exp_ratios",
+            "stackwise_se_ratios",
+            "stackwise_dw_kernel_sizes",
+            "stackwise_dw_start_kernel_sizes",
+            "stackwise_dw_end_kernel_sizes",
+            "stackwise_exp_kernel_sizes",
+            "stackwise_pw_kernel_sizes",
+            "stackwise_num_heads",
+            "stackwise_key_dims",
+            "stackwise_value_dims",
+            "stackwise_kv_strides",
+            "stackwise_use_cpe",
+        ]
+    }
+    for stack in decoded_args:
+        stackwise_params["stackwise_num_blocks"].append(len(stack))
+        current_stack_params = {
+            k: [] for k in stackwise_params if k != "stackwise_num_blocks"
+        }
+        for block in stack:
+            current_stack_params["stackwise_block_types"].append(
+                block.get("block_type")
+            )
+            current_stack_params["stackwise_num_filters"].append(
+                block.get("out_chs")
+            )
+            current_stack_params["stackwise_strides"].append(
+                block.get("stride")
+            )
+            current_stack_params["stackwise_act_layers"].append(
+                block.get("act_layer")
+            )
+            current_stack_params["stackwise_exp_ratios"].append(
+                block.get("exp_ratio", 0.0)
+            )
+            current_stack_params["stackwise_se_ratios"].append(
+                block.get("se_ratio", 0.0)
+            )
+            current_stack_params["stackwise_dw_kernel_sizes"].append(
+                block.get("dw_kernel_size", block.get("dw_kernel_size_mid", 0))
+            )
+            current_stack_params["stackwise_dw_start_kernel_sizes"].append(
+                block.get("dw_kernel_size_start", 0)
+            )
+            current_stack_params["stackwise_dw_end_kernel_sizes"].append(
+                block.get("dw_kernel_size_end", 0)
+            )
+            current_stack_params["stackwise_exp_kernel_sizes"].append(
+                block.get("exp_kernel_size", 0)
+            )
+            current_stack_params["stackwise_pw_kernel_sizes"].append(
+                block.get("pw_kernel_size", 0)
+            )
+            current_stack_params["stackwise_num_heads"].append(
+                block.get("num_heads", 0)
+            )
+            current_stack_params["stackwise_key_dims"].append(
+                block.get("key_dim", 0)
+            )
+            current_stack_params["stackwise_value_dims"].append(
+                block.get("value_dim", 0)
+            )
+            current_stack_params["stackwise_kv_strides"].append(
+                block.get("kv_stride", 0)
+            )
+            current_stack_params["stackwise_use_cpe"].append(
+                block.get("use_cpe", False)
+            )
+        for key, value in current_stack_params.items():
+            stackwise_params[key].append(value)
+    return stackwise_params
 
 
 class MobileNetV5Builder:

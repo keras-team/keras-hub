@@ -13,7 +13,9 @@ from keras_hub.src.models.mobilenetv5.mobilenetv5_blocks import EdgeResidual
 from keras_hub.src.models.mobilenetv5.mobilenetv5_blocks import (
     UniversalInvertedResidual,
 )
-from keras_hub.src.models.mobilenetv5.mobilenetv5_builder import decode_arch_def
+from keras_hub.src.models.mobilenetv5.mobilenetv5_builder import (
+    convert_arch_def_to_stackwise,
+)
 from keras_hub.src.models.mobilenetv5.mobilenetv5_layers import ConvNormAct
 from keras_hub.src.models.mobilenetv5.mobilenetv5_layers import RmsNorm2d
 
@@ -21,115 +23,113 @@ backbone_cls = MobileNetV5Backbone
 
 MODEL_CONFIGS = {
     "mobilenetv5_300m": {
-        "backbone": {
-            "block_args": decode_arch_def(
+        "backbone": convert_arch_def_to_stackwise(
+            [
+                # Stage 0: 128x128 in
                 [
-                    # Stage 0: 128x128 in
-                    [
-                        "er_r1_k3_s2_e4_c128",
-                        "er_r1_k3_s1_e4_c128",
-                        "er_r1_k3_s1_e4_c128",
-                    ],
-                    # Stage 1: 256x256 in
-                    [
-                        "uir_r1_a3_k5_s2_e6_c256",
-                        "uir_r1_a5_k0_s1_e4_c256",
-                        "uir_r1_a3_k0_s1_e4_c256",
-                        "uir_r1_a5_k0_s1_e4_c256",
-                        "uir_r1_a3_k0_s1_e4_c256",
-                    ],
-                    # Stage 2: 640x640 in
-                    [
-                        "uir_r1_a5_k5_s2_e6_c640",
-                        "uir_r1_a5_k0_s1_e4_c640",
-                        "uir_r1_a5_k0_s1_e4_c640",
-                        "uir_r1_a5_k0_s1_e4_c640",
-                        "uir_r1_a5_k0_s1_e4_c640",
-                        "uir_r1_a5_k0_s1_e4_c640",
-                        "uir_r1_a5_k0_s1_e4_c640",
-                        "uir_r1_a5_k0_s1_e4_c640",
-                        "uir_r1_a0_k0_s1_e1_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                        "mqa_r1_k3_h12_v2_s1_d64_c640",
-                        "uir_r1_a0_k0_s1_e2_c640",
-                    ],
-                    # Stage 3: 1280x1280 in
-                    [
-                        "uir_r1_a5_k5_s2_e6_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                        "mqa_r1_k3_h16_s1_d96_c1280",
-                        "uir_r1_a0_k0_s1_e2_c1280",
-                    ],
-                ]
-            ),
-            "stem_size": 64,
-            "num_features": 2048,
-            "norm_layer": "rms_norm",
-            "act_layer": "gelu",
-            "use_msfa": True,
-            "layer_scale_init_value": 1e-5,
-        },
-    }
+                    "er_r1_k3_s2_e4_c128",
+                    "er_r1_k3_s1_e4_c128",
+                    "er_r1_k3_s1_e4_c128",
+                ],
+                # Stage 1: 256x256 in
+                [
+                    "uir_r1_a3_k5_s2_e6_c256",
+                    "uir_r1_a5_k0_s1_e4_c256",
+                    "uir_r1_a3_k0_s1_e4_c256",
+                    "uir_r1_a5_k0_s1_e4_c256",
+                    "uir_r1_a3_k0_s1_e4_c256",
+                ],
+                # Stage 2: 640x640 in
+                [
+                    "uir_r1_a5_k5_s2_e6_c640",
+                    "uir_r1_a5_k0_s1_e4_c640",
+                    "uir_r1_a5_k0_s1_e4_c640",
+                    "uir_r1_a5_k0_s1_e4_c640",
+                    "uir_r1_a5_k0_s1_e4_c640",
+                    "uir_r1_a5_k0_s1_e4_c640",
+                    "uir_r1_a5_k0_s1_e4_c640",
+                    "uir_r1_a5_k0_s1_e4_c640",
+                    "uir_r1_a0_k0_s1_e1_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                    "mqa_r1_k3_h12_v2_s1_d64_c640",
+                    "uir_r1_a0_k0_s1_e2_c640",
+                ],
+                # Stage 3: 1280x1280 in
+                [
+                    "uir_r1_a5_k5_s2_e6_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                    "mqa_r1_k3_h16_s1_d96_c1280",
+                    "uir_r1_a0_k0_s1_e2_c1280",
+                ],
+            ]
+        ),
+        "stem_size": 64,
+        "num_features": 2048,
+        "norm_layer": "rms_norm",
+        "act_layer": "gelu",
+        "use_msfa": True,
+        "layer_scale_init_value": 1e-5,
+    },
 }
 
 
@@ -141,7 +141,10 @@ def convert_backbone_config(timm_config):
     timm_architecture = timm_config["architecture"]
     if timm_architecture not in MODEL_CONFIGS:
         raise ValueError(f"Unsupported architecture: {timm_architecture}")
-    return MODEL_CONFIGS[timm_architecture]["backbone"]
+    config = MODEL_CONFIGS[timm_architecture].copy()
+    backbone_config = config.pop("backbone")
+    backbone_config.update(config)
+    return backbone_config
 
 
 def convert_weights(backbone, loader, timm_config):
@@ -253,8 +256,10 @@ def convert_weights(backbone, loader, timm_config):
         )
     ]
     block_counter = 0
-    for stack_idx, stack_args in enumerate(backbone.block_args):
-        for block_idx_in_stage in range(len(stack_args)):
+    for stack_idx in range(len(backbone.stackwise_num_blocks)):
+        for block_idx_in_stage in range(
+            backbone.stackwise_num_blocks[stack_idx]
+        ):
             block = block_layers[block_counter]
             timm_prefix = f"blocks.{stack_idx}.{block_idx_in_stage}"
             if isinstance(block, EdgeResidual):

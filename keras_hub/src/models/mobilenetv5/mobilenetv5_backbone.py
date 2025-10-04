@@ -26,8 +26,40 @@ class MobileNetV5Backbone(Backbone):
     can be used as a feature extractor for various downstream tasks.
 
     Args:
-        block_args: list. A list of lists, where each inner list contains the
-            arguments for the blocks in a stage.
+        stackwise_block_types: list of list of strings. The block type for each
+            block in each stack.
+        stackwise_num_blocks: list of ints. The number of blocks for each
+            stack.
+        stackwise_num_filters: list of list of ints. The number of filters for
+            each block in each stack.
+        stackwise_strides: list of list of ints. The stride for each block in
+            each stack.
+        stackwise_act_layers: list of list of strings. The activation function
+            for each block in each stack.
+        stackwise_exp_ratios: list of list of floats. The expansion ratio for
+            each block in each stack.
+        stackwise_se_ratios: list of list of floats. The SE ratio for each
+            block in each stack.
+        stackwise_dw_kernel_sizes: list of list of ints. The depthwise kernel
+            size for each block in each stack.
+        stackwise_dw_start_kernel_sizes: list of list of ints. The start
+            depthwise kernel size for each `uir` block in each stack.
+        stackwise_dw_end_kernel_sizes: list of list of ints. The end depthwise
+            kernel size for each `uir` block in each stack.
+        stackwise_exp_kernel_sizes: list of list of ints. The expansion kernel
+            size for each `er` block in each stack.
+        stackwise_pw_kernel_sizes: list of list of ints. The pointwise kernel
+            size for each `er` block in each stack.
+        stackwise_num_heads: list of list of ints. The number of heads for each
+            `mqa` or `mha` block in each stack.
+        stackwise_key_dims: list of list of ints. The key dimension for each
+            `mqa` or `mha` block in each stack.
+        stackwise_value_dims: list of list of ints. The value dimension for each
+            `mqa` or `mha` block in each stack.
+        stackwise_kv_strides: list of list of ints. The key-value stride for
+            each `mqa` or `mha` block in each stack.
+        stackwise_use_cpe: list of list of bools. Whether to use conditional
+            position encoding for each `mqa` or `mha` block in each stack.
         filters: int. The number of input channels.
         stem_size: int. The number of channels in the stem convolution.
         stem_bias: bool. If `True`, a bias term is used in the stem
@@ -60,14 +92,30 @@ class MobileNetV5Backbone(Backbone):
     Example:
     ```python
     import keras
-    from keras_hub.src.models.mobilenetv5.mobilenetv5_builder import (
-        decode_arch_def
+    from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
+        MobileNetV5Backbone,
     )
-
-    arch_def = [["er_r1_k3_s2_e4_c24"], ["uir_r2_k5_s2_e6_c48"]]
-    block_args = decode_arch_def(arch_def)
-    model = keras_hub.models.MobileNetV5Backbone(block_args=block_args)
-    # Create a dummy input.
+    model_args = {
+        "stackwise_block_types": [["er"], ["uir", "uir"]],
+        "stackwise_num_blocks": [1, 2],
+        "stackwise_num_filters": [[24], [48, 48]],
+        "stackwise_strides": [[2], [2, 1]],
+        "stackwise_act_layers": [["relu"], ["relu", "relu"]],
+        "stackwise_exp_ratios": [[4.0], [6.0, 6.0]],
+        "stackwise_se_ratios": [[0.0], [0.0, 0.0]],
+        "stackwise_dw_kernel_sizes": [[0], [5, 5]],
+        "stackwise_dw_start_kernel_sizes": [[0], [0, 0]],
+        "stackwise_dw_end_kernel_sizes": [[0], [0, 0]],
+        "stackwise_exp_kernel_sizes": [[3], [0, 0]],
+        "stackwise_pw_kernel_sizes": [[1], [0, 0]],
+        "stackwise_num_heads": [[0], [0, 0]],
+        "stackwise_key_dims": [[0], [0, 0]],
+        "stackwise_value_dims": [[0], [0, 0]],
+        "stackwise_kv_strides": [[0], [0, 0]],
+        "stackwise_use_cpe": [[False], [False, False]],
+        "use_msfa": False,
+    }
+    model = MobileNetV5Backbone(**model_args)
     input_data = keras.ops.ones((1, 224, 224, 3))
     output = model(input_data)
     ```
@@ -75,7 +123,23 @@ class MobileNetV5Backbone(Backbone):
 
     def __init__(
         self,
-        block_args,
+        stackwise_block_types,
+        stackwise_num_blocks,
+        stackwise_num_filters,
+        stackwise_strides,
+        stackwise_act_layers,
+        stackwise_exp_ratios,
+        stackwise_se_ratios,
+        stackwise_dw_kernel_sizes,
+        stackwise_dw_start_kernel_sizes,
+        stackwise_dw_end_kernel_sizes,
+        stackwise_exp_kernel_sizes,
+        stackwise_pw_kernel_sizes,
+        stackwise_num_heads,
+        stackwise_key_dims,
+        stackwise_value_dims,
+        stackwise_kv_strides,
+        stackwise_use_cpe,
         filters=3,
         stem_size=16,
         stem_bias=True,
@@ -99,6 +163,62 @@ class MobileNetV5Backbone(Backbone):
     ):
         data_format = standardize_data_format(data_format)
         channel_axis = -1 if data_format == "channels_last" else 1
+        block_args = []
+        for i in range(len(stackwise_num_blocks)):
+            stack_args = []
+            for j in range(stackwise_num_blocks[i]):
+                block_type = stackwise_block_types[i][j]
+                args = {
+                    "block_type": block_type,
+                    "out_chs": stackwise_num_filters[i][j],
+                    "stride": stackwise_strides[i][j],
+                    "act_layer": stackwise_act_layers[i][j],
+                }
+                if block_type == "ir":
+                    args.update(
+                        {
+                            "dw_kernel_size": stackwise_dw_kernel_sizes[i][j],
+                            "exp_ratio": stackwise_exp_ratios[i][j],
+                            "se_ratio": stackwise_se_ratios[i][j],
+                        }
+                    )
+                elif block_type == "uir":
+                    args.update(
+                        {
+                            "dw_kernel_size_mid": stackwise_dw_kernel_sizes[i][
+                                j
+                            ],
+                            "dw_kernel_size_start": stackwise_dw_start_kernel_sizes[  # noqa: E501
+                                i
+                            ][j],
+                            "dw_kernel_size_end": stackwise_dw_end_kernel_sizes[
+                                i
+                            ][j],
+                            "exp_ratio": stackwise_exp_ratios[i][j],
+                            "se_ratio": stackwise_se_ratios[i][j],
+                        }
+                    )
+                elif block_type == "er":
+                    args.update(
+                        {
+                            "exp_kernel_size": stackwise_exp_kernel_sizes[i][j],
+                            "pw_kernel_size": stackwise_pw_kernel_sizes[i][j],
+                            "exp_ratio": stackwise_exp_ratios[i][j],
+                            "se_ratio": stackwise_se_ratios[i][j],
+                        }
+                    )
+                elif block_type in ("mqa", "mha"):
+                    args.update(
+                        {
+                            "num_heads": stackwise_num_heads[i][j],
+                            "key_dim": stackwise_key_dims[i][j],
+                            "value_dim": stackwise_value_dims[i][j],
+                            "kv_stride": stackwise_kv_strides[i][j],
+                            "use_cpe": stackwise_use_cpe[i][j],
+                        }
+                    )
+                stack_args.append(args)
+            block_args.append(stack_args)
 
         # === Layers ===
         if not fix_stem:
@@ -176,7 +296,23 @@ class MobileNetV5Backbone(Backbone):
         super().__init__(inputs=image_input, outputs=x, dtype=dtype, **kwargs)
 
         # === Config ===
-        self.block_args = block_args
+        self.stackwise_block_types = stackwise_block_types
+        self.stackwise_num_blocks = stackwise_num_blocks
+        self.stackwise_num_filters = stackwise_num_filters
+        self.stackwise_strides = stackwise_strides
+        self.stackwise_act_layers = stackwise_act_layers
+        self.stackwise_exp_ratios = stackwise_exp_ratios
+        self.stackwise_se_ratios = stackwise_se_ratios
+        self.stackwise_dw_kernel_sizes = stackwise_dw_kernel_sizes
+        self.stackwise_dw_start_kernel_sizes = stackwise_dw_start_kernel_sizes
+        self.stackwise_dw_end_kernel_sizes = stackwise_dw_end_kernel_sizes
+        self.stackwise_exp_kernel_sizes = stackwise_exp_kernel_sizes
+        self.stackwise_pw_kernel_sizes = stackwise_pw_kernel_sizes
+        self.stackwise_num_heads = stackwise_num_heads
+        self.stackwise_key_dims = stackwise_key_dims
+        self.stackwise_value_dims = stackwise_value_dims
+        self.stackwise_kv_strides = stackwise_kv_strides
+        self.stackwise_use_cpe = stackwise_use_cpe
         self.filters = filters
         self.stem_size = stem_size
         self.stem_bias = stem_bias
@@ -199,7 +335,23 @@ class MobileNetV5Backbone(Backbone):
 
     def get_config(self):
         config = {
-            "block_args": self.block_args,
+            "stackwise_block_types": self.stackwise_block_types,
+            "stackwise_num_blocks": self.stackwise_num_blocks,
+            "stackwise_num_filters": self.stackwise_num_filters,
+            "stackwise_strides": self.stackwise_strides,
+            "stackwise_act_layers": self.stackwise_act_layers,
+            "stackwise_exp_ratios": self.stackwise_exp_ratios,
+            "stackwise_se_ratios": self.stackwise_se_ratios,
+            "stackwise_dw_kernel_sizes": self.stackwise_dw_kernel_sizes,
+            "stackwise_dw_start_kernel_sizes": self.stackwise_dw_start_kernel_sizes,  # noqa: E501
+            "stackwise_dw_end_kernel_sizes": self.stackwise_dw_end_kernel_sizes,
+            "stackwise_exp_kernel_sizes": self.stackwise_exp_kernel_sizes,
+            "stackwise_pw_kernel_sizes": self.stackwise_pw_kernel_sizes,
+            "stackwise_num_heads": self.stackwise_num_heads,
+            "stackwise_key_dims": self.stackwise_key_dims,
+            "stackwise_value_dims": self.stackwise_value_dims,
+            "stackwise_kv_strides": self.stackwise_kv_strides,
+            "stackwise_use_cpe": self.stackwise_use_cpe,
             "filters": self.filters,
             "stem_size": self.stem_size,
             "stem_bias": self.stem_bias,
