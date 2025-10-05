@@ -10,6 +10,7 @@ backbone_presets = {
             "parameters": "7B",
             "model_size": "7B",
         },
+        "kaggle_handle": "kaggle://keras/qwen3-omni-moe-7b/keras/qwen3_omni_moe_7b",
         "config": {
             "vocabulary_size": 151936,
             "num_layers": 32,

@@ -1,5 +1,8 @@
 from keras_hub.src.models.qwen3_omni_moe.qwen3_omni_moe_backbone import Qwen3OmniMoeBackbone
+from keras_hub.src.models.qwen3_omni_moe.qwen3_omni_moe_causal_lm import Qwen3OmniMoeCausalLM
+from keras_hub.src.models.qwen3_omni_moe.qwen3_omni_moe_causal_lm_preprocessor import Qwen3OmniMoeCausalLMPreprocessor
 from keras_hub.src.models.qwen3_omni_moe.qwen3_omni_moe_presets import backbone_presets
+from keras_hub.src.models.qwen3_omni_moe.qwen3_omni_moe_tokenizer import Qwen3OmniMoeTokenizer
 from keras_hub.src.utils.preset_utils import register_presets
 
 register_presets(backbone_presets, Qwen3OmniMoeBackbone)

@@ -8,7 +8,45 @@ from keras_hub.src.models.qwen3_omni_moe.qwen3_omni_moe_layernorm import Qwen3Om
 
 @keras_hub_export("keras_hub.models.Qwen3OmniMoeAttention")
 class Qwen3OmniMoeAttention(keras.layers.Layer):
-    """Multi-head attention for Qwen3-Omni MoE model."""
+    """Multi-head attention for Qwen3-Omni MoE model.
+
+    This layer implements multi-head attention with grouped query attention (GQA)
+    and rotary positional embeddings for the Qwen3-Omni MoE model. It supports
+    efficient key-value caching for autoregressive generation.
+
+    Args:
+        num_query_heads: int. The number of heads for the query projections.
+        num_key_value_heads: int. The number of heads for the key and value
+            projections (must be <= num_query_heads).
+        hidden_dim: int. The size of the transformer hidden state.
+        head_dim: int, optional. The size of each attention head. If None,
+            defaults to hidden_dim // num_query_heads.
+        layer_norm_epsilon: float, default 1e-6. The epsilon value used for
+            layer normalization.
+        dropout: float, default 0.0. Dropout probability for attention weights.
+        sliding_window_size: int, default 4096. Size of the sliding local window.
+        max_sequence_length: int, default 32768. The maximum sequence length
+            supported by the model.
+        dtype: str or `keras.mixed_precision.DTypePolicy`, optional. The dtype
+            to use for the layer's computations and weights.
+
+    Example:
+    ```python
+    # Create attention layer
+    attention = Qwen3OmniMoeAttention(
+        num_query_heads=32,
+        num_key_value_heads=4,
+        hidden_dim=4096,
+        head_dim=128
+    )
+    
+    # Apply to input
+    hidden_states = keras.random.normal((2, 10, 4096))
+    outputs = attention(hidden_states)
+    # outputs["hidden_states"] shape: (2, 10, 4096)
+    # outputs["cache"] contains key-value cache for generation
+    ```
+    """
 
     def __init__(
         self,
@@ -106,15 +144,10 @@ class Qwen3OmniMoeAttention(keras.layers.Layer):
             key = self.rotary_embedding(key, position_ids)
 
         # Handle cache
-        if cache is not None:
-            if cache_update_index is not None:
-                # Update cache
-                key = ops.concatenate([cache["key"], key], axis=1)
-                value = ops.concatenate([cache["value"], value], axis=1)
-            else:
-                # Use cache
-                key = cache["key"]
-                value = cache["value"]
+        if cache is not None and cache_update_index is not None:
+            # Update cache
+            key = ops.concatenate([cache["key"], key], axis=1)
+            value = ops.concatenate([cache["value"], value], axis=1)
 
         # Update cache
         new_cache = {

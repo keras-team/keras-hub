@@ -539,6 +539,12 @@ from keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm_preprocessor import (
 from keras_hub.src.models.qwen3_omni_moe.qwen3_omni_moe_backbone import (
     Qwen3OmniMoeBackbone as Qwen3OmniMoeBackbone,
 )
+from keras_hub.src.models.qwen3_omni_moe.qwen3_omni_moe_causal_lm import (
+    Qwen3OmniMoeCausalLM as Qwen3OmniMoeCausalLM,
+)
+from keras_hub.src.models.qwen3_omni_moe.qwen3_omni_moe_causal_lm_preprocessor import (
+    Qwen3OmniMoeCausalLMPreprocessor as Qwen3OmniMoeCausalLMPreprocessor,
+)
 from keras_hub.src.models.qwen_moe.qwen_moe_backbone import (
     QwenMoeBackbone as QwenMoeBackbone,
 )

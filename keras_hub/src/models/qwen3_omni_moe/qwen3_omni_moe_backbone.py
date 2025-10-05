@@ -104,7 +104,6 @@ class Qwen3OmniMoeBackbone(Backbone):
         **kwargs,
     ):
         # Set up the config
-        super().__init__(dtype=dtype, **kwargs)
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
@@ -124,7 +123,7 @@ class Qwen3OmniMoeBackbone(Backbone):
             vocabulary_size,
             hidden_dim,
             embeddings_initializer=_qwen3_omni_moe_kernel_initializer(),
-            dtype=self.dtype,
+            dtype=dtype,
             name="token_embedding",
         )
 
@@ -142,30 +141,70 @@ class Qwen3OmniMoeBackbone(Backbone):
             dropout=dropout,
             sliding_window_size=sliding_window_size,
             max_sequence_length=max_sequence_length,
-            dtype=self.dtype,
+            dtype=dtype,
             name="transformer_decoder",
         )
 
         # Final layer norm
         self.layer_norm = Qwen3OmniMoeLayerNorm(
             epsilon=layer_norm_epsilon,
-            dtype=self.dtype,
+            dtype=dtype,
             name="layer_norm",
+        )
+
+        # === Functional Model ===
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        x = self.token_embedding(token_id_input)
+        
+        # Compute attention mask
+        attention_mask = ops.cast(padding_mask_input, dtype="bool")
+        
+        # Transformer decoder
+        decoder_outputs = self.transformer_decoder(
+            hidden_states=x,
+            attention_mask=attention_mask,
+            position_ids=None,
+            cache=None,
+            cache_update_index=None,
+            training=None,
+        )
+        
+        sequence_output = self.layer_norm(decoder_outputs["hidden_states"])
+        
+        super().__init__(
+            inputs=[token_id_input, padding_mask_input],
+            outputs=sequence_output,
+            dtype=dtype,
+            **kwargs,
         )
 
     def call(
         self,
-        token_ids,
-        attention_mask=None,
+        inputs,
         position_ids=None,
         cache=None,
         cache_update_index=None,
         training=None,
     ):
+        # Handle both dictionary and list inputs (for functional model compatibility)
+        if isinstance(inputs, dict):
+            token_ids = inputs["token_ids"]
+            padding_mask = inputs.get("padding_mask")
+        else:
+            # inputs is a list from functional model: [token_ids, padding_mask]
+            token_ids = inputs[0]
+            padding_mask = inputs[1]
+
         # Embed tokens
         hidden_states = self.token_embedding(token_ids)
 
         # Compute attention mask
+        attention_mask = padding_mask
         if attention_mask is not None:
             attention_mask = ops.cast(attention_mask, dtype="bool")
         else:
@@ -185,8 +224,10 @@ class Qwen3OmniMoeBackbone(Backbone):
         )
 
         # Final layer norm
-        hidden_states = self.layer_norm(decoder_outputs)
+        hidden_states = self.layer_norm(decoder_outputs["hidden_states"])
 
+        if cache_update_index is not None:
+            return hidden_states, decoder_outputs["cache"]
         return hidden_states
 
     def get_config(self):
