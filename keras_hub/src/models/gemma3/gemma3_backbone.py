@@ -1,5 +1,6 @@
 import keras
-from keras import ops, layers
+from keras import layers
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.reversible_embedding import (
@@ -428,8 +429,29 @@ class Gemma3Backbone(Backbone):
 
 class MeanPooling(layers.Layer):
     """
-    This layer calculates the mean of the token embeddings, ignoring
-    padded tokens.
+    Mean pooling layer that computes the average of token embeddings,
+    respecting a padding mask.
+
+    This layer correctly handles variable-length sequences by ignoring
+    padded tokens in the mean calculation.
+
+    Call arguments:
+        inputs: A tuple of `(sequence_output, padding_mask)`.
+            `sequence_output` is a tensor of shape `(batch_size, seq_len,
+            hidden_dim)`. `padding_mask` is a tensor of shape `(batch_size,
+            seq_len)` with `1` for valid tokens and `0` for padded tokens.
+
+    Returns:
+        A tensor of shape `(batch_size, hidden_dim)`.
+
+    Example:
+    ```python
+    sequence_output = np.random.rand(2, 4, 8).astype("float32")
+    padding_mask = np.array([[1, 1, 1, 0], [1, 1, 0, 0]])
+    mean_pool_layer = MeanPooling()
+    pooled = mean_pool_layer((sequence_output, padding_mask))
+    # pooled.shape -> (2, 8)
+    ```
     """
 
     def __init__(self, **kwargs):
@@ -444,8 +466,9 @@ class MeanPooling(layers.Layer):
         )
         masked_output = sequence_output * mask
         sum_embeddings = ops.sum(masked_output, axis=1)
-
-        num_tokens = ops.sum(ops.cast(padding_mask, sequence_output.dtype), axis=1)
+        num_tokens = ops.sum(
+            ops.cast(padding_mask, sequence_output.dtype), axis=1
+        )
         num_tokens = ops.expand_dims(num_tokens, axis=1)
 
         num_tokens = ops.maximum(num_tokens, 1e-9)
@@ -457,16 +480,46 @@ class MeanPooling(layers.Layer):
         sequence_output_shape, padding_mask_shape = input_shape
         return (sequence_output_shape[0], sequence_output_shape[2])
 
+    def get_config(self):
+        return super().get_config()
+
 
 @keras_hub_export("keras_hub.models.Gemma3Embedding")
 class Gemma3EmbeddingModel(keras.Model):
+    """An end-to-end Gemma3 model for embedding tasks.
 
-    def __init__(
-        self,
-        backbone: Gemma3Backbone,
-        embedding_dim: int,
-        **kwargs,
-    ):
+    This model takes token ids as input and returns a fixed-size embedding
+    vector for the input sequence. It uses a `Gemma3Backbone` to generate
+    contextualized token embeddings, a `MeanPooling` layer to pool them into a
+    single vector, and a final `Dense` layer to project to the desired
+    embedding dimension.
+
+    This model can be loaded with a pre-trained `Gemma3Backbone` and used for
+    tasks like semantic similarity, retrieval, or as a feature extractor.
+
+    Args:
+        backbone: A `keras_hub.models.Gemma3Backbone` instance.
+        embedding_dim (int): The dimension of the output embedding.
+
+    Example:
+    ```python
+    # backbone = keras_hub.models.Gemma3Backbone.from_preset(
+    #     "gemma3_instruct_1b"
+    # )
+    # embedding_model = keras_hub.models.Gemma3EmbeddingModel(
+    #     backbone=backbone,
+    #     embedding_dim=768,
+    # )
+    # input_data = {
+    #     "token_ids": np.array([[651, 4320, 8426, 25341, 235265]]),
+    #     "padding_mask": np.ones((1, 5), dtype="int32"),
+    # }
+    # embeddings = embedding_model.predict(input_data)
+    ```
+    """
+
+    def __init__(self, backbone, embedding_dim, **kwargs):
+        super().__init__(**kwargs)
         self.backbone = backbone
         self.pooling_layer = MeanPooling(
             dtype=backbone.dtype, name="mean_pooling"
@@ -474,24 +527,21 @@ class Gemma3EmbeddingModel(keras.Model):
         self.projection_layer = layers.Dense(
             embedding_dim, dtype=backbone.dtype, name="embedding_projection"
         )
+        self.embedding_dim = embedding_dim
 
-        inputs = self.backbone.input
-        sequence_output = self.backbone.outputs[0]
+    def call(self, inputs):
+        sequence_output = self.backbone(inputs)
         padding_mask = inputs["padding_mask"]
 
-        pooled_output = self.pooling_layer([sequence_output, padding_mask])
-        
+        pooled_output = self.pooling_layer((sequence_output, padding_mask))
         embedding = self.projection_layer(pooled_output)
-
-        super().__init__(inputs=inputs, outputs=embedding, **kwargs)
-
-        self.embedding_dim = embedding_dim
+        return embedding
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "backbone": keras.layers.serialize(self.backbone),
+                "backbone": layers.serialize(self.backbone),
                 "embedding_dim": self.embedding_dim,
             }
         )
@@ -499,5 +549,5 @@ class Gemma3EmbeddingModel(keras.Model):
 
     @classmethod
     def from_config(cls, config):
-        config["backbone"] = keras.layers.deserialize(config["backbone"])
+        config["backbone"] = layers.deserialize(config["backbone"])
         return cls(**config)

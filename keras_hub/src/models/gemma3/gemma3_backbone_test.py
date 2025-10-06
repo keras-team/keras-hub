@@ -6,11 +6,9 @@ from absl.testing import parameterized
 from keras import ops
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3EmbeddingModel
 from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
     Gemma3VisionEncoder,
-)
-from keras_hub.src.models.gemma3.gemma3_backbone import (
-    Gemma3EmbeddingModel,
 )
 from keras_hub.src.tests.test_case import TestCase
 
@@ -197,6 +195,7 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
                 else self.input_data,
             )
 
+
 class Gemma3EmbeddingModelTest(TestCase, parameterized.TestCase):
     def setUp(self):
         self.batch_size = 2
@@ -249,13 +248,15 @@ class Gemma3EmbeddingModelTest(TestCase, parameterized.TestCase):
         """Test parameter and layer counts."""
         model = Gemma3EmbeddingModel(**self.init_kwargs)
 
+        model(self.input_data)
+
         backbone_params = self.backbone.count_params()
         projection_params = (
             self.hidden_dim * self.embedding_dim
         ) + self.embedding_dim
         expected_params = backbone_params + projection_params
 
-        expected_layers = 8 
+        expected_layers = 3
 
         self.assertEqual(model.count_params(), expected_params)
         self.assertEqual(len(model.layers), expected_layers)
