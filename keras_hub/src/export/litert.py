@@ -8,7 +8,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporter
 
 try:
-    from keras.src.export.litert_exporter import (
+    from keras.src.export.litert import (
         LitertExporter as KerasLitertExporter,
     )
 

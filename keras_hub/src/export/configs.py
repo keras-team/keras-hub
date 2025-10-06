@@ -5,6 +5,7 @@ of Keras-Hub models, following the Optimum pattern.
 """
 
 import keras
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporterConfig
 
@@ -291,7 +292,9 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
 
         return {
             "images": keras.layers.InputSpec(
-                shape=(None, *image_size, 3), dtype=self._get_input_dtype(), name="images"
+                shape=(None, *image_size, 3),
+                dtype=self._get_input_dtype(),
+                name="images",
             ),
         }
 
@@ -386,7 +389,9 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
 
         return {
             "images": keras.layers.InputSpec(
-                shape=(None, *image_size, 3), dtype=self._get_input_dtype(), name="images"
+                shape=(None, *image_size, 3),
+                dtype=self._get_input_dtype(),
+                name="images",
             ),
             "image_shape": keras.layers.InputSpec(
                 shape=(None, 2), dtype="int32", name="image_shape"
@@ -490,7 +495,9 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
 
         return {
             "images": keras.layers.InputSpec(
-                shape=(None, *image_size, 3), dtype=self._get_input_dtype(), name="images"
+                shape=(None, *image_size, 3),
+                dtype=self._get_input_dtype(),
+                name="images",
             ),
         }
 
