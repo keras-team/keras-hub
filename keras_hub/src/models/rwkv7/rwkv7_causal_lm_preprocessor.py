@@ -44,13 +44,13 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
     # Initialize the tokenizer and load assets from a local path.
     tokenizer = RWKVTokenizer()
     tokenizer.load_assets(rwkv_path)
-    
+
     # Create a preprocessor with a sequence length of 8.
     preprocessor = RWKV7CausalLMPreprocessor(tokenizer, sequence_length=8)
-    
+
     # Tokenize and pack a batch of sentences.
     preprocessor(["Bubble sort\n```python", "Hello World\n```python\n"])
-    
+
     # Preprocess inputs for generation with a maximum generation length of 16.
     preprocessor.generate_preprocess(
         ["Bubble sort\n```python", "Hello World\n```python\n"], 16
@@ -91,6 +91,7 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
              0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
              0,  0]], dtype=torch.int32)}
     """
+
     backbone_cls = RWKV7Backbone
     tokenizer_cls = RWKVTokenizer
 
@@ -101,7 +102,7 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         **kwargs,
     ):
         """Initialize the preprocessor.
-        
+
         Args:
             tokenizer: The tokenizer to use.
             add_start_token: Whether to add start token.
@@ -119,19 +120,26 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length=None,
     ):
         """Preprocess the input for training.
-        
+
         Args:
             x: Input text data.
             y: Target data (optional).
             sample_weight: Sample weights (optional).
             sequence_length: Desired sequence length.
-            
+
         Returns:
             Preprocessed data tuple (x, y, sample_weight).
         """
+        if isinstance(x, str):
+            x = [x]
         sequence_length = sequence_length or self.sequence_length
         # Pad length to multiples of 16 to meet kernel requirements
-        sequence_length = sequence_length + (16 - sequence_length % 16)
+        if sequence_length is None:
+            raise (ValueError("`sequence_length` must be specified."))
+        if (sequence_length - 1) % 16 != 0:
+            sequence_length = sequence_length + (
+                16 - (sequence_length - 1) % 16
+            )
         x = self.tokenizer(x)
 
         token_ids, padding_mask = self.packer(
@@ -158,28 +166,35 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
     def generate_preprocess(
         self,
         x,
-        sequence_length=None,
+        sequence_length,
     ):
         """Preprocess input for generation.
-        
+
         Args:
             x: Input text data.
             sequence_length: Maximum generation length.
-            
+
         Returns:
             Dictionary with preprocessed inputs for generation.
         """
+        if isinstance(x, str):
+            x = [x]
+
         if not self.built:
             self.build(None)
         # Align with Keras API
         # Input sequence_length is the maximum generation length
         # While self.sequence_length corresponds to the prefill max length
         generate_length = sequence_length
+        if sequence_length is None:
+            raise (ValueError("`sequence_length` must be specified."))
         sequence_length = self.sequence_length
 
         # Pad length to multiples of 16 to meet kernel requirements
-        sequence_length = sequence_length + (16 - sequence_length % 16)
-        generate_length = generate_length + (16 - generate_length % 16)
+        if sequence_length % 16 != 0:
+            sequence_length = sequence_length + (16 - sequence_length % 16)
+        if generate_length % 16 != 0:
+            generate_length = generate_length + (16 - generate_length % 16)
 
         x = [t[-sequence_length:] for t in self.tokenizer(x)]
         y = ops.zeros((len(x), generate_length), "int32")
@@ -206,14 +221,14 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         x,
     ):
         """Convert integer token output to strings for generation.
-        
+
         This method reverses `generate_preprocess()`, by first removing all
         padding and start/end tokens, and then converting the integer sequence
         back to a string.
-        
+
         Args:
             x: Dictionary containing token_ids and padding_mask.
-            
+
         Returns:
             Detokenized string output.
         """

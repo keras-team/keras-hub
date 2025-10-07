@@ -36,10 +36,10 @@ class RWKV7CausalLM(CausalLM):
     # Initialize the tokenizer and load assets from a local path.
     tokenizer = RWKVTokenizer()
     tokenizer.load_assets(rwkv_path)
-    
+
     # Create a preprocessor with a sequence length of 8.
     preprocessor = RWKV7CausalLMPreprocessor(tokenizer, sequence_length=8)
-    
+
     # Initialize the model with a backbone and preprocessor.
     causal_lm = RWKV7CausalLM(backbone, preprocessor)
 
@@ -59,7 +59,7 @@ class RWKV7CausalLM(CausalLM):
 
     def __init__(self, backbone, preprocessor=None, **kwargs):
         """Initialize the RWKV-7 causal language model.
-        
+
         Args:
             backbone: The backbone model.
             preprocessor: The preprocessor for tokenization.
@@ -87,7 +87,7 @@ class RWKV7CausalLM(CausalLM):
 
         `call_with_cache` adds an additional forward pass for the model for
         autoregressive inference. Unlike calling the model directly, this method
-        allows caching previous state Tensors in RWKV layers, and avoids 
+        allows caching previous state Tensors in RWKV layers, and avoids
         recomputing the outputs of seen tokens.
 
         Args:
