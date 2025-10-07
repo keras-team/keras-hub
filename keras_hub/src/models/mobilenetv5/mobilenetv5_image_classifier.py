@@ -42,16 +42,40 @@ class MobileNetV5ImageClassifier(ImageClassifier):
     Example:
     ```python
     import keras
-    from keras_hub.src.models.mobilenetv5.mobilenetv5_builder import (
-        decode_arch_def
-    )
+    from keras_hub.models import MobileNetV5Backbone
+    from keras_hub.models import MobileNetV5ImageClassifier
 
-    arch_def = [["er_r1_k3_s2_e4_c24"], ["uir_r2_k5_s2_e6_c48"]]
-    block_args = decode_arch_def(arch_def)
-    backbone = keras_hub.models.MobileNetV5Backbone(block_args=block_args)
-    model = keras_hub.models.MobileNetV5ImageClassifier(backbone, 1000)
+    # Randomly initialized task model with a custom config.
+    model_args = {
+        "stackwise_block_types": [["er"], ["uir", "uir"]],
+        "stackwise_num_blocks": [1, 2],
+        "stackwise_num_filters": [[24], [48, 48]],
+        "stackwise_strides": [[2], [2, 1]],
+        "stackwise_act_layers": [["relu"], ["relu", "relu"]],
+        "stackwise_exp_ratios": [[4.0], [6.0, 6.0]],
+        "stackwise_se_ratios": [[0.0], [0.0, 0.0]],
+        "stackwise_dw_kernel_sizes": [[0], [5, 5]],
+        "stackwise_dw_start_kernel_sizes": [[0], [0, 0]],
+        "stackwise_dw_end_kernel_sizes": [[0], [0, 0]],
+        "stackwise_exp_kernel_sizes": [[3], [0, 0]],
+        "stackwise_pw_kernel_sizes": [[1], [0, 0]],
+        "stackwise_num_heads": [[0], [0, 0]],
+        "stackwise_key_dims": [[0], [0, 0]],
+        "stackwise_value_dims": [[0], [0, 0]],
+        "stackwise_kv_strides": [[0], [0, 0]],
+        "stackwise_use_cpe": [[False], [False, False]],
+        "use_msfa": False,
+    }
+    backbone = MobileNetV5Backbone(**model_args)
+    model = MobileNetV5ImageClassifier(backbone, 1000)
     images = keras.ops.ones((1, 224, 224, 3))
     output = model.predict(images)
+
+    # Load the model from a preset and run a prediction.
+    model = MobileNetV5ImageClassifier.from_preset("mobilenetv5_300m_gemma3n")
+
+    # Expected output shape = (1, 2048).
+    outputs = model.predict(keras.ops.ones((1, 224, 224, 3)))
     ```
     """
 

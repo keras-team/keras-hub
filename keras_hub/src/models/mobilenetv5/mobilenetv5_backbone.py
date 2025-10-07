@@ -92,9 +92,9 @@ class MobileNetV5Backbone(Backbone):
     Example:
     ```python
     import keras
-    from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
-        MobileNetV5Backbone,
-    )
+    from keras_hub.models import MobileNetV5Backbone
+
+    # Randomly initialized backbone with a custom config.
     model_args = {
         "stackwise_block_types": [["er"], ["uir", "uir"]],
         "stackwise_num_blocks": [1, 2],
@@ -118,6 +118,12 @@ class MobileNetV5Backbone(Backbone):
     model = MobileNetV5Backbone(**model_args)
     input_data = keras.ops.ones((1, 224, 224, 3))
     output = model(input_data)
+
+    # Load the backbone from a preset and run a prediction.
+    backbone = MobileNetV5Backbone.from_preset("mobilenetv5_300m_gemma3n")
+
+    # Expected output shape = (1, 16, 16, 2048).
+    outputs = backbone.predict(keras.ops.ones((1, 224, 224, 3)))
     ```
     """
 
