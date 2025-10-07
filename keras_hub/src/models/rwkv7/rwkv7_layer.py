@@ -24,19 +24,8 @@ def rnn_generalized_delta_rule(
     output_final_state: bool = True,
     head_first: bool = False,
 ):
-    """
-    Implements the generalized delta rule.
+    """Implements the generalized delta rule.
 
-    Parameters:
-    r: Input tensor.
-    w: Weight tensor.
-    k, v, a, b: Other input tensors.
-    initial_state: Initial state tensor.
-    output_final_state: Whether to return the final state.
-    head_first: Whether to place the head dimension first during computation.
-
-    Returns:
-    Final state if output_final_state is True, otherwise only the output.
     """
     DTYPE = r.dtype
     B, T, H, N = ops.shape(r)
