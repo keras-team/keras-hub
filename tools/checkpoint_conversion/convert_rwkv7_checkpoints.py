@@ -409,7 +409,7 @@ def main(_):
 
     # Download checkpoint
     download_path = snapshot_download(
-        repo_id="Blink_DL/rwkv-7-world",
+        repo_id="RWKV/rwkv7-g1",
         allow_patterns=souce_model_name,
     )
     weights_path = os.path.join(download_path, souce_model_name)

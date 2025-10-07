@@ -184,13 +184,12 @@ class RWKV7_TimeMix(Layer):
         self.initial_state = None
         try:
             from rwkv_ops import generalized_delta_rule
-
             self.RWKV7_OP = generalized_delta_rule
         except ImportError:
             warnings.warn(
                 "The 'rwkv_ops' package is not installed. "
                 "Falling back to the default (pure-Python) operators, which will be very slow. "
-                "Please install 'rwkv_ops' to enable the optimized kernels.",
+                "Please 'pip install rwkv_ops' to enable the optimized kernels.",
                 UserWarning,
                 stacklevel=2,
             )
