@@ -10,6 +10,87 @@ from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
 
 @keras_hub_export("keras_hub.models.RWKV7CausalLMPreprocessor")
 class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
+    """RWKV-7 Causal LM preprocessor.
+
+    This preprocessing layer is meant for use with
+    `keras_hub.models.RWKV7CausalLM`. By default, it will take in batches of
+    strings, and return outputs in a `(x, y, sample_weight)` format, where the
+    `y` label is the next token id in the `x` sequence.
+
+    For use with generation, the layer also exposes two methods
+    `generate_preprocess()` and `generate_postprocess()`. When this preprocessor
+    is attached to a `keras_hub.models.RWKV7CausalLM` instance, these methods
+    will be called implicitly in generate(). They can also be called
+    standalone (e.g. to precompute preprocessing inputs for generation in a
+    separate process).
+
+    Args:
+        tokenizer: A `keras_hub.models.RWKVTokenizer` instance.
+        sequence_length: The length of the packed inputs.
+        add_start_token: If `True`, the preprocessor will prepend the tokenizer
+            start token to each input sequence. Default is `False`.
+
+    Call arguments:
+        x: A string, `tf.Tensor` or list of python strings.
+        y: Label data. Should always be `None` as the layer generates labels.
+        sample_weight: Label weights. Should always be `None` as the layer
+            generates label weights.
+        sequence_length: Pass to override the configured sequence_length of
+            the layer.
+
+
+    Examples:
+    ```python
+    # Initialize the tokenizer and load assets from a local path.
+    tokenizer = RWKVTokenizer()
+    tokenizer.load_assets(rwkv_path)
+    
+    # Create a preprocessor with a sequence length of 8.
+    preprocessor = RWKV7CausalLMPreprocessor(tokenizer, sequence_length=8)
+    
+    # Tokenize and pack a batch of sentences.
+    preprocessor(["Bubble sort\n```python", "Hello World\n```python\n"])
+    
+    # Preprocess inputs for generation with a maximum generation length of 16.
+    preprocessor.generate_preprocess(
+        ["Bubble sort\n```python", "Hello World\n```python\n"], 16
+    )
+    ```
+    Outputs (torch Backend) :
+    tensor([[    0,  0,  0,  0,  0,  0,  0,  0,  0,   893,
+          1760,  2011, 32082,    11,  6884],
+            [    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+            33155, 37576,    11,  6884, 42114]], dtype=torch.int32),
+    tensor([[    0,  0,  0,  0,  0,  0,  0,  0,   893,  1760,
+            2011, 32082,    11,  6884, 42114],
+            [    0,  0,  0,  0,  0,  0,  0,  0,  0, 33155,
+            37576,    11,  6884, 42114,    11]], dtype=torch.int32),
+    tensor([[False, False, False, False, False, False, False, False,  True,
+            True,  True,  True,  True,  True,  True],
+            [False, False, False, False, False, False, False, False, False,
+            True,  True,  True,  True,  True,  True]])
+
+    {'token_ids': tensor([[    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+            893,  1760,  2011, 32082,    11,  6884],
+            [    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+             0, 33155, 37576,    11,  6884, 42114]], dtype=torch.int32),
+    'padding_mask': tensor([[ True, False, False, False, False, False, False,
+            False, False, False, False, False, False, False, False, False,
+            False, False, False, False, False, False, False, False, False,
+            False, False, False, False, False, False, False],
+            [True, False, False, False, False, False, False, False, False,
+            False, False, False, False, False, False, False, False, False,
+            False, False, False, False, False, False, False, False, False,
+            False, False, False, False, False]]),
+    'predict_token_ids': tensor([[42114,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+             0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+             0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+             0,  0],
+            [   11,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+             0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+             0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+             0,  0]], dtype=torch.int32)}
+    """
     backbone_cls = RWKV7Backbone
     tokenizer_cls = RWKVTokenizer
 
@@ -19,6 +100,13 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         add_start_token=False,
         **kwargs,
     ):
+        """Initialize the preprocessor.
+        
+        Args:
+            tokenizer: The tokenizer to use.
+            add_start_token: Whether to add start token.
+            **kwargs: Additional arguments.
+        """
         super().__init__(
             tokenizer=tokenizer, add_start_token=add_start_token, **kwargs
         )
@@ -30,8 +118,19 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         sample_weight=None,
         sequence_length=None,
     ):
+        """Preprocess the input for training.
+        
+        Args:
+            x: Input text data.
+            y: Target data (optional).
+            sample_weight: Sample weights (optional).
+            sequence_length: Desired sequence length.
+            
+        Returns:
+            Preprocessed data tuple (x, y, sample_weight).
+        """
         sequence_length = sequence_length or self.sequence_length
-        # padding 长度到16的倍数，适应kernel的需求
+        # Pad length to multiples of 16 to meet kernel requirements
         sequence_length = sequence_length + (16 - sequence_length % 16)
         x = self.tokenizer(x)
 
@@ -46,15 +145,13 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def build(self, input_shape):
-        # Defer packer creation to `build()` so that we can be sure tokenizer
-        # assets have loaded when restoring a saved model.
         self.packer = StartEndPacker(
             start_value=None,
             end_value=None,
             pad_value=self.tokenizer.pad_token_id,
             sequence_length=self.sequence_length,
             return_padding_mask=True,
-            padding_side="left",
+            padding_side="left",  # RWKV uses left-padding exclusively
         )
         self.built = True
 
@@ -63,31 +160,31 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         x,
         sequence_length=None,
     ):
-        """Convert strings to integer token input for generation.
-
-        Similar to calling the layer for training, this method takes in strings
-        or tensor strings, tokenizes and packs the input, and computes a padding
-        mask masking all inputs not filled in with a padded value.
-
-        Unlike calling the layer for training, this method does not compute
-        labels and will never append a `tokenizer.end_token_id` to the end of
-        the sequence (as generation is expected to continue at the end of the
-        inputted prompt).
+        """Preprocess input for generation.
+        
+        Args:
+            x: Input text data.
+            sequence_length: Maximum generation length.
+            
+        Returns:
+            Dictionary with preprocessed inputs for generation.
         """
         if not self.built:
             self.build(None)
-        # 这么做的目的是为了对齐keras的api
-        # 输入的sequence_length是生成的最大长度
-        # 而本身sequence_length则对应于prefill的最大长度
+        # Align with Keras API
+        # Input sequence_length is the maximum generation length
+        # While self.sequence_length corresponds to the prefill max length
         generate_length = sequence_length
         sequence_length = self.sequence_length
 
-        # padding 长度到16的倍数，适应kernel的需求
+        # Pad length to multiples of 16 to meet kernel requirements
         sequence_length = sequence_length + (16 - sequence_length % 16)
         generate_length = generate_length + (16 - generate_length % 16)
 
         x = [t[-sequence_length:] for t in self.tokenizer(x)]
         y = ops.zeros((len(x), generate_length), "int32")
+        # Utilize RNN characteristics where prefill and decode are two sequences
+        # But the first token of decode should be the last token of prefill
         start_token = [[t[-1]] for t in x]
         x = [t[:-1] if len(t) > 1 else [0] for t in x]
 
@@ -109,10 +206,16 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         x,
     ):
         """Convert integer token output to strings for generation.
-
+        
         This method reverses `generate_preprocess()`, by first removing all
         padding and start/end tokens, and then converting the integer sequence
         back to a string.
+        
+        Args:
+            x: Dictionary containing token_ids and padding_mask.
+            
+        Returns:
+            Detokenized string output.
         """
         if not self.built:
             self.build(None)

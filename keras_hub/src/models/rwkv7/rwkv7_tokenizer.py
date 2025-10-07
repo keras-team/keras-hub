@@ -1,6 +1,7 @@
 import os
 
 import keras
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
 from keras_hub.src.utils.tensor_utils import is_int_dtype
@@ -13,17 +14,18 @@ VOCAB_FILENAME = "vocab.txt"
 
 class TRIE:
     """Byte-level Trie structure for longest prefix matching.
-    
+
     This class implements a trie data structure that stores byte
     sequences and allows efficient longest prefix matching.
     """
+
     __slots__ = tuple("ch,to,values,front".split(","))
     to: list
     values: set
 
     def __init__(self, front=None, ch=None):
         """Initialize a TRIE node.
-        
+
         Args:
             front: Parent node reference.
             ch: Byte value for this node.
@@ -45,12 +47,12 @@ class TRIE:
 
     def add(self, key: bytes, idx: int = 0, val=None):
         """Add a key-value pair to the trie.
-        
+
         Args:
             key: Byte sequence to add.
             idx: Current index in key processing.
             val: Value to store (defaults to key).
-            
+
         Returns:
             Final node where key was inserted.
         """
@@ -66,11 +68,11 @@ class TRIE:
 
     def find_longest(self, key: bytes, idx: int = 0):
         """Find longest match in trie for given key.
-        
+
         Args:
             key: Byte sequence to search for.
             idx: Starting index for search.
-            
+
         Returns:
             Tuple of (end_index, node, values) for match.
         """
@@ -90,13 +92,14 @@ class TRIE:
 
 class RWKV_TOKENIZER:
     """RWKV tokenizer implementation using byte-level trie.
-    
+
     Implements tokenization using a fixed vocabulary and greedy
     longest-match algorithm on byte sequences.
     """
+
     def __init__(self, vocabs):
         """Initialize tokenizer with vocabulary.
-        
+
         Args:
             vocabs: List of vocabulary entries in format
                    "<idx> <repr> <len>".
@@ -122,10 +125,10 @@ class RWKV_TOKENIZER:
 
     def encodeBytes(self, src: bytes):
         """Encode byte sequence to token IDs.
-        
+
         Args:
             src: Byte sequence to encode.
-            
+
         Returns:
             List of token IDs.
         """
@@ -141,10 +144,10 @@ class RWKV_TOKENIZER:
 
     def decodeBytes(self, tokens):
         """Decode token IDs to byte sequence.
-        
+
         Args:
             tokens: List of token IDs.
-            
+
         Returns:
             Decoded byte sequence.
         """
@@ -152,10 +155,10 @@ class RWKV_TOKENIZER:
 
     def encode(self, src):
         """Encode text to token IDs.
-        
+
         Args:
             src: Text string or list of strings.
-            
+
         Returns:
             Token IDs or list of token ID lists.
         """
@@ -166,10 +169,10 @@ class RWKV_TOKENIZER:
 
     def decode(self, tokens):
         """Decode token IDs to text.
-        
+
         Args:
             tokens: Token IDs or list of token ID lists.
-            
+
         Returns:
             List of decoded text strings.
         """
@@ -181,7 +184,7 @@ class RWKV_TOKENIZER:
 
     def printTokens(self, tokens):
         """Print tokens with their string representations.
-        
+
         Args:
             tokens: List of token IDs to print.
         """
@@ -215,6 +218,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
     >>> tok("hello the")
     [3, 0, 2]
     """
+
     def __init__(
         self,
         vocabulary=None,
@@ -222,7 +226,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         **kwargs,
     ) -> None:
         """Initialize RWKV tokenizer.
-        
+
         Args:
             vocabulary: Vocabulary list.
             dtype: Output data type.
@@ -243,7 +247,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
 
     def set_vocabulary(self, vocabulary):
         """Set the tokenizer vocabulary.
-        
+
         Args:
             vocabulary: Vocabulary list to set.
         """
@@ -255,7 +259,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
 
     def save_assets(self, dir_path):
         """Save vocabulary to directory.
-        
+
         Args:
             dir_path: Directory path to save to.
         """
@@ -265,7 +269,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
 
     def load_assets(self, dir_path=""):
         """Load vocabulary from directory.
-        
+
         Args:
             dir_path: Directory path to load from.
         """
@@ -284,7 +288,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
 
     def vocabulary_size(self):
         """Get the size of the vocabulary.
-        
+
         Returns:
             Number of tokens in vocabulary.
         """
@@ -293,7 +297,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
 
     def get_vocabulary(self):
         """Get the current vocabulary.
-        
+
         Returns:
             Current vocabulary list.
         """
@@ -302,10 +306,10 @@ class RWKVTokenizer(tokenizer.Tokenizer):
 
     def id_to_token(self, id):
         """Convert token ID to string representation.
-        
+
         Args:
             id: Token ID to convert.
-            
+
         Returns:
             String representation of token.
         """
@@ -324,7 +328,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
 
     def get_config(self):
         """Get tokenizer configuration.
-        
+
         Returns:
             Configuration dictionary.
         """
@@ -338,10 +342,10 @@ class RWKVTokenizer(tokenizer.Tokenizer):
 
     def tokenize(self, inputs):
         """Tokenize input text.
-        
+
         Args:
             inputs: Text to tokenize.
-            
+
         Returns:
             Tokenized representation.
         """
@@ -359,10 +363,10 @@ class RWKVTokenizer(tokenizer.Tokenizer):
 
     def detokenize(self, inputs):
         """Convert tokens back to text.
-        
+
         Args:
             inputs: Tokens to convert.
-            
+
         Returns:
             Detokenized text.
         """
@@ -375,10 +379,10 @@ class RWKVTokenizer(tokenizer.Tokenizer):
 
     def compute_output_spec(self, input_spec):
         """Compute output specification.
-        
+
         Args:
             input_spec: Input specification.
-            
+
         Returns:
             Output tensor specification.
         """
@@ -388,10 +392,10 @@ class RWKVTokenizer(tokenizer.Tokenizer):
 
     def call(self, inputs):
         """Call the tokenizer on inputs.
-        
+
         Args:
             inputs: Input text.
-            
+
         Returns:
             Tokenized output.
         """

@@ -11,10 +11,60 @@ from keras_hub.src.utils.tensor_utils import any_equal
 
 @keras_hub_export("keras_hub.models.RWKV7CausalLM")
 class RWKV7CausalLM(CausalLM):
+    """An end-to-end RWKV-7 model for causal language modeling.
+
+    A causal language model (LM) predicts the next token based on previous
+    tokens. This task setup can be used to train the model unsupervised on
+    plain text input, or to autoregressively generate plain text similar to
+    the data used for training. This task can be used for pre-training or
+    fine-tuning a RWKV-7 model, simply by calling `fit()`.
+
+    This model has a generate() method, which generates text based on a
+    prompt. The generation strategy used is controlled by an additional
+    sampler argument on `compile()`. You can recompile the model with
+    different `keras_hub.samplers` objects to control the generation. By
+    default, `"greedy"` sampling will be used.
+
+    Args:
+        backbone: A `keras_hub.models.RWKV7Backbone` instance.
+        preprocessor: A `keras_hub.models.RWKV7CausalLMPreprocessor` or `None`.
+            If `None`, this model will not apply preprocessing, and inputs
+            should be preprocessed before calling the model.
+
+    Examples:
+    ```python
+    # Initialize the tokenizer and load assets from a local path.
+    tokenizer = RWKVTokenizer()
+    tokenizer.load_assets(rwkv_path)
+    
+    # Create a preprocessor with a sequence length of 8.
+    preprocessor = RWKV7CausalLMPreprocessor(tokenizer, sequence_length=8)
+    
+    # Initialize the model with a backbone and preprocessor.
+    causal_lm = RWKV7CausalLM(backbone, preprocessor)
+
+    prompts = ["Bubble sort\n```python", "Hello World\n```python\n"]
+
+    causal_lm.compile(sampler="greedy")
+
+    outputs = causal_lm.generate(prompts, max_length=128)
+    for out in outputs:
+        print(out)
+        print("-" * 100)
+    ```
+    """
+
     backbone_cls = RWKV7Backbone
     preprocessor_cls = RWKV7CausalLMPreprocessor
 
     def __init__(self, backbone, preprocessor=None, **kwargs):
+        """Initialize the RWKV-7 causal language model.
+        
+        Args:
+            backbone: The backbone model.
+            preprocessor: The preprocessor for tokenization.
+            **kwargs: Additional keyword arguments.
+        """
         # === Layers ===
         self.backbone = backbone
         self.preprocessor = preprocessor
@@ -33,6 +83,26 @@ class RWKV7CausalLM(CausalLM):
         padding_mask=None,
         rnn_mode=True,
     ):
+        """Forward pass of `RWKV7CausalLM` with cache.
+
+        `call_with_cache` adds an additional forward pass for the model for
+        autoregressive inference. Unlike calling the model directly, this method
+        allows caching previous state Tensors in RWKV layers, and avoids 
+        recomputing the outputs of seen tokens.
+
+        Args:
+            token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
+            cache: a dense float Tensor, the cache of state and token values.
+            compute_head: bool, whether to compute the output head.
+            padding_mask: a dense bool Tensor, the padding mask.
+            rnn_mode: bool, whether to use RNN mode.
+
+        Returns:
+            A (logits, hidden_states, cache) tuple. Where `logits` is the
+            language model logits for the input token_ids, `hidden_states` is
+            the final hidden representation of the input tokens, and `cache` is
+            the decoding cache.
+        """
         state_cachce, last_token_cache = cache
         x = self.backbone.token_embedding(token_ids)
         if padding_mask is None:
@@ -89,7 +159,7 @@ class RWKV7CausalLM(CausalLM):
         cache = [state_cachce, last_token_cache]
 
         # Seed the cache.
-        # prefill阶段可以使用kernel,要快一点
+        # Prefill stage can use kernel for better performance
         _, hidden_states, cache = self.call_with_cache(
             token_ids,
             cache,
@@ -111,8 +181,8 @@ class RWKV7CausalLM(CausalLM):
         model inputs, a dictionary with keys `"token_ids"` and `"padding_mask"`.
 
         Args:
-            inputs: A dictionary with two keys `"token_ids"` and
-                `"padding_mask"` and batched tensor values.
+            inputs: A dictionary with keys `"token_ids"`, `"padding_mask"`, and
+                `"predict_token_ids"` with batched tensor values.
             stop_token_ids: Tuple of id's of the end token to stop on. If all
                 sequences have produced a new stop token, generation
                 will stop.

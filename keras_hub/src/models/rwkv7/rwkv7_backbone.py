@@ -12,6 +12,54 @@ def rwkv7_kernel_initializer(stddev=0.02):
 
 @keras_hub_export("keras_hub.models.RWKV7Backbone")
 class RWKV7Backbone(Backbone):
+    """The [RWKV-7](https://arxiv.org/abs/2503.14456) core architecture.
+
+    This network implements a Modern RNN architecture based on linear
+    attention mechanisms with recurrent processing, as described in the
+    RWKV papers. It includes the embedding lookups and RWKV-7 blocks.
+
+    The default constructor gives a fully customizable, randomly initialized
+    RWKV-7 model with any number of layers, heads, and embedding dimensions.
+    To load preset architectures and weights, use the `from_preset`
+    constructor.
+
+    Args:
+        hidden_size: int. The size of the transformer encoding and pooling
+            layers.
+        head_size: int. The size of each attention head.
+        num_layers: int. The number of transformer layers.
+        vocabulary_size: int. The size of the token vocabulary.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each transformer.
+        gate_lora: int. LoRA dimension for gating.
+        mv_lora: int. LoRA dimension for value mixing.
+        aaa_lora: int. LoRA dimension for alpha parameters.
+        decay_lora: int. LoRA dimension for decay parameters.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
+        dropout_rate: float. Dropout rate for the dropout layer.
+
+    Examples:
+
+    ```python
+    input_data = np.ones(shape=(1, 12), dtype="int32")
+
+
+    # Randomly initialized RWKV-7 decoder with custom config.
+    model = keras_hub.models.RWKV7Backbone(
+        vocabulary_size=10,
+        hidden_size=512,
+        num_layers=2,
+        head_size=64,
+        intermediate_dim=1024,
+        dtype="float32"
+    )
+    model(input_data)
+    ```
+    """
+
     def __init__(
         self,
         hidden_size,
@@ -27,6 +75,22 @@ class RWKV7Backbone(Backbone):
         dropout_rate=0,
         **kwargs,
     ):
+        """Initialize RWKV7 backbone.
+
+        Args:
+            hidden_size: Hidden dimension size.
+            head_size: Attention head size.
+            num_layers: Number of RWKV blocks.
+            vocabulary_size: Size of vocabulary.
+            intermediate_dim: Intermediate dimension for FFN.
+            gate_lora: LoRA dimension for gating.
+            mv_lora: LoRA dimension for value mixing.
+            aaa_lora: LoRA dimension for alpha parameters.
+            decay_lora: LoRA dimension for decay parameters.
+            dtype: Data type for the layer.
+            dropout_rate: Dropout rate for regularization.
+            **kwargs: Additional arguments.
+        """
         # === Layers ===
         self.token_embedding = keras.layers.Embedding(
             input_dim=vocabulary_size,
@@ -90,6 +154,7 @@ class RWKV7Backbone(Backbone):
             dtype=dtype,
             **kwargs,
         )
+        # Initialize the graph to avoid potential errors in some cases
         self.call(ops.ones([1, 16], "int32"))
 
         self.num_layers = num_layers

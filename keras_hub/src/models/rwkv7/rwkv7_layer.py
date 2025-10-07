@@ -1,8 +1,9 @@
+import warnings
+
 import keras
 from keras import initializers
 from keras import ops
 from keras.layers import Layer
-import warnings
 
 
 def transpose_head(x, head_first):
@@ -24,9 +25,7 @@ def rnn_generalized_delta_rule(
     output_final_state: bool = True,
     head_first: bool = False,
 ):
-    """Implements the generalized delta rule.
-
-    """
+    """Implements the generalized delta rule for RWKV."""
     DTYPE = r.dtype
     B, T, H, N = ops.shape(r)
     r = transpose_head(r, head_first)
@@ -68,6 +67,10 @@ def rnn_generalized_delta_rule(
 
 
 class TimeShift(Layer):
+    """Time shift layer that shifts input sequence by one step.
+    It also be called short conv
+    """
+
     def __init__(self, name="time_shift"):
         super(TimeShift, self).__init__(name=name)
 
@@ -83,12 +86,31 @@ class TimeShift(Layer):
 
 
 class RWKV7_ChannelMix(Layer):
+    """RWKV-7 channel mixing layer."""
+
     def __init__(self, dim_ffn, kernel_initializer="glorot_uniform", **kwargs):
+        """Initialize RWKV7 channel mixer.
+
+        Args:
+            dim_ffn: Feed-forward dimension.
+            kernel_initializer: Weight initializer.
+            **kwargs: Additional layer arguments.
+        """
         super().__init__(**kwargs)
         self.dim_ffn = dim_ffn
         self.kernel_initializer = initializers.get(kernel_initializer)
 
     def call(self, x, last_cache_x=None, train_mode=True):
+        """Process input through channel mixer.
+
+        Args:
+            x: Input tensor.
+            last_cache_x: Cached previous values.
+            train_mode: Whether in training mode.
+
+        Returns:
+            Mixed output tensor.
+        """
         xx = self.time_shift(x, last_cache_x) - x
         if last_cache_x is not None or not train_mode:
             last_cache_x = x[:, -1:]
@@ -132,13 +154,20 @@ class RWKV7_ChannelMix(Layer):
     def get_config(self):
         config = {
             "dim_ffn": self.dim_ffn,
-            "kernel_initializer": initializers.serialize(self.kernel_initializer),
+            "kernel_initializer": initializers.serialize(
+                self.kernel_initializer
+            ),
         }
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
 class GroupNorm(keras.layers.GroupNormalization):
+    """Group normalization with backend-specific handling.
+
+    Extends Keras GroupNormalization with PyTorch backend support.
+    """
+
     def call(self, inputs):
         if keras.config.backend() == "torch":
             import torch.nn.functional as F
@@ -150,6 +179,8 @@ class GroupNorm(keras.layers.GroupNormalization):
 
 
 class RWKV7_TimeMix(Layer):
+    """RWKV-7 time mixing layer."""
+
     def __init__(
         self,
         hidden_size,
@@ -161,6 +192,18 @@ class RWKV7_TimeMix(Layer):
         kernel_initializer="glorot_uniform",
         **kwargs,
     ):
+        """Initialize RWKV7 time mixer.
+
+        Args:
+            hidden_size: Hidden dimension size.
+            head_size: Attention head size.
+            gate_lora: LoRA dimension for gating.
+            mv_lora: LoRA dimension for value mixing.
+            aaa_lora: LoRA dimension for alpha parameters.
+            decay_lora: LoRA dimension for decay parameters.
+            kernel_initializer: Weight initializer.
+            **kwargs: Additional layer arguments.
+        """
         super().__init__(**kwargs)
         self.head_size = head_size
         self.hidden_size = hidden_size
@@ -173,12 +216,14 @@ class RWKV7_TimeMix(Layer):
         self.initial_state = None
         try:
             from rwkv_ops import generalized_delta_rule
+
             self.RWKV7_OP = generalized_delta_rule
         except ImportError:
             warnings.warn(
                 "The 'rwkv_ops' package is not installed. "
-                "Falling back to the default (pure-Python) operators, which will be very slow. "
-                "Please 'pip install rwkv_ops' to enable the optimized kernels.",
+                "Falling back to the default (pure-Python) operators"
+                "pure-Python which will be very slow. "
+                "Please 'pip install rwkv_ops' to enable the optimized kernels",
                 UserWarning,
                 stacklevel=2,
             )
@@ -319,7 +364,21 @@ class RWKV7_TimeMix(Layer):
         rnn_mode=False,
         train_mode=True,
     ):
-        if cache_state == None:
+        """Process input through time mixer.
+
+        Args:
+            x: Input tensor.
+            v_first: First value for mixing.
+            padding_mask: Mask for padding tokens.
+            last_cache_x: Cached previous values.
+            cache_state: Cached recurrent state.
+            rnn_mode: Whether to use RNN mode.
+            train_mode: Whether in training mode.
+
+        Returns:
+            Mixed output tensor and state information.
+        """
+        if cache_state is None:
             initial_state = self.initial_state
         else:
             initial_state = cache_state
@@ -346,7 +405,10 @@ class RWKV7_TimeMix(Layer):
         r = self.receptance(xr)
         w = (
             -ops.softplus(
-                -(self.w0 + ops.matmul(ops.tanh(ops.matmul(xw, self.w1)), self.w2))
+                -(
+                    self.w0
+                    + ops.matmul(ops.tanh(ops.matmul(xw, self.w1)), self.w2)
+                )
             )
             - 0.5
         )  # soft-clamp to (-inf, -0.5)
@@ -443,7 +505,9 @@ class RWKV7_TimeMix(Layer):
             "mv_lora": self.mv_lora,
             "aaa_lora": self.aaa_lora,
             "decay_lora": self.decay_lora,
-            "kernel_initializer": initializers.serialize(self.kernel_initializer),
+            "kernel_initializer": initializers.serialize(
+                self.kernel_initializer
+            ),
         }
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -463,6 +527,20 @@ class RWKV7_Block(Layer):
         kernel_initializer="glorot_uniform",
         **kwargs,
     ):
+        """Initialize RWKV7 block.
+
+        Args:
+            hidden_size: Hidden dimension size.
+            head_size: Attention head size.
+            intermediate_dim: Intermediate dimension for FFN.
+            gate_lora: LoRA dimension for gating.
+            mv_lora: LoRA dimension for value mixing.
+            aaa_lora: LoRA dimension for alpha parameters.
+            decay_lora: LoRA dimension for decay parameters.
+            use_initial_norm: Whether to use initial normalization.
+            kernel_initializer: Weight initializer.
+            **kwargs: Additional layer arguments.
+        """
         super().__init__(**kwargs)
         self.head_size = head_size
         self.hidden_size = hidden_size
@@ -477,13 +555,19 @@ class RWKV7_Block(Layer):
     def build(self, input_shape):
         super().build(input_shape)
         if self.use_initial_norm:
-            self.ln0 = keras.layers.LayerNormalization(epsilon=1e-5, name="init_norm")
+            self.ln0 = keras.layers.LayerNormalization(
+                epsilon=1e-5, name="init_norm"
+            )
             self.ln0.build(input_shape)
 
-        self.ln1 = keras.layers.LayerNormalization(epsilon=1e-5, name="att_norm")
+        self.ln1 = keras.layers.LayerNormalization(
+            epsilon=1e-5, name="att_norm"
+        )
         self.ln1.build(input_shape)
 
-        self.ln2 = keras.layers.LayerNormalization(epsilon=1e-5, name="ffn_norm")
+        self.ln2 = keras.layers.LayerNormalization(
+            epsilon=1e-5, name="ffn_norm"
+        )
         self.ln2.build(input_shape)
 
         self.att = RWKV7_TimeMix(
@@ -516,6 +600,21 @@ class RWKV7_Block(Layer):
         rnn_mode=False,
         train_mode=True,
     ):
+        """Process input through RWKV block.
+
+        Args:
+            x: Input tensor.
+            v_first: First value for mixing.
+            padding_mask: Mask for padding tokens.
+            cache_state: Cached recurrent state.
+            cache_tmix_x: Cached time mixer values.
+            cache_cmix_x: Cached channel mixer values.
+            rnn_mode: Whether to use RNN mode.
+            train_mode: Whether in training mode.
+
+        Returns:
+            Processed output tensor and cache information.
+        """
         if padding_mask is not None:
             padding_mask = ops.cast(padding_mask, x.dtype)
             padding_mask = ops.expand_dims(padding_mask, axis=-1)
@@ -569,7 +668,9 @@ class RWKV7_Block(Layer):
             "decay_lora": self.decay_lora,
             "intermediate_dim": self.intermediate_dim,
             "use_initial_norm": self.use_initial_norm,
-            "kernel_initializer": initializers.serialize(self.kernel_initializer),
+            "kernel_initializer": initializers.serialize(
+                self.kernel_initializer
+            ),
         }
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
