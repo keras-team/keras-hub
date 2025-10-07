@@ -23,7 +23,7 @@ from keras import ops  # noqa: E402
 from modelscope import snapshot_download
 
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
-from keras_hub.src.models.rwkv7.rwkv7_casual_lm import RWKV7CausalLM
+from keras_hub.src.models.rwkv7.rwkv7_causal_lm import RWKV7CausalLM
 
 # Local modules
 from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
@@ -32,10 +32,11 @@ from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
 # Model Preset Registry
 # ==============================================================================
 PRESET_MAP = {
-    "rwkv7_world_0.1B": "RWKV-x070-World-0.1B-v2.8-20241210-ctx4096.pth",
-    "rwkv7_world_0.3B": "RWKV-x070-World-0.4B-v2.9-20250107-ctx4096.pth",
-    "rwkv7_world_1.5B": "RWKV-x070-World-1.5B-v3-20250127-ctx4096.pth",
-    "rwkv7_world_2.9B": "RWKV-x070-World-2.9B-v3-20250211-ctx4096.pth",
+    "RWKV7_G1a_0.1B": "rwkv7-g1a-0.1b-20250728-ctx4096.pth",
+    "RWKV7_G1a_0.3B": "rwkv7-g1a-0.4b-20250905-ctx4096.pth",
+    "RWKV7_G1a_1.5B": "rwkv7-g1a-1.5b-20250922-ctx4096.pth",
+    "RWKV7_G1a_2.9B": "rwkv7-g1a-2.9b-20250924-ctx4096.pth",
+    "RWKV7_G0a_7.2B": "rwkv7-g0a-7.2b-20250829-ctx4096.pth",
 }
 
 # ==============================================================================
@@ -431,6 +432,8 @@ def main(_):
         standard_model = RWKV(args)
 
     weights = torch.load(weights_path, map_location="cpu")
+    # Some parameters are not present in the weights, but this does not matter.
+    # This is because these parameters are not used
     standard_model.load_state_dict(weights, strict=False)
 
     # Sanity check: tokenize & compare outputs

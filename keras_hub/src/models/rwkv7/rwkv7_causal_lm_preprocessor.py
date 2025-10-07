@@ -1,10 +1,11 @@
 import keras
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
 from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
-from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
 
 @keras_hub_export("keras_hub.models.RWKV7CausalLMPreprocessor")
@@ -30,19 +31,32 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length=None,
     ):
         sequence_length = sequence_length or self.sequence_length
+        # padding 长度到16的倍数，适应kernel的需求
+        sequence_length = sequence_length + (16 - sequence_length % 16)
         x = self.tokenizer(x)
-        # Pad with one extra token to account for the truncation below.
+
         token_ids, padding_mask = self.packer(
-            x,
-            sequence_length=sequence_length + 1,
-            add_start_value=self.add_start_token,
-            add_end_value=self.add_end_token,
+            x, sequence_length=sequence_length, add_end_value=False
         )
+
         # The last token does not have a next token, so we truncate it out.
         x = token_ids[..., :-1]
         # Target `y` will be the next token.
         y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def build(self, input_shape):
+        # Defer packer creation to `build()` so that we can be sure tokenizer
+        # assets have loaded when restoring a saved model.
+        self.packer = StartEndPacker(
+            start_value=None,
+            end_value=None,
+            pad_value=self.tokenizer.pad_token_id,
+            sequence_length=self.sequence_length,
+            return_padding_mask=True,
+            padding_side="left",
+        )
+        self.built = True
 
     def generate_preprocess(
         self,
@@ -62,12 +76,33 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         """
         if not self.built:
             self.build(None)
+        # 这么做的目的是为了对齐keras的api
+        # 输入的sequence_length是生成的最大长度
+        # 而本身sequence_length则对应于prefill的最大长度
+        generate_length = sequence_length
+        sequence_length = self.sequence_length
 
-        x = self.tokenizer(x)
-        token_ids, padding_mask = self.packer(
+        # padding 长度到16的倍数，适应kernel的需求
+        sequence_length = sequence_length + (16 - sequence_length % 16)
+        generate_length = generate_length + (16 - generate_length % 16)
+
+        x = [t[-sequence_length:] for t in self.tokenizer(x)]
+        y = ops.zeros((len(x), generate_length), "int32")
+        start_token = [[t[-1]] for t in x]
+        x = [t[:-1] if len(t) > 1 else [0] for t in x]
+
+        token_ids, __ = self.packer(
             x, sequence_length=sequence_length, add_end_value=False
         )
-        return token_ids
+        start_token = ops.convert_to_tensor(start_token, "int32")
+        y = ops.slice_update(y, [0, 0], start_token)
+        padding_mask = ops.not_equal(y, 0)
+
+        return {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+            "predict_token_ids": y,
+        }
 
     def generate_postprocess(
         self,
@@ -83,6 +118,6 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
             self.build(None)
 
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
-        ids_to_strip = self.tokenizer.special_token_ids
-        token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
-        return self.tokenizer.detokenize(token_ids)
+        token_ids = ops.convert_to_numpy(token_ids)
+        padding_mask = ops.convert_to_numpy(padding_mask)
+        return self.tokenizer.detokenize(token_ids * padding_mask)

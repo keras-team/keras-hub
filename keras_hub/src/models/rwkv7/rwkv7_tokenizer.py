@@ -1,7 +1,6 @@
 import os
 
 import keras
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
 from keras_hub.src.utils.tensor_utils import is_int_dtype
@@ -115,13 +114,7 @@ class RWKV_TOKENIZER:
             print(f"{repr(s)}{i}", end=" ")
         print()
 
-
-@keras_hub_export(
-    [
-        "keras_hub.tokenizers.RWKVTokenizer",
-        "keras_hub.models.RWKVTokenizer",
-    ]
-)
+@keras_hub_export("keras_hub.tokenizers.RWKVTokenizer")
 class RWKVTokenizer(tokenizer.Tokenizer):
     def __init__(
         self,
@@ -203,7 +196,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         tokens = self._tokenizer.encode(inputs)
 
         def tokens2ids(x):
-            return [self.token_to_id(t) for t in x]
+            return [self.id_to_token(t) for t in x]
 
         if is_string_dtype(self.dtype):
             if isinstance(inputs, str):
@@ -213,7 +206,11 @@ class RWKVTokenizer(tokenizer.Tokenizer):
 
     def detokenize(self, inputs):
         self._check_vocabulary()
-        return self._tokenizer.decode(inputs)
+        strip_zero_inputs = []
+        for t in inputs:
+            strip_zero_inputs.append([x for x in t if x != 0])
+
+        return self._tokenizer.decode(strip_zero_inputs)
 
     def compute_output_spec(self, input_spec):
         return keras.KerasTensor(

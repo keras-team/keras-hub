@@ -430,7 +430,7 @@ from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
     RoformerV2Tokenizer,
 )
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
-from keras_hub.src.models.rwkv7.rwkv7_casual_lm import RWKV7CausalLM
+from keras_hub.src.models.rwkv7.rwkv7_causal_lm import RWKV7CausalLM
 from keras_hub.src.models.rwkv7.rwkv7_causal_lm_preprocessor import (
     RWKV7CausalLMPreprocessor,
 )

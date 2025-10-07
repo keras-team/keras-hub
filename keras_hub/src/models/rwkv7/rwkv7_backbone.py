@@ -90,6 +90,7 @@ class RWKV7Backbone(Backbone):
             dtype=dtype,
             **kwargs,
         )
+        self.call(ops.ones([1, 16], "int32"))
 
         self.num_layers = num_layers
         self.head_size = head_size
