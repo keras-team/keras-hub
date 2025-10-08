@@ -14,7 +14,7 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/qwen-3-moe/keras/qwen3_moe_30b_a3b_en/2",
     },
-    "qweqwen3_moe_235b_a22b_en": {
+    "qwen3_moe_235b_a22b_en": {
         "metadata": {
             "description": (
                 "Mixture-of-Experts (MoE) model has 235 billion total parameters,"
