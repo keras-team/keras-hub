@@ -34,7 +34,7 @@ class RWKV7CausalLMTest(TestCase):
 
         # Create a small backbone for testing
         self.backbone = RWKV7Backbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size() + 1,
+            vocabulary_size=5,
             hidden_size=16,
             num_layers=2,
             head_size=4,
@@ -51,21 +51,18 @@ class RWKV7CausalLMTest(TestCase):
             "backbone": self.backbone,
         }
 
-        self.causal_lm = RWKV7CausalLM(self.backbone, self.preprocessor)
-        self.causal_lm.compile(sampler="greedy")
-
     def test_generate(self):
         """
         Test text generation functionality.
         """
-
+        causal_lm = RWKV7CausalLM(self.backbone, self.preprocessor)
         prompt = ["hello world"]
-        output = self.causal_lm.generate(prompt, 16)
+        output = causal_lm.generate(prompt, 16)
         self.assertTrue(isinstance(output[0], str))
         self.assertTrue(isinstance(output, list))
 
         prompt = "hello world"
-        output = self.causal_lm.generate(prompt, 16)
+        output = causal_lm.generate(prompt, 16)
         self.assertTrue(isinstance(output, str))
 
     def test_generate_strip_prompt(self):
@@ -73,7 +70,8 @@ class RWKV7CausalLMTest(TestCase):
         Test that generated text can strip the prompt from output.
         """
         prompt = ["hello world"]
-        output = self.causal_lm.generate(prompt, 16, strip_prompt=True)
+        causal_lm = RWKV7CausalLM(self.backbone, self.preprocessor)
+        output = causal_lm.generate(prompt, 16, strip_prompt=True)
         self.assertFalse(output[0].startswith(prompt[0]))
 
     def test_generate_compilation(self):
@@ -81,12 +79,12 @@ class RWKV7CausalLMTest(TestCase):
         Test that the generate function compiles correctly and
         reuses compiled functions.
         """
-
-        self.causal_lm.generate(["hello world"], 16)
-        first_fn = self.causal_lm.generate_function
-        self.causal_lm.generate(["hello world"], 16)
-        second_fn = self.causal_lm.generate_function
+        causal_lm = RWKV7CausalLM(self.backbone, self.preprocessor)
+        causal_lm.generate(["hello world"], 16)
+        first_fn = causal_lm.generate_function
+        causal_lm.generate(["hello world"], 16)
+        second_fn = causal_lm.generate_function
         self.assertEqual(first_fn, second_fn)
 
-        self.causal_lm.compile(sampler="greedy")
-        self.assertIsNone(self.causal_lm.generate_function)
+        causal_lm.compile(sampler="greedy")
+        self.assertIsNone(causal_lm.generate_function)

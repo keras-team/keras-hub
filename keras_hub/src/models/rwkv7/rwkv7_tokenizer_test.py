@@ -10,7 +10,7 @@ class RWKV7TokenizerTest(TestCase):
 
     def test_tokenizer_basics(self):
         result = self.tokenizer("hello world")
-        self.assertAllEqual(result, [[4, 1, 5]])
+        self.assertAllEqual(result, [4, 1, 5])
 
     def test_vocabulary_size(self):
         self.assertEqual(self.tokenizer.vocabulary_size(), 5)
