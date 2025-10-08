@@ -6,8 +6,7 @@ backbone_presets = {
             "description": (
                 "Mixture-of-Experts (MoE) model has 30.5 billion total parameters"
                 " with 3.3 billion activated, built on 48 layers, and utilizes 32 query "
-                "and 4 key/value attention heads with 128 experts (8 active)"
-                "efficiency and fast inference on resource-constrained devices."
+                "and 4 key/value attention heads with 128 experts (8 active), enabling efficiency and fast inference on resource-constrained devices."
             ),
             "params": 30532122624,
             "path": "qwen3_moe",
