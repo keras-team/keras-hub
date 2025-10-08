@@ -212,10 +212,13 @@ class RWKVTokenizer(tokenizer.Tokenizer):
             or string type.
 
     Examples:
+    ```python
+    vocab = ["0 ' ' 1", "1 '\\n' 1", "2 'the' 3", "3 'hello' 5"]
+    tok = RWKVTokenizer(vocabulary=vocab)
+    tok("hello the")
+    ```
 
-    >>> vocab = ["0 ' ' 1", "1 '\\n' 1", "2 'the' 3", "3 'hello' 5"]
-    >>> tok = RWKVTokenizer(vocabulary=vocab)
-    >>> tok("hello the")
+    Output:
     [3, 0, 2]
     """
 
