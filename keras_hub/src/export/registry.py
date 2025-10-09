@@ -58,10 +58,7 @@ def export_model(model, filepath, format="litert", **kwargs):
         format: Export format (currently supports "litert")
         **kwargs: Additional arguments passed to the exporter
     """
-    # Ensure registry is initialized
-    initialize_export_registry()
-
-    # Get the appropriate configuration for this model
+    # Registry is initialized at module level
     config = ExporterRegistry.get_config_for_model(model)
 
     # Get the exporter for the specified format

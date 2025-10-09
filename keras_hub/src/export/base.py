@@ -10,8 +10,6 @@ from abc import abstractmethod
 
 try:
     import keras
-    # Removed unused import: from keras.src.export.export_utils import
-    # get_input_signature
 
     KERAS_AVAILABLE = True
 except ImportError:
@@ -151,9 +149,8 @@ class KerasHubExporter(ABC):
         """Ensure the model is properly built with correct input structure.
 
         This method builds the model using model.build() with input shapes.
-        For TensorFlow backend, this creates the necessary variables and
-        prepares the model for tracing, but actual graph tracing happens
-        during export when the model is converted to a concrete function.
+        This creates the necessary variables and initializes the model structure
+        for export, avoiding the need for dummy forward passes.
 
         Note: We don't check model.built because it can be True even if the
         model isn't properly initialized with the correct input structure.
