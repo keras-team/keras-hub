@@ -86,11 +86,9 @@ class GptOssAttention(keras.layers.Layer):
         # Use HF head_dim if provided, otherwise calculate dynamically
         if self.head_dim is not None:
             self._head_dim = self.head_dim
-            print(f"Using HF head_dim: {self._head_dim}")
         else:
             # Calculate head_dim dynamically based on the model configuration
             self._head_dim = self._hidden_dim // self.num_query_heads
-            print(f"Calculated head_dim: {self._head_dim}")
         self._inv_norm_factor = 1.0 / math.sqrt(self._head_dim)
 
         # Calculate rotary dimension -
@@ -159,6 +157,12 @@ class GptOssAttention(keras.layers.Layer):
         self.rotary_embedding_layer = RotaryEmbedding(
             max_wavelength=self.rope_max_wavelength,
             scaling_factor=self.rope_scaling_factor,
+            rope_scaling={
+                'beta_fast': 32.0,
+                'beta_slow': 1.0,
+                'type': 'yarn',
+                'original_max_position_embeddings': 4096,
+                'factor': 32.0},
             dtype=self.dtype_policy,
         )
 
@@ -188,8 +192,8 @@ class GptOssAttention(keras.layers.Layer):
 
         query = self.query_dense(hidden_states)
 
-        # Compute RoPE for queries (only apply to first _rotary_dim dimensions)
-        # Ensure RoPE is applied consistently with HuggingFace implementation
+        # Compute RoPE for queries (only 
+        #  to first _rotary_dim dimensions)
         if self._rotary_dim < self._head_dim:
             query_rot = query[..., : self._rotary_dim]
             query_rot = self.rotary_embedding_layer(
@@ -285,7 +289,7 @@ class GptOssAttention(keras.layers.Layer):
             else:
                 adder = ops.cast(-1e4, self.compute_dtype)
             attention_scores = ops.where(
-                attention_mask[:, None, :, :], adder, attention_scores
+                attention_mask[:, None, :, :], attention_scores, adder
             )
 
         # Handle sink tokens by concatenating them to the logits.

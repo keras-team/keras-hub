@@ -44,21 +44,9 @@ def convert_backbone_config(transformers_config):
     if "head_dim" in transformers_config and transformers_config["head_dim"] is not None:
         config["head_dim"] = transformers_config["head_dim"]
 
-    # Handle head_dim if present - but don't pass it to backbone as it's calculated dynamically
-    if "head_dim" in transformers_config and transformers_config["head_dim"] is not None:
-        print(f"HF model head_dim: {transformers_config['head_dim']}")
-        print(f"Calculated head_dim: {transformers_config['hidden_size'] // transformers_config['num_attention_heads']}")
-        # Verify that the HF head_dim matches our calculation
-        expected_head_dim = transformers_config["hidden_size"] // transformers_config["num_attention_heads"]
-        if transformers_config["head_dim"] != expected_head_dim:
-            print(f"Warning: HF head_dim ({transformers_config['head_dim']}) != calculated head_dim ({expected_head_dim})")
-    elif "head_dim" in transformers_config:
-        print(f"HF model has head_dim=None, will calculate dynamically")
-
     # Include rope_scaling for YaRN support
     if "rope_scaling" in transformers_config and transformers_config["rope_scaling"] is not None:
         config["rope_scaling"] = transformers_config["rope_scaling"]
-        print(f"Found YaRN rope_scaling config: {transformers_config['rope_scaling']}")
 
     return config
 
@@ -96,18 +84,11 @@ def convert_weights(backbone, loader, transformers_config):
             ),
         )
         # Query bias
-        try:
-            loader.port_weight(
-                keras_variable=attention_layer.query_dense.bias,
-                hf_weight_key=f"model.layers.{i}.self_attn.q_proj.bias",
-                hook_fn=lambda hf_tensor, keras_shape: np.reshape(hf_tensor, keras_shape),
-            )
-        except KeyError:
-            print(f"No query bias found for layer {i}, initializing to zeros")
-            # Initialize bias to zeros if not found in HF model
-            attention_layer.query_dense.bias.assign(
-                np.zeros_like(attention_layer.query_dense.bias)
-            )
+        loader.port_weight(
+            keras_variable=attention_layer.query_dense.bias,
+            hf_weight_key=f"model.layers.{i}.self_attn.q_proj.bias",
+            hook_fn=lambda hf_tensor, keras_shape: np.reshape(hf_tensor, keras_shape),
+        )
 
         # Key
         loader.port_weight(
@@ -118,18 +99,11 @@ def convert_weights(backbone, loader, transformers_config):
             ),
         )
         # Key bias
-        try:
-            loader.port_weight(
-                keras_variable=attention_layer.key_dense.bias,
-                hf_weight_key=f"model.layers.{i}.self_attn.k_proj.bias",
-                hook_fn=lambda hf_tensor, keras_shape: np.reshape(hf_tensor, keras_shape),
-            )
-        except KeyError:
-            print(f"No key bias found for layer {i}, initializing to zeros")
-            # Initialize bias to zeros if not found in HF model
-            attention_layer.key_dense.bias.assign(
-                np.zeros_like(attention_layer.key_dense.bias)
-            )
+        loader.port_weight(
+            keras_variable=attention_layer.key_dense.bias,
+            hf_weight_key=f"model.layers.{i}.self_attn.k_proj.bias",
+            hook_fn=lambda hf_tensor, keras_shape: np.reshape(hf_tensor, keras_shape),
+        )
 
         # Value
         loader.port_weight(
@@ -140,18 +114,11 @@ def convert_weights(backbone, loader, transformers_config):
             ),
         )
         # Value bias
-        try:
-            loader.port_weight(
-                keras_variable=attention_layer.value_dense.bias,
-                hf_weight_key=f"model.layers.{i}.self_attn.v_proj.bias",
-                hook_fn=lambda hf_tensor, keras_shape: np.reshape(hf_tensor, keras_shape),
-            )
-        except KeyError:
-            print(f"No value bias found for layer {i}, initializing to zeros")
-            # Initialize bias to zeros if not found in HF model
-            attention_layer.value_dense.bias.assign(
-                np.zeros_like(attention_layer.value_dense.bias)
-            )
+        loader.port_weight(
+            keras_variable=attention_layer.value_dense.bias,
+            hf_weight_key=f"model.layers.{i}.self_attn.v_proj.bias",
+            hook_fn=lambda hf_tensor, keras_shape: np.reshape(hf_tensor, keras_shape),
+        )
 
         # Output
         loader.port_weight(
@@ -162,33 +129,17 @@ def convert_weights(backbone, loader, transformers_config):
             ),
         )
         # Output bias
-        try:
-            loader.port_weight(
-                keras_variable=attention_layer.output_dense.bias,
-                hf_weight_key=f"model.layers.{i}.self_attn.o_proj.bias",
-                hook_fn=lambda hf_tensor, keras_shape: np.reshape(hf_tensor, keras_shape),
-            )
-        except KeyError:
-            print(f"No output bias found for layer {i}, initializing to zeros")
-            # Initialize bias to zeros if not found in HF model
-            attention_layer.output_dense.bias.assign(
-                np.zeros_like(attention_layer.output_dense.bias)
-            )
+        loader.port_weight(
+            keras_variable=attention_layer.output_dense.bias,
+            hf_weight_key=f"model.layers.{i}.self_attn.o_proj.bias",
+            hook_fn=lambda hf_tensor, keras_shape: np.reshape(hf_tensor, keras_shape),
+        )
 
         # Sink tokens
-        try:
-            loader.port_weight(
-                keras_variable=attention_layer.sinks,
-                hf_weight_key=f"model.layers.{i}.self_attn.sinks",
-            )
-            print(f"  Loaded sink tokens for layer {i}")
-        except KeyError:
-            print(f"Warning: No sink tokens found for layer {i}")
-            # Initialize sink tokens with small random values if not found
-            attention_layer.sinks.assign(
-                np.random.normal(0, 0.02, size=attention_layer.sinks.shape).astype(np.float32)
-            )
-            print(f"  Initialized sink tokens randomly for layer {i}")
+        loader.port_weight(
+            keras_variable=attention_layer.sinks,
+            hf_weight_key=f"model.layers.{i}.self_attn.sinks",
+        )
 
         # MoE layers
         moe_block = decoder_layer.sparse_moe_block
@@ -205,186 +156,118 @@ def convert_weights(backbone, loader, transformers_config):
 
         # Experts - handle the quantized HuggingFace MoE structure
         # The HF model uses MXFP4 quantization with _blocks and _scales
-        try:
-            # Get quantized weights and scales
-            gate_up_blocks = loader.get_tensor(
-                f"model.layers.{i}.mlp.experts.gate_up_proj_blocks"
-            )
-            gate_up_scales = loader.get_tensor(
-                f"model.layers.{i}.mlp.experts.gate_up_proj_scales"
-            )
-            gate_up_bias = loader.get_tensor(
-                f"model.layers.{i}.mlp.experts.gate_up_proj_bias"
-            )
 
-            down_blocks = loader.get_tensor(
-                f"model.layers.{i}.mlp.experts.down_proj_blocks"
-            )
-            down_scales = loader.get_tensor(
-                f"model.layers.{i}.mlp.experts.down_proj_scales"
-            )
-            down_bias = loader.get_tensor(
-                f"model.layers.{i}.mlp.experts.down_proj_bias"
-            )
+        # Get quantized weights and scales
+        gate_up_blocks = loader.get_tensor(
+            f"model.layers.{i}.mlp.experts.gate_up_proj_blocks"
+        )
+        gate_up_scales = loader.get_tensor(
+            f"model.layers.{i}.mlp.experts.gate_up_proj_scales"
+        )
+        gate_up_bias = loader.get_tensor(
+            f"model.layers.{i}.mlp.experts.gate_up_proj_bias"
+        )
 
-            # Proper MXFP4 dequantization implementation
-            def decode_e8m0(scales_8bit: np.ndarray) -> np.ndarray:
-                """Decode 8-bit E8M0 floats (power-of-two scale factors)."""
-                s = (scales_8bit >> 7) & 0x1       # sign bit
-                e = scales_8bit & 0x7F             # 7-bit exponent (bits6..0)
-                bias = 127.0
-                sign = 1.0 - 2.0*s
-                values = sign * (2.0 ** (e.astype(np.float32) - bias))
-                return values
+        down_blocks = loader.get_tensor(
+            f"model.layers.{i}.mlp.experts.down_proj_blocks"
+        )
+        down_scales = loader.get_tensor(
+            f"model.layers.{i}.mlp.experts.down_proj_scales"
+        )
+        down_bias = loader.get_tensor(
+            f"model.layers.{i}.mlp.experts.down_proj_bias"
+        )
 
-            def dequantize_mxfp4(blocks, scales):
-                """Dequantize MXFP4 weights (E2M1 4bit, packed in uint8)."""
-                scales = decode_e8m0(scales)
-                # blocks: [num_experts, out_dim, num_blocks, 16] (uint8, each value packs two 4bit numbers)
-                # scales: [num_experts, out_dim, num_blocks]
-                num_experts, out_dim, num_blocks, block_size = blocks.shape
+        # Proper MXFP4 dequantization implementation
+        def decode_e8m0(scales_8bit: np.ndarray) -> np.ndarray:
+            """Decode 8-bit E8M0 floats (power-of-two scale factors)."""
+            bias = 127.0
+            values = 2.0 ** (scales_8bit.astype(np.float32) - bias)
+            return values
 
-                # Unpack 4bit values: each uint8 contains two 4bit values (high nibble, low nibble)
-                # We'll expand last dim from 16 to 32 (each 16 uint8 -> 32 4bit values)
-                # Result: [num_experts, out_dim, num_blocks, 32]
-                blocks_uint8 = blocks.astype(np.uint8)
-                high_nibble = (blocks_uint8 >> 4) & 0xF
-                low_nibble = blocks_uint8 & 0xF
-                # Stack along new last axis
-                blocks_4bit = np.stack([low_nibble, high_nibble], axis=-1)
-                # Reshape last two dims: [num_experts, out_dim, num_blocks, 16, 2] -> [num_experts, out_dim, num_blocks, 32]
-                blocks_4bit = blocks_4bit.reshape(num_experts, out_dim, num_blocks, block_size * 2)
+        def dequantize_mxfp4(blocks, scales):
+            """Dequantize MXFP4 weights (E2M1 4bit, packed in uint8)."""
+            scales = decode_e8m0(scales)
+            # blocks: [num_experts, out_dim, num_blocks, 16] (uint8, each value packs two 4bit numbers)
+            # scales: [num_experts, out_dim, num_blocks]
+            num_experts, out_dim, num_blocks, block_size = blocks.shape
 
-                # Now, decode E2M1 4bit: 1 sign bit, 2 exponent bits, 1 mantissa bit
-                # Format: s e e m (bit3 bit2 bit1 bit0)
-                s = (blocks_4bit >> 3) & 0x1
-                e = (blocks_4bit >> 1) & 0x3
-                m = blocks_4bit & 0x1
+            # Unpack 4bit values: each uint8 contains two 4bit values (high nibble, low nibble)
+            # We'll expand last dim from 16 to 32 (each 16 uint8 -> 32 4bit values)
+            # Result: [num_experts, out_dim, num_blocks, 32]
+            blocks_uint8 = blocks.astype(np.uint8)
+            high_nibble = (blocks_uint8 >> 4) & 0xF
+            low_nibble = blocks_uint8 & 0xF
+            # Stack along new last axis
+            blocks_4bit = np.stack([low_nibble, high_nibble], axis=-1)
+            # Reshape last two dims: [num_experts, out_dim, num_blocks, 16, 2] -> [num_experts, out_dim, num_blocks, 32]
+            blocks_4bit = blocks_4bit.reshape(num_experts, out_dim, num_blocks, block_size * 2)
 
-                bias = 1.0
-                sign = 1.0 - 2.0*s                # +1 for s=0, -1 for s=1
+            # Now, decode E2M1 4bit: 1 sign bit, 2 exponent bits, 1 mantissa bit
+            # Format: s e e m (bit3 bit2 bit1 bit0)
+            s = (blocks_4bit >> 3) & 0x1
+            e = (blocks_4bit >> 1) & 0x3
+            m = blocks_4bit & 0x1
 
-                # normal numbers (e != 0)
-                normal_mask = e != 0
+            bias = 1.0
+            sign = 1.0 - 2.0*s                # +1 for s=0, -1 for s=1
 
-                values = np.empty_like(blocks_4bit, dtype=np.float32)
+            # normal numbers (e != 0)
+            normal_mask = e != 0
 
-                # normal: sign * 2^(e - bias) * (1 + m/2)
-                values[normal_mask] = (
-                    sign[normal_mask]
-                    * (2.0 ** (e[normal_mask].astype(np.float32) - bias))
-                    * (1.0 + m[normal_mask].astype(np.float32)/2.0)
-                )
+            values = np.empty_like(blocks_4bit, dtype=np.float32)
 
-                # subnormal or zero: sign * 2^(1 - bias) * (m/2)
-                values[~normal_mask] = (
-                    sign[~normal_mask]
-                    * (2.0 ** (1.0 - bias))
-                    * (m[~normal_mask].astype(np.float32)/2.0)
-                )
-
-                # Reshape to [num_experts, out_dim, num_blocks * 32]
-                values = values.reshape(num_experts, out_dim, num_blocks * block_size * 2)
-                # Expand scales to match: [num_experts, out_dim, num_blocks, 1] -> [num_experts, out_dim, num_blocks, 32]
-                scales_expanded = np.repeat(scales[..., np.newaxis], block_size * 2, axis=3)
-                # Reshape to [num_experts, out_dim, num_blocks * 32]
-                scales_expanded = scales_expanded.reshape(num_experts, out_dim, num_blocks * block_size * 2)
-                # Dequantize: multiply each element by its corresponding scale
-                dequantized = values * scales_expanded
-
-                return dequantized
-
-            # Dequantize gate_up_proj weights: [32, 5760, 90, 16] -> [32, 5760, 2880] (32 elements per block)
-            gate_up_dequantized = dequantize_mxfp4(
-                gate_up_blocks, gate_up_scales
-            )
-            print(f"Gate_up dequantized shape: {gate_up_dequantized.shape}")
-
-            # The dequantized weights need proper reshaping based on actual dimensions
-            # gate_up_dequantized: [32, 5760, 2880] -> [32, hidden_dim, 2*intermediate_dim]
-            # We need to transpose to [32, 2880, 5760] to get [num_experts, hidden_dim, gate+up_dim]
-            gate_up_proj = np.transpose(gate_up_dequantized, (0, 2, 1))  # [32, 2880, 5760]
-
-            # Verify the expected shape matches what we have
-            expected_hidden_dim = transformers_config["hidden_size"]
-            expected_intermediate_dim = transformers_config["intermediate_size"]
-
-            print(f"Expected hidden_dim: {expected_hidden_dim}, got: {gate_up_proj.shape[1]}")
-            print(f"Expected gate+up_dim: {2*expected_intermediate_dim}, got: {gate_up_proj.shape[2]}")
-
-            # Dequantize down_proj weights: [32, 2880, 90, 16] -> [32, 2880, 2880] (32 elements per block)
-            down_dequantized = dequantize_mxfp4(down_blocks, down_scales)
-            print(f"Down dequantized shape: {down_dequantized.shape}")
-
-            # down_dequantized: [32, 2880, 2880] -> [32, intermediate_dim, hidden_dim]
-            # We need to transpose to [32, 2880, 2880] to get [num_experts, hidden_dim, intermediate_dim]
-            down_proj = np.transpose(down_dequantized, (0, 2, 1))  # [32, 2880, 2880]
-
-            # Verify dimensions
-            print(f"Expected down_proj shape: [{transformers_config['num_local_experts']}, {expected_hidden_dim}, {expected_intermediate_dim}]")
-            print(f"Actual down_proj shape: {down_proj.shape}")
-
-            # Add debugging before assignment
-            print(f"Final gate_up_proj shape: {gate_up_proj.shape}")
-            print(f"Final down_proj shape: {down_proj.shape}")
-            print(f"Gate_up_proj stats: min={gate_up_proj.min():.6f}, max={gate_up_proj.max():.6f}, mean={gate_up_proj.mean():.6f}")
-            print(f"Down_proj stats: min={down_proj.min():.6f}, max={down_proj.max():.6f}, mean={down_proj.mean():.6f}")
-
-            # Assign weights directly to the expert layer
-            moe_block.experts.gate_up_proj.assign(gate_up_proj)
-            moe_block.experts.down_proj.assign(down_proj)
-
-            # Load biases - reshape to match KerasHub format
-            print(f"Gate_up_bias shape: {gate_up_bias.shape}")
-            print(f"Down_bias shape: {down_bias.shape}")
-            moe_block.experts.gate_up_proj_bias.assign(
-                gate_up_bias
-            )  # [32, 5760]
-            moe_block.experts.down_proj_bias.assign(down_bias)  # [32, 2880]
-
-            print(
-                f"Successfully loaded dequantized MoE expert weights for layer {i}"
+            # normal: sign * 2^(e - bias) * (1 + m/2)
+            values[normal_mask] = (
+                sign[normal_mask]
+                * (2.0 ** (e[normal_mask].astype(np.float32) - bias))
+                * (1.0 + m[normal_mask].astype(np.float32)/2.0)
             )
 
-        except KeyError as e:
-            print(
-                f"Warning: Could not load quantized MoE expert weights for layer {i}: {e}"
+            # subnormal or zero: sign * 2^(1 - bias) * (m/2)
+            values[~normal_mask] = (
+                sign[~normal_mask]
+                * (2.0 ** (1.0 - bias))
+                * (m[~normal_mask].astype(np.float32)/2.0)
             )
-            print(
-                f"Available keys: {[k for k in loader.safetensor_config['weight_map'].keys() if f'layers.{i}.mlp' in k]}"
-            )
 
-            # Try to load non-quantized weights as fallback
-            try:
-                print(f"Attempting to load non-quantized MoE weights for layer {i}...")
-                # Try standard weight names for non-quantized models
-                for expert_idx in range(backbone.num_experts):
-                    gate_weight_key = f"model.layers.{i}.mlp.experts.{expert_idx}.gate_proj.weight"
-                    up_weight_key = f"model.layers.{i}.mlp.experts.{expert_idx}.up_proj.weight"
-                    down_weight_key = f"model.layers.{i}.mlp.experts.{expert_idx}.down_proj.weight"
+            # Reshape to [num_experts, out_dim, num_blocks * 32]
+            values = values.reshape(num_experts, out_dim, num_blocks * block_size * 2)
+            # Expand scales to match: [num_experts, out_dim, num_blocks, 1] -> [num_experts, out_dim, num_blocks, 32]
+            scales_expanded = np.repeat(scales[..., np.newaxis], block_size * 2, axis=3)
+            # Reshape to [num_experts, out_dim, num_blocks * 32]
+            scales_expanded = scales_expanded.reshape(num_experts, out_dim, num_blocks * block_size * 2)
+            # Dequantize: multiply each element by its corresponding scale
+            dequantized = values * scales_expanded
 
-                    if gate_weight_key in loader.safetensor_config['weight_map']:
-                        gate_weight = loader.get_tensor(gate_weight_key)
-                        up_weight = loader.get_tensor(up_weight_key)
-                        down_weight = loader.get_tensor(down_weight_key)
+            return dequantized
 
-                        # Combine gate and up weights
-                        gate_up_combined = np.concatenate([gate_weight, up_weight], axis=0)
+        # Dequantize gate_up_proj weights: [32, 5760, 90, 16] -> [32, 5760, 2880] (32 elements per block)
+        gate_up_dequantized = dequantize_mxfp4(
+            gate_up_blocks, gate_up_scales
+        )
 
-                        # Assign to the expert
-                        # Note: This assumes a different MoE structure - may need adjustment
-                        print(f"Loaded non-quantized weights for expert {expert_idx} in layer {i}")
-                        break
-                else:
-                    print(f"No suitable MoE weights found for layer {i}")
+        # The dequantized weights need proper reshaping based on actual dimensions
+        # gate_up_dequantized: [32, 5760, 2880] -> [32, hidden_dim, 2*intermediate_dim]
+        # We need to transpose to [32, 2880, 5760] to get [num_experts, hidden_dim, gate+up_dim]
+        gate_up_proj = np.transpose(gate_up_dequantized, (0, 2, 1))  # [32, 2880, 5760]
 
-            except Exception as fallback_error:
-                print(f"Fallback loading also failed for layer {i}: {fallback_error}")
-                print("Skipping MoE weight loading for this layer")
+        # Dequantize down_proj weights: [32, 2880, 90, 16] -> [32, 2880, 2880] (32 elements per block)
+        down_dequantized = dequantize_mxfp4(down_blocks, down_scales)
 
-        # Debug: Print layer parameter counts
-        layer_params = decoder_layer.count_params()
-        print(f"Layer {i} parameter count: {layer_params:,}")
+        # down_dequantized: [32, 2880, 2880] -> [32, intermediate_dim, hidden_dim]
+        # We need to transpose to [32, 2880, 2880] to get [num_experts, hidden_dim, intermediate_dim]
+        down_proj = np.transpose(down_dequantized, (0, 2, 1))  # [32, 2880, 2880]
+
+        # Assign weights directly to the expert layer
+        moe_block.experts.gate_up_proj.assign(gate_up_proj)
+        moe_block.experts.down_proj.assign(down_proj)
+
+        # Load biases - reshape to match KerasHub format
+        moe_block.experts.gate_up_proj_bias.assign(
+            gate_up_bias
+        )  # [32, 5760]
+        moe_block.experts.down_proj_bias.assign(down_bias)  # [32, 2880]
 
         # Post-attention layernorm
         loader.port_weight(
@@ -397,19 +280,6 @@ def convert_weights(backbone, loader, transformers_config):
         keras_variable=backbone.layer_norm.scale,
         hf_weight_key="model.norm.weight",
     )
-
-    # Debug: Print final component parameter counts
-    print(
-        f"Token embedding parameters: {backbone.token_embedding.count_params():,}"
-    )
-    print(
-        f"Output projection parameters: {backbone.token_embedding.reverse_embeddings.shape[0] * backbone.token_embedding.reverse_embeddings.shape[1]:,}"
-    )
-    print(
-        f"Final layer norm parameters: {backbone.layer_norm.count_params():,}"
-    )
-    print(f"Total backbone parameters: {backbone.count_params():,}")
-
     return backbone
 
 

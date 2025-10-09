@@ -67,7 +67,7 @@ def compute_hf_output(hf_model, hf_model_tokenizer):
 def compute_keras_output(keras_hub_model, keras_hub_tokenizer):
     """Computes the output of the KerasHub model."""
     keras_hub_preprocessor = keras_hub.models.GptOssCausalLMPreprocessor(
-        keras_hub_tokenizer
+        keras_hub_tokenizer, add_start_token=False
     )
     keras_hub_inputs = keras_hub_preprocessor(
         ["What is Keras?"], sequence_length=5
@@ -108,6 +108,7 @@ def main(_):
     hf_model = AutoModelForCausalLM.from_pretrained(
         hf_preset,
         device_map=device,
+        torch_dtype=torch.float32
     )
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
@@ -194,4 +195,3 @@ def main(_):
 if __name__ == "__main__":
     flags.mark_flag_as_required("preset")
     app.run(main)
-
