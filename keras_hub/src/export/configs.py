@@ -36,15 +36,22 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
         """Get input signature for causal LM models.
 
         Args:
-            sequence_length: Optional sequence length. If None, will be inferred
-                from model.
+            sequence_length: Optional sequence length. If None, uses default.
 
         Returns:
             Dict[str, Any]: Dictionary mapping input names to their
             specifications
         """
         if sequence_length is None:
-            sequence_length = self._get_sequence_length()
+            # Get from preprocessor or use default
+            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
+                sequence_length = getattr(
+                    self.model.preprocessor,
+                    "sequence_length",
+                    self.DEFAULT_SEQUENCE_LENGTH,
+                )
+            else:
+                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
 
         return {
             "token_ids": keras.layers.InputSpec(
@@ -54,20 +61,6 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
                 shape=(None, sequence_length), dtype="bool", name="padding_mask"
             ),
         }
-
-    def _get_sequence_length(self):
-        """Get sequence length from model or use default.
-
-        Returns:
-            int: The sequence length
-        """
-        if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-            return getattr(
-                self.model.preprocessor,
-                "sequence_length",
-                self.DEFAULT_SEQUENCE_LENGTH,
-            )
-        return self.DEFAULT_SEQUENCE_LENGTH
 
 
 @keras_hub_export("keras_hub.export.TextClassifierExporterConfig")
@@ -90,15 +83,22 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
         """Get input signature for text classifier models.
 
         Args:
-            sequence_length: Optional sequence length. If None, will be inferred
-                from model.
+            sequence_length: Optional sequence length. If None, uses default.
 
         Returns:
             Dict[str, Any]: Dictionary mapping input names to their
             specifications
         """
         if sequence_length is None:
-            sequence_length = self._get_sequence_length()
+            # Get from preprocessor or use default
+            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
+                sequence_length = getattr(
+                    self.model.preprocessor,
+                    "sequence_length",
+                    self.DEFAULT_SEQUENCE_LENGTH,
+                )
+            else:
+                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
 
         return {
             "token_ids": keras.layers.InputSpec(
@@ -108,20 +108,6 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
                 shape=(None, sequence_length), dtype="bool", name="padding_mask"
             ),
         }
-
-    def _get_sequence_length(self):
-        """Get sequence length from model or use default.
-
-        Returns:
-            int: The sequence length
-        """
-        if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-            return getattr(
-                self.model.preprocessor,
-                "sequence_length",
-                self.DEFAULT_SEQUENCE_LENGTH,
-            )
-        return self.DEFAULT_SEQUENCE_LENGTH
 
 
 @keras_hub_export("keras_hub.export.Seq2SeqLMExporterConfig")
@@ -154,15 +140,22 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
         """Get input signature for seq2seq models.
 
         Args:
-            sequence_length: Optional sequence length. If None, will be inferred
-                from model.
+            sequence_length: Optional sequence length. If None, uses default.
 
         Returns:
             Dict[str, Any]: Dictionary mapping input names to their
             specifications
         """
         if sequence_length is None:
-            sequence_length = self._get_sequence_length()
+            # Get from preprocessor or use default
+            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
+                sequence_length = getattr(
+                    self.model.preprocessor,
+                    "sequence_length",
+                    self.DEFAULT_SEQUENCE_LENGTH,
+                )
+            else:
+                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
 
         return {
             "encoder_token_ids": keras.layers.InputSpec(
@@ -186,20 +179,6 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
                 name="decoder_padding_mask",
             ),
         }
-
-    def _get_sequence_length(self):
-        """Get sequence length from model or use default.
-
-        Returns:
-            int: The sequence length
-        """
-        if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-            return getattr(
-                self.model.preprocessor,
-                "sequence_length",
-                self.DEFAULT_SEQUENCE_LENGTH,
-            )
-        return self.DEFAULT_SEQUENCE_LENGTH
 
 
 @keras_hub_export("keras_hub.export.TextModelExporterConfig")
@@ -228,15 +207,22 @@ class TextModelExporterConfig(KerasHubExporterConfig):
         """Get input signature for generic text models.
 
         Args:
-            sequence_length: Optional sequence length. If None, will be inferred
-                from model.
+            sequence_length: Optional sequence length. If None, uses default.
 
         Returns:
             Dict[str, Any]: Dictionary mapping input names to their
             specifications
         """
         if sequence_length is None:
-            sequence_length = self._get_sequence_length()
+            # Get from preprocessor or use default
+            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
+                sequence_length = getattr(
+                    self.model.preprocessor,
+                    "sequence_length",
+                    self.DEFAULT_SEQUENCE_LENGTH,
+                )
+            else:
+                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
 
         return {
             "token_ids": keras.layers.InputSpec(
@@ -246,20 +232,6 @@ class TextModelExporterConfig(KerasHubExporterConfig):
                 shape=(None, sequence_length), dtype="bool", name="padding_mask"
             ),
         }
-
-    def _get_sequence_length(self):
-        """Get sequence length from model or use default.
-
-        Returns:
-            int: The sequence length
-        """
-        if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-            return getattr(
-                self.model.preprocessor,
-                "sequence_length",
-                self.DEFAULT_SEQUENCE_LENGTH,
-            )
-        return self.DEFAULT_SEQUENCE_LENGTH
 
 
 @keras_hub_export("keras_hub.export.ImageClassifierExporterConfig")
@@ -279,74 +251,81 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
     def get_input_signature(self, image_size=None):
         """Get input signature for image classifier models.
         Args:
-            image_size: Optional image size. If None, will be inferred
-                from model.
+            image_size: Optional image size. If None, inferred from model.
         Returns:
             Dict[str, Any]: Dictionary mapping input names to their
             specifications
         """
         if image_size is None:
-            image_size = self._get_image_size()
+            # Get from preprocessor
+            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
+                if hasattr(self.model.preprocessor, "image_size"):
+                    image_size = self.model.preprocessor.image_size
+
+            # Try to infer from model inputs
+            if (
+                image_size is None
+                and hasattr(self.model, "inputs")
+                and self.model.inputs
+            ):
+                input_shape = self.model.inputs[0].shape
+                if (
+                    len(input_shape) == 4
+                    and input_shape[1] is not None
+                    and input_shape[2] is not None
+                ):
+                    image_size = (input_shape[1], input_shape[2])
+
+            if image_size is None:
+                raise ValueError(
+                    "Could not determine image size from model. "
+                    "Model should have a preprocessor with image_size "
+                    "attribute, or model inputs should have concrete shapes."
+                )
+
         if isinstance(image_size, int):
             image_size = (image_size, image_size)
+
+        # Get input dtype
+        dtype = "float32"
+        if hasattr(self.model, "inputs") and self.model.inputs:
+            dtype = str(self.model.inputs[0].dtype)
 
         return {
             "images": keras.layers.InputSpec(
                 shape=(None, *image_size, 3),
-                dtype=self._get_input_dtype(),
+                dtype=dtype,
                 name="images",
             ),
         }
-
-    def _get_input_dtype(self):
-        """Get input dtype from model.
-        Returns:
-            str: The input dtype (e.g., 'float32', 'float16')
-        """
-        if hasattr(self.model, "inputs") and self.model.inputs:
-            return str(self.model.inputs[0].dtype)
-        # Default fallback
-        return "float32"
-
-    def _get_image_size(self):
-        """Get image size from model preprocessor.
-        Returns:
-            tuple: The image size (height, width)
-        """
-        if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-            if hasattr(self.model.preprocessor, "image_size"):
-                return self.model.preprocessor.image_size
-
-        # If no preprocessor image_size, try to infer from model inputs
-        if hasattr(self.model, "inputs") and self.model.inputs:
-            input_shape = self.model.inputs[0].shape
-            if (
-                len(input_shape) == 4
-                and input_shape[1] is not None
-                and input_shape[2] is not None
-            ):
-                # Shape is (batch, height, width, channels)
-                return (input_shape[1], input_shape[2])
-
-        # Last resort: raise an error instead of using hardcoded values
-        raise ValueError(
-            "Could not determine image size from model. "
-            "Model should have a preprocessor with image_size attribute, "
-            "or model inputs should have concrete shapes."
-        )
 
     def get_dummy_inputs(self, image_size=None):
         """Generate dummy inputs for image classifier models.
 
         Args:
-            image_size: Optional image size. If None, will be inferred from
-                model.
+            image_size: Optional image size. If None, inferred from model.
 
         Returns:
             Dict[str, Any]: Dictionary of dummy inputs
         """
         if image_size is None:
-            image_size = self._get_image_size()
+            # Get image size using same logic as get_input_signature
+            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
+                if hasattr(self.model.preprocessor, "image_size"):
+                    image_size = self.model.preprocessor.image_size
+            if (
+                image_size is None
+                and hasattr(self.model, "inputs")
+                and self.model.inputs
+            ):
+                input_shape = self.model.inputs[0].shape
+                if (
+                    len(input_shape) == 4
+                    and input_shape[1] is not None
+                    and input_shape[2] is not None
+                ):
+                    image_size = (input_shape[1], input_shape[2])
+
         if isinstance(image_size, int):
             image_size = (image_size, image_size)
 
@@ -376,21 +355,50 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
     def get_input_signature(self, image_size=None):
         """Get input signature for object detector models.
         Args:
-            image_size: Optional image size. If None, will be inferred
-                from model.
+            image_size: Optional image size. If None, inferred from model.
         Returns:
             Dict[str, Any]: Dictionary mapping input names to their
             specifications
         """
         if image_size is None:
-            image_size = self._get_image_size()
+            # Get from preprocessor
+            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
+                if hasattr(self.model.preprocessor, "image_size"):
+                    image_size = self.model.preprocessor.image_size
+
+            # Try to infer from model inputs
+            if (
+                image_size is None
+                and hasattr(self.model, "inputs")
+                and self.model.inputs
+            ):
+                input_shape = self.model.inputs[0].shape
+                if (
+                    len(input_shape) == 4
+                    and input_shape[1] is not None
+                    and input_shape[2] is not None
+                ):
+                    image_size = (input_shape[1], input_shape[2])
+
+            if image_size is None:
+                raise ValueError(
+                    "Could not determine image size from model. "
+                    "Model should have a preprocessor with image_size "
+                    "attribute, or model inputs should have concrete shapes."
+                )
+
         if isinstance(image_size, int):
             image_size = (image_size, image_size)
+
+        # Get input dtype
+        dtype = "float32"
+        if hasattr(self.model, "inputs") and self.model.inputs:
+            dtype = str(self.model.inputs[0].dtype)
 
         return {
             "images": keras.layers.InputSpec(
                 shape=(None, *image_size, 3),
-                dtype=self._get_input_dtype(),
+                dtype=dtype,
                 name="images",
             ),
             "image_shape": keras.layers.InputSpec(
@@ -398,55 +406,33 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
             ),
         }
 
-    def _get_input_dtype(self):
-        """Get input dtype from model.
-        Returns:
-            str: The input dtype (e.g., 'float32', 'float16')
-        """
-        if hasattr(self.model, "inputs") and self.model.inputs:
-            return str(self.model.inputs[0].dtype)
-        # Default fallback
-        return "float32"
-
-    def _get_image_size(self):
-        """Get image size from model preprocessor.
-        Returns:
-            tuple: The image size (height, width)
-        """
-        if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-            if hasattr(self.model.preprocessor, "image_size"):
-                return self.model.preprocessor.image_size
-
-        # If no preprocessor image_size, try to infer from model inputs
-        if hasattr(self.model, "inputs") and self.model.inputs:
-            input_shape = self.model.inputs[0].shape
-            if (
-                len(input_shape) == 4
-                and input_shape[1] is not None
-                and input_shape[2] is not None
-            ):
-                # Shape is (batch, height, width, channels)
-                return (input_shape[1], input_shape[2])
-
-        # Last resort: raise an error instead of using hardcoded values
-        raise ValueError(
-            "Could not determine image size from model. "
-            "Model should have a preprocessor with image_size attribute, "
-            "or model inputs should have concrete shapes."
-        )
-
     def get_dummy_inputs(self, image_size=None):
         """Generate dummy inputs for object detector models.
 
         Args:
-            image_size: Optional image size. If None, will be inferred
-                from model.
+            image_size: Optional image size. If None, inferred from model.
 
         Returns:
             Dict[str, Any]: Dictionary of dummy inputs
         """
         if image_size is None:
-            image_size = self._get_image_size()
+            # Get image size using same logic as get_input_signature
+            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
+                if hasattr(self.model.preprocessor, "image_size"):
+                    image_size = self.model.preprocessor.image_size
+            if (
+                image_size is None
+                and hasattr(self.model, "inputs")
+                and self.model.inputs
+            ):
+                input_shape = self.model.inputs[0].shape
+                if (
+                    len(input_shape) == 4
+                    and input_shape[1] is not None
+                    and input_shape[2] is not None
+                ):
+                    image_size = (input_shape[1], input_shape[2])
+
         if isinstance(image_size, int):
             image_size = (image_size, image_size)
 
@@ -482,58 +468,50 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
     def get_input_signature(self, image_size=None):
         """Get input signature for image segmenter models.
         Args:
-            image_size: Optional image size. If None, will be inferred
-                from model.
+            image_size: Optional image size. If None, inferred from model.
         Returns:
             Dict[str, Any]: Dictionary mapping input names to their
             specifications
         """
         if image_size is None:
-            image_size = self._get_image_size()
+            # Get from preprocessor
+            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
+                if hasattr(self.model.preprocessor, "image_size"):
+                    image_size = self.model.preprocessor.image_size
+
+            # Try to infer from model inputs
+            if (
+                image_size is None
+                and hasattr(self.model, "inputs")
+                and self.model.inputs
+            ):
+                input_shape = self.model.inputs[0].shape
+                if (
+                    len(input_shape) == 4
+                    and input_shape[1] is not None
+                    and input_shape[2] is not None
+                ):
+                    image_size = (input_shape[1], input_shape[2])
+
+            if image_size is None:
+                raise ValueError(
+                    "Could not determine image size from model. "
+                    "Model should have a preprocessor with image_size "
+                    "attribute, or model inputs should have concrete shapes."
+                )
+
         if isinstance(image_size, int):
             image_size = (image_size, image_size)
+
+        # Get input dtype
+        dtype = "float32"
+        if hasattr(self.model, "inputs") and self.model.inputs:
+            dtype = str(self.model.inputs[0].dtype)
 
         return {
             "images": keras.layers.InputSpec(
                 shape=(None, *image_size, 3),
-                dtype=self._get_input_dtype(),
+                dtype=dtype,
                 name="images",
             ),
         }
-
-    def _get_input_dtype(self):
-        """Get input dtype from model.
-        Returns:
-            str: The input dtype (e.g., 'float32', 'float16')
-        """
-        if hasattr(self.model, "inputs") and self.model.inputs:
-            return str(self.model.inputs[0].dtype)
-        # Default fallback
-        return "float32"
-
-    def _get_image_size(self):
-        """Get image size from model preprocessor.
-        Returns:
-            tuple: The image size (height, width)
-        """
-        if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-            if hasattr(self.model.preprocessor, "image_size"):
-                return self.model.preprocessor.image_size
-
-        # If no preprocessor image_size, try to infer from model inputs
-        if hasattr(self.model, "inputs") and self.model.inputs:
-            input_shape = self.model.inputs[0].shape
-            if (
-                len(input_shape) == 4
-                and input_shape[1] is not None
-                and input_shape[2] is not None
-            ):
-                # Shape is (batch, height, width, channels)
-                return (input_shape[1], input_shape[2])
-
-        # Last resort: raise an error instead of using hardcoded values
-        raise ValueError(
-            "Could not determine image size from model. "
-            "Model should have a preprocessor with image_size attribute, "
-            "or model inputs should have concrete shapes."
-        )

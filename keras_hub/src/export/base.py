@@ -147,31 +147,50 @@ class KerasHubExporter(ABC):
         """
         pass
 
-    def _ensure_model_built(self, sequence_length=None):
+    def _ensure_model_built(self, param=None):
         """Ensure the model is properly built with correct input structure.
 
-        Args:
-            sequence_length: Optional sequence length for dummy inputs
-        """
-        if not self.model.built:
-            dummy_inputs = self.config.get_dummy_inputs(sequence_length)
+        This method builds the model using model.build() with input shapes.
+        For TensorFlow backend, this creates the necessary variables and
+        prepares the model for tracing, but actual graph tracing happens
+        during export when the model is converted to a concrete function.
 
+        Note: We don't check model.built because it can be True even if the
+        model isn't properly initialized with the correct input structure.
+
+        Args:
+            param: Optional parameter for input signature (e.g., sequence_length
+                for text models, image_size for vision models)
+        """
+        # Get input signature (returns dict of InputSpec objects)
+        input_signature = self.config.get_input_signature(param)
+
+        # Extract shapes from InputSpec objects
+        input_shapes = {}
+        for name, spec in input_signature.items():
+            if hasattr(spec, "shape"):
+                input_shapes[name] = spec.shape
+            else:
+                # Fallback for unexpected formats
+                input_shapes[name] = spec
+
+        try:
+            # Build the model using shapes only (no actual data allocation)
+            # This creates variables and initializes the model structure
+            self.model.build(input_shape=input_shapes)
+        except Exception as e:
+            # Fallback to forward pass approach if build() fails
+            # This maintains backward compatibility for models that don't
+            # support shape-based building
             try:
-                # Build the model with the correct input structure
+                dummy_inputs = self.config.get_dummy_inputs(param)
                 _ = self.model(dummy_inputs, training=False)
-            except Exception as e:
-                # Try alternative approach using build() method
-                try:
-                    input_shapes = {
-                        key: tensor.shape
-                        for key, tensor in dummy_inputs.items()
-                    }
-                    self.model.build(input_shape=input_shapes)
-                except Exception:
-                    raise ValueError(
-                        f"Failed to build model: {e}. Please ensure the model "
-                        "is properly constructed."
-                    )
+            except Exception as fallback_error:
+                raise ValueError(
+                    f"Failed to build model with both shape-based building "
+                    f"({e}) and forward pass ({fallback_error}). Please ensure "
+                    f"the model is properly constructed."
+                )
 
 
 class ExporterRegistry:

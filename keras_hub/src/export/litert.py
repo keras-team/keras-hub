@@ -4,13 +4,13 @@ This module provides LiteRT export functionality specifically designed for
 Keras-Hub models, handling their unique input structures and requirements.
 """
 
+import keras
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporter
 
 try:
-    from keras.src.export.litert import (
-        LitertExporter as KerasLitertExporter,
-    )
+    from keras.src.export.litert import LitertExporter as KerasLitertExporter
 
     KERAS_LITE_RT_AVAILABLE = True
 except ImportError:
@@ -39,7 +39,7 @@ class LitertExporter(KerasHubExporter):
 
         Args:
             config: Exporter configuration for the model
-            max_sequence_length: Maximum sequence length for conversion
+            max_sequence_length: Maximum sequence length for text models
             aot_compile_targets: List of AOT compilation targets
             verbose: Enable verbose logging
             **kwargs: Additional arguments passed to the underlying exporter
@@ -56,17 +56,6 @@ class LitertExporter(KerasHubExporter):
         self.aot_compile_targets = aot_compile_targets
         self.verbose = verbose
 
-        # Get sequence length from model if not provided
-        if self.max_sequence_length is None:
-            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-                self.max_sequence_length = getattr(
-                    self.model.preprocessor,
-                    "sequence_length",
-                    self.config.DEFAULT_SEQUENCE_LENGTH,
-                )
-            else:
-                self.max_sequence_length = self.config.DEFAULT_SEQUENCE_LENGTH
-
     def export(self, filepath):
         """Export the Keras-Hub model to LiteRT format.
 
@@ -76,35 +65,19 @@ class LitertExporter(KerasHubExporter):
         if self.verbose:
             print(f"Starting LiteRT export for {self.config.MODEL_TYPE} model")
 
-        # Ensure model is built with correct input structure
-        # For text models, use sequence length; for image models, use None to
-        # auto-detect
-        if self.config.MODEL_TYPE in [
+        # For text models, use sequence_length; for other models, use None
+        is_text_model = self.config.MODEL_TYPE in [
             "causal_lm",
             "text_classifier",
             "seq2seq_lm",
-        ]:
-            build_param = self.max_sequence_length
-        else:
-            build_param = None  # Let image models auto-detect from preprocessor
+        ]
+        param = self.max_sequence_length if is_text_model else None
 
-        self._ensure_model_built(build_param)
+        # Ensure model is built
+        self._ensure_model_built(param)
 
-        # Get the proper input signature for this model type
-        # For text models, pass sequence length; for image models, pass None to
-        # auto-detect
-        if self.config.MODEL_TYPE in [
-            "causal_lm",
-            "text_classifier",
-            "seq2seq_lm",
-        ]:
-            signature_param = self.max_sequence_length
-        else:
-            signature_param = (
-                None  # Let image models auto-detect from preprocessor
-            )
-
-        input_signature = self.config.get_input_signature(signature_param)
+        # Get input signature
+        input_signature = self.config.get_input_signature(param)
 
         # Create a wrapper that adapts the Keras-Hub model to work with Keras
         # LiteRT exporter
@@ -136,17 +109,9 @@ class LitertExporter(KerasHubExporter):
                 print(f"Export completed successfully to: {filepath}.tflite")
 
         except Exception as e:
-            raise RuntimeError(f"LiteRT export failed: {e}") from e
-            keras_exporter.export(filepath)
-
-            if self.verbose:
-                print("✅ Export completed successfully!")
-                print(f"📁 Model saved to: {filepath}.tflite")
-
-        except Exception as e:
             if self.verbose:
                 print(f"❌ Export failed: {e}")
-            raise
+            raise RuntimeError(f"LiteRT export failed: {e}") from e
 
     def _create_export_wrapper(self):
         """Create a wrapper model that handles the input structure conversion.
@@ -155,7 +120,6 @@ class LitertExporter(KerasHubExporter):
         exporter provides and the dictionary-based inputs that Keras-Hub models
         expect.
         """
-        import keras
 
         class KerasHubModelWrapper(keras.Model):
             """Wrapper that adapts Keras-Hub models for export."""
@@ -303,21 +267,17 @@ class LitertExporter(KerasHubExporter):
                 return self.keras_hub_model.get_config()
 
         # Pass the correct parameter based on model type
-        if self.config.MODEL_TYPE in [
+        is_text_model = self.config.MODEL_TYPE in [
             "causal_lm",
             "text_classifier",
             "seq2seq_lm",
-        ]:
-            signature_param = self.max_sequence_length
-        else:
-            signature_param = (
-                None  # Let image models auto-detect from preprocessor
-            )
+        ]
+        param = self.max_sequence_length if is_text_model else None
 
         return KerasHubModelWrapper(
             self.model,
             self.config.EXPECTED_INPUTS,
-            self.config.get_input_signature(signature_param),
+            self.config.get_input_signature(param),
         )
 
 
