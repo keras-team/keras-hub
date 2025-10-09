@@ -37,8 +37,8 @@ class KerasHubExporterConfig(ABC):
         """Initialize the exporter configuration.
 
         Args:
-            model: The Keras-Hub model to export
-            **kwargs: Additional configuration parameters
+            model: `keras.Model`. The Keras-Hub model to export.
+            **kwargs: Additional configuration parameters.
         """
         self.model = model
         self.config_kwargs = kwargs
@@ -66,10 +66,11 @@ class KerasHubExporterConfig(ABC):
         """Get the input signature for this model type.
 
         Args:
-            sequence_length: Optional sequence length for input tensors
+            sequence_length: `int` or `None`. Optional sequence length for
+                input tensors.
 
         Returns:
-            Dict[str, Any]: Dictionary mapping input names to their signatures
+            A dictionary mapping input names to their tensor specifications.
         """
         pass
 
@@ -77,10 +78,11 @@ class KerasHubExporterConfig(ABC):
         """Generate dummy inputs for model building and testing.
 
         Args:
-            sequence_length: Optional sequence length for dummy inputs
+            sequence_length: `int` or `None`. Optional sequence length for
+                dummy inputs.
 
         Returns:
-            Dict[str, Any]: Dictionary of dummy inputs
+            A dictionary of dummy inputs.
         """
         if sequence_length is None:
             sequence_length = self.DEFAULT_SEQUENCE_LENGTH
@@ -129,8 +131,9 @@ class KerasHubExporter(ABC):
         """Initialize the exporter.
 
         Args:
-            config: Exporter configuration specifying model type and parameters
-            **kwargs: Additional exporter-specific parameters
+            config: `KerasHubExporterConfig`. Exporter configuration specifying
+                model type and parameters.
+            **kwargs: Additional exporter-specific parameters.
         """
         self.config = config
         self.model = config.model
@@ -141,7 +144,7 @@ class KerasHubExporter(ABC):
         """Export the model to the specified filepath.
 
         Args:
-            filepath: Path where to save the exported model
+            filepath: `str`. Path where to save the exported model.
         """
         pass
 
@@ -156,8 +159,9 @@ class KerasHubExporter(ABC):
         model isn't properly initialized with the correct input structure.
 
         Args:
-            param: Optional parameter for input signature (e.g., sequence_length
-                for text models, image_size for vision models)
+            param: `int` or `None`. Optional parameter for input signature
+                (e.g., sequence_length for text models, image_size for vision
+                models).
         """
         # Get input signature (returns dict of InputSpec objects)
         input_signature = self.config.get_input_signature(param)

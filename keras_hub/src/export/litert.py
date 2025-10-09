@@ -32,7 +32,7 @@ class LitertExporter(KerasHubExporter):
         config,
         max_sequence_length=None,
         aot_compile_targets=None,
-        verbose=False,
+        verbose=None,
         **kwargs,
     ):
         """Initialize the LiteRT exporter.
@@ -41,7 +41,8 @@ class LitertExporter(KerasHubExporter):
             config: Exporter configuration for the model
             max_sequence_length: Maximum sequence length for text models
             aot_compile_targets: List of AOT compilation targets
-            verbose: Enable verbose logging
+            verbose: Whether to print progress messages. Defaults to `None`,
+                which will use `True`.
             **kwargs: Additional arguments passed to the underlying exporter
         """
         super().__init__(config, **kwargs)
@@ -54,7 +55,7 @@ class LitertExporter(KerasHubExporter):
 
         self.max_sequence_length = max_sequence_length
         self.aot_compile_targets = aot_compile_targets
-        self.verbose = verbose
+        self.verbose = verbose if verbose is not None else True
 
     def export(self, filepath):
         """Export the Keras-Hub model to LiteRT format.
@@ -62,8 +63,12 @@ class LitertExporter(KerasHubExporter):
         Args:
             filepath: Path where to save the exported model (without extension)
         """
+        from keras.src.utils import io_utils
+
         if self.verbose:
-            print(f"Starting LiteRT export for {self.config.MODEL_TYPE} model")
+            io_utils.print_msg(
+                f"Starting LiteRT export for {self.config.MODEL_TYPE} model"
+            )
 
         # For text models, use sequence_length; for other models, use None
         is_text_model = self.config.MODEL_TYPE in [
@@ -97,7 +102,7 @@ class LitertExporter(KerasHubExporter):
             wrapped_model,
             input_signature=input_signature,
             aot_compile_targets=self.aot_compile_targets,
-            verbose=1 if self.verbose else 0,
+            verbose=self.verbose,
             **self.export_kwargs,
         )
 
@@ -106,11 +111,11 @@ class LitertExporter(KerasHubExporter):
             keras_exporter.export(filepath)
 
             if self.verbose:
-                print(f"Export completed successfully to: {filepath}.tflite")
+                io_utils.print_msg(
+                    f"Export completed successfully to: {filepath}.tflite"
+                )
 
         except Exception as e:
-            if self.verbose:
-                print(f"❌ Export failed: {e}")
             raise RuntimeError(f"LiteRT export failed: {e}") from e
 
     def _create_export_wrapper(self):

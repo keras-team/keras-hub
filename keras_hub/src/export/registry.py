@@ -139,6 +139,8 @@ def extend_export_method_for_keras_hub():
                     "Seq2SeqLM",
                     "TextClassifier",
                     "ImageClassifier",
+                    "ObjectDetector",
+                    "ImageSegmenter",
                 ]
                 if any(name in class_name for name in keras_hub_model_names):
                     return True

@@ -289,7 +289,12 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
         # Get input dtype
         dtype = "float32"
         if hasattr(self.model, "inputs") and self.model.inputs:
-            dtype = str(self.model.inputs[0].dtype)
+            model_dtype = self.model.inputs[0].dtype
+            dtype = (
+                model_dtype.name
+                if hasattr(model_dtype, "name")
+                else model_dtype
+            )
 
         return {
             "images": keras.layers.InputSpec(
@@ -393,7 +398,12 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
         # Get input dtype
         dtype = "float32"
         if hasattr(self.model, "inputs") and self.model.inputs:
-            dtype = str(self.model.inputs[0].dtype)
+            model_dtype = self.model.inputs[0].dtype
+            dtype = (
+                model_dtype.name
+                if hasattr(model_dtype, "name")
+                else model_dtype
+            )
 
         return {
             "images": keras.layers.InputSpec(
@@ -506,7 +516,12 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
         # Get input dtype
         dtype = "float32"
         if hasattr(self.model, "inputs") and self.model.inputs:
-            dtype = str(self.model.inputs[0].dtype)
+            model_dtype = self.model.inputs[0].dtype
+            dtype = (
+                model_dtype.name
+                if hasattr(model_dtype, "name")
+                else model_dtype
+            )
 
         return {
             "images": keras.layers.InputSpec(
