@@ -510,7 +510,7 @@ def jax_memory_cleanup(layer):
                 # Do not delete sharded arrays, as they may be referenced in
                 # JAX's distributed computation graph and deletion can cause
                 # errors.
-                sharding = getattr(weight._value, 'sharding', None)
+                sharding = getattr(weight._value, "sharding", None)
                 if sharding is None:
                     weight._value.delete()
 
