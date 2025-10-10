@@ -63,8 +63,9 @@ class DepthAnythingDepthEstimatorTest(TestCase):
 
     @pytest.mark.large
     def test_smallest_preset(self):
-        self.skipTest("Presets are not uploaded yet.")
-        image_batch = self.load_test_image(target_size=518)[None, ...] / 255.0
+        image_batch = (
+            self.load_test_image(target_size=(518, 518))[None, ...] / 255.0
+        )
         self.run_preset_test(
             cls=DepthAnythingDepthEstimator,
             preset="depth_anything_v2_small",
