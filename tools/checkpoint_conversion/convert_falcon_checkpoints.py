@@ -16,6 +16,8 @@ Finally run this script to convert, validate and upload weights.
 ```
 python tools/checkpoint_conversion/convert_falcon_checkpoints.py \
     --preset falcon_refinedweb_1b_en
+python tools/checkpoint_conversion/convert_falcon_checkpoints.py \
+    --preset falcon_7b_instruct
 ```
 """
 
@@ -35,6 +37,7 @@ import keras_hub  # noqa: E402
 
 PRESET_MAP = {
     "falcon_refinedweb_1b_en": "tiiuae/falcon-rw-1b",
+    "falcon_7b_instruct": "tiiuae/falcon-7b-instruct",
 }
 
 EXTRACT_DIR = "./model"
@@ -50,7 +53,7 @@ absl.flags.DEFINE_string(
 def download_hf_model(hf_model_name):
     hf_model_dir = huggingface_hub.snapshot_download(
         repo_id=hf_model_name,
-        allow_patterns=["*.json", "*.bin"],
+        allow_patterns=["*.json", "*.bin", "*.safetensors"],
         ignore_patterns=["onnx/*"],
         local_dir=EXTRACT_DIR,
     )
@@ -68,6 +71,12 @@ def convert_model(hf_model):
     kwargs["intermediate_dim"] = 4 * kwargs["hidden_dim"]
     kwargs["feedforward_dropout_rate"] = hf_config["hidden_dropout"]
     kwargs["attention_dropout_rate"] = hf_config["attention_dropout"]
+    if hf_config.get("multi_query", False):
+        kwargs["num_kv_heads"] = 1
+    else:
+        kwargs["num_kv_heads"] = hf_config.get(
+            "num_kv_heads", kwargs["num_attention_heads"]
+        )
 
     return keras_hub.models.FalconBackbone(**kwargs)
 
