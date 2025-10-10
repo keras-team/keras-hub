@@ -476,8 +476,8 @@ def main(_):
     converter = TimmToKerasConverter(timm_model)
     converter.convert(keras_model)
     validate_output(keras_model, timm_model)
-    keras_model.save_to_preset(f"./{preset}")
-    print(f"🏁 Preset saved to ./{preset}")
+    keras_model.backbone.save_to_preset(f"./{preset}")
+    keras_model.preprocessor.save_to_preset(f"./{preset}")
     upload_uri = FLAGS.upload_uri
     if upload_uri:
         try:

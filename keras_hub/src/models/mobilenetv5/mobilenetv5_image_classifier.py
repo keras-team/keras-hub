@@ -70,12 +70,6 @@ class MobileNetV5ImageClassifier(ImageClassifier):
     model = MobileNetV5ImageClassifier(backbone, 1000)
     images = keras.ops.ones((1, 224, 224, 3))
     output = model.predict(images)
-
-    # Load the model from a preset and run a prediction.
-    model = MobileNetV5ImageClassifier.from_preset("mobilenetv5_300m_gemma3n")
-
-    # Expected output shape = (1, 2048).
-    outputs = model.predict(keras.ops.ones((1, 224, 224, 3)))
     ```
     """
 
