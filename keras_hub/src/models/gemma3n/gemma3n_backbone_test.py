@@ -1,32 +1,21 @@
 from copy import deepcopy
 
 import numpy as np
-import pytest
 from absl.testing import parameterized
-
-try:
-    from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
-        MobileNetV5Backbone,
-    )
-    from keras_hub.src.models.mobilenetv5.mobilenetv5_builder import (
-        decode_arch_def,
-    )
-
-    mobilenetv5 = True
-except ImportError:
-    mobilenetv5 = False
 
 from keras_hub.src.models.gemma3n.gemma3n_audio_encoder import (
     Gemma3nAudioEncoder,
 )
 from keras_hub.src.models.gemma3n.gemma3n_backbone import Gemma3nBackbone
+from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
+    MobileNetV5Backbone,
+)
+from keras_hub.src.models.mobilenetv5.mobilenetv5_builder import (
+    convert_arch_def_to_stackwise,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
-@pytest.mark.skipif(
-    not mobilenetv5,
-    reason="The pull request for MobileNetV5 is still open.",
-)
 class Gemma3nBackboneTest(TestCase):
     def setUp(self):
         self.batch_size = 1
@@ -37,18 +26,15 @@ class Gemma3nBackboneTest(TestCase):
         self.audio_sequence_length = 16
         self.audio_feature_size = 32
         # === Vision Encoder ===
-        if mobilenetv5:
-            vision_arch_def = [["er_r1_k3_s1_e1_c16"]]
-            vision_block_args = decode_arch_def(vision_arch_def)
-            vision_encoder = MobileNetV5Backbone(
-                block_args=vision_block_args,
-                num_features=4,
-                image_shape=(self.image_height, self.image_width, 3),
-                use_msfa=False,
-            )
-            vision_encoder_config = vision_encoder.get_config()
-        else:
-            vision_encoder_config = None
+        vision_arch_def = [["er_r1_k3_s1_e1_c16"]]
+        stackwise_params = convert_arch_def_to_stackwise(vision_arch_def)
+        vision_encoder = MobileNetV5Backbone(
+            **stackwise_params,
+            num_features=4,
+            image_shape=(self.image_height, self.image_width, 3),
+            use_msfa=False,
+        )
+        vision_encoder_config = vision_encoder.get_config()
         # === Audio Encoder ===
         audio_encoder = Gemma3nAudioEncoder(
             hidden_size=8,

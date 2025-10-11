@@ -1,3 +1,5 @@
+import inspect
+
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
@@ -7,6 +9,9 @@ from keras_hub.src.models.gemma3n.gemma3n_audio_encoder import (
 )
 from keras_hub.src.models.gemma3n.gemma3n_text_model import Gemma3nTextModel
 from keras_hub.src.models.gemma3n.rms_normalization import Gemma3nRMSNorm
+from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
+    MobileNetV5Backbone,
+)
 
 
 class Gemma3nMultimodalEmbedder(keras.layers.Layer):
@@ -510,14 +515,14 @@ class Gemma3nBackbone(Backbone):
         MobileNetV5Backbone,
     )
     from keras_hub.src.models.mobilenetv5.mobilenetv5_builder import (
-        decode_arch_def,
+        convert_arch_def_to_stackwise,
     )
 
     # Vision encoder config.
     vision_arch_def = [["er_r1_k3_s1_e1_c16"]]
-    vision_block_args = decode_arch_def(vision_arch_def)
+    stackwise_params = convert_arch_def_to_stackwise(vision_arch_def)
     vision_encoder = MobileNetV5Backbone(
-        block_args=vision_block_args,
+        **stackwise_params,
         num_features=4,
         image_shape=(224, 224, 3),
         use_msfa=False,
@@ -630,20 +635,30 @@ class Gemma3nBackbone(Backbone):
         # === Layers ===
         self.vision_encoder = None
         if vision_encoder_config:
-            from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
-                MobileNetV5Backbone,
-            )
-
-            vision_encoder_config["dtype"] = dtype
+            local_vision_encoder_config = vision_encoder_config.copy()
+            local_vision_encoder_config["dtype"] = dtype
             self.vision_encoder = MobileNetV5Backbone.from_config(
-                vision_encoder_config
+                local_vision_encoder_config
             )
         self.audio_encoder = None
         if audio_encoder_config:
-            audio_config = audio_encoder_config.copy()
-            audio_config.pop("dtype", None)
+            audio_encoder_sig = inspect.signature(Gemma3nAudioEncoder.__init__)
+            audio_encoder_args = {
+                p.name for p in audio_encoder_sig.parameters.values()
+            }
+            keras_layer_sig = inspect.signature(keras.layers.Layer.__init__)
+            keras_layer_args = {
+                p.name for p in keras_layer_sig.parameters.values()
+            }
+            valid_args = audio_encoder_args.union(keras_layer_args)
+            filtered_kwargs = {
+                key: value
+                for key, value in audio_encoder_config.items()
+                if key in valid_args
+            }
+            filtered_kwargs.pop("dtype", None)
             self.audio_encoder = Gemma3nAudioEncoder(
-                dtype=dtype, **audio_config
+                dtype=dtype, **filtered_kwargs
             )
         self.language_model = Gemma3nTextModel(
             pad_token_id=pad_token_id,
