@@ -19,14 +19,14 @@ from keras_hub.src.tests.test_case import TestCase
 class Gemma3nBackboneTest(TestCase):
     def setUp(self):
         self.batch_size = 1
-        self.text_vocab_size = 50
-        self.text_sequence_length = 16
-        self.image_height = 224
-        self.image_width = 224
-        self.audio_sequence_length = 16
-        self.audio_feature_size = 32
+        self.text_vocab_size = 10
+        self.text_sequence_length = 8
+        self.image_height = 32
+        self.image_width = 32
+        self.audio_sequence_length = 8
+        self.audio_feature_size = 16
         # === Vision Encoder ===
-        vision_arch_def = [["er_r1_k3_s1_e1_c16"]]
+        vision_arch_def = [["er_r1_k3_s1_e1_c8"]]
         stackwise_params = convert_arch_def_to_stackwise(vision_arch_def)
         vision_encoder = MobileNetV5Backbone(
             **stackwise_params,
@@ -37,10 +37,10 @@ class Gemma3nBackboneTest(TestCase):
         vision_encoder_config = vision_encoder.get_config()
         # === Audio Encoder ===
         audio_encoder = Gemma3nAudioEncoder(
-            hidden_size=8,
+            hidden_size=4,
             input_feat_size=self.audio_feature_size,
-            sscp_conv_channel_size=[4, 8],
-            sscp_conv_kernel_size=[(3, 3), (3, 3)],
+            sscp_conv_channel_size=[2, 4],
+            sscp_conv_kernel_size=[(1, 1), (1, 1)],
             sscp_conv_stride_size=[(2, 2), (2, 2)],
             sscp_conv_group_norm_eps=1e-5,
             conf_num_hidden_layers=1,
@@ -48,36 +48,36 @@ class Gemma3nBackboneTest(TestCase):
             gradient_clipping=1.0,
             conf_residual_weight=0.5,
             conf_num_attention_heads=1,
-            conf_attention_chunk_size=4,
-            conf_attention_context_right=5,
-            conf_attention_context_left=5,
+            conf_attention_chunk_size=2,
+            conf_attention_context_right=1,
+            conf_attention_context_left=1,
             conf_attention_logit_cap=50.0,
-            conf_conv_kernel_size=5,
+            conf_conv_kernel_size=3,
             conf_reduction_factor=1,
         )
         # === Multimodal ===
         self.multimodal_init_kwargs = {
             "text_vocab_size": self.text_vocab_size,
-            "text_hidden_size": 8,
+            "text_hidden_size": 4,
             "num_hidden_layers": 1,
             "pad_token_id": 0,
             "num_attention_heads": 1,
             "num_key_value_heads": 1,
-            "head_dim": 8,  # hidden_size / num_attention_heads
-            "intermediate_size": [16],
+            "head_dim": 4,  # hidden_size / num_attention_heads
+            "intermediate_size": [8],
             "hidden_activation": "gelu_approximate",
             "layer_types": ["full_attention"],
             "sliding_window": 4,
             "rope_theta": 10000.0,
             "max_position_embeddings": self.text_sequence_length,
-            "vocab_size_per_layer_input": 50,
+            "vocab_size_per_layer_input": 10,
             "hidden_size_per_layer_input": 2,
             "altup_num_inputs": 2,
             "laurel_rank": 1,
             "vision_encoder_config": vision_encoder_config,
-            "vision_hidden_size": 16,
+            "vision_hidden_size": 8,
             "audio_encoder_config": audio_encoder.get_config(),
-            "audio_hidden_size": 8,
+            "audio_hidden_size": 4,
         }
         self.multimodal_input_data = {
             "token_ids": np.random.randint(
@@ -156,8 +156,8 @@ class Gemma3nBackboneTest(TestCase):
         )
 
     @parameterized.named_parameters(
-        ("multimodal", "multimodal", 10354, 7),
-        ("text_only", "text_only", 1450, 4),
+        ("multimodal", "multimodal", 5450, 7),
+        ("text_only", "text_only", 350, 4),
     )
     def test_architecture_characteristics(
         self, backbone_type, num_params, num_layers

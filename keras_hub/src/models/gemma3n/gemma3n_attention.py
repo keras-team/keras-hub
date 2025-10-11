@@ -507,13 +507,13 @@ class Gemma3nAudioAttention(keras.layers.Layer):
         return keras.ops.reshape(hidden_states, permute_dims)
 
     def _extract_block_context(self, hidden_states):
+        _, t = keras.ops.shape(hidden_states)[:2]
+        num_frames = (t + self.chunk_size - 1) // self.chunk_size
         pad_left = self.max_past_horizon
         pad_right = self.max_future_horizon + self.chunk_size - 1
         hidden_states = self._pad_dim1(hidden_states, pad_left, pad_right)
-        _, t = keras.ops.shape(hidden_states)[:2]
         frame_len = self.context_size
         frame_step = self.chunk_size
-        num_frames = (t - frame_len) // frame_step + 1
 
         start_indices = keras.ops.arange(0, num_frames) * frame_step
         frame_offsets = keras.ops.arange(0, frame_len)
