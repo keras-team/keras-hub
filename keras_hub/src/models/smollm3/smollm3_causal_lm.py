@@ -292,15 +292,8 @@ class SmolLM3CausalLM(CausalLM):
         token_embeddings = self.backbone.token_embedding(token_ids)
         x = layer_intercept_fn(token_embeddings, -1)
 
-        # Get position embeddings for the full sequence
-        position_embeddings = self.backbone.rotary_embedding(x)
-
         for i, transformer_layer in enumerate(self.backbone.transformer_layers):
-            x = transformer_layer(
-                hidden_states=x,
-                position_embeddings=position_embeddings,
-                attention_mask=padding_mask,
-            )
+            x = transformer_layer(x, decoder_padding_mask=padding_mask)
             x = layer_intercept_fn(x, i)
 
         x = self.backbone.norm(x)

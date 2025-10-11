@@ -94,7 +94,7 @@ class SmolLM3Attention(layers.Layer):
         self.o_proj = layers.EinsumDense(
             equation="bquh,uhm->bqm",
             output_shape=(None, self.hidden_size),
-            name="attention_output",
+            name="o_proj",
         )
         self.o_proj.build((None, None, self.num_attention_heads, self.head_dim))
 
