@@ -52,12 +52,13 @@ class SmolLM3CausalLM(CausalLM):
 
         Args:
             token_ids: a dense int Tensor with shape `(batch_size, seq_len)`.
-                       For prefill, `seq_len` is the prompt length. For generation,
-                       `seq_len` is typically 1.
+                For prefill, `seq_len` is the prompt length. For generation,
+                `seq_len` is typically 1.
             cache: a dense float Tensor, the cache of key and value.
-                   Shape: (batch_size, num_layers, 2, max_seq_len, num_key_value_heads, head_dim)
-            cache_update_index: int, or int Tensor. The index of current inputs
-            in the whole sequence.
+                Shape: (batch_size, num_layers, 2, max_seq_len,
+                num_key_value_heads, head_dim)
+            cache_update_index: int, or int Tensor. The index of current
+                inputs in the whole sequence.
             training: Boolean, whether the call is during training or inference.
             attention_mask: Optional attention mask.
 

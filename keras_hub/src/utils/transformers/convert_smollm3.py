@@ -22,8 +22,8 @@ def convert_backbone_config(transformers_config):
         ],
         "rope_theta": transformers_config["rope_theta"],
         # partial_rotary_factor is not explicitly in config.json
-        # but is inherited from the default value in the `_compute_default_rope_parameters()`
-        # function
+        # but is inherited from the default value in the
+        # `_compute_default_rope_parameters()` function
         "partial_rotary_factor": 1.0,
         "attention_bias": transformers_config["attention_bias"],
         "attention_dropout": transformers_config["attention_dropout"],

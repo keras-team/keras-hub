@@ -120,12 +120,14 @@ class SmolLM3Attention(layers.Layer):
         )
 
     def build(self, input_shape):
-        """
-        Builds the internal Dense layers.
+        """Builds the internal Dense layers.
+
         Args:
             input_shape: A list/tuple of shapes for the inputs:
-                         [hidden_states_shape, position_embeddings_shape_tuple, attention_mask_shape]
-                         - hidden_states_shape: (batch_size, seq_len, hidden_size)
+                [hidden_states_shape, position_embeddings_shape_tuple,
+                attention_mask_shape]
+                - hidden_states_shape: (batch_size, seq_len,
+                    hidden_size)
         """
         # The input shape to the Dense layers (q_proj, k_proj, v_proj, o_proj)
         # is the same as the hidden_states input to SmolLM3Attention.
@@ -142,11 +144,11 @@ class SmolLM3Attention(layers.Layer):
         attention_mask=None,
         **kwargs,
     ):
-        """
-        Forward pass for SmolLM3Attention.
+        """Forward pass for SmolLM3Attention.
 
         Args:
-            hidden_states: Input tensor of shape (batch_size, seq_len, hidden_size).
+            hidden_states: Input tensor of shape (batch_size, seq_len,
+                hidden_size).
             position_embeddings: Tuple of (cos, sin) tensors for RoPE.
             attention_mask: Attention mask tensor.
             training: Whether the layer is in training mode.
@@ -207,9 +209,11 @@ class SmolLM3Attention(layers.Layer):
         else:
             if self_attention_cache_update_index is not None:
                 raise ValueError(
-                    "`self_attention_cache_update_index` should not be set if `self_attention_cache` is "
-                    f"`None`. Received: self_attention_cache={self_attention_cache}, "
-                    f"self_attention_cache_update_index={self_attention_cache_update_index}"
+                    "`self_attention_cache_update_index` should not be set "
+                    "if `self_attention_cache` is `None`. Received: "
+                    f"self_attention_cache={self_attention_cache}, "
+                    "self_attention_cache_update_index="
+                    f"{self_attention_cache_update_index}"
                 )
             key, value = _compute_kv_values(hidden_states)
 
@@ -244,13 +248,19 @@ class SmolLM3Attention(layers.Layer):
 
         Args:
             input_shape: A list/tuple of shapes for the inputs:
-                         [hidden_states_shape, position_embeddings_shape_tuple, attention_mask_shape]
-                         - hidden_states_shape: (batch_size, seq_len, hidden_size)
-                         - position_embeddings_shape_tuple: (cos_shape, sin_shape) where cos_shape/sin_shape is (batch_size, seq_len, head_dim)
-                         - attention_mask_shape: (batch_size, 1, seq_len, seq_len)
+                [hidden_states_shape, position_embeddings_shape_tuple,
+                attention_mask_shape]
+                - hidden_states_shape: (batch_size, seq_len,
+                  hidden_size)
+                - position_embeddings_shape_tuple: (cos_shape,
+                  sin_shape) where cos_shape/sin_shape is
+                  (batch_size, seq_len, head_dim)
+                - attention_mask_shape: (batch_size, 1, seq_len,
+                  seq_len)
 
         Returns:
-            A list of output shapes: [output_attn_output_shape, output_attn_weights_shape]
+            A list of output shapes: [output_attn_output_shape,
+            output_attn_weights_shape]
         """
         hidden_states_shape = input_shape[0]
 
@@ -506,9 +516,10 @@ class SmolLM3DecoderLayer(layers.Layer):
 
         Args:
             input_shape: The input shape to the decoder layer
-                         (batch_size, seq_len, hidden_size).
+                (batch_size, seq_len, hidden_size).
         """
-        # input_shape for SmolLM3DecoderLayer: (batch_size, seq_len, hidden_size)
+        # input_shape for SmolLM3DecoderLayer: (batch_size, seq_len,
+        # hidden_size)
         batch_size = input_shape[0]
         seq_len = input_shape[1]
 
@@ -542,8 +553,10 @@ class SmolLM3DecoderLayer(layers.Layer):
         Forward pass for SmolLM3DecoderLayer.
 
         Args:
-            hidden_states: Input tensor of shape (batch_size, seq_len, hidden_size).
-            position_embeddings: Optional tuple of (cos, sin) tensors for RoPE.
+            hidden_states: Input tensor of shape (batch_size,
+                seq_len, hidden_size).
+            position_embeddings: Optional tuple of (cos, sin)
+                tensors for RoPE.
             training: Whether the layer is in training mode.
         """
         self_attention_cache = kwargs.get("self_attention_cache", None)
@@ -648,15 +661,17 @@ class SmolLM3RotaryEmbedding(layers.Layer):
 
     def build(self, input_shape):
         """
-        Builds the layer. For SmolLM3RotaryEmbedding, this mainly ensures
-        that the parent layer's build is called.
+        Builds the layer. For SmolLM3RotaryEmbedding, this mainly
+        ensures that the parent layer's build is called.
+
         Args:
             input_shape: A list/tuple of shapes for the inputs:
-                         [x_shape, position_ids_shape]
-                         - x_shape: (batch_size, ..., head_dim)
-                         - position_ids_shape: (batch_size, seq_len)
+                [x_shape, position_ids_shape]
+                - x_shape: (batch_size, ..., head_dim)
+                - position_ids_shape: (batch_size, seq_len)
         """
-        # No internal layers to explicitly build here, as inv_freq is added in __init__
+        # No internal layers to explicitly build here, as inv_freq is
+        # added in __init__
         super().build(input_shape)
 
     def call(
@@ -677,7 +692,8 @@ class SmolLM3RotaryEmbedding(layers.Layer):
         positions = ops.arange(seq_len, dtype="float32")
         positions = positions + ops.cast(start_index, dtype="float32")
 
-        # inv_freq: (inv_freq_dim,) -> (1, inv_freq_dim, 1) -> (batch, inv_freq_dim, 1)
+        # inv_freq: (inv_freq_dim,) -> (1, inv_freq_dim, 1)
+        # -> (batch, inv_freq_dim, 1)
         inv_freq_expanded = ops.expand_dims(
             ops.expand_dims(self.inv_freq, axis=0), axis=-1
         )
@@ -685,7 +701,8 @@ class SmolLM3RotaryEmbedding(layers.Layer):
             inv_freq_expanded, (batch_size, ops.shape(self.inv_freq)[0], 1)
         )
 
-        # positions: (seq_len,) -> (1, 1, seq_len) -> (batch, 1, seq_len)
+        # positions: (seq_len,) -> (1, 1, seq_len)
+        # -> (batch, 1, seq_len)
         position_ids_expanded = ops.expand_dims(
             ops.expand_dims(positions, axis=0), axis=0
         )
@@ -693,13 +710,15 @@ class SmolLM3RotaryEmbedding(layers.Layer):
             position_ids_expanded, (batch_size, 1, seq_len)
         )
 
-        # matmul: (batch, inv_freq_dim, 1) @ (batch, 1, seq_len) -> (batch, inv_freq_dim, seq_len)
+        # matmul: (batch, inv_freq_dim, 1) @ (batch, 1, seq_len)
+        # -> (batch, inv_freq_dim, seq_len)
         freqs = ops.matmul(
             ops.cast(inv_freq_expanded, "float32"),
             ops.cast(position_ids_expanded, "float32"),
         )
 
-        # transpose: (batch, inv_freq_dim, seq_len) -> (batch, seq_len, inv_freq_dim)
+        # transpose: (batch, inv_freq_dim, seq_len) ->
+        # (batch, seq_len, inv_freq_dim)
         freqs = ops.transpose(freqs, axes=(0, 2, 1))
 
         emb = ops.concatenate((freqs, freqs), axis=-1)
