@@ -8,7 +8,7 @@ backbone_presets = {
                 "efficiency and fast inference on resource-constrained devices."
             ),
             "params": 596049920,
-            "path": "qwen-3",
+            "path": "qwen3",
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_0.6b_en/1",
     },
@@ -19,7 +19,7 @@ backbone_presets = {
                 "a good balance between performance and resource usage."
             ),
             "params": 1720574976,
-            "path": "qwen-3",
+            "path": "qwen3",
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_1.7b_en/1",
     },
@@ -31,7 +31,7 @@ backbone_presets = {
                 "variants."
             ),
             "params": 4022468096,
-            "path": "qwen-3",
+            "path": "qwen3",
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_4b_en/1",
     },
@@ -43,7 +43,7 @@ backbone_presets = {
                 "capabilities."
             ),
             "params": 8190735360,
-            "path": "qwen-3",
+            "path": "qwen3",
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_8b_en/1",
     },
@@ -54,7 +54,7 @@ backbone_presets = {
                 "advanced reasoning, coding, and multilingual capabilities."
             ),
             "params": 14768307200,
-            "path": "qwen-3",
+            "path": "qwen3",
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_14b_en/1",
     },
@@ -66,7 +66,7 @@ backbone_presets = {
                 "general language tasks."
             ),
             "params": 32762123264,
-            "path": "qwen-3",
+            "path": "qwen3",
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_32b_en/1",
     },

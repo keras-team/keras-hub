@@ -9,7 +9,7 @@ authors = [
 ]
 description = "Pretrained models for Keras."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "Apache-2.0"
 dynamic = ["version"]
 classifiers = [
@@ -27,7 +27,7 @@ classifiers = [
     "Topic :: Software Development",
 ]
 dependencies = [
-    "keras>=3.5",
+    "keras>=3.8",
     "absl-py",
     "numpy",
     "packaging",

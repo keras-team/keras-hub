@@ -81,7 +81,7 @@ Once the pull request is approved, a team member will take care of merging.
 
 ## Setting up an Environment
 
-Python 3.9 or later is required.
+Python 3.10 or later is required.
 
 Setting up your KerasHub development environment requires you to fork the
 KerasHub repository and clone it locally. With the
@@ -114,13 +114,13 @@ environement supports all backends without cuda, and each backend environement
 has cuda support.
 
 ```shell
-conda create -y -n keras-hub-cpu python=3.9
+conda create -y -n keras-hub-cpu python=3.10
 conda activate keras-hub-cpu
 pip install -r requirements.txt  # install deps
 pip install -e .  # install keras-hub
 
 for backend in "jax" "torch" "tensorflow"; do
-    conda create -y -n keras-hub-${backend} python=3.9
+    conda create -y -n keras-hub-${backend} python=3.10
     conda activate keras-hub-${backend}
     pip install -r requirements-${backend}-cuda.txt  # install deps
     pip install -e .  # install keras-hub

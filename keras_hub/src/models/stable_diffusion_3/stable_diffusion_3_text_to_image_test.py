@@ -1,5 +1,7 @@
 import keras
 import pytest
+from keras import backend
+from keras import distribution
 from keras import ops
 
 from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
@@ -34,6 +36,11 @@ class StableDiffusion3TextToImageTest(TestCase):
             clip_l_preprocessor, clip_g_preprocessor
         )
 
+        # TODO: JAX CPU doesn't support float16 in `nn.dot_product_attention`.
+        is_jax_cpu = (
+            backend.backend() == "jax"
+            and "cpu" in distribution.list_devices()[0].lower()
+        )
         self.backbone = StableDiffusion3Backbone(
             mmdit_patch_size=2,
             mmdit_hidden_dim=16 * 2,
@@ -52,10 +59,28 @@ class StableDiffusion3TextToImageTest(TestCase):
                 name="vae",
             ),
             clip_l=CLIPTextEncoder(
-                20, 64, 64, 2, 2, 128, "quick_gelu", -2, name="clip_l"
+                20,
+                64,
+                64,
+                2,
+                2,
+                128,
+                "quick_gelu",
+                -2,
+                dtype="float16" if not is_jax_cpu else None,
+                name="clip_l",
             ),
             clip_g=CLIPTextEncoder(
-                20, 128, 128, 2, 2, 256, "gelu", -2, name="clip_g"
+                20,
+                128,
+                128,
+                2,
+                2,
+                256,
+                "gelu",
+                -2,
+                dtype="float16" if not is_jax_cpu else None,
+                name="clip_g",
             ),
             image_shape=(64, 64, 3),
         )

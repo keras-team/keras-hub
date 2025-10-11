@@ -1,4 +1,6 @@
 import keras
+from keras import backend
+from keras import distribution
 from keras import layers
 from keras import ops
 
@@ -96,26 +98,10 @@ class LatentRescaling(layers.Rescaling):
         return (self.backend.cast(inputs, dtype) / scale) + offset
 
 
-class ClassifierFreeGuidanceConcatenate(layers.Layer):
-    def call(
-        self,
-        latents,
-        positive_contexts,
-        negative_contexts,
-        positive_pooled_projections,
-        negative_pooled_projections,
-        timestep,
-    ):
+class TimestepBroadcastTo(layers.Layer):
+    def call(self, latents, timestep):
         timestep = ops.broadcast_to(timestep, ops.shape(latents)[:1])
-        latents = ops.concatenate([latents, latents], axis=0)
-        contexts = ops.concatenate(
-            [positive_contexts, negative_contexts], axis=0
-        )
-        pooled_projections = ops.concatenate(
-            [positive_pooled_projections, negative_pooled_projections], axis=0
-        )
-        timesteps = ops.concatenate([timestep, timestep], axis=0)
-        return latents, contexts, pooled_projections, timesteps
+        return timestep
 
 
 class ClassifierFreeGuidance(layers.Layer):
@@ -330,8 +316,8 @@ class StableDiffusion3Backbone(Backbone):
             name="diffuser",
         )
         self.vae = vae
-        self.cfg_concat = ClassifierFreeGuidanceConcatenate(
-            dtype=dtype, name="classifier_free_guidance_concat"
+        self.timestep_broadcast_to = TimestepBroadcastTo(
+            dtype=dtype, name="timestep_broadcast_to"
         )
         self.cfg = ClassifierFreeGuidance(
             dtype=dtype, name="classifier_free_guidance"
@@ -538,6 +524,9 @@ class StableDiffusion3Backbone(Backbone):
         latents = self.vae.encode(images)
         return self.image_rescaling(latents)
 
+    def configure_scheduler(self, num_steps):
+        self.scheduler.set_sigmas(num_steps)
+
     def add_noise_step(self, latents, noises, step, num_steps):
         return self.scheduler.add_noise(latents, noises, step, num_steps)
 
@@ -562,11 +551,15 @@ class StableDiffusion3Backbone(Backbone):
 
         # Concatenation for classifier-free guidance.
         if guidance_scale is not None:
-            concated_latents, contexts, pooled_projs, timesteps = (
-                self.cfg_concat(latents, *embeddings, timestep)
+            timestep = self.timestep_broadcast_to(latents, timestep)
+            timesteps = ops.concatenate([timestep, timestep], axis=0)
+            concated_latents = ops.concatenate([latents, latents], axis=0)
+            contexts = ops.concatenate([embeddings[0], embeddings[1]], axis=0)
+            pooled_projs = ops.concatenate(
+                [embeddings[2], embeddings[3]], axis=0
             )
         else:
-            timesteps = ops.broadcast_to(timestep, ops.shape(latents)[:1])
+            timesteps = self.timestep_broadcast_to(latents, timestep)
             concated_latents = latents
             contexts = embeddings[0]
             pooled_projs = embeddings[2]
@@ -623,20 +616,26 @@ class StableDiffusion3Backbone(Backbone):
     def from_config(cls, config, custom_objects=None):
         config = config.copy()
 
-        # Propagate `dtype` to text encoders if needed.
+        # Propagate `dtype` to the VAE if needed.
         if "dtype" in config and config["dtype"] is not None:
             dtype_config = config["dtype"]
             if "dtype" not in config["vae"]["config"]:
                 config["vae"]["config"]["dtype"] = dtype_config
-            if "dtype" not in config["clip_l"]["config"]:
-                config["clip_l"]["config"]["dtype"] = dtype_config
-            if "dtype" not in config["clip_g"]["config"]:
-                config["clip_g"]["config"]["dtype"] = dtype_config
+
+        # Text encoders default to float16 dtype if not specified.
+        # TODO: JAX CPU doesn't support float16 in `nn.dot_product_attention`.
+        is_jax_cpu = (
+            backend.backend() == "jax"
+            and "cpu" in distribution.list_devices()[0].lower()
+        )
+        for text_encoder in ("clip_l", "clip_g", "t5"):
             if (
-                config["t5"] is not None
-                and "dtype" not in config["t5"]["config"]
+                text_encoder in config
+                and config[text_encoder] is not None
+                and "dtype" not in config[text_encoder]["config"]
+                and not is_jax_cpu
             ):
-                config["t5"]["config"]["dtype"] = dtype_config
+                config[text_encoder]["config"]["dtype"] = "float16"
 
         # We expect `vae`, `clip_l`, `clip_g` and/or `t5` to be instantiated.
         config["vae"] = layers.deserialize(
