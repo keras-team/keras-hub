@@ -10,7 +10,7 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
 from keras_hub.src.models.smollm3.smollm3_utils import rope_init
-from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
+from keras_hub.src.models.smollm3.smollm3_utils import apply_rotary_pos_emb
 import math
 
 
@@ -39,6 +39,9 @@ class SmolLM3Attention(layers.Layer):
         rope_layer_enabled_list: list[bool],
         layer_types: list[str],
         layer_idx: int,
+        max_position_embeddings: int = 2048,
+        rope_theta: float = 10000.0,
+        partial_rotary_factor: float = 1.0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -50,19 +53,17 @@ class SmolLM3Attention(layers.Layer):
         self.attention_dropout = attention_dropout
         self.rope_layer_enabled_list = rope_layer_enabled_list
         self.layer_types = layer_types
+        self.max_position_embeddings = max_position_embeddings
+        self.rope_theta = rope_theta
+        self.partial_rotary_factor = partial_rotary_factor
+
         self._dot_product_equation = "bquh,bkuh->buqk"
         self._combine_equation = "buqk,bkuh->bquh"
 
         self.head_dim = hidden_size // self.num_attention_heads
         self._inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
 
-        self.rotary_embedding = RotaryEmbedding(
-            max_wavelength=5000000.0,
-        )
-
         self.layer_idx = layer_idx
-
-        self.head_dim = self.hidden_size // self.num_attention_heads
         self.num_key_value_groups = (
             self.num_attention_heads // self.num_key_value_heads
         )
@@ -96,6 +97,15 @@ class SmolLM3Attention(layers.Layer):
             if self.layer_idx < len(self.rope_layer_enabled_list)
             else True
         )  # Default to True if index out of bounds
+
+        self.rotary_embedding = SmolLM3RotaryEmbedding(
+            hidden_size=self.hidden_size,
+            num_attention_heads=self.num_attention_heads,
+            max_position_embeddings=self.max_position_embeddings,
+            rope_theta=self.rope_theta,
+            partial_rotary_factor=self.partial_rotary_factor,
+            name="rotary_emb",
+        )
 
         self._softmax = layers.Softmax(
             axis=-1,
@@ -172,7 +182,15 @@ class SmolLM3Attention(layers.Layer):
                 value = value_cache
             else:
                 key_update, value_update = _compute_kv_values(hidden_states)
-                start = [0, self_attention_cache_update_index, 0, 0]
+
+                # Apply RoPE to key_update BEFORE caching
+                if self.use_rope:
+                    cos, sin = self.rotary_embedding(query, start_index=start_index)
+                    query_rope, key_update = apply_rotary_pos_emb(query, key_update, cos, sin, expansion_axis=2)
+                    query = query_rope
+
+                start = (0, self_attention_cache_update_index, 0, 0)
+
                 key = ops.slice_update(key_cache, start, key_update)
                 value = ops.slice_update(
                     value_cache, start, value_update
@@ -189,14 +207,13 @@ class SmolLM3Attention(layers.Layer):
                 )
             key, value = _compute_kv_values(hidden_states)
 
-        if self.use_rope:
-            query = self.rotary_embedding(query, start_index=start_index)
-            key = self.rotary_embedding(key, start_index=start_index)
+            # Apply RoPE when not using cache
+            if self.use_rope:
+                cos, sin = self.rotary_embedding(query, start_index=start_index)
+                query, key = apply_rotary_pos_emb(query, key, cos, sin, expansion_axis=2)
 
-        print('pre', key.shape, value.shape)
         key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
         value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
-        print('post', key.shape, value.shape)
         
         attn_output = self._compute_attention(
             query,
@@ -400,6 +417,9 @@ class SmolLM3DecoderLayer(layers.Layer):
         intermediate_size: int,
         mlp_bias: bool,
         layer_norm_epsilon: float,
+        max_position_embeddings: int = 2048,
+        rope_theta: float = 10000.0,
+        partial_rotary_factor: float = 1.0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -415,6 +435,9 @@ class SmolLM3DecoderLayer(layers.Layer):
             rope_layer_enabled_list=rope_layer_enabled_list,
             layer_types=layer_types,
             layer_idx=layer_idx,
+            max_position_embeddings=max_position_embeddings,
+            rope_theta=rope_theta,
+            partial_rotary_factor=partial_rotary_factor,
             name="self_attn",
         )
 
@@ -641,26 +664,34 @@ class SmolLM3RotaryEmbedding(layers.Layer):
                Shape can vary, but the last dimension is head_dim.
             position_ids: Tensor of position IDs of shape (batch_size, seq_len).
         """
-        inv_freq_expanded = ops.expand_dims(
-            ops.expand_dims(self.inv_freq, axis=0), axis=-1
-        )
-        
         batch_size = ops.shape(x)[0]
         seq_len = ops.shape(x)[1]
         positions = ops.arange(seq_len, dtype="float32")
         positions = positions + ops.cast(start_index, dtype="float32")
 
+        # inv_freq: (inv_freq_dim,) -> (1, inv_freq_dim, 1) -> (batch, inv_freq_dim, 1)
+        inv_freq_expanded = ops.expand_dims(
+            ops.expand_dims(self.inv_freq, axis=0), axis=-1
+        )
         inv_freq_expanded = ops.broadcast_to(
             inv_freq_expanded, (batch_size, ops.shape(self.inv_freq)[0], 1)
         )
 
-        position_ids_expanded = ops.expand_dims(positions, axis=1).T
+        # positions: (seq_len,) -> (1, 1, seq_len) -> (batch, 1, seq_len)
+        position_ids_expanded = ops.expand_dims(
+            ops.expand_dims(positions, axis=0), axis=0
+        )
+        position_ids_expanded = ops.broadcast_to(
+            position_ids_expanded, (batch_size, 1, seq_len)
+        )
 
+        # matmul: (batch, inv_freq_dim, 1) @ (batch, 1, seq_len) -> (batch, inv_freq_dim, seq_len)
         freqs = ops.matmul(
             ops.cast(inv_freq_expanded, "float32"),
             ops.cast(position_ids_expanded, "float32"),
         )
 
+        # transpose: (batch, inv_freq_dim, seq_len) -> (batch, seq_len, inv_freq_dim)
         freqs = ops.transpose(freqs, axes=(0, 2, 1))
 
         emb = ops.concatenate((freqs, freqs), axis=-1)

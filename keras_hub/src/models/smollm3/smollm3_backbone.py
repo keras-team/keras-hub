@@ -7,7 +7,6 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
 )
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.smollm3.smollm3_layers import SmolLM3DecoderLayer
-from keras_hub.src.models.smollm3.smollm3_layers import SmolLM3RotaryEmbedding
 
 
 @keras_hub_export(
@@ -91,6 +90,9 @@ class SmolLM3Backbone(Backbone):
                 intermediate_size=intermediate_dim,
                 mlp_bias=mlp_bias,
                 layer_norm_epsilon=layer_norm_epsilon,
+                max_position_embeddings=max_position_embeddings,
+                rope_theta=rope_theta,
+                partial_rotary_factor=partial_rotary_factor,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)

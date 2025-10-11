@@ -27,7 +27,10 @@ def convert_backbone_config(transformers_config):
         "partial_rotary_factor": 1.0,
         "attention_bias": transformers_config["attention_bias"],
         "attention_dropout": transformers_config["attention_dropout"],
-        "rope_layer_enabled_list": transformers_config["no_rope_layers"],
+        # Despite the name, no_rope_layers: 1 = HAS RoPE, 0 = NO RoPE
+        "rope_layer_enabled_list": [
+            bool(x) for x in transformers_config["no_rope_layers"]
+        ],
         "layer_types": transformers_config["layer_types"],
         "mlp_bias": transformers_config["mlp_bias"]
     }
