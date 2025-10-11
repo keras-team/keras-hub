@@ -71,7 +71,7 @@ class SmolLM3CausalLM(CausalLM):
 
         # Each decoder layer has a cache; we update them separately.
         updated_cache = []
-        
+
         for i in range(self.backbone.num_layers):
             current_cache = cache[:, i, ...]
             x, next_cache = self.backbone.transformer_layers[i](

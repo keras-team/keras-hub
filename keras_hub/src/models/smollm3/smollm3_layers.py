@@ -1,3 +1,5 @@
+import math
+
 from keras import activations
 from keras import initializers
 from keras import layers
@@ -9,39 +11,43 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
-from keras_hub.src.models.smollm3.smollm3_utils import rope_init
 from keras_hub.src.models.smollm3.smollm3_utils import apply_rotary_pos_emb
-import math
+from keras_hub.src.models.smollm3.smollm3_utils import rope_init
 
 
 class SmolLM3Attention(layers.Layer):
-    """
-    Multi-head attention layer for SmolLM3 model.
+    """Multi-head attention layer for SmolLM3 model.
 
     Args:
-        hidden_size: The hidden size of the attention layer.
-        num_attention_heads: The number of attention heads.
-        num_key_value_heads: The number of key-value heads.
-        attention_bias: Whether to use bias in attention projections.
-        attention_dropout: Dropout rate for attention weights.
-        rope_layer_enabled_list: List indicating if RoPE is enabled for each layer.
-        layer_types: List of layer types.
-        layer_idx: Index of the current layer.
+        hidden_size: int. The hidden size of the attention layer.
+        num_attention_heads: int. The number of attention heads.
+        num_key_value_heads: int. The number of key-value heads.
+        attention_bias: bool. Whether to use bias in attention projections.
+        attention_dropout: float. Dropout rate for attention weights.
+        rope_layer_enabled_list: list of bool. List indicating if RoPE is
+            enabled for each layer.
+        layer_types: list of str. List of layer types.
+        layer_idx: int. Index of the current layer.
+        max_position_embeddings: int. Maximum sequence length for position
+            embeddings. Defaults to 2048.
+        rope_theta: float. The theta value for RoPE. Defaults to 10000.0.
+        partial_rotary_factor: float. The factor for partial rotary embedding.
+            Defaults to 1.0.
     """
 
     def __init__(
         self,
-        hidden_size: int,
-        num_attention_heads: int,
-        num_key_value_heads: int,
-        attention_bias: bool,
-        attention_dropout: float,
-        rope_layer_enabled_list: list[bool],
-        layer_types: list[str],
-        layer_idx: int,
-        max_position_embeddings: int = 2048,
-        rope_theta: float = 10000.0,
-        partial_rotary_factor: float = 1.0,
+        hidden_size,
+        num_attention_heads,
+        num_key_value_heads,
+        attention_bias,
+        attention_dropout,
+        rope_layer_enabled_list,
+        layer_types,
+        layer_idx,
+        max_position_embeddings=2048,
+        rope_theta=10000.0,
+        partial_rotary_factor=1.0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -151,7 +157,9 @@ class SmolLM3Attention(layers.Layer):
             "self_attention_cache_update_index", None
         )
         start_index = (
-            self_attention_cache_update_index if self_attention_cache_update_index is not None else 0
+            self_attention_cache_update_index
+            if self_attention_cache_update_index is not None
+            else 0
         )
 
         input_shape = ops.shape(hidden_states)[:-1]
@@ -167,9 +175,7 @@ class SmolLM3Attention(layers.Layer):
             )
 
             key = ops.reshape(self.k_proj(x_input), kv_hidden_shape)
-            value = ops.reshape(
-                self.v_proj(x_input), kv_hidden_shape
-            )
+            value = ops.reshape(self.v_proj(x_input), kv_hidden_shape)
 
             return key, value
 
@@ -185,19 +191,19 @@ class SmolLM3Attention(layers.Layer):
 
                 # Apply RoPE to key_update BEFORE caching
                 if self.use_rope:
-                    cos, sin = self.rotary_embedding(query, start_index=start_index)
-                    query_rope, key_update = apply_rotary_pos_emb(query, key_update, cos, sin, expansion_axis=2)
+                    cos, sin = self.rotary_embedding(
+                        query, start_index=start_index
+                    )
+                    query_rope, key_update = apply_rotary_pos_emb(
+                        query, key_update, cos, sin, expansion_axis=2
+                    )
                     query = query_rope
 
                 start = (0, self_attention_cache_update_index, 0, 0)
 
                 key = ops.slice_update(key_cache, start, key_update)
-                value = ops.slice_update(
-                    value_cache, start, value_update
-                )
-                self_attention_cache = ops.stack(
-                    (key, value), axis=1
-                )
+                value = ops.slice_update(value_cache, start, value_update)
+                self_attention_cache = ops.stack((key, value), axis=1)
         else:
             if self_attention_cache_update_index is not None:
                 raise ValueError(
@@ -210,11 +216,13 @@ class SmolLM3Attention(layers.Layer):
             # Apply RoPE when not using cache
             if self.use_rope:
                 cos, sin = self.rotary_embedding(query, start_index=start_index)
-                query, key = apply_rotary_pos_emb(query, key, cos, sin, expansion_axis=2)
+                query, key = apply_rotary_pos_emb(
+                    query, key, cos, sin, expansion_axis=2
+                )
 
         key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
         value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
-        
+
         attn_output = self._compute_attention(
             query,
             key,
@@ -259,8 +267,6 @@ class SmolLM3Attention(layers.Layer):
         )
 
         return [output_attn_output_shape, output_attn_weights_shape]
-    
-
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
         """Applies softmax with optional masking.
@@ -277,7 +283,7 @@ class SmolLM3Attention(layers.Layer):
                 attention_scores, attention_mask[:, None, :, :]
             )
         return self._softmax(attention_scores)
-    
+
     def _compute_attention(
         self, query, key, value, attention_mask=None, cache_update_index=None
     ):
@@ -313,18 +319,15 @@ class SmolLM3Attention(layers.Layer):
 
 
 class SmolLM3MLP(layers.Layer):
-    """
-    Multi-layer perceptron (MLP) block for SmolLM3 model.
+    """Multi-layer perceptron (MLP) block for SmolLM3 model.
 
     Args:
-        hidden_size: The hidden size of the MLP.
-        intermediate_size: The intermediate size of the MLP.
-        mlp_bias: Whether to use bias in MLP dense layers.
+        hidden_size: int. The hidden size of the MLP.
+        intermediate_size: int. The intermediate size of the MLP.
+        mlp_bias: bool. Whether to use bias in MLP dense layers.
     """
 
-    def __init__(
-        self, hidden_size: int, intermediate_size: int, mlp_bias: bool, **kwargs
-    ):
+    def __init__(self, hidden_size, intermediate_size, mlp_bias, **kwargs):
         super().__init__(**kwargs)
         self.hidden_size = hidden_size
         self.intermediate_size = intermediate_size
@@ -387,39 +390,44 @@ class SmolLM3MLP(layers.Layer):
 
 
 class SmolLM3DecoderLayer(layers.Layer):
-    """
-    Decoder layer for SmolLM3 model, combining self-attention and MLP.
+    """Decoder layer for SmolLM3 model, combining self-attention and MLP.
 
     Args:
-        hidden_size: The hidden size of the layer.
-        num_attention_heads: The number of attention heads.
-        num_key_value_heads: The number of key-value heads.
-        attention_bias: Whether to use bias in attention projections.
-        attention_dropout: Dropout rate for attention weights.
-        rope_layer_enabled_list: List indicating if RoPE is enabled for each layer.
-        layer_types: List of layer types.
-        layer_idx: Index of the current layer.
-        intermediate_size: The intermediate size of the MLP.
-        mlp_bias: Whether to use bias in MLP dense layers.
-        layer_norm_epsilon: Epsilon for RMSNormalization.
+        hidden_size: int. The hidden size of the layer.
+        num_attention_heads: int. The number of attention heads.
+        num_key_value_heads: int. The number of key-value heads.
+        attention_bias: bool. Whether to use bias in attention projections.
+        attention_dropout: float. Dropout rate for attention weights.
+        rope_layer_enabled_list: list of bool. List indicating if RoPE is
+            enabled for each layer.
+        layer_types: list of str. List of layer types.
+        layer_idx: int. Index of the current layer.
+        intermediate_size: int. The intermediate size of the MLP.
+        mlp_bias: bool. Whether to use bias in MLP dense layers.
+        layer_norm_epsilon: float. Epsilon for RMSNormalization.
+        max_position_embeddings: int. Maximum sequence length for position
+            embeddings. Defaults to 2048.
+        rope_theta: float. The theta value for RoPE. Defaults to 10000.0.
+        partial_rotary_factor: float. The factor for partial rotary embedding.
+            Defaults to 1.0.
     """
 
     def __init__(
         self,
-        hidden_size: int,
-        num_attention_heads: int,
-        num_key_value_heads: int,
-        attention_bias: bool,
-        attention_dropout: float,
-        rope_layer_enabled_list: list[bool],
-        layer_types: list[str],
-        layer_idx: int,
-        intermediate_size: int,
-        mlp_bias: bool,
-        layer_norm_epsilon: float,
-        max_position_embeddings: int = 2048,
-        rope_theta: float = 10000.0,
-        partial_rotary_factor: float = 1.0,
+        hidden_size,
+        num_attention_heads,
+        num_key_value_heads,
+        attention_bias,
+        attention_dropout,
+        rope_layer_enabled_list,
+        layer_types,
+        layer_idx,
+        intermediate_size,
+        mlp_bias,
+        layer_norm_epsilon,
+        max_position_embeddings=2048,
+        rope_theta=10000.0,
+        partial_rotary_factor=1.0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -594,24 +602,24 @@ class SmolLM3DecoderLayer(layers.Layer):
 
 
 class SmolLM3RotaryEmbedding(layers.Layer):
-    """
-    Rotary Position Embedding (RoPE) layer for SmolLM3 model.
+    """Rotary Position Embedding (RoPE) layer for SmolLM3 model.
 
     Args:
-        hidden_size: The hidden size of the model.
-        num_attention_heads: The number of attention heads.
-        max_position_embeddings: The maximum sequence length for position embeddings.
-        rope_theta: The theta value for RoPE.
-        partial_rotary_factor: The factor for partial rotary embedding.
+        hidden_size: int. The hidden size of the model.
+        num_attention_heads: int. The number of attention heads.
+        max_position_embeddings: int. The maximum sequence length for position
+            embeddings.
+        rope_theta: float. The theta value for RoPE.
+        partial_rotary_factor: float. The factor for partial rotary embedding.
     """
 
     def __init__(
         self,
-        hidden_size: int,
-        num_attention_heads: int,
-        max_position_embeddings: int,
-        rope_theta: float,
-        partial_rotary_factor: float,
+        hidden_size,
+        num_attention_heads,
+        max_position_embeddings,
+        rope_theta,
+        partial_rotary_factor,
         **kwargs,
     ):
         super().__init__(**kwargs)

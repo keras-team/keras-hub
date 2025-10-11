@@ -1,6 +1,4 @@
-from keras import layers
 from keras import ops
-from keras import random
 
 
 def rotate_half(x):
@@ -36,7 +34,18 @@ def repeat_kv(hidden_states, n_rep):
     )
 
 
-def rope_init(rope_theta: float, partial_rotary_factor: float, head_dim: int):
+def rope_init(rope_theta, partial_rotary_factor, head_dim):
+    """Initialize RoPE (Rotary Position Embedding) parameters.
+
+    Args:
+        rope_theta: float. The theta value for RoPE.
+        partial_rotary_factor: float. The factor for partial rotary embedding.
+        head_dim: int. The dimension of each attention head.
+
+    Returns:
+        A tuple of (inv_freq, attention_scaling) where inv_freq is the inverse
+        frequency tensor and attention_scaling is the scaling factor.
+    """
     base = rope_theta
     dim = int(head_dim * partial_rotary_factor)
 

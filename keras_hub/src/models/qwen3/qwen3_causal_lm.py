@@ -193,7 +193,6 @@ class Qwen3CausalLM(CausalLM):
                 self_attention_cache=current_cache,
                 self_attention_cache_update_index=cache_update_index,
             )
-            #print(next_cache.shape)
             updated_cache.append(next_cache)
         cache = ops.stack(updated_cache, axis=1)
         hidden_states = x = self.backbone.layer_norm(x)

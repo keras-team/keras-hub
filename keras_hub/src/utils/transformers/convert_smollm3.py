@@ -32,7 +32,7 @@ def convert_backbone_config(transformers_config):
             bool(x) for x in transformers_config["no_rope_layers"]
         ],
         "layer_types": transformers_config["layer_types"],
-        "mlp_bias": transformers_config["mlp_bias"]
+        "mlp_bias": transformers_config["mlp_bias"],
     }
 
 
