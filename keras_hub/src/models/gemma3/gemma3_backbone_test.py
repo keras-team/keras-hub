@@ -6,6 +6,7 @@ from absl.testing import parameterized
 from keras import ops
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3EmbeddingModel
 from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
     Gemma3VisionEncoder,
 )
@@ -193,3 +194,96 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
                 if "_text" in preset or "1b" in preset
                 else self.input_data,
             )
+
+
+class Gemma3EmbeddingModelTest(TestCase, parameterized.TestCase):
+    def setUp(self):
+        self.batch_size = 2
+        self.vocabulary_size = 256
+        self.text_sequence_length = 64
+        self.hidden_dim = 8
+        self.embedding_dim = 16
+
+        self.backbone = Gemma3Backbone(
+            vocabulary_size=self.vocabulary_size,
+            image_size=16,
+            num_layers=2,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=self.hidden_dim,
+            intermediate_dim=32,
+            head_dim=4,
+            vision_encoder=None,
+        )
+
+        self.init_kwargs = {
+            "backbone": self.backbone,
+            "embedding_dim": self.embedding_dim,
+        }
+
+        dummy_text_token_ids = np.random.randint(
+            0,
+            self.vocabulary_size,
+            (self.batch_size, self.text_sequence_length),
+        )
+        padding_mask = np.ones(
+            (self.batch_size, self.text_sequence_length), dtype="int32"
+        )
+        padding_mask[0, -10:] = 0
+        padding_mask[1, -5:] = 0
+
+        self.input_data = {
+            "token_ids": dummy_text_token_ids,
+            "padding_mask": padding_mask,
+        }
+
+    def test_model_basics(self):
+        """Test the model's forward pass and output shape."""
+        model = Gemma3EmbeddingModel(**self.init_kwargs)
+        output = model(self.input_data)
+        expected_output_shape = (self.batch_size, self.embedding_dim)
+        self.assertEqual(output.shape, expected_output_shape)
+
+    def test_architecture_characteristics(self):
+        """Test parameter and layer counts."""
+        model = Gemma3EmbeddingModel(**self.init_kwargs)
+
+        model(self.input_data)
+
+        backbone_params = self.backbone.count_params()
+        projection_params = (
+            self.hidden_dim * self.embedding_dim
+        ) + self.embedding_dim
+        expected_params = backbone_params + projection_params
+
+        expected_layers = 3
+
+        self.assertEqual(model.count_params(), expected_params)
+        self.assertEqual(len(model.layers), expected_layers)
+
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=Gemma3EmbeddingModel,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    @pytest.mark.kaggle_key_required
+    @pytest.mark.extra_large
+    def test_build_from_preset_backbone(self):
+        backbone = Gemma3Backbone.from_preset("gemma3_instruct_1b_text")
+        model = Gemma3EmbeddingModel(
+            backbone=backbone,
+            embedding_dim=768,
+        )
+
+        input_data = {
+            "token_ids": ops.array([[651, 4320, 8426, 25341, 235265]]),
+            "padding_mask": ops.ones((1, 5), dtype="int32"),
+        }
+
+        outputs = model(input_data)
+
+        self.assertEqual(outputs.shape, (1, 768))
+        norm = ops.vector_norm(outputs, axis=1)
+        self.assertGreater(norm[0], 0)
