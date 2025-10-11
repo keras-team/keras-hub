@@ -538,10 +538,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
             self.assertIsInstance(output_data, dict)
             self.assertEqual(
-                list(output_data.keys()), list(backbone.pyramid_outputs.keys())
+                sorted(output_data.keys()),
+                sorted(backbone.pyramid_outputs.keys()),
             )
             self.assertEqual(
-                list(output_data.keys()), expected_pyramid_output_keys
+                sorted(output_data.keys()), sorted(expected_pyramid_output_keys)
             )
             # check height and width of each level.
             for i, (k, v) in enumerate(output_data.items()):

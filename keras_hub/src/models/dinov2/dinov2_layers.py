@@ -1,3 +1,4 @@
+import keras
 from keras import backend
 from keras import config
 from keras import initializers
@@ -289,6 +290,10 @@ class DINOV2Embedding(layers.Layer):
                 # 1 is for cls token.
                 output_shape[1] = 1 + self.num_register_tokens + patch_num**2
         return output_shape
+
+    def compute_output_spec(self, inputs):
+        output_shape = self.compute_output_shape(inputs.shape)
+        return keras.KerasTensor(output_shape, dtype=self.compute_dtype)
 
     @staticmethod
     def _interpolate_position_embeddings(
@@ -861,10 +866,12 @@ class DINOV2Encoder(layers.Layer):
             input_shape = layer.compute_output_shape(input_shape)
 
     def call(self, inputs, training=None):
+        pyramid_outputs = {}
         x = inputs
-        for layer in self.layers:
+        for layer_index, layer in enumerate(self.layers, start=1):
             x = layer(x, training=training)
-        return x
+            pyramid_outputs[f"stage{str(layer_index)}"] = x
+        return x, pyramid_outputs
 
     def get_config(self):
         config = super().get_config()
@@ -883,4 +890,7 @@ class DINOV2Encoder(layers.Layer):
         return config
 
     def compute_output_shape(self, input_shape):
-        return input_shape
+        pyramid_outputs = {}
+        for layer_index in range(1, len(self.layers) + 1):
+            pyramid_outputs[f"stage{str(layer_index)}"] = input_shape
+        return input_shape, pyramid_outputs
