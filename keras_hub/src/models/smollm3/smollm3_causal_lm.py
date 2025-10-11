@@ -85,14 +85,10 @@ class SmolLM3CausalLM(CausalLM):
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
-    def _build_cache(self, token_ids, cache_max_length):
-        """Build an empty cache for use with `call_with_cache()`.
-
-        Args:
-            token_ids: Prompt tokens to seed the cache with
-            cache_max_length: Maximum length for the cache (should be max generation length)
-        """
+    def _build_cache(self, token_ids):
+        """Build an empty cache for use with `call_with_cache()`."""
         batch_size = ops.shape(token_ids)[0]
+        max_length = ops.shape(token_ids)[1]
         num_layers = self.backbone.num_layers
         num_key_value_heads = self.backbone.num_key_value_heads
         head_dim = self.backbone.hidden_dim // self.backbone.num_attention_heads
@@ -100,7 +96,7 @@ class SmolLM3CausalLM(CausalLM):
             batch_size,
             num_layers,
             2,
-            cache_max_length,
+            max_length,
             num_key_value_heads,
             head_dim,
         ]
@@ -130,16 +126,11 @@ class SmolLM3CausalLM(CausalLM):
         """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
 
+        hidden_states, cache = self._build_cache(token_ids)
         # Compute the lengths of all user inputted tokens ids.
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         # Start at the first index that has no user inputted id.
         index = ops.min(row_lengths)
-
-        # Only pass actual prompt tokens to _build_cache, not padding
-        # But cache must be sized for the full max_length
-        max_length = ops.shape(token_ids)[1]
-        prompt_token_ids = token_ids[:, :index]
-        hidden_states, cache = self._build_cache(prompt_token_ids, max_length)
 
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.
