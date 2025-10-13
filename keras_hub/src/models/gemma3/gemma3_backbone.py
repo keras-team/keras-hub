@@ -12,6 +12,7 @@ from keras_hub.src.models.gemma3.gemma3_decoder_block import Gemma3DecoderBlock
 from keras_hub.src.models.gemma3.gemma3_interleave_embeddings import (
     Gemma3InterleaveEmbeddings,
 )
+from keras_hub.src.models.gemma3.gemma3_mean_pooling import MeanPooling
 
 
 @keras_hub_export("keras_hub.models.Gemma3Backbone")
@@ -27,6 +28,9 @@ class Gemma3Backbone(Backbone):
 
     For a higher-level object for text-generation, see
     `keras_hub.models.Gemma3CausalLM`.
+
+    This backbone can also function as an end-to-end embedding model by
+    setting the `pooling_mode` argument.
 
     The default constructor gives a fully customizable, randomly initialized
     Gemma3 model with any vision encoder, number of heads, embedding dimensions,
@@ -71,6 +75,12 @@ class Gemma3Backbone(Backbone):
             in all transformer blocks. Defaults to `1e-6`.
         dropout: float. Dropout probability for the Transformer decoder blocks.
             Defaults to `0`.
+        pooling_mode (str, optional): The pooling mode for the final output.
+            If set to `"mean"`, the model will add a mean pooling and a dense
+            projection layer to output a fixed-size embedding. In this case,
+            `embedding_dim` must also be set. Defaults to `None`.
+        embedding_dim (int, optional): The dimension of the final projected
+            embedding. Required if `pooling_mode` is `"mean"`. Defaults to `None`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
@@ -199,6 +209,8 @@ class Gemma3Backbone(Backbone):
         layer_norm_epsilon=1e-6,
         use_bidirectional_attention=False,
         dropout=0,
+        pooling_mode=None,
+        embedding_dim=None,
         dtype=None,
         **kwargs,
     ):
@@ -320,6 +332,32 @@ class Gemma3Backbone(Backbone):
             )
         sequence_output = self.layer_norm(x)
 
+        if pooling_mode is not None:
+            if pooling_mode != "mean":
+                raise ValueError(f"Unknown pooling mode: {pooling_mode}")
+            if embedding_dim is None:
+                raise ValueError(
+                    "`embedding_dim` must be specified when `pooling_mode` is set."
+                )
+            
+            pooled_output = MeanPooling(dtype=dtype, name="mean_pooling")(
+                sequence_output=sequence_output,
+                padding_mask=padding_mask_input,
+            )
+            
+            pooled_output = layers.Dense(
+                embedding_dim,
+                dtype=dtype,
+                name="embedding_projection",
+            )(pooled_output)
+            
+            outputs = {
+                "sequence_output": sequence_output,
+                "pooled_output": pooled_output,
+            }
+        else:
+            outputs = sequence_output
+
         inputs = {
             "token_ids": token_id_input,
             "padding_mask": padding_mask_input,
@@ -362,7 +400,9 @@ class Gemma3Backbone(Backbone):
         self.use_bidirectional_attention = use_bidirectional_attention
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
-
+        self.pooling_mode = pooling_mode
+        self.embedding_dim = embedding_dim
+        
         # Keep `num_vision_tokens_per_image` as a backbone property for easy
         # access.
         if not text_only_model:
@@ -402,6 +442,8 @@ class Gemma3Backbone(Backbone):
                 "use_bidirectional_attention": self.use_bidirectional_attention,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
+                "pooling_mode": self.pooling_mode,
+                "embedding_dim": self.embedding_dim,
             }
         )
         return config
@@ -425,129 +467,3 @@ class Gemma3Backbone(Backbone):
         )
 
         return super().from_config(config)
-
-
-class MeanPooling(layers.Layer):
-    """
-    Mean pooling layer that computes the average of token embeddings,
-    respecting a padding mask.
-
-    This layer correctly handles variable-length sequences by ignoring
-    padded tokens in the mean calculation.
-
-    Call arguments:
-        inputs: A tuple of `(sequence_output, padding_mask)`.
-            `sequence_output` is a tensor of shape `(batch_size, seq_len,
-            hidden_dim)`. `padding_mask` is a tensor of shape `(batch_size,
-            seq_len)` with `1` for valid tokens and `0` for padded tokens.
-
-    Returns:
-        A tensor of shape `(batch_size, hidden_dim)`.
-
-    Example:
-    ```python
-    sequence_output = np.random.rand(2, 4, 8).astype("float32")
-    padding_mask = np.array([[1, 1, 1, 0], [1, 1, 0, 0]])
-    mean_pool_layer = MeanPooling()
-    pooled = mean_pool_layer((sequence_output, padding_mask))
-    # pooled.shape -> (2, 8)
-    ```
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.supports_masking = True
-
-    def call(self, inputs):
-        sequence_output, padding_mask = inputs
-
-        mask = ops.expand_dims(
-            ops.cast(padding_mask, sequence_output.dtype), axis=-1
-        )
-        masked_output = sequence_output * mask
-        sum_embeddings = ops.sum(masked_output, axis=1)
-        num_tokens = ops.sum(
-            ops.cast(padding_mask, sequence_output.dtype), axis=1
-        )
-        num_tokens = ops.expand_dims(num_tokens, axis=1)
-
-        num_tokens = ops.maximum(num_tokens, 1e-9)
-
-        mean_embeddings = sum_embeddings / num_tokens
-        return mean_embeddings
-
-    def compute_output_shape(self, input_shape):
-        sequence_output_shape, padding_mask_shape = input_shape
-        return (sequence_output_shape[0], sequence_output_shape[2])
-
-    def get_config(self):
-        return super().get_config()
-
-
-@keras_hub_export("keras_hub.models.Gemma3Embedding")
-class Gemma3EmbeddingModel(keras.Model):
-    """An end-to-end Gemma3 model for embedding tasks.
-
-    This model takes token ids as input and returns a fixed-size embedding
-    vector for the input sequence. It uses a `Gemma3Backbone` to generate
-    contextualized token embeddings, a `MeanPooling` layer to pool them into a
-    single vector, and a final `Dense` layer to project to the desired
-    embedding dimension.
-
-    This model can be loaded with a pre-trained `Gemma3Backbone` and used for
-    tasks like semantic similarity, retrieval, or as a feature extractor.
-
-    Args:
-        backbone: A `keras_hub.models.Gemma3Backbone` instance.
-        embedding_dim (int): The dimension of the output embedding.
-
-    Example:
-    ```python
-    # backbone = keras_hub.models.Gemma3Backbone.from_preset(
-    #     "gemma3_instruct_1b"
-    # )
-    # embedding_model = keras_hub.models.Gemma3EmbeddingModel(
-    #     backbone=backbone,
-    #     embedding_dim=768,
-    # )
-    # input_data = {
-    #     "token_ids": np.array([[651, 4320, 8426, 25341, 235265]]),
-    #     "padding_mask": np.ones((1, 5), dtype="int32"),
-    # }
-    # embeddings = embedding_model.predict(input_data)
-    ```
-    """
-
-    def __init__(self, backbone, embedding_dim, **kwargs):
-        super().__init__(**kwargs)
-        self.backbone = backbone
-        self.pooling_layer = MeanPooling(
-            dtype=backbone.dtype, name="mean_pooling"
-        )
-        self.projection_layer = layers.Dense(
-            embedding_dim, dtype=backbone.dtype, name="embedding_projection"
-        )
-        self.embedding_dim = embedding_dim
-
-    def call(self, inputs):
-        sequence_output = self.backbone(inputs)
-        padding_mask = inputs["padding_mask"]
-
-        pooled_output = self.pooling_layer((sequence_output, padding_mask))
-        embedding = self.projection_layer(pooled_output)
-        return embedding
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "backbone": layers.serialize(self.backbone),
-                "embedding_dim": self.embedding_dim,
-            }
-        )
-        return config
-
-    @classmethod
-    def from_config(cls, config):
-        config["backbone"] = layers.deserialize(config["backbone"])
-        return cls(**config)
