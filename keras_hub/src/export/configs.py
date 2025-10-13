@@ -304,44 +304,6 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
             ),
         }
 
-    def get_dummy_inputs(self, image_size=None):
-        """Generate dummy inputs for image classifier models.
-
-        Args:
-            image_size: Optional image size. If None, inferred from model.
-
-        Returns:
-            Dict[str, Any]: Dictionary of dummy inputs
-        """
-        if image_size is None:
-            # Get image size using same logic as get_input_signature
-            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-                if hasattr(self.model.preprocessor, "image_size"):
-                    image_size = self.model.preprocessor.image_size
-            if (
-                image_size is None
-                and hasattr(self.model, "inputs")
-                and self.model.inputs
-            ):
-                input_shape = self.model.inputs[0].shape
-                if (
-                    len(input_shape) == 4
-                    and input_shape[1] is not None
-                    and input_shape[2] is not None
-                ):
-                    image_size = (input_shape[1], input_shape[2])
-
-        if isinstance(image_size, int):
-            image_size = (image_size, image_size)
-
-        dummy_inputs = {}
-        if "images" in self.EXPECTED_INPUTS:
-            dummy_inputs["images"] = keras.ops.ones(
-                (1, *image_size, 3), dtype="float32"
-            )
-
-        return dummy_inputs
-
 
 @keras_hub_export("keras_hub.export.ObjectDetectorExporterConfig")
 class ObjectDetectorExporterConfig(KerasHubExporterConfig):
@@ -415,50 +377,6 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
                 shape=(None, 2), dtype="int32", name="image_shape"
             ),
         }
-
-    def get_dummy_inputs(self, image_size=None):
-        """Generate dummy inputs for object detector models.
-
-        Args:
-            image_size: Optional image size. If None, inferred from model.
-
-        Returns:
-            Dict[str, Any]: Dictionary of dummy inputs
-        """
-        if image_size is None:
-            # Get image size using same logic as get_input_signature
-            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-                if hasattr(self.model.preprocessor, "image_size"):
-                    image_size = self.model.preprocessor.image_size
-            if (
-                image_size is None
-                and hasattr(self.model, "inputs")
-                and self.model.inputs
-            ):
-                input_shape = self.model.inputs[0].shape
-                if (
-                    len(input_shape) == 4
-                    and input_shape[1] is not None
-                    and input_shape[2] is not None
-                ):
-                    image_size = (input_shape[1], input_shape[2])
-
-        if isinstance(image_size, int):
-            image_size = (image_size, image_size)
-
-        dummy_inputs = {}
-
-        # Create dummy image input
-        dummy_inputs["images"] = keras.ops.random_uniform(
-            (1, *image_size, 3), dtype="float32"
-        )
-
-        # Create dummy image shape input
-        dummy_inputs["image_shape"] = keras.ops.constant(
-            [[image_size[0], image_size[1]]], dtype="int32"
-        )
-
-        return dummy_inputs
 
 
 @keras_hub_export("keras_hub.export.ImageSegmenterExporterConfig")

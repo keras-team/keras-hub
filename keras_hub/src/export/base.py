@@ -74,51 +74,6 @@ class KerasHubExporterConfig(ABC):
         """
         pass
 
-    def get_dummy_inputs(self, sequence_length=None):
-        """Generate dummy inputs for model building and testing.
-
-        Args:
-            sequence_length: `int` or `None`. Optional sequence length for
-                dummy inputs.
-
-        Returns:
-            A dictionary of dummy inputs.
-        """
-        if sequence_length is None:
-            sequence_length = self.DEFAULT_SEQUENCE_LENGTH
-
-        dummy_inputs = {}
-
-        # Common inputs for most Keras-Hub models
-        if "token_ids" in self.EXPECTED_INPUTS:
-            dummy_inputs["token_ids"] = keras.ops.ones(
-                (1, sequence_length), dtype="int32"
-            )
-        if "padding_mask" in self.EXPECTED_INPUTS:
-            dummy_inputs["padding_mask"] = keras.ops.ones(
-                (1, sequence_length), dtype="bool"
-            )
-
-        # Encoder-decoder specific inputs
-        if "encoder_token_ids" in self.EXPECTED_INPUTS:
-            dummy_inputs["encoder_token_ids"] = keras.ops.ones(
-                (1, sequence_length), dtype="int32"
-            )
-        if "encoder_padding_mask" in self.EXPECTED_INPUTS:
-            dummy_inputs["encoder_padding_mask"] = keras.ops.ones(
-                (1, sequence_length), dtype="bool"
-            )
-        if "decoder_token_ids" in self.EXPECTED_INPUTS:
-            dummy_inputs["decoder_token_ids"] = keras.ops.ones(
-                (1, sequence_length), dtype="int32"
-            )
-        if "decoder_padding_mask" in self.EXPECTED_INPUTS:
-            dummy_inputs["decoder_padding_mask"] = keras.ops.ones(
-                (1, sequence_length), dtype="bool"
-            )
-
-        return dummy_inputs
-
 
 class KerasHubExporter(ABC):
     """Base class for Keras-Hub model exporters.
@@ -153,10 +108,7 @@ class KerasHubExporter(ABC):
 
         This method builds the model using model.build() with input shapes.
         This creates the necessary variables and initializes the model structure
-        for export, avoiding the need for dummy forward passes.
-
-        Note: We don't check model.built because it can be True even if the
-        model isn't properly initialized with the correct input structure.
+        for export without needing dummy data.
 
         Args:
             param: `int` or `None`. Optional parameter for input signature
@@ -175,23 +127,9 @@ class KerasHubExporter(ABC):
                 # Fallback for unexpected formats
                 input_shapes[name] = spec
 
-        try:
-            # Build the model using shapes only (no actual data allocation)
-            # This creates variables and initializes the model structure
-            self.model.build(input_shape=input_shapes)
-        except Exception as e:
-            # Fallback to forward pass approach if build() fails
-            # This maintains backward compatibility for models that don't
-            # support shape-based building
-            try:
-                dummy_inputs = self.config.get_dummy_inputs(param)
-                _ = self.model(dummy_inputs, training=False)
-            except Exception as fallback_error:
-                raise ValueError(
-                    f"Failed to build model with both shape-based building "
-                    f"({e}) and forward pass ({fallback_error}). Please ensure "
-                    f"the model is properly constructed."
-                )
+        # Build the model using shapes only (no actual data allocation)
+        # This creates variables and initializes the model structure
+        self.model.build(input_shape=input_shapes)
 
 
 class ExporterRegistry:
