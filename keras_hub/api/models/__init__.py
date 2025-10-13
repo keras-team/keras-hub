@@ -300,9 +300,6 @@ from keras_hub.src.models.gemma.gemma_tokenizer import (
 from keras_hub.src.models.gemma3.gemma3_backbone import (
     Gemma3Backbone as Gemma3Backbone,
 )
-from keras_hub.src.models.gemma3.gemma3_backbone import (
-    Gemma3EmbeddingModel as Gemma3Embedding,
-)
 from keras_hub.src.models.gemma3.gemma3_causal_lm import (
     Gemma3CausalLM as Gemma3CausalLM,
 )

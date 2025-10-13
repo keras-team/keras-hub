@@ -123,11 +123,13 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
 
     def test_embedding_mode(self):
         embedding_dim = 16
+        pooling_intermediate_dim = 32
         init_kwargs = self.text_init_kwargs.copy()
         input_data = self.text_backbone_input_data.copy()
 
-        init_kwargs["pooling_mode"] = "mean"
+        init_kwargs["is_embedding_model"] = True
         init_kwargs["embedding_dim"] = embedding_dim
+        init_kwargs["pooling_intermediate_dim"] = pooling_intermediate_dim
 
         model = Gemma3Backbone(**init_kwargs)
         outputs = model(input_data)
@@ -138,7 +140,10 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
 
         expected_pooled_shape = (self.batch_size, embedding_dim)
         self.assertEqual(outputs["pooled_output"].shape, expected_pooled_shape)
-        
+
+        self.assertEqual(model.count_params(), 6520)
+        self.assertEqual(len(model.layers), 13)
+
         self.run_model_saving_test(
             cls=Gemma3Backbone,
             init_kwargs=init_kwargs,
