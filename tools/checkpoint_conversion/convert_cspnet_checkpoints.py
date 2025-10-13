@@ -25,9 +25,9 @@ import keras_hub
 
 PRESET_MAP = {
     "csp_darknet_53_ra_imagenet": "timm/cspdarknet53.ra_in1k",
-    "csp_resnext_50_ra_imagenet": "cspresnext50.ra_in1k",
-    "csp_resnet_50_ra_imagenet": "cspresnet50.ra_in1k",
-    "darknet_53_imagenet": "darknet53.c2ns_in1k",
+    "csp_resnext_50_ra_imagenet": "timm/cspresnext50.ra_in1k",
+    "csp_resnet_50_ra_imagenet": "timm/cspresnet50.ra_in1k",
+    "darknet_53_imagenet": "timm/darknet53.c2ns_in1k",
 }
 FLAGS = flags.FLAGS
 
