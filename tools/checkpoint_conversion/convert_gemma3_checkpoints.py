@@ -778,7 +778,7 @@ def main(_):
             infer(
                 local_hf_model,
                 local_hf_tokenizer,
-                "Hello, my name is",
+                "What is Keras?",
                 "cpu",
                 max_new_tokens=100,
             ),
