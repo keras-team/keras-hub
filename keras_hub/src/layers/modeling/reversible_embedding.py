@@ -247,7 +247,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
 
         if mode != "int8":
             raise NotImplementedError(
-                "Invalid quantization mode. Expected one 'int8'. "
+                "Invalid quantization mode. Expected 'int8'. "
                 f"Received: quantization_mode={mode}"
             )
 
