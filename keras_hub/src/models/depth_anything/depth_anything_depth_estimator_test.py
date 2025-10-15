@@ -70,6 +70,10 @@ class DepthAnythingDepthEstimatorTest(TestCase):
             cls=DepthAnythingDepthEstimator,
             preset="depth_anything_v2_small",
             input_data=image_batch,
+            init_kwargs={
+                "depth_estimation_type": "relative",
+                "max_depth": None,
+            },
             expected_output_shape={"depths": (1, 518, 518, 1)},
         )
 
