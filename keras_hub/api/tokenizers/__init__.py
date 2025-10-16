@@ -28,6 +28,7 @@ from keras_hub.src.models.distil_bert.distil_bert_tokenizer import (
 from keras_hub.src.models.electra.electra_tokenizer import (
     ElectraTokenizer as ElectraTokenizer,
 )
+from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer as ESMTokenizer
 from keras_hub.src.models.f_net.f_net_tokenizer import (
     FNetTokenizer as FNetTokenizer,
 )
@@ -65,6 +66,9 @@ from keras_hub.src.models.opt.opt_tokenizer import OPTTokenizer as OPTTokenizer
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer as PaliGemmaTokenizer,
 )
+from keras_hub.src.models.parseq.parseq_tokenizer import (
+    PARSeqTokenizer as PARSeqTokenizer,
+)
 from keras_hub.src.models.phi3.phi3_tokenizer import (
     Phi3Tokenizer as Phi3Tokenizer,
 )
@@ -73,6 +77,9 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 )
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
+)
+from keras_hub.src.models.qwen3_moe.qwen3_moe_tokenizer import (
+    Qwen3MoeTokenizer as Qwen3MoeTokenizer,
 )
 from keras_hub.src.models.qwen_moe.qwen_moe_tokenizer import (
     QwenMoeTokenizer as QwenMoeTokenizer,
@@ -87,6 +94,9 @@ from keras_hub.src.models.siglip.siglip_tokenizer import (
     SigLIPTokenizer as SigLIPTokenizer,
 )
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer as T5Tokenizer
+from keras_hub.src.models.t5gemma.t5gemma_tokenizer import (
+    T5GemmaTokenizer as T5GemmaTokenizer,
+)
 from keras_hub.src.models.whisper.whisper_tokenizer import (
     WhisperTokenizer as WhisperTokenizer,
 )

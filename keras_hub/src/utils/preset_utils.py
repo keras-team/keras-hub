@@ -10,6 +10,7 @@ import keras
 from absl import logging
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.utils import tensor_utils
 from keras_hub.src.utils.keras_utils import print_msg
 from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.tensor_utils import get_tensor_size_in_bits
@@ -501,10 +502,17 @@ def jax_memory_cleanup(layer):
     # For jax, delete all previous allocated memory to avoid temporarily
     # duplicating variable allocations. torch and tensorflow have stateful
     # variable types and do not need this fix.
+    # Skip deletion for sharded arrays to avoid breaking references in
+    # distributed setups.
     if keras.config.backend() == "jax":
         for weight in layer.weights:
-            if getattr(weight, "_value", None) is not None:
-                weight._value.delete()
+            if weight._value is not None:
+                # Do not delete sharded arrays, as they may be referenced in
+                # JAX's distributed computation graph and deletion can cause
+                # errors.
+                sharding = getattr(weight._value, "sharding", None)
+                if sharding is None:
+                    weight._value.delete()
 
 
 def set_dtype_in_config(config, dtype=None):
@@ -649,7 +657,10 @@ class KerasPresetLoader(PresetLoader):
         return check_config_class(self.config)
 
     def load_backbone(self, cls, load_weights, **kwargs):
-        backbone = self._load_serialized_object(self.config, **kwargs)
+        config = self.config.copy()
+        backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
+        config["config"] = {**config["config"], **backbone_kwargs}
+        backbone = self._load_serialized_object(config, **kwargs)
         if load_weights:
             jax_memory_cleanup(backbone)
             self._load_backbone_weights(backbone)
@@ -684,6 +695,7 @@ class KerasPresetLoader(PresetLoader):
             )
         # We found a `task.json` with a complete config for our class.
         # Forward backbone args.
+        kwargs["dtype"] = self._resolve_dtype(self.config, kwargs)
         backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
         if "backbone" in task_config["config"]:
             backbone_config = task_config["config"]["backbone"]["config"]
@@ -704,6 +716,53 @@ class KerasPresetLoader(PresetLoader):
                 jax_memory_cleanup(task.backbone)
             self._load_backbone_weights(task.backbone)
         return task
+
+    def _resolve_dtype(self, config, kwargs):
+        """Resolves the Model's dtype based on the provided config and kwargs.
+
+        The data type is resolved based on the following priority:
+        1. If a user specified dtype is passed, use that.
+        2. If no user specified dtype is passed, and the save dtype is castable
+          to the current keras default dtype convert weights on load (float type
+          to float type).
+        3. If not user specified dtype is passed, and the save dtype is not
+          castable to the current default dtype (quantized dtypes). Load the
+          saved types verbatim.
+
+        Args:
+            config: dict. The model configuration.
+            kwargs: dict. Additional keyword arguments, potentially including
+             `dtype`.
+
+        Returns:
+            str, dict, or DTypePolicy. The resolved dtype.
+        """
+        # 1. If a user specified dtype is passed, use that.
+        if "dtype" in kwargs and kwargs["dtype"] is not None:
+            return kwargs["dtype"]
+
+        saved_dtype = config.get("config", {}).get("dtype")
+
+        # If there's no saved dtype, we don't need to do anything.
+        if saved_dtype is None:
+            return None
+
+        # 2. Check whether the saved dtype is a simple float type.
+        policy_name = saved_dtype.get("config", {}).get("name")
+        if policy_name and tensor_utils.is_float_dtype(policy_name):
+            # If the saved dtype is a float, we can safely cast to the default
+            # backend float type.
+            if policy_name != keras.config.dtype_policy().name:
+                logging.info(
+                    f"Converting weights saved as {policy_name} "
+                    "to the current Keras dtype policy "
+                    f"{keras.config.dtype_policy()}"
+                )
+            return keras.config.dtype_policy()
+        else:
+            # 3. Otherwise, the dtype is a complex object (e.g. a
+            # DTypePolicyMap for quantization), and should be used as is.
+            return saved_dtype
 
     def load_preprocessor(
         self, cls, config_file=PREPROCESSOR_CONFIG_FILE, **kwargs

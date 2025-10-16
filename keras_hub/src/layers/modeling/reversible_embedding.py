@@ -235,13 +235,20 @@ class ReversibleEmbedding(keras.layers.Embedding):
 
         return super()._int8_call(inputs)
 
-    def quantize(self, mode, type_check=True):
+    def quantize(self, mode, type_check=True, config=None):
+        del config
         if type_check and type(self) is not ReversibleEmbedding:
             raise self._not_implemented_error(self.quantize)
 
         def abs_max_quantize(inputs, axis):
             return keras.quantizers.abs_max_quantize(
                 inputs, axis=axis, to_numpy=True
+            )
+
+        if mode != "int8":
+            raise NotImplementedError(
+                "Invalid quantization mode. Expected 'int8'. "
+                f"Received: quantization_mode={mode}"
             )
 
         embeddings_shape = (self.input_dim, self.output_dim)

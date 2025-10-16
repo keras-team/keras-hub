@@ -132,6 +132,17 @@ class CausalLM(Task):
             return self.generate_function
 
         self.generate_function = self.generate_step
+        if keras.config.backend() == "openvino":
+            from keras_hub.src.utils.openvino_utils import ov_infer
+
+            def wrapped_generate_function(inputs, stop_token_ids=None):
+                # Convert to numpy for OpenVINO backend
+                inputs = tree.map_structure(ops.array, inputs)
+                return ov_infer(
+                    self, inputs, stop_token_ids, self.generate_step
+                )
+
+            self.generate_function = wrapped_generate_function
         if keras.config.backend() == "torch":
             import torch
 
@@ -392,3 +403,29 @@ class CausalLM(Task):
             outputs = [postprocess(x) for x in outputs]
 
         return self._normalize_generate_outputs(outputs, input_is_scalar)
+
+    def export_to_transformers(self, path):
+        """Export the full CausalLM model to HuggingFace Transformers format.
+
+        This exports the trainable model, tokenizer, and configurations in a
+        format compatible with HuggingFace Transformers. For unsupported model
+        architectures, a ValueError is raised.
+
+        If the preprocessor is attached (default), both the trainable model and
+        tokenizer are exported. To export only the trainable model, set
+        `self.preprocessor = None` before calling this method, then export the
+        preprocessor separately via `preprocessor.export_to_transformers(path)`.
+
+        Args:
+            path: str. Path to save the exported model.
+        """
+        from keras_hub.src.utils.transformers.export.hf_exporter import (
+            export_to_safetensors,
+        )
+
+        export_to_safetensors(self, path)
+
+    def _post_quantize(self, mode, **kwargs):
+        super()._post_quantize(mode, **kwargs)
+        # Reset the compiled generate function.
+        self.generate_function = None
