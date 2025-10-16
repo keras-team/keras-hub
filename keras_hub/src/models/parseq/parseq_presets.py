@@ -1,7 +1,7 @@
 """PARSeq preset configurations."""
 
 backbone_presets = {
-    "parseq_vit": {
+    "parseq": {
         "metadata": {
             "description": (
                 "Permuted autoregressive sequence (PARSeq) base "
@@ -10,6 +10,6 @@ backbone_presets = {
             "params": 23_832_671,
             "path": "parseq",
         },
-        "kaggle_handle": "kaggle://keras/parseq/keras/parseq_vit/1",
+        "kaggle_handle": "kaggle://keras/parseq/keras/parseq/1",
     }
 }
