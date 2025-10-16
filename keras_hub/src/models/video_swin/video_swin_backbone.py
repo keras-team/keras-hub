@@ -3,7 +3,7 @@ from functools import partial
 import keras
 from keras import layers
 
-from keras_hub.api import utils
+from keras_hub.src import utils
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.video_swin.video_swin_layers import (
@@ -17,10 +17,7 @@ from keras_hub.src.models.video_swin.video_swin_layers import (
 )
 
 
-@keras_hub_export(
-    "keras_hub_export.models.VideoSwinBackbone",
-    package="keras_hub_export.models",
-)
+@keras_hub_export("keras_hub.models.VideoSwinBackbone")
 class VideoSwinBackbone(Backbone):
     """A Video Swin Transformer backbone model.
     References:
