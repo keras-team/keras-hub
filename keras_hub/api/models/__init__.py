@@ -704,7 +704,7 @@ from keras_hub.src.models.video_swin.video_swin_backbone import (
     VideoSwinBackbone as VideoSwinBackbone,
 )
 from keras_hub.src.models.video_swin.video_swin_layers import (
- VideoSwinTransformerLayer as VideoSwinTransformerLayer,
+    VideoSwinTransformerLayer as VideoSwinTransformerLayer,
 )
 from keras_hub.src.models.vit.vit_backbone import ViTBackbone as ViTBackbone
 from keras_hub.src.models.vit.vit_image_classifier import (

@@ -1,7 +1,8 @@
 import keras
 import numpy as np
-from keras_hub.src.models.mit.mit_layers import DropPath
 from keras import ops
+
+from keras_hub.src.models.mit.mit_layers import DropPath
 
 
 def window_partition(x, window_size):
