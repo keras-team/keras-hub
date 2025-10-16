@@ -700,6 +700,12 @@ from keras_hub.src.models.vgg.vgg_image_classifier import (
 from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
     VGGImageClassifierPreprocessor as VGGImageClassifierPreprocessor,
 )
+from keras_hub.src.models.video_swin.video_swin_backbone import (
+    VideoSwinBackbone as VideoSwinBackbone,
+)
+from keras_hub.src.models.video_swin.video_swin_layers import (
+ VideoSwinTransformerLayer as VideoSwinTransformerLayer,
+)
 from keras_hub.src.models.vit.vit_backbone import ViTBackbone as ViTBackbone
 from keras_hub.src.models.vit.vit_image_classifier import (
     ViTImageClassifier as ViTImageClassifier,
@@ -749,24 +755,9 @@ from keras_hub.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor i
 from keras_hub.src.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer as XLMRobertaTokenizer,
 )
+from keras_hub.src.models.xlnet.xlnet_backbone import XLNetBackbone
 from keras_hub.src.models.xlnet.xlnet_backbone import (
     XLNetBackbone as XLNetBackbone,
 )
-<<<<<<< master
-from keras_hub.src.models.xlnet.xlnet_backbone import XLNetBackbone
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
-from keras_hub.src.models.video_swin.video_swin_aliases import (
-    VideoSwinBBackbone,
-)
-from keras_hub.src.models.video_swin.video_swin_aliases import (
-    VideoSwinSBackbone,
-)
-from keras_hub.src.models.video_swin.video_swin_aliases import (
-    VideoSwinTBackbone,
-)
-from keras_hub.src.models.video_swin.video_swin_backbone import (
-    VideoSwinBackbone,
-)
-=======
 from keras_hub.src.tokenizers.tokenizer import Tokenizer as Tokenizer
->>>>>>> master

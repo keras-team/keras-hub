@@ -105,7 +105,8 @@ backbone_presets = {
         "metadata": {
             "description": (
                 "Base Video Swin Transformer backbone. "
-                "Pretrained on Kinetics-400 and trained on Something-Something V2. "
+                "Pretrained on Kinetics-400 and trained on "
+                "Something-Something V2"
                 "Achieves 69.6% top-1 and 92.7% top-5 accuracy."
             ),
             "params": 87_638_984,

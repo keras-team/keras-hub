@@ -1,8 +1,10 @@
 import os
+
+import keras
 import numpy as np
 import pytest
-import keras
 from keras import ops
+
 from keras_hub.src.models.video_swin.video_swin_backbone import (
     VideoSwinBackbone,
 )
@@ -10,10 +12,9 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class TestVideoSwinSBackbone(TestCase):
-
     @pytest.mark.large
     def test_call(self):
-        model = VideoSwinBackbone(  # TODO: replace with aliases
+        model = VideoSwinBackbone(
             include_rescaling=True, input_shape=(8, 256, 256, 3)
         )
         x = np.ones((1, 8, 256, 256, 3))

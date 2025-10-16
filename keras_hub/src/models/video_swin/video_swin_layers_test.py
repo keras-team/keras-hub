@@ -1,5 +1,6 @@
-from keras import ops
 import pytest
+from keras import ops
+
 from keras_hub.src.models.video_swin.video_swin_layers import (
     VideoSwinPatchingAndEmbedding,
 )
@@ -10,6 +11,7 @@ from keras_hub.src.models.video_swin.video_swin_layers import (
     VideoSwinWindowAttention,
 )
 from keras_hub.src.tests.test_case import TestCase
+
 
 @pytest.mark.large
 class TestVideoSwinPatchingAndEmbedding(TestCase):
@@ -31,9 +33,9 @@ class TestVideoSwinPatchingAndEmbedding(TestCase):
         assert config["patch_size"] == (4, 4, 4)
         assert config["embed_dim"] == 96
 
+
 @pytest.mark.extra_large
 class TestVideoSwinWindowAttention(TestCase):
-
     def setUp(self):
         self.window_attention_model = VideoSwinWindowAttention(
             input_dim=32,
@@ -62,6 +64,7 @@ class TestVideoSwinWindowAttention(TestCase):
         assert config["qk_scale"] is None
         assert config["attn_drop_rate"] == 0.1
         assert config["proj_drop_rate"] == 0.1
+
 
 @pytest.mark.extra_large
 class TestVideoSwinPatchMerging(TestCase):

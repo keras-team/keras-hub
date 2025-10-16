@@ -1,7 +1,8 @@
-import numpy as np
 import keras
+import numpy as np
+from keras_hub.src.models.mit.mit_layers import DropPath
 from keras import ops
-from keras import DropPath
+
 
 def window_partition(x, window_size):
     """Partitions a video tensor into non-overlapping windows of a specified size.

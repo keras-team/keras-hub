@@ -1,16 +1,26 @@
 from functools import partial
-import numpy as np
-from keras import layers
+
 import keras
+from keras import layers
+
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models import utils
+from keras_hub.api import utils
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.video_swin.video_swin_layers import (
-    VideoSwinTransformerLayer,
     VideoSwinPatchingAndEmbedding,
+)
+from keras_hub.src.models.video_swin.video_swin_layers import (
     VideoSwinPatchMerging,
 )
-@keras_hub_export("keras_hub_export.models.VideoSwinBackbone", package="keras_hub_export.models")
+from keras_hub.src.models.video_swin.video_swin_layers import (
+    VideoSwinTransformerLayer,
+)
+
+
+@keras_hub_export(
+    "keras_hub_export.models.VideoSwinBackbone",
+    package="keras_hub_export.models",
+)
 class VideoSwinBackbone(Backbone):
     """A Video Swin Transformer backbone model.
     References:
@@ -79,9 +89,7 @@ class VideoSwinBackbone(Backbone):
         **kwargs,
     ):
         # Parse input specification.
-        input_spec = utils.parse_model_inputs(
-            input_shape, name="videos"
-        )
+        input_spec = utils.parse_model_inputs(input_shape, name="videos")
 
         # Check that the input video is well specified.
         if (
@@ -119,7 +127,7 @@ class VideoSwinBackbone(Backbone):
                 qk_scale=qk_scale,
                 drop_rate=drop_rate,
                 attn_drop_rate=attention_drop_rate,
-                drop_path_rate=dpr[sum(depths[:i]):sum(depths[:i + 1])],
+                drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
                 norm_layer=norm_layer,
                 downsampling_layer=(
                     VideoSwinPatchMerging if (i < num_layers - 1) else None
