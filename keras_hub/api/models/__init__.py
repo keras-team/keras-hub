@@ -756,8 +756,4 @@ from keras_hub.src.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer as XLMRobertaTokenizer,
 )
 from keras_hub.src.models.xlnet.xlnet_backbone import XLNetBackbone
-from keras_hub.src.models.xlnet.xlnet_backbone import (
-    XLNetBackbone as XLNetBackbone,
-)
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
-from keras_hub.src.tokenizers.tokenizer import Tokenizer as Tokenizer
