@@ -14,6 +14,12 @@ def _qwen_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
+def _qwen_embedding_initializer(stddev=0.01):
+    from keras_hub.src.utils import dist_initializer
+
+    return dist_initializer.DistributedRandomNormal(stddev=0.01)
+
+
 @keras_hub_export(
     [
         "keras_hub.models.QwenBackbone",
@@ -114,7 +120,7 @@ class QwenBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=tie_word_embeddings,
-            embeddings_initializer=_qwen_kernel_initializer(stddev=0.01),
+            embeddings_initializer=_qwen_embedding_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
         )
