@@ -209,8 +209,8 @@ backbone_presets = {
     "c2s_scale_gemma_2_2b_en": {
         "metadata": {
             "description": (
-                "2 billion parameter, is a single‑cell biology–aware model "
-                "built on the Gemma‑2 architecture."
+                "A 2 billion parameter, single-cell biology-aware model "
+                "built on the Gemma-2 architecture."
             ),
             "params": 2614341888,
             "path": "gemma",
@@ -220,8 +220,8 @@ backbone_presets = {
     "c2s_scale_gemma_2_27b_en": {
         "metadata": {
             "description": (
-                "27 billion parameter, is a single‑cell biology–aware model "
-                "built on the Gemma‑2 architecture."
+                "A 27 billion parameter, single-cell biology-aware model "
+                "built on the Gemma-2 architecture."
             ),
             "params": 27227128320,
             "path": "gemma",
