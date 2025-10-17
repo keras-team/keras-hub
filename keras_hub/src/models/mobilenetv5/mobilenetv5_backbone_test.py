@@ -47,7 +47,6 @@ class MobileNetV5BackboneTest(TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.skip(reason="TODO: Enable once presets have been uploaded.")
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=MobileNetV5Backbone,
