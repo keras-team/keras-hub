@@ -6,10 +6,10 @@ References:
 - [LayoutLMv3 GitHub](https://github.com/microsoft/unilm/tree/master/layoutlmv3)
 """
 
+import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-import keras
 
 
 @keras_hub_export("keras_hub.models.LayoutLMv3Tokenizer")
@@ -57,14 +57,14 @@ class LayoutLMv3Tokenizer(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        
+
         # Store configuration
         self.vocabulary = vocabulary or {}
         self.merges = merges or []
         self.sequence_length = sequence_length
         self.add_prefix_space = add_prefix_space
         self.unsplittable_tokens = unsplittable_tokens or []
-        
+
         # Store special tokens for bbox processing
         self.cls_token = "[CLS]"
         self.sep_token = "[SEP]"
@@ -241,19 +241,26 @@ class LayoutLMv3Tokenizer(keras.layers.Layer):
             # Truncate if too long
             if len(token_ids) > max_len:
                 token_ids = token_ids[:max_len]
-            
+
             # Pad if too short
             pad_length = max_len - len(token_ids)
-            padded_ids = token_ids + [self.vocabulary.get(self.pad_token, 0)] * pad_length
+            padded_ids = (
+                token_ids
+                + [self.vocabulary.get(self.pad_token, 0)] * pad_length
+            )
             padded_token_ids.append(padded_ids)
-            
+
             # Create padding mask
             padding_mask = [1] * len(token_ids) + [0] * pad_length
             padding_masks.append(padding_mask)
 
         # Convert to tensors
-        token_ids_tensor = ops.convert_to_tensor(padded_token_ids, dtype="int32")
-        padding_mask_tensor = ops.convert_to_tensor(padding_masks, dtype="int32")
+        token_ids_tensor = ops.convert_to_tensor(
+            padded_token_ids, dtype="int32"
+        )
+        padding_mask_tensor = ops.convert_to_tensor(
+            padding_masks, dtype="int32"
+        )
 
         # Process bbox if provided
         if bbox is not None:
@@ -276,7 +283,9 @@ class LayoutLMv3Tokenizer(keras.layers.Layer):
                 bbox_tensor = ops.convert_to_tensor(bbox_tensor, dtype="int32")
             else:
                 # Create dummy bbox tensor
-                bbox_tensor = ops.zeros((len(inputs), max_len, 4), dtype="int32")
+                bbox_tensor = ops.zeros(
+                    (len(inputs), max_len, 4), dtype="int32"
+                )
         else:
             # Create dummy bbox tensor if no bbox provided
             bbox_tensor = ops.zeros((len(inputs), max_len, 4), dtype="int32")
