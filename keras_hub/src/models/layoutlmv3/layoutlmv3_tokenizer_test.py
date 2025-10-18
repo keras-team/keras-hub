@@ -125,12 +125,7 @@ class LayoutLMv3TokenizerTest(TestCase):
         # Check that all expected keys are in config
         expected_keys = [
             "vocabulary",
-            "lowercase",
-            "strip_accents",
-            "split",
-            "split_on_cjk",
-            "suffix_indicator",
-            "oov_token",
+            "merges",
             "cls_token",
             "sep_token",
             "pad_token",

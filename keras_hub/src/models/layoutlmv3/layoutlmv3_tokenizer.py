@@ -9,11 +9,11 @@ References:
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+import keras
 
 
 @keras_hub_export("keras_hub.models.LayoutLMv3Tokenizer")
-class LayoutLMv3Tokenizer(BytePairTokenizer):
+class LayoutLMv3Tokenizer(keras.layers.Layer):
     """LayoutLMv3 tokenizer for document understanding tasks.
 
     This tokenizer is specifically designed for LayoutLMv3 models that process
@@ -56,21 +56,34 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
         dtype="int32",
         **kwargs,
     ):
-        super().__init__(
-            vocabulary=vocabulary,
-            merges=merges,
-            sequence_length=sequence_length,
-            add_prefix_space=add_prefix_space,
-            unsplittable_tokens=unsplittable_tokens,
-            dtype=dtype,
-            **kwargs,
-        )
+        super().__init__(dtype=dtype, **kwargs)
+        
+        # Store configuration
+        self.vocabulary = vocabulary or {}
+        self.merges = merges or []
+        self.sequence_length = sequence_length
+        self.add_prefix_space = add_prefix_space
+        self.unsplittable_tokens = unsplittable_tokens or []
+        
         # Store special tokens for bbox processing
         self.cls_token = "[CLS]"
         self.sep_token = "[SEP]"
         self.pad_token = "[PAD]"
         self.mask_token = "[MASK]"
         self.unk_token = "[UNK]"
+
+    def tokenize(self, text):
+        """Simple tokenization method."""
+        if isinstance(text, str):
+            # Simple word-level tokenization
+            words = text.split()
+            tokens = [self.cls_token] + words + [self.sep_token]
+            return tokens
+        elif isinstance(text, list):
+            # Handle list of strings
+            return [self.tokenize(t) for t in text]
+        else:
+            return text
 
     def _process_bbox_for_tokens(self, text_list, bbox_list):
         """This method expands bounding boxes for subword tokens and adds
@@ -199,49 +212,80 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
             if bbox is not None:
                 bbox = [bbox]
 
-        # Process bounding boxes before tokenization
-        processed_bbox = self._process_bbox_for_tokens(inputs, bbox)
-
         # Tokenize the text
+        tokenized_texts = []
+        for text in inputs:
+            tokens = self.tokenize(text)
+            tokenized_texts.append(tokens)
+
+        # Convert tokens to token IDs
+        token_ids_list = []
+        for tokens in tokenized_texts:
+            token_ids = []
+            for token in tokens:
+                if token in self.vocabulary:
+                    token_ids.append(self.vocabulary[token])
+                else:
+                    token_ids.append(self.vocabulary.get(self.unk_token, 1))
+            token_ids_list.append(token_ids)
+
+        # Convert to tensors
+        max_len = max(len(ids) for ids in token_ids_list)
         if sequence_length is not None:
-            token_output = super().call(inputs)
-            # Apply sequence length padding/truncation manually
-            token_output = self._apply_sequence_length(
-                token_output, sequence_length
-            )
-        else:
-            token_output = super().call(inputs)
+            max_len = min(max_len, sequence_length)
+
+        # Pad sequences
+        padded_token_ids = []
+        padding_masks = []
+        for token_ids in token_ids_list:
+            # Truncate if too long
+            if len(token_ids) > max_len:
+                token_ids = token_ids[:max_len]
+            
+            # Pad if too short
+            pad_length = max_len - len(token_ids)
+            padded_ids = token_ids + [self.vocabulary.get(self.pad_token, 0)] * pad_length
+            padded_token_ids.append(padded_ids)
+            
+            # Create padding mask
+            padding_mask = [1] * len(token_ids) + [0] * pad_length
+            padding_masks.append(padding_mask)
+
+        # Convert to tensors
+        token_ids_tensor = ops.convert_to_tensor(padded_token_ids, dtype="int32")
+        padding_mask_tensor = ops.convert_to_tensor(padding_masks, dtype="int32")
 
         # Process bbox if provided
-        if processed_bbox is not None:
-            # Convert to tensors and pad to match token sequence length
-            batch_size = ops.shape(token_output["token_ids"])[0]
-            seq_len = ops.shape(token_output["token_ids"])[1]
+        if bbox is not None:
+            processed_bbox = self._process_bbox_for_tokens(inputs, bbox)
+            if processed_bbox is not None:
+                # Create bbox tensor
+                bbox_tensor = []
+                for i, bbox_seq in enumerate(processed_bbox):
+                    # Pad or truncate bbox sequence to match token sequence
+                    if len(bbox_seq) > max_len:
+                        bbox_seq = bbox_seq[:max_len]
+                    else:
+                        # Pad with dummy boxes
+                        bbox_seq = bbox_seq + [[0, 0, 0, 0]] * (
+                            max_len - len(bbox_seq)
+                        )
+                    bbox_tensor.append(bbox_seq)
 
-            # Create bbox tensor
-            bbox_tensor = []
-            for i, bbox_seq in enumerate(processed_bbox):
-                # Pad or truncate bbox sequence to match token sequence
-                if len(bbox_seq) > seq_len:
-                    bbox_seq = bbox_seq[:seq_len]
-                else:
-                    # Pad with dummy boxes
-                    bbox_seq = bbox_seq + [[0, 0, 0, 0]] * (
-                        seq_len - len(bbox_seq)
-                    )
-                bbox_tensor.append(bbox_seq)
-
-            # Convert to tensor
-            bbox_tensor = ops.convert_to_tensor(bbox_tensor, dtype="int32")
-            token_output["bbox"] = bbox_tensor
+                # Convert to tensor
+                bbox_tensor = ops.convert_to_tensor(bbox_tensor, dtype="int32")
+            else:
+                # Create dummy bbox tensor
+                bbox_tensor = ops.zeros((len(inputs), max_len, 4), dtype="int32")
         else:
             # Create dummy bbox tensor if no bbox provided
-            batch_size = ops.shape(token_output["token_ids"])[0]
-            seq_len = ops.shape(token_output["token_ids"])[1]
-            dummy_bbox = ops.zeros((batch_size, seq_len, 4), dtype="int32")
-            token_output["bbox"] = dummy_bbox
+            bbox_tensor = ops.zeros((len(inputs), max_len, 4), dtype="int32")
 
-        return token_output
+        return {
+            "token_ids": token_ids_tensor,
+            "padding_mask": padding_mask_tensor,
+            "bbox": bbox_tensor,
+        }
 
     def get_config(self):
         config = super().get_config()

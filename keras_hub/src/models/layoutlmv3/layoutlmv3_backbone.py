@@ -103,6 +103,18 @@ class LayoutLMv3Backbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+        # Store configuration parameters as attributes
+        self.vocabulary_size = vocabulary_size
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.intermediate_dim = intermediate_dim
+        self.max_sequence_length = max_sequence_length
+        self.type_vocab_size = type_vocab_size
+        self.spatial_embedding_dim = spatial_embedding_dim
+        self.patch_size = patch_size
+        self.num_channels = num_channels
+
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
