@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: api-gen
         name: api_gen
-        entry: bash -c "shell/api_gen.sh && if [ -n \"$(git status --porcelain)\" ]; then echo 'Please run shell/api_gen.sh to generate API.' && exit 1; fi"
+        entry: python api_gen.py
         language: system
         stages: [pre-commit, manual]
         require_serial: true
