@@ -150,7 +150,8 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
             If input is a string or list of strings, the dictionary will contain:
             - "token_ids": Tokenized representation of the inputs.
             - "padding_mask": A mask indicating which tokens are real vs padding.
-            - "bbox": Bounding box coordinates aligned with tokens (if provided).
+            - "bbox": Bounding box coordinates aligned with tokens
+                (if provided).
         """
         # Handle string inputs by converting to list
         if isinstance(inputs, str):
