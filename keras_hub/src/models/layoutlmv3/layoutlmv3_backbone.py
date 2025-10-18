@@ -216,9 +216,12 @@ class LayoutLMv3Backbone(Backbone):
 
         # Compute sequence length for position embeddings
         seq_length = ops.shape(token_id_input)[1]
-        position_ids = ops.arange(seq_length, dtype="int32")
+        # Use max_sequence_length for static shape, but handle dynamic sequences
+        max_seq_len = self.max_sequence_length
+        position_ids = ops.arange(max_seq_len, dtype="int32")
         position_ids = ops.expand_dims(position_ids, axis=0)
-        position_ids = ops.broadcast_to(position_ids, ops.shape(token_id_input))
+        # Truncate to actual sequence length
+        position_ids = position_ids[:, :seq_length]
 
         # Token embeddings
         token_embeddings = self.token_embedding(token_id_input)

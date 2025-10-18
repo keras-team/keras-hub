@@ -1,4 +1,5 @@
 import numpy as np
+from keras import ops
 
 from keras_hub.src.models.layoutlmv3.layoutlmv3_tokenizer import (
     LayoutLMv3Tokenizer,
@@ -81,7 +82,7 @@ class LayoutLMv3TokenizerTest(TestCase):
         self.assertEqual(output["bbox"].shape, (1, 16, 4))
 
         # Check that dummy bbox was added for special tokens
-        bbox_values = output["bbox"][0]
+        bbox_values = ops.convert_to_numpy(output["bbox"][0])
         # First position should be dummy for [CLS]
         self.assertTrue(np.array_equal(bbox_values[0], [0, 0, 0, 0]))
 
@@ -114,7 +115,7 @@ class LayoutLMv3TokenizerTest(TestCase):
         self.assertEqual(output["bbox"].shape, (1, 16, 4))
 
         # All bbox values should be zeros (dummy)
-        bbox_values = output["bbox"][0]
+        bbox_values = ops.convert_to_numpy(output["bbox"][0])
         for i in range(bbox_values.shape[0]):
             self.assertTrue(np.array_equal(bbox_values[i], [0, 0, 0, 0]))
 
@@ -156,13 +157,13 @@ class LayoutLMv3TokenizerTest(TestCase):
         texts = ["hello"]
         output = self.tokenizer(texts)
 
-        token_ids = output["token_ids"][0]
+        token_ids = ops.convert_to_numpy(output["token_ids"][0])
 
         # Should start with [CLS] and end with [SEP]
         self.assertEqual(token_ids[0], self.vocabulary["[CLS]"])
 
         # Find the last non-padding token - should be [SEP]
-        padding_mask = output["padding_mask"][0]
+        padding_mask = ops.convert_to_numpy(output["padding_mask"][0])
         last_token_idx = np.sum(padding_mask) - 1
         self.assertEqual(token_ids[last_token_idx], self.vocabulary["[SEP]"])
 
@@ -170,6 +171,7 @@ class LayoutLMv3TokenizerTest(TestCase):
         # Test with custom sequence length
         custom_tokenizer = LayoutLMv3Tokenizer(
             vocabulary=self.vocabulary,
+            merges=self.merges,
             sequence_length=8,
         )
 
@@ -196,8 +198,8 @@ class LayoutLMv3TokenizerTest(TestCase):
         self.assertEqual(output["token_ids"].shape, (1, 16))
 
         # Check that padding tokens are used
-        token_ids = output["token_ids"][0]
-        padding_mask = output["padding_mask"][0]
+        token_ids = ops.convert_to_numpy(output["token_ids"][0])
+        padding_mask = ops.convert_to_numpy(output["padding_mask"][0])
 
         # Find first padding position
         padding_positions = np.where(padding_mask == 0)[0]
@@ -238,7 +240,7 @@ class LayoutLMv3TokenizerTest(TestCase):
         self.assertEqual(output["bbox"].shape, (1, 16, 4))
 
         # Should contain [CLS] and [SEP] tokens
-        token_ids = output["token_ids"][0]
+        token_ids = ops.convert_to_numpy(output["token_ids"][0])
         self.assertEqual(token_ids[0], self.vocabulary["[CLS]"])
         self.assertEqual(token_ids[1], self.vocabulary["[SEP]"])
 
@@ -247,7 +249,7 @@ class LayoutLMv3TokenizerTest(TestCase):
         output = self.tokenizer("unknown_token")
 
         # Should use [UNK] token for unknown words
-        token_ids = output["token_ids"][0]
+        token_ids = ops.convert_to_numpy(output["token_ids"][0])
 
         # Check that [UNK] token appears (excluding [CLS] and [SEP])
         self.assertIn(self.vocabulary["[UNK]"], token_ids[1:-1])
