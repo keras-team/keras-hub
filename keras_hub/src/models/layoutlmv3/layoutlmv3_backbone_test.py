@@ -1,5 +1,4 @@
 import keras
-import numpy as np
 from keras import ops
 
 from keras_hub.src.models.layoutlmv3.layoutlmv3_backbone import (
@@ -21,13 +20,17 @@ class LayoutLMv3BackboneTest(TestCase):
         }
         self.input_data = {
             "token_ids": ops.cast(
-                keras.random.uniform(shape=(2, 10), minval=0, maxval=1000, dtype="float32"),
-                "int32"
+                keras.random.uniform(
+                    shape=(2, 10), minval=0, maxval=1000, dtype="float32"
+                ),
+                "int32",
             ),
             "padding_mask": keras.ops.ones((2, 10), dtype="int32"),
             "bbox": ops.cast(
-                keras.random.uniform(shape=(2, 10, 4), minval=0, maxval=1000, dtype="float32"),
-                "int32"
+                keras.random.uniform(
+                    shape=(2, 10, 4), minval=0, maxval=1000, dtype="float32"
+                ),
+                "int32",
             ),
         }
 
@@ -58,7 +61,7 @@ class LayoutLMv3BackboneTest(TestCase):
 
     def test_spatial_embeddings_initialization(self):
         model = LayoutLMv3Backbone(**self.init_kwargs)
-        
+
         # Check that spatial embeddings have correct shapes
         for coord in ["x", "y", "h", "w"]:
             embeddings = model.spatial_embeddings[coord].embeddings
@@ -67,15 +70,17 @@ class LayoutLMv3BackboneTest(TestCase):
 
     def test_bbox_processing(self):
         model = LayoutLMv3Backbone(**self.init_kwargs)
-        
+
         # Test with bbox values at the boundary
-        bbox_data = keras.ops.array([[[0, 0, 100, 50], [100, 100, 200, 150]]], dtype="int32")
+        bbox_data = keras.ops.array(
+            [[[0, 0, 100, 50], [100, 100, 200, 150]]], dtype="int32"
+        )
         input_data = {
             "token_ids": keras.ops.array([[1, 2]], dtype="int32"),
             "padding_mask": keras.ops.ones((1, 2), dtype="int32"),
             "bbox": bbox_data,
         }
-        
+
         output = model(input_data)
         expected_shape = [1, 2, 64]
         self.assertEqual(list(output.shape), expected_shape)
@@ -83,7 +88,7 @@ class LayoutLMv3BackboneTest(TestCase):
     def test_large_sequence_length(self):
         # Test with sequence length at the maximum
         model = LayoutLMv3Backbone(**self.init_kwargs)
-        
+
         seq_len = 128  # max_sequence_length
         input_data = {
             "token_ids": keras.random.uniform(
@@ -94,7 +99,7 @@ class LayoutLMv3BackboneTest(TestCase):
                 shape=(1, seq_len, 4), minval=0, maxval=1000, dtype="int32"
             ),
         }
-        
+
         output = model(input_data)
         expected_shape = [1, seq_len, 64]
         self.assertEqual(list(output.shape), expected_shape)

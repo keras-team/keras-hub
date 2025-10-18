@@ -1,19 +1,14 @@
-import keras
-from keras import ops
-
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.transformer_encoder import (
-    TransformerEncoder,
-)
+from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
 
 
 @keras_hub_export("keras_hub.models.LayoutLMv3TransformerLayer")
 class LayoutLMv3TransformerLayer(TransformerEncoder):
     """LayoutLMv3 transformer encoder layer.
-    
+
     This layer implements a transformer encoder block for LayoutLMv3, which
     includes multi-head self-attention and a feed-forward network.
-    
+
     Args:
         hidden_dim: int. The size of the transformer hidden state.
         num_heads: int. The number of attention heads.
@@ -63,4 +58,4 @@ class LayoutLMv3TransformerLayer(TransformerEncoder):
                 "hidden_dim": self.hidden_dim,
             }
         )
-        return config 
+        return config

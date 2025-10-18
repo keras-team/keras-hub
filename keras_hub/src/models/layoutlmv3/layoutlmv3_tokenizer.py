@@ -6,7 +6,6 @@ References:
 - [LayoutLMv3 GitHub](https://github.com/microsoft/unilm/tree/master/layoutlmv3)
 """
 
-import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -76,20 +75,20 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
     def _process_bbox_for_tokens(self, text_list, bbox_list):
         """This method expands bounding boxes for subword tokens and adds
         dummy boxes for special tokens.
-        
+
         Args:
             text_list: List of text strings.
             bbox_list: List of bounding box lists corresponding to words.
-            
+
         Returns:
             List of bounding box lists aligned with tokens, or None if
             bbox_list is None.
         """
         if bbox_list is None:
             return None
-            
+
         processed_bbox = []
-        
+
         try:
             for text, bbox in zip(text_list, bbox_list):
                 # Handle empty or None inputs defensively
@@ -103,11 +102,11 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
                         word_bbox = [[0, 0, 0, 0] for _ in words]
                     else:
                         word_bbox = bbox
-                
+
                 token_bbox = []
                 # Add dummy box for [CLS] token
                 token_bbox.append([0, 0, 0, 0])
-                
+
                 # Process each word and its corresponding box
                 for word, word_box in zip(words, word_bbox):
                     # Tokenize the word to handle subwords
@@ -119,30 +118,31 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
                     except Exception:
                         # Fallback: just add one token with the box
                         token_bbox.append(word_box)
-                
+
                 # Add dummy box for [SEP] token
                 token_bbox.append([0, 0, 0, 0])
                 processed_bbox.append(token_bbox)
-                
+
         except Exception as e:
             import warnings
+
             warnings.warn(
                 f"Error processing bounding boxes: {e}. "
                 f"Falling back to dummy boxes."
             )
             # Fallback: return None to use dummy boxes
             return None
-            
+
         return processed_bbox
 
     def _apply_sequence_length(self, token_output, sequence_length):
         """Apply sequence length padding or truncation to token output."""
         token_ids = token_output["token_ids"]
         padding_mask = token_output["padding_mask"]
-        
+
         # Get current sequence length
         current_seq_len = ops.shape(token_ids)[1]
-        
+
         if current_seq_len > sequence_length:
             # Truncate
             token_ids = token_ids[:, :sequence_length]
@@ -151,15 +151,22 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
             # Pad
             pad_length = sequence_length - current_seq_len
             pad_token_id = self.vocabulary.get(self.pad_token, 0)
-            
+
             # Pad token_ids
-            pad_tokens = ops.full((ops.shape(token_ids)[0], pad_length), pad_token_id, dtype=token_ids.dtype)
+            pad_tokens = ops.full(
+                (ops.shape(token_ids)[0], pad_length),
+                pad_token_id,
+                dtype=token_ids.dtype,
+            )
             token_ids = ops.concatenate([token_ids, pad_tokens], axis=1)
-            
+
             # Pad padding_mask
-            pad_mask = ops.zeros((ops.shape(padding_mask)[0], pad_length), dtype=padding_mask.dtype)
+            pad_mask = ops.zeros(
+                (ops.shape(padding_mask)[0], pad_length),
+                dtype=padding_mask.dtype,
+            )
             padding_mask = ops.concatenate([padding_mask, pad_mask], axis=1)
-        
+
         return {
             "token_ids": token_ids,
             "padding_mask": padding_mask,
@@ -199,16 +206,18 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
         if sequence_length is not None:
             token_output = super().call(inputs)
             # Apply sequence length padding/truncation manually
-            token_output = self._apply_sequence_length(token_output, sequence_length)
+            token_output = self._apply_sequence_length(
+                token_output, sequence_length
+            )
         else:
             token_output = super().call(inputs)
-        
+
         # Process bbox if provided
         if processed_bbox is not None:
             # Convert to tensors and pad to match token sequence length
             batch_size = ops.shape(token_output["token_ids"])[0]
             seq_len = ops.shape(token_output["token_ids"])[1]
-            
+
             # Create bbox tensor
             bbox_tensor = []
             for i, bbox_seq in enumerate(processed_bbox):
@@ -217,9 +226,11 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
                     bbox_seq = bbox_seq[:seq_len]
                 else:
                     # Pad with dummy boxes
-                    bbox_seq = bbox_seq + [[0, 0, 0, 0]] * (seq_len - len(bbox_seq))
+                    bbox_seq = bbox_seq + [[0, 0, 0, 0]] * (
+                        seq_len - len(bbox_seq)
+                    )
                 bbox_tensor.append(bbox_seq)
-            
+
             # Convert to tensor
             bbox_tensor = ops.convert_to_tensor(bbox_tensor, dtype="int32")
             token_output["bbox"] = bbox_tensor
@@ -255,12 +266,12 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
             "mask_token": config.pop("mask_token", "[MASK]"),
             "unk_token": config.pop("unk_token", "[UNK]"),
         }
-        
+
         # Create instance using parent method
         instance = super().from_config(config)
-        
+
         # Set special tokens
         for token_name, token_value in special_tokens.items():
             setattr(instance, token_name, token_value)
-        
+
         return instance

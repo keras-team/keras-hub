@@ -27,7 +27,10 @@ from keras_hub.src.utils.preset_utils import register_presets
 if LayoutLMv3Backbone is not None:
     try:
         # Import presets from the presets file
-        from keras_hub.src.models.layoutlmv3.layoutlmv3_presets import backbone_presets
+        from keras_hub.src.models.layoutlmv3.layoutlmv3_presets import (
+            backbone_presets,
+        )
+
         register_presets(backbone_presets, LayoutLMv3Backbone)
     except Exception as e:
         import warnings

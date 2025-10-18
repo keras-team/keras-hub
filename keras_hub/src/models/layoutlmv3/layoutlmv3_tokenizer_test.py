@@ -23,7 +23,7 @@ class LayoutLMv3TokenizerTest(TestCase):
             "good": 10,
             "morning": 11,
         }
-        
+
         # Create simple merges for BPE
         self.merges = [
             "h e",
@@ -52,7 +52,11 @@ class LayoutLMv3TokenizerTest(TestCase):
         """Test tokenizer using the standardized test helper."""
         self.run_preprocessor_test(
             cls=LayoutLMv3Tokenizer,
-            init_kwargs={"vocabulary": self.vocabulary, "merges": self.merges, "sequence_length": 16},
+            init_kwargs={
+                "vocabulary": self.vocabulary,
+                "merges": self.merges,
+                "sequence_length": 16,
+            },
             input_data="hello world",
         )
 
