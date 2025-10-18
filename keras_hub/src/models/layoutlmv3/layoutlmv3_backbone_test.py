@@ -36,6 +36,8 @@ class LayoutLMv3BackboneTest(TestCase):
 
     def test_backbone_basics(self):
         model = LayoutLMv3Backbone(**self.init_kwargs)
+        # Call the model to ensure it's built
+        _ = model(self.input_data)
         self.assertEqual(model.vocabulary_size, 1000)
         self.assertEqual(model.hidden_dim, 64)
         self.assertEqual(model.num_layers, 2)

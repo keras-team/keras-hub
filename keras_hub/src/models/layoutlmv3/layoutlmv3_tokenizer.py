@@ -247,6 +247,8 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
         config = super().get_config()
         config.update(
             {
+                "vocabulary": self.vocabulary,
+                "merges": self.merges,
                 "cls_token": self.cls_token,
                 "sep_token": self.sep_token,
                 "pad_token": self.pad_token,
