@@ -1,6 +1,8 @@
 import contextlib
 import functools
 import inspect
+import math
+import re
 import threading
 
 import keras
@@ -19,6 +21,20 @@ except ImportError:
 NO_CONVERT_COUNTER = threading.local()
 
 
+def pad(x, shape, padding_side, pad_value):
+    if padding_side == "left":
+        x = x[..., ::-1]
+
+    outputs = x.to_tensor(
+        default_value=pad_value,
+        shape=shape,
+    )
+
+    if padding_side == "left":
+        outputs = outputs[..., ::-1]
+    return outputs
+
+
 @contextlib.contextmanager
 def no_convert_scope():
     try:
@@ -26,6 +42,12 @@ def no_convert_scope():
         yield
     finally:
         NO_CONVERT_COUNTER.count = getattr(NO_CONVERT_COUNTER, "count", 0) - 1
+
+
+def in_tf_function():
+    if tf is None:
+        return False
+    return not tf.executing_eagerly()
 
 
 def in_no_convert_scope():
@@ -288,7 +310,29 @@ def is_tensor_type(x):
 
 
 def is_float_dtype(dtype):
-    return "float" in keras.backend.standardize_dtype(dtype)
+    """
+    Checks if a dtype is a float type by using a regex.
+
+    This function standardizes the input dtype and then uses a regular
+    expression to perform an exact match. It identifies standard floats,
+    bfloats, and mixed-precision float types.
+
+    For example:
+    - `is_float_dtype("float32")` returns `True`.
+    - `is_float_dtype("bfloat16")` returns `True`.
+    - `is_float_dtype("mixed_float16")` returns `True`.
+    - `is_float_dtype("int8")` returns `False`.
+    - `is_float_dtype("int8_from_float32")` returns `False`.
+
+    Args:
+        dtype: str, DTypePolicy. The data type to check.
+
+    Returns:
+        bool: `True` if the dtype is a floating-point type, `False` otherwise.
+    """
+    pattern = re.compile(r"^(mixed_)?(b)?float[0-9]*$")
+    standardized_dtype = keras.backend.standardize_dtype(dtype)
+    return pattern.match(standardized_dtype) is not None
 
 
 def is_int_dtype(dtype):
@@ -297,6 +341,29 @@ def is_int_dtype(dtype):
 
 def is_string_dtype(dtype):
     return "string" in keras.backend.standardize_dtype(dtype)
+
+
+def get_dtype_size_in_bits(dtype):
+    """Get the size of a given dtype in bits."""
+    dtype = keras.backend.standardize_dtype(dtype)
+    # If dtype is bool, return 1 immediately.
+    if dtype == "bool":
+        return 1
+    # Else, we extract the bit size from the string.
+    return int(re.sub(r"bfloat|float|uint|int", "", dtype))
+
+
+def get_tensor_size_in_bits(shape, dtype):
+    """Calculate the size given dtype and shape in bits.
+
+    Args:
+        dtype: The dtype of the tensor.
+        shape: List of iterables representing the shape of the tensor.
+
+    Returns:
+        The size of the tensor in bytes.
+    """
+    return math.prod(shape) * get_dtype_size_in_bits(dtype)
 
 
 def any_equal(inputs, values, padding_mask):
@@ -314,7 +381,8 @@ def any_equal(inputs, values, padding_mask):
     Returns:
         A tensor with `inputs` shape where each position is True if it contains
             a value from any `values`. Padding mask will be applied before
-            returning."""
+            returning.
+    """
     output = ops.equal(inputs, values[0])
     for value in values[1:]:
         value_equality = ops.equal(inputs, value)

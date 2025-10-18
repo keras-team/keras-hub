@@ -125,7 +125,7 @@ class RandomDeletion(PreprocessingLayer):
 
         self.rate = rate
         self.max_deletions = max_deletions
-        self.seed = random.randint(1, 1e9) if seed is None else seed
+        self.seed = random.randint(1, int(1e9)) if seed is None else seed
         self._generator = tf.random.Generator.from_seed(self.seed)
         self.skip_list = skip_list
         self.skip_fn = skip_fn

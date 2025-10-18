@@ -1,5 +1,6 @@
 import collections
 import datetime
+import glob
 import inspect
 import json
 import os
@@ -9,7 +10,10 @@ import keras
 from absl import logging
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.utils import tensor_utils
 from keras_hub.src.utils.keras_utils import print_msg
+from keras_hub.src.utils.keras_utils import sharded_weights_available
+from keras_hub.src.utils.tensor_utils import get_tensor_size_in_bits
 
 try:
     import kagglehub
@@ -48,6 +52,7 @@ METADATA_FILE = "metadata.json"
 # Weight file names.
 MODEL_WEIGHTS_FILE = "model.weights.h5"
 TASK_WEIGHTS_FILE = "task.weights.h5"
+SHARDED_MODEL_WEIGHTS_CONFIG_FILE = "model.weights.json"
 
 # HuggingFace filenames.
 README_FILE = "README.md"
@@ -238,7 +243,8 @@ def get_file(preset, path):
             "2) a Kaggle Models handle like "
             "`'kaggle://keras/bert/keras/bert_base_en'`\n"
             "3) a Hugging Face handle like `'hf://username/bert_base_en'`\n"
-            "4) a path to a local preset directory like `'./bert_base_en`\n"
+            "4) a Modelscope handle like `'modelscope://username/bert_base_en'`\n"
+            "5) a path to a local preset directory like `'./bert_base_en'`\n"
             "Use `print(cls.presets.keys())` to view all built-in presets for "
             "API symbol `cls`.\n"
             f"Received: preset='{preset}'"
@@ -313,7 +319,8 @@ def _validate_backbone(preset):
         )
 
     weights_path = os.path.join(preset, MODEL_WEIGHTS_FILE)
-    if not os.path.exists(weights_path):
+    sharded_weights_path = os.path.join(preset, "model_*.weights.h5")
+    if not os.path.exists(weights_path) and not glob.glob(sharded_weights_path):
         raise FileNotFoundError(
             f"The weights file is missing from the preset directory `{preset}`."
         )
@@ -495,10 +502,17 @@ def jax_memory_cleanup(layer):
     # For jax, delete all previous allocated memory to avoid temporarily
     # duplicating variable allocations. torch and tensorflow have stateful
     # variable types and do not need this fix.
+    # Skip deletion for sharded arrays to avoid breaking references in
+    # distributed setups.
     if keras.config.backend() == "jax":
         for weight in layer.weights:
-            if getattr(weight, "_value", None) is not None:
-                weight._value.delete()
+            if weight._value is not None:
+                # Do not delete sharded arrays, as they may be referenced in
+                # JAX's distributed computation graph and deletion can cause
+                # errors.
+                sharding = getattr(weight._value, "sharding", None)
+                if sharding is None:
+                    weight._value.delete()
 
 
 def set_dtype_in_config(config, dtype=None):
@@ -643,10 +657,13 @@ class KerasPresetLoader(PresetLoader):
         return check_config_class(self.config)
 
     def load_backbone(self, cls, load_weights, **kwargs):
-        backbone = self._load_serialized_object(self.config, **kwargs)
+        config = self.config.copy()
+        backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
+        config["config"] = {**config["config"], **backbone_kwargs}
+        backbone = self._load_serialized_object(config, **kwargs)
         if load_weights:
             jax_memory_cleanup(backbone)
-            backbone.load_weights(get_file(self.preset, MODEL_WEIGHTS_FILE))
+            self._load_backbone_weights(backbone)
         return backbone
 
     def load_tokenizer(self, cls, config_file=TOKENIZER_CONFIG_FILE, **kwargs):
@@ -678,6 +695,7 @@ class KerasPresetLoader(PresetLoader):
             )
         # We found a `task.json` with a complete config for our class.
         # Forward backbone args.
+        kwargs["dtype"] = self._resolve_dtype(self.config, kwargs)
         backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
         if "backbone" in task_config["config"]:
             backbone_config = task_config["config"]["backbone"]["config"]
@@ -696,9 +714,55 @@ class KerasPresetLoader(PresetLoader):
                 task.load_task_weights(task_weights)
             else:
                 jax_memory_cleanup(task.backbone)
-            backbone_weights = get_file(self.preset, MODEL_WEIGHTS_FILE)
-            task.backbone.load_weights(backbone_weights)
+            self._load_backbone_weights(task.backbone)
         return task
+
+    def _resolve_dtype(self, config, kwargs):
+        """Resolves the Model's dtype based on the provided config and kwargs.
+
+        The data type is resolved based on the following priority:
+        1. If a user specified dtype is passed, use that.
+        2. If no user specified dtype is passed, and the save dtype is castable
+          to the current keras default dtype convert weights on load (float type
+          to float type).
+        3. If not user specified dtype is passed, and the save dtype is not
+          castable to the current default dtype (quantized dtypes). Load the
+          saved types verbatim.
+
+        Args:
+            config: dict. The model configuration.
+            kwargs: dict. Additional keyword arguments, potentially including
+             `dtype`.
+
+        Returns:
+            str, dict, or DTypePolicy. The resolved dtype.
+        """
+        # 1. If a user specified dtype is passed, use that.
+        if "dtype" in kwargs and kwargs["dtype"] is not None:
+            return kwargs["dtype"]
+
+        saved_dtype = config.get("config", {}).get("dtype")
+
+        # If there's no saved dtype, we don't need to do anything.
+        if saved_dtype is None:
+            return None
+
+        # 2. Check whether the saved dtype is a simple float type.
+        policy_name = saved_dtype.get("config", {}).get("name")
+        if policy_name and tensor_utils.is_float_dtype(policy_name):
+            # If the saved dtype is a float, we can safely cast to the default
+            # backend float type.
+            if policy_name != keras.config.dtype_policy().name:
+                logging.info(
+                    f"Converting weights saved as {policy_name} "
+                    "to the current Keras dtype policy "
+                    f"{keras.config.dtype_policy()}"
+                )
+            return keras.config.dtype_policy()
+        else:
+            # 3. Otherwise, the dtype is a complex object (e.g. a
+            # DTypePolicyMap for quantization), and should be used as is.
+            return saved_dtype
 
     def load_preprocessor(
         self, cls, config_file=PREPROCESSOR_CONFIG_FILE, **kwargs
@@ -725,17 +789,73 @@ class KerasPresetLoader(PresetLoader):
         config["config"] = {**config["config"], **kwargs}
         return keras.saving.deserialize_keras_object(config)
 
+    def _get_sharded_filenames(self, config_path):
+        with open(config_path, encoding="utf-8") as config_file:
+            config = json.load(config_file)
+        weight_map = config["weight_map"]
+        filenames = set()
+        for v in weight_map.values():
+            if isinstance(v, list):
+                filenames.update(v)
+            else:
+                filenames.add(v)
+        return sorted(filenames)
+
+    def _load_backbone_weights(self, backbone):
+        # Detect if the backbone is sharded or not.
+        has_single_file_weights = check_file_exists(
+            self.preset, MODEL_WEIGHTS_FILE
+        )
+        if has_single_file_weights:
+            filepath = get_file(self.preset, MODEL_WEIGHTS_FILE)
+        else:
+            if not sharded_weights_available():
+                raise RuntimeError(
+                    "Sharded weights loading is not supported in the current "
+                    f"Keras version {keras.__version__}. "
+                    "Please update to a newer version."
+                )
+            filepath = get_file(self.preset, SHARDED_MODEL_WEIGHTS_CONFIG_FILE)
+            sharded_filenames = self._get_sharded_filenames(filepath)
+            for sharded_filename in sharded_filenames:
+                # Download the sharded weights.
+                _ = get_file(self.preset, sharded_filename)
+        backbone.load_weights(filepath)
+
 
 class KerasPresetSaver:
     def __init__(self, preset_dir):
         os.makedirs(preset_dir, exist_ok=True)
         self.preset_dir = preset_dir
 
-    def save_backbone(self, backbone):
+    def save_backbone(self, backbone, max_shard_size=10):
         self._save_serialized_object(backbone, config_file=CONFIG_FILE)
-        backbone_weight_path = os.path.join(self.preset_dir, MODEL_WEIGHTS_FILE)
-        backbone.save_weights(backbone_weight_path)
         self._save_metadata(backbone)
+
+        # Save the weights.
+        backbone_size_in_bytes = self._get_variables_size_in_bytes(
+            backbone.variables
+        )
+        backbone_size_in_gb = backbone_size_in_bytes / (1024**3)
+        # If the size of the backbone is larger than `max_shard_size`, save
+        # sharded weights.
+        if (
+            sharded_weights_available()
+            and max_shard_size is not None
+            and backbone_size_in_gb > max_shard_size
+        ):
+            backbone_sharded_weights_config_path = os.path.join(
+                self.preset_dir, SHARDED_MODEL_WEIGHTS_CONFIG_FILE
+            )
+            backbone.save_weights(
+                backbone_sharded_weights_config_path,
+                max_shard_size=max_shard_size,
+            )
+        else:
+            backbone_weight_path = os.path.join(
+                self.preset_dir, MODEL_WEIGHTS_FILE
+            )
+            backbone.save_weights(backbone_weight_path)
 
     def save_tokenizer(self, tokenizer):
         config_file = TOKENIZER_CONFIG_FILE
@@ -754,7 +874,7 @@ class KerasPresetSaver:
     def save_image_converter(self, converter):
         self._save_serialized_object(converter, IMAGE_CONVERTER_CONFIG_FILE)
 
-    def save_task(self, task):
+    def save_task(self, task, max_shard_size=10):
         # Save task specific config and weights.
         self._save_serialized_object(task, TASK_CONFIG_FILE)
         if task.has_task_weights():
@@ -762,10 +882,12 @@ class KerasPresetSaver:
             task.save_task_weights(task_weight_path)
         # Save backbone.
         if hasattr(task.backbone, "save_to_preset"):
-            task.backbone.save_to_preset(self.preset_dir)
+            task.backbone.save_to_preset(
+                self.preset_dir, max_shard_size=max_shard_size
+            )
         else:
             # Allow saving a `keras.Model` that is not a backbone subclass.
-            self.save_backbone(task.backbone)
+            self.save_backbone(task.backbone, max_shard_size=max_shard_size)
         # Save preprocessor.
         if task.preprocessor and hasattr(task.preprocessor, "save_to_preset"):
             task.preprocessor.save_to_preset(self.preset_dir)
@@ -800,7 +922,7 @@ class KerasPresetSaver:
 
     def _save_metadata(self, layer):
         from keras_hub.src.models.task import Task
-        from keras_hub.src.version_utils import __version__ as keras_hub_version
+        from keras_hub.src.version import __version__ as keras_hub_version
 
         # Find all tasks that are compatible with the backbone.
         # E.g. for `BertBackbone` we would have `TextClassifier` and `MaskedLM`.
@@ -822,3 +944,13 @@ class KerasPresetSaver:
         metadata_path = os.path.join(self.preset_dir, METADATA_FILE)
         with open(metadata_path, "w") as metadata_file:
             metadata_file.write(json.dumps(metadata, indent=4))
+
+    def _get_variables_size_in_bytes(self, variables):
+        unique_variables = {}
+        for v in variables:
+            if id(v) not in unique_variables:
+                unique_variables[id(v)] = (v.shape, v.dtype)
+        total_memory_size = 0
+        for shape, dtype in unique_variables.values():
+            total_memory_size += get_tensor_size_in_bits(shape, dtype)
+        return total_memory_size / 8

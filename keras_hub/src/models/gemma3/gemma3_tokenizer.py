@@ -4,6 +4,10 @@ from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
 
+START_OF_IMAGE_TOKEN = "<start_of_image>"
+IMAGE_PLACEHOLDER_TOKEN = "<img>"
+END_OF_IMAGE_TOKEN = "<end_of_image>"
+
 
 @keras_hub_export(
     [
@@ -83,5 +87,10 @@ class Gemma3Tokenizer(SentencePieceTokenizer):
 
         # Image placeholder token.
         self._add_special_token("<img>", "image_placeholder")
+
+        #  Some tokens which are used in the preprocessor. We need to keep them
+        # here so that the preprocessor works with `tf.data`.
+        self._add_special_token("<start_of_image>", "start_of_image_token")
+        self._add_special_token("<end_of_image>", "end_of_image_token")
 
         super().__init__(proto=proto, **kwargs)

@@ -7,6 +7,7 @@ from keras_hub.src.utils.timm import convert_cspnet
 from keras_hub.src.utils.timm import convert_densenet
 from keras_hub.src.utils.timm import convert_efficientnet
 from keras_hub.src.utils.timm import convert_mobilenet
+from keras_hub.src.utils.timm import convert_mobilenetv5
 from keras_hub.src.utils.timm import convert_resnet
 from keras_hub.src.utils.timm import convert_vgg
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
@@ -16,17 +17,19 @@ class TimmPresetLoader(PresetLoader):
     def __init__(self, preset, config):
         super().__init__(preset, config)
         architecture = self.config["architecture"]
-        if "resnet" in architecture:
+        if architecture.startswith("resnet"):
             self.converter = convert_resnet
-        elif "csp" in architecture:
+        elif architecture.startswith(("csp", "dark")):
             self.converter = convert_cspnet
-        elif "densenet" in architecture:
+        elif architecture.startswith("densenet"):
             self.converter = convert_densenet
-        elif "mobilenet" in architecture:
+        elif architecture.startswith("mobilenetv5"):
+            self.converter = convert_mobilenetv5
+        elif architecture.startswith("mobilenet"):
             self.converter = convert_mobilenet
-        elif "vgg" in architecture:
+        elif architecture.startswith("vgg"):
             self.converter = convert_vgg
-        elif "efficientnet" in architecture:
+        elif architecture.startswith("efficientnet"):
             self.converter = convert_efficientnet
         else:
             raise ValueError(
@@ -41,7 +44,8 @@ class TimmPresetLoader(PresetLoader):
         keras_config = self.converter.convert_backbone_config(self.config)
         backbone = cls(**{**keras_config, **kwargs})
         if load_weights:
-            jax_memory_cleanup(backbone)
+            if not self.config["architecture"].startswith("mobilenetv5"):
+                jax_memory_cleanup(backbone)
             # Use prefix="" to avoid using `get_prefixed_key`.
             with SafetensorLoader(self.preset, prefix="") as loader:
                 self.converter.convert_weights(backbone, loader, self.config)
@@ -54,9 +58,9 @@ class TimmPresetLoader(PresetLoader):
             )
         # Support loading the classification head for classifier models.
         kwargs["num_classes"] = self.config["num_classes"]
-        if (
-            "num_features" in self.config
-            and "mobilenet" in self.config["architecture"]
+        if "num_features" in self.config and (
+            "mobilenet" in self.config["architecture"]
+            or "mobilenetv5" in self.config["architecture"]
         ):
             kwargs["num_features"] = self.config["num_features"]
 

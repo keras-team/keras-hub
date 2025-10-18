@@ -7,20 +7,29 @@ from keras import ops
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.utils.keras_utils import has_flash_attention_support
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
+from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
 class CachedGemma3Attention(keras.layers.Layer):
     """A cached grouped query attention layer for Gemma3.
 
-    This is different from Gemma and Gemma2 in several ways:
+    This is the same as the attention layer used for Gemma and Gemma2. It
+    exposes a few additional args:
 
-    - `use_query_key_norm`: Applies RMS Norm on query, key.
-    - `rope_wavelength`: RoPE wavelength differs from local to global attention
-      layers.
-    - `rope_scaling_factor`: RoPE scaling factor differs from local to global
-      attention layers.
+    `use_query_key_norm`: bool. If True, apply RMS normalization on query
+        and key. For Gemma3, this is True.
+    `rope_wavelength`: float. Configurable value for RoPE wavelength. Gemma3
+        uses 10K for local attention layers and 1M for global attention layers.
+    `gate_dim_reduction`: int. In the gating layers, the output dimension is
+        `intermediate_dim // gate_dim_reduction`. For Gemma and Gemma2, this
+        value is 2. For Gemma3, it is 1.
+
+    Moreover, the call() method takes in a `cache_update_mask` so as to make
+    sure that the key-value cache is updated only for the non-prompt tokens
+    during generation.
     """
 
     def __init__(
@@ -37,6 +46,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         layer_norm_epsilon=1e-6,
         rope_wavelength=10_000.0,
         rope_scaling_factor=1.0,
+        use_bidirectional_attention=False,
         dropout=0,
         **kwargs,
     ):
@@ -52,6 +62,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.rope_wavelength = rope_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.use_bidirectional_attention = use_bidirectional_attention
         self.dropout = dropout
 
         self._kernel_initializer = keras.initializers.get(
@@ -139,17 +150,22 @@ class CachedGemma3Attention(keras.layers.Layer):
         x = self.rope_layer(x, start_index=start_index)
         return x
 
-    def _can_use_flash_attention(self):
-        if not has_flash_attention_support():
+    def _use_fused_attention_op(self):
+        if not fused_attention_op_available():
             return False
         if self.dropout > 0.0:
             return False
-        if self.logit_soft_cap is None:
-            return True
-        sig = inspect.signature(ops.dot_product_attention)
-        # We can currently only run soft capped attention for keras >= 3.10
-        # and only on TPU.
-        return running_on_tpu() and "attn_logits_soft_cap" in sig.parameters
+        if running_on_gpu():
+            # GPU never supports softcap in the fused op.
+            if self.logit_soft_cap is not None:
+                return False
+            return gpu_supports_fused_attention_op()
+        elif running_on_tpu():
+            # TPU supports softcap with on keras >= 3.10.
+            sig = inspect.signature(ops.dot_product_attention)
+            return "attn_logits_soft_cap" in sig.parameters
+        else:
+            return False
 
     def _compute_attention(
         self,
@@ -166,7 +182,14 @@ class CachedGemma3Attention(keras.layers.Layer):
             query_normalization = 1 / np.sqrt(
                 self.hidden_dim // self.num_query_heads
             )
-        if self._can_use_flash_attention():
+
+        if self.use_sliding_window_attention and attention_mask is not None:
+            attention_mask = self._mask_sliding_window(
+                attention_mask,
+                cache_update_index=cache_update_index,
+            )
+
+        if self._use_fused_attention_op():
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
                 attention_mask = ops.cast(attention_mask, dtype="bool")
@@ -205,13 +228,8 @@ class CachedGemma3Attention(keras.layers.Layer):
                 ops.tanh(attention_logits), self.logit_soft_cap
             )
 
-        if self.use_sliding_window_attention:
-            attention_mask = self._mask_sliding_window(
-                attention_mask,
-                cache_update_index=cache_update_index,
-            )
-
-        attention_mask = attention_mask[:, None, None, :, :]
+        if attention_mask is not None:
+            attention_mask = attention_mask[:, None, None, :, :]
         orig_dtype = attention_logits.dtype
         attention_softmax = self.softmax(attention_logits, mask=attention_mask)
         attention_softmax = ops.cast(attention_softmax, orig_dtype)
@@ -224,12 +242,58 @@ class CachedGemma3Attention(keras.layers.Layer):
         results = ops.einsum("bkgts,bskh->btkgh", attention_softmax, v)
         return ops.reshape(results, (b, q_len, self.num_query_heads, h))
 
+    def _compute_bidirectional_sliding_mask(self, batch_size, sequence_length):
+        """Computes a bidirectional sliding window attention mask.
+
+        A token can attend to any other token if their absolute distance is
+        within  half the sliding window size. This mask is used in embedding
+        models like `EmbeddingGemma`.
+
+        Args:
+            batch_size: The batch size for the mask.
+            sequence_length: The length of the sequence.
+
+        Returns:
+            A boolean attention mask with shape
+            `(batch_size, sequence_length, sequence_length)`.
+        """
+        i = keras.ops.expand_dims(
+            keras.ops.arange(sequence_length, dtype="int32"), axis=1
+        )
+        j = keras.ops.arange(sequence_length, dtype="int32")
+
+        # If sliding window size is 4, the token in question attends to 1
+        # token before and 2 tokens after.
+        w_right = self.sliding_window_size // 2
+        w_left = self.sliding_window_size - w_right - 1
+
+        # Calculate the relative distance.
+        distance = i - j
+
+        mask = keras.ops.logical_and(distance <= w_left, distance >= -w_right)
+
+        mask = keras.ops.expand_dims(mask, axis=0)
+        return keras.ops.broadcast_to(
+            mask, (batch_size, sequence_length, sequence_length)
+        )
+
     def _mask_sliding_window(
         self,
         attention_mask,
         cache_update_index=0,
     ):
         batch_size, query_len, key_len = ops.shape(attention_mask)
+
+        if self.use_bidirectional_attention:
+            bidirectional_sliding_mask = (
+                self._compute_bidirectional_sliding_mask(
+                    batch_size=batch_size,
+                    # `query_len = key_len` for embedding models
+                    sequence_length=query_len,
+                )
+            )
+            return ops.logical_and(attention_mask, bidirectional_sliding_mask)
+
         # Compute the sliding window for square attention.
         all_ones = ops.ones((key_len, key_len), "bool")
         if keras.config.backend() == "tensorflow":
@@ -256,6 +320,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         attention_mask=None,
         cache=None,
         cache_update_index=0,
+        cache_update_mask=None,
         training=False,
     ):
         query = self.query_dense(x)
@@ -275,7 +340,43 @@ class CachedGemma3Attention(keras.layers.Layer):
 
             key_update = self._apply_rope(key_update, cache_update_index)
             value_update = self.value_dense(x)
+
+            # Update cache. Note that the cache is updated only if the
+            # corresponding `cache_update_mask` value is True. This is to
+            # ensure that we don't update the cache at indices corresponding to
+            # the prompt. For Gemma3, in particular, this is useful because
+            # image tokens have bidirectional attention. During generation,
+            # if we have uneven inputs during generation, we might end up having
+            # causal attention between image tokens, which is incorrect. To
+            # avoid this, bidirectional attention is taken care of during
+            # the prefill step, and during generation, the cache is not updated
+            # for the prompt. The shape of `cache_update_mask` is
+            # `(bsz, seq_len)`, where `seq_len` is 1 when we are generating
+            # token-by-token.
             start = [0, cache_update_index, 0, 0]
+            if cache_update_mask is not None:
+                cache_update_mask = ops.expand_dims(
+                    ops.expand_dims(cache_update_mask, axis=-1),
+                    axis=-1,
+                )
+                key_original = ops.slice(
+                    key_cache, start, ops.shape(key_update)
+                )
+                value_original = ops.slice(
+                    value_cache, start, ops.shape(value_update)
+                )
+
+                key_update = ops.where(
+                    cache_update_mask,
+                    key_update,
+                    key_original,
+                )
+                value_update = ops.where(
+                    cache_update_mask,
+                    value_update,
+                    value_original,
+                )
+
             key = ops.slice_update(key_cache, start, key_update)
             value = ops.slice_update(value_cache, start, value_update)
             cache = ops.stack((key, value), axis=1)

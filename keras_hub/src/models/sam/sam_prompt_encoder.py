@@ -67,7 +67,9 @@ class SAMPromptEncoder(keras.layers.Layer):
         self.activation = activation
 
         self.positional_embedding_layer = RandomFrequencyPositionalEmbeddings(
-            num_positional_features=self.hidden_size // 2, scale=1
+            num_positional_features=self.hidden_size // 2,
+            scale=1,
+            dtype=self.dtype,
         )
 
         self.foreground_point_embed = keras.layers.Embedding(

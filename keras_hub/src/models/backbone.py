@@ -91,21 +91,16 @@ class Backbone(keras.Model):
         }
 
         # Add quantization support by utilizing `DTypePolicyMap`
-        try:
-            if isinstance(
-                self.dtype_policy, keras.dtype_policies.DTypePolicyMap
-            ):
-                config.update({"dtype": self.dtype_policy})
-            else:
-                policy_map = keras.dtype_policies.DTypePolicyMap()
-                for layer in self._flatten_layers():
-                    if layer.quantization_mode is not None:
-                        policy_map[layer.path] = layer.dtype_policy
-                if len(policy_map) > 0:
-                    config.update({"dtype": policy_map})
-        # Before Keras 3.2, there is no `keras.dtype_policies.get`.
-        except AttributeError:
-            pass
+        dtype = self.dtype_policy
+        if not isinstance(dtype, keras.dtype_policies.DTypePolicyMap):
+            policy_map = keras.dtype_policies.DTypePolicyMap()
+            for layer in self._flatten_layers():
+                if layer.quantization_mode is not None:
+                    policy_map[layer.path] = layer.dtype_policy
+            if len(policy_map) > 0:
+                dtype = policy_map
+
+        config.update({"dtype": keras.dtype_policies.serialize(dtype)})
         return config
 
     @classmethod
@@ -135,7 +130,8 @@ class Backbone(keras.Model):
         1. a built-in preset identifier like `'bert_base_en'`
         2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
         3. a Hugging Face handle like `'hf://user/bert_base_en'`
-        4. a path to a local preset directory like `'./bert_base_en'`
+        4. a ModelScope handle like `'modelscope://user/bert_base_en'`
+        5. a path to a local preset directory like `'./bert_base_en'`
 
         This constructor can be called in one of two ways. Either from the base
         class like `keras_hub.models.Backbone.from_preset()`, or from
@@ -177,32 +173,38 @@ class Backbone(keras.Model):
             )
         return loader.load_backbone(backbone_cls, load_weights, **kwargs)
 
-    def save_to_preset(self, preset_dir):
+    def save_to_preset(self, preset_dir, max_shard_size=10):
         """Save backbone to a preset directory.
 
         Args:
             preset_dir: The path to the local model preset directory.
+            max_shard_size: `int` or `float`. Maximum size in GB for each
+                sharded file. If `None`, no sharding will be done. Defaults to
+                `10`.
         """
         saver = get_preset_saver(preset_dir)
-        saver.save_backbone(self)
+        saver.save_backbone(self, max_shard_size=max_shard_size)
 
-    def get_lora_target_names(self):
-        """Returns list of layer names which are to be LoRA-fied.
-
-        Subclasses can override this method if the names of layers to be
-        LoRa-fied are different.
-        """
+    def default_lora_layer_names(self):
+        """Returns list of layer names which are to be LoRA-fied."""
         return ["query_dense", "value_dense", "query", "value"]
 
-    def enable_lora(self, rank, target_names=None):
+    def enable_lora(self, rank, target_layer_names=None):
         """Enable Lora on the backbone.
 
         Calling this method will freeze all weights on the backbone,
         while enabling Lora on the query & value `EinsumDense` layers
         of the attention layers.
+
+        Args:
+            rank: The rank of the LoRA factorization.
+            target_layer_names: A list of strings, the names of the layers to
+                apply LoRA to. If `None`, this will be populated with the
+                default LoRA layer names as returned by
+                `backbone.default_lora_layer_names()`.
         """
-        if target_names is None:
-            target_names = self.get_lora_target_names()
+        if target_layer_names is None:
+            target_layer_names = self.default_lora_layer_names()
         self.trainable = True
         self._lora_enabled_layers = []
         self._lora_rank = rank
@@ -211,7 +213,7 @@ class Backbone(keras.Model):
         all_layers = self._flatten_layers(include_self=False)
         all_layers = [lyr for lyr in all_layers if lyr.weights]
         for i, layer in enumerate(all_layers):
-            for name in target_names:
+            for name in target_layer_names:
                 if layer.name == name:
                     if hasattr(layer, "enable_lora"):
                         layer.trainable = True
@@ -271,3 +273,19 @@ class Backbone(keras.Model):
             layer.lora_kernel_a.assign(lora_kernel_a)
             layer.lora_kernel_b.assign(lora_kernel_b)
         store.close()
+
+    def export_to_transformers(self, path):
+        """Export the backbone model to HuggingFace Transformers format.
+
+        This saves the backbone's configuration and weights in a format
+        compatible with HuggingFace Transformers. For unsupported model
+        architectures, a ValueError is raised.
+
+        Args:
+            path: str. Path to save the exported model.
+        """
+        from keras_hub.src.utils.transformers.export.hf_exporter import (
+            export_backbone,
+        )
+
+        export_backbone(self, path)

@@ -19,13 +19,10 @@ class Gemma3Backbone(Backbone):
 
     This backbone implements the Gemma3 model architecture. Gemma3 is a
     vision-language model (image-text in, text out). The text input is encoded
-    using an embedding layer; images are encoded using a vision transformer.
-    After encoding these two modalities, the image embeddings are placed in the
-    correct position in the text embedding sequence. The mixed sequence of
-    embeddings is then passed through transformer decoder layers.
-
-    Currently, this model supports only the `vision_encoder = None` case, i.e.,
-    working only with text.
+    using an embedding layer; images are encoded using a vision transformer
+    (ViT). After encoding these two modalities, the image embeddings are placed
+    in the correct position in the text embedding sequence. The mixed sequence
+    of embeddings is then passed through transformer decoder layers.
 
     For a higher-level object for text-generation, see
     `keras_hub.models.Gemma3CausalLM`.
@@ -66,8 +63,9 @@ class Gemma3Backbone(Backbone):
           window attention. Defaults to `False`.
         sliding_window_size: int. Size of the sliding local window. Defaults to
             `4096`.
-        vision_encoder: `keras.Model` or `keras.layers.Layer` instance. `call()`
-            takes in images and returns corresponding sequence of embeddings.
+        vision_encoder: A `Gemma3VisionEncoder` instance. `call()`
+            takes in images and returns corresponding sequence of embeddings. If
+            `None`, the model is a text-only model.
         layer_norm_epsilon: float. The epsilon value user for every layer norm
             in all transformer blocks. Defaults to `1e-6`.
         dropout: float. Dropout probability for the Transformer decoder blocks.
@@ -75,10 +73,12 @@ class Gemma3Backbone(Backbone):
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
-            be done a float32 precision regardless of dtype.
+            be done in float32 precision regardless of dtype. Defaults to
+            `bfloat16`.
 
     Example:
     ```python
+    # === Language Gemma3 model ===
     input_data = {}
     input_data["token_ids"] = np.ones(shape=(1, 300), dtype="int32")
     input_data["padding_mask"] = (
@@ -87,31 +87,89 @@ class Gemma3Backbone(Backbone):
     )
 
     # Pretrained Gemma3 decoder.
+    model = keras_hub.models.Gemma3Backbone.from_preset(
+        "gemma3_instruct_4b_text"
+    )
+    model(input_data)
+
+    # Randomly initialized Gemma3 decoder with a custom config.
+    model = keras_hub.models.Gemma3Backbone(
+        vocabulary_size=262144,
+        image_size=896,
+        num_layers=34,
+        num_query_heads=8,
+        num_key_value_heads=4,
+        hidden_dim=2560,
+        intermediate_dim=10240,
+        head_dim=256,
+        query_head_dim_normalize=True,
+        use_post_ffw_norm=True,
+        use_post_attention_norm=True,
+        final_logit_soft_cap=None,
+        attention_logit_soft_cap=None,
+        sliding_window_size=1024,
+        use_sliding_window_attention=True,
+        vision_encoder=None,
+        layer_norm_epsilon=1e-06,
+        dtype="bfloat16",
+    )
+    model(input_data)
+
+    # === Vision + Language Gemma3 model ===
+    input_data = {}
+    input_data["images"] = np.ones(shape=(1, 1, 896, 896, 3))
+    input_data["token_ids"] = np.ones(shape=(1, 300), dtype="int32")
+    # images after the text part of the sequence.
+    input_data["vision_mask"] = np.expand_dims(
+        np.array([0] * 30 + [1] * 256 + [0] * 14),
+        axis=0,
+    ).astype(bool)
+    input_data["vision_indices"] = (
+        np.expand_dims(np.arange(30, 286), axis=0)
+    )
+    input_data["padding_mask"] = (
+        np.expand_dims(np.array([1] * 286 + [0] * (300 - 286)), axis=0)
+        .astype(bool)
+    )
+
+    # Pretrained Gemma3 decoder.
     model = keras_hub.models.Gemma3Backbone.from_preset("gemma3_instruct_4b")
     model(input_data)
 
-    config = {
-        'vocabulary_size': 262144,
-        'image_size': 896,
-        'num_layers': 34,
-        'num_query_heads': 8,
-        'num_key_value_heads': 4,
-        'hidden_dim': 2560,
-        'intermediate_dim': 10240,
-        'head_dim': 256,
-        'query_head_dim_normalize': True,
-        'use_post_ffw_norm': True,
-        'use_post_attention_norm': True,
-        'final_logit_soft_cap': None,
-        'attention_logit_soft_cap': None,
-        'sliding_window_size': 1024,
-        'use_sliding_window_attention': True,
-        'vision_encoder': None,
-        'layer_norm_epsilon': 1e-06,
-        dtype: "bfloat16",
-    }
+    # Randomly initialized Gemma3 decoder with a custom config.
+    vision_encoder = Gemma3VisionEncoder(
+        image_size=896,
+        patch_size=14,
+        num_heads=16,
+        hidden_dim=1152,
+        num_layers=27,
+        intermediate_dim=4304,
+        output_dim=2560,
+        pool_size=4,
+        layer_norm_epsilon=1e-6,
+        dtype="float32",
+    )
 
-    model = keras_hub.models.Gemma3Backbone(**config)
+    model = keras_hub.models.Gemma3Backbone(
+        vocabulary_size=262144,
+        image_size=896,
+        num_layers=34,
+        num_query_heads=8,
+        num_key_value_heads=4,
+        hidden_dim=2560,
+        intermediate_dim=10240,
+        head_dim=256,
+        query_head_dim_normalize=True,
+        use_post_ffw_norm=True,
+        use_post_attention_norm=True,
+        final_logit_soft_cap=None,
+        attention_logit_soft_cap=None,
+        sliding_window_size=1024,
+        use_sliding_window_attention=True,
+        vision_encoder=vision_encoder,
+        layer_norm_epsilon=1e-06,
+        dtype="bfloat16"
+    )
     model(input_data)
     ```
     """
@@ -134,18 +192,15 @@ class Gemma3Backbone(Backbone):
         final_logit_soft_cap=None,
         use_sliding_window_attention=False,
         sliding_window_size=1024,
+        local_rope_scaling_factor=1.0,
+        global_rope_scaling_factor=1.0,
         vision_encoder=None,
         layer_norm_epsilon=1e-6,
+        use_bidirectional_attention=False,
         dropout=0,
         dtype=None,
         **kwargs,
     ):
-        if vision_encoder is not None:
-            raise ValueError(
-                "Currently, only the text version of the Gemma3 model is "
-                "supported."
-            )
-
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
@@ -155,7 +210,6 @@ class Gemma3Backbone(Backbone):
                 scale=1.0,
                 mode="fan_in",
                 distribution="untruncated_normal",
-                seed=None,
             ),
             dtype=dtype,
             logit_soft_cap=final_logit_soft_cap,
@@ -176,7 +230,11 @@ class Gemma3Backbone(Backbone):
             # 5 local, 1 global
             sliding_window = use_sliding_window_attention and (i % 6 < 5)
             rope_wavelength = 10_000.0 if sliding_window else 1_000_000.0
-            rope_scaling_factor = 1.0 if sliding_window else 8.0
+            rope_scaling_factor = (
+                local_rope_scaling_factor
+                if sliding_window
+                else global_rope_scaling_factor
+            )
             layer = Gemma3DecoderBlock(
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
@@ -193,6 +251,7 @@ class Gemma3Backbone(Backbone):
                 sliding_window_size=sliding_window_size,
                 rope_wavelength=rope_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
+                use_bidirectional_attention=use_bidirectional_attention,
                 dropout=dropout,
                 dtype=dtype,
                 name=f"decoder_block_{i}",
@@ -215,10 +274,11 @@ class Gemma3Backbone(Backbone):
             vision_indices_input = keras.Input(
                 shape=(None,), dtype="int32", name="vision_indices"
             )
-            # TODO: Consider removing `text_mask_input` and using
-            # `vision_indices_input` to infer it directly.
-            text_mask_input = keras.Input(
-                shape=(None,), dtype="int32", name="text_mask"
+            # Truth be told, this is redundant, and we can infer this from
+            # `vision_indices_input`. But it is easier to return this from
+            # the preprocessor than to compute it here.
+            vision_mask_input = keras.Input(
+                shape=(None,), dtype="int32", name="vision_mask"
             )
 
         token_id_input = keras.Input(
@@ -239,7 +299,7 @@ class Gemma3Backbone(Backbone):
         if not text_only_model:
             img_embeddings = self.vision_encoder(image_input)
 
-            ## == Interleaving text and images ==
+            # == Interleaving text and images ==
             # Place image embeddings in the right position in
             # `text_embeddings`.
             x = self.interleave_embeddings(
@@ -255,7 +315,7 @@ class Gemma3Backbone(Backbone):
             x = transformer_layer(
                 x,
                 padding_mask=padding_mask_input,
-                text_mask=None if text_only_model else text_mask_input,
+                vision_mask=None if text_only_model else vision_mask_input,
             )
         sequence_output = self.layer_norm(x)
 
@@ -268,7 +328,7 @@ class Gemma3Backbone(Backbone):
                 {
                     "images": image_input,
                     "vision_indices": vision_indices_input,
-                    "text_mask": text_mask_input,
+                    "vision_mask": vision_mask_input,
                 }
             )
 
@@ -296,6 +356,9 @@ class Gemma3Backbone(Backbone):
         self.final_logit_soft_cap = final_logit_soft_cap
         self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
+        self.local_rope_scaling_factor = local_rope_scaling_factor
+        self.global_rope_scaling_factor = global_rope_scaling_factor
+        self.use_bidirectional_attention = use_bidirectional_attention
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
 
@@ -330,14 +393,25 @@ class Gemma3Backbone(Backbone):
                     self.use_sliding_window_attention
                 ),
                 "sliding_window_size": self.sliding_window_size,
+                "local_rope_scaling_factor": self.local_rope_scaling_factor,
+                "global_rope_scaling_factor": self.global_rope_scaling_factor,
                 "vision_encoder": None
                 if self.vision_encoder is None
                 else keras.layers.serialize(self.vision_encoder),
+                "use_bidirectional_attention": self.use_bidirectional_attention,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
             }
         )
         return config
+
+    def default_lora_layer_names(self):
+        target_names = super().default_lora_layer_names()
+
+        # Add these for `Gemma3VITAttention`.
+        if not self.text_only_model:
+            target_names += ["query_proj", "value_proj"]
+        return target_names
 
     @classmethod
     def from_config(cls, config):

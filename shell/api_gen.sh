@@ -3,6 +3,12 @@ set -Eeuo pipefail
 
 base_dir=$(dirname $(dirname $0))
 
+if ! command -v pre-commit 2>&1 >/dev/null
+then
+    echo 'Please `pip install pre-commit` to run api_gen.sh.'
+    exit 1
+fi
+
 echo "Generating api directory with public APIs..."
 # Generate API Files - try python3 first, fall back to python
 if command -v python3 > /dev/null 2>&1; then

@@ -175,7 +175,7 @@ class QwenBackbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings
-        self.use_sliding_window_attention = (use_sliding_window_attention,)
+        self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
 
     def get_config(self):

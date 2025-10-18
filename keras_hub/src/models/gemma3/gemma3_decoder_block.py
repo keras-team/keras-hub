@@ -14,16 +14,17 @@ from keras_hub.src.models.gemma3.rms_normalization import RMSNormalization
 class Gemma3DecoderBlock(keras.layers.Layer):
     """Transformer decoder layer for Gemma3.
 
-    This is different from Gemma and Gemma2 in several ways:
+    This decoder layer is the same as the layer used for Gemma and Gemma2.
+    However, there are a few key differences. Firstly, image tokens have
+    bidirectional masking. Additionally, this layer exposes the following args:
 
-    - `use_query_key_norm`: Applies RMS Norm on query, key.
-    - `rope_wavelength`: RoPE wavelength differs from local to global attention
-      layers.
-    - `rope_scaling_factor`: RoPE scaling factor differs from local to global
-      attention layers.
-    - `gate_dim_reduction`: In the gating layers, Gemma and Gemma2 reduce
-      intermediate dimension by 2. For Gemma3, no such reduction happens.
-    - Uses bidirectional attention for images, and causal for everything else.
+    `use_query_key_norm`: bool. If True, apply RMS normalization on query
+        and key. For Gemma3, this is True.
+    `rope_wavelength`: float. Configurable value for RoPE wavelength. Gemma3
+        uses 10K for local attention layers and 1M for global attention layers.
+    `gate_dim_reduction`: int. In the gating layers, the output dimension is
+        `intermediate_dim // gate_dim_reduction`. For Gemma and Gemma2, this
+        value is 2. For Gemma3, it is 1.
     """
 
     def __init__(
@@ -44,6 +45,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         layer_norm_epsilon=1e-6,
         rope_wavelength=10_000.0,
         rope_scaling_factor=1.0,
+        use_bidirectional_attention=False,
         dropout=0,
         **kwargs,
     ):
@@ -65,6 +67,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.rope_wavelength = rope_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.use_bidirectional_attention = use_bidirectional_attention
         self.dropout = dropout
 
         self.pre_attention_norm = RMSNormalization(
@@ -92,6 +95,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
             rope_wavelength=rope_wavelength,
             rope_scaling_factor=rope_scaling_factor,
             dropout=dropout,
+            use_bidirectional_attention=use_bidirectional_attention,
             dtype=self.dtype_policy,
             name="attention",
         )
@@ -160,9 +164,10 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         # Isometric
         return input_shape
 
-    def _compute_image_bidirectional_attention_mask(self, text_mask):
-        # text_mask is True for text, False for images. Shape of (bsz, seq_len).
-        bidirectional_mask = ops.logical_not(text_mask)
+    def _compute_image_bidirectional_attention_mask(self, vision_mask):
+        # vision_mask is False for text, True for images. Shape of
+        # (bsz, seq_len).
+        bidirectional_mask = vision_mask
 
         # Left pad with 0.
         padded_mask = ops.cast(
@@ -194,7 +199,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         self,
         x,
         padding_mask,
-        text_mask,
+        vision_mask,
         cache,
         cache_update_index,
     ):
@@ -207,6 +212,14 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         if cache is not None:
             input_length = ops.shape(cache)[2]
 
+        if self.use_bidirectional_attention:
+            # `output_length` and `input_length` will be the same in this case
+            # because we use bidirectional attention for models like
+            # `EmbeddingGemma` which aren't used for text generation.
+            mask_1 = decoder_mask
+            mask_2 = ops.transpose(mask_1, (0, 2, 1))
+            return mask_1 * mask_2
+
         causal_mask = compute_causal_mask(
             batch_size=batch_size,
             input_length=input_length,
@@ -216,9 +229,9 @@ class Gemma3DecoderBlock(keras.layers.Layer):
 
         # Compute bidirectional mask (image tokens can attend to each other
         # in both directions, within the same image).
-        if text_mask is not None:
+        if vision_mask is not None:
             bidirectional_image_mask = (
-                self._compute_image_bidirectional_attention_mask(text_mask)
+                self._compute_image_bidirectional_attention_mask(vision_mask)
             )
             causal_mask = ops.logical_or(causal_mask, bidirectional_image_mask)
 
@@ -232,14 +245,15 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         self,
         x,
         padding_mask=None,
-        text_mask=None,
+        vision_mask=None,
         cache=None,
         cache_update_index=0,
+        cache_update_mask=None,
     ):
-        # Note: `text_mask` is used only for Gemma33.
+        # Note: `vision_mask` is used only for Gemma3.
         normalized_x = self.pre_attention_norm(x)
         attention_mask = self._compute_attention_mask(
-            normalized_x, padding_mask, text_mask, cache, cache_update_index
+            normalized_x, padding_mask, vision_mask, cache, cache_update_index
         )
         if cache is not None:
             attention, new_cache = self.attention(
@@ -247,6 +261,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
                 attention_mask=attention_mask,
                 cache=cache,
                 cache_update_index=cache_update_index,
+                cache_update_mask=cache_update_mask,
             )
         else:
             attention = self.attention(
@@ -300,6 +315,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
                 "dropout": self.dropout,
                 "rope_wavelength": self.rope_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "use_bidirectional_attention": self.use_bidirectional_attention,
             }
         )
         return config

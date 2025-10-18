@@ -197,6 +197,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         input_data,
         expected_output=None,
         expected_detokenize_output=None,
+        return_output=False,
     ):
         """Run basic tests for a preprocessing layer."""
         layer = cls(**init_kwargs)
@@ -229,6 +230,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         if expected_output:
             self.assertAllClose(output, expected_output)
+
+        if return_output:
+            return output
 
     def run_preprocessor_test(
         self,
@@ -495,6 +499,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         init_kwargs,
         input_data,
         expected_output_shape,
+        spatial_output_keys=None,
         expected_pyramid_output_keys=None,
         expected_pyramid_image_sizes=None,
         variable_length_data=None,
@@ -533,10 +538,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
             self.assertIsInstance(output_data, dict)
             self.assertEqual(
-                list(output_data.keys()), list(backbone.pyramid_outputs.keys())
+                sorted(output_data.keys()),
+                sorted(backbone.pyramid_outputs.keys()),
             )
             self.assertEqual(
-                list(output_data.keys()), expected_pyramid_output_keys
+                sorted(output_data.keys()), sorted(expected_pyramid_output_keys)
             )
             # check height and width of each level.
             for i, (k, v) in enumerate(output_data.items()):
@@ -553,12 +559,47 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 input_data = ops.transpose(input_data, axes=(2, 0, 1))
             elif len(input_data_shape) == 4:
                 input_data = ops.transpose(input_data, axes=(0, 3, 1, 2))
-            if len(expected_output_shape) == 3:
+            if isinstance(expected_output_shape, dict):
+                # Handle dictionary of shapes.
+                transposed_shapes = {}
+                for key, shape in expected_output_shape.items():
+                    if spatial_output_keys and key not in spatial_output_keys:
+                        transposed_shapes[key] = shape
+                        continue
+                    if len(shape) == 3:
+                        transposed_shapes[key] = (shape[0], shape[2], shape[1])
+                    elif len(shape) == 4:
+                        transposed_shapes[key] = (
+                            shape[0],
+                            shape[3],
+                            shape[1],
+                            shape[2],
+                        )
+                    else:
+                        transposed_shapes[key] = shape
+                expected_output_shape = transposed_shapes
+            elif len(expected_output_shape) == 3:
                 x = expected_output_shape
                 expected_output_shape = (x[0], x[2], x[1])
             elif len(expected_output_shape) == 4:
                 x = expected_output_shape
                 expected_output_shape = (x[0], x[3], x[1], x[2])
+            original_init_kwargs = init_kwargs.copy()
+            init_kwargs = original_init_kwargs.copy()
+            # Handle nested `keras.Model` instances passed within `init_kwargs`.
+            for k, v in init_kwargs.items():
+                if isinstance(v, keras.Model) and hasattr(v, "data_format"):
+                    config = v.get_config()
+                    config["data_format"] = "channels_first"
+                    if (
+                        "image_shape" in config
+                        and config["image_shape"] is not None
+                        and len(config["image_shape"]) == 3
+                    ):
+                        config["image_shape"] = tuple(
+                            reversed(config["image_shape"])
+                        )
+                    init_kwargs[k] = v.__class__.from_config(config)
             if "image_shape" in init_kwargs:
                 init_kwargs = init_kwargs.copy()
                 init_kwargs["image_shape"] = tuple(

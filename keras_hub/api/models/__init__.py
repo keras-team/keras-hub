@@ -789,3 +789,4 @@ from keras_hub.src.models.xlnet.xlnet_backbone import (
     XLNetBackbone as XLNetBackbone,
 )
 from keras_hub.src.tokenizers.tokenizer import Tokenizer as Tokenizer
+from keras_hub.src.tokenizers.tokenizer import Tokenizer as Tokenizer
