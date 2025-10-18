@@ -125,82 +125,26 @@ class LayoutLMv3Backbone(Backbone):
         )
 
         # Spatial position embeddings for bounding box coordinates
-        self.x_position_embedding = keras.layers.Embedding(
-            input_dim=1024,
-            output_dim=spatial_embedding_dim,
-            embeddings_initializer=keras.initializers.TruncatedNormal(
-                stddev=initializer_range
-            ),
-            dtype=dtype,
-            name="x_position_embedding",
-        )
-        
-        self.y_position_embedding = keras.layers.Embedding(
-            input_dim=1024,
-            output_dim=spatial_embedding_dim,
-            embeddings_initializer=keras.initializers.TruncatedNormal(
-                stddev=initializer_range
-            ),
-            dtype=dtype,
-            name="y_position_embedding",
-        )
-        
-        self.h_position_embedding = keras.layers.Embedding(
-            input_dim=1024,
-            output_dim=spatial_embedding_dim,
-            embeddings_initializer=keras.initializers.TruncatedNormal(
-                stddev=initializer_range
-            ),
-            dtype=dtype,
-            name="h_position_embedding",
-        )
-        
-        self.w_position_embedding = keras.layers.Embedding(
-            input_dim=1024,
-            output_dim=spatial_embedding_dim,
-            embeddings_initializer=keras.initializers.TruncatedNormal(
-                stddev=initializer_range
-            ),
-            dtype=dtype,
-            name="w_position_embedding",
-        )
-
-        # Spatial projection layers
-        self.x_projection = keras.layers.Dense(
-            hidden_dim,
-            kernel_initializer=keras.initializers.TruncatedNormal(
-                stddev=initializer_range
-            ),
-            dtype=dtype,
-            name="x_projection",
-        )
-        
-        self.y_projection = keras.layers.Dense(
-            hidden_dim,
-            kernel_initializer=keras.initializers.TruncatedNormal(
-                stddev=initializer_range
-            ),
-            dtype=dtype,
-            name="y_projection",
-        )
-        
-        self.h_projection = keras.layers.Dense(
-            hidden_dim,
-            kernel_initializer=keras.initializers.TruncatedNormal(
-                stddev=initializer_range
-            ),
-            dtype=dtype,
-            name="h_projection",
-        )
-        
-        self.w_projection = keras.layers.Dense(
-            hidden_dim,
-            kernel_initializer=keras.initializers.TruncatedNormal(
-                stddev=initializer_range
-            ),
-            dtype=dtype,
-            name="w_projection",
-        )
+        self.spatial_embeddings = {}
+        self.spatial_projections = {}
+        for coord in ["x", "y", "h", "w"]:
+            self.spatial_embeddings[coord] = keras.layers.Embedding(
+                input_dim=1024,
+                output_dim=spatial_embedding_dim,
+                embeddings_initializer=keras.initializers.TruncatedNormal(
+                    stddev=initializer_range
+                ),
+                dtype=dtype,
+                name=f"{coord}_position_embedding",
+            )
+            self.spatial_projections[coord] = keras.layers.Dense(
+                hidden_dim,
+                kernel_initializer=keras.initializers.TruncatedNormal(
+                    stddev=initializer_range
+                ),
+                dtype=dtype,
+                name=f"{coord}_projection",
+            )
 
         self.token_type_embedding = keras.layers.Embedding(
             input_dim=type_vocab_size,
@@ -287,16 +231,16 @@ class LayoutLMv3Backbone(Backbone):
         position_embeddings = self.position_embedding(position_ids)
 
         # Spatial embeddings
-        x_embeddings = self.x_position_embedding(bbox_input[..., 0])
-        y_embeddings = self.y_position_embedding(bbox_input[..., 1])
-        h_embeddings = self.h_position_embedding(bbox_input[..., 2])
-        w_embeddings = self.w_position_embedding(bbox_input[..., 3])
+        x_embeddings = self.spatial_embeddings["x"](bbox_input[..., 0])
+        y_embeddings = self.spatial_embeddings["y"](bbox_input[..., 1])
+        h_embeddings = self.spatial_embeddings["h"](bbox_input[..., 2])
+        w_embeddings = self.spatial_embeddings["w"](bbox_input[..., 3])
 
         # Project spatial embeddings
-        x_embeddings = self.x_projection(x_embeddings)
-        y_embeddings = self.y_projection(y_embeddings)
-        h_embeddings = self.h_projection(h_embeddings)
-        w_embeddings = self.w_projection(w_embeddings)
+        x_embeddings = self.spatial_projections["x"](x_embeddings)
+        y_embeddings = self.spatial_projections["y"](y_embeddings)
+        h_embeddings = self.spatial_projections["h"](h_embeddings)
+        w_embeddings = self.spatial_projections["w"](w_embeddings)
 
         # Token type embeddings (default to 0)
         token_type_ids = ops.zeros_like(token_id_input)

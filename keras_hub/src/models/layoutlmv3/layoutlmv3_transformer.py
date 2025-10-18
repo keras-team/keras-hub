@@ -55,30 +55,12 @@ class LayoutLMv3TransformerLayer(TransformerEncoder):
             **kwargs,
         )
         self.hidden_dim = hidden_dim
-        self.num_heads = num_heads
-        self.intermediate_dim = intermediate_dim
-        self.dropout_rate = dropout
-        self.activation = activation
-        self.layer_norm_epsilon = layer_norm_epsilon
-        self.kernel_initializer = kernel_initializer
-        self.bias_initializer = bias_initializer
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "hidden_dim": self.hidden_dim,
-                "num_heads": self.num_heads,
-                "intermediate_dim": self.intermediate_dim,
-                "dropout": self.dropout_rate,
-                "activation": self.activation,
-                "layer_norm_epsilon": self.layer_norm_epsilon,
-                "kernel_initializer": keras.initializers.serialize(
-                    keras.initializers.get(self.kernel_initializer)
-                ),
-                "bias_initializer": keras.initializers.serialize(
-                    keras.initializers.get(self.bias_initializer)
-                ),
             }
         )
         return config 

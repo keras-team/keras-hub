@@ -37,19 +37,13 @@ class LayoutLMv3TokenizerTest(TestCase):
         self.assertEqual(self.tokenizer.mask_token, "[MASK]")
         self.assertEqual(self.tokenizer.unk_token, "[UNK]")
 
-    def test_simple_tokenization(self):
-        # Test simple string tokenization
-        output = self.tokenizer("hello world")
-
-        # Check that output contains the expected keys
-        self.assertIn("token_ids", output)
-        self.assertIn("padding_mask", output)
-        self.assertIn("bbox", output)
-
-        # Check shapes
-        self.assertEqual(output["token_ids"].shape, (1, 16))
-        self.assertEqual(output["padding_mask"].shape, (1, 16))
-        self.assertEqual(output["bbox"].shape, (1, 16, 4))
+    def test_tokenizer_functionality(self):
+        """Test tokenizer using the standardized test helper."""
+        self.run_preprocessor_test(
+            preprocessor=self.tokenizer,
+            input_data="hello world",
+            expected_output_shape={"token_ids": (1, 16), "padding_mask": (1, 16), "bbox": (1, 16, 4)},
+        )
 
     def test_list_tokenization(self):
         # Test list of strings tokenization

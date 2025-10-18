@@ -10,11 +10,11 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
+from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
 @keras_hub_export("keras_hub.models.LayoutLMv3Tokenizer")
-class LayoutLMv3Tokenizer(WordPieceTokenizer):
+class LayoutLMv3Tokenizer(BytePairTokenizer):
     """LayoutLMv3 tokenizer for document understanding tasks.
 
     This tokenizer is specifically designed for LayoutLMv3 models that process
@@ -22,21 +22,15 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
     box coordinates for document understanding tasks.
 
     Args:
-        vocabulary: Optional list of strings containing the vocabulary. If None,
+        vocabulary: Optional dict or string containing the vocabulary. If None,
             vocabulary will be loaded from preset.
-        lowercase: bool, defaults to True. Whether to lowercase the input text.
-        strip_accents: bool, defaults to True. Whether to strip accents from
-            the input text.
-        split: bool, defaults to True. Whether to split the input on whitespace.
-        split_on_cjk: bool, defaults to True. Whether to split CJK characters.
-        suffix_indicator: str, defaults to "##". The prefix to add to 
-            continuation tokens.
-        oov_token: str, defaults to "[UNK]". The out-of-vocabulary token.
-        cls_token: str, defaults to "[CLS]". The classification token.
-        sep_token: str, defaults to "[SEP]". The separator token.
-        pad_token: str, defaults to "[PAD]". The padding token.
-        mask_token: str, defaults to "[MASK]". The mask token.
-        unk_token: str, defaults to "[UNK]". The unknown token.
+        merges: Optional list or string containing the merge rules for BPE.
+            If None, merges will be loaded from preset.
+        sequence_length: int. If set, the output will be packed or padded to
+            exactly this sequence length.
+        add_prefix_space: bool. Whether to add a prefix space to the input.
+        unsplittable_tokens: Optional list of tokens that should never be split.
+        dtype: str. The output dtype for token IDs.
         **kwargs: Additional keyword arguments passed to the parent class.
 
     Examples:
@@ -56,34 +50,28 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
     def __init__(
         self,
         vocabulary=None,
-        lowercase=True,
-        strip_accents=True,
-        split=True,
-        split_on_cjk=True,
-        suffix_indicator="##",
-        oov_token="[UNK]",
-        cls_token="[CLS]",
-        sep_token="[SEP]",
-        pad_token="[PAD]",
-        mask_token="[MASK]",
-        unk_token="[UNK]",
+        merges=None,
+        sequence_length=None,
+        add_prefix_space=False,
+        unsplittable_tokens=None,
+        dtype="int32",
         **kwargs,
     ):
         super().__init__(
             vocabulary=vocabulary,
-            lowercase=lowercase,
-            strip_accents=strip_accents,
-            split=split,
-            split_on_cjk=split_on_cjk,
-            suffix_indicator=suffix_indicator,
-            oov_token=oov_token,
+            merges=merges,
+            sequence_length=sequence_length,
+            add_prefix_space=add_prefix_space,
+            unsplittable_tokens=unsplittable_tokens,
+            dtype=dtype,
             **kwargs,
         )
-        self.cls_token = cls_token
-        self.sep_token = sep_token
-        self.pad_token = pad_token
-        self.mask_token = mask_token
-        self.unk_token = unk_token
+        # Store special tokens for bbox processing
+        self.cls_token = "[CLS]"
+        self.sep_token = "[SEP]"
+        self.pad_token = "[PAD]"
+        self.mask_token = "[MASK]"
+        self.unk_token = "[UNK]"
 
     def _process_bbox_for_tokens(self, text_list, bbox_list):
         """This method expands bounding boxes for subword tokens and adds
@@ -135,7 +123,12 @@ class LayoutLMv3Tokenizer(WordPieceTokenizer):
                 token_bbox.append([0, 0, 0, 0])
                 processed_bbox.append(token_bbox)
                 
-        except Exception:
+        except Exception as e:
+            import warnings
+            warnings.warn(
+                f"Error processing bounding boxes: {e}. "
+                f"Falling back to dummy boxes."
+            )
             # Fallback: return None to use dummy boxes
             return None
             

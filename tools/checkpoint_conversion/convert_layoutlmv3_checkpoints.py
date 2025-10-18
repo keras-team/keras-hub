@@ -55,7 +55,7 @@ def convert_checkpoint(model_name):
     position_weight = hf_weights[
         "embeddings.position_embeddings.weight"
     ].numpy()
-    keras_model.position_embedding.position_embeddings.assign(position_weight)
+    keras_model.position_embedding.embeddings.assign(position_weight)
     print(f"✅ Position embedding: {position_weight.shape}")
 
     # Token type embeddings
@@ -73,7 +73,7 @@ def convert_checkpoint(model_name):
         spatial_key = f"embeddings.{coord}_position_embeddings.weight"
         if spatial_key in hf_weights:
             spatial_weight = hf_weights[spatial_key].numpy()
-            spatial_emb = getattr(keras_model, f"{coord}_position_embedding")
+            spatial_emb = keras_model.spatial_embeddings[coord]
             spatial_emb.embeddings.assign(spatial_weight)
             print(f"✅ {coord} spatial embedding: {spatial_weight.shape}")
 
@@ -82,7 +82,7 @@ def convert_checkpoint(model_name):
         if f"{proj_key}.weight" in hf_weights:
             proj_weight = hf_weights[f"{proj_key}.weight"].numpy().T
             proj_bias = hf_weights[f"{proj_key}.bias"].numpy()
-            projection_layer = getattr(keras_model, f"{coord}_projection")
+            projection_layer = keras_model.spatial_projections[coord]
             projection_layer.kernel.assign(proj_weight)
             projection_layer.bias.assign(proj_bias)
             print(f"✅ {coord} projection: {proj_weight.shape}")
@@ -141,8 +141,8 @@ def convert_checkpoint(model_name):
         attn_ln_bias = hf_weights[
             f"{hf_prefix}.attention.output.LayerNorm.bias"
         ].numpy()
-        keras_layer._self_attention_layernorm.gamma.assign(attn_ln_weight)
-        keras_layer._self_attention_layernorm.beta.assign(attn_ln_bias)
+        keras_layer._self_attention_layer_norm.gamma.assign(attn_ln_weight)
+        keras_layer._self_attention_layer_norm.beta.assign(attn_ln_bias)
 
         # Feed forward
         ff1_weight = (
@@ -162,8 +162,8 @@ def convert_checkpoint(model_name):
             f"{hf_prefix}.output.LayerNorm.weight"
         ].numpy()
         out_ln_bias = hf_weights[f"{hf_prefix}.output.LayerNorm.bias"].numpy()
-        keras_layer._feedforward_layernorm.gamma.assign(out_ln_weight)
-        keras_layer._feedforward_layernorm.beta.assign(out_ln_bias)
+        keras_layer._feedforward_layer_norm.gamma.assign(out_ln_weight)
+        keras_layer._feedforward_layer_norm.beta.assign(out_ln_bias)
 
         print(f"✅ Transformer layer {i}")
 
