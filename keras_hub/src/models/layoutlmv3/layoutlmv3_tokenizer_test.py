@@ -222,14 +222,20 @@ class LayoutLMv3TokenizerTest(TestCase):
         # Compare results
         for i in range(len(texts)):
             batch_token_ids = ops.convert_to_numpy(batch_output["token_ids"])
-            individual_token_ids = ops.convert_to_numpy(individual_outputs[i]["token_ids"])
+            individual_token_ids = ops.convert_to_numpy(
+                individual_outputs[i]["token_ids"]
+            )
             self.assertAllClose(
                 batch_token_ids[i : i + 1],
                 individual_token_ids,
             )
-            
-            batch_padding_mask = ops.convert_to_numpy(batch_output["padding_mask"])
-            individual_padding_mask = ops.convert_to_numpy(individual_outputs[i]["padding_mask"])
+
+            batch_padding_mask = ops.convert_to_numpy(
+                batch_output["padding_mask"]
+            )
+            individual_padding_mask = ops.convert_to_numpy(
+                individual_outputs[i]["padding_mask"]
+            )
             self.assertAllClose(
                 batch_padding_mask[i : i + 1],
                 individual_padding_mask,
