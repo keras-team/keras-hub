@@ -232,8 +232,8 @@ class LayoutLMv3Backbone(Backbone):
         max_seq_len = self.max_sequence_length
         position_ids = ops.arange(max_seq_len, dtype="int32")
         position_ids = ops.expand_dims(position_ids, axis=0)
-        # Truncate to actual sequence length
-        position_ids = position_ids[:, :seq_length]
+        # Truncate to actual sequence length using dynamic slicing
+        position_ids = ops.slice(position_ids, [0, 0], [1, seq_length])
 
         # Token embeddings
         token_embeddings = self.token_embedding(token_id_input)

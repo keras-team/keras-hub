@@ -64,7 +64,7 @@ class LayoutLMv3TokenizerTest(TestCase):
     def test_list_tokenization(self):
         # Test list of strings tokenization
         texts = ["hello world", "how are you"]
-        output = self.tokenizer(texts)
+        output = self.tokenizer(inputs=texts)
 
         # Check shapes for batch processing
         self.assertEqual(output["token_ids"].shape, (2, 16))
@@ -76,7 +76,7 @@ class LayoutLMv3TokenizerTest(TestCase):
         texts = ["hello world"]
         bbox = [[[0, 0, 100, 50], [100, 0, 200, 50]]]
 
-        output = self.tokenizer(texts, bbox=bbox)
+        output = self.tokenizer(inputs=texts, bbox=bbox)
 
         # Check that bbox was processed correctly
         self.assertEqual(output["bbox"].shape, (1, 16, 4))
@@ -91,7 +91,7 @@ class LayoutLMv3TokenizerTest(TestCase):
         texts = ["hello"]
         bbox = [[[0, 0, 100, 50]]]  # One bbox for one word
 
-        output = self.tokenizer(texts, bbox=bbox)
+        output = self.tokenizer(inputs=texts, bbox=bbox)
 
         # The bbox should be expanded to cover all tokens including specials
         self.assertEqual(output["bbox"].shape, (1, 16, 4))
@@ -102,14 +102,14 @@ class LayoutLMv3TokenizerTest(TestCase):
         bbox = [[[0, 0, 100, 50], [100, 0, 200, 50]]]  # 2 bboxes
 
         # Should handle gracefully by using dummy boxes
-        output = self.tokenizer(texts, bbox=bbox)
+        output = self.tokenizer(inputs=texts, bbox=bbox)
 
         self.assertEqual(output["bbox"].shape, (1, 16, 4))
 
     def test_no_bbox_provided(self):
         # Test tokenization without bounding boxes
         texts = ["hello world"]
-        output = self.tokenizer(texts)
+        output = self.tokenizer(inputs=texts)
 
         # Should create dummy bbox tensor
         self.assertEqual(output["bbox"].shape, (1, 16, 4))
@@ -141,7 +141,7 @@ class LayoutLMv3TokenizerTest(TestCase):
         restored_tokenizer = LayoutLMv3Tokenizer.from_config(config)
 
         # Test that restored tokenizer works the same
-        output1 = self.tokenizer("hello world")
+        output1 = self.tokenizer(inputs="hello world")
         output2 = restored_tokenizer("hello world")
 
         self.assertAllClose(output1["token_ids"], output2["token_ids"])
@@ -150,7 +150,7 @@ class LayoutLMv3TokenizerTest(TestCase):
     def test_special_token_handling(self):
         # Test that special tokens are handled correctly
         texts = ["hello"]
-        output = self.tokenizer(texts)
+        output = self.tokenizer(inputs=texts)
 
         token_ids = ops.convert_to_numpy(output["token_ids"][0])
 
@@ -180,14 +180,14 @@ class LayoutLMv3TokenizerTest(TestCase):
     def test_padding_and_truncation(self):
         # Test with a very long input
         long_text = " ".join(["hello"] * 20)
-        output = self.tokenizer(long_text)
+        output = self.tokenizer(inputs=long_text)
 
         # Should be truncated to sequence_length
         self.assertEqual(output["token_ids"].shape, (1, 16))
 
         # Test with short input
         short_text = "hello"
-        output = self.tokenizer(short_text)
+        output = self.tokenizer(inputs=short_text)
 
         # Should be padded to sequence_length
         self.assertEqual(output["token_ids"].shape, (1, 16))
@@ -207,12 +207,12 @@ class LayoutLMv3TokenizerTest(TestCase):
         texts = ["hello world", "how are you"]
 
         # Process as batch
-        batch_output = self.tokenizer(texts)
+        batch_output = self.tokenizer(inputs=texts)
 
         # Process individually
         individual_outputs = []
         for text in texts:
-            individual_outputs.append(self.tokenizer(text))
+            individual_outputs.append(self.tokenizer(inputs=text))
 
         # Compare results
         for i in range(len(texts)):
@@ -238,7 +238,7 @@ class LayoutLMv3TokenizerTest(TestCase):
 
     def test_empty_input(self):
         # Test handling of empty input
-        output = self.tokenizer("")
+        output = self.tokenizer(inputs="")
 
         # Should still produce valid output with special tokens
         self.assertEqual(output["token_ids"].shape, (1, 16))
@@ -252,7 +252,7 @@ class LayoutLMv3TokenizerTest(TestCase):
 
     def test_oov_token_handling(self):
         # Test handling of out-of-vocabulary tokens
-        output = self.tokenizer("unknown_token")
+        output = self.tokenizer(inputs="unknown_token")
 
         # Should use [UNK] token for unknown words
         token_ids = ops.convert_to_numpy(output["token_ids"][0])
@@ -262,8 +262,8 @@ class LayoutLMv3TokenizerTest(TestCase):
 
     def test_case_sensitivity(self):
         # Test case handling based on lowercase parameter
-        output1 = self.tokenizer("Hello")
-        output2 = self.tokenizer("hello")
+        output1 = self.tokenizer(inputs="Hello")
+        output2 = self.tokenizer(inputs="hello")
 
         # Should be the same if lowercase=True (default)
         self.assertAllClose(output1["token_ids"], output2["token_ids"])

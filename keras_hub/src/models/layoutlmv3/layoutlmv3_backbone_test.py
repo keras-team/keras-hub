@@ -93,12 +93,21 @@ class LayoutLMv3BackboneTest(TestCase):
 
         seq_len = 128  # max_sequence_length
         input_data = {
-            "token_ids": keras.random.uniform(
-                shape=(1, seq_len), minval=0, maxval=1000, dtype="int32"
+            "token_ids": ops.cast(
+                keras.random.uniform(
+                    shape=(1, seq_len), minval=0, maxval=1000, dtype="float32"
+                ),
+                "int32",
             ),
             "padding_mask": keras.ops.ones((1, seq_len), dtype="int32"),
-            "bbox": keras.random.uniform(
-                shape=(1, seq_len, 4), minval=0, maxval=1000, dtype="int32"
+            "bbox": ops.cast(
+                keras.random.uniform(
+                    shape=(1, seq_len, 4),
+                    minval=0,
+                    maxval=1000,
+                    dtype="float32",
+                ),
+                "int32",
             ),
         }
 
