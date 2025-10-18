@@ -40,7 +40,8 @@ class LayoutLMv3TokenizerTest(TestCase):
     def test_tokenizer_functionality(self):
         """Test tokenizer using the standardized test helper."""
         self.run_preprocessor_test(
-            preprocessor=self.tokenizer,
+            cls=LayoutLMv3Tokenizer,
+            init_kwargs={"vocabulary": self.vocabulary, "sequence_length": 16},
             input_data="hello world",
             expected_output_shape={"token_ids": (1, 16), "padding_mask": (1, 16), "bbox": (1, 16, 4)},
         )

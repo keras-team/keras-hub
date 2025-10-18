@@ -20,12 +20,12 @@ class LayoutLMv3BackboneTest(TestCase):
         }
         self.input_data = {
             "token_ids": keras.random.uniform(
-                shape=(2, 10), minval=0, maxval=1000, dtype="int32"
-            ),
+                shape=(2, 10), minval=0, maxval=1000, dtype="float32"
+            ).astype("int32"),
             "padding_mask": keras.ops.ones((2, 10), dtype="int32"),
             "bbox": keras.random.uniform(
-                shape=(2, 10, 4), minval=0, maxval=1000, dtype="int32"
-            ),
+                shape=(2, 10, 4), minval=0, maxval=1000, dtype="float32"
+            ).astype("int32"),
         }
 
     def test_backbone_basics(self):

@@ -135,6 +135,36 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
             
         return processed_bbox
 
+    def _apply_sequence_length(self, token_output, sequence_length):
+        """Apply sequence length padding or truncation to token output."""
+        token_ids = token_output["token_ids"]
+        padding_mask = token_output["padding_mask"]
+        
+        # Get current sequence length
+        current_seq_len = ops.shape(token_ids)[1]
+        
+        if current_seq_len > sequence_length:
+            # Truncate
+            token_ids = token_ids[:, :sequence_length]
+            padding_mask = padding_mask[:, :sequence_length]
+        elif current_seq_len < sequence_length:
+            # Pad
+            pad_length = sequence_length - current_seq_len
+            pad_token_id = self.vocabulary.get(self.pad_token, 0)
+            
+            # Pad token_ids
+            pad_tokens = ops.full((ops.shape(token_ids)[0], pad_length), pad_token_id, dtype=token_ids.dtype)
+            token_ids = ops.concatenate([token_ids, pad_tokens], axis=1)
+            
+            # Pad padding_mask
+            pad_mask = ops.zeros((ops.shape(padding_mask)[0], pad_length), dtype=padding_mask.dtype)
+            padding_mask = ops.concatenate([padding_mask, pad_mask], axis=1)
+        
+        return {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+        }
+
     def call(self, inputs, bbox=None, sequence_length=None):
         """Tokenize input text and process bounding boxes.
 
@@ -166,7 +196,12 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
         processed_bbox = self._process_bbox_for_tokens(inputs, bbox)
 
         # Tokenize the text
-        token_output = super().call(inputs, sequence_length=sequence_length)
+        if sequence_length is not None:
+            token_output = super().call(inputs)
+            # Apply sequence length padding/truncation manually
+            token_output = self._apply_sequence_length(token_output, sequence_length)
+        else:
+            token_output = super().call(inputs)
         
         # Process bbox if provided
         if processed_bbox is not None:
@@ -209,3 +244,23 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        # Extract special tokens from config
+        special_tokens = {
+            "cls_token": config.pop("cls_token", "[CLS]"),
+            "sep_token": config.pop("sep_token", "[SEP]"),
+            "pad_token": config.pop("pad_token", "[PAD]"),
+            "mask_token": config.pop("mask_token", "[MASK]"),
+            "unk_token": config.pop("unk_token", "[UNK]"),
+        }
+        
+        # Create instance using parent method
+        instance = super().from_config(config)
+        
+        # Set special tokens
+        for token_name, token_value in special_tokens.items():
+            setattr(instance, token_name, token_value)
+        
+        return instance
