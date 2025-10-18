@@ -82,7 +82,8 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
             bbox_list: List of bounding box lists corresponding to words.
             
         Returns:
-            List of bounding box lists aligned with tokens, or None if bbox_list is None.
+            List of bounding box lists aligned with tokens, or None if
+            bbox_list is None.
         """
         if bbox_list is None:
             return None
@@ -146,10 +147,12 @@ class LayoutLMv3Tokenizer(BytePairTokenizer):
                 exactly this sequence length.
 
         Returns:
-            A dictionary with the tokenized inputs and optionally bounding boxes.
-            If input is a string or list of strings, the dictionary will contain:
+            A dictionary with the tokenized inputs and optionally bounding
+            boxes. If input is a string or list of strings, the dictionary
+            will contain:
             - "token_ids": Tokenized representation of the inputs.
-            - "padding_mask": A mask indicating which tokens are real vs padding.
+            - "padding_mask": A mask indicating which tokens are real vs
+                padding.
             - "bbox": Bounding box coordinates aligned with tokens
                 (if provided).
         """
