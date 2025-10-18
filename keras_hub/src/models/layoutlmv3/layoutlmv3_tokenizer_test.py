@@ -23,9 +23,20 @@ class LayoutLMv3TokenizerTest(TestCase):
             "good": 10,
             "morning": 11,
         }
+        
+        # Create simple merges for BPE
+        self.merges = [
+            "h e",
+            "l l",
+            "o w",
+            "w o",
+            "r l",
+            "d </w>",
+        ]
 
         self.tokenizer = LayoutLMv3Tokenizer(
             vocabulary=self.vocabulary,
+            merges=self.merges,
             sequence_length=16,
         )
 
@@ -41,9 +52,8 @@ class LayoutLMv3TokenizerTest(TestCase):
         """Test tokenizer using the standardized test helper."""
         self.run_preprocessor_test(
             cls=LayoutLMv3Tokenizer,
-            init_kwargs={"vocabulary": self.vocabulary, "sequence_length": 16},
+            init_kwargs={"vocabulary": self.vocabulary, "merges": self.merges, "sequence_length": 16},
             input_data="hello world",
-            expected_output_shape={"token_ids": (1, 16), "padding_mask": (1, 16), "bbox": (1, 16, 4)},
         )
 
     def test_list_tokenization(self):

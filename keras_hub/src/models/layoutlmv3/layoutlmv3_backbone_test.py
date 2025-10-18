@@ -1,5 +1,6 @@
 import keras
 import numpy as np
+from keras import ops
 
 from keras_hub.src.models.layoutlmv3.layoutlmv3_backbone import (
     LayoutLMv3Backbone,
@@ -19,13 +20,15 @@ class LayoutLMv3BackboneTest(TestCase):
             "spatial_embedding_dim": 32,
         }
         self.input_data = {
-            "token_ids": keras.random.uniform(
-                shape=(2, 10), minval=0, maxval=1000, dtype="float32"
-            ).astype("int32"),
+            "token_ids": ops.cast(
+                keras.random.uniform(shape=(2, 10), minval=0, maxval=1000, dtype="float32"),
+                "int32"
+            ),
             "padding_mask": keras.ops.ones((2, 10), dtype="int32"),
-            "bbox": keras.random.uniform(
-                shape=(2, 10, 4), minval=0, maxval=1000, dtype="float32"
-            ).astype("int32"),
+            "bbox": ops.cast(
+                keras.random.uniform(shape=(2, 10, 4), minval=0, maxval=1000, dtype="float32"),
+                "int32"
+            ),
         }
 
     def test_backbone_basics(self):
