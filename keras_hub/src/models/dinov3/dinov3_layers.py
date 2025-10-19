@@ -220,6 +220,7 @@ class DINOV3Embedding(layers.Layer):
 def _get_patches_center_coordinates(
     num_patches_h, num_patches_w, dtype="float32"
 ):
+    """A helper function to get the center coordinates of the patches."""
     coords_h = ops.arange(0.5, num_patches_h, dtype=dtype)
     coords_w = ops.arange(0.5, num_patches_w, dtype=dtype)
 
@@ -239,6 +240,17 @@ def _get_patches_center_coordinates(
 
 
 class DINOV3RopePositionEmbedding(layers.Layer):
+    """A layer that implements Rotary Position Embedding.
+
+    Args:
+        hidden_dim: int. The number of units in the hidden layers.
+        num_heads: int. Number of attention heads.
+        rope_theta: float. The base period of the rotary position embeddings.
+        patch_size: int. The size of one side of each patch.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(self, hidden_dim, num_heads, rope_theta, patch_size, **kwargs):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
@@ -247,7 +259,8 @@ class DINOV3RopePositionEmbedding(layers.Layer):
         self.patch_size = patch_size
         self.head_dim = hidden_dim // num_heads
         inv_freq = 1.0 / (
-            rope_theta ** (ops.arange(0, 1, 4 / self.head_dim, dtype="float32"))
+            rope_theta
+            ** (ops.arange(0, 1, 4 / self.head_dim, dtype=self.dtype))
         )
         self.inv_freq = inv_freq
 
@@ -258,7 +271,7 @@ class DINOV3RopePositionEmbedding(layers.Layer):
         num_patches_w = width // self.patch_size
 
         patch_coords = _get_patches_center_coordinates(
-            num_patches_h, num_patches_w, dtype="float32"
+            num_patches_h, num_patches_w, dtype=self.dtype
         )
 
         angles = (
@@ -291,12 +304,14 @@ class DINOV3RopePositionEmbedding(layers.Layer):
 
 
 def _rotate_half(x):
+    """A helper function to rotate half of the features."""
     x1 = x[..., : ops.shape(x)[-1] // 2]
     x2 = x[..., ops.shape(x)[-1] // 2 :]
     return ops.concatenate([-x2, x1], axis=-1)
 
 
 def _apply_rotary_pos_emb(q, k, cos, sin, num_prefix_tokens):
+    """A helper function to apply rotary position embedding to query and key."""
     q_prefix_tokens = q[:, :, :num_prefix_tokens, :]
     q_patches = q[:, :, num_prefix_tokens:, :]
     k_prefix_tokens = k[:, :, :num_prefix_tokens, :]
@@ -315,6 +330,20 @@ def _apply_rotary_pos_emb(q, k, cos, sin, num_prefix_tokens):
 
 
 class DINOV3Attention(layers.Layer):
+    """A multi-head attention layer with dropout.
+
+    Args:
+        hidden_dim: int. The number of units in the hidden layers.
+        num_heads: int. Number of attention heads.
+        dropout_rate: float. The dropout rate to use. Defaults to `0.0`.
+        query_bias: bool. Whether to use a bias for the query projection.
+        key_bias: bool. Whether to use a bias for the key projection.
+        value_bias: bool. Whether to use a bias for the value projection.
+        proj_bias: bool. Whether to use a bias for the output projection.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(
         self,
         hidden_dim,
@@ -334,16 +363,32 @@ class DINOV3Attention(layers.Layer):
         self.scale = self.head_dim**-0.5
 
         self.q_proj = layers.Dense(
-            hidden_dim, use_bias=query_bias, name="q_proj"
+            hidden_dim,
+            use_bias=query_bias,
+            dtype=self.dtype_policy,
+            name="q_proj",
         )
-        self.k_proj = layers.Dense(hidden_dim, use_bias=key_bias, name="k_proj")
+        self.k_proj = layers.Dense(
+            hidden_dim,
+            use_bias=key_bias,
+            dtype=self.dtype_policy,
+            name="k_proj",
+        )
         self.v_proj = layers.Dense(
-            hidden_dim, use_bias=value_bias, name="v_proj"
+            hidden_dim,
+            use_bias=value_bias,
+            dtype=self.dtype_policy,
+            name="v_proj",
         )
         self.o_proj = layers.Dense(
-            hidden_dim, use_bias=proj_bias, name="o_proj"
+            hidden_dim,
+            use_bias=proj_bias,
+            dtype=self.dtype_policy,
+            name="o_proj",
         )
-        self.dropout = layers.Dropout(dropout_rate)
+        self.dropout = layers.Dropout(
+            dropout_rate, dtype=self.dtype_policy, name="dropout"
+        )
 
     def call(
         self,
@@ -404,6 +449,15 @@ class DINOV3Attention(layers.Layer):
 
 
 class DINOV3LayerScale(layers.Layer):
+    """A layer scale.
+
+    Args:
+        hidden_dim: int. The number of units in the hidden layers.
+        init_values: float. The initial value for the scale. Defaults to `1.0`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(self, hidden_dim, init_values=1.0, **kwargs):
         super().__init__(**kwargs)
         self.hidden_dim = int(hidden_dim)
@@ -429,6 +483,14 @@ class DINOV3LayerScale(layers.Layer):
 
 
 class DINOV3DropPath(layers.Layer):
+    """A drop path layer.
+
+    Args:
+        rate: float. The drop path rate to use. Defaults to `0.0`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(self, rate=0.0, **kwargs):
         super().__init__(**kwargs)
         self.rate = float(rate)
@@ -454,6 +516,18 @@ class DINOV3DropPath(layers.Layer):
 
 
 class DINOV3MLP(layers.Layer):
+    """A DINOV3 MLP block.
+
+    Args:
+        hidden_dim: int. The number of units in the output layer.
+        intermediate_dim: int. The output dimension of the first Dense layer.
+        activation: str of callable. Activation to use in the intermediate
+            layer. Defaults to `"gelu"`.
+        use_bias: bool. Whether to use a bias for the dense layers.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(
         self,
         hidden_dim,
@@ -468,12 +542,21 @@ class DINOV3MLP(layers.Layer):
         self.activation = activation
         self.use_bias = use_bias
         self.up_proj = layers.Dense(
-            intermediate_dim, use_bias=use_bias, name="up_proj"
+            intermediate_dim,
+            use_bias=use_bias,
+            dtype=self.dtype_policy,
+            name="up_proj",
         )
         self.down_proj = layers.Dense(
-            hidden_dim, use_bias=use_bias, name="down_proj"
+            hidden_dim,
+            use_bias=use_bias,
+            dtype=self.dtype_policy,
+            name="down_proj",
         )
-        self.act_fn = layers.Activation(activation)
+        self.act_fn = layers.Activation(
+            activation,
+            dtype=self.dtype_policy,
+        )
 
     def call(self, x):
         return self.down_proj(self.act_fn(self.up_proj(x)))
@@ -492,6 +575,18 @@ class DINOV3MLP(layers.Layer):
 
 
 class DINOV3GatedMLP(layers.Layer):
+    """A DINOV3 Gated MLP block.
+
+    Args:
+        hidden_dim: int. The number of units in the output layer.
+        intermediate_dim: int. The output dimension of the first Dense layer.
+        activation: str of callable. Activation to use in the intermediate
+            layer. Defaults to `"gelu"`.
+        use_bias: bool. Whether to use a bias for the dense layers.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(
         self,
         hidden_dim,
@@ -506,15 +601,24 @@ class DINOV3GatedMLP(layers.Layer):
         self.activation = activation
         self.use_bias = use_bias
         self.gate_proj = layers.Dense(
-            intermediate_dim, use_bias=use_bias, name="gate_proj"
+            intermediate_dim,
+            use_bias=use_bias,
+            dtype=self.dtype_policy,
+            name="gate_proj",
         )
         self.up_proj = layers.Dense(
-            intermediate_dim, use_bias=use_bias, name="up_proj"
+            intermediate_dim,
+            use_bias=use_bias,
+            dtype=self.dtype_policy,
+            name="up_proj",
         )
         self.down_proj = layers.Dense(
-            hidden_dim, use_bias=use_bias, name="down_proj"
+            hidden_dim,
+            use_bias=use_bias,
+            dtype=self.dtype_policy,
+            name="down_proj",
         )
-        self.act_fn = layers.Activation(activation)
+        self.act_fn = layers.Activation(activation, dtype=self.dtype_policy)
 
     def call(self, x):
         return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
@@ -533,6 +637,29 @@ class DINOV3GatedMLP(layers.Layer):
 
 
 class DINOV3Layer(layers.Layer):
+    """A DINOV3 encoder layer.
+
+    Args:
+        hidden_dim: int. The number of units in the hidden layers.
+        num_heads: int. Number of attention heads.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each transformer.
+        layer_scale_init_value: float. The initial value for the scale.
+            Defaults to `1.0`.
+        use_gated_mlp: bool. Whether to use Gated MLP layers. Defaults to
+            `False`.
+        attention_dropout: float. The dropout rate for the attention
+            probabilities. Defaults to `0.0`.
+        drop_path_rate: float. The drop path rate to use. Defaults to `0.0`.
+        layer_norm_eps: float. The epsilon for layer normalization.
+        query_bias: bool. Whether to use a bias for the query projection.
+        key_bias: bool. Whether to use a bias for the key projection.
+        value_bias: bool. Whether to use a bias for the value projection.
+        proj_bias: bool. Whether to use a bias for the output projection.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(
         self,
         hidden_dim,
@@ -560,7 +687,7 @@ class DINOV3Layer(layers.Layer):
         self.layer_norm_eps = layer_norm_eps
 
         self.norm1 = layers.LayerNormalization(
-            epsilon=layer_norm_eps, name="norm1"
+            epsilon=layer_norm_eps, dtype=self.dtype_policy, name="norm1"
         )
         self.attention = DINOV3Attention(
             hidden_dim=hidden_dim,
@@ -570,27 +697,42 @@ class DINOV3Layer(layers.Layer):
             key_bias=key_bias,
             value_bias=value_bias,
             proj_bias=proj_bias,
+            dtype=self.dtype_policy,
             name="attention",
         )
         self.layer_scale1 = DINOV3LayerScale(
             hidden_dim,
             init_values=layer_scale_init_value,
+            dtype=self.dtype_policy,
             name="layer_scale1",
         )
         self.drop_path = (
-            DINOV3DropPath(drop_path_rate)
+            DINOV3DropPath(drop_path_rate, dtype=self.dtype_policy)
             if drop_path_rate > 0.0
-            else layers.Identity()
+            else layers.Identity(dtype=self.dtype_policy)
         )
         self.norm2 = layers.LayerNormalization(
-            epsilon=layer_norm_eps, name="norm2"
+            epsilon=layer_norm_eps, dtype=self.dtype_policy, name="norm2"
         )
         if use_gated_mlp:
-            self.mlp = DINOV3GatedMLP(hidden_dim, intermediate_dim, name="mlp")
+            self.mlp = DINOV3GatedMLP(
+                hidden_dim,
+                intermediate_dim,
+                dtype=self.dtype_policy,
+                name="mlp",
+            )
         else:
-            self.mlp = DINOV3MLP(hidden_dim, intermediate_dim, name="mlp")
+            self.mlp = DINOV3MLP(
+                hidden_dim,
+                intermediate_dim,
+                dtype=self.dtype_policy,
+                name="mlp",
+            )
         self.layer_scale2 = DINOV3LayerScale(
-            hidden_dim, init_values=layer_scale_init_value, name="layer_scale2"
+            hidden_dim,
+            init_values=layer_scale_init_value,
+            dtype=self.dtype_policy,
+            name="layer_scale2",
         )
 
     def call(
@@ -637,6 +779,30 @@ class DINOV3Layer(layers.Layer):
 
 
 class DINOV3Encoder(layers.Layer):
+    """A DINOV3 encoder.
+
+    Args:
+        num_layers: int. The number of transformer layers.
+        hidden_dim: int. The number of units in the hidden layers.
+        num_heads: int. Number of attention heads.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each transformer.
+        layer_scale_init_value: float. The initial value for the scale.
+            Defaults to `1.0`.
+        use_gated_mlp: bool. Whether to use Gated MLP layers. Defaults to
+            `False`.
+        attention_dropout: float. The dropout rate for the attention
+            probabilities. Defaults to `0.0`.
+        drop_path_rate: float. The drop path rate to use. Defaults to `0.0`.
+        layer_norm_eps: float. The epsilon for layer normalization.
+        query_bias: bool. Whether to use a bias for the query projection.
+        key_bias: bool. Whether to use a bias for the key projection.
+        value_bias: bool. Whether to use a bias for the value projection.
+        proj_bias: bool. Whether to use a bias for the output projection.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `dtype` etc.
+    """
+
     def __init__(
         self,
         num_layers,
@@ -680,6 +846,7 @@ class DINOV3Encoder(layers.Layer):
                 key_bias=key_bias,
                 value_bias=value_bias,
                 proj_bias=proj_bias,
+                dtype=self.dtype_policy,
                 name=f"layers.{i}",
             )
             for i in range(num_layers)
