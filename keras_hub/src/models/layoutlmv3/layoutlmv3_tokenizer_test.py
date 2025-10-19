@@ -142,7 +142,7 @@ class LayoutLMv3TokenizerTest(TestCase):
 
         # Test that restored tokenizer works the same
         output1 = self.tokenizer(inputs="hello world")
-        output2 = restored_tokenizer("hello world")
+        output2 = restored_tokenizer(inputs="hello world")
 
         self.assertAllClose(output1["token_ids"], output2["token_ids"])
         self.assertAllClose(output1["padding_mask"], output2["padding_mask"])
@@ -170,7 +170,7 @@ class LayoutLMv3TokenizerTest(TestCase):
             sequence_length=8,
         )
 
-        output = custom_tokenizer("hello world")
+        output = custom_tokenizer(inputs="hello world")
 
         # Check that output respects custom sequence length
         self.assertEqual(output["token_ids"].shape, (1, 8))

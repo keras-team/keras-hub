@@ -230,9 +230,12 @@ class LayoutLMv3Tokenizer(keras.layers.Layer):
             token_ids_list.append(token_ids)
 
         # Convert to tensors
-        max_len = max(len(ids) for ids in token_ids_list)
         if sequence_length is not None:
-            max_len = min(max_len, sequence_length)
+            max_len = sequence_length
+        elif self.sequence_length is not None:
+            max_len = self.sequence_length
+        else:
+            max_len = max(len(ids) for ids in token_ids_list)
 
         # Pad sequences
         padded_token_ids = []
