@@ -66,7 +66,10 @@ class LayoutLMv3BackboneTest(TestCase):
 
         # Check that spatial embeddings have correct shapes
         for coord in ["x", "y", "h", "w"]:
-            embeddings = model.spatial_embeddings[coord].embeddings
+            # Build the layer if not already built
+            if not model.spatial_embeddings[coord].built:
+                model.spatial_embeddings[coord].build((None, None))
+            embeddings = model.spatial_embeddings[coord].weights[0]
             expected_shape = [1024, 32]  # max_bbox_value, spatial_embedding_dim
             self.assertEqual(list(embeddings.shape), expected_shape)
 

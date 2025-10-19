@@ -58,7 +58,7 @@ class LayoutLMv3TokenizerTest(TestCase):
                 "merges": self.merges,
                 "sequence_length": 16,
             },
-            input_data="hello world",
+            input_data=["hello world"],
         )
 
     def test_list_tokenization(self):

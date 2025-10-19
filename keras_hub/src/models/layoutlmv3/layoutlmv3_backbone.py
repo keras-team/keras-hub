@@ -1,83 +1,58 @@
+"""LayoutLMv3 backbone implementation."""
+
 import keras
 from keras import ops
-
-from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.reversible_embedding import (
-    ReversibleEmbedding,
-)
+from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
+from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.layoutlmv3.layoutlmv3_transformer import (
-    LayoutLMv3TransformerLayer,
-)
 
 
-@keras_hub_export("keras_hub.models.LayoutLMv3Backbone")
+@keras.saving.register_keras_serializable(package="keras_hub")
 class LayoutLMv3Backbone(Backbone):
-    """LayoutLMv3 backbone model for document understanding tasks.
+    """LayoutLMv3 backbone model.
 
-    This class implements the LayoutLMv3 model architecture for joint text and
-    layout understanding in document AI tasks. It processes both text and image
-    inputs while maintaining spatial relationships in documents.
-
-    The default constructor gives a fully customizable, randomly initialized
-    LayoutLMv3 model with any number of layers, heads, and embedding dimensions.
-    To load preset architectures and weights, use the `from_preset` constructor.
+    This model implements the LayoutLMv3 architecture for document understanding
+    tasks. It processes text tokens along with their spatial (bounding box)
+    information to generate contextualized representations.
 
     Args:
-        vocabulary_size: int. The size of the token vocabulary. Defaults to
-            30522.
-        hidden_dim: int. The size of the transformer hidden state at the end of
-            each transformer layer. Defaults to 768.
-        num_layers: int. The number of transformer layers. Defaults to 12.
-        num_heads: int. The number of attention heads for each transformer.
-            Defaults to 12.
-        intermediate_dim: int. The output dimension of the first Dense layer in
-            a two-layer feedforward network for each transformer. Defaults to
-            3072.
-        dropout: float. Dropout probability for the transformer encoder.
-            Defaults to 0.1.
-        max_sequence_length: int. The maximum sequence length that this encoder
-            can consume. Defaults to 512.
-        type_vocab_size: int. The vocabulary size for token types. Defaults to
-            2.
-        initializer_range: float. The standard deviation of the truncated_normal
-            initializer for initializing all weight matrices. Defaults to 0.02.
-        layer_norm_epsilon: float. The epsilon used by the layer normalization
-            layers. Defaults to 1e-12.
-        spatial_embedding_dim: int. The dimension of spatial position
-            embeddings for bounding box coordinates. Defaults to 64.
-        patch_size: int. The size of the patches for image processing. Defaults
-            to 16.
-        num_channels: int. The number of channels in the input images. Defaults
-            to 3.
-        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
-            for model computations and weights.
+        vocabulary_size: int. The size of the vocabulary.
+        hidden_dim: int. The size of the hidden dimension.
+        num_layers: int. The number of transformer layers.
+        num_heads: int. The number of attention heads.
+        intermediate_dim: int. The size of the intermediate dimension in the
+            feed-forward network.
+        dropout: float. The dropout rate.
+        max_sequence_length: int. The maximum sequence length.
+        type_vocab_size: int. The size of the token type vocabulary.
+        initializer_range: float. The standard deviation of the initializer.
+        layer_norm_epsilon: float. The epsilon value for layer normalization.
+        patch_size: int. The size of the image patches.
+        image_size: int. The size of the input images.
+        num_channels: int. The number of input image channels.
+        dtype: str. The dtype of the model.
 
-    Examples:
+    Example:
+
     ```python
-    input_data = {
-        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
-        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
-        "bbox": np.ones(shape=(1, 12, 4), dtype="int32"),
-    }
-
-    # Pretrained LayoutLMv3 encoder.
-    model = keras_hub.models.LayoutLMv3Backbone.from_preset(
-        "layoutlmv3_base",
-    )
-    model(input_data)
-
-    # Randomly initialized LayoutLMv3 encoder with custom config.
-    model = keras_hub.models.LayoutLMv3Backbone(
+    # Create a LayoutLMv3 backbone
+    model = LayoutLMv3Backbone(
         vocabulary_size=30522,
         hidden_dim=768,
         num_layers=12,
         num_heads=12,
         intermediate_dim=3072,
+        dropout=0.1,
         max_sequence_length=512,
-        spatial_embedding_dim=64,
     )
-    model(input_data)
+
+    # Call the model
+    input_data = {
+        "token_ids": tf.constant([[1, 2, 3, 4, 5]]),
+        "padding_mask": tf.constant([[1, 1, 1, 1, 1]]),
+        "bbox": tf.constant([[[0, 0, 10, 10], [10, 0, 20, 10], [20, 0, 30, 10], [30, 0, 40, 10], [40, 0, 50, 10]]]),
+    }
+    output = model(input_data)
     ```
 
     References:
@@ -97,26 +72,31 @@ class LayoutLMv3Backbone(Backbone):
         type_vocab_size=2,
         initializer_range=0.02,
         layer_norm_epsilon=1e-12,
-        spatial_embedding_dim=64,
         patch_size=16,
+        image_size=224,
         num_channels=3,
-        dtype=None,
+        spatial_embedding_dim=None,
+        dtype="float32",
         **kwargs,
     ):
-        # Store configuration parameters as attributes
+        # Store configuration
         self.vocabulary_size = vocabulary_size
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
         self.intermediate_dim = intermediate_dim
+        self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.type_vocab_size = type_vocab_size
-        self.spatial_embedding_dim = spatial_embedding_dim
+        self.initializer_range = initializer_range
+        self.layer_norm_epsilon = layer_norm_epsilon
         self.patch_size = patch_size
+        self.image_size = image_size
         self.num_channels = num_channels
+        self.spatial_embedding_dim = spatial_embedding_dim or hidden_dim // 4
 
-        # === Layers ===
-        self.token_embedding = ReversibleEmbedding(
+        # Token embedding layer
+        self.token_embedding = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=keras.initializers.TruncatedNormal(
@@ -126,6 +106,7 @@ class LayoutLMv3Backbone(Backbone):
             name="token_embedding",
         )
 
+        # Position embedding layer
         self.position_embedding = keras.layers.Embedding(
             input_dim=max_sequence_length,
             output_dim=hidden_dim,
@@ -136,28 +117,7 @@ class LayoutLMv3Backbone(Backbone):
             name="position_embedding",
         )
 
-        # Spatial position embeddings for bounding box coordinates
-        self.spatial_embeddings = {}
-        self.spatial_projections = {}
-        for coord in ["x", "y", "h", "w"]:
-            self.spatial_embeddings[coord] = keras.layers.Embedding(
-                input_dim=1024,
-                output_dim=spatial_embedding_dim,
-                embeddings_initializer=keras.initializers.TruncatedNormal(
-                    stddev=initializer_range
-                ),
-                dtype=dtype,
-                name=f"{coord}_position_embedding",
-            )
-            self.spatial_projections[coord] = keras.layers.Dense(
-                hidden_dim,
-                kernel_initializer=keras.initializers.TruncatedNormal(
-                    stddev=initializer_range
-                ),
-                dtype=dtype,
-                name=f"{coord}_projection",
-            )
-
+        # Token type embedding layer
         self.token_type_embedding = keras.layers.Embedding(
             input_dim=type_vocab_size,
             output_dim=hidden_dim,
@@ -168,12 +128,88 @@ class LayoutLMv3Backbone(Backbone):
             name="token_type_embedding",
         )
 
+        # Spatial embedding layers for bounding box coordinates
+        self.spatial_embeddings = {
+            "x": keras.layers.Embedding(
+                input_dim=1024,  # Max coordinate value
+                output_dim=self.spatial_embedding_dim,
+                embeddings_initializer=keras.initializers.TruncatedNormal(
+                    stddev=initializer_range
+                ),
+                dtype=dtype,
+                name="spatial_x_embedding",
+            ),
+            "y": keras.layers.Embedding(
+                input_dim=1024,
+                output_dim=self.spatial_embedding_dim,
+                embeddings_initializer=keras.initializers.TruncatedNormal(
+                    stddev=initializer_range
+                ),
+                dtype=dtype,
+                name="spatial_y_embedding",
+            ),
+            "h": keras.layers.Embedding(
+                input_dim=1024,
+                output_dim=self.spatial_embedding_dim,
+                embeddings_initializer=keras.initializers.TruncatedNormal(
+                    stddev=initializer_range
+                ),
+                dtype=dtype,
+                name="spatial_h_embedding",
+            ),
+            "w": keras.layers.Embedding(
+                input_dim=1024,
+                output_dim=self.spatial_embedding_dim,
+                embeddings_initializer=keras.initializers.TruncatedNormal(
+                    stddev=initializer_range
+                ),
+                dtype=dtype,
+                name="spatial_w_embedding",
+            ),
+        }
+
+        # Spatial projection layers
+        self.spatial_projections = {
+            "x": keras.layers.Dense(
+                hidden_dim,
+                kernel_initializer=keras.initializers.TruncatedNormal(
+                    stddev=initializer_range
+                ),
+                dtype=dtype,
+                name="spatial_x_projection",
+            ),
+            "y": keras.layers.Dense(
+                hidden_dim,
+                kernel_initializer=keras.initializers.TruncatedNormal(
+                    stddev=initializer_range
+                ),
+                dtype=dtype,
+                name="spatial_y_projection",
+            ),
+            "h": keras.layers.Dense(
+                hidden_dim,
+                kernel_initializer=keras.initializers.TruncatedNormal(
+                    stddev=initializer_range
+                ),
+                dtype=dtype,
+                name="spatial_h_projection",
+            ),
+            "w": keras.layers.Dense(
+                hidden_dim,
+                kernel_initializer=keras.initializers.TruncatedNormal(
+                    stddev=initializer_range
+                ),
+                dtype=dtype,
+                name="spatial_w_projection",
+            ),
+        }
+
+        # Layer normalization and dropout
         self.embeddings_layer_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="embeddings_layer_norm",
         )
-
         self.embeddings_dropout = keras.layers.Dropout(
             dropout,
             dtype=dtype,
@@ -183,16 +219,11 @@ class LayoutLMv3Backbone(Backbone):
         # Transformer layers
         self.transformer_layers = []
         for i in range(num_layers):
-            layer = LayoutLMv3TransformerLayer(
-                hidden_dim=hidden_dim,
+            layer = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
                 dropout=dropout,
-                activation="gelu",
                 layer_norm_epsilon=layer_norm_epsilon,
-                kernel_initializer=keras.initializers.TruncatedNormal(
-                    stddev=initializer_range
-                ),
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
@@ -217,35 +248,55 @@ class LayoutLMv3Backbone(Backbone):
             name="patch_layer_norm",
         )
 
-        # === Functional Model ===
-        token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
-        )
-        padding_mask_input = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
-        bbox_input = keras.Input(shape=(None, 4), dtype="int32", name="bbox")
+        # Initialize the parent class
+        super().__init__(dtype=dtype, **kwargs)
+
+    @property
+    def token_embedding_matrix(self):
+        """Get the token embedding matrix."""
+        # Build the layer if not already built
+        if not self.token_embedding.built:
+            self.token_embedding.build((None, None))
+        return self.token_embedding.weights[0]
+
+    def call(self, inputs, training=None):
+        """Call the model on new inputs.
+
+        Args:
+            inputs: A dictionary containing:
+                - "token_ids": Token IDs tensor of shape (batch_size, seq_len)
+                - "padding_mask": Padding mask tensor of shape (batch_size, seq_len)
+                - "bbox": Bounding box tensor of shape (batch_size, seq_len, 4)
+            training: Whether the model is in training mode.
+
+        Returns:
+            A tensor of shape (batch_size, seq_len, hidden_dim) containing the
+            contextualized representations.
+        """
+        token_ids = inputs["token_ids"]
+        padding_mask = inputs["padding_mask"]
+        bbox = inputs["bbox"]
 
         # Compute sequence length for position embeddings
-        seq_length = ops.shape(token_id_input)[1]
-        # Use max_sequence_length for static shape, but handle dynamic sequences
-        max_seq_len = self.max_sequence_length
-        position_ids = ops.arange(max_seq_len, dtype="int32")
+        seq_length = ops.shape(token_ids)[1]
+        batch_size = ops.shape(token_ids)[0]
+        # Create position IDs that match the actual sequence length
+        position_ids = ops.arange(seq_length, dtype="int32")
         position_ids = ops.expand_dims(position_ids, axis=0)
-        # Truncate to actual sequence length using dynamic slicing
-        position_ids = ops.slice(position_ids, [0, 0], [1, seq_length])
+        # Broadcast to match batch size
+        position_ids = ops.tile(position_ids, [batch_size, 1])
 
         # Token embeddings
-        token_embeddings = self.token_embedding(token_id_input)
+        token_embeddings = self.token_embedding(token_ids)
 
         # Position embeddings
         position_embeddings = self.position_embedding(position_ids)
 
         # Spatial embeddings
-        x_embeddings = self.spatial_embeddings["x"](bbox_input[..., 0])
-        y_embeddings = self.spatial_embeddings["y"](bbox_input[..., 1])
-        h_embeddings = self.spatial_embeddings["h"](bbox_input[..., 2])
-        w_embeddings = self.spatial_embeddings["w"](bbox_input[..., 3])
+        x_embeddings = self.spatial_embeddings["x"](bbox[..., 0])
+        y_embeddings = self.spatial_embeddings["y"](bbox[..., 1])
+        h_embeddings = self.spatial_embeddings["h"](bbox[..., 2])
+        w_embeddings = self.spatial_embeddings["w"](bbox[..., 3])
 
         # Project spatial embeddings
         x_embeddings = self.spatial_projections["x"](x_embeddings)
@@ -254,7 +305,7 @@ class LayoutLMv3Backbone(Backbone):
         w_embeddings = self.spatial_projections["w"](w_embeddings)
 
         # Token type embeddings (default to 0)
-        token_type_ids = ops.zeros_like(token_id_input)
+        token_type_ids = ops.zeros_like(token_ids)
         token_type_embeddings = self.token_type_embedding(token_type_ids)
 
         # Combine all embeddings
@@ -270,43 +321,19 @@ class LayoutLMv3Backbone(Backbone):
 
         # Apply layer normalization and dropout
         embeddings = self.embeddings_layer_norm(embeddings)
-        embeddings = self.embeddings_dropout(embeddings)
+        embeddings = self.embeddings_dropout(embeddings, training=training)
 
         # Apply transformer layers
         hidden_states = embeddings
         for transformer_layer in self.transformer_layers:
             hidden_states = transformer_layer(
-                hidden_states, padding_mask=padding_mask_input
+                hidden_states, padding_mask=padding_mask, training=training
             )
 
-        # Build the model
-        super().__init__(
-            inputs={
-                "token_ids": token_id_input,
-                "padding_mask": padding_mask_input,
-                "bbox": bbox_input,
-            },
-            outputs=hidden_states,
-            dtype=dtype,
-            **kwargs,
-        )
-
-        # === Config ===
-        self.vocabulary_size = vocabulary_size
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
-        self.num_heads = num_heads
-        self.intermediate_dim = intermediate_dim
-        self.dropout = dropout
-        self.max_sequence_length = max_sequence_length
-        self.type_vocab_size = type_vocab_size
-        self.initializer_range = initializer_range
-        self.layer_norm_epsilon = layer_norm_epsilon
-        self.spatial_embedding_dim = spatial_embedding_dim
-        self.patch_size = patch_size
-        self.num_channels = num_channels
+        return hidden_states
 
     def get_config(self):
+        """Get the configuration of the model."""
         config = super().get_config()
         config.update(
             {
@@ -320,13 +347,15 @@ class LayoutLMv3Backbone(Backbone):
                 "type_vocab_size": self.type_vocab_size,
                 "initializer_range": self.initializer_range,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "spatial_embedding_dim": self.spatial_embedding_dim,
                 "patch_size": self.patch_size,
+                "image_size": self.image_size,
                 "num_channels": self.num_channels,
+                "spatial_embedding_dim": self.spatial_embedding_dim,
             }
         )
         return config
 
-    @property
-    def token_embedding_matrix(self):
-        return self.token_embedding.embeddings
+    @classmethod
+    def from_config(cls, config):
+        """Create a model from its configuration."""
+        return cls(**config)
