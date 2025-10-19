@@ -14,20 +14,21 @@ def convert_backbone_config(transformers_config):
         "num_heads": transformers_config["num_attention_heads"],
         "intermediate_dim": transformers_config["intermediate_size"],
         "layer_scale_init_value": transformers_config["layerscale_value"],
-        "num_register_tokens": transformers_config.get(
-            "num_register_tokens", 0
-        ),
+        "num_register_tokens": transformers_config["num_register_tokens"],
         "use_mask_token": True,
+        "hidden_activation": transformers_config["hidden_act"],
         "use_gated_mlp": transformers_config["use_gated_mlp"],
+        "use_query_bias": transformers_config["query_bias"],
+        "use_key_bias": transformers_config["key_bias"],
+        "use_value_bias": transformers_config["value_bias"],
+        "use_proj_bias": transformers_config["proj_bias"],
+        "use_mlp_bias": transformers_config["mlp_bias"],
         "attention_dropout": transformers_config["attention_dropout"],
         "drop_path_rate": transformers_config["drop_path_rate"],
+        "layer_norm_eps": transformers_config["layer_norm_eps"],
         "image_shape": (image_size, image_size, 3),
         "rope_theta": transformers_config["rope_theta"],
         "apply_layernorm": False,
-        "query_bias": transformers_config["query_bias"],
-        "key_bias": transformers_config["key_bias"],
-        "value_bias": transformers_config["value_bias"],
-        "proj_bias": transformers_config["proj_bias"],
     }
 
 
@@ -56,6 +57,11 @@ def convert_weights(backbone, loader, transformers_config):
         keras_variable=backbone.embeddings.cls_token,
         hf_weight_key="embeddings.cls_token",
     )
+    if backbone.use_mask_token:
+        loader.port_weight(
+            keras_variable=backbone.embeddings.mask_token,
+            hf_weight_key="embeddings.mask_token",
+        )
     if backbone.num_register_tokens > 0:
         loader.port_weight(
             keras_variable=backbone.embeddings.register_tokens,
@@ -75,10 +81,10 @@ def convert_weights(backbone, loader, transformers_config):
     for i, layer in enumerate(backbone.encoder.layers):
         prefix = f"layer.{i}"
         port_ln(layer.norm1, f"{prefix}.norm1")
-        port_dense(layer.attention.q_proj, f"{prefix}.attention.q_proj")
-        port_dense(layer.attention.k_proj, f"{prefix}.attention.k_proj")
-        port_dense(layer.attention.v_proj, f"{prefix}.attention.v_proj")
-        port_dense(layer.attention.o_proj, f"{prefix}.attention.o_proj")
+        port_dense(layer.attention.query_dense, f"{prefix}.attention.q_proj")
+        port_dense(layer.attention.key_dense, f"{prefix}.attention.k_proj")
+        port_dense(layer.attention.value_dense, f"{prefix}.attention.v_proj")
+        port_dense(layer.attention.output_dense, f"{prefix}.attention.o_proj")
 
         loader.port_weight(
             keras_variable=layer.layer_scale1.lambda1,

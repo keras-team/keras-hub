@@ -1,3 +1,28 @@
+"""Convert DINOV3 checkpoints.
+
+export KAGGLE_USERNAME=xxx KAGGLE_KEY=xxx
+
+python tools/checkpoint_conversion/convert_dinov3_checkpoints.py \
+    --preset dinov3_vit_small_lvd1689m --upload_uri kaggle://kerashub/dinov3/keras/dinov3_vit_small_lvd1689m
+python tools/checkpoint_conversion/convert_dinov3_checkpoints.py \
+    --preset dinov3_vit_small_plus_lvd1689m --upload_uri kaggle://kerashub/dinov3/keras/dinov3_vit_small_plus_lvd1689m
+python tools/checkpoint_conversion/convert_dinov3_checkpoints.py \
+    --preset dinov3_vit_base_lvd1689m --upload_uri kaggle://kerashub/dinov3/keras/dinov3_vit_base_lvd1689m
+python tools/checkpoint_conversion/convert_dinov3_checkpoints.py \
+    --preset dinov3_vit_large_lvd1689m --upload_uri kaggle://kerashub/dinov3/keras/dinov3_vit_large_lvd1689m
+python tools/checkpoint_conversion/convert_dinov3_checkpoints.py \
+    --preset dinov3_vit_huge_lvd1689m --upload_uri kaggle://kerashub/dinov3/keras/dinov3_vit_huge_lvd1689m
+python tools/checkpoint_conversion/convert_dinov3_checkpoints.py \
+    --preset dinov3_vit_huge_plus_lvd1689m --upload_uri kaggle://kerashub/dinov3/keras/dinov3_vit_huge_plus_lvd1689m
+python tools/checkpoint_conversion/convert_dinov3_checkpoints.py \
+    --preset dinov3_vit_7b_lvd1689m --upload_uri kaggle://kerashub/dinov3/keras/dinov3_vit_7b_lvd1689m
+
+python tools/checkpoint_conversion/convert_dinov3_checkpoints.py \
+    --preset dinov3_vit_large_sat493m --upload_uri kaggle://kerashub/dinov3/keras/dinov3_vit_large_sat493m
+python tools/checkpoint_conversion/convert_dinov3_checkpoints.py \
+    --preset dinov3_vit_7b_sat493m --upload_uri kaggle://kerashub/dinov3/keras/dinov3_vit_7b_sat493m
+"""
+
 import keras
 import numpy as np
 import torch
@@ -10,7 +35,20 @@ from transformers import AutoModel
 import keras_hub
 
 PRESET_MAP = {
+    # ViT lvd1689m variants.
     "dinov3_vit_small_lvd1689m": "facebook/dinov3-vits16-pretrain-lvd1689m",
+    "dinov3_vit_small_plus_lvd1689m": (
+        "facebook/dinov3-vits16plus-pretrain-lvd1689m"
+    ),
+    "dinov3_vit_base_lvd1689m": "facebook/dinov3-vitb16-pretrain-lvd1689m",
+    "dinov3_vit_large_lvd1689m": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "dinov3_vit_huge_plus_lvd1689m": (
+        "facebook/dinov3-vith16plus-pretrain-lvd1689m"
+    ),
+    "dinov3_vit_7b_lvd1689m": "facebook/dinov3-vit7b16-pretrain-lvd1689m",
+    # ViT sat493m variants.
+    "dinov3_vit_large_sat493m": "facebook/dinov3-vitl16-pretrain-sat493m",
+    "dinov3_vit_7b_sat493m": "facebook/dinov3-vit7b16-pretrain-sat493m",
 }
 
 FLAGS = flags.FLAGS
@@ -37,6 +75,7 @@ def convert_image_converter(image_size, hf_image_processor):
         image_size=image_size,
         scale=[1.0 / 255.0 / s for s in std],
         offset=[-m / s for m, s in zip(mean, std)],
+        crop_to_aspect_ratio=False,
         interpolation="bilinear",
         antialias=True,
     )
@@ -56,12 +95,14 @@ def validate_output(
     # Preprocess with hf.
     hf_inputs = hf_image_processor(images=image, return_tensors="pt")
     hf_preprocessed = hf_inputs["pixel_values"].detach().cpu().numpy()
-    print("🔶 HF preprocessed shape:", hf_preprocessed.shape)
 
     # Preprocess with keras.
     images = np.expand_dims(np.array(image).astype("float32"), axis=0)
     images = keras_hub_image_converter(images)
     keras_preprocessed = keras.ops.convert_to_numpy(images)
+
+    print("🔶 Keras preprocessor output:", keras_preprocessed[0, 0, :10, 0])
+    print("🔶 HF preprocessor output:", hf_preprocessed[0, 0, 0, :10])
 
     # Call with hf. Use the keras preprocessed image so we can keep modeling
     # and preprocessing comparisons independent.

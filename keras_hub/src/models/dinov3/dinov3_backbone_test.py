@@ -11,7 +11,7 @@ from keras_hub.src.tests.test_case import TestCase
 class DINOV3BackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "patch_size": 14,
+            "patch_size": 16,
             "num_layers": 2,
             "hidden_dim": 16,
             "num_heads": 2,
@@ -19,11 +19,11 @@ class DINOV3BackboneTest(TestCase):
             "layer_scale_init_value": 1.0,
             "num_register_tokens": 4,
             "use_gated_mlp": False,
-            "image_shape": (70, 70, 3),
+            "image_shape": (64, 64, 3),
             "name": "dinov3_backbone",
         }
         self.input_data = {
-            "images": ops.ones((2, 70, 70, 3)),
+            "images": ops.ones((2, 64, 64, 3)),
         }
 
     def test_backbone_basics(self):
@@ -70,7 +70,7 @@ class DINOV3BackboneTest(TestCase):
         model.save_to_preset(path)
         restored_model = DINOV3Backbone.from_preset(
             path,
-            image_shape=(128, 128, 3),  # From 70 to 128.
+            image_shape=(128, 128, 3),  # From 64 to 128.
         )
         input_data = {
             "images": ops.ones((2, 128, 128, 3)),
