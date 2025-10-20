@@ -114,7 +114,6 @@ class GemmaBackbone(Backbone):
                 scale=1.0,
                 mode="fan_in",
                 distribution="untruncated_normal",
-                seed=None,
             ),
             dtype=dtype,
             logit_soft_cap=final_logit_soft_cap,
@@ -148,10 +147,10 @@ class GemmaBackbone(Backbone):
 
         # === Functional Model ===
         token_id_input = keras.Input(
-            shape=(None,), dtype="float32", name="token_ids"
+            shape=(None,), dtype="int32", name="token_ids"
         )
         padding_mask_input = keras.Input(
-            shape=(None,), dtype="float32", name="padding_mask"
+            shape=(None,), dtype="int32", name="padding_mask"
         )
         x = self.token_embedding(token_id_input)
         x = x * ops.cast(ops.sqrt(hidden_dim), x.dtype)

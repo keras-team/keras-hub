@@ -12,6 +12,9 @@ from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class GemmaCausalLMTest(TestCase):
@@ -94,6 +97,22 @@ class GemmaCausalLMTest(TestCase):
             outputs["padding_mask"][:, :4],
             prompt_ids["padding_mask"][:, :4],
         )
+
+    def test_flash_attention_call(self):
+        if (
+            keras.config.backend() != "jax"
+            or not fused_attention_op_available()
+            or not gpu_supports_fused_attention_op()
+        ):
+            self.skipTest("`flash_attention` testing requires the Jax backend.")
+
+        with patch("keras.src.backend.nn.dot_product_attention") as mock_func:
+            causal_lm = GemmaCausalLM(**self.init_kwargs)
+            causal_lm.generate("the quick brown fox")
+            if running_on_gpu():
+                mock_func.assert_called()
+            else:
+                mock_func.assert_not_called()
 
     def test_generate_with_bfloat16(self):
         original_floatx = keras.config.floatx()

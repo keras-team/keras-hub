@@ -2,14 +2,16 @@ import keras
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (  # noqa: E501
     StableDiffusion3Backbone,
+)
+from keras_hub.src.models.text_to_image_preprocessor import (
+    TextToImagePreprocessor,
 )
 
 
 @keras_hub_export("keras_hub.models.StableDiffusion3TextToImagePreprocessor")
-class StableDiffusion3TextToImagePreprocessor(Preprocessor):
+class StableDiffusion3TextToImagePreprocessor(TextToImagePreprocessor):
     """Stable Diffusion 3 text-to-image model preprocessor.
 
     This preprocessing layer is meant for use with
@@ -48,8 +50,12 @@ class StableDiffusion3TextToImagePreprocessor(Preprocessor):
 
     def generate_preprocess(self, x):
         token_ids = {}
-        token_ids["clip_l"] = self.clip_l_preprocessor(x)["token_ids"]
-        token_ids["clip_g"] = self.clip_g_preprocessor(x)["token_ids"]
+        token_ids["clip_l"] = self.clip_l_preprocessor(
+            {"prompts": x, "images": None}
+        )["token_ids"]
+        token_ids["clip_g"] = self.clip_g_preprocessor(
+            {"prompts": x, "images": None}
+        )["token_ids"]
         if self.t5_preprocessor is not None:
             token_ids["t5"] = self.t5_preprocessor(x)["token_ids"]
         return token_ids

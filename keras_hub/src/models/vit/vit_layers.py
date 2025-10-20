@@ -65,6 +65,7 @@ class MLP(keras.layers.Layer):
 
     def call(self, inputs):
         x = self.dense_1(inputs)
+        x = self.dropout(x)
         x = self.dense_2(x)
         out = self.dropout(x)
         return out
@@ -74,12 +75,13 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
     """Patches the image and embeds the patches.
 
     Args:
-        image_size: int. Size of the input image (height or width).
-            Assumed to be square.
-        patch_size: int. Size of each image patch.
+        image_size: (int, int). Size of the input image.
+        patch_size: (int, int). Size of each image patch.
         hidden_dim: int. Dimensionality of the patch embeddings.
         num_channels: int. Number of channels in the input image. Defaults to
             `3`.
+        use_class_token: bool. Whether to use class token to be part of
+            patch embedding. Defaults to `True`.
         data_format: str. `"channels_last"` or `"channels_first"`. Defaults to
             `None` (which uses `"channels_last"`).
         **kwargs: Additional keyword arguments passed to `keras.layers.Layer`
@@ -91,12 +93,15 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         patch_size,
         hidden_dim,
         num_channels=3,
+        use_class_token=True,
+        use_patch_bias=True,
         data_format=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        num_patches = (image_size // patch_size) ** 2
-        num_positions = num_patches + 1
+        grid_size = tuple([s // p for s, p in zip(image_size, patch_size)])
+        num_patches = grid_size[0] * grid_size[1]
+        num_positions = num_patches + 1 if use_class_token else num_patches
 
         # === Config ===
         self.image_size = image_size
@@ -105,19 +110,22 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         self.num_channels = num_channels
         self.num_patches = num_patches
         self.num_positions = num_positions
+        self.use_class_token = use_class_token
+        self.use_patch_bias = use_patch_bias
         self.data_format = standardize_data_format(data_format)
 
     def build(self, input_shape):
-        self.class_token = self.add_weight(
-            shape=(
-                1,
-                1,
-                self.hidden_dim,
-            ),
-            initializer="random_normal",
-            dtype=self.variable_dtype,
-            name="class_token",
-        )
+        if self.use_class_token:
+            self.class_token = self.add_weight(
+                shape=(
+                    1,
+                    1,
+                    self.hidden_dim,
+                ),
+                initializer="random_normal",
+                dtype=self.variable_dtype,
+                name="class_token",
+            )
         self.patch_embedding = keras.layers.Conv2D(
             filters=self.hidden_dim,
             kernel_size=self.patch_size,
@@ -126,6 +134,7 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
             activation=None,
             dtype=self.dtype_policy,
             data_format=self.data_format,
+            use_bias=self.use_patch_bias,
             name="patch_embedding",
         )
         self.patch_embedding.build(input_shape)
@@ -152,10 +161,16 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
         patch_embeddings = ops.reshape(
             patch_embeddings, [embeddings_shape[0], -1, embeddings_shape[-1]]
         )
-        class_token = ops.tile(self.class_token, (embeddings_shape[0], 1, 1))
         position_embeddings = self.position_embedding(self.position_ids)
-        embeddings = ops.concatenate([class_token, patch_embeddings], axis=1)
-        return ops.add(embeddings, position_embeddings)
+
+        if self.use_class_token:
+            class_token = ops.tile(
+                self.class_token, (embeddings_shape[0], 1, 1)
+            )
+            patch_embeddings = ops.concatenate(
+                [class_token, patch_embeddings], axis=1
+            )
+        return ops.add(patch_embeddings, position_embeddings)
 
     def compute_output_shape(self, input_shape):
         return (
@@ -174,6 +189,7 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
                 "num_channels": self.num_channels,
                 "num_patches": self.num_patches,
                 "num_positions": self.num_positions,
+                "use_class_token": self.use_class_token,
             }
         )
         return config
@@ -257,6 +273,7 @@ class ViTEncoderBlock(keras.layers.Layer):
             hidden_dim=self.hidden_dim,
             mlp_dim=self.mlp_dim,
             use_bias=self.use_mlp_bias,
+            dropout_rate=self.dropout_rate,
             name="mlp",
             dtype=self.dtype_policy,
         )
@@ -351,7 +368,7 @@ class ViTEncoder(keras.layers.Layer):
                 attention_dropout=self.attention_dropout,
                 layer_norm_epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
-                name=f"tranformer_block_{i+1}",
+                name=f"tranformer_block_{i + 1}",
             )
             encoder_block.build((None, None, self.hidden_dim))
             self.encoder_layers.append(encoder_block)

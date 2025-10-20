@@ -23,7 +23,7 @@ EXTRACT_DIR = "./{}"
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
-    "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
+    "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
 
 
@@ -45,7 +45,9 @@ def convert_checkpoints(size):
     checkpoint_path = os.path.join(extract_dir, "model.pt")
 
     # Load PyTorch XLM-R checkpoint.
-    pt_ckpt = torch.load(checkpoint_path, map_location=torch.device("cpu"))
+    pt_ckpt = torch.load(
+        checkpoint_path, map_location=torch.device("cpu"), weights_only=True
+    )
     pt_cfg = pt_ckpt["args"]
     pt_model = pt_ckpt["model"]
 
@@ -291,8 +293,8 @@ def check_output(
 
 def main(_):
     assert FLAGS.preset in PRESET_MAP.keys(), (
-        f'Invalid preset {FLAGS.preset}. '
-        f'Must be one of {",".join(PRESET_MAP.keys())}'
+        f"Invalid preset {FLAGS.preset}. "
+        f"Must be one of {','.join(PRESET_MAP.keys())}"
     )
     size = PRESET_MAP[FLAGS.preset][0]
     hf_model_name = PRESET_MAP[FLAGS.preset][1]

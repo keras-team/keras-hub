@@ -1,3 +1,54 @@
+[build-system]
+requires = ["setuptools >=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "keras-hub"
+authors = [
+    {name = "Keras team", email = "keras-users@googlegroups.com"},
+]
+description = "Pretrained models for Keras."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dynamic = ["version"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: Unix",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development",
+]
+dependencies = [
+    "keras>=3.8",
+    "absl-py",
+    "numpy",
+    "packaging",
+    "regex",
+    "rich",
+    "kagglehub",
+    "tensorflow-text;platform_system != 'Windows'",
+]
+
+[project.urls]
+Home = "https://keras.io/keras_hub/"
+Repository = "https://github.com/keras-team/keras/keras_hub"
+
+[tool.setuptools.dynamic]
+version = {attr = "keras_hub.src.version.__version__"}
+
+[tool.setuptools.package-dir]
+"" = "."
+"keras_hub" = "keras_hub/api"  # Remap api/ to the root of the package.
+"keras_hub.src" = "keras_hub/src"
+
 [tool.ruff]
 line-length = 80
 
@@ -7,10 +58,45 @@ select = [
     "F",  # Pyflakes
     "I",  # isort
 ]
+ignore = [
+    "E741",  # ambiguous variable name
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["E501", "F401"]  # lines too long; imported but unused
 
 [tool.ruff.lint.isort]
 force-single-line = true
 known-first-party = ["keras_hub"]
 
-[tool.ruff.lint.per-file-ignores]
-"**/__init__.py" = ["E501", "F401"]
+[tool.pytest.ini_options]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::ImportWarning",
+    "ignore::RuntimeWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::FutureWarning",
+    "ignore::UserWarning",
+]
+addopts = "-vv"
+
+# Do not run tests in the `build` folders
+norecursedirs = ["build"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "@abstract",
+    "raise NotImplementedError",
+]
+omit = [
+    "*/*_test.py",
+]
+
+[tool.coverage.run]
+branch = true
+omit = [
+    "*/*_test.py",
+]
+

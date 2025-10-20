@@ -54,7 +54,6 @@ class BASNetTest(TestCase):
         output = model.predict(self.images)
         self.assertAllEqual(output.shape, (2, 64, 64, 1))
 
-    @pytest.mark.skip(reason="disabled until preset's been uploaded to Kaggle")
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in BASNetImageSegmenter.presets:

@@ -120,8 +120,8 @@ def convert_paddle_to_keras(paddle_weights: dict, keras_model: keras.Model):
         # in PaddleClas. first try a mapping in the form
         # stack2_block3_1_conv -> res4b2_branch2a
         paddle_address = (
-            f'{int(match["stack"])+2}b{int(match["block"])}'
-            f'_branch{branch_mapping[int(match["conv"])]}'
+            f"{int(match['stack']) + 2}b{int(match['block'])}"
+            f"_branch{branch_mapping[int(match['conv'])]}"
         )
         if match["type"] == "bn":
             paddle_name = f"bn{paddle_address}"
@@ -133,8 +133,8 @@ def convert_paddle_to_keras(paddle_weights: dict, keras_model: keras.Model):
         # if that was not successful, try a mapping like
         # stack2_block3_1_conv -> res4c_branch2a
         paddle_address = (
-            f'{int(match["stack"])+2}{"abcdefghijkl"[int(match["block"])]}'
-            f'_branch{branch_mapping[int(match["conv"])]}'
+            f"{int(match['stack']) + 2}{'abcdefghijkl'[int(match['block'])]}"
+            f"_branch{branch_mapping[int(match['conv'])]}"
         )
         if match["type"] == "bn":
             paddle_name = f"bn{paddle_address}"
@@ -278,7 +278,7 @@ urllib.request.urlretrieve(
     "elephant.jpg",
 )
 
-print(f'{"Model": <25}Error')
+print(f"{'Model': <25}Error")
 for architecture_name in configurations:
     # PaddleClas prediction
     predictor = paddleclas.PaddleClas(model_name=architecture_name).predictor

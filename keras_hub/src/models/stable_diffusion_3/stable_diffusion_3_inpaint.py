@@ -82,8 +82,7 @@ class StableDiffusion3Inpaint(Inpaint):
 
     def fit(self, *args, **kwargs):
         raise NotImplementedError(
-            "Currently, `fit` is not supported for "
-            "`StableDiffusion3Inpaint`."
+            "Currently, `fit` is not supported for `StableDiffusion3Inpaint`."
         )
 
     def generate_step(
@@ -185,6 +184,7 @@ class StableDiffusion3Inpaint(Inpaint):
         guidance_scale=7.0,
         seed=None,
     ):
+        self.backbone.configure_scheduler(num_steps)
         return super().generate(
             inputs,
             num_steps=num_steps,

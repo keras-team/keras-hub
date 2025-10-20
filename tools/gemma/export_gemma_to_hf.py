@@ -129,7 +129,7 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     "preset",
     None,
-    f'Must be one of {",".join(PRESET_MAP.keys())}'
+    f"Must be one of {','.join(PRESET_MAP.keys())}"
     " Alternatively, a Keras weights file (`.weights.h5`) can be passed"
     " to --weights_file flag.",
 )
@@ -345,9 +345,9 @@ def convert_checkpoints(
 
 def update_state_dict(layer, weight_name: str, tensor: torch.Tensor) -> None:
     """Updates the state dict for a weight given a tensor."""
-    assert (
-        tensor.shape == layer.state_dict()[weight_name].shape
-    ), f"{tensor.shape} vs {layer.state_dict()[weight_name].shape}"
+    assert tensor.shape == layer.state_dict()[weight_name].shape, (
+        f"{tensor.shape} vs {layer.state_dict()[weight_name].shape}"
+    )
     layer.state_dict()[weight_name].copy_(tensor)
 
 

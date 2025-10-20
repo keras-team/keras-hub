@@ -1,6 +1,6 @@
 # KerasHub: Multi-framework Pretrained Models
 [![](https://github.com/keras-team/keras-hub/workflows/Tests/badge.svg?branch=master)](https://github.com/keras-team/keras-hub/actions?query=workflow%3ATests+branch%3Amaster)
-![Python](https://img.shields.io/badge/python-v3.9.0+-success.svg)
+![Python](https://img.shields.io/badge/python-v3.10.0+-success.svg)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-hub/issues)
 
 > [!IMPORTANT]
@@ -78,7 +78,7 @@ print(keras_hub.utils.decode_imagenet_predictions(preds))
 Load a Bert model and fine-tune it on IMDb movie reviews:
 
 ```python
-classifier = keras_hub.models.BertClassifier.from_preset(
+classifier = keras_hub.models.TextClassifier.from_preset(
     "bert_base_en_uncased",
     activation="softmax",
     num_classes=2,
@@ -100,6 +100,13 @@ To install the latest KerasHub release with Keras 3, simply run:
 
 ```
 pip install --upgrade keras-hub
+```
+
+Our text tokenizers are based on TensorFlow Text. Hence, if you are using any
+model which has language as a modality, you will have to run:
+
+```
+pip install --upgrade keras-hub[nlp]
 ```
 
 To install the latest nightly changes for both KerasHub and Keras, you can use

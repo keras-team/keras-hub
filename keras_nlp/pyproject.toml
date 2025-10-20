@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools >=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "keras-nlp"
+version = "0.0.0"  # Will be replaced in pip_build.py
+dependencies = ["keras-hub==0.0.0"]  # Will be replaced in pip_build.py
+authors = [
+    {name = "Keras team", email = "keras-users@googlegroups.com"},
+]
+description = "Pretrained models for Keras."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: Unix",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development",
+]
+
+[project.urls]
+Home = "https://keras.io/keras_hub/"
+Repository = "https://github.com/keras-team/keras/keras_hub"
