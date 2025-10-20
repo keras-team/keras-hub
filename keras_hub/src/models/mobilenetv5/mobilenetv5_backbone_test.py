@@ -50,7 +50,7 @@ class MobileNetV5BackboneTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=MobileNetV5Backbone,
-            preset="mobilenetv5_300m_enc.gemma3n",
+            preset="mobilenetv5_300m_enc_gemma3n",
             input_data=keras.ops.ones((1, 224, 224, 3)),
             expected_output_shape=(1, 16, 16, 2048),
         )
