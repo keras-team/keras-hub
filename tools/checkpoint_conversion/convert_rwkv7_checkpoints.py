@@ -34,7 +34,7 @@ from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
 PRESET_MAP = {
     "RWKV7_G1a_0.1B": "rwkv7-g1a-0.1b-20250728-ctx4096.pth",
     "RWKV7_G1a_0.3B": "rwkv7-g1a-0.4b-20250905-ctx4096.pth",
-    "RWKV7_G1a_1.5B": "rwkv7-g1a-1.5b-20250922-ctx4096.pth",
+    "RWKV7_G1a_1.5B": "rwkv7-g1a3-1.5b-20251015-ctx8192.pth",
     "RWKV7_G1a_2.9B": "rwkv7-g1a-2.9b-20250924-ctx4096.pth",
     "RWKV7_G0a_7.2B": "rwkv7-g0a-7.2b-20250829-ctx4096.pth",
 }
@@ -396,7 +396,7 @@ def main(_):
     if not os.path.exists(FLAGS.preset):
         os.makedirs(FLAGS.preset)
 
-    souce_model_name = PRESET_MAP[FLAGS.preset]
+    source_model_name = PRESET_MAP[FLAGS.preset]
     # Download vocabulary file
 
     vocabs = requests.get(url, timeout=30).text
@@ -410,9 +410,9 @@ def main(_):
     # Download checkpoint
     download_path = snapshot_download(
         repo_id="RWKV/rwkv7-g1",
-        allow_patterns=souce_model_name,
+        allow_patterns=source_model_name,
     )
-    weights_path = os.path.join(download_path, souce_model_name)
+    weights_path = os.path.join(download_path, source_model_name)
 
     # Convert to Keras format
     my_model = convert_rwkv7_checkpoints(weights_path)

@@ -187,7 +187,7 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         # While self.sequence_length corresponds to the prefill max length
         generate_length = sequence_length
         if sequence_length is None:
-            raise (ValueError("`sequence_length` must be specified."))
+            raise ValueError("`sequence_length` must be specified.")
         sequence_length = self.sequence_length
 
         # Pad length to multiples of 16 to meet kernel requirements

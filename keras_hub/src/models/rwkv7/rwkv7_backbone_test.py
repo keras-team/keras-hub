@@ -27,8 +27,12 @@ class RWKV7BackboneTest(TestCase):
         """
         Test basic functionality of the RWKV7 backbone.
         """
-        y = self.backbone(self.input_data)
-        self.assertEqual(y.shape, (2, 5, 10))
+        self.run_backbone_test(
+            cls=RWKV7Backbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(2, 5, 10),
+        )
 
     def test_num_parameters(self):
         """

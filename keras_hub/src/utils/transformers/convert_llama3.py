@@ -31,9 +31,9 @@ def convert_backbone_config(transformers_config):
             "rope_scaling"
         ]["high_freq_factor"]
         backbone_config["rope_pretraining_sequence_length"] = (
-            transformers_config["rope_scaling"][
-                "original_max_position_embeddings"
-            ]
+            transformers_config[
+                "rope_scaling"
+            ]["original_max_position_embeddings"]
         )
     return backbone_config
 

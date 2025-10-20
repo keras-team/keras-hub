@@ -75,22 +75,6 @@ class RWKV7Backbone(Backbone):
         dropout_rate=0,
         **kwargs,
     ):
-        """Initialize RWKV7 backbone.
-
-        Args:
-            hidden_size: Hidden dimension size.
-            head_size: Attention head size.
-            num_layers: Number of RWKV blocks.
-            vocabulary_size: Size of vocabulary.
-            intermediate_dim: Intermediate dimension for FFN.
-            gate_lora: LoRA dimension for gating.
-            mv_lora: LoRA dimension for value mixing.
-            aaa_lora: LoRA dimension for alpha parameters.
-            decay_lora: LoRA dimension for decay parameters.
-            dtype: Data type for the layer.
-            dropout_rate: Dropout rate for regularization.
-            **kwargs: Additional arguments.
-        """
         # === Layers ===
         self.token_embedding = keras.layers.Embedding(
             input_dim=vocabulary_size,

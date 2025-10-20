@@ -267,7 +267,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
             dir_path: Directory path to save to.
         """
         path = os.path.join(dir_path, VOCAB_FILENAME)
-        with open(path, "wb") as file:
+        with open(path, "w", encoding="utf-8") as file:
             file.write("\n".join(self.vocabulary))
 
     def load_assets(self, dir_path=""):

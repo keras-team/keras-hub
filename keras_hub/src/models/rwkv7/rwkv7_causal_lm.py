@@ -103,16 +103,16 @@ class RWKV7CausalLM(CausalLM):
             the final hidden representation of the input tokens, and `cache` is
             the decoding cache.
         """
-        state_cachce, last_token_cache = cache
+        state_cache, last_token_cache = cache
         x = self.backbone.token_embedding(token_ids)
         if padding_mask is None:
             padding_mask = ops.not_equal(token_ids, 0)
         v_first = None
-        updated_state_cachce = []
+        updated_state_cache = []
         updated_last_token_cache = []
 
         for i in range(self.backbone.num_layers):
-            current_state_cache = state_cachce[:, i, ...]
+            current_state_cache = state_cache[:, i, ...]
             current_token_cache = last_token_cache[:, i, ...]
             x, v_first, new_cache_state, cache_tmix_x, cache_cmix_x = (
                 self.backbone.rwkv_layers[i].call(
@@ -127,10 +127,10 @@ class RWKV7CausalLM(CausalLM):
                 )
             )
             new_token_cache = ops.stack([cache_tmix_x, cache_cmix_x], axis=1)
-            updated_state_cachce.append(new_cache_state)
+            updated_state_cache.append(new_cache_state)
             updated_last_token_cache.append(new_token_cache)
         cache = [
-            ops.stack(updated_state_cachce, axis=1),
+            ops.stack(updated_state_cache, axis=1),
             ops.stack(updated_last_token_cache, axis=1),
         ]
         hidden_states = x = self.backbone.output_layer_norm(x)
@@ -148,7 +148,7 @@ class RWKV7CausalLM(CausalLM):
         hidden_size = self.backbone.hidden_size
         num_heads = hidden_size // head_dim
 
-        state_cachce = ops.zeros(
+        state_cache = ops.zeros(
             [batch_size, num_layers, num_heads, head_dim, head_dim],
             dtype=self.compute_dtype,
         )
@@ -156,7 +156,7 @@ class RWKV7CausalLM(CausalLM):
             [batch_size, num_layers, 2, 1, hidden_size],
             dtype=self.compute_dtype,
         )
-        cache = [state_cachce, last_token_cache]
+        cache = [state_cache, last_token_cache]
 
         # Seed the cache.
         # Prefill stage can use kernel for better performance

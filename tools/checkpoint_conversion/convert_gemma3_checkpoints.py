@@ -513,9 +513,9 @@ def main(_):
     print(f"🏃 Converting {preset}")
 
     presets = PRESET_MAP.keys()
-    assert preset in presets, (
-        f"Invalid preset {preset}. Must be one of {','.join(presets)}"
-    )
+    assert (
+        preset in presets
+    ), f"Invalid preset {preset}. Must be one of {','.join(presets)}"
     text_only = "text" in preset or "1b" in preset or "270m" in preset
 
     print("🏃 Loading Flax model and tokeniser")
