@@ -11,6 +11,7 @@ from keras_hub.src.utils.transformers import convert_dinov2
 from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_gemma
+from keras_hub.src.utils.transformers import convert_gemma3
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_mistral
@@ -46,6 +47,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_esm
         elif model_type in ("gemma", "gemma2"):
             self.converter = convert_gemma
+        elif model_type in ("gemma3", "gemma3_text"):
+            self.converter = convert_gemma3
         elif model_type == "gpt2":
             self.converter = convert_gpt2
         elif model_type == "llama":
