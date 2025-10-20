@@ -266,9 +266,9 @@ def validate_output(
 
     print(f"🔶 Keras model params: {keras_params:,}")
     print(f"🔶 HF model params:    {hf_params:,}")
-    assert (
-        keras_params == hf_params
-    ), "❌ Parameter count mismatch between Keras and HF models!"
+    assert keras_params == hf_params, (
+        "❌ Parameter count mismatch between Keras and HF models!"
+    )
 
     # Preprocess with hf.
     hf_inputs = hf_image_processor(
