@@ -184,6 +184,9 @@ from keras_hub.src.models.depth_estimator_preprocessor import (
 from keras_hub.src.models.dinov2.dinov2_backbone import (
     DINOV2Backbone as DINOV2Backbone,
 )
+from keras_hub.src.models.dinov3.dinov3_backbone import (
+    DINOV3Backbone as DINOV3Backbone,
+)
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone as DistilBertBackbone,
 )

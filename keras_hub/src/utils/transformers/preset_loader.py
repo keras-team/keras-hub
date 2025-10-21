@@ -8,6 +8,7 @@ from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
 from keras_hub.src.utils.transformers import convert_deit
 from keras_hub.src.utils.transformers import convert_dinov2
+from keras_hub.src.utils.transformers import convert_dinov3
 from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_gemma
@@ -42,6 +43,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_distilbert
         elif model_type in ("dinov2", "dinov2_with_registers"):
             self.converter = convert_dinov2
+        elif model_type == "dinov3_vit":
+            self.converter = convert_dinov3
         elif model_type == "esm":
             self.converter = convert_esm
         elif model_type in ("gemma", "gemma2"):
