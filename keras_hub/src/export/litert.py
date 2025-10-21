@@ -10,7 +10,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporter
 
 try:
-    from keras.src.export.litert import LitertExporter as KerasLitertExporter
+    from keras.src.export.litert import LiteRTExporter as KerasLitertExporter
 
     KERAS_LITE_RT_AVAILABLE = True
 except ImportError:
@@ -18,8 +18,8 @@ except ImportError:
     KerasLitertExporter = None
 
 
-@keras_hub_export("keras_hub.export.LitertExporter")
-class LitertExporter(KerasHubExporter):
+@keras_hub_export("keras_hub.export.LiteRTExporter")
+class LiteRTExporter(KerasHubExporter):
     """LiteRT exporter for Keras-Hub models.
 
     This exporter handles the conversion of Keras-Hub models to TensorFlow Lite
@@ -303,6 +303,6 @@ def export_litert(model, filepath, **kwargs):
     # Get the appropriate configuration for this model
     config = ExporterRegistry.get_config_for_model(model)
 
-    # Create and use the Litert exporter
-    exporter = LitertExporter(config, **kwargs)
+    # Create and use the LiteRT exporter
+    exporter = LiteRTExporter(config, **kwargs)
     exporter.export(filepath)
