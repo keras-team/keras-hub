@@ -63,27 +63,23 @@ import keras_hub  # noqa: E402
 FLAGS = flags.FLAGS
 
 PRESET_MAP = {
-    "pali_gemma2_3b_ft_docci_448": (
-        "google/paligemma-2/jax/paligemma2-3b-ft-docci-448"
-    ),
-    "pali_gemma2_10b_ft_docci_448": (
-        "google/paligemma-2/jax/paligemma2-10b-ft-docci-448"
-    ),
-    "pali_gemma2_3b_mix_224": "google/paligemma-2/jax/paligemma2-3b-mix-224",
-    "pali_gemma2_3b_mix_448": "google/paligemma-2/jax/paligemma2-3b-mix-448",
-    "pali_gemma2_10b_mix_224": "google/paligemma-2/jax/paligemma2-10b-mix-224",
-    "pali_gemma2_10b_mix_448": "google/paligemma-2/jax/paligemma2-10b-mix-448",
-    "pali_gemma2_28b_mix_224": "google/paligemma-2/jax/paligemma2-28b-mix-224",
-    "pali_gemma2_28b_mix_448": "google/paligemma-2/jax/paligemma2-28b-mix-448",
-    "pali_gemma2_3b_pt_224": "google/paligemma-2/jax/paligemma2-3b-pt-224",
-    "pali_gemma2_3b_pt_448": "google/paligemma-2/jax/paligemma2-3b-pt-448",
-    "pali_gemma2_3b_pt_896": "google/paligemma-2/jax/paligemma2-3b-pt-896",
-    "pali_gemma2_10b_pt_224": "google/paligemma-2/jax/paligemma2-10b-pt-224",
-    "pali_gemma2_10b_pt_448": "google/paligemma-2/jax/paligemma2-10b-pt-448",
-    "pali_gemma2_10b_pt_896": "google/paligemma-2/jax/paligemma2-10b-pt-896",
-    "pali_gemma2_28b_pt_224": "google/paligemma-2/jax/paligemma2-28b-pt-224",
-    "pali_gemma2_28b_pt_448": "google/paligemma-2/jax/paligemma2-28b-pt-448",
-    "pali_gemma2_28b_pt_896": "google/paligemma-2/jax/paligemma2-28b-pt-896",
+    "pali_gemma_2_ft_docci_3b_448": "google/paligemma2-3b-ft-docci-448-jax",
+    "pali_gemma2_ft_docci_10b_448": "google/paligemma2-10b-ft-docci-448",
+    "pali_gemma2_mix_3b_224": "google/paligemma2-3b-mix-224",
+    "pali_gemma2_mix_3b_448": "google/paligemma2-3b-mix-448",
+    "pali_gemma2_mix_10b_224": "google/paligemma2-10b-mix-224",
+    "pali_gemma2_mix_10b_448": "google/paligemma2-10b-mix-448-jax",
+    "pali_gemma2_mix_28b_224": "google/paligemma2-28b-mix-224",
+    "pali_gemma2_mix_28b_448": "google/paligemma2-28b-mix-448-jax",
+    "pali_gemma2_pt_3b_224": "google/paligemma2-3b-pt-224-jax",
+    "pali_gemma2_pt_3b_448": "google/paligemma2-3b-pt-448",
+    "pali_gemma2_pt_3b_896": "google/paligemma2-3b-pt-896",
+    "pali_gemma2_pt_10b_224": "google/paligemma2-10b-pt-224",
+    "pali_gemma2_pt_10b_448": "google/paligemma2-10b-pt-448",
+    "pali_gemma2_pt_10b_896": "google/paligemma2-10b-pt-896",
+    "pali_gemma2_pt_28b_224": "google/paligemma2-28b-pt-224",
+    "pali_gemma2_pt_28b_448": "google/paligemma2-28b-pt-448",
+    "pali_gemma2_pt_28b_896": "google/paligemma2-28b-pt-896",
 }
 
 
