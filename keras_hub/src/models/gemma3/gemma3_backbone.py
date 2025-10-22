@@ -13,6 +13,26 @@ from keras_hub.src.models.gemma3.gemma3_interleave_embeddings import (
 )
 
 
+# Note: For LoRA or quantization, apply after model loading using
+# model.backbone.enable_lora() or model.quantize() respectively.
+# Distributed initialization is designed for initial text only model loading.
+def _gemma3_embedding_initializer(text_only_model):
+    if text_only_model:
+        from keras_hub.src.utils import dist_initializer
+
+        return dist_initializer.DistributedVarianceScaling(
+            scale=1.0,
+            mode="fan_in",
+            distribution="untruncated_normal",
+        )
+    else:
+        return keras.initializers.VarianceScaling(
+            scale=1.0,
+            mode="fan_in",
+            distribution="untruncated_normal",
+        )
+
+
 @keras_hub_export("keras_hub.models.Gemma3Backbone")
 class Gemma3Backbone(Backbone):
     """Gemma3 core network with hyperparameters.
@@ -202,14 +222,14 @@ class Gemma3Backbone(Backbone):
         **kwargs,
     ):
         # === Layers ===
+        text_only_model = True if vision_encoder is None else False
+
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=True,
-            embeddings_initializer=keras.initializers.VarianceScaling(
-                scale=1.0,
-                mode="fan_in",
-                distribution="untruncated_normal",
+            embeddings_initializer=_gemma3_embedding_initializer(
+                text_only_model
             ),
             dtype=dtype,
             logit_soft_cap=final_logit_soft_cap,
@@ -217,7 +237,7 @@ class Gemma3Backbone(Backbone):
         )
 
         self.vision_encoder = vision_encoder
-        text_only_model = True if vision_encoder is None else False
+
         if not text_only_model:
             self.interleave_embeddings = Gemma3InterleaveEmbeddings(
                 num_vision_tokens_per_image=self.vision_encoder.num_vision_tokens_per_image,
