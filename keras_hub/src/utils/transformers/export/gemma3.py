@@ -25,17 +25,13 @@ def get_gemma3_config(backbone):
 
 def get_gemma3_weights_map(backbone, include_lm_head=False):
     """Convert a Keras Gemma3 model to Hugging Face format.
-    
-    Uses the exact same weight transformation logic as convert_gemma3_checkpoints.py
-    
-    Args:
-        backbone: Gemma3Backbone model
-        include_lm_head: If True, exports for CausalLM (with "model." prefix).
-                        If False, exports for backbone only (without prefix).
+
+    include_lm_head: If True, exports for CausalLM (with "model." prefix).
+                    If False, exports for backbone only (without prefix).
     """
 
     weights_dict = {}
-    
+
     # For CausalLM export, use "model." prefix
     # For backbone export, use no prefix
     prefix = "model." if include_lm_head else ""
@@ -47,7 +43,7 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
 
     for i in range(backbone.num_layers):
         block = backbone.get_layer(f"decoder_block_{i}")
-        
+
         # Attention query projection
         q_kernel = block.attention.query_dense.weights[0]
         q_kernel = ops.transpose(q_kernel, axes=(1, 0, 2))  # permute(1, 0, 2)
@@ -99,41 +95,50 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
 
         # Pre-attention normalization
         input_layer_norm = block.pre_attention_norm.weights[0]
-        weights_dict[f"{prefix}layers.{i}.input_layernorm.weight"] = input_layer_norm
+        weights_dict[f"{prefix}layers.{i}.input_layernorm.weight"] = (
+            input_layer_norm
+        )
 
         # Post-attention normalization
-        if hasattr(block, 'post_attention_norm'):
+        if hasattr(block, "post_attention_norm"):
             post_attn_norm = block.post_attention_norm.weights[0]
         else:
             # Fallback to pre_ffw_norm if post_attention_norm doesn't exist
             post_attn_norm = block.pre_ffw_norm.weights[0]
-        weights_dict[f"{prefix}layers.{i}.post_attention_layernorm.weight"] = post_attn_norm
+        weights_dict[f"{prefix}layers.{i}.post_attention_layernorm.weight"] = (
+            post_attn_norm
+        )
 
         # Pre-feedforward normalization
         pre_feedforward_layernorm = block.pre_ffw_norm.weights[0]
-        weights_dict[f"{prefix}layers.{i}.pre_feedforward_layernorm.weight"] = pre_feedforward_layernorm
+        weights_dict[f"{prefix}layers.{i}.pre_feedforward_layernorm.weight"] = (
+            pre_feedforward_layernorm
+        )
 
         # Post-feedforward normalization
-        if hasattr(block, 'post_ffw_norm'):
+        if hasattr(block, "post_ffw_norm"):
             post_feedforward_layernorm = block.post_ffw_norm.weights[0]
         else:
             # Fallback to pre_ffw_norm if post_ffw_norm doesn't exist
             post_feedforward_layernorm = block.pre_ffw_norm.weights[0]
-        weights_dict[f"{prefix}layers.{i}.post_feedforward_layernorm.weight"] = post_feedforward_layernorm
+        weights_dict[
+            f"{prefix}layers.{i}.post_feedforward_layernorm.weight"
+        ] = post_feedforward_layernorm
 
     # Final normalization
     final_norm = backbone.get_layer("final_normalization").weights[0]
     weights_dict[f"{prefix}norm.weight"] = final_norm
-    
+
     # LM head - only for CausalLM exports
     if include_lm_head:
         weights_dict["lm_head.weight"] = token_embedding
-    
+
     return weights_dict
+
 
 def get_gemma3_tokenizer_config(tokenizer):
     tokenizer_config = {
-        "tokenizer_class": "GemmaTokenizer",  # Use GemmaTokenizer for compatibility
+        "tokenizer_class": "GemmaTokenizer",
         "clean_up_tokenization_spaces": False,
         "bos_token": "<bos>",
         "eos_token": "<eos>",
@@ -167,4 +172,3 @@ def get_gemma3_tokenizer_config(tokenizer):
             }
     tokenizer_config["added_tokens_decoder"] = added_tokens_decoder
     return tokenizer_config
-
