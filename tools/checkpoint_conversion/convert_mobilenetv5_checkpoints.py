@@ -37,7 +37,7 @@ from keras_hub.src.models.mobilenetv5.mobilenetv5_layers import ConvNormAct
 from keras_hub.src.models.mobilenetv5.mobilenetv5_layers import RmsNorm2d
 
 PRESET_MAP = {
-    "mobilenetv5_300m_enc.gemma3n": {
+    "mobilenetv5_300m_enc_gemma3n": {
         "arch": "mobilenetv5_300m_enc",
         "hf_hub_id": "timm/mobilenetv5_300m.gemma3n",
     }

@@ -50,23 +50,28 @@ class DepthAnythingBackboneTest(TestCase):
         )
 
     @pytest.mark.kaggle_key_required
-    @pytest.mark.extra_large
+    @pytest.mark.large
     def test_smallest_preset(self):
-        self.skipTest("Presets are not uploaded yet.")
+        image_batch = (
+            self.load_test_image(target_size=(518, 518))[None, ...] / 255.0
+        )
         self.run_preset_test(
             cls=DepthAnythingBackbone,
             preset="depth_anything_v2_small",
-            input_data=self.input_data,
-            expected_output_shape=(2, 70, 70, 1),
+            input_data=image_batch,
+            expected_output_shape=(1, 518, 518, 1),
         )
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
-        self.skipTest("Presets are not uploaded yet.")
+        image_batch = (
+            self.load_test_image(target_size=(518, 518))[None, ...] / 255.0
+        )
         for preset in DepthAnythingBackbone.presets:
             self.run_preset_test(
                 cls=DepthAnythingBackbone,
                 preset=preset,
-                input_data=self.input_data,
+                input_data=image_batch,
+                expected_output_shape=(1, 518, 518, 1),
             )

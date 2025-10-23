@@ -29,10 +29,10 @@ jobs:
           close-issue-message: >
             This issue was closed because it has been inactive for 28 days.
             Please reopen if you'd like to work on this further.
-          days-before-pr-stale: 14
-          days-before-pr-close: 14
-          stale-pr-message: "This PR is stale because it has been open for 14 days with no activity. It will be closed if no further activity occurs. Thank you."
-          close-pr-message: "This PR was closed because it has been inactive for 28 days. Please reopen if you'd like to work on this further."
+          days-before-pr-stale: 28
+          days-before-pr-close: 28
+          stale-pr-message: "This PR is stale because it has been open for 28 days with no activity. It will be closed in 28 days if no further activity occurs. Thank you."
+          close-pr-message: "This PR was closed because it has been inactive for 56 days. Please reopen if you'd like to work on this further."
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Contribution issues
         uses: actions/stale@v9

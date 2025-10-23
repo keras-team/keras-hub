@@ -33,7 +33,7 @@ from keras_hub.src.models.vit.vit_backbone import ViTBackbone
 
 FLAGS = flags.FLAGS
 
-PRESET_MAP = {"parseq_vit": "baudm/parseq"}
+PRESET_MAP = {"parseq": "baudm/parseq"}
 
 flags.DEFINE_string(
     "preset",
@@ -336,7 +336,7 @@ def main(_):
 
     validate_output(parseq_preprocessor, keras_model, torch_model)
     print("✅ Outputs Validated.")
-
+    keras_model.save_to_preset(f"./{preset}")
     print(f"🏁 Preset saved to ./{preset}.")
 
     upload_uri = FLAGS.upload_uri
