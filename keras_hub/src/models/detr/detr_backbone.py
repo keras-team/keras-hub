@@ -88,7 +88,8 @@ class DETRBackbone(Backbone):
         )
 
         # === Functional Model ===
-        # Generate mask (1 for valid, 0 for padding) and resize to feature map size
+        # Generate mask (1 for valid, 0 for padding)
+        # and resize to feature map size
         image_sum = ops.sum(image_input, axis=-1)
         mask_binary = ops.cast(ops.not_equal(image_sum, 0), image_input.dtype)
         mask_expanded = ops.expand_dims(mask_binary, axis=-1)
@@ -98,7 +99,8 @@ class DETRBackbone(Backbone):
 
         # Generate position embeddings
         pos_embed = pos_embed_layer(mask[:, :, :, 0])
-        # pos_embed shape: (batch, hidden_dim, h, w) -> (batch, h, w, hidden_dim)
+        # pos_embed shape:
+        # (batch, hidden_dim, h, w) -> (batch, h, w, hidden_dim)
         pos_embed = layers.Permute((2, 3, 1))(pos_embed)
 
         # Flatten spatial dimensions using Reshape layers

@@ -106,8 +106,6 @@ class TransformersPresetLoader(PresetLoader):
             kwargs["num_classes"] = len(self.config["id2label"])
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
         if load_task_weights:
-            # Build the model before converting head weights
-            # For models like DETR, decoder layers are only fully built after a forward pass
             jax_memory_cleanup(task)
             with SafetensorLoader(self.preset, prefix="") as loader:
                 self.converter.convert_head(task, loader, self.config)

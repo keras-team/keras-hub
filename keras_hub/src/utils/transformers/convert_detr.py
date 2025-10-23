@@ -160,7 +160,11 @@ def convert_weights(backbone, loader, transformers_config):
     for stack_idx in range(4):
         for block_idx in range(num_blocks[stack_idx]):
             keras_prefix = f"stack{stack_idx}_block{block_idx}"
-            hf_prefix = f"model.backbone.conv_encoder.model.layer{stack_idx + 1}.{block_idx}"
+            layer_num = stack_idx + 1
+            hf_prefix = (
+                f"model.backbone.conv_encoder.model.layer{layer_num}."
+                f"{block_idx}"
+            )
 
             # Downsample (only for first block in each stage)
             if block_idx == 0:
@@ -232,9 +236,10 @@ def convert_weights(backbone, loader, transformers_config):
 
 
 def convert_head(task, loader, transformers_config):
-    """Convert DETR decoder and prediction heads from HuggingFace to KerasHub.
+    """Convert DETR decoder and heads from HuggingFace to KerasHub.
 
-    Converts weights for: query embeddings, decoder layers, class head, bbox head
+    Converts weights for: query embeddings, decoder layers,
+    class head, bbox head
 
     Args:
         task: DETRObjectDetector instance
