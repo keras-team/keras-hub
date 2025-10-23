@@ -117,5 +117,10 @@ class TransformersPresetLoader(PresetLoader):
         return self.converter.convert_tokenizer(cls, self.preset, **kwargs)
 
     def load_image_converter(self, cls, **kwargs):
+        # Check if the converter has an image converter conversion function
+        if hasattr(self.converter, "convert_image_converter"):
+            return self.converter.convert_image_converter(
+                cls, self.preset, **kwargs
+            )
         # TODO: set image size for pali gemma checkpoints.
         return None

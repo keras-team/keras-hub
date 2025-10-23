@@ -1,6 +1,9 @@
 """Convert DETR models from HuggingFace to KerasHub."""
 
+import json
+
 import numpy as np
+from huggingface_hub import hf_hub_download
 
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.detr.detr_backbone import DETRBackbone
@@ -381,3 +384,39 @@ def convert_head(task, loader, transformers_config):
     bbox_mlp = task.bbox_head
     for i, dense_layer in enumerate(bbox_mlp.layers_list):
         port_dense(dense_layer, f"bbox_predictor.layers.{i}")
+
+
+def convert_image_converter(cls, preset, **kwargs):
+    """Convert HuggingFace image processor config to KerasHub image converter.
+
+    Args:
+        cls: The KerasHub image converter class to instantiate
+        preset: Path to the HuggingFace preset
+        **kwargs: Additional kwargs to pass to the image converter
+
+    Returns:
+        Instance of the image converter class
+    """
+
+    config_path = hf_hub_download(
+        preset.replace("hf://", ""), "preprocessor_config.json"
+    )
+    with open(config_path) as f:
+        config = json.load(f)
+
+    # Extract image preprocessing parameters
+    image_mean = config.get("image_mean")
+    image_std = config.get("image_std")
+
+    # Convert to KerasHub format: scale = 1/255/std, offset = -mean/std
+    scale = [1.0 / 255.0 / std for std in image_std]
+    offset = [-mean / std for mean, std in zip(image_mean, image_std)]
+
+    image_size = (800, 800)
+
+    return cls(
+        image_size=image_size,
+        scale=scale,
+        offset=offset,
+        **kwargs,
+    )
