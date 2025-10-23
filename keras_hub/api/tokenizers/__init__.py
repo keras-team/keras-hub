@@ -22,6 +22,12 @@ from keras_hub.src.models.clip.clip_tokenizer import (
 from keras_hub.src.models.deberta_v3.deberta_v3_tokenizer import (
     DebertaV3Tokenizer as DebertaV3Tokenizer,
 )
+from keras_hub.src.models.deepseek_r1.deepseek_r1_qwen_tokenizer import (
+    DeepSeekR1QwenTokenizer as DeepSeekR1Qwen2Tokenizer,
+)
+from keras_hub.src.models.deepseek_r1.deepseek_r1_qwen_tokenizer import (
+    DeepSeekR1QwenTokenizer as DeepSeekR1QwenTokenizer,
+)
 from keras_hub.src.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer as DistilBertTokenizer,
 )
