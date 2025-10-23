@@ -100,16 +100,19 @@ class DetrSinePositionEmbedding(Layer):
             axis=4,
         )
 
-        pos_x = ops.reshape(
-            pos_x, [pos_x.shape[0], pos_x.shape[1], pos_x.shape[2], -1]
-        )
-        pos_y = ops.reshape(
-            pos_y, [pos_y.shape[0], pos_y.shape[1], pos_y.shape[2], -1]
-        )
+        shape_x = list(ops.shape(pos_x))
+        pos_x = ops.reshape(pos_x, shape_x[:-2] + [-1])
+        shape_y = list(ops.shape(pos_y))
+        pos_y = ops.reshape(pos_y, shape_y[:-2] + [-1])
 
         pos = ops.concatenate((pos_y, pos_x), axis=3)
         pos = ops.transpose(pos, [0, 3, 1, 2])
         return pos
+
+    def compute_output_shape(self, input_shape):
+        """Compute output shape: (batch, embedding_dim*2, height, width)."""
+        batch_size, height, width = input_shape
+        return (batch_size, self.embedding_dim * 2, height, width)
 
 
 # Functional version of the code based on https://github.com/tensorflow/models/blob/master/official/projects/detr/modeling/detr.py
@@ -175,8 +178,11 @@ def position_embedding_sine(
         axis=4,
     )
 
-    # final_shape = pos_row.shape.as_list()[:3] + [-1]
-    final_shape = ops.shape(pos_row)[:3] + (-1,)
+    # Reshape to flatten the last two dimensions
+    # pos_row/pos_col shape: (batch, height, width, num_pos_features/2, 2)
+    # We want: (batch, height, width, num_pos_features)
+    shape = list(ops.shape(pos_row))
+    final_shape = shape[:-2] + [-1]
     pos_row = ops.reshape(pos_row, final_shape)
     pos_col = ops.reshape(pos_col, final_shape)
     output = ops.concatenate([pos_row, pos_col], -1)
@@ -253,16 +259,15 @@ class DetrTransformerEncoder(layers.Layer):
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    def call(self, encoder_inputs, attention_mask=None, pos_embed=None):
+    def call(
+        self, encoder_inputs, attention_mask=None, pos_embed=None, training=None
+    ):
         for layer_idx in range(self.num_layers):
             encoder_inputs = self.encoder_layers[layer_idx](
-                [encoder_inputs, attention_mask, pos_embed]
+                [encoder_inputs, attention_mask, pos_embed], training=training
             )
 
-        output_tensor = encoder_inputs
-        output_tensor = self.output_normalization(output_tensor)
-
-        return output_tensor
+        return encoder_inputs
 
 
 class DetrTransformerEncoderBlock(layers.Layer):
@@ -364,7 +369,7 @@ class DetrTransformerEncoderBlock(layers.Layer):
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
         input_tensor, attention_mask, pos_embed = inputs
 
         if self.norm_first:
@@ -377,8 +382,11 @@ class DetrTransformerEncoderBlock(layers.Layer):
             key=input_tensor + pos_embed,
             value=input_tensor,
             attention_mask=attention_mask,
+            training=training,
         )
-        attention_output = self.attention_dropout(attention_output)
+        attention_output = self.attention_dropout(
+            attention_output, training=training
+        )
         if self.norm_first:
             attention_output = source_tensor + attention_output
         else:
@@ -390,9 +398,9 @@ class DetrTransformerEncoderBlock(layers.Layer):
             attention_output = self.output_layer_norm(attention_output)
 
         inner_output = self.intermediate_dense(attention_output)
-        inner_output = self.inner_dropout_layer(inner_output)
+        inner_output = self.inner_dropout_layer(inner_output, training=training)
         layer_output = self.output_dense(inner_output)
-        layer_output = self.output_dropout(layer_output)
+        layer_output = self.output_dropout(layer_output, training=training)
 
         if self.norm_first:
             return source_attention_output + layer_output
@@ -414,9 +422,9 @@ class DetrTransformerDecoder(layers.Layer):
         activation="relu",
         dropout_rate=0.0,
         attentiondropout_rate=0.0,
-        use_bias=False,
-        norm_first=True,
-        norm_epsilon=1e-6,
+        use_bias=True,
+        norm_first=False,
+        norm_epsilon=1e-5,
         intermediate_dropout=0.0,
         **kwargs,
     ):
@@ -479,6 +487,7 @@ class DetrTransformerDecoder(layers.Layer):
         return_all_decoder_outputs=False,
         input_pos_embed=None,
         memory_pos_embed=None,
+        training=None,
     ):
         output_tensor = target
         decoder_outputs = []
@@ -492,7 +501,9 @@ class DetrTransformerDecoder(layers.Layer):
                 memory_pos_embed,
             ]
 
-            output_tensor = self.decoder_layers[layer_idx](transformer_inputs)
+            output_tensor = self.decoder_layers[layer_idx](
+                transformer_inputs, training=training
+            )
 
             if return_all_decoder_outputs:
                 decoder_outputs.append(self.output_normalization(output_tensor))
@@ -501,6 +512,10 @@ class DetrTransformerDecoder(layers.Layer):
             return decoder_outputs
         else:
             return self.output_normalization(output_tensor)
+
+    def compute_output_shape(self, input_shape):
+        # input_shape is for target: (batch, seq_len, hidden_dim)
+        return input_shape
 
 
 class DetrTransformerDecoderBlock(layers.Layer):
@@ -518,7 +533,7 @@ class DetrTransformerDecoderBlock(layers.Layer):
         attentiondropout_rate=0.0,
         use_bias=True,
         norm_first=False,
-        norm_epsilon=1e-12,
+        norm_epsilon=1e-5,
         intermediate_dropout=0.0,
         **kwargs,
     ):
@@ -632,7 +647,7 @@ class DetrTransformerDecoderBlock(layers.Layer):
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    def call(self, inputs):
+    def call(self, inputs, training=None):
         (
             input_tensor,
             memory,
@@ -649,9 +664,10 @@ class DetrTransformerDecoderBlock(layers.Layer):
             key=input_tensor + input_pos_embed,
             value=input_tensor,
             attention_mask=self_attention_mask,
+            training=training,
         )
         self_attention_output = self.self_attention_dropout(
-            self_attention_output
+            self_attention_output, training=training
         )
         if self.norm_first:
             self_attention_output = source_tensor + self_attention_output
@@ -669,9 +685,12 @@ class DetrTransformerDecoderBlock(layers.Layer):
             key=memory + memory_pos_embed,
             value=memory,
             attention_mask=attention_mask,
+            training=training,
         )
         attention_output = self.encdec_attention(**cross_attn_inputs)
-        attention_output = self.encdec_attention_dropout(attention_output)
+        attention_output = self.encdec_attention_dropout(
+            attention_output, training=training
+        )
         if self.norm_first:
             attention_output = source_self_attention_output + attention_output
         else:
@@ -687,10 +706,10 @@ class DetrTransformerDecoderBlock(layers.Layer):
             intermediate_output
         )
         intermediate_output = self.intermediate_dropout_layer(
-            intermediate_output
+            intermediate_output, training=training
         )
         layer_output = self.output_dense(intermediate_output)
-        layer_output = self.output_dropout(layer_output)
+        layer_output = self.output_dropout(layer_output, training=training)
         if self.norm_first:
             layer_output = source_attention_output + layer_output
         else:
@@ -698,6 +717,167 @@ class DetrTransformerDecoderBlock(layers.Layer):
                 layer_output + attention_output
             )
         return layer_output
+
+    def compute_output_shape(self, input_shape):
+        # input_shape is a list: [input_tensor_shape, memory_shape, ...]
+        # Return shape of input_tensor (unchanged)
+        if isinstance(input_shape, list):
+            return input_shape[0]
+        return input_shape
+
+
+class CreateSelfAttentionMask(layers.Layer):
+    """Creates self-attention mask of ones for decoder queries."""
+
+    def __init__(self, num_queries, **kwargs):
+        super().__init__(**kwargs)
+        self.num_queries = num_queries
+
+    def call(self, inputs):
+        batch_size = ops.shape(inputs)[0]
+        return ops.ones((batch_size, self.num_queries, self.num_queries))
+
+    def compute_output_shape(self, input_shape):
+        if input_shape is None:
+            return (None, self.num_queries, self.num_queries)
+        batch_size = input_shape[0]
+        return (batch_size, self.num_queries, self.num_queries)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"num_queries": self.num_queries})
+        return config
+
+
+class CreateCrossAttentionMask(layers.Layer):
+    """Tiles encoder mask for cross-attention in decoder."""
+
+    def __init__(self, num_queries, **kwargs):
+        super().__init__(**kwargs)
+        self.num_queries = num_queries
+
+    def call(self, mask):
+        # mask shape: (batch, seq_len)
+        # output: (batch, num_queries, seq_len)
+        return ops.tile(ops.expand_dims(mask, axis=1), (1, self.num_queries, 1))
+
+    def compute_output_shape(self, input_shape):
+        if input_shape is None:
+            return (None, self.num_queries, None)
+        batch_size = input_shape[0]
+        seq_len = input_shape[1]
+        return (batch_size, self.num_queries, seq_len)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"num_queries": self.num_queries})
+        return config
+
+
+class DetrQueryEmbedding(layers.Layer):
+    """Learnable object query embeddings for DETR decoder.
+
+    Creates a set of learnable embeddings that serve as object queries
+    in the DETR decoder. Each query will predict one object (or no-object).
+
+    Args:
+        num_queries: int. Number of object queries.
+        hidden_dim: int. Dimensionality of each query embedding.
+        **kwargs: Additional arguments passed to Layer.
+    """
+
+    def __init__(self, num_queries, hidden_dim, **kwargs):
+        super().__init__(**kwargs)
+        self.num_queries = num_queries
+        self.hidden_dim = hidden_dim
+
+    def build(self, input_shape):
+        self.query_embed = self.add_weight(
+            name="query_embed",
+            shape=(self.num_queries, self.hidden_dim),
+            initializer="glorot_uniform",
+            trainable=True,
+        )
+        super().build(input_shape)
+
+    def call(self, inputs):
+        """Tile query embeddings to match batch size.
+
+        Args:
+            inputs: Input tensor (used only to extract batch size).
+                Shape: (batch, ...)
+
+        Returns:
+            Query embeddings: (batch, num_queries, hidden_dim)
+        """
+        batch_size = ops.shape(inputs)[0]
+        return ops.tile(
+            ops.expand_dims(self.query_embed, axis=0), (batch_size, 1, 1)
+        )
+
+    def compute_output_shape(self, input_shape):
+        batch_size = input_shape[0]
+        return (batch_size, self.num_queries, self.hidden_dim)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_queries": self.num_queries,
+                "hidden_dim": self.hidden_dim,
+            }
+        )
+        return config
+
+
+class DETRMLPPredictionHead(layers.Layer):
+    """MLP head for bounding box coordinate prediction.
+
+    A 3-layer MLP that predicts normalized bounding box coordinates
+    [cx, cy, w, h] in range [0, 1].
+
+    Args:
+        hidden_dim: int. Input/hidden dimension, default 256
+        output_dim: int. Output dimension, default 4 (bbox coords)
+        num_layers: int. Number of linear layers, default 3
+    """
+
+    def __init__(self, hidden_dim=256, output_dim=4, num_layers=3, **kwargs):
+        super().__init__(**kwargs)
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.num_layers = num_layers
+
+    def build(self, input_shape):
+        self.layers_list = []
+        for i in range(self.num_layers - 1):
+            self.layers_list.append(
+                layers.Dense(
+                    self.hidden_dim, activation="relu", name=f"layer_{i}"
+                )
+            )
+        # Final layer outputs bbox coords (no activation, will apply
+        # sigmoid later)
+        self.layers_list.append(
+            layers.Dense(self.output_dim, name=f"layer_{self.num_layers - 1}")
+        )
+        super().build(input_shape)
+
+    def call(self, x):
+        for layer in self.layers_list:
+            x = layer(x)
+        return x
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_dim": self.hidden_dim,
+                "output_dim": self.output_dim,
+                "num_layers": self.num_layers,
+            }
+        )
+        return config
 
 
 class DETRTransformer(Layer):
@@ -788,3 +968,19 @@ class DETRTransformer(Layer):
             memory_pos_embed=pos_embed,
         )
         return decoded
+
+
+class ExpandMaskLayer(layers.Layer):
+    """Expand 1D mask to 2D attention mask."""
+
+    def call(self, mask_flat):
+        """Expand mask from (batch, num_features) to (batch, num_features, num_features)."""
+        num_features = ops.shape(mask_flat)[1]
+        return ops.tile(
+            ops.expand_dims(mask_flat, axis=1), (1, num_features, 1)
+        )
+
+    def compute_output_shape(self, input_shape):
+        """Compute output shape: (batch, num_features, num_features)."""
+        batch_size, num_features = input_shape
+        return (batch_size, num_features, num_features)

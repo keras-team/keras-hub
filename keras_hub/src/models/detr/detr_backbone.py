@@ -1,181 +1,196 @@
 from keras import layers
 from keras import ops
-from src.models.detr.detr_layers import DETRTransformer
-from src.models.detr.detr_layers import position_embedding_sine
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.detr.detr_layers import DetrSinePositionEmbedding
+from keras_hub.src.models.detr.detr_layers import DetrTransformerEncoder
+from keras_hub.src.models.detr.detr_layers import ExpandMaskLayer
 
 
-def _freeze_batch_norm(model):
-    """DETR uses "frozen" batch norm, i.e. batch normalization
-    with zeros and ones as the parameters, and they don't get adjusted
-    during training. This was done through a custom class.
+@keras_hub_export("keras_hub.models.DETRBackbone")
+class DETRBackbone(Backbone):
+    """DETR backbone for feature extraction.
 
-    Since it's tricky to exchange all BatchNormalization layers
-    in an existing model with FrozenBatchNormalization, we just
-    make them untrainable and assign the "frozen" parameters.
-    """
-    for layer in model.layers:
-        if isinstance(layer, layers.BatchNormalization):
-            # Disable training of the layer
-            layer.trainable = False
-            # Set the layer to inference mode
-            layer._trainable = False
-            # Manually freeze weights and stats
-            layer.gamma.assign(ops.ones_like(layer.gamma))
-            layer.beta.assign(ops.zeros_like(layer.beta))
-            layer.moving_mean.assign(ops.zeros_like(layer.moving_mean))
-            layer.moving_variance.assign(ops.ones_like(layer.moving_variance))
-
-    return model
-
-
-@keras_hub_export("keras_hub.models.DETR")
-class DETR(Backbone):
-    """A Keras model implementing DETR for object detection.
-
-    This class implements the majority of the DETR architecture described
-    in [End-to-End Object Detection with Transformers](https://arxiv.org/abs/2005.12872)
-    and based on the [TensorFlow implementation]
-    (https://github.com/tensorflow/models/tree/master/official/projects/detr).
-
-    DETR is meant to be used with a modified ResNet50 backbone/encoder.
+    Combines a CNN backbone (ResNet) with a transformer encoder to extract
+    rich features for object detection. The backbone:
+    1. Extracts features using ResNet
+    2. Projects to hidden dimension via 1x1 convolution
+    3. Adds 2D positional embeddings
+    4. Processes through transformer encoder
 
     Args:
-        image_encoder: `keras.Model`. The backbone network for the model that is
-            used as a feature extractor for the SegFormer encoder.
-            Should be used with
-            `keras_hub.models.ResNetBackbone.from_preset("resnet_50_imagenet")`.
-        ...
+        image_encoder: keras.Model. CNN backbone, typically
+            ResNetBackbone.from_preset("resnet_50_imagenet")
+        hidden_dim: int. Model dimension (d_model), default 256
+        num_encoder_layers: int. Number of encoder layers, default 6
+        num_heads: int. Number of attention heads, default 8
+        intermediate_size: int. FFN intermediate size, default 2048
+        dropout: float. Dropout rate, default 0.1
+        activation: str. Activation function, default "relu"
+        image_shape: tuple. Input image shape, default (None, None, 3)
 
-    Examples:
+    Example:
+    ```python
+    # Create backbone
+    resnet = keras_hub.models.ResNetBackbone.from_preset(
+        "resnet_50_imagenet"
+    )
+    backbone = keras_hub.models.DETRBackbone(
+        image_encoder=resnet,
+        hidden_dim=256,
+        num_encoder_layers=6,
+    )
 
+    # Extract features
+    features = backbone(images)  # Returns dict with encoded_features, etc
     ```
-    # todo
-    ```
-
     """
 
     def __init__(
         self,
-        backbone,
-        num_queries,
-        hidden_size,
-        num_classes,
+        image_encoder,
+        hidden_dim=256,
         num_encoder_layers=6,
-        num_decoder_layers=6,
-        dropout_rate=0.1,
+        num_heads=8,
+        intermediate_size=2048,
+        dropout=0.1,
+        activation="relu",
+        image_shape=(None, None, 3),
         **kwargs,
     ):
         # === Layers ===
-        inputs = layers.Input(shape=backbone.input.shape[1:])
+        image_input = layers.Input(shape=image_shape, name="images")
 
-        input_proj = layers.Conv2D(hidden_size, 1, name="conv2d")
-        transformer = DETRTransformer(
-            num_encoder_layers=num_encoder_layers,
-            num_decoder_layers=num_decoder_layers,
-            dropout_rate=dropout_rate,
+        # Output shape: (batch, H/32, W/32, 2048) for ResNet-50
+        features = image_encoder(image_input)
+
+        input_proj = layers.Conv2D(hidden_dim, kernel_size=1, name="input_proj")
+        projected = input_proj(features)
+
+        # Get static shape for mask generation
+        _, h, w, _ = projected.shape
+
+        pos_embed_layer = DetrSinePositionEmbedding(
+            embedding_dim=hidden_dim // 2,
+            normalize=True,
         )
-        # query_embeddings = self.add_weight(
-        #    shape=[num_queries, hidden_size],
-        # )
-        # cannot call self.add_weight before super()
-        # TODO: look into how to work around this.
-        # for the time being, initialize query_embeddings
-        # as a static vector
-        query_embeddings = ops.ones([num_queries, hidden_size])
-
-        class_embed = layers.Dense(num_classes, name="cls_dense")
-        bbox_embed = [
-            layers.Dense(hidden_size, activation="relu", name="box_dense_0"),
-            layers.Dense(hidden_size, activation="relu", name="box_dense_1"),
-            layers.Dense(4, name="box_dense_2"),
-        ]
+        encoder = DetrTransformerEncoder(
+            num_layers=num_encoder_layers,
+            num_attention_heads=num_heads,
+            intermediate_size=intermediate_size,
+            activation=activation,
+            dropout_rate=dropout,
+            attentiondropout_rate=dropout,
+            norm_first=False,
+            norm_epsilon=1e-5,
+            use_bias=True,
+            name="encoder",
+        )
+        expand_mask = ExpandMaskLayer(name="expand_mask")
 
         # === Functional Model ===
-        batch_size = ops.shape(inputs)[0]
-        features = backbone(inputs)
-        shape = ops.shape(features)
-        mask = self._generate_image_mask(inputs, shape[1:3])
-
-        pos_embed = position_embedding_sine(
-            mask[:, :, :, 0], num_pos_features=hidden_size
-        )
-        pos_embed = ops.reshape(pos_embed, [batch_size, -1, hidden_size])
-
-        features = ops.reshape(
-            input_proj(features), [batch_size, -1, hidden_size]
-        )
-        mask = ops.reshape(mask, [batch_size, -1])
-
-        decoded_list = transformer(
-            {
-                "inputs": features,
-                "targets": ops.tile(
-                    ops.expand_dims(query_embeddings, axis=0),
-                    (batch_size, 1, 1),
+        # Generate mask (1 for valid, 0 for padding)
+        # Resize input mask to feature map size
+        mask = layers.Lambda(
+            lambda x: ops.image.resize(
+                ops.expand_dims(
+                    ops.cast(ops.not_equal(ops.sum(x, axis=-1), 0), x.dtype),
+                    axis=-1,
                 ),
-                "pos_embed": pos_embed,
-                "mask": mask,
-            }
-        )
-        out_list = []
-        for decoded in decoded_list:
-            decoded = ops.stack(decoded)
-            output_class = class_embed(decoded)
-            box_out = decoded
-            for layer in bbox_embed:
-                box_out = layer(box_out)
-            output_coord = layers.Activation("sigmoid")(box_out)
-            out = {"cls_outputs": output_class, "box_outputs": output_coord}
-            out_list.append(out)
+                (h, w),
+                interpolation="nearest",
+            ),
+            name="generate_mask",
+        )(image_input)
 
-        super().__init__(
-            inputs=inputs,
-            outputs=out_list,
-            **kwargs,
+        # Generate position embeddings
+        pos_embed = pos_embed_layer(mask[:, :, :, 0])
+        # pos_embed shape: (batch, hidden_dim, h, w) -> (batch, h, w, hidden_dim)
+        pos_embed = layers.Permute((2, 3, 1), name="transpose_pos_embed")(
+            pos_embed
         )
 
-        # === Config ===
-        self.num_queries = num_queries
-        self.hidden_size = hidden_size
-        self.num_classes = num_classes
-        self.num_encoder_layers = num_encoder_layers
-        self.num_decoder_layers = num_decoder_layers
-        self.dropout_rate = dropout_rate
-        if hidden_size % 2 != 0:
-            raise ValueError("hidden_size must be a multiple of 2.")
-        self.backbone = backbone
+        # Flatten spatial dimensions
+        projected_flat = layers.Reshape(
+            (-1, hidden_dim), name="flatten_projected"
+        )(projected)
+        pos_embed_flat = layers.Reshape(
+            (-1, hidden_dim), name="flatten_pos_embed"
+        )(pos_embed)
+        mask_flat = layers.Reshape((-1,), name="flatten_mask")(mask)
 
-    def get_config(self):
-        return {
-            "backbone": self.backbone,
-            "num_queries": self.num_queries,
-            "hidden_size": self.hidden_size,
-            "num_classes": self.num_classes,
-            "num_encoder_layers": self.num_encoder_layers,
-            "num_decoder_layers": self.num_decoder_layers,
-            "dropout_rate": self.dropout_rate,
+        # Process through transformer encoder
+        attention_mask = expand_mask(mask_flat)
+        encoded_features = encoder(
+            projected_flat,
+            attention_mask=attention_mask,
+            pos_embed=pos_embed_flat,
+        )
+
+        # Output: Dictionary containing all necessary info for decoder
+        outputs = {
+            "encoded_features": encoded_features,
+            "pos_embed": pos_embed_flat,
+            "mask": mask_flat,
         }
 
-    @property
-    def backbone(self):
-        return self.backbone
+        super().__init__(inputs=image_input, outputs=outputs, **kwargs)
+
+        # Store config
+        self.image_encoder = image_encoder
+        self.hidden_dim = hidden_dim
+        self.num_encoder_layers = num_encoder_layers
+        self.num_heads = num_heads
+        self.intermediate_size = intermediate_size
+        self.dropout = dropout
+        self.activation = activation
+        self.image_shape = image_shape
+
+    def _generate_image_mask(self, images, target_shape):
+        """Generate binary mask from images (1 for valid, 0 for padding).
+
+        Args:
+            images: Input images (batch, height, width, channels)
+            target_shape: Target (height, width) for mask
+
+        Returns:
+            Binary mask (batch, height, width, 1)
+        """
+        # Sum across channels, mark non-zero as valid
+        # This handles black padding (all zeros)
+        mask = ops.not_equal(ops.sum(images, axis=-1), 0)
+        mask = ops.cast(mask, images.dtype)
+        mask = ops.expand_dims(mask, axis=-1)
+
+        # Resize to feature map size
+        mask = ops.image.resize(mask, target_shape, interpolation="nearest")
+        return mask
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "image_encoder": keras.saving.serialize_keras_object(
+                    self.image_encoder
+                ),
+                "hidden_dim": self.hidden_dim,
+                "num_encoder_layers": self.num_encoder_layers,
+                "num_heads": self.num_heads,
+                "intermediate_size": self.intermediate_size,
+                "dropout": self.dropout,
+                "activation": self.activation,
+                "image_shape": self.image_shape,
+            }
+        )
+        return config
 
     @classmethod
     def from_config(cls, config):
-        return cls(**config)
-
-    def build(self, input_shape=None):
-        self.build_detection_decoder()
-        super().build(input_shape)
-
-    def _generate_image_mask(self, inputs, target_shape):
-        """Generates image mask from input image."""
-        mask = ops.expand_dims(
-            ops.cast(ops.not_equal(ops.sum(inputs, axis=-1), 0), inputs.dtype),
-            axis=-1,
-        )
-        mask = ops.image.resize(mask, target_shape, interpolation="nearest")
-        return mask
+        if "image_encoder" in config and isinstance(
+            config["image_encoder"], dict
+        ):
+            config["image_encoder"] = keras.layers.deserialize(
+                config["image_encoder"]
+            )
+        return super().from_config(config)
