@@ -11,18 +11,27 @@ from keras_hub.src.utils.transformers.export.gemma import (
 )
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
 
+from keras_hub.src.utils.transformers.export.gemma3 import get_gemma3_config
+from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import get_gemma3_weights_map
+
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
+    "Gemma3Backbone" : get_gemma3_config,
     # Add for future models, e.g., "MistralBackbone": get_mistral_config
 }
 
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
+    "Gemma3Backbone" : get_gemma3_weights_map,
     # Add for future models, e.g., "MistralBackbone": get_mistral_weights_map
 }
 
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
+    "Gemma3Tokenizer" : get_gemma3_tokenizer_config,
     # Add for future models, e.g., "MistralTokenizer":
     # get_mistral_tokenizer_config
 }
@@ -142,3 +151,4 @@ def export_to_safetensors(keras_model, path):
         )
     if keras_model.preprocessor is not None:
         export_tokenizer(keras_model.preprocessor.tokenizer, path)
+
