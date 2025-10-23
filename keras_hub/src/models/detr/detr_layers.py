@@ -115,9 +115,6 @@ class DetrSinePositionEmbedding(Layer):
         return (batch_size, self.embedding_dim * 2, height, width)
 
 
-# Functional version of the code based on https://github.com/tensorflow/models/blob/master/official/projects/detr/modeling/detr.py
-
-
 def position_embedding_sine(
     attention_mask,
     num_pos_features=256,
@@ -126,6 +123,9 @@ def position_embedding_sine(
     scale=2 * math.pi,
 ):
     """Sine-based positional embeddings for 2D images.
+
+    Based on:
+    - https://github.com/tensorflow/models/blob/master/official/projects/detr/modeling/detr.py
 
     Args:
       attention_mask: a `bool` Tensor specifying the size of the input image to
@@ -152,8 +152,6 @@ def position_embedding_sine(
         )
     num_pos_features = num_pos_features // 2
 
-    # Produce row and column embeddings based on total size of the image
-    # <tf.float>[batch_size, height, width]
     row_embedding = ops.cumsum(attention_mask, 1)
     col_embedding = ops.cumsum(attention_mask, 2)
 
@@ -165,8 +163,6 @@ def position_embedding_sine(
     dim_t = ops.arange(num_pos_features, dtype=row_embedding.dtype)
     dim_t = ops.power(temperature, 2 * (dim_t // 2) / num_pos_features)
 
-    # Creates positional embeddings for each row and column position
-    # <tf.float>[batch_size, height, width, num_pos_features]
     pos_row = ops.expand_dims(row_embedding, -1) / dim_t
     pos_col = ops.expand_dims(col_embedding, -1) / dim_t
     pos_row = ops.stack(
@@ -178,9 +174,6 @@ def position_embedding_sine(
         axis=4,
     )
 
-    # Reshape to flatten the last two dimensions
-    # pos_row/pos_col shape: (batch, height, width, num_pos_features/2, 2)
-    # We want: (batch, height, width, num_pos_features)
     shape = list(ops.shape(pos_row))
     final_shape = shape[:-2] + [-1]
     pos_row = ops.reshape(pos_row, final_shape)
@@ -191,9 +184,30 @@ def position_embedding_sine(
 
 
 class DetrTransformerEncoder(layers.Layer):
-    """
-    Adapted from
-    https://github.com/tensorflow/models/blob/master/official/projects/detr/modeling/transformer.py
+    """Transformer encoder for DETR.
+
+    This layer implements a stack of transformer encoder blocks with
+    self-attention, feedforward layers, and layer normalization.
+
+    Args:
+        num_layers: int. Number of encoder layers. Defaults to 6.
+        num_attention_heads: int. Number of attention heads. Defaults to 8.
+        intermediate_size: int. Size of feedforward network. Defaults to 2048.
+        activation: str. Activation function. Defaults to "relu".
+        dropout_rate: float. Dropout rate for residual connections.
+            Defaults to 0.0.
+        attentiondropout_rate: float. Dropout rate for attention weights.
+            Defaults to 0.0.
+        use_bias: bool. Whether to use bias in dense layers. Defaults to False.
+        norm_first: bool. Whether to apply layer norm before attention.
+            Defaults to True.
+        norm_epsilon: float. Epsilon for layer normalization.
+            Defaults to 1e-6.
+        intermediate_dropout: float. Dropout rate for feedforward network.
+            Defaults to 0.0.
+
+    Reference:
+        - [TensorFlow Models DETR](https://github.com/tensorflow/models/blob/master/official/projects/detr/modeling/transformer.py)
     """
 
     def __init__(
@@ -271,9 +285,27 @@ class DetrTransformerEncoder(layers.Layer):
 
 
 class DetrTransformerEncoderBlock(layers.Layer):
-    """
-    Adapted from
-    https://github.com/tensorflow/models/blob/master/official/projects/detr/modeling/transformer.py
+    """Single transformer encoder block for DETR.
+
+    Implements one layer of the transformer encoder with self-attention,
+    feedforward network, residual connections, and layer normalization.
+
+    Args:
+        num_attention_heads: int. Number of attention heads.
+        inner_dim: int. Hidden dimension of feedforward network.
+        inner_activation: str or callable. Activation function.
+        use_bias: bool. Whether to use bias. Defaults to True.
+        norm_first: bool. Pre-norm vs post-norm. Defaults to False.
+        norm_epsilon: float. Layer norm epsilon. Defaults to 1e-12.
+        output_dropout: float. Dropout rate for residual connections.
+            Defaults to 0.0.
+        attention_dropout: float. Dropout rate for attention.
+            Defaults to 0.0.
+        inner_dropout: float. Dropout for feedforward. Defaults to 0.0.
+        attention_axes: Axes for attention. Defaults to None.
+
+    Reference:
+        - [TensorFlow Models DETR](https://github.com/tensorflow/models/blob/master/official/projects/detr/modeling/transformer.py)
     """
 
     def __init__(
@@ -409,9 +441,31 @@ class DetrTransformerEncoderBlock(layers.Layer):
 
 
 class DetrTransformerDecoder(layers.Layer):
-    """
-    Adapted from
-    https://github.com/tensorflow/models/blob/master/official/projects/detr/modeling/transformer.py
+    """Transformer decoder for DETR.
+
+    This layer implements a stack of transformer decoder blocks with
+    self-attention, cross-attention, feedforward layers, and layer
+    normalization.
+
+    Args:
+        num_layers: int. Number of decoder layers. Defaults to 6.
+        num_attention_heads: int. Number of attention heads. Defaults to 8.
+        intermediate_size: int. Size of feedforward network. Defaults to 2048.
+        activation: str. Activation function. Defaults to "relu".
+        dropout_rate: float. Dropout rate for residual connections.
+            Defaults to 0.0.
+        attentiondropout_rate: float. Dropout rate for attention weights.
+            Defaults to 0.0.
+        use_bias: bool. Whether to use bias in dense layers. Defaults to True.
+        norm_first: bool. Whether to apply layer norm before attention.
+            Defaults to False.
+        norm_epsilon: float. Epsilon for layer normalization.
+            Defaults to 1e-5.
+        intermediate_dropout: float. Dropout rate for feedforward network.
+            Defaults to 0.0.
+
+    Reference:
+        - [TensorFlow Models DETR](https://github.com/tensorflow/models/blob/master/official/projects/detr/modeling/transformer.py)
     """
 
     def __init__(
@@ -519,9 +573,27 @@ class DetrTransformerDecoder(layers.Layer):
 
 
 class DetrTransformerDecoderBlock(layers.Layer):
-    """
-    Adapted from
-    https://github.com/tensorflow/models/blob/master/official/projects/detr/modeling/transformer.py
+    """Single transformer decoder block for DETR.
+
+    Implements one layer of the transformer decoder with self-attention,
+    cross-attention to encoder outputs, feedforward network, residual
+    connections, and layer normalization.
+
+    Args:
+        num_attention_heads: int. Number of attention heads.
+        intermediate_size: int. Hidden dimension of feedforward network.
+        intermediate_activation: str or callable. Activation function.
+        dropout_rate: float. Dropout for residual connections.
+            Defaults to 0.0.
+        attentiondropout_rate: float. Dropout for attention. Defaults to 0.0.
+        use_bias: bool. Whether to use bias. Defaults to True.
+        norm_first: bool. Pre-norm vs post-norm. Defaults to False.
+        norm_epsilon: float. Layer norm epsilon. Defaults to 1e-5.
+        intermediate_dropout: float. Dropout for feedforward.
+            Defaults to 0.0.
+
+    Reference:
+        - [TensorFlow Models DETR](https://github.com/tensorflow/models/blob/master/official/projects/detr/modeling/transformer.py)
     """
 
     def __init__(
@@ -757,8 +829,6 @@ class CreateCrossAttentionMask(layers.Layer):
         self.num_queries = num_queries
 
     def call(self, mask):
-        # mask shape: (batch, seq_len)
-        # output: (batch, num_queries, seq_len)
         return ops.tile(ops.expand_dims(mask, axis=1), (1, self.num_queries, 1))
 
     def compute_output_shape(self, input_shape):
