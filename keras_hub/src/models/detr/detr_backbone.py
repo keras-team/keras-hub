@@ -5,7 +5,6 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.detr.detr_layers import DetrSinePositionEmbedding
 from keras_hub.src.models.detr.detr_layers import DetrTransformerEncoder
-from keras_hub.src.models.detr.detr_layers import ExpandMaskLayer
 
 
 @keras_hub_export("keras_hub.models.DETRBackbone")
@@ -87,41 +86,33 @@ class DETRBackbone(Backbone):
             use_bias=True,
             name="encoder",
         )
-        expand_mask = ExpandMaskLayer(name="expand_mask")
 
         # === Functional Model ===
-        # Generate mask (1 for valid, 0 for padding)
-        # Resize input mask to feature map size
-        mask = layers.Lambda(
-            lambda x: ops.image.resize(
-                ops.expand_dims(
-                    ops.cast(ops.not_equal(ops.sum(x, axis=-1), 0), x.dtype),
-                    axis=-1,
-                ),
-                (h, w),
-                interpolation="nearest",
-            ),
-            name="generate_mask",
-        )(image_input)
+        # Generate mask (1 for valid, 0 for padding) and resize to feature map size
+        # Create mask from image (non-zero pixels = valid)
+        image_sum = ops.sum(image_input, axis=-1)
+        mask_binary = ops.cast(ops.not_equal(image_sum, 0), image_input.dtype)
+        mask_expanded = ops.expand_dims(mask_binary, axis=-1)
+        mask = ops.image.resize(mask_expanded, (h, w), interpolation="nearest")
 
         # Generate position embeddings
         pos_embed = pos_embed_layer(mask[:, :, :, 0])
         # pos_embed shape: (batch, hidden_dim, h, w) -> (batch, h, w, hidden_dim)
-        pos_embed = layers.Permute((2, 3, 1), name="transpose_pos_embed")(
-            pos_embed
+        pos_embed = layers.Permute((2, 3, 1))(pos_embed)
+
+        # Flatten spatial dimensions using Reshape layers
+        projected_flat = layers.Reshape((-1, hidden_dim))(projected)
+        pos_embed_flat = layers.Reshape((-1, hidden_dim))(pos_embed)
+        mask_flat = layers.Reshape((-1,))(mask)
+
+        # Expand mask for attention: (batch, seq_len) -> (batch, seq_len, seq_len)
+        # Tile mask to create 2D attention mask
+        num_features = ops.shape(mask_flat)[1]
+        attention_mask = ops.tile(
+            ops.expand_dims(mask_flat, axis=1), (1, num_features, 1)
         )
 
-        # Flatten spatial dimensions
-        projected_flat = layers.Reshape(
-            (-1, hidden_dim), name="flatten_projected"
-        )(projected)
-        pos_embed_flat = layers.Reshape(
-            (-1, hidden_dim), name="flatten_pos_embed"
-        )(pos_embed)
-        mask_flat = layers.Reshape((-1,), name="flatten_mask")(mask)
-
         # Process through transformer encoder
-        attention_mask = expand_mask(mask_flat)
         encoded_features = encoder(
             projected_flat,
             attention_mask=attention_mask,

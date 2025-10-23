@@ -1,4 +1,5 @@
 from keras import layers
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.detr.detr_backbone import DETRBackbone
@@ -9,8 +10,6 @@ from keras_hub.src.models.detr.detr_layers import DetrQueryEmbedding
 from keras_hub.src.models.detr.detr_layers import DetrTransformerDecoder
 from keras_hub.src.models.object_detector import ObjectDetector
 from keras_hub.src.models.task import Task
-
-from keras import ops
 
 
 @keras_hub_export("keras_hub.models.DETRObjectDetector")
@@ -110,7 +109,7 @@ class DETRObjectDetector(ObjectDetector):
             intermediate_size=intermediate_size,
             activation=activation,
             dropout_rate=dropout,
-            attentiondropout_rate=0.0, 
+            attentiondropout_rate=0.0,
             use_bias=True,
             norm_first=False,
             norm_epsilon=1e-5,
