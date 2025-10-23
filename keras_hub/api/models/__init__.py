@@ -185,6 +185,9 @@ from keras_hub.src.models.detr.detr_backbone import DETRBackbone as DETRBackbone
 from keras_hub.src.models.detr.detr_object_detector import (
     DETRObjectDetector as DETRObjectDetector,
 )
+from keras_hub.src.models.detr.detr_object_detector_preprocessor import (
+    DETRObjectDetectorPreprocessor as DETRObjectDetectorPreprocessor,
+)
 from keras_hub.src.models.dinov2.dinov2_backbone import (
     DINOV2Backbone as DINOV2Backbone,
 )
