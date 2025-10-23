@@ -974,13 +974,25 @@ class ExpandMaskLayer(layers.Layer):
     """Expand 1D mask to 2D attention mask."""
 
     def call(self, mask_flat):
-        """Expand mask from (batch, num_features) to (batch, num_features, num_features)."""
         num_features = ops.shape(mask_flat)[1]
         return ops.tile(
             ops.expand_dims(mask_flat, axis=1), (1, num_features, 1)
         )
 
     def compute_output_shape(self, input_shape):
-        """Compute output shape: (batch, num_features, num_features)."""
         batch_size, num_features = input_shape
         return (batch_size, num_features, num_features)
+
+
+class ResizeMaskLayer(layers.Layer):
+    """Resize mask to target spatial dimensions."""
+
+    def call(self, inputs):
+        mask, target_tensor = inputs
+        target_shape = ops.shape(target_tensor)
+        h, w = target_shape[1], target_shape[2]
+        return ops.image.resize(mask, (h, w), interpolation="nearest")
+
+    def compute_output_shape(self, input_shape):
+        mask_shape, target_shape = input_shape
+        return (mask_shape[0], target_shape[1], target_shape[2], mask_shape[3])

@@ -1,3 +1,4 @@
+import keras
 from keras import layers
 from keras import ops
 
@@ -5,6 +6,8 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.detr.detr_layers import DetrSinePositionEmbedding
 from keras_hub.src.models.detr.detr_layers import DetrTransformerEncoder
+from keras_hub.src.models.detr.detr_layers import ExpandMaskLayer
+from keras_hub.src.models.detr.detr_layers import ResizeMaskLayer
 
 
 @keras_hub_export("keras_hub.models.DETRBackbone")
@@ -67,9 +70,6 @@ class DETRBackbone(Backbone):
         input_proj = layers.Conv2D(hidden_dim, kernel_size=1, name="input_proj")
         projected = input_proj(features)
 
-        # Get static shape for mask generation
-        _, h, w, _ = projected.shape
-
         pos_embed_layer = DetrSinePositionEmbedding(
             embedding_dim=hidden_dim // 2,
             normalize=True,
@@ -89,11 +89,12 @@ class DETRBackbone(Backbone):
 
         # === Functional Model ===
         # Generate mask (1 for valid, 0 for padding) and resize to feature map size
-        # Create mask from image (non-zero pixels = valid)
         image_sum = ops.sum(image_input, axis=-1)
         mask_binary = ops.cast(ops.not_equal(image_sum, 0), image_input.dtype)
         mask_expanded = ops.expand_dims(mask_binary, axis=-1)
-        mask = ops.image.resize(mask_expanded, (h, w), interpolation="nearest")
+
+        resize_mask = ResizeMaskLayer()
+        mask = resize_mask([mask_expanded, projected])
 
         # Generate position embeddings
         pos_embed = pos_embed_layer(mask[:, :, :, 0])
@@ -106,11 +107,8 @@ class DETRBackbone(Backbone):
         mask_flat = layers.Reshape((-1,))(mask)
 
         # Expand mask for attention: (batch, seq_len) -> (batch, seq_len, seq_len)
-        # Tile mask to create 2D attention mask
-        num_features = ops.shape(mask_flat)[1]
-        attention_mask = ops.tile(
-            ops.expand_dims(mask_flat, axis=1), (1, num_features, 1)
-        )
+        expand_mask = ExpandMaskLayer()
+        attention_mask = expand_mask(mask_flat)
 
         # Process through transformer encoder
         encoded_features = encoder(
@@ -137,26 +135,6 @@ class DETRBackbone(Backbone):
         self.dropout = dropout
         self.activation = activation
         self.image_shape = image_shape
-
-    def _generate_image_mask(self, images, target_shape):
-        """Generate binary mask from images (1 for valid, 0 for padding).
-
-        Args:
-            images: Input images (batch, height, width, channels)
-            target_shape: Target (height, width) for mask
-
-        Returns:
-            Binary mask (batch, height, width, 1)
-        """
-        # Sum across channels, mark non-zero as valid
-        # This handles black padding (all zeros)
-        mask = ops.not_equal(ops.sum(images, axis=-1), 0)
-        mask = ops.cast(mask, images.dtype)
-        mask = ops.expand_dims(mask, axis=-1)
-
-        # Resize to feature map size
-        mask = ops.image.resize(mask, target_shape, interpolation="nearest")
-        return mask
 
     def get_config(self):
         config = super().get_config()
