@@ -1,5 +1,4 @@
 import numpy as np
-from sentencepiece import SentencePieceProcessor
 
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.utils.preset_utils import get_file
@@ -158,17 +157,4 @@ def convert_weights(backbone, loader, transformers_config):
 
 
 def convert_tokenizer(cls, preset, **kwargs):
-    proto = get_file(preset, "tokenizer.model")
-    sp = SentencePieceProcessor()
-    if isinstance(proto, bytes):
-        sp.LoadFromSerializedProto(proto)
-    else:
-        sp.load(proto)
-
-    is_vision_model = (
-        sp.PieceToId("<start_of_image>") != sp.unk_id()
-        and sp.PieceToId("<img>") != sp.unk_id()
-        and sp.PieceToId("<end_of_image>") != sp.unk_id()
-    )
-
-    return cls(proto, is_vision_model=is_vision_model, **kwargs)
+    return cls(get_file(preset, "tokenizer.model"), **kwargs)
