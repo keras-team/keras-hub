@@ -3,6 +3,7 @@ import keras.ops as ops
 
 def get_gemma3_config(backbone):
     """Convert Keras Gemma3 config to Hugging Face config dictionary."""
+    token_embedding_layer = backbone.get_layer("token_embedding")
     hf_config = {
         "architectures": ["Gemma3ForCausalLM"],
         "model_type": "gemma3_text",
@@ -14,6 +15,7 @@ def get_gemma3_config(backbone):
         "intermediate_size": backbone.intermediate_dim,
         "head_dim": backbone.head_dim,
         "max_position_embeddings": 32768,
+        "tie_word_embeddings": token_embedding_layer.tie_weights,
         "rms_norm_eps": 1e-6,
         "rope_theta": 10000.0,
         "attention_bias": False,
@@ -129,9 +131,10 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
     final_norm = backbone.get_layer("final_normalization").weights[0]
     weights_dict[f"{prefix}norm.weight"] = final_norm
 
-    # LM head - only for CausalLM exports
-    if include_lm_head:
-        weights_dict["lm_head.weight"] = token_embedding
+    if include_lm_head and not token_embedding_layer.tie_weights:
+        weights_dict["lm_head.weight"] = ops.transpose(
+            token_embedding_layer.reverse_embeddings
+        )
 
     return weights_dict
 
