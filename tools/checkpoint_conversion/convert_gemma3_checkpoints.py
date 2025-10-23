@@ -44,7 +44,14 @@ import keras_hub  # noqa: E402
 
 
 def convert_to_hf_config(keras_config):
-    """Convert Keras Gemma config to Hugging Face GemmaConfig."""
+    """Convert Keras Gemma config to Hugging Face GemmaConfig.
+
+        Args:
+            keras_config: A Keras Gemma3 config object from the backbone.
+
+        Returns:
+            A `transformers.Gemma3TextConfig` instance.
+    """
     hf_config = transformers.Gemma3TextConfig(
         vocab_size=keras_config.vocabulary_size,
         num_hidden_layers=keras_config.num_layers,
@@ -59,8 +66,13 @@ def convert_to_hf_config(keras_config):
 
 
 def export_to_hf(backbone, keras_tokenizer, path):
-    """Convert a Keras Gemma model to Hugging Face format and save to path."""
+    """Convert a Keras Gemma model to Hugging Face format and save to path.
 
+        Args:
+            backbone: A `keras_hub.models.Gemma3Backbone` instance.
+            keras_tokenizer: A `keras_hub.models.Gemma3Tokenizer` instance.
+            path: str. The path to save the Hugging Face model to.
+    """
     hf_config = convert_to_hf_config(backbone)
     weights_dict = {}
 
