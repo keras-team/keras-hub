@@ -180,7 +180,6 @@ class DETRObjectDetector(ObjectDetector):
             "bbox_regression": bbox_preds,  # (batch, num_queries, 4)
         }
 
-        # Skip parent's __init__ to avoid ImageClassifier-specific logic
         Task.__init__(
             self,
             inputs=inputs,

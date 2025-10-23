@@ -7,7 +7,6 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.detr.detr_layers import DetrSinePositionEmbedding
 from keras_hub.src.models.detr.detr_layers import DetrTransformerEncoder
 from keras_hub.src.models.detr.detr_layers import ExpandMaskLayer
-from keras_hub.src.models.detr.detr_layers import ResizeMaskLayer
 
 
 @keras_hub_export("keras_hub.models.DETRBackbone")
@@ -92,17 +91,23 @@ class DETRBackbone(Backbone):
         mask_binary = ops.cast(ops.not_equal(image_sum, 0), image_input.dtype)
         mask_expanded = ops.expand_dims(mask_binary, axis=-1)
 
-        resize_mask = ResizeMaskLayer()
-        mask = resize_mask([mask_expanded, projected])
+        # Resize mask to feature map size
+        target_shape = ops.shape(projected)
+        mask = ops.image.resize(
+            mask_expanded,
+            (target_shape[1], target_shape[2]),
+            interpolation="nearest",
+        )
 
         # Generate position embeddings
         pos_embed = pos_embed_layer(mask[:, :, :, 0])
-        pos_embed = layers.Permute((2, 3, 1))(pos_embed)
+        pos_embed = ops.transpose(pos_embed, [0, 2, 3, 1])
 
         projected_flat = layers.Reshape((-1, hidden_dim))(projected)
         pos_embed_flat = layers.Reshape((-1, hidden_dim))(pos_embed)
         mask_flat = layers.Reshape((-1,))(mask)
 
+        # Expand mask for attention using helper layer
         expand_mask = ExpandMaskLayer()
         attention_mask = expand_mask(mask_flat)
 

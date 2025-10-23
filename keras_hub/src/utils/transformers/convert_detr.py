@@ -1,5 +1,3 @@
-"""Convert DETR models from HuggingFace to KerasHub."""
-
 import json
 
 import numpy as np
@@ -13,7 +11,6 @@ backbone_cls = DETRBackbone
 
 def convert_backbone_config(transformers_config):
     """Convert HuggingFace config to KerasHub DETRBackbone config."""
-    # Create ResNet backbone (load_weights=False since we'll convert them)
     resnet = Backbone.from_preset("resnet_50_imagenet", load_weights=False)
 
     # Return config for DETRBackbone
@@ -23,9 +20,9 @@ def convert_backbone_config(transformers_config):
         "num_encoder_layers": transformers_config["encoder_layers"],
         "num_heads": transformers_config["encoder_attention_heads"],
         "intermediate_size": transformers_config["encoder_ffn_dim"],
-        "dropout": 0.0,  # Use 0.0 for inference - HF uses attention_dropout=0.0 for encoder
+        "dropout": 0.0,
         "activation": transformers_config["activation_function"],
-        "image_shape": (800, 800, 3),  # DETR default
+        "image_shape": (800, 800, 3),
     }
 
 
