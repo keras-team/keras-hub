@@ -41,7 +41,7 @@ class TestGemma3Export(TestCase):
             layer_norm_epsilon=1e-6,
             dropout=0,
         )
-        
+
         # Create preprocessor
         preprocessor = Gemma3CausalLMPreprocessor(tokenizer=tokenizer)
 
@@ -127,7 +127,7 @@ class TestGemma3Export(TestCase):
             backbone.token_embedding.tie_weights,
             "Tie word embeddings do not match",
         )
-        
+
         # Verify tokenizer compatibility (using slow tokenizer)
         self.assertEqual(
             hf_tokenizer_slow.vocab_size,
@@ -137,10 +137,10 @@ class TestGemma3Export(TestCase):
 
         # Compare generated outputs using full model
         prompt = "the quick"
-        
+
         # Generate with Keras model
         keras_output = keras_model.generate(prompt, max_length=20)
-        
+
         # Generate with HuggingFace model using slow tokenizer
         input_ids_slow = hf_tokenizer_slow.encode(prompt, return_tensors="pt")
         output_ids_slow = hf_full_model.generate(
@@ -149,14 +149,13 @@ class TestGemma3Export(TestCase):
         hf_slow_output = hf_tokenizer_slow.decode(
             output_ids_slow[0], skip_special_tokens=True
         )
-        
+
         # Debug print to see the actual outputs
         print(f"Keras output: '{keras_output}'")
         print(f"HF slow output: '{hf_slow_output}'")
-        
+
         self.assertEqual(
             keras_output,
             hf_slow_output,
             "Generated outputs do not match",
         )
-
