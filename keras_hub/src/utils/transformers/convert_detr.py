@@ -29,7 +29,7 @@ def convert_backbone_config(transformers_config):
 def convert_weights(backbone, loader, transformers_config):
     """Convert DETR backbone weights from HuggingFace to KerasHub.
 
-    Converts weights for: ResNet encoder + input projection + transformer encoder
+    Converts weights for: ResNet encoder + input projection + transformer
 
     Args:
         backbone: DETRBackbone instance

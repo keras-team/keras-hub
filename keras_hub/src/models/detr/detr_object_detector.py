@@ -17,7 +17,8 @@ class DETRObjectDetector(ObjectDetector):
     """DETR (DEtection TRansformer) object detection model.
 
     This class implements the DETR architecture from the paper
-    "End-to-End Object Detection with Transformers" (https://arxiv.org/abs/2005.12872).
+    "End-to-End Object Detection with Transformers"
+        (https://arxiv.org/abs/2005.12872).
 
     DETR treats object detection as a direct set prediction problem using a
     transformer encoder-decoder architecture with learnable object queries.
@@ -29,14 +30,17 @@ class DETRObjectDetector(ObjectDetector):
             and encodes them with a transformer encoder.
         num_queries: int. Number of learnable object queries. Each query
             will predict one object (or no-object). Default: 100.
-        num_classes: int. Number of object classes to detect (excluding background).
-        num_decoder_layers: int. Number of transformer decoder layers. Default: 6.
+        num_classes: int. Number of object classes to detect
+            (excluding background).
+        num_decoder_layers: int. Number of transformer decoder layers.
+            Default: 6.
         num_heads: int. Number of attention heads in decoder. Default: 8.
-        intermediate_size: int. FFN intermediate dimension in decoder. Default: 2048.
+        intermediate_size: int. FFN intermediate dimension in decoder.
+            Default: 2048.
         dropout: float. Dropout rate. Default: 0.1.
         activation: str. Activation function. Default: "relu".
-        bounding_box_format: str. Format for bounding boxes (e.g., "xyxy", "yxyx").
-            Default: "yxyx".
+        bounding_box_format: str. Format for bounding boxes
+        (e.g., "xyxy", "yxyx"). Default: "yxyx".
         preprocessor: Optional. A preprocessor instance for image preprocessing.
         dtype: Optional. Data type for the model.
         **kwargs: Additional arguments passed to the parent class.
