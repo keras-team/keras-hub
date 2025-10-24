@@ -8,8 +8,6 @@ different model types and formats.
 from abc import ABC
 from abc import abstractmethod
 
-import keras
-
 # Import model classes for registry
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.image_classifier import ImageClassifier
@@ -59,7 +57,7 @@ class KerasHubExporterConfig(ABC):
         """Check if the model is compatible with this exporter.
 
         Returns:
-            bool: True if compatible, False otherwise
+            `bool`. True if compatible, False otherwise
         """
         pass
 
@@ -72,7 +70,7 @@ class KerasHubExporterConfig(ABC):
                 input tensors.
 
         Returns:
-            A dictionary mapping input names to their tensor specifications.
+            `dict`. Dictionary mapping input names to tensor specifications.
         """
         pass
 
@@ -168,7 +166,7 @@ class ExporterRegistry:
             model: The Keras-Hub model
 
         Returns:
-            KerasHubExporterConfig: An appropriate exporter configuration
+            `KerasHubExporterConfig`. An appropriate exporter configuration
             instance
 
         Raises:
@@ -209,7 +207,7 @@ class ExporterRegistry:
             **kwargs: Additional parameters for the exporter
 
         Returns:
-            KerasHubExporter: An appropriate exporter instance
+            `KerasHubExporter`. An appropriate exporter instance
 
         Raises:
             ValueError: If no exporter is found for the format

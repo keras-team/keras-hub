@@ -28,7 +28,7 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
         """Check if model is a causal language model.
 
         Returns:
-            bool: True if compatible, False otherwise
+            `bool`. True if compatible, False otherwise
         """
         return isinstance(self.model, CausalLM)
 
@@ -39,8 +39,7 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
             sequence_length: Optional sequence length. If None, uses default.
 
         Returns:
-            Dict[str, Any]: Dictionary mapping input names to their
-            specifications
+            `dict`. Dictionary mapping input names to their specifications
         """
         if sequence_length is None:
             # Get from preprocessor or use default
@@ -74,10 +73,10 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
     DEFAULT_SEQUENCE_LENGTH = 128
 
     def _is_model_compatible(self):
-        """Check if model is a text classifier.
+        """Check if model is an image classifier.
 
         Returns:
-            bool: True if compatible, False otherwise
+            `bool`. True if compatible, False otherwise
         """
         return isinstance(self.model, TextClassifier)
 
@@ -88,8 +87,7 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
             sequence_length: Optional sequence length. If None, uses default.
 
         Returns:
-            Dict[str, Any]: Dictionary mapping input names to their
-            specifications
+            `dict`. Dictionary mapping input names to their specifications
         """
         if sequence_length is None:
             # Get from preprocessor or use default
@@ -131,7 +129,7 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
         """Check if model is a seq2seq language model.
 
         Returns:
-            bool: True if compatible, False otherwise
+            `bool`. True if compatible, False otherwise
         """
         return isinstance(self.model, Seq2SeqLM)
 
@@ -142,8 +140,7 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
             sequence_length: Optional sequence length. If None, uses default.
 
         Returns:
-            Dict[str, Any]: Dictionary mapping input names to their
-            specifications
+            `dict`. Dictionary mapping input names to their specifications
         """
         if sequence_length is None:
             # Get from preprocessor or use default
@@ -192,7 +189,7 @@ class TextModelExporterConfig(KerasHubExporterConfig):
         """Check if model is a text model (fallback).
 
         Returns:
-            bool: True if compatible, False otherwise
+            `bool`. True if compatible, False otherwise
         """
         # This is a fallback config for text models that don't fit other
         # categories
@@ -209,8 +206,7 @@ class TextModelExporterConfig(KerasHubExporterConfig):
             sequence_length: Optional sequence length. If None, uses default.
 
         Returns:
-            Dict[str, Any]: Dictionary mapping input names to their
-            specifications
+            `dict`. Dictionary mapping input names to their specifications
         """
         if sequence_length is None:
             # Get from preprocessor or use default
@@ -245,7 +241,7 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
     def _is_model_compatible(self):
         """Check if model is an image classifier.
         Returns:
-            bool: True if compatible, False otherwise
+            `bool`. True if compatible, False otherwise
         """
         return isinstance(self.model, ImageClassifier)
 
@@ -254,8 +250,7 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
         Args:
             image_size: Optional image size. If None, inferred from model.
         Returns:
-            Dict[str, Any]: Dictionary mapping input names to their
-            specifications
+            `dict`. Dictionary mapping input names to their specifications
         """
         if image_size is None:
             # Get from preprocessor
@@ -316,7 +311,7 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
     def _is_model_compatible(self):
         """Check if model is an object detector.
         Returns:
-            bool: True if compatible, False otherwise
+            `bool`. True if compatible, False otherwise
         """
         return isinstance(self.model, ObjectDetector)
 
@@ -325,8 +320,7 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
         Args:
             image_size: Optional image size. If None, inferred from model.
         Returns:
-            Dict[str, Any]: Dictionary mapping input names to their
-            specifications
+            `dict`. Dictionary mapping input names to their specifications
         """
         if image_size is None:
             # Get from preprocessor
@@ -390,7 +384,7 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
     def _is_model_compatible(self):
         """Check if model is an image segmenter.
         Returns:
-            bool: True if compatible, False otherwise
+            `bool`. True if compatible, False otherwise
         """
         return isinstance(self.model, ImageSegmenter)
 
@@ -399,8 +393,7 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
         Args:
             image_size: Optional image size. If None, inferred from model.
         Returns:
-            Dict[str, Any]: Dictionary mapping input names to their
-            specifications
+            `dict`. Dictionary mapping input names to their specifications
         """
         if image_size is None:
             # Get from preprocessor

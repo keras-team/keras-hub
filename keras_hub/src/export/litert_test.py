@@ -15,9 +15,11 @@ LITERT_AVAILABLE = False
 if keras.backend.backend() == "tensorflow":
     try:
         from ai_edge_litert.interpreter import Interpreter
+
         LITERT_AVAILABLE = True
     except ImportError:
         import tensorflow as tf
+
         Interpreter = tf.lite.Interpreter
 
 

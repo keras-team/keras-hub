@@ -142,13 +142,13 @@ class LiteRTExporter(KerasHubExporter):
     def _create_export_wrapper(self):
         """Create a wrapper model that handles the input structure conversion.
 
-        This wrapper converts between the list-based inputs that Keras LiteRT
-        exporter provides and the dictionary-based inputs that Keras-Hub models
-        expect.
+        This creates a type-specific adapter that converts between the
+        list-based inputs that Keras LiteRT exporter provides and the format
+        expected by Keras-Hub models.
         """
 
-        class KerasHubModelWrapper(keras.Model):
-            """Wrapper that adapts Keras-Hub models for export."""
+        class BaseModelAdapter(keras.Model):
+            """Base adapter for Keras-Hub models."""
 
             def __init__(
                 self, keras_hub_model, expected_inputs, input_signature
@@ -163,7 +163,6 @@ class LiteRTExporter(KerasHubExporter):
                 for input_name in expected_inputs:
                     if input_name in input_signature:
                         spec = input_signature[input_name]
-                        # Ensure we preserve the correct dtype
                         input_layer = keras.layers.Input(
                             shape=spec.shape[1:],  # Remove batch dimension
                             dtype=spec.dtype,
@@ -195,104 +194,74 @@ class LiteRTExporter(KerasHubExporter):
                 """Return the input layers for the Keras exporter to use."""
                 return self._input_layers
 
-            def call(self, inputs, training=None, mask=None):
-                """Convert list inputs to dictionary format and call the
-                original model."""
-                if isinstance(inputs, dict):
-                    # Already in dictionary format
-                    return self.keras_hub_model(
-                        inputs, training=training, mask=mask
-                    )
-
-                # Convert list inputs to dictionary format
-                if not isinstance(inputs, (list, tuple)):
-                    inputs = [inputs]
-
-                # For image classifiers, try the direct tensor approach first
-                # since most Keras-Hub vision models expect single tensor inputs
-                if (
-                    len(self.expected_inputs) == 1
-                    and self.expected_inputs[0] == "images"
-                ):
-                    try:
-                        return self.keras_hub_model(
-                            inputs[0], training=training, mask=mask
-                        )
-                    except Exception:
-                        # Fall back to dictionary approach if that fails
-                        pass
-
-                # For LiteRT export, we need to handle the fact that different
-                # Keras Hub models expect inputs in different formats. Some
-                # expect dictionaries, others expect single tensors.
-                try:
-                    # First, try mapping to the expected input names (dictionary
-                    # format)
-                    input_dict = {}
-                    if len(self.expected_inputs) == 1:
-                        input_dict[self.expected_inputs[0]] = inputs[0]
-                    else:
-                        for i, input_name in enumerate(self.expected_inputs):
-                            input_dict[input_name] = inputs[i]
-
-                    return self.keras_hub_model(
-                        input_dict, training=training, mask=mask
-                    )
-                except ValueError as e:
-                    error_msg = str(e)
-                    # If that fails, try direct tensor input (positional format)
-                    if (
-                        "doesn't match the expected structure" in error_msg
-                        and "Expected: keras_tensor" in error_msg
-                    ):
-                        # The model expects a single tensor, not a dictionary
-                        if len(inputs) == 1:
-                            return self.keras_hub_model(
-                                inputs[0], training=training, mask=mask
-                            )
-                        else:
-                            # Multiple inputs - try as positional arguments
-                            return self.keras_hub_model(
-                                *inputs, training=training, mask=mask
-                            )
-                    elif "Missing data for input" in error_msg:
-                        # Extract the actual expected input names from the error
-                        if "Expected the following keys:" in error_msg:
-                            # Parse the expected keys from error message
-                            start = error_msg.find(
-                                "Expected the following keys: ["
-                            )
-                            if start != -1:
-                                start += len("Expected the following keys: [")
-                                end = error_msg.find("]", start)
-                                if end != -1:
-                                    keys_str = error_msg[start:end]
-                                    actual_input_names = [
-                                        k.strip().strip("'\"")
-                                        for k in keys_str.split(",")
-                                    ]
-
-                                    # Map inputs to actual expected names
-                                    input_dict = {}
-                                    for i, actual_name in enumerate(
-                                        actual_input_names
-                                    ):
-                                        if i < len(inputs):
-                                            input_dict[actual_name] = inputs[i]
-
-                                    return self.keras_hub_model(
-                                        input_dict, training=training, mask=mask
-                                    )
-
-                    # If we still can't figure it out, re-raise the original
-                    # error
-                    raise
-
             def get_config(self):
                 """Return the configuration of the wrapped model."""
                 return self.keras_hub_model.get_config()
 
-        # Determine the parameter to pass based on model type using isinstance
+        class TextModelAdapter(BaseModelAdapter):
+            """Adapter for text models (CausalLM, TextClassifier, Seq2SeqLM).
+
+            Text models expect dictionary inputs with keys like 'token_ids'
+            and 'padding_mask'.
+            """
+
+            def call(self, inputs, training=None, mask=None):
+                """Convert list inputs to dictionary format for text models."""
+                if isinstance(inputs, dict):
+                    return self.keras_hub_model(
+                        inputs, training=training, mask=mask
+                    )
+
+                # Convert to list if needed
+                if not isinstance(inputs, (list, tuple)):
+                    inputs = [inputs]
+
+                # Map inputs to expected dictionary keys
+                input_dict = {}
+                for i, input_name in enumerate(self.expected_inputs):
+                    if i < len(inputs):
+                        input_dict[input_name] = inputs[i]
+
+                return self.keras_hub_model(
+                    input_dict, training=training, mask=mask
+                )
+
+        class ImageModelAdapter(BaseModelAdapter):
+            """Adapter for image models (ImageClassifier, ObjectDetector,
+            ImageSegmenter).
+
+            Image models typically expect a single tensor input but may also
+            accept dictionary format with 'images' key.
+            """
+
+            def call(self, inputs, training=None, mask=None):
+                """Convert list inputs to format expected by image models."""
+                if isinstance(inputs, dict):
+                    return self.keras_hub_model(
+                        inputs, training=training, mask=mask
+                    )
+
+                # Convert to list if needed
+                if not isinstance(inputs, (list, tuple)):
+                    inputs = [inputs]
+
+                # Most image models expect a single tensor input
+                if len(self.expected_inputs) == 1:
+                    return self.keras_hub_model(
+                        inputs[0], training=training, mask=mask
+                    )
+
+                # If multiple inputs, use dictionary format
+                input_dict = {}
+                for i, input_name in enumerate(self.expected_inputs):
+                    if i < len(inputs):
+                        input_dict[input_name] = inputs[i]
+
+                return self.keras_hub_model(
+                    input_dict, training=training, mask=mask
+                )
+
+        # Determine the parameter to pass based on model type
         is_text_model = isinstance(
             self.model, (CausalLM, TextClassifier, Seq2SeqLM)
         )
@@ -300,8 +269,7 @@ class LiteRTExporter(KerasHubExporter):
             self.model, (ImageClassifier, ObjectDetector, ImageSegmenter)
         )
 
-        # For text models, use sequence_length; for image models, get image_size
-        # from preprocessor
+        # Get the appropriate parameter for input signature
         if is_text_model:
             param = self.max_sequence_length
         elif is_image_model:
@@ -315,7 +283,16 @@ class LiteRTExporter(KerasHubExporter):
         else:
             param = None
 
-        return KerasHubModelWrapper(
+        # Select the appropriate adapter based on model type
+        if is_text_model:
+            adapter_class = TextModelAdapter
+        elif is_image_model:
+            adapter_class = ImageModelAdapter
+        else:
+            # Fallback to base adapter for unknown types
+            adapter_class = BaseModelAdapter
+
+        return adapter_class(
             self.model,
             self.config.EXPECTED_INPUTS,
             self.config.get_input_signature(param),
