@@ -8,6 +8,12 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporter
+from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.image_classifier import ImageClassifier
+from keras_hub.src.models.image_segmenter import ImageSegmenter
+from keras_hub.src.models.object_detector import ObjectDetector
+from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
+from keras_hub.src.models.text_classifier import TextClassifier
 
 try:
     from keras.src.export.litert import LiteRTExporter as KerasLitertExporter
@@ -67,16 +73,31 @@ class LiteRTExporter(KerasHubExporter):
 
         if self.verbose:
             io_utils.print_msg(
-                f"Starting LiteRT export for {self.config.MODEL_TYPE} model"
+                f"Starting LiteRT export for {self.model.__class__.__name__}"
             )
 
-        # For text models, use sequence_length; for other models, use None
-        is_text_model = self.config.MODEL_TYPE in [
-            "causal_lm",
-            "text_classifier",
-            "seq2seq_lm",
-        ]
-        param = self.max_sequence_length if is_text_model else None
+        # Determine the parameter to pass based on model type using isinstance
+        is_text_model = isinstance(
+            self.model, (CausalLM, TextClassifier, Seq2SeqLM)
+        )
+        is_image_model = isinstance(
+            self.model, (ImageClassifier, ObjectDetector, ImageSegmenter)
+        )
+
+        # For text models, use sequence_length; for image models, get image_size
+        # from preprocessor
+        if is_text_model:
+            param = self.max_sequence_length
+        elif is_image_model:
+            # Get image_size from model's preprocessor
+            if hasattr(self.model, "preprocessor") and hasattr(
+                self.model.preprocessor, "image_size"
+            ):
+                param = self.model.preprocessor.image_size
+            else:
+                param = None  # Will use default in get_input_signature
+        else:
+            param = None
 
         # Ensure model is built
         self._ensure_model_built(param)
@@ -271,13 +292,28 @@ class LiteRTExporter(KerasHubExporter):
                 """Return the configuration of the wrapped model."""
                 return self.keras_hub_model.get_config()
 
-        # Pass the correct parameter based on model type
-        is_text_model = self.config.MODEL_TYPE in [
-            "causal_lm",
-            "text_classifier",
-            "seq2seq_lm",
-        ]
-        param = self.max_sequence_length if is_text_model else None
+        # Determine the parameter to pass based on model type using isinstance
+        is_text_model = isinstance(
+            self.model, (CausalLM, TextClassifier, Seq2SeqLM)
+        )
+        is_image_model = isinstance(
+            self.model, (ImageClassifier, ObjectDetector, ImageSegmenter)
+        )
+
+        # For text models, use sequence_length; for image models, get image_size
+        # from preprocessor
+        if is_text_model:
+            param = self.max_sequence_length
+        elif is_image_model:
+            # Get image_size from model's preprocessor
+            if hasattr(self.model, "preprocessor") and hasattr(
+                self.model.preprocessor, "image_size"
+            ):
+                param = self.model.preprocessor.image_size
+            else:
+                param = None  # Will use default in get_input_signature
+        else:
+            param = None
 
         return KerasHubModelWrapper(
             self.model,

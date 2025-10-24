@@ -8,6 +8,12 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporterConfig
+from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.image_classifier import ImageClassifier
+from keras_hub.src.models.image_segmenter import ImageSegmenter
+from keras_hub.src.models.object_detector import ObjectDetector
+from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
+from keras_hub.src.models.text_classifier import TextClassifier
 
 
 @keras_hub_export("keras_hub.export.CausalLMExporterConfig")
@@ -24,13 +30,7 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
         Returns:
             bool: True if compatible, False otherwise
         """
-        try:
-            from keras_hub.src.models.causal_lm import CausalLM
-
-            return isinstance(self.model, CausalLM)
-        except ImportError:
-            # Fallback to class name checking
-            return "CausalLM" in self.model.__class__.__name__
+        return isinstance(self.model, CausalLM)
 
     def get_input_signature(self, sequence_length=None):
         """Get input signature for causal LM models.
@@ -58,7 +58,9 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
                 shape=(None, sequence_length), dtype="int32", name="token_ids"
             ),
             "padding_mask": keras.layers.InputSpec(
-                shape=(None, sequence_length), dtype="bool", name="padding_mask"
+                shape=(None, sequence_length),
+                dtype="int32",
+                name="padding_mask",
             ),
         }
 
@@ -77,7 +79,7 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
         Returns:
             bool: True if compatible, False otherwise
         """
-        return "TextClassifier" in self.model.__class__.__name__
+        return isinstance(self.model, TextClassifier)
 
     def get_input_signature(self, sequence_length=None):
         """Get input signature for text classifier models.
@@ -105,7 +107,9 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
                 shape=(None, sequence_length), dtype="int32", name="token_ids"
             ),
             "padding_mask": keras.layers.InputSpec(
-                shape=(None, sequence_length), dtype="bool", name="padding_mask"
+                shape=(None, sequence_length),
+                dtype="int32",
+                name="padding_mask",
             ),
         }
 
@@ -129,12 +133,7 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
         Returns:
             bool: True if compatible, False otherwise
         """
-        try:
-            from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
-
-            return isinstance(self.model, Seq2SeqLM)
-        except ImportError:
-            return "Seq2SeqLM" in self.model.__class__.__name__
+        return isinstance(self.model, Seq2SeqLM)
 
     def get_input_signature(self, sequence_length=None):
         """Get input signature for seq2seq models.
@@ -165,7 +164,7 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
             ),
             "encoder_padding_mask": keras.layers.InputSpec(
                 shape=(None, sequence_length),
-                dtype="bool",
+                dtype="int32",
                 name="encoder_padding_mask",
             ),
             "decoder_token_ids": keras.layers.InputSpec(
@@ -175,7 +174,7 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
             ),
             "decoder_padding_mask": keras.layers.InputSpec(
                 shape=(None, sequence_length),
-                dtype="bool",
+                dtype="int32",
                 name="decoder_padding_mask",
             ),
         }
@@ -229,7 +228,9 @@ class TextModelExporterConfig(KerasHubExporterConfig):
                 shape=(None, sequence_length), dtype="int32", name="token_ids"
             ),
             "padding_mask": keras.layers.InputSpec(
-                shape=(None, sequence_length), dtype="bool", name="padding_mask"
+                shape=(None, sequence_length),
+                dtype="int32",
+                name="padding_mask",
             ),
         }
 
@@ -246,7 +247,7 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
         Returns:
             bool: True if compatible, False otherwise
         """
-        return "ImageClassifier" in self.model.__class__.__name__
+        return isinstance(self.model, ImageClassifier)
 
     def get_input_signature(self, image_size=None):
         """Get input signature for image classifier models.
@@ -317,7 +318,7 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
         Returns:
             bool: True if compatible, False otherwise
         """
-        return "ObjectDetector" in self.model.__class__.__name__
+        return isinstance(self.model, ObjectDetector)
 
     def get_input_signature(self, image_size=None):
         """Get input signature for object detector models.
@@ -391,7 +392,7 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
         Returns:
             bool: True if compatible, False otherwise
         """
-        return "ImageSegmenter" in self.model.__class__.__name__
+        return isinstance(self.model, ImageSegmenter)
 
     def get_input_signature(self, image_size=None):
         """Get input signature for image segmenter models.

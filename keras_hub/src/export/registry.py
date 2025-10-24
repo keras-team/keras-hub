@@ -11,29 +11,33 @@ from keras_hub.src.export.configs import ImageSegmenterExporterConfig
 from keras_hub.src.export.configs import ObjectDetectorExporterConfig
 from keras_hub.src.export.configs import Seq2SeqLMExporterConfig
 from keras_hub.src.export.configs import TextClassifierExporterConfig
-from keras_hub.src.export.configs import TextModelExporterConfig
+from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.image_classifier import ImageClassifier
+from keras_hub.src.models.image_segmenter import ImageSegmenter
+from keras_hub.src.models.object_detector import ObjectDetector
+from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
+from keras_hub.src.models.text_classifier import TextClassifier
 
 
 def initialize_export_registry():
     """Initialize the export registry with available configurations and
     exporters."""
-    # Register configurations for different model types
-    ExporterRegistry.register_config("causal_lm", CausalLMExporterConfig)
+    # Register configurations for different model types using classes
+    ExporterRegistry.register_config(CausalLM, CausalLMExporterConfig)
     ExporterRegistry.register_config(
-        "text_classifier", TextClassifierExporterConfig
+        TextClassifier, TextClassifierExporterConfig
     )
-    ExporterRegistry.register_config("seq2seq_lm", Seq2SeqLMExporterConfig)
-    ExporterRegistry.register_config("text_model", TextModelExporterConfig)
+    ExporterRegistry.register_config(Seq2SeqLM, Seq2SeqLMExporterConfig)
 
     # Register vision model configurations
     ExporterRegistry.register_config(
-        "image_classifier", ImageClassifierExporterConfig
+        ImageClassifier, ImageClassifierExporterConfig
     )
     ExporterRegistry.register_config(
-        "object_detector", ObjectDetectorExporterConfig
+        ObjectDetector, ObjectDetectorExporterConfig
     )
     ExporterRegistry.register_config(
-        "image_segmenter", ImageSegmenterExporterConfig
+        ImageSegmenter, ImageSegmenterExporterConfig
     )
 
     # Register exporters for different formats

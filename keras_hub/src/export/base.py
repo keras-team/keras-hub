@@ -16,6 +16,14 @@ except ImportError:
     KERAS_AVAILABLE = False
     keras = None
 
+# Import model classes for registry
+from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.image_classifier import ImageClassifier
+from keras_hub.src.models.image_segmenter import ImageSegmenter
+from keras_hub.src.models.object_detector import ObjectDetector
+from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
+from keras_hub.src.models.text_classifier import TextClassifier
+
 
 class KerasHubExporterConfig(ABC):
     """Base configuration class for Keras-Hub model exporters.
@@ -139,14 +147,14 @@ class ExporterRegistry:
     _exporters = {}
 
     @classmethod
-    def register_config(cls, model_type, config_class):
+    def register_config(cls, model_class, config_class):
         """Register a configuration class for a model type.
 
         Args:
-            model_type: The model type (e.g., "causal_lm")
+            model_class: The model class (e.g., CausalLM)
             config_class: The configuration class
         """
-        cls._configs[model_type] = config_class
+        cls._configs[model_class] = config_class
 
     @classmethod
     def register_exporter(cls, format_name, exporter_class):
@@ -172,15 +180,30 @@ class ExporterRegistry:
         Raises:
             ValueError: If no configuration is found for the model type
         """
-        model_type = cls._detect_model_type(model)
+        # Find the matching model class
+        for model_class in [
+            CausalLM,
+            TextClassifier,
+            Seq2SeqLM,
+            ImageClassifier,
+            ObjectDetector,
+            ImageSegmenter,
+        ]:
+            if isinstance(model, model_class):
+                if model_class not in cls._configs:
+                    raise ValueError(
+                        f"No configuration found for model type: "
+                        f"{model_class.__name__}"
+                    )
+                config_class = cls._configs[model_class]
+                return config_class(model)
 
-        if model_type not in cls._configs:
-            raise ValueError(
-                f"No configuration found for model type: {model_type}"
-            )
-
-        config_class = cls._configs[model_type]
-        return config_class(model)
+        # If we get here, model type is not recognized
+        raise ValueError(
+            f"Could not detect model type for {model.__class__.__name__}. "
+            "Supported types: CausalLM, TextClassifier, Seq2SeqLM, "
+            "ImageClassifier, ObjectDetector, ImageSegmenter"
+        )
 
     @classmethod
     def get_exporter(cls, format_name, config, **kwargs):
@@ -202,47 +225,3 @@ class ExporterRegistry:
 
         exporter_class = cls._exporters[format_name]
         return exporter_class(config, **kwargs)
-
-    @classmethod
-    def _detect_model_type(cls, model):
-        """Detect the model type from the model instance.
-
-        Args:
-            model: The Keras-Hub model
-
-        Returns:
-            str: The detected model type
-        """
-        # Import here to avoid circular imports
-        try:
-            from keras_hub.src.models.causal_lm import CausalLM
-            from keras_hub.src.models.image_segmenter import ImageSegmenter
-            from keras_hub.src.models.object_detector import ObjectDetector
-            from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
-        except ImportError:
-            CausalLM = None
-            Seq2SeqLM = None
-            ObjectDetector = None
-            ImageSegmenter = None
-
-        model_class_name = model.__class__.__name__
-
-        if CausalLM and isinstance(model, CausalLM):
-            return "causal_lm"
-        elif "TextClassifier" in model_class_name:
-            return "text_classifier"
-        elif Seq2SeqLM and isinstance(model, Seq2SeqLM):
-            return "seq2seq_lm"
-        elif "ImageClassifier" in model_class_name:
-            return "image_classifier"
-        elif ObjectDetector and isinstance(model, ObjectDetector):
-            return "object_detector"
-        elif "ObjectDetector" in model_class_name:
-            return "object_detector"
-        elif ImageSegmenter and isinstance(model, ImageSegmenter):
-            return "image_segmenter"
-        elif "ImageSegmenter" in model_class_name:
-            return "image_segmenter"
-        else:
-            # Default to text model for generic Keras-Hub models
-            return "text_model"
