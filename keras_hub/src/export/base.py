@@ -8,13 +8,7 @@ different model types and formats.
 from abc import ABC
 from abc import abstractmethod
 
-try:
-    import keras
-
-    KERAS_AVAILABLE = True
-except ImportError:
-    KERAS_AVAILABLE = False
-    keras = None
+import keras
 
 # Import model classes for registry
 from keras_hub.src.models.causal_lm import CausalLM
