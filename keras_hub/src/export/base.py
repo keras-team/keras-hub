@@ -143,8 +143,8 @@ class ExporterRegistry:
         """Register a configuration class for a model type.
 
         Args:
-            model_class: The model class (e.g., CausalLM)
-            config_class: The configuration class
+            model_class: `type`. The model class (e.g., CausalLM)
+            config_class: `type`. The configuration class
         """
         cls._configs[model_class] = config_class
 
@@ -153,8 +153,8 @@ class ExporterRegistry:
         """Register an exporter class for a format.
 
         Args:
-            format_name: The export format (e.g., "litert")
-            exporter_class: The exporter class
+            format_name: `str`. The export format (e.g., "litert")
+            exporter_class: `type`. The exporter class
         """
         cls._exporters[format_name] = exporter_class
 
@@ -163,7 +163,7 @@ class ExporterRegistry:
         """Get the appropriate configuration for a model.
 
         Args:
-            model: The Keras-Hub model
+            model: `keras.Model`. The Keras-Hub model
 
         Returns:
             `KerasHubExporterConfig`. An appropriate exporter configuration
@@ -202,9 +202,9 @@ class ExporterRegistry:
         """Get an exporter for the specified format.
 
         Args:
-            format_name: The export format
-            config: The exporter configuration
-            **kwargs: Additional parameters for the exporter
+            format_name: `str`. The export format
+            config: `KerasHubExporterConfig`. The exporter configuration
+            **kwargs: `dict`. Additional parameters for the exporter
 
         Returns:
             `KerasHubExporter`. An appropriate exporter instance

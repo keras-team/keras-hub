@@ -44,12 +44,12 @@ class LiteRTExporter(KerasHubExporter):
         """Initialize the LiteRT exporter.
 
         Args:
-            config: Exporter configuration for the model
-            max_sequence_length: Maximum sequence length for text models
-            aot_compile_targets: List of AOT compilation targets
-            verbose: Whether to print progress messages. Defaults to `None`,
-                which will use `True`.
-            **kwargs: Additional arguments passed to the underlying exporter
+            config: `KerasHubExporterConfig`. Exporter configuration.
+            max_sequence_length: `int` or `None`. Maximum sequence length.
+            aot_compile_targets: `list` or `None`. AOT compilation targets.
+            verbose: `bool` or `None`. Whether to print progress. Defaults to
+                `None`, which will use `True`.
+            **kwargs: `dict`. Additional arguments passed to exporter.
         """
         super().__init__(config, **kwargs)
 
@@ -67,7 +67,7 @@ class LiteRTExporter(KerasHubExporter):
         """Export the Keras-Hub model to LiteRT format.
 
         Args:
-            filepath: Path where to save the exported model (without extension)
+            filepath: `str`. Path where to save the model (without extension).
         """
         from keras.src.utils import io_utils
 
@@ -307,9 +307,9 @@ def export_litert(model, filepath, **kwargs):
     and exports it using the appropriate configuration.
 
     Args:
-        model: The Keras-Hub model to export
-        filepath: Path where to save the exported model (without extension)
-        **kwargs: Additional arguments passed to the exporter
+        model: `keras.Model`. The Keras-Hub model to export.
+        filepath: `str`. Path where to save the model (without extension).
+        **kwargs: `dict`. Additional arguments passed to exporter.
     """
     from keras_hub.src.export.base import ExporterRegistry
 

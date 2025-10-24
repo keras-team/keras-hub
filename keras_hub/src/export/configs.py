@@ -36,7 +36,7 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
         """Get input signature for causal LM models.
 
         Args:
-            sequence_length: Optional sequence length. If None, uses default.
+            sequence_length: `int` or `None`. Optional sequence length.
 
         Returns:
             `dict`. Dictionary mapping input names to their specifications
@@ -84,7 +84,7 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
         """Get input signature for text classifier models.
 
         Args:
-            sequence_length: Optional sequence length. If None, uses default.
+            sequence_length: `int` or `None`. Optional sequence length.
 
         Returns:
             `dict`. Dictionary mapping input names to their specifications
@@ -137,7 +137,7 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
         """Get input signature for seq2seq models.
 
         Args:
-            sequence_length: Optional sequence length. If None, uses default.
+            sequence_length: `int` or `None`. Optional sequence length.
 
         Returns:
             `dict`. Dictionary mapping input names to their specifications
@@ -203,7 +203,7 @@ class TextModelExporterConfig(KerasHubExporterConfig):
         """Get input signature for generic text models.
 
         Args:
-            sequence_length: Optional sequence length. If None, uses default.
+            sequence_length: `int` or `None`. Optional sequence length.
 
         Returns:
             `dict`. Dictionary mapping input names to their specifications
@@ -248,7 +248,7 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
     def get_input_signature(self, image_size=None):
         """Get input signature for image classifier models.
         Args:
-            image_size: Optional image size. If None, inferred from model.
+            image_size: `int`, `tuple` or `None`. Optional image size.
         Returns:
             `dict`. Dictionary mapping input names to their specifications
         """
@@ -318,7 +318,7 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
     def get_input_signature(self, image_size=None):
         """Get input signature for object detector models.
         Args:
-            image_size: Optional image size. If None, inferred from model.
+            image_size: `int`, `tuple` or `None`. Optional image size.
         Returns:
             `dict`. Dictionary mapping input names to their specifications
         """
@@ -391,7 +391,7 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
     def get_input_signature(self, image_size=None):
         """Get input signature for image segmenter models.
         Args:
-            image_size: Optional image size. If None, inferred from model.
+            image_size: `int`, `tuple` or `None`. Optional image size.
         Returns:
             `dict`. Dictionary mapping input names to their specifications
         """
