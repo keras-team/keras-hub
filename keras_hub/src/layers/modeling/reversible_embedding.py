@@ -245,6 +245,12 @@ class ReversibleEmbedding(keras.layers.Embedding):
                 inputs, axis=axis, to_numpy=True
             )
 
+        if mode != "int8":
+            raise NotImplementedError(
+                "Invalid quantization mode. Expected 'int8'. "
+                f"Received: quantization_mode={mode}"
+            )
+
         embeddings_shape = (self.input_dim, self.output_dim)
         if mode == "int8":
             embeddings, embeddings_scale = abs_max_quantize(

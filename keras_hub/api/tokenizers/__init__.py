@@ -78,6 +78,9 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
 )
+from keras_hub.src.models.qwen3_moe.qwen3_moe_tokenizer import (
+    Qwen3MoeTokenizer as Qwen3MoeTokenizer,
+)
 from keras_hub.src.models.qwen_moe.qwen_moe_tokenizer import (
     QwenMoeTokenizer as QwenMoeTokenizer,
 )
@@ -89,6 +92,12 @@ from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
 )
 from keras_hub.src.models.siglip.siglip_tokenizer import (
     SigLIPTokenizer as SigLIPTokenizer,
+)
+from keras_hub.src.models.smollm3.smollm3_tokenizer import (
+    SmolLM3Tokenizer as SmolLM3Tokenizer,
+)
+from keras_hub.src.models.smollm3.smollm3_tokenizer import (
+    SmolLM3Tokenizer as SmolLMTokenizer,
 )
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer as T5Tokenizer
 from keras_hub.src.models.t5gemma.t5gemma_tokenizer import (
