@@ -38,9 +38,9 @@ def initialize_export_registry():
 
     # Register exporters for different formats
     try:
-        from keras_hub.src.export.litert import LitertExporter
+        from keras_hub.src.export.litert import LiteRTExporter
 
-        ExporterRegistry.register_exporter("litert", LitertExporter)
+        ExporterRegistry.register_exporter("litert", LiteRTExporter)
     except ImportError:
         # Litert not available
         pass
