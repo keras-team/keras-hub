@@ -152,7 +152,9 @@ class CausalLMExportTest(TestCase):
             test_token_ids = np.random.randint(0, 1000, (1, 128)).astype(
                 input_details[0]["dtype"]
             )
-            test_padding_mask = np.ones((1, 128), dtype=input_details[1]["dtype"])
+            test_padding_mask = np.ones(
+                (1, 128), dtype=input_details[1]["dtype"]
+            )
 
             # Set inputs and run inference
             interpreter.set_tensor(input_details[0]["index"], test_token_ids)
