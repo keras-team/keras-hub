@@ -37,27 +37,27 @@ if keras.backend.backend() == "tensorflow":
 
 # Model configurations for testing
 CAUSAL_LM_MODELS = [
-    # {
-    #     "preset": "llama3.2_1b",
-    #     "model_class": keras_hub.models.Llama3CausalLM,
-    #     "sequence_length": 128,
-    #     "vocab_size": 32000,
-    #     "test_name": "llama3_2_1b",
-    # },
-    # {
-    #     "preset": "gemma3_1b",
-    #     "model_class": keras_hub.models.Gemma3CausalLM,
-    #     "sequence_length": 128,
-    #     "vocab_size": 32000,
-    #     "test_name": "gemma3_1b",
-    # },
-    # {
-    #     "preset": "gpt2_base_en",
-    #     "model_class": keras_hub.models.GPT2CausalLM,
-    #     "sequence_length": 128,
-    #     "vocab_size": 50000,
-    #     "test_name": "gpt2_base_en",
-    # },
+    {
+        "preset": "llama3.2_1b",
+        "model_class": keras_hub.models.Llama3CausalLM,
+        "sequence_length": 128,
+        "vocab_size": 32000,
+        "test_name": "llama3_2_1b",
+    },
+    {
+        "preset": "gemma3_1b",
+        "model_class": keras_hub.models.Gemma3CausalLM,
+        "sequence_length": 128,
+        "vocab_size": 32000,
+        "test_name": "gemma3_1b",
+    },
+    {
+        "preset": "gpt2_base_en",
+        "model_class": keras_hub.models.GPT2CausalLM,
+        "sequence_length": 128,
+        "vocab_size": 50000,
+        "test_name": "gpt2_base_en",
+    },
 ]
 
 IMAGE_CLASSIFIER_MODELS = [
@@ -126,7 +126,7 @@ class LiteRTCausalLMModelsTest(TestCase):
 
         try:
             # Load model
-            model = model_class.from_preset(preset, load_weights=False)
+            model = model_class.from_preset(preset, load_weights=True)
             model.preprocessor.sequence_length = sequence_length
 
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -487,7 +487,7 @@ class LiteRTProductionModelsNumericalTest(TestCase):
 
         try:
             # Load model
-            model = model_class.from_preset(preset, load_weights=False)
+            model = model_class.from_preset(preset, load_weights=True)
             model.preprocessor.sequence_length = sequence_length
 
             # Create test inputs

@@ -92,11 +92,7 @@ def _infer_image_size(model):
             image_size = model.preprocessor.image_size
 
     # Try to infer from model inputs
-    if (
-        image_size is None
-        and hasattr(model, "inputs")
-        and model.inputs
-    ):
+    if image_size is None and hasattr(model, "inputs") and model.inputs:
         input_shape = model.inputs[0].shape
         if (
             len(input_shape) == 4
