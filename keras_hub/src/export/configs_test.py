@@ -268,7 +268,32 @@ class ObjectDetectorExporterConfigTest(TestCase):
             model = MockObjectDetectorForTest()
             config = ObjectDetectorExporterConfig(model)
             self.assertEqual(config.MODEL_TYPE, "object_detector")
-            self.assertEqual(config.EXPECTED_INPUTS, ["images"])
+            self.assertEqual(config.EXPECTED_INPUTS, ["images", "image_shape"])
+        except Exception:
+            self.skipTest("Cannot test with ObjectDetector model")
+
+    def test_get_input_signature_with_preprocessor(self):
+        """Test get_input_signature infers from preprocessor."""
+        from keras_hub.src.models.object_detector import ObjectDetector
+
+        class MockObjectDetectorForTest(ObjectDetector):
+            def __init__(self, preprocessor):
+                keras.Model.__init__(self)
+                self.preprocessor = preprocessor
+
+        try:
+            preprocessor = MockPreprocessor(image_size=(512, 512))
+            model = MockObjectDetectorForTest(preprocessor)
+            config = ObjectDetectorExporterConfig(model)
+            signature = config.get_input_signature()
+
+            self.assertIn("images", signature)
+            self.assertIn("image_shape", signature)
+            # Images shape should be (batch, height, width, channels)
+            self.assertEqual(signature["images"].shape, (None, 512, 512, 3))
+            # Image shape is (batch, 2) for (height, width)
+            self.assertEqual(signature["image_shape"].shape, (None, 2))
+            self.assertEqual(signature["image_shape"].dtype, "int32")
         except Exception:
             self.skipTest("Cannot test with ObjectDetector model")
 

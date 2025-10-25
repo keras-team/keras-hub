@@ -173,10 +173,11 @@ class ExporterRegistry:
             ValueError: If no configuration is found for the model type
         """
         # Find the matching model class
+        # NOTE: Seq2SeqLM must be checked before CausalLM since it's a subclass
         for model_class in [
+            Seq2SeqLM,
             CausalLM,
             TextClassifier,
-            Seq2SeqLM,
             ImageClassifier,
             ObjectDetector,
             ImageSegmenter,
