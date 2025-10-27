@@ -10,16 +10,14 @@ import numpy as np
 from keras import ops
 from packaging import version
 
-tf = None
-tf_text = None
 try:
     import tensorflow as tf
-    try:
-        import tensorflow_text as tf_text
-    except ImportError:
-        pass
 except ImportError:
-    pass
+    tf = None
+try:
+    import tensorflow_text as tf_text
+except ImportError:
+    tf_text = None
 
 
 NO_CONVERT_COUNTER = threading.local()
