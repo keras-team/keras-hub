@@ -372,20 +372,22 @@ class Backbone(keras.Model):
                         child._data, list
                     ):
                         # Create a clean list of the trackable items
-                        clean_list = []
-                        for item in child._data:
-                            if hasattr(item, "_trackable_children"):
-                                clean_list.append(item)
+                        clean_list = [
+                            item
+                            for item in child._data
+                            if hasattr(item, "_trackable_children")
+                        ]
                         if clean_list:
                             clean_children[name] = clean_list
                     # For dict-like _DictWrapper
                     elif hasattr(child, "_data") and isinstance(
                         child._data, dict
                     ):
-                        clean_dict = {}
-                        for k, v in child._data.items():
-                            if hasattr(v, "_trackable_children"):
-                                clean_dict[k] = v
+                        clean_dict = {
+                            k: v
+                            for k, v in child._data.items()
+                            if hasattr(v, "_trackable_children")
+                        }
                         if clean_dict:
                             clean_children[name] = clean_dict
                     # Skip if we can't unwrap safely
