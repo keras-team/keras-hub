@@ -22,7 +22,4 @@ from keras_hub.src.export.configs import (
 from keras_hub.src.export.configs import (
     TextClassifierExporterConfig as TextClassifierExporterConfig,
 )
-from keras_hub.src.export.configs import (
-    TextModelExporterConfig as TextModelExporterConfig,
-)
 from keras_hub.src.export.litert import LiteRTExporter as LiteRTExporter

@@ -112,7 +112,7 @@ class LiteRTExporter(KerasHubExporter):
 
         # Create a wrapper that adapts the Keras-Hub model to work with Keras
         # LiteRT exporter
-        wrapped_model = self._create_export_wrapper()
+        wrapped_model = self._create_export_wrapper(param)
 
         # Convert input signature to list format expected by Keras exporter
         if isinstance(input_signature, dict):
@@ -144,12 +144,16 @@ class LiteRTExporter(KerasHubExporter):
         except Exception as e:
             raise RuntimeError(f"LiteRT export failed: {e}") from e
 
-    def _create_export_wrapper(self):
+    def _create_export_wrapper(self, param):
         """Create a wrapper model that handles the input structure conversion.
 
         This creates a type-specific adapter that converts between the
         list-based inputs that Keras LiteRT exporter provides and the format
         expected by Keras-Hub models.
+
+        Args:
+            param: The parameter for input signature (sequence_length for text
+                models, image_size for image models).
         """
 
         class BaseModelAdapter(keras.Model):
@@ -256,7 +260,7 @@ class LiteRTExporter(KerasHubExporter):
 
                 return self.keras_hub_model(input_dict, training=training)
 
-        # Determine the parameter to pass based on model type
+        # Select the appropriate adapter based on model type
         is_text_model = isinstance(
             self.model, (CausalLM, TextClassifier, Seq2SeqLM)
         )
@@ -264,21 +268,6 @@ class LiteRTExporter(KerasHubExporter):
             self.model, (ImageClassifier, ObjectDetector, ImageSegmenter)
         )
 
-        # Get the appropriate parameter for input signature
-        if is_text_model:
-            param = self.max_sequence_length
-        elif is_image_model:
-            # Get image_size from model's preprocessor
-            if hasattr(self.model, "preprocessor") and hasattr(
-                self.model.preprocessor, "image_size"
-            ):
-                param = self.model.preprocessor.image_size
-            else:
-                param = None  # Will use default in get_input_signature
-        else:
-            param = None
-
-        # Select the appropriate adapter based on model type
         if is_text_model:
             adapter_class = TextModelAdapter
         elif is_image_model:

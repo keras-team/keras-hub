@@ -72,6 +72,25 @@ def _get_seq2seq_input_signature(model, sequence_length=128):
     }
 
 
+def _infer_sequence_length(model, default_length):
+    """Infer sequence length from model preprocessor or use default.
+
+    Args:
+        model: The model instance.
+        default_length: `int`. Default sequence length to use if not found.
+
+    Returns:
+        `int`. Sequence length from preprocessor or default.
+    """
+    if hasattr(model, "preprocessor") and model.preprocessor:
+        return getattr(
+            model.preprocessor,
+            "sequence_length",
+            default_length,
+        )
+    return default_length
+
+
 def _infer_image_size(model):
     """Infer image size from model preprocessor or inputs.
 
@@ -114,6 +133,21 @@ def _infer_image_size(model):
     return image_size
 
 
+def _infer_image_dtype(model):
+    """Infer image dtype from model inputs.
+
+    Args:
+        model: The model instance.
+
+    Returns:
+        `str`. Image dtype (defaults to "float32").
+    """
+    if hasattr(model, "inputs") and model.inputs:
+        model_dtype = model.inputs[0].dtype
+        return model_dtype.name if hasattr(model_dtype, "name") else model_dtype
+    return "float32"
+
+
 @keras_hub_export("keras_hub.export.CausalLMExporterConfig")
 class CausalLMExporterConfig(KerasHubExporterConfig):
     """Exporter configuration for Causal Language Models (GPT, LLaMA, etc.)."""
@@ -140,14 +174,9 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
             `dict`. Dictionary mapping input names to their specifications
         """
         if sequence_length is None:
-            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-                sequence_length = getattr(
-                    self.model.preprocessor,
-                    "sequence_length",
-                    self.DEFAULT_SEQUENCE_LENGTH,
-                )
-            else:
-                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
+            sequence_length = _infer_sequence_length(
+                self.model, self.DEFAULT_SEQUENCE_LENGTH
+            )
 
         return _get_text_input_signature(self.model, sequence_length)
 
@@ -178,14 +207,9 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
             `dict`. Dictionary mapping input names to their specifications
         """
         if sequence_length is None:
-            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-                sequence_length = getattr(
-                    self.model.preprocessor,
-                    "sequence_length",
-                    self.DEFAULT_SEQUENCE_LENGTH,
-                )
-            else:
-                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
+            sequence_length = _infer_sequence_length(
+                self.model, self.DEFAULT_SEQUENCE_LENGTH
+            )
 
         return _get_text_input_signature(self.model, sequence_length)
 
@@ -221,60 +245,11 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
             `dict`. Dictionary mapping input names to their specifications
         """
         if sequence_length is None:
-            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-                sequence_length = getattr(
-                    self.model.preprocessor,
-                    "sequence_length",
-                    self.DEFAULT_SEQUENCE_LENGTH,
-                )
-            else:
-                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
+            sequence_length = _infer_sequence_length(
+                self.model, self.DEFAULT_SEQUENCE_LENGTH
+            )
 
         return _get_seq2seq_input_signature(self.model, sequence_length)
-
-
-@keras_hub_export("keras_hub.export.TextModelExporterConfig")
-class TextModelExporterConfig(KerasHubExporterConfig):
-    """Generic exporter configuration for text models."""
-
-    MODEL_TYPE = "text_model"
-    EXPECTED_INPUTS = ["token_ids", "padding_mask"]
-    DEFAULT_SEQUENCE_LENGTH = 128
-
-    def _is_model_compatible(self):
-        """Check if model is a text model (fallback).
-
-        Returns:
-            `bool`. True if compatible, False otherwise
-        """
-        # This is a fallback config for text models that don't fit other
-        # categories
-        return (
-            hasattr(self.model, "preprocessor")
-            and self.model.preprocessor
-            and hasattr(self.model.preprocessor, "tokenizer")
-        )
-
-    def get_input_signature(self, sequence_length=None):
-        """Get input signature for generic text models.
-
-        Args:
-            sequence_length: `int` or `None`. Optional sequence length.
-
-        Returns:
-            `dict`. Dictionary mapping input names to their specifications
-        """
-        if sequence_length is None:
-            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-                sequence_length = getattr(
-                    self.model.preprocessor,
-                    "sequence_length",
-                    self.DEFAULT_SEQUENCE_LENGTH,
-                )
-            else:
-                sequence_length = self.DEFAULT_SEQUENCE_LENGTH
-
-        return _get_text_input_signature(self.model, sequence_length)
 
 
 @keras_hub_export("keras_hub.export.ImageClassifierExporterConfig")
@@ -303,15 +278,7 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
         elif isinstance(image_size, int):
             image_size = (image_size, image_size)
 
-        # Get input dtype
-        dtype = "float32"
-        if hasattr(self.model, "inputs") and self.model.inputs:
-            model_dtype = self.model.inputs[0].dtype
-            dtype = (
-                model_dtype.name
-                if hasattr(model_dtype, "name")
-                else model_dtype
-            )
+        dtype = _infer_image_dtype(self.model)
 
         return {
             "images": keras.layers.InputSpec(
@@ -348,15 +315,7 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
         elif isinstance(image_size, int):
             image_size = (image_size, image_size)
 
-        # Get input dtype
-        dtype = "float32"
-        if hasattr(self.model, "inputs") and self.model.inputs:
-            model_dtype = self.model.inputs[0].dtype
-            dtype = (
-                model_dtype.name
-                if hasattr(model_dtype, "name")
-                else model_dtype
-            )
+        dtype = _infer_image_dtype(self.model)
 
         return {
             "images": keras.layers.InputSpec(
@@ -396,15 +355,7 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
         elif isinstance(image_size, int):
             image_size = (image_size, image_size)
 
-        # Get input dtype
-        dtype = "float32"
-        if hasattr(self.model, "inputs") and self.model.inputs:
-            model_dtype = self.model.inputs[0].dtype
-            dtype = (
-                model_dtype.name
-                if hasattr(model_dtype, "name")
-                else model_dtype
-            )
+        dtype = _infer_image_dtype(self.model)
 
         return {
             "images": keras.layers.InputSpec(
