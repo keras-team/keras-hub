@@ -181,4 +181,43 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_instruct_270m/4",
     },
+    "medgemma_instruct_4b": {
+        "metadata": {
+            "description": (
+                " 4 billion parameter model is built based on Gemma 3"
+                " This model trained for performance on medical text"
+                " and image comprehension. MedGemma is optimized for medical"
+                " applications that involve a text generation component."
+            ),
+            "params": 4300079472,
+            "path": "gemma3",
+        },
+        "kaggle_handle": "kaggle://keras/medgemma/keras/medgemma_instruct_4b/1",
+    },
+    "medgemma_instruct_27b": {
+        "metadata": {
+            "description": (
+                " 27 billion parameter model is built based on Gemma 3"
+                " This model trained for performance on medical text"
+                " and image comprehension. MedGemma is optimized for medical"
+                " applications that involve a text generation component."
+            ),
+            "params": 27432406640,
+            "path": "gemma3",
+        },
+        "kaggle_handle": "kaggle://keras/medgemma/keras/medgemma_instruct_27b/1",
+    },
+    "medgemma_instruct_27b_text": {
+        "metadata": {
+            "description": (
+                " 27 billion parameter model is built based on Gemma 3"
+                " This model trained for performance on medical text"
+                " and image comprehension. MedGemma is optimized for medical"
+                " applications that involve a text generation component."
+            ),
+            "params": 27009002240,
+            "path": "gemma3",
+        },
+        "kaggle_handle": "kaggle://keras/medgemma/keras/medgemma_instruct_27b_text/1",
+    },
 }
