@@ -126,7 +126,7 @@ class LiteRTCausalLMModelsTest(TestCase):
 
         try:
             # Load model
-            model = model_class.from_preset(preset, load_weights=False)
+            model = model_class.from_preset(preset, load_weights=True)
             model.preprocessor.sequence_length = sequence_length
 
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -283,16 +283,26 @@ class LiteRTObjectDetectorModelsTest(TestCase):
                 input_details = interpreter.get_input_details()
                 output_details = interpreter.get_output_details()
 
-                # Get input shape from the exported model
-                input_shape = input_details[0]["shape"]
+                # Get input shapes from the exported model
+                # ObjectDetector requires two inputs: images and image_shape
+                image_input_details = input_details[0]
+                shape_input_details = input_details[1]
+                image_input_shape = image_input_details["shape"]
 
-                # Create test input with the correct shape
+                # Create test inputs
                 test_image = np.random.uniform(
-                    0.0, 1.0, size=tuple(input_shape)
-                ).astype(input_details[0]["dtype"])
+                    0.0, 1.0, size=tuple(image_input_shape)
+                ).astype(image_input_details["dtype"])
+                test_image_shape = np.array(
+                    [[image_input_shape[1], image_input_shape[2]]],
+                    dtype=shape_input_details["dtype"],
+                )
 
-                # Run inference
-                interpreter.set_tensor(input_details[0]["index"], test_image)
+                # Run inference with both inputs
+                interpreter.set_tensor(image_input_details["index"], test_image)
+                interpreter.set_tensor(
+                    shape_input_details["index"], test_image_shape
+                )
                 interpreter.invoke()
                 output = interpreter.get_tensor(output_details[0]["index"])
 
@@ -477,7 +487,7 @@ class LiteRTProductionModelsNumericalTest(TestCase):
 
         try:
             # Load model
-            model = model_class.from_preset(preset, load_weights=False)
+            model = model_class.from_preset(preset, load_weights=True)
             model.preprocessor.sequence_length = sequence_length
 
             # Create test inputs

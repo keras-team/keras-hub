@@ -16,6 +16,104 @@ from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.text_classifier import TextClassifier
 
 
+def _get_text_input_signature(model, sequence_length=128):
+    """Get input signature for text models with token_ids and padding_mask.
+
+    Args:
+        model: The model instance.
+        sequence_length: `int`. Sequence length (default: 128).
+
+    Returns:
+        `dict`. Dictionary mapping input names to their specifications
+    """
+    return {
+        "token_ids": keras.layers.InputSpec(
+            shape=(None, sequence_length), dtype="int32", name="token_ids"
+        ),
+        "padding_mask": keras.layers.InputSpec(
+            shape=(None, sequence_length),
+            dtype="int32",
+            name="padding_mask",
+        ),
+    }
+
+
+def _get_seq2seq_input_signature(model, sequence_length=128):
+    """Get input signature for seq2seq models with encoder/decoder tokens.
+
+    Args:
+        model: The model instance.
+        sequence_length: `int`. Sequence length (default: 128).
+
+    Returns:
+        `dict`. Dictionary mapping input names to their specifications
+    """
+    return {
+        "encoder_token_ids": keras.layers.InputSpec(
+            shape=(None, sequence_length),
+            dtype="int32",
+            name="encoder_token_ids",
+        ),
+        "encoder_padding_mask": keras.layers.InputSpec(
+            shape=(None, sequence_length),
+            dtype="int32",
+            name="encoder_padding_mask",
+        ),
+        "decoder_token_ids": keras.layers.InputSpec(
+            shape=(None, sequence_length),
+            dtype="int32",
+            name="decoder_token_ids",
+        ),
+        "decoder_padding_mask": keras.layers.InputSpec(
+            shape=(None, sequence_length),
+            dtype="int32",
+            name="decoder_padding_mask",
+        ),
+    }
+
+
+def _infer_image_size(model):
+    """Infer image size from model preprocessor or inputs.
+
+    Args:
+        model: The model instance.
+
+    Returns:
+        `tuple`. Image size as (height, width).
+
+    Raises:
+        ValueError: If image_size cannot be determined.
+    """
+    image_size = None
+
+    # Get from preprocessor
+    if hasattr(model, "preprocessor") and model.preprocessor:
+        if hasattr(model.preprocessor, "image_size"):
+            image_size = model.preprocessor.image_size
+
+    # Try to infer from model inputs
+    if image_size is None and hasattr(model, "inputs") and model.inputs:
+        input_shape = model.inputs[0].shape
+        if (
+            len(input_shape) == 4
+            and input_shape[1] is not None
+            and input_shape[2] is not None
+        ):
+            image_size = (input_shape[1], input_shape[2])
+
+    if image_size is None:
+        raise ValueError(
+            "Could not determine image size from model. "
+            "Model should have a preprocessor with image_size "
+            "attribute, or model inputs should have concrete shapes."
+        )
+
+    if isinstance(image_size, int):
+        image_size = (image_size, image_size)
+
+    return image_size
+
+
 @keras_hub_export("keras_hub.export.CausalLMExporterConfig")
 class CausalLMExporterConfig(KerasHubExporterConfig):
     """Exporter configuration for Causal Language Models (GPT, LLaMA, etc.)."""
@@ -42,7 +140,6 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
             `dict`. Dictionary mapping input names to their specifications
         """
         if sequence_length is None:
-            # Get from preprocessor or use default
             if hasattr(self.model, "preprocessor") and self.model.preprocessor:
                 sequence_length = getattr(
                     self.model.preprocessor,
@@ -52,16 +149,7 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
             else:
                 sequence_length = self.DEFAULT_SEQUENCE_LENGTH
 
-        return {
-            "token_ids": keras.layers.InputSpec(
-                shape=(None, sequence_length), dtype="int32", name="token_ids"
-            ),
-            "padding_mask": keras.layers.InputSpec(
-                shape=(None, sequence_length),
-                dtype="int32",
-                name="padding_mask",
-            ),
-        }
+        return _get_text_input_signature(self.model, sequence_length)
 
 
 @keras_hub_export("keras_hub.export.TextClassifierExporterConfig")
@@ -90,7 +178,6 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
             `dict`. Dictionary mapping input names to their specifications
         """
         if sequence_length is None:
-            # Get from preprocessor or use default
             if hasattr(self.model, "preprocessor") and self.model.preprocessor:
                 sequence_length = getattr(
                     self.model.preprocessor,
@@ -100,16 +187,7 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
             else:
                 sequence_length = self.DEFAULT_SEQUENCE_LENGTH
 
-        return {
-            "token_ids": keras.layers.InputSpec(
-                shape=(None, sequence_length), dtype="int32", name="token_ids"
-            ),
-            "padding_mask": keras.layers.InputSpec(
-                shape=(None, sequence_length),
-                dtype="int32",
-                name="padding_mask",
-            ),
-        }
+        return _get_text_input_signature(self.model, sequence_length)
 
 
 @keras_hub_export("keras_hub.export.Seq2SeqLMExporterConfig")
@@ -143,7 +221,6 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
             `dict`. Dictionary mapping input names to their specifications
         """
         if sequence_length is None:
-            # Get from preprocessor or use default
             if hasattr(self.model, "preprocessor") and self.model.preprocessor:
                 sequence_length = getattr(
                     self.model.preprocessor,
@@ -153,28 +230,7 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
             else:
                 sequence_length = self.DEFAULT_SEQUENCE_LENGTH
 
-        return {
-            "encoder_token_ids": keras.layers.InputSpec(
-                shape=(None, sequence_length),
-                dtype="int32",
-                name="encoder_token_ids",
-            ),
-            "encoder_padding_mask": keras.layers.InputSpec(
-                shape=(None, sequence_length),
-                dtype="int32",
-                name="encoder_padding_mask",
-            ),
-            "decoder_token_ids": keras.layers.InputSpec(
-                shape=(None, sequence_length),
-                dtype="int32",
-                name="decoder_token_ids",
-            ),
-            "decoder_padding_mask": keras.layers.InputSpec(
-                shape=(None, sequence_length),
-                dtype="int32",
-                name="decoder_padding_mask",
-            ),
-        }
+        return _get_seq2seq_input_signature(self.model, sequence_length)
 
 
 @keras_hub_export("keras_hub.export.TextModelExporterConfig")
@@ -209,7 +265,6 @@ class TextModelExporterConfig(KerasHubExporterConfig):
             `dict`. Dictionary mapping input names to their specifications
         """
         if sequence_length is None:
-            # Get from preprocessor or use default
             if hasattr(self.model, "preprocessor") and self.model.preprocessor:
                 sequence_length = getattr(
                     self.model.preprocessor,
@@ -219,16 +274,7 @@ class TextModelExporterConfig(KerasHubExporterConfig):
             else:
                 sequence_length = self.DEFAULT_SEQUENCE_LENGTH
 
-        return {
-            "token_ids": keras.layers.InputSpec(
-                shape=(None, sequence_length), dtype="int32", name="token_ids"
-            ),
-            "padding_mask": keras.layers.InputSpec(
-                shape=(None, sequence_length),
-                dtype="int32",
-                name="padding_mask",
-            ),
-        }
+        return _get_text_input_signature(self.model, sequence_length)
 
 
 @keras_hub_export("keras_hub.export.ImageClassifierExporterConfig")
@@ -253,33 +299,8 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
             `dict`. Dictionary mapping input names to their specifications
         """
         if image_size is None:
-            # Get from preprocessor
-            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-                if hasattr(self.model.preprocessor, "image_size"):
-                    image_size = self.model.preprocessor.image_size
-
-            # Try to infer from model inputs
-            if (
-                image_size is None
-                and hasattr(self.model, "inputs")
-                and self.model.inputs
-            ):
-                input_shape = self.model.inputs[0].shape
-                if (
-                    len(input_shape) == 4
-                    and input_shape[1] is not None
-                    and input_shape[2] is not None
-                ):
-                    image_size = (input_shape[1], input_shape[2])
-
-            if image_size is None:
-                raise ValueError(
-                    "Could not determine image size from model. "
-                    "Model should have a preprocessor with image_size "
-                    "attribute, or model inputs should have concrete shapes."
-                )
-
-        if isinstance(image_size, int):
+            image_size = _infer_image_size(self.model)
+        elif isinstance(image_size, int):
             image_size = (image_size, image_size)
 
         # Get input dtype
@@ -323,33 +344,8 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
             `dict`. Dictionary mapping input names to their specifications
         """
         if image_size is None:
-            # Get from preprocessor
-            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-                if hasattr(self.model.preprocessor, "image_size"):
-                    image_size = self.model.preprocessor.image_size
-
-            # Try to infer from model inputs
-            if (
-                image_size is None
-                and hasattr(self.model, "inputs")
-                and self.model.inputs
-            ):
-                input_shape = self.model.inputs[0].shape
-                if (
-                    len(input_shape) == 4
-                    and input_shape[1] is not None
-                    and input_shape[2] is not None
-                ):
-                    image_size = (input_shape[1], input_shape[2])
-
-            if image_size is None:
-                raise ValueError(
-                    "Could not determine image size from model. "
-                    "Model should have a preprocessor with image_size "
-                    "attribute, or model inputs should have concrete shapes."
-                )
-
-        if isinstance(image_size, int):
+            image_size = _infer_image_size(self.model)
+        elif isinstance(image_size, int):
             image_size = (image_size, image_size)
 
         # Get input dtype
@@ -396,33 +392,8 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
             `dict`. Dictionary mapping input names to their specifications
         """
         if image_size is None:
-            # Get from preprocessor
-            if hasattr(self.model, "preprocessor") and self.model.preprocessor:
-                if hasattr(self.model.preprocessor, "image_size"):
-                    image_size = self.model.preprocessor.image_size
-
-            # Try to infer from model inputs
-            if (
-                image_size is None
-                and hasattr(self.model, "inputs")
-                and self.model.inputs
-            ):
-                input_shape = self.model.inputs[0].shape
-                if (
-                    len(input_shape) == 4
-                    and input_shape[1] is not None
-                    and input_shape[2] is not None
-                ):
-                    image_size = (input_shape[1], input_shape[2])
-
-            if image_size is None:
-                raise ValueError(
-                    "Could not determine image size from model. "
-                    "Model should have a preprocessor with image_size "
-                    "attribute, or model inputs should have concrete shapes."
-                )
-
-        if isinstance(image_size, int):
+            image_size = _infer_image_size(self.model)
+        elif isinstance(image_size, int):
             image_size = (image_size, image_size)
 
         # Get input dtype

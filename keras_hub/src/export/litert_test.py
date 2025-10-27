@@ -148,11 +148,13 @@ class CausalLMExportTest(TestCase):
             # Verify we have the expected inputs
             self.assertEqual(len(input_details), 2)
 
-            # Create test inputs
+            # Create test inputs with dtypes from the interpreter
             test_token_ids = np.random.randint(0, 1000, (1, 128)).astype(
-                np.int32
+                input_details[0]["dtype"]
             )
-            test_padding_mask = np.ones((1, 128), dtype=np.int32)
+            test_padding_mask = np.ones(
+                (1, 128), dtype=input_details[1]["dtype"]
+            )
 
             # Set inputs and run inference
             interpreter.set_tensor(input_details[0]["index"], test_token_ids)

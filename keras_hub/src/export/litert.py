@@ -67,9 +67,14 @@ class LiteRTExporter(KerasHubExporter):
         """Export the Keras-Hub model to LiteRT format.
 
         Args:
-            filepath: `str`. Path where to save the model (without extension).
+            filepath: `str`. Path where to save the model. If it doesn't end
+                with '.tflite', the extension will be added automatically.
         """
         from keras.src.utils import io_utils
+
+        # Ensure filepath ends with .tflite
+        if not filepath.endswith(".tflite"):
+            filepath = filepath + ".tflite"
 
         if self.verbose:
             io_utils.print_msg(
@@ -133,7 +138,7 @@ class LiteRTExporter(KerasHubExporter):
 
             if self.verbose:
                 io_utils.print_msg(
-                    f"Export completed successfully to: {filepath}.tflite"
+                    f"Export completed successfully to: {filepath}"
                 )
 
         except Exception as e:
@@ -208,9 +213,7 @@ class LiteRTExporter(KerasHubExporter):
             def call(self, inputs, training=None, mask=None):
                 """Convert list inputs to dictionary format for text models."""
                 if isinstance(inputs, dict):
-                    return self.keras_hub_model(
-                        inputs, training=training, mask=mask
-                    )
+                    return self.keras_hub_model(inputs, training=training)
 
                 # Convert to list if needed
                 if not isinstance(inputs, (list, tuple)):
@@ -222,9 +225,7 @@ class LiteRTExporter(KerasHubExporter):
                     if i < len(inputs):
                         input_dict[input_name] = inputs[i]
 
-                return self.keras_hub_model(
-                    input_dict, training=training, mask=mask
-                )
+                return self.keras_hub_model(input_dict, training=training)
 
         class ImageModelAdapter(BaseModelAdapter):
             """Adapter for image models (ImageClassifier, ObjectDetector,
@@ -237,9 +238,7 @@ class LiteRTExporter(KerasHubExporter):
             def call(self, inputs, training=None, mask=None):
                 """Convert list inputs to format expected by image models."""
                 if isinstance(inputs, dict):
-                    return self.keras_hub_model(
-                        inputs, training=training, mask=mask
-                    )
+                    return self.keras_hub_model(inputs, training=training)
 
                 # Convert to list if needed
                 if not isinstance(inputs, (list, tuple)):
@@ -247,9 +246,7 @@ class LiteRTExporter(KerasHubExporter):
 
                 # Most image models expect a single tensor input
                 if len(self.expected_inputs) == 1:
-                    return self.keras_hub_model(
-                        inputs[0], training=training, mask=mask
-                    )
+                    return self.keras_hub_model(inputs[0], training=training)
 
                 # If multiple inputs, use dictionary format
                 input_dict = {}
@@ -257,9 +254,7 @@ class LiteRTExporter(KerasHubExporter):
                     if i < len(inputs):
                         input_dict[input_name] = inputs[i]
 
-                return self.keras_hub_model(
-                    input_dict, training=training, mask=mask
-                )
+                return self.keras_hub_model(input_dict, training=training)
 
         # Determine the parameter to pass based on model type
         is_text_model = isinstance(
