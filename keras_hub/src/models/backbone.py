@@ -352,6 +352,11 @@ class Backbone(keras.Model):
         children = super()._trackable_children(save_type, **kwargs)
 
         # Import _DictWrapper safely
+        # WARNING: This uses a private TensorFlow API (_DictWrapper from
+        # tensorflow.python.trackable.data_structures). This API is not
+        # guaranteed to be stable and may change in future TensorFlow versions.
+        # If this breaks, we may need to find an alternative approach or pin
+        # the TensorFlow version more strictly.
         try:
             from tensorflow.python.trackable.data_structures import _DictWrapper
         except ImportError:
