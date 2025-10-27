@@ -449,6 +449,7 @@ class DINOV3Attention(layers.Layer):
             is_causal=False,
         )
         attn_output = ops.reshape(attn_output, (batch_size, seq_len, -1))
+        attn_output = self.dropout(attn_output, training=training)
         return self.output_dense(attn_output, training=training)
 
     def get_config(self):
@@ -815,6 +816,7 @@ class DINOV3Layer(layers.Layer):
         attention_mask=None,
         position_embeddings=None,
         num_prefix_tokens=0,
+        training=None,
     ):
         residual = inputs
         hidden_states = self.norm1(inputs)
@@ -823,17 +825,18 @@ class DINOV3Layer(layers.Layer):
             attention_mask=attention_mask,
             position_embeddings=position_embeddings,
             num_prefix_tokens=num_prefix_tokens,
+            training=training,
         )
-        hidden_states = self.layer_scale1(hidden_states)
-        hidden_states = self.drop_path(hidden_states) + residual
+        hidden_states = self.layer_scale1(hidden_states, training=training)
+        hidden_states = (
+            self.drop_path(hidden_states, training=training) + residual
+        )
 
         residual = hidden_states
-        hidden_states = self.norm2(hidden_states)
-        hidden_states = self.mlp(hidden_states)
-        hidden_states = self.layer_scale2(hidden_states)
-        hidden_states = self.drop_path(hidden_states) + residual
-
-        return hidden_states
+        hidden_states = self.norm2(hidden_states, training=training)
+        hidden_states = self.mlp(hidden_states, training=training)
+        hidden_states = self.layer_scale2(hidden_states, training=training)
+        return self.drop_path(hidden_states, training=training) + residual
 
     def get_config(self):
         config = super().get_config()

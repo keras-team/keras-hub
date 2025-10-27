@@ -64,6 +64,48 @@ class DINOV3Backbone(FeaturePyramidBackbone):
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
             be done a float32 precision regardless of dtype.
+
+    Example:
+    ```python
+    # Pretrained DINOV3 model.
+    input_data = {
+        "images": np.ones(shape=(1, 518, 518, 3), dtype="float32"),
+    }
+    model = keras_hub.models.DINOV3Backbone.from_preset(
+        "dinov3_vit_small_lvd1689m"
+    )
+    model(input_data)
+
+    # Pretrained DINOV3 model with custom image shape.
+    input_data = {
+        "images": np.ones(shape=(1, 224, 224, 3), dtype="float32"),
+    }
+    model = keras_hub.models.DINOV3Backbone.from_preset(
+        "dinov3_vit_small_lvd1689m", image_shape=(224, 224, 3)
+    )
+    model(input_data)
+
+    # Randomly initialized DINOV3 model with custom config.
+    model = keras_hub.models.DINOV3Backbone(
+        patch_size=14,
+        num_layers=2,
+        hidden_dim=32,
+        num_heads=2,
+        intermediate_dim=128,
+        image_shape=(224, 224, 3),
+    )
+    model(input_data)
+
+    # Accessing feature pyramid outputs.
+    backbone = keras_hub.models.DINOV3Backbone.from_preset(
+        "dinov3_vit_small_lvd1689m", image_shape=(224, 224, 3)
+    )
+    model = keras.Model(
+        inputs=backbone.inputs,
+        outputs=backbone.pyramid_outputs,
+    )
+    features = model(input_data)
+    ```
     """
 
     def __init__(
@@ -141,7 +183,7 @@ class DINOV3Backbone(FeaturePyramidBackbone):
 
         # === Functional Model ===
         pyramid_outputs = {}
-        image_input = layers.Input(shape=image_shape, name="images")
+        image_input = layers.Input(shape=image_shape, name="pixel_values")
         x = self.embeddings(image_input)
         pyramid_outputs["stem"] = x
 
@@ -160,7 +202,7 @@ class DINOV3Backbone(FeaturePyramidBackbone):
                 pyramid_outputs[key] = self.layernorm(pyramid_outputs[key])
         outputs = x
         super().__init__(
-            inputs={"images": image_input},
+            inputs={"pixel_values": image_input},
             outputs=outputs,
             dtype=dtype,
             name=name,

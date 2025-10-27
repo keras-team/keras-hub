@@ -23,7 +23,7 @@ class DINOV3BackboneTest(TestCase):
             "name": "dinov3_backbone",
         }
         self.input_data = {
-            "images": ops.ones((2, 64, 64, 3)),
+            "pixel_values": ops.ones((2, 64, 64, 3)),
         }
 
     def test_backbone_basics(self):
@@ -73,7 +73,7 @@ class DINOV3BackboneTest(TestCase):
             image_shape=(128, 128, 3),  # From 64 to 128.
         )
         input_data = {
-            "images": ops.ones((2, 128, 128, 3)),
+            "pixel_values": ops.ones((2, 128, 128, 3)),
         }
         restored_output = restored_model(input_data)
         self.assertNotEqual(model_output.shape, restored_output.shape)
