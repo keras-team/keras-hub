@@ -184,10 +184,10 @@ backbone_presets = {
     "medgemma_instruct_4b": {
         "metadata": {
             "description": (
-                " 4 billion parameter model is built based on Gemma 3"
-                " This model trained for performance on medical text"
-                " and image comprehension. MedGemma is optimized for medical"
-                " applications that involve a text generation component."
+                "A 4 billion parameter model based on Gemma 3. "
+                "This model is trained for performance on medical text"
+                "and image comprehension and is optimized for medical"
+                "applications that involve a text generation component."
             ),
             "params": 4300079472,
             "path": "gemma3",
@@ -197,10 +197,10 @@ backbone_presets = {
     "medgemma_instruct_27b": {
         "metadata": {
             "description": (
-                " 27 billion parameter model is built based on Gemma 3"
-                " This model trained for performance on medical text"
-                " and image comprehension. MedGemma is optimized for medical"
-                " applications that involve a text generation component."
+                "A 27 billion parameter model based on Gemma 3. "
+                "This model trained for performance on medical text "
+                "and image comprehension and is optimized for medical "
+                "applications that involve a text generation component."
             ),
             "params": 27432406640,
             "path": "gemma3",
@@ -210,10 +210,10 @@ backbone_presets = {
     "medgemma_instruct_27b_text": {
         "metadata": {
             "description": (
-                " 27 billion parameter model is built based on Gemma 3"
-                " This model trained for performance on medical text"
-                " and image comprehension. MedGemma is optimized for medical"
-                " applications that involve a text generation component."
+                "A 27 billion parameter text-only model based on Gemma 3. "
+                "This model is trained for performance on medical text "
+                "comprehension and is optimized for medical applications "
+                "that involve a text generation component."
             ),
             "params": 27009002240,
             "path": "gemma3",

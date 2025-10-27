@@ -324,11 +324,10 @@ backbone_presets = {
     "medsiglip_900m_448": {
         "metadata": {
             "description": (
-                "900 million parameter, MedSigLIP is a variant of SigLIP, "
-                "trained to encode medical images and text into a common "
-                "embedding space,MedSigLIP contains a 400M parameter vision "
-                "encoder and 400M parameter text encoder, it supports 448x448 "
-                "image resolution with up to 64 text tokens."
+                "A 900 million parameter variant of SigLIP trained to encode "
+                "medical images and text into a common embedding space. "
+                "MedSigLIP contains a vision encoder and a text encoder, and "
+                "supports 448x448 image resolution with up to 64 text tokens."
             ),
             "params": 878301426,
             "official_name": "SigLIP2",
