@@ -190,7 +190,7 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
     DEFAULT_SEQUENCE_LENGTH = 128
 
     def _is_model_compatible(self):
-        """Check if model is an image classifier.
+        """Check if model is a text classifier.
 
         Returns:
             `bool`. True if compatible, False otherwise
