@@ -63,6 +63,54 @@ class LiteRTExporter(KerasHubExporter):
         self.aot_compile_targets = aot_compile_targets
         self.verbose = verbose if verbose is not None else True
 
+    def _get_model_adapter_class(self):
+        """Determine the appropriate adapter class for the model.
+
+        Returns:
+            `str`. The adapter type to use ("text" or "image").
+
+        Raises:
+            ValueError: If the model type is not supported for LiteRT export.
+        """
+        if isinstance(self.model, (CausalLM, TextClassifier, Seq2SeqLM)):
+            return "text"
+        elif isinstance(
+            self.model, (ImageClassifier, ObjectDetector, ImageSegmenter)
+        ):
+            return "image"
+        else:
+            # For other model types (audio, multimodal, custom, etc.)
+            raise ValueError(
+                f"Model type {self.model.__class__.__name__} is not supported "
+                "for LiteRT export. Currently supported model types are: "
+                "CausalLM, TextClassifier, Seq2SeqLM, ImageClassifier, "
+                "ObjectDetector, ImageSegmenter."
+            )
+
+    def _get_export_param(self):
+        """Get the appropriate parameter for export based on model type.
+
+        Returns:
+            The parameter to use for export (sequence_length for text models,
+            image_size for image models, or None for other model types).
+        """
+        if isinstance(self.model, (CausalLM, TextClassifier, Seq2SeqLM)):
+            # For text models, use sequence_length
+            return self.max_sequence_length
+        elif isinstance(
+            self.model, (ImageClassifier, ObjectDetector, ImageSegmenter)
+        ):
+            # For image models, get image_size from preprocessor
+            if hasattr(self.model, "preprocessor") and hasattr(
+                self.model.preprocessor, "image_size"
+            ):
+                return self.model.preprocessor.image_size
+            else:
+                return None  # Will use default in get_input_signature
+        else:
+            # For other model types (audio, multimodal, custom, etc.)
+            return None
+
     def export(self, filepath):
         """Export the Keras-Hub model to LiteRT format.
 
@@ -81,28 +129,8 @@ class LiteRTExporter(KerasHubExporter):
                 f"Starting LiteRT export for {self.model.__class__.__name__}"
             )
 
-        # Determine the parameter to pass based on model type using isinstance
-        is_text_model = isinstance(
-            self.model, (CausalLM, TextClassifier, Seq2SeqLM)
-        )
-        is_image_model = isinstance(
-            self.model, (ImageClassifier, ObjectDetector, ImageSegmenter)
-        )
-
-        # For text models, use sequence_length; for image models, get image_size
-        # from preprocessor
-        if is_text_model:
-            param = self.max_sequence_length
-        elif is_image_model:
-            # Get image_size from model's preprocessor
-            if hasattr(self.model, "preprocessor") and hasattr(
-                self.model.preprocessor, "image_size"
-            ):
-                param = self.model.preprocessor.image_size
-            else:
-                param = None  # Will use default in get_input_signature
-        else:
-            param = None
+        # Get export parameter based on model type
+        param = self._get_export_param()
 
         # Ensure model is built
         self._ensure_model_built(param)
@@ -110,9 +138,12 @@ class LiteRTExporter(KerasHubExporter):
         # Get input signature
         input_signature = self.config.get_input_signature(param)
 
+        # Get adapter class type for this model
+        adapter_type = self._get_model_adapter_class()
+
         # Create a wrapper that adapts the Keras-Hub model to work with Keras
         # LiteRT exporter
-        wrapped_model = self._create_export_wrapper(param)
+        wrapped_model = self._create_export_wrapper(param, adapter_type)
 
         # Convert input signature to list format expected by Keras exporter
         if isinstance(input_signature, dict):
@@ -144,7 +175,7 @@ class LiteRTExporter(KerasHubExporter):
         except Exception as e:
             raise RuntimeError(f"LiteRT export failed: {e}") from e
 
-    def _create_export_wrapper(self, param):
+    def _create_export_wrapper(self, param, adapter_type):
         """Create a wrapper model that handles the input structure conversion.
 
         This creates a type-specific adapter that converts between the
@@ -153,7 +184,9 @@ class LiteRTExporter(KerasHubExporter):
 
         Args:
             param: The parameter for input signature (sequence_length for text
-                models, image_size for image models).
+                models, image_size for image models, or None for other types).
+            adapter_type: `str`. The type of adapter to use - "text", "image",
+                or "base".
         """
 
         class BaseModelAdapter(keras.Model):
@@ -260,20 +293,13 @@ class LiteRTExporter(KerasHubExporter):
 
                 return self.keras_hub_model(input_dict, training=training)
 
-        # Select the appropriate adapter based on model type
-        is_text_model = isinstance(
-            self.model, (CausalLM, TextClassifier, Seq2SeqLM)
-        )
-        is_image_model = isinstance(
-            self.model, (ImageClassifier, ObjectDetector, ImageSegmenter)
-        )
-
-        if is_text_model:
+        # Select the appropriate adapter based on adapter_type
+        if adapter_type == "text":
             adapter_class = TextModelAdapter
-        elif is_image_model:
+        elif adapter_type == "image":
             adapter_class = ImageModelAdapter
         else:
-            # Fallback to base adapter for unknown types
+            # For other model types (audio, multimodal, custom, etc.)
             adapter_class = BaseModelAdapter
 
         return adapter_class(
