@@ -162,8 +162,6 @@ class LiteRTCausalLMModelsTest(TestCase):
                 self.assertEqual(output.shape[0], 1)
                 self.assertEqual(output.shape[1], sequence_length)
 
-        except Exception as e:
-            self.skipTest(f"{test_name} model test skipped: {e}")
         finally:
             # Clean up model and interpreter, free memory
             if "model" in locals():
@@ -231,8 +229,6 @@ class LiteRTImageClassifierModelsTest(TestCase):
                 self.assertEqual(output.shape[0], 1)
                 self.assertEqual(len(output.shape), 2)
 
-        except Exception as e:
-            self.skipTest(f"{test_name} model test skipped: {e}")
         finally:
             # Clean up model and interpreter, free memory
             if "model" in locals():
@@ -310,8 +306,6 @@ class LiteRTObjectDetectorModelsTest(TestCase):
                 self.assertEqual(output.shape[0], 1)
                 self.assertGreater(len(output.shape), 1)
 
-        except Exception as e:
-            self.skipTest(f"{test_name} model test skipped: {e}")
         finally:
             # Clean up model and interpreter, free memory
             if "model" in locals():
@@ -379,8 +373,6 @@ class LiteRTImageSegmenterModelsTest(TestCase):
                 self.assertEqual(output.shape[0], 1)
                 self.assertGreater(len(output.shape), 2)
 
-        except Exception as e:
-            self.skipTest(f"{test_name} model test skipped: {e}")
         finally:
             # Clean up model and interpreter, free memory
             if "model" in locals():
@@ -454,8 +446,6 @@ class LiteRTProductionModelsNumericalTest(TestCase):
                     f"{test_name}: Max diff {max_diff} exceeds tolerance",
                 )
 
-        except Exception as e:
-            self.skipTest(f"{test_name} numerical test skipped: {e}")
         finally:
             # Clean up model and interpreter, free memory
             if "model" in locals():
@@ -536,8 +526,6 @@ class LiteRTProductionModelsNumericalTest(TestCase):
                     f"{test_name}: Max diff {max_diff} exceeds tolerance",
                 )
 
-        except Exception as e:
-            self.skipTest(f"{test_name} numerical test skipped: {e}")
         finally:
             # Clean up model and interpreter, free memory
             if "model" in locals():

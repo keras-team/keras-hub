@@ -23,11 +23,12 @@ def initialize_export_registry():
     """Initialize the export registry with available configurations and
     exporters."""
     # Register configurations for different model types using classes
+    # NOTE: Seq2SeqLM must be registered before CausalLM since it's a subclass
+    ExporterRegistry.register_config(Seq2SeqLM, Seq2SeqLMExporterConfig)
     ExporterRegistry.register_config(CausalLM, CausalLMExporterConfig)
     ExporterRegistry.register_config(
         TextClassifier, TextClassifierExporterConfig
     )
-    ExporterRegistry.register_config(Seq2SeqLM, Seq2SeqLMExporterConfig)
 
     # Register vision model configurations
     ExporterRegistry.register_config(
@@ -124,31 +125,12 @@ def extend_export_method_for_keras_hub():
 
         def _is_keras_hub_model(self):
             """Check if this model is a Keras-Hub model that needs special
-            handling."""
-            class_name = self.__class__.__name__
-            module_name = self.__class__.__module__
+            handling.
 
-            # Check if it's from keras_hub package
-            if "keras_hub" in module_name:
-                return True
-
-            # Check if it has keras-hub specific attributes
-            if hasattr(self, "preprocessor") and hasattr(self, "backbone"):
-                return True
-
-            # Check for common Keras-Hub model names
-            keras_hub_model_names = [
-                "CausalLM",
-                "Seq2SeqLM",
-                "TextClassifier",
-                "ImageClassifier",
-                "ObjectDetector",
-                "ImageSegmenter",
-            ]
-            if any(name in class_name for name in keras_hub_model_names):
-                return True
-
-            return False
+            Since this method is monkey-patched onto the Task class, `self`
+            will always be an instance of a Task subclass from keras_hub.
+            """
+            return isinstance(self, Task)
 
         # Add the helper method and export method to the Task class
         Task._is_keras_hub_model = _is_keras_hub_model
