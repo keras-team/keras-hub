@@ -9,12 +9,6 @@ from abc import ABC
 from abc import abstractmethod
 
 # Import model classes for registry
-from keras_hub.src.models.causal_lm import CausalLM
-from keras_hub.src.models.image_classifier import ImageClassifier
-from keras_hub.src.models.image_segmenter import ImageSegmenter
-from keras_hub.src.models.object_detector import ObjectDetector
-from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
-from keras_hub.src.models.text_classifier import TextClassifier
 
 
 class KerasHubExporterConfig(ABC):
@@ -172,23 +166,11 @@ class ExporterRegistry:
         Raises:
             ValueError: If no configuration is found for the model type
         """
-        # Find the matching model class
-        # NOTE: Seq2SeqLM must be checked before CausalLM since it's a subclass
-        for model_class in [
-            Seq2SeqLM,
-            CausalLM,
-            TextClassifier,
-            ImageClassifier,
-            ObjectDetector,
-            ImageSegmenter,
-        ]:
+        # Iterate through registered configs to find a match
+        # This approach is more maintainable and extensible than a
+        # hardcoded list
+        for model_class, config_class in cls._configs.items():
             if isinstance(model, model_class):
-                if model_class not in cls._configs:
-                    raise ValueError(
-                        f"No configuration found for model type: "
-                        f"{model_class.__name__}"
-                    )
-                config_class = cls._configs[model_class]
                 return config_class(model)
 
         # If we get here, model type is not recognized
