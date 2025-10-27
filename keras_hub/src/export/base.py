@@ -24,9 +24,6 @@ class KerasHubExporterConfig(ABC):
     # Expected input structure for this model type
     EXPECTED_INPUTS = []
 
-    # Default sequence length if not specified
-    DEFAULT_SEQUENCE_LENGTH = 128
-
     def __init__(self, model, **kwargs):
         """Initialize the exporter configuration.
 
