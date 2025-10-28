@@ -1,6 +1,7 @@
 """Tests for LiteRT export functionality."""
 
 import os
+import shutil
 import tempfile
 
 import keras
@@ -39,8 +40,6 @@ class LiteRTExporterTest(TestCase):
         """Clean up test fixtures."""
         super().tearDown()
         # Clean up temporary files
-        import shutil
-
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
@@ -138,6 +137,10 @@ class CausalLMExportTest(TestCase):
         interpreter = Interpreter(model_path=tflite_path)
         interpreter.allocate_tensors()
 
+        # Delete the TFLite file after loading to free disk space
+        if os.path.exists(tflite_path):
+            os.remove(tflite_path)
+
         input_details = interpreter.get_input_details()
         output_details = interpreter.get_output_details()
 
@@ -160,6 +163,12 @@ class CausalLMExportTest(TestCase):
         self.assertEqual(output.shape[0], 1)  # Batch size
         self.assertEqual(output.shape[1], 128)  # Sequence length
         self.assertEqual(output.shape[2], 1000)  # Vocab size
+
+        # Clean up interpreter, free memory
+        del interpreter
+        import gc
+
+        gc.collect()
 
 
 @pytest.mark.skipif(
@@ -212,6 +221,10 @@ class ImageClassifierExportTest(TestCase):
         interpreter = Interpreter(model_path=tflite_path)
         interpreter.allocate_tensors()
 
+        # Delete the TFLite file after loading to free disk space
+        if os.path.exists(tflite_path):
+            os.remove(tflite_path)
+
         input_details = interpreter.get_input_details()
         output_details = interpreter.get_output_details()
 
@@ -231,6 +244,12 @@ class ImageClassifierExportTest(TestCase):
         output = interpreter.get_tensor(output_details[0]["index"])
         self.assertEqual(output.shape[0], 1)  # Batch size
         self.assertEqual(output.shape[1], 10)  # Number of classes
+
+        # Clean up interpreter, free memory
+        del interpreter
+        import gc
+
+        gc.collect()
 
 
 @pytest.mark.skipif(
@@ -295,10 +314,20 @@ class TextClassifierExportTest(TestCase):
         interpreter = Interpreter(model_path=tflite_path)
         interpreter.allocate_tensors()
 
+        # Delete the TFLite file after loading to free disk space
+        if os.path.exists(tflite_path):
+            os.remove(tflite_path)
+
         output_details = interpreter.get_output_details()
 
         # Verify output shape (batch, num_classes)
         self.assertEqual(len(output_details), 1)
+
+        # Clean up interpreter, free memory
+        del interpreter
+        import gc
+
+        gc.collect()
 
 
 @pytest.mark.skipif(
@@ -307,19 +336,6 @@ class TextClassifierExportTest(TestCase):
 )
 class ExportNumericalVerificationTest(TestCase):
     """Tests for numerical accuracy of exported models."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        super().setUp()
-        self.temp_dir = tempfile.mkdtemp()
-
-    def tearDown(self):
-        """Clean up test fixtures."""
-        super().tearDown()
-        import shutil
-
-        if os.path.exists(self.temp_dir):
-            shutil.rmtree(self.temp_dir)
 
     def test_simple_model_numerical_accuracy(self):
         """Test that exported model produces similar outputs to original."""
@@ -331,83 +347,56 @@ class ExportNumericalVerificationTest(TestCase):
             ]
         )
 
-        # Export the model (must end with .tflite)
-        export_path = os.path.join(self.temp_dir, "simple_model.tflite")
-        model.export(export_path, format="litert")
-
-        self.assertTrue(os.path.exists(export_path))
-
-        # Create test input
+        # Prepare test input
         test_input = np.random.random((1, 5)).astype(np.float32)
 
-        # Get Keras output
-        keras_output = model(test_input).numpy()
+        # Use standardized test from TestCase
+        # Note: This assumes the model has an export() method
+        # If not available, the test will be skipped
+        if not hasattr(model, "export"):
+            self.skipTest("model.export() not available")
 
-        # Get LiteRT output
-        interpreter = Interpreter(model_path=export_path)
-        interpreter.allocate_tensors()
-
-        input_details = interpreter.get_input_details()
-        output_details = interpreter.get_output_details()
-
-        interpreter.set_tensor(input_details[0]["index"], test_input)
-        interpreter.invoke()
-        litert_output = interpreter.get_tensor(output_details[0]["index"])
-
-        # Compare outputs
-        max_diff = np.max(np.abs(keras_output - litert_output))
-        self.assertLess(
-            max_diff,
-            1e-5,
-            f"Max difference {max_diff} exceeds tolerance 1e-5",
+        self.run_litert_export_test(
+            cls=keras.Sequential,
+            init_kwargs={
+                "layers": [
+                    keras.layers.Dense(10, activation="relu", input_shape=(5,)),
+                    keras.layers.Dense(3, activation="softmax"),
+                ]
+            },
+            input_data=test_input,
+            expected_output_shape=(1, 3),
+            comparison_mode="strict",
         )
 
     def test_dict_input_model_numerical_accuracy(self):
         """Test numerical accuracy for models with dictionary inputs."""
-        # Create a model with dictionary inputs
-        input1 = keras.Input(shape=(10,), name="input1")
-        input2 = keras.Input(shape=(10,), name="input2")
-        x = keras.layers.Concatenate()([input1, input2])
-        output = keras.layers.Dense(5)(x)
-        model = keras.Model(inputs=[input1, input2], outputs=output)
 
-        try:
-            # Export the model (must end with .tflite)
-            export_path = os.path.join(self.temp_dir, "dict_input_model.tflite")
-            model.export(export_path, format="litert")
+        # Define a custom model class for testing
+        class DictInputModel(keras.Model):
+            def __init__(self):
+                super().__init__()
+                self.concat = keras.layers.Concatenate()
+                self.dense = keras.layers.Dense(5)
 
-            self.assertTrue(os.path.exists(export_path))
+            def call(self, inputs):
+                x = self.concat([inputs["input1"], inputs["input2"]])
+                return self.dense(x)
 
-            # Create test inputs
-            test_input1 = np.random.random((1, 10)).astype(np.float32)
-            test_input2 = np.random.random((1, 10)).astype(np.float32)
+        # Prepare test inputs
+        test_inputs = {
+            "input1": np.random.random((1, 10)).astype(np.float32),
+            "input2": np.random.random((1, 10)).astype(np.float32),
+        }
 
-            # Get Keras output
-            keras_output = model([test_input1, test_input2]).numpy()
-
-            # Get LiteRT output
-            interpreter = Interpreter(model_path=export_path)
-            interpreter.allocate_tensors()
-
-            input_details = interpreter.get_input_details()
-            output_details = interpreter.get_output_details()
-
-            # Set inputs
-            interpreter.set_tensor(input_details[0]["index"], test_input1)
-            interpreter.set_tensor(input_details[1]["index"], test_input2)
-            interpreter.invoke()
-            litert_output = interpreter.get_tensor(output_details[0]["index"])
-
-            # Compare outputs
-            max_diff = np.max(np.abs(keras_output - litert_output))
-            self.assertLess(
-                max_diff,
-                1e-5,
-                f"Max difference {max_diff} exceeds tolerance 1e-5",
-            )
-        except AttributeError:
-            # model.export might not be available in older Keras versions
-            self.skipTest("model.export() not available")
+        # Use standardized test from TestCase
+        self.run_litert_export_test(
+            cls=DictInputModel,
+            init_kwargs={},
+            input_data=test_inputs,
+            expected_output_shape=(1, 5),
+            comparison_mode="strict",
+        )
 
 
 @pytest.mark.skipif(
