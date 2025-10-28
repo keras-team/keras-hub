@@ -321,10 +321,10 @@ def export_litert(model, filepath, **kwargs):
         filepath: `str`. Path where to save the model (without extension).
         **kwargs: `dict`. Additional arguments passed to exporter.
     """
-    from keras_hub.src.export.base import ExporterRegistry
+    from keras_hub.src.export.configs import get_exporter_config
 
     # Get the appropriate configuration for this model
-    config = ExporterRegistry.get_config_for_model(model)
+    config = get_exporter_config(model)
 
     # Create and use the LiteRT exporter
     exporter = LiteRTExporter(config, **kwargs)
