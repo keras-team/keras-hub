@@ -8,6 +8,7 @@ from keras_hub.src.tests.test_case import TestCase
 class TestTask(TestCase):
     @pytest.mark.large
     def test_convert_tiny_preset(self):
+        pytest.skip(reason="TODO: enable after HF token is available in CI")
         model = DINOV3Backbone.from_preset(
             "hf://facebook/dinov3-vits16-pretrain-lvd1689m",
             image_shape=(224, 224, 3),
