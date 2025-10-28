@@ -364,3 +364,46 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
                 name="images",
             ),
         }
+
+
+def get_exporter_config(model):
+    """Get the appropriate exporter configuration for a model instance.
+
+    This function automatically detects the model type and returns the
+    corresponding exporter configuration.
+
+    Args:
+        model: A Keras-Hub model instance (e.g., CausalLM, TextClassifier).
+
+    Returns:
+        An instance of the appropriate KerasHubExporterConfig subclass.
+
+    Raises:
+        ValueError: If the model type is not supported for export.
+    """
+    # Mapping of model classes to their config classes
+    # NOTE: Order matters! Seq2SeqLM must be checked before CausalLM
+    # since Seq2SeqLM is a subclass of CausalLM
+    _MODEL_TYPE_TO_CONFIG = {
+        Seq2SeqLM: Seq2SeqLMExporterConfig,
+        CausalLM: CausalLMExporterConfig,
+        TextClassifier: TextClassifierExporterConfig,
+        ImageClassifier: ImageClassifierExporterConfig,
+        ObjectDetector: ObjectDetectorExporterConfig,
+        ImageSegmenter: ImageSegmenterExporterConfig,
+    }
+
+    # Find matching config class
+    for model_class, config_class in _MODEL_TYPE_TO_CONFIG.items():
+        if isinstance(model, model_class):
+            return config_class(model)
+
+    # Model type not supported
+    supported_types = ", ".join(
+        cls.__name__ for cls in _MODEL_TYPE_TO_CONFIG.keys()
+    )
+    raise ValueError(
+        f"Could not find exporter config for model type "
+        f"'{model.__class__.__name__}'. "
+        f"Supported types: {supported_types}"
+    )

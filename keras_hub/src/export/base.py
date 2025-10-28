@@ -1,14 +1,11 @@
 """Base classes for Keras-Hub model exporters.
 
 This module provides the foundation for exporting Keras-Hub models to various
-formats. It follows the Optimum pattern of having different exporters for
-different model types and formats.
+formats. It defines the abstract base classes that all exporters must implement.
 """
 
 from abc import ABC
 from abc import abstractmethod
-
-# Import model classes for registry
 
 
 class KerasHubExporterConfig(ABC):
@@ -121,79 +118,3 @@ class KerasHubExporter(ABC):
         # Build the model using shapes only (no actual data allocation)
         # This creates variables and initializes the model structure
         self.model.build(input_shape=input_shapes)
-
-
-class ExporterRegistry:
-    """Registry for mapping model types to their appropriate exporters."""
-
-    _configs = {}
-    _exporters = {}
-
-    @classmethod
-    def register_config(cls, model_class, config_class):
-        """Register a configuration class for a model type.
-
-        Args:
-            model_class: `type`. The model class (e.g., CausalLM)
-            config_class: `type`. The configuration class
-        """
-        cls._configs[model_class] = config_class
-
-    @classmethod
-    def register_exporter(cls, format_name, exporter_class):
-        """Register an exporter class for a format.
-
-        Args:
-            format_name: `str`. The export format (e.g., "litert")
-            exporter_class: `type`. The exporter class
-        """
-        cls._exporters[format_name] = exporter_class
-
-    @classmethod
-    def get_config_for_model(cls, model):
-        """Get the appropriate configuration for a model.
-
-        Args:
-            model: `keras.Model`. The Keras-Hub model
-
-        Returns:
-            `KerasHubExporterConfig`. An appropriate exporter configuration
-            instance
-
-        Raises:
-            ValueError: If no configuration is found for the model type
-        """
-        # Iterate through registered configs to find a match
-        # This approach is more maintainable and extensible than a
-        # hardcoded list
-        for model_class, config_class in cls._configs.items():
-            if isinstance(model, model_class):
-                return config_class(model)
-
-        # If we get here, model type is not recognized
-        raise ValueError(
-            f"Could not detect model type for {model.__class__.__name__}. "
-            "Supported types: CausalLM, TextClassifier, Seq2SeqLM, "
-            "ImageClassifier, ObjectDetector, ImageSegmenter"
-        )
-
-    @classmethod
-    def get_exporter(cls, format_name, config, **kwargs):
-        """Get an exporter for the specified format.
-
-        Args:
-            format_name: `str`. The export format
-            config: `KerasHubExporterConfig`. The exporter configuration
-            **kwargs: `dict`. Additional parameters for the exporter
-
-        Returns:
-            `KerasHubExporter`. An appropriate exporter instance
-
-        Raises:
-            ValueError: If no exporter is found for the format
-        """
-        if format_name not in cls._exporters:
-            raise ValueError(f"No exporter found for format: {format_name}")
-
-        exporter_class = cls._exporters[format_name]
-        return exporter_class(config, **kwargs)

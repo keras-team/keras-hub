@@ -313,7 +313,7 @@ class Backbone(keras.Model):
         except AttributeError:
             # Fall back to building specs from `self.inputs`.
             try:
-                from tensorflow.python.framework import tensor_spec
+                from tensorflow import TensorSpec
             except (ImportError, ModuleNotFoundError):
                 return None
 
@@ -329,7 +329,7 @@ class Backbone(keras.Model):
                 # Convert to tuple for TensorSpec
                 try:
                     name = getattr(t, "name", None)
-                    return tensor_spec.TensorSpec(
+                    return TensorSpec(
                         shape=tuple(shape), dtype=t.dtype, name=name
                     )
                 except (ImportError, ModuleNotFoundError):

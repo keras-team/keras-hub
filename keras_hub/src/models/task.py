@@ -369,3 +369,62 @@ class Task(PipelineModel):
             print_fn=print_fn,
             **kwargs,
         )
+
+    def export(self, filepath, format="litert", verbose=False, **kwargs):
+        """Export the Keras-Hub model to the specified format.
+
+        This method overrides `keras.Model.export()` to provide specialized
+        handling for Keras-Hub models with dictionary inputs.
+
+        Args:
+            filepath: `str`. Path where to save the exported model.
+            format: `str`. Export format. Currently supports "litert" for
+                TensorFlow Lite export, as well as other formats supported by
+                the parent `keras.Model.export()` method (e.g.,
+                "tf_saved_model").
+            verbose: `bool`. Whether to print verbose output during export.
+                Defaults to `False`.
+            **kwargs: Additional arguments passed to the exporter. For LiteRT
+                export, common options include:
+                - `max_sequence_length`: Maximum sequence length for text models
+                - `litert_kwargs`: Dictionary of TFLite converter options
+
+        Examples:
+
+        ```python
+        # Export a text model to TensorFlow Lite
+        model = keras_hub.models.GemmaCausalLM.from_preset("gemma_2b_en")
+        model.export("gemma_model.tflite", format="litert")
+
+        # Export with custom sequence length
+        model.export(
+            "gemma_model.tflite",
+            format="litert",
+            max_sequence_length=512
+        )
+
+        # Export with quantization
+        import tensorflow as tf
+        model.export(
+            "gemma_model_quantized.tflite",
+            format="litert",
+            litert_kwargs={
+                "optimizations": [tf.lite.Optimize.DEFAULT]
+            }
+        )
+        ```
+        """
+        if format == "litert":
+            from keras_hub.src.export.configs import get_exporter_config
+            from keras_hub.src.export.litert import LiteRTExporter
+
+            # Get the appropriate configuration for this model type
+            config = get_exporter_config(self)
+
+            # Create and use the LiteRT exporter
+            kwargs["verbose"] = verbose
+            exporter = LiteRTExporter(config, **kwargs)
+            exporter.export(filepath)
+        else:
+            # Fall back to parent class (keras.Model) export for other formats
+            super().export(filepath, format=format, verbose=verbose, **kwargs)
