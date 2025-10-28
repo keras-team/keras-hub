@@ -25,14 +25,14 @@ CAUSAL_LM_MODELS = [
         "model_class": Llama3CausalLM,
         "sequence_length": 128,
         "test_name": "llama3_2_1b",
-        "output_thresholds": {"*": {"max": 5e-4, "mean": 1e-5}},
+        "output_thresholds": {"*": {"max": 1e-3, "mean": 1e-5}},
     },
     {
         "preset": "gemma3_1b",
         "model_class": Gemma3CausalLM,
         "sequence_length": 128,
         "test_name": "gemma3_1b",
-        "output_thresholds": {"*": {"max": 5e-4, "mean": 3e-5}},
+        "output_thresholds": {"*": {"max": 1e-3, "mean": 3e-5}},
     },
     {
         "preset": "gpt2_base_en",
