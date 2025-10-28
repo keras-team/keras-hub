@@ -435,6 +435,115 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         restored_output = restored_model(input_data)
         self.assertAllClose(model_output, restored_output, atol=atol, rtol=rtol)
 
+    def _prepare_litert_inputs(self, input_data, input_details):
+        """Prepare input data for LiteRT interpreter."""
+        if isinstance(input_data, dict):
+            input_values = list(input_data.values())
+            litert_input_values = []
+            for i, detail in enumerate(input_details):
+                if i < len(input_values):
+                    converted_value = ops.convert_to_numpy(
+                        input_values[i]
+                    ).astype(detail["dtype"])
+                    litert_input_values.append(converted_value)
+            return input_data, litert_input_values
+        else:
+            litert_input_values = [
+                ops.convert_to_numpy(input_data).astype(
+                    input_details[0]["dtype"]
+                )
+            ]
+            return input_data, litert_input_values
+
+    def _get_litert_output(self, interpreter, output_details):
+        """Get output from LiteRT interpreter."""
+        if len(output_details) == 1:
+            return interpreter.get_tensor(output_details[0]["index"])
+        else:
+            litert_output = {}
+            for detail in output_details:
+                output_tensor = interpreter.get_tensor(detail["index"])
+                litert_output[detail["name"]] = output_tensor
+            return litert_output
+
+    def _verify_outputs(
+        self,
+        keras_output,
+        litert_output,
+        output_thresholds,
+        comparison_mode,
+    ):
+        """Verify numerical accuracy between Keras and LiteRT outputs."""
+        if isinstance(keras_output, dict) and isinstance(litert_output, dict):
+            # Map LiteRT generic keys to Keras semantic keys if needed
+            if all(
+                key.startswith("StatefulPartitionedCall")
+                for key in litert_output.keys()
+            ):
+                litert_keys_sorted = sorted(litert_output.keys())
+                keras_keys_sorted = sorted(keras_output.keys())
+                if len(litert_keys_sorted) != len(keras_keys_sorted):
+                    self.fail(
+                        f"Different number of outputs:\n"
+                        f"Keras: {len(keras_keys_sorted)} outputs -\n"
+                        f"  {keras_keys_sorted}\n"
+                        f"LiteRT: {len(litert_keys_sorted)} outputs -\n"
+                        f"  {litert_keys_sorted}"
+                    )
+                output_name_mapping = dict(
+                    zip(litert_keys_sorted, keras_keys_sorted)
+                )
+                mapped_litert = {
+                    keras_key: litert_output[litert_key]
+                    for litert_key, keras_key in output_name_mapping.items()
+                }
+                litert_output = mapped_litert
+
+            common_keys = set(keras_output.keys()) & set(litert_output.keys())
+            if not common_keys:
+                self.fail(
+                    f"No common keys between Keras and LiteRT outputs.\n"
+                    f"Keras keys: {list(keras_output.keys())}\n"
+                    f"LiteRT keys: {list(litert_output.keys())}"
+                )
+
+            for key in sorted(common_keys):
+                keras_val_np = ops.convert_to_numpy(keras_output[key])
+                litert_val = litert_output[key]
+                output_threshold = output_thresholds.get(
+                    key, output_thresholds.get("*", {"max": 10.0, "mean": 0.1})
+                )
+                self._compare_outputs(
+                    keras_val_np,
+                    litert_val,
+                    comparison_mode,
+                    key,
+                    output_threshold["max"],
+                    output_threshold["mean"],
+                )
+        elif not isinstance(keras_output, dict) and not isinstance(
+            litert_output, dict
+        ):
+            keras_output_np = ops.convert_to_numpy(keras_output)
+            output_threshold = output_thresholds.get(
+                "*", {"max": 10.0, "mean": 0.1}
+            )
+            self._compare_outputs(
+                keras_output_np,
+                litert_output,
+                comparison_mode,
+                key=None,
+                max_threshold=output_threshold["max"],
+                mean_threshold=output_threshold["mean"],
+            )
+        else:
+            keras_type = type(keras_output).__name__
+            litert_type = type(litert_output).__name__
+            self.fail(
+                f"Output structure mismatch: Keras returns "
+                f"{keras_type}, LiteRT returns {litert_type}"
+            )
+
     def run_litert_export_test(
         self,
         cls=None,
@@ -444,8 +553,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         model=None,
         verify_numerical_accuracy=True,
         comparison_mode="strict",
-        max_threshold=10.0,
-        mean_threshold=0.1,
+        output_thresholds=None,
     ):
         """Export model to LiteRT format and verify numerical accuracy.
 
@@ -465,15 +573,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     (1e-6)
                 - "statistical": Check mean/max absolute differences against
                     provided thresholds
-            max_threshold: Maximum absolute difference threshold for statistical
-                mode (default: 10.0)
-            mean_threshold: Mean absolute difference threshold for statistical
-                mode (default: 0.1)
+            output_thresholds: Dict mapping output names to threshold dicts
+                with "max" and "mean" keys. Use "*" as wildcard for defaults.
+                Example: {"output1": {"max": 1e-4, "mean": 1e-5},
+                         "*": {"max": 1e-3, "mean": 1e-4}}
         """
         if keras.backend.backend() != "tensorflow":
             self.skipTest("LiteRT export only supports TensorFlow backend")
 
-        # Try to import LiteRT interpreter
         try:
             from ai_edge_litert.interpreter import Interpreter
         except ImportError:
@@ -481,181 +588,71 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
             Interpreter = tf.lite.Interpreter
 
-        # Create model and get reference output
+        if output_thresholds is None:
+            output_thresholds = {"*": {"max": 10.0, "mean": 0.1}}
+
         if model is None:
             if cls is None or init_kwargs is None:
                 raise ValueError(
-                    "Either 'model' or both 'cls' and 'init_kwargs' must be "
-                    "provided"
+                    "Either 'model' or 'cls' and 'init_kwargs' must be provided"
                 )
             model = cls(**init_kwargs)
-            # Build the model by calling it once with input data
             _ = model(input_data)
 
         interpreter = None
         try:
-            # Export to LiteRT first to get the expected input dtypes
             with tempfile.TemporaryDirectory() as temp_dir:
                 export_path = os.path.join(temp_dir, "model.tflite")
                 model.export(export_path, format="litert")
 
-                # Verify file was created
-                self.assertTrue(
-                    os.path.exists(export_path),
-                    "LiteRT model file was not created",
-                )
+                self.assertTrue(os.path.exists(export_path))
+                self.assertGreater(os.path.getsize(export_path), 0)
 
-                # Verify file has content
-                self.assertGreater(
-                    os.path.getsize(export_path),
-                    0,
-                    "LiteRT model file is empty",
-                )
-
-                # Load exported model
                 interpreter = Interpreter(model_path=export_path)
                 interpreter.allocate_tensors()
-
-                # Delete the TFLite file after loading to free disk space
-                if os.path.exists(export_path):
-                    os.remove(export_path)
+                os.remove(export_path)
 
                 input_details = interpreter.get_input_details()
                 output_details = interpreter.get_output_details()
 
-                # Convert input data to match LiteRT's expected dtypes
-                # Keep original Keras input names for model call, but prepare
-                # data for LiteRT
-                if isinstance(input_data, dict):
-                    # For dict inputs, convert values to match LiteRT's expected
-                    # dtypes
-                    # Keep original keys for Keras model, prepare values for
-                    # LiteRT
-                    input_values = list(input_data.values())
-                    litert_input_values = []
-                    for i, detail in enumerate(input_details):
-                        if i < len(input_values):
-                            # Convert to the dtype expected by LiteRT
-                            converted_value = ops.convert_to_numpy(
-                                input_values[i]
-                            ).astype(detail["dtype"])
-                            litert_input_values.append(converted_value)
+                keras_input_data, litert_input_values = (
+                    self._prepare_litert_inputs(input_data, input_details)
+                )
 
-                    # Keep original input_data for Keras model call
-                    keras_input_data = input_data
-                else:
-                    # Single tensor input
-                    keras_input_data = input_data
-                    litert_input_values = [
-                        ops.convert_to_numpy(input_data).astype(
-                            input_details[0]["dtype"]
-                        )
-                    ]
-
-                # Get reference output with the SAME data that LiteRT will use
                 if verify_numerical_accuracy:
                     keras_output = model(keras_input_data)
 
-                # Set input tensors for LiteRT interpreter
                 if isinstance(input_data, dict):
-                    # Dictionary inputs - set each tensor by index
                     for i, detail in enumerate(input_details):
                         if i < len(litert_input_values):
                             interpreter.set_tensor(
-                                detail["index"],
-                                litert_input_values[i],
+                                detail["index"], litert_input_values[i]
                             )
                 else:
-                    # Single tensor input
                     interpreter.set_tensor(
-                        input_details[0]["index"],
-                        litert_input_values[0],
+                        input_details[0]["index"], litert_input_values[0]
                     )
 
-                # Run inference
                 interpreter.invoke()
 
-                # Get output - always use LiteRT's output names since TFLite
-                # generates its own
-                if len(output_details) == 1:
-                    # Single output
-                    litert_output = interpreter.get_tensor(
-                        output_details[0]["index"]
-                    )
-                else:
-                    # Multiple outputs - use LiteRT's output names
-                    litert_output = {}
-                    for detail in output_details:
-                        output_tensor = interpreter.get_tensor(detail["index"])
-                        litert_output[detail["name"]] = output_tensor
+                litert_output = self._get_litert_output(
+                    interpreter, output_details
+                )
 
-                # Verify output shape if provided
                 if expected_output_shape is not None:
-                    self.assertEqual(
-                        litert_output.shape,
-                        expected_output_shape,
-                        f"Expected shape {expected_output_shape}, "
-                        f"got {litert_output.shape}",
-                    )
+                    self.assertEqual(litert_output.shape, expected_output_shape)
 
-                # Compare numerical outputs if requested
                 if verify_numerical_accuracy:
-                    if isinstance(keras_output, dict) and isinstance(
-                        litert_output, dict
-                    ):
-                        # Both are dicts - compare by position since names may
-                        # not match
-                        keras_values = list(keras_output.values())
-                        litert_values = list(litert_output.values())
-                        self.assertEqual(
-                            len(keras_values),
-                            len(litert_values),
-                            f"Output count mismatch: Keras has "
-                            f"{len(keras_values)}, LiteRT has "
-                            f"{len(litert_values)}",
-                        )
-                        for i, (keras_val, litert_val) in enumerate(
-                            zip(keras_values, litert_values)
-                        ):
-                            keras_val_np = ops.convert_to_numpy(keras_val)
-                            self._compare_outputs(
-                                keras_val_np,
-                                litert_val,
-                                comparison_mode,
-                                f"output_{i}",
-                                max_threshold,
-                                mean_threshold,
-                            )
-                    elif not isinstance(keras_output, dict) and not isinstance(
-                        litert_output, dict
-                    ):
-                        # Both are single tensors
-                        keras_output_np = ops.convert_to_numpy(keras_output)
-                        self._compare_outputs(
-                            keras_output_np,
-                            litert_output,
-                            comparison_mode,
-                            key=None,
-                            max_threshold=max_threshold,
-                            mean_threshold=mean_threshold,
-                        )
-                    else:
-                        # Mismatch between dict and tensor - this indicates a
-                        # structural difference
-                        keras_type = type(keras_output).__name__
-                        litert_type = type(litert_output).__name__
-                        self.fail(
-                            f"Output structure mismatch: Keras returns "
-                            f"{keras_type}, LiteRT returns {litert_type}"
-                        )
-
+                    self._verify_outputs(
+                        keras_output,
+                        litert_output,
+                        output_thresholds,
+                        comparison_mode,
+                    )
         finally:
-            # Clean up interpreter and model if created locally, free memory
             if interpreter is not None:
                 del interpreter
-            if (
-                model is not None and cls is not None
-            ):  # Model was created locally
+            if model is not None and cls is not None:
                 del model
             gc.collect()
 
@@ -683,16 +680,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         key_msg = f" for output key '{key}'" if key else ""
 
         # Check if shapes are compatible for comparison
-        if keras_val.shape != litert_val.shape:
-            # If shapes don't match, this indicates a fundamental issue with
-            # LiteRT export
-            # Log the shapes and skip numerical comparison for this output
-            print(
-                f"WARNING: Shape mismatch{key_msg}: Keras shape "
-                f"{keras_val.shape}, LiteRT shape {litert_val.shape}. "
-                "Skipping numerical comparison."
-            )
-            return
+        self.assertEqual(
+            keras_val.shape,
+            litert_val.shape,
+            f"Shape mismatch{key_msg}: Keras shape "
+            f"{keras_val.shape}, LiteRT shape {litert_val.shape}. "
+            "Numerical comparison cannot proceed due to incompatible shapes.",
+        )
 
         if comparison_mode == "strict":
             # Original strict element-wise comparison with default tolerances
@@ -704,25 +698,26 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 msg=f"Mismatch{key_msg}",
             )
         elif comparison_mode == "statistical":
-            # Statistical comparison using mean/max absolute differences
-            # Calculate absolute differences
+            # Statistical comparison
+
+            # Calculate element-wise absolute differences
             abs_diff = np.abs(keras_val - litert_val)
 
-            # Calculate statistics
+            # Element-wise statistics
             mean_abs_diff = np.mean(abs_diff)
             max_abs_diff = np.max(abs_diff)
 
-            # Assert reasonable bounds on mean and max absolute differences
+            # Assert reasonable bounds on statistical differences
             self.assertLessEqual(
                 mean_abs_diff,
                 mean_threshold,
-                f"Mean absolute difference too high: {mean_abs_diff:.6f}"
+                f"Mean absolute difference too high: {mean_abs_diff:.6e}"
                 f"{key_msg} (threshold: {mean_threshold})",
             )
             self.assertLessEqual(
                 max_abs_diff,
                 max_threshold,
-                f"Max absolute difference too high: {max_abs_diff:.6f}"
+                f"Max absolute difference too high: {max_abs_diff:.6e}"
                 f"{key_msg} (threshold: {max_threshold})",
             )
         else:

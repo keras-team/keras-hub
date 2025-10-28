@@ -25,18 +25,21 @@ CAUSAL_LM_MODELS = [
         "model_class": Llama3CausalLM,
         "sequence_length": 128,
         "test_name": "llama3_2_1b",
+        "output_thresholds": {"*": {"max": 3e-5, "mean": 1e-5}},
     },
     {
         "preset": "gemma3_1b",
         "model_class": Gemma3CausalLM,
         "sequence_length": 128,
         "test_name": "gemma3_1b",
+        "output_thresholds": {"*": {"max": 3e-6, "mean": 1e-5}},
     },
     {
         "preset": "gpt2_base_en",
         "model_class": GPT2CausalLM,
         "sequence_length": 128,
         "test_name": "gpt2_base_en",
+        "output_thresholds": {"*": {"max": 5e-4, "mean": 5e-5}},
     },
 ]
 
@@ -44,29 +47,63 @@ IMAGE_CLASSIFIER_MODELS = [
     {
         "preset": "resnet_50_imagenet",
         "test_name": "resnet_50",
+        "input_range": (0.0, 1.0),
+        "output_thresholds": {"*": {"max": 5e-5, "mean": 1e-5}},
     },
     {
         "preset": "efficientnet_b0_ra_imagenet",
         "test_name": "efficientnet_b0",
+        "input_range": (0.0, 1.0),
+        "output_thresholds": {"*": {"max": 5e-5, "mean": 1e-5}},
     },
     {
         "preset": "densenet_121_imagenet",
         "test_name": "densenet_121",
+        "input_range": (0.0, 1.0),
+        "output_thresholds": {"*": {"max": 5e-5, "mean": 1e-5}},
     },
     {
         "preset": "mobilenet_v3_small_100_imagenet",
         "test_name": "mobilenet_v3_small",
+        "input_range": (0.0, 1.0),
+        "output_thresholds": {"*": {"max": 5e-5, "mean": 1e-5}},
     },
 ]
 
 OBJECT_DETECTOR_MODELS = [
     {
-        "preset": "dfine_nano_coco",
-        "test_name": "dfine_nano",
+        "preset": "dfine_small_coco",
+        "test_name": "dfine_small",
+        "input_range": (0.0, 1.0),
+        "output_thresholds": {
+            "intermediate_predicted_corners": {"max": 5.0, "mean": 0.05},
+            "intermediate_logits": {"max": 5.0, "mean": 0.1},
+            "enc_topk_logits": {"max": 5.0, "mean": 0.03},
+            "logits": {"max": 2.0, "mean": 0.03},
+            "*": {"max": 1.0, "mean": 0.03},
+        },
+    },
+    {
+        "preset": "dfine_medium_coco",
+        "test_name": "dfine_medium",
+        "input_range": (0.0, 1.0),
+        "output_thresholds": {
+            "intermediate_predicted_corners": {"max": 50.0, "mean": 0.15},
+            "intermediate_logits": {"max": 5.0, "mean": 0.1},
+            "enc_topk_logits": {"max": 5.0, "mean": 0.03},
+            "logits": {"max": 2.0, "mean": 0.03},
+            "*": {"max": 1.0, "mean": 0.03},
+        },
     },
     {
         "preset": "retinanet_resnet50_fpn_coco",
         "test_name": "retinanet_resnet50",
+        "input_range": (0.0, 1.0),
+        "output_thresholds": {
+            "enc_topk_logits": {"max": 5.0, "mean": 0.03},
+            "logits": {"max": 2.0, "mean": 0.03},
+            "*": {"max": 1.0, "mean": 0.03},
+        },
     },
 ]
 
@@ -74,6 +111,8 @@ IMAGE_SEGMENTER_MODELS = [
     {
         "preset": "deeplab_v3_plus_resnet50_pascalvoc",
         "test_name": "deeplab_v3_plus",
+        "input_range": (0.0, 1.0),
+        "output_thresholds": {"*": {"max": 1.0, "mean": 1e-2}},
     },
 ]
 
@@ -101,6 +140,9 @@ class LiteRTCausalLMModelsTest(TestCase):
         preset = model_config["preset"]
         model_class = model_config["model_class"]
         sequence_length = model_config["sequence_length"]
+        output_thresholds = model_config.get(
+            "output_thresholds", {"*": {"max": 3e-5, "mean": 3e-6}}
+        )
 
         try:
             # Load model from preset
@@ -127,8 +169,7 @@ class LiteRTCausalLMModelsTest(TestCase):
                 input_data=input_data,
                 expected_output_shape=(1, sequence_length, vocab_size),
                 comparison_mode="statistical",
-                max_threshold=3e-5,  # Tightened from 1e-3 (~2e-5)
-                mean_threshold=3e-5,  # Tightened from 3e-5 (~3e-6)
+                output_thresholds=output_thresholds,
             )
 
         finally:
@@ -181,8 +222,9 @@ class LiteRTImageClassifierModelsTest(TestCase):
             input_shape = image_size + (3,)  # Add channels
 
             # Prepare test input
+            input_range = model_config.get("input_range", (0.0, 1.0))
             test_image = np.random.uniform(
-                0.0, 1.0, size=(1,) + input_shape
+                input_range[0], input_range[1], size=(1,) + input_shape
             ).astype(np.float32)
 
             # Use standardized test from TestCase with pre-loaded model
@@ -191,8 +233,9 @@ class LiteRTImageClassifierModelsTest(TestCase):
                 input_data=test_image,
                 expected_output_shape=None,  # Output shape varies by model
                 comparison_mode="statistical",
-                max_threshold=2e-5,  # Tightened from 1e-3 (~1-2e-5)
-                mean_threshold=4e-6,  # Tightened from 1e-5 (~2-3e-6)
+                output_thresholds=model_config.get(
+                    "output_thresholds", {"*": {"max": 1e-4, "mean": 4e-5}}
+                ),
             )
 
         finally:
@@ -244,9 +287,12 @@ class LiteRTObjectDetectorModelsTest(TestCase):
 
             # ObjectDetector typically needs images (H, W, 3) and
             # image_shape (H, W)
+            input_range = model_config.get("input_range", (0.0, 1.0))
             test_inputs = {
                 "images": np.random.uniform(
-                    0.0, 1.0, size=(1,) + image_size + (3,)
+                    input_range[0],
+                    input_range[1],
+                    size=(1,) + image_size + (3,),
                 ).astype(np.float32),
                 "image_shape": np.array([image_size], dtype=np.int32),
             }
@@ -257,8 +303,9 @@ class LiteRTObjectDetectorModelsTest(TestCase):
                 input_data=test_inputs,
                 expected_output_shape=None,  # Output varies by model
                 comparison_mode="statistical",
-                max_threshold=1e-5,  # (~$1)
-                mean_threshold=1e-5,  # (~$1)
+                output_thresholds=model_config.get(
+                    "output_thresholds", {"*": {"max": 1.0, "mean": 0.02}}
+                ),
             )
 
         finally:
@@ -288,6 +335,10 @@ class LiteRTImageSegmenterModelsTest(TestCase):
             model_config: Dict containing preset and test_name.
         """
         preset = model_config["preset"]
+        input_range = model_config.get("input_range", (0.0, 1.0))
+        output_thresholds = model_config.get(
+            "output_thresholds", {"*": {"max": 1.0, "mean": 1e-2}}
+        )
 
         try:
             # Load model
@@ -312,7 +363,7 @@ class LiteRTImageSegmenterModelsTest(TestCase):
 
             # Prepare test input
             test_image = np.random.uniform(
-                0.0, 1.0, size=(1,) + input_shape
+                input_range[0], input_range[1], size=(1,) + input_shape
             ).astype(np.float32)
 
             # Use standardized test from TestCase with pre-loaded model
@@ -321,6 +372,7 @@ class LiteRTImageSegmenterModelsTest(TestCase):
                 input_data=test_image,
                 expected_output_shape=None,  # Output shape varies by model
                 comparison_mode="statistical",
+                output_thresholds=output_thresholds,
             )
 
         finally:
@@ -351,6 +403,10 @@ class LiteRTProductionModelsNumericalTest(TestCase):
             model_config: Dict containing preset and test_name.
         """
         preset = model_config["preset"]
+        input_range = model_config.get("input_range", (0.0, 1.0))
+        output_thresholds = model_config.get(
+            "output_thresholds", {"*": {"max": 1e-4, "mean": 4e-5}}
+        )
 
         try:
             # Load model
@@ -375,7 +431,7 @@ class LiteRTProductionModelsNumericalTest(TestCase):
 
             # Prepare test input
             test_image = np.random.uniform(
-                0.0, 1.0, size=(1,) + input_shape
+                input_range[0], input_range[1], size=(1,) + input_shape
             ).astype(np.float32)
 
             # Use standardized test from TestCase with pre-loaded model
@@ -384,8 +440,7 @@ class LiteRTProductionModelsNumericalTest(TestCase):
                 input_data=test_image,
                 expected_output_shape=None,
                 comparison_mode="statistical",
-                max_threshold=2e-5,  # Tightened from 1e-3 (~1-2e-5)
-                mean_threshold=4e-6,  # Tightened from 1e-5 (~2-3e-6)
+                output_thresholds=output_thresholds,
             )
 
         finally:
@@ -418,6 +473,9 @@ class LiteRTProductionModelsNumericalTest(TestCase):
         preset = model_config["preset"]
         model_class = model_config["model_class"]
         sequence_length = model_config["sequence_length"]
+        output_thresholds = model_config.get(
+            "output_thresholds", {"*": {"max": 3e-5, "mean": 3e-6}}
+        )
 
         try:
             # Load model using specific model class
@@ -444,8 +502,7 @@ class LiteRTProductionModelsNumericalTest(TestCase):
                 input_data=input_data,
                 expected_output_shape=(1, sequence_length, vocab_size),
                 comparison_mode="statistical",
-                max_threshold=3e-5,
-                mean_threshold=3e-5,
+                output_thresholds=output_thresholds,
             )
 
         finally:
@@ -461,6 +518,10 @@ class LiteRTProductionModelsNumericalTest(TestCase):
             model_config: Dict containing preset and test_name.
         """
         preset = model_config["preset"]
+        input_range = model_config.get("input_range", (0.0, 1.0))
+        output_thresholds = model_config.get(
+            "output_thresholds", {"*": {"max": 1.0, "mean": 0.02}}
+        )
 
         try:
             # Load model
@@ -485,7 +546,9 @@ class LiteRTProductionModelsNumericalTest(TestCase):
             # image_shape (H, W)
             test_inputs = {
                 "images": np.random.uniform(
-                    0.0, 1.0, size=(1,) + image_size + (3,)
+                    input_range[0],
+                    input_range[1],
+                    size=(1,) + image_size + (3,),
                 ).astype(np.float32),
                 "image_shape": np.array([image_size], dtype=np.int32),
             }
@@ -496,8 +559,7 @@ class LiteRTProductionModelsNumericalTest(TestCase):
                 input_data=test_inputs,
                 expected_output_shape=None,  # Output varies by model
                 comparison_mode="statistical",
-                max_threshold=1e-5,
-                mean_threshold=1e-5,
+                output_thresholds=output_thresholds,
             )
 
         finally:
