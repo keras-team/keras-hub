@@ -1,7 +1,7 @@
 import os
 
 import keras
-
+from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
 from keras_hub.src.utils.tensor_utils import is_int_dtype
@@ -221,6 +221,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
     Output:
     [3, 0, 2]
     """
+    backbone_cls = RWKV7Backbone
 
     def __init__(
         self,
