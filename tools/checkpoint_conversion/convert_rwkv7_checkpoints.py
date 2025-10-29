@@ -458,6 +458,7 @@ def main(_):
 
     # Export final Keras model
     my_model.backbone.save_to_preset(f"./{FLAGS.preset}")
+    tokenizer.save_to_preset(f"./{FLAGS.preset}")
 
 
 # ==============================================================================
