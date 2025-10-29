@@ -387,7 +387,11 @@ class Task(PipelineModel):
             **kwargs: Additional arguments passed to the exporter. For LiteRT
                 export, common options include:
                 - `max_sequence_length`: Maximum sequence length for text models
-                - `litert_kwargs`: Dictionary of TFLite converter options
+                - `optimizations`: List of TFLite optimizations (e.g.,
+                    `[tf.lite.Optimize.DEFAULT]`)
+                - `allow_custom_ops`: Whether to allow custom operations
+                - `enable_select_tf_ops`: Whether to enable TensorFlow Select
+                    ops
 
         Examples:
 
@@ -408,9 +412,7 @@ class Task(PipelineModel):
         model.export(
             "gemma_model_quantized.tflite",
             format="litert",
-            litert_kwargs={
-                "optimizations": [tf.lite.Optimize.DEFAULT]
-            }
+            optimizations=[tf.lite.Optimize.DEFAULT]
         )
         ```
         """
