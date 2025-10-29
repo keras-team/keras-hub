@@ -1,8 +1,9 @@
 import os
 
 import keras
-from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
+
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
 from keras_hub.src.tokenizers import tokenizer
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
@@ -221,6 +222,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
     Output:
     [3, 0, 2]
     """
+
     backbone_cls = RWKV7Backbone
 
     def __init__(
@@ -269,7 +271,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         """
         path = os.path.join(dir_path, VOCAB_FILENAME)
         with open(path, "w", encoding="utf-8") as file:
-            file.write("\n".join(self.vocabulary))
+            file.write("".join(self.vocabulary))
 
     def load_assets(self, dir_path=""):
         """Load vocabulary from directory.
