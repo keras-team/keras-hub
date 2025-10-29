@@ -473,7 +473,15 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         output_thresholds,
         comparison_mode,
     ):
-        """Verify numerical accuracy between Keras and LiteRT outputs."""
+        """Verify numerical accuracy between Keras and LiteRT outputs.
+
+        This method uses name-based matching with sorted keys to reliably
+        map LiteRT outputs to Keras outputs, even when LiteRT generates
+        generic names like "StatefulPartitionedCall:0". This approach:
+        - Provides better error messages with semantic output names
+        - Supports per-output threshold configurations
+        - Is more robust than relying on output ordering
+        """
         if isinstance(keras_output, dict) and isinstance(litert_output, dict):
             # Map LiteRT generic keys to Keras semantic keys if needed
             if all(
