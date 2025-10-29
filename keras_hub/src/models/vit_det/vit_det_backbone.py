@@ -1,5 +1,4 @@
 import keras
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
@@ -105,10 +104,6 @@ class ViTDetBackbone(Backbone):
             )
         img_size = img_input.shape[-3]
         x = img_input
-        # VITDet scales inputs based on the standard ImageNet mean/stddev.
-        x = (x - ops.array([0.485, 0.456, 0.406], dtype=x.dtype)) / (
-            ops.array([0.229, 0.224, 0.225], dtype=x.dtype)
-        )
         x = ViTDetPatchingAndEmbedding(
             kernel_size=(patch_size, patch_size),
             strides=(patch_size, patch_size),

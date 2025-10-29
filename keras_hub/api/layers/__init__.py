@@ -147,6 +147,9 @@ from keras_hub.src.models.vgg.vgg_image_converter import (
 from keras_hub.src.models.vit.vit_image_converter import (
     ViTImageConverter as ViTImageConverter,
 )
+from keras_hub.src.models.vit_det.vit_det_image_converter import (
+    ViTDetImageConverter as ViTDetImageConverter,
+)
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter as WhisperAudioConverter,
 )
