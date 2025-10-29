@@ -28,11 +28,13 @@ class ViTDetImageConverter(ImageConverter):
         image_size=(1024, 1024),
         **kwargs,
     ):
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+        variance = [x**2 for x in std]
         super().__init__(
             image_size=image_size,
             scale=1.0 / 255.0,  # Scale to [0, 1]
-            offset=None,
-            norm_mean=[0.485, 0.456, 0.406],
-            norm_std=[0.229, 0.224, 0.225],
+            mean=mean,
+            variance=variance,
             **kwargs,
         )
