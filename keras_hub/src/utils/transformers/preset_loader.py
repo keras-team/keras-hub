@@ -1,12 +1,14 @@
 """Convert huggingface models to KerasHub."""
 
 from keras_hub.src.models.image_classifier import ImageClassifier
+from keras_hub.src.models.object_detector import ObjectDetector
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
 from keras_hub.src.utils.transformers import convert_deit
+from keras_hub.src.utils.transformers import convert_detr
 from keras_hub.src.utils.transformers import convert_dinov2
 from keras_hub.src.utils.transformers import convert_dinov3
 from keras_hub.src.utils.transformers import convert_distilbert
@@ -39,6 +41,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_bert
         elif model_type == "deit":
             self.converter = convert_deit
+        elif model_type == "detr":
+            self.converter = convert_detr
         elif model_type == "distilbert":
             self.converter = convert_distilbert
         elif model_type in ("dinov2", "dinov2_with_registers"):
@@ -94,9 +98,10 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         architecture = self.config["architectures"][0]
+        needs_head_conversion = [ObjectDetector, ImageClassifier]
         if (
             not load_task_weights
-            or not issubclass(cls, ImageClassifier)
+            or not any(issubclass(cls, base) for base in needs_head_conversion)
             or architecture == "ViTModel"
         ):
             return super().load_task(
@@ -107,6 +112,7 @@ class TransformersPresetLoader(PresetLoader):
             kwargs["num_classes"] = len(self.config["id2label"])
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
         if load_task_weights:
+            jax_memory_cleanup(task)
             with SafetensorLoader(self.preset, prefix="") as loader:
                 self.converter.convert_head(task, loader, self.config)
         return task
@@ -115,5 +121,10 @@ class TransformersPresetLoader(PresetLoader):
         return self.converter.convert_tokenizer(cls, self.preset, **kwargs)
 
     def load_image_converter(self, cls, **kwargs):
+        # Check if the converter has an image converter conversion function
+        if hasattr(self.converter, "convert_image_converter"):
+            return self.converter.convert_image_converter(
+                cls, self.preset, **kwargs
+            )
         # TODO: set image size for pali gemma checkpoints.
         return None
