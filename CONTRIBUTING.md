@@ -221,7 +221,7 @@ If there's any error, the commit will not go through. Please fix the error (
 most of the times, the error is fixed automatically by the formatter/linter) and
 re-run the following:
 
-```
+```shell
 git add .
 git commit -m "<message>" # This will not get logged as a duplicate commit.
 ```
@@ -229,8 +229,70 @@ git commit -m "<message>" # This will not get logged as a duplicate commit.
 In case you want to run the above manually on all files, you can do the
 following:
 
-```
+```shell
 pre-commit run --all-files
 ```
 
 KerasHub uses [Ruff](https://docs.astral.sh/ruff/) to format the code.
+
+## Co-working with the Gemini CLI
+
+Let's accelerate the development with Gemini CLI.
+
+### Installation
+
+Please refer to the Installation section at [https://github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli).
+
+### Using the Gemini CLI
+
+Start the CLI and analyze the project structure.
+
+```shell
+gemini
+
+# In the CLI.
+/init
+```
+
+After running this, a `GEMINI.md` file will be generated in the project root. This file contains the project context that the Gemini CLI will use for subsequent tasks.
+
+### Adding models
+
+Taking `DINOV3` as a concrete example, you can instruct the CLI to help implement a new model by providing clear references and local context.
+
+```shell
+# In the CLI.
+Add `DINOV3Backbone` at @keras_hub/src/models/dinov3. Refer to the implementation on HF here: https://github.com/huggingface/transformers/blob/main/src/transformers/models/dinov3_vit/modeling_dinov3_vit.py and consider the existing implementation of `dinov2` at @keras_hub/src/models/dinov2 for guidance.
+```
+
+After the CLI generation, you should get some initial implementation for the model. Feel free to review and refine the code as needed.
+
+Next, let's instruct the CLI to construct a numerical validation test to ensure the implementation is correct. Before running this step, make sure you have installed the `transformers` library and have access to the `facebook/dinov3-*` presets.
+
+```shell
+# In the CLI.
+Create a numerical validation script `check_dinov3.py` for `DINOV3Backbone` at project root. Use the HF preset `facebook/dinov3-vits16-pretrain-lvd1689m` as a reference for the expected outputs. Remember to port the weights from HF to `DINOV3Backbone` within the script and refer to the existing implementation here: @keras_hub/src/utils/transformers/convert_dinov2.py
+```
+
+Now, instruct the CLI to run the script and correct any errors. If you are working within Conda environments, be sure to also instruct the CLI to use the appropriate environment for execution.
+
+```shell
+# In the CLI.
+Run @check_dinov3.py by `KERAS_BACKEND=jax conda run -n keras-hub-jax python check_dinov3.py`. Fix any errors encountered during execution.
+```
+
+During this phase, human intervention is often necessary. You will need to carefully review the CLI's modifications and provide guidance or even handcraft some details that the tool failed to implement correctly.
+
+Once you successfully complete the step above, you can now proceed to add the conversion script and unit tests for the `DINOV3Backbone`.
+
+```shell
+# In the CLI.
+Create the conversion script `convert_dinov3.py` at @keras_hub/src/utils/transformers/convert_dinov3.py. Refer to the existing @keras_hub/src/utils/transformers/convert_dinov2.py at the same location for guidance.
+```
+
+```shell
+# In the CLI.
+Create unit tests for `DINOV3Backbone` at @keras_hub/src/models/dinov3. Refer to the existing tests for `DINOV2Backbone` at @keras_hub/src/models/dinov2/dinov2_backbone_test.py for guidance.
+```
+
+If you successfully run through all these steps, congratulations! You have now successfully added a new model to KerasHub through effective co-working with the Gemini CLI.
