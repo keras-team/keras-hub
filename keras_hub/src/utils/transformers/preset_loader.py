@@ -13,6 +13,7 @@ from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gpt2
+from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_mixtral
@@ -51,6 +52,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma
         elif model_type == "gpt2":
             self.converter = convert_gpt2
+        elif model_type == "gpt_oss":
+            self.converter = convert_gpt_oss
         elif model_type == "llama":
             # TODO: handle other llama versions.
             self.converter = convert_llama3
