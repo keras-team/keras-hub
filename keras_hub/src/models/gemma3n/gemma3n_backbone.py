@@ -187,6 +187,9 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
         self.vocab_size_per_layer_input = vocab_size_per_layer_input
         self.text_hidden_size = language_model.embed_tokens.embedding_dim
 
+    def build(self, input_shape):
+        super().build(input_shape)
+
     def call(self, inputs):
         input_ids = inputs["token_ids"]
         pixel_values = inputs.get("pixel_values")
@@ -262,28 +265,10 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                 batch_size, seq_len, hidden_size = keras.ops.shape(
                     inputs_embeds
                 )
-                num_soft_tokens = self.vision_soft_tokens_per_image
-                start_mask_f32 = keras.ops.cast(
-                    image_token_mask, dtype="float32"
-                )
-                start_mask_f32 = keras.ops.expand_dims(start_mask_f32, axis=-1)
-                kernel = keras.ops.ones(
-                    (num_soft_tokens, 1, 1), dtype="float32"
-                )
-                padded_mask = keras.ops.pad(
-                    start_mask_f32,
-                    [[0, 0], [num_soft_tokens - 1, 0], [0, 0]],
-                )
-                full_mask_f32 = keras.ops.conv(
-                    padded_mask, kernel, strides=1, padding="valid"
-                )
-                full_mask = keras.ops.cast(
-                    keras.ops.squeeze(full_mask_f32, axis=-1) > 0.5, "bool"
-                )
                 flat_vision_embeds = keras.ops.reshape(
                     vision_embeds, [-1, hidden_size]
                 )
-                flat_full_mask = keras.ops.reshape(full_mask, [-1])
+                flat_full_mask = keras.ops.reshape(image_token_mask, [-1])
                 gather_indices = (
                     keras.ops.cumsum(keras.ops.cast(flat_full_mask, "int32"))
                     - 1
@@ -297,7 +282,9 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                 replacement_tensor = keras.ops.reshape(
                     replacement_values, (batch_size, seq_len, hidden_size)
                 )
-                expanded_full_mask = keras.ops.expand_dims(full_mask, axis=-1)
+                expanded_full_mask = keras.ops.expand_dims(
+                    image_token_mask, axis=-1
+                )
                 return keras.ops.where(
                     expanded_full_mask, replacement_tensor, inputs_embeds
                 )
@@ -359,28 +346,10 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                 batch_size, seq_len, hidden_size = keras.ops.shape(
                     inputs_embeds
                 )
-                num_soft_tokens = self.audio_soft_tokens_per_image
-                start_mask_f32 = keras.ops.cast(
-                    audio_token_mask, dtype="float32"
-                )
-                start_mask_f32 = keras.ops.expand_dims(start_mask_f32, axis=-1)
-                kernel = keras.ops.ones(
-                    (num_soft_tokens, 1, 1), dtype="float32"
-                )
-                padded_mask = keras.ops.pad(
-                    start_mask_f32,
-                    [[0, 0], [num_soft_tokens - 1, 0], [0, 0]],
-                )
-                full_mask_f32 = keras.ops.conv(
-                    padded_mask, kernel, strides=1, padding="valid"
-                )
-                full_mask = keras.ops.cast(
-                    keras.ops.squeeze(full_mask_f32, axis=-1) > 0.5, "bool"
-                )
                 flat_audio_embeds = keras.ops.reshape(
                     audio_embeds, [-1, hidden_size]
                 )
-                flat_full_mask = keras.ops.reshape(full_mask, [-1])
+                flat_full_mask = keras.ops.reshape(audio_token_mask, [-1])
                 gather_indices = (
                     keras.ops.cumsum(keras.ops.cast(flat_full_mask, "int32"))
                     - 1
@@ -394,7 +363,9 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                 replacement_tensor = keras.ops.reshape(
                     replacement_values, (batch_size, seq_len, hidden_size)
                 )
-                expanded_full_mask = keras.ops.expand_dims(full_mask, axis=-1)
+                expanded_full_mask = keras.ops.expand_dims(
+                    audio_token_mask, axis=-1
+                )
                 return keras.ops.where(
                     expanded_full_mask, replacement_tensor, inputs_embeds
                 )

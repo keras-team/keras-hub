@@ -63,20 +63,28 @@ class Gemma3nAudioRelativePositionEmbedding(keras.layers.Layer):
         )
         self.inv_timescales = keras.ops.expand_dims(
             keras.ops.expand_dims(
-                keras.ops.convert_to_tensor(inv_timescales), 0
+                keras.ops.convert_to_tensor(inv_timescales, dtype="float32"), 0
             ),
             0,
         )
 
     def build(self, input_shape):
-        self.pos_proj.build((None, self.channels))
+        if not self.pos_proj.built:
+            self.pos_proj.build((None, self.channels))
         super().build(input_shape)
 
     def _get_timing_signal_1d_pos(self, position, dtype):
         position = keras.ops.cast(
             keras.ops.expand_dims(position, axis=-1), "float32"
         )
-        scaled_time = position * keras.ops.cast(self.inv_timescales, "float32")
+        pos_shape = keras.ops.shape(position)
+        inv_shape = keras.ops.shape(self.inv_timescales)
+        target_shape = (pos_shape[0], pos_shape[1], inv_shape[2])
+        position = keras.ops.broadcast_to(position, target_shape)
+        inv_timescales = keras.ops.broadcast_to(
+            self.inv_timescales, target_shape
+        )
+        scaled_time = position * inv_timescales
         timing_signal = keras.ops.concatenate(
             [keras.ops.sin(scaled_time), keras.ops.cos(scaled_time)], axis=-1
         )
@@ -92,27 +100,56 @@ class Gemma3nAudioRelativePositionEmbedding(keras.layers.Layer):
         key_context_size,
         max_span_plus_1,
     ):
-        pad_amount_last_dim = (key_context_size + 1) - max_span_plus_1
-        padding_tuple = [[0, 0]] * (len(term_bd_before_shift.shape) - 1) + [
-            [0, pad_amount_last_dim]
-        ]
+        msp1_val = max_span_plus_1
+        kcs_val = key_context_size
+        if not isinstance(msp1_val, int) and hasattr(msp1_val, "shape"):
+            msp1_val = keras.ops.shape(msp1_val)[-1]
+        if not isinstance(kcs_val, int) and hasattr(kcs_val, "shape"):
+            kcs_val = keras.ops.shape(kcs_val)[-1]
+        pad_amount_last_dim = (kcs_val + 1) - msp1_val
+        padding_tuple = [[0, 0]] * (
+            len(keras.ops.shape(term_bd_before_shift)) - 1
+        ) + [[0, pad_amount_last_dim]]
         term_bd_padded = keras.ops.pad(term_bd_before_shift, padding_tuple)
+        shape_padded = keras.ops.shape(term_bd_padded)
+        B = shape_padded[0]
+        H = shape_padded[1]
+        U = shape_padded[2]
+        W = shape_padded[3]
+        C_plus_1 = shape_padded[4]
+        target_shape_1_last_dim = -1
+        if W is not None and C_plus_1 is not None:
+            try:
+                target_shape_1_last_dim = W * C_plus_1
+            except TypeError:
+                target_shape_1_last_dim = -1
         term_bd_reshaped = keras.ops.reshape(
             term_bd_padded,
             (
-                batch_size,
-                num_heads,
-                -1,
+                B if B is not None else -1,
+                H if H is not None else -1,
+                U if U is not None else -1,
+                target_shape_1_last_dim,
             ),
-        )[:, :, : query_block_size * key_context_size]
+        )
+        slice_end = None
+        qbs_val = query_block_size
+        if not isinstance(qbs_val, int) and hasattr(qbs_val, "shape"):
+            qbs_val = keras.ops.shape(qbs_val)[0]
+        if qbs_val is not None and kcs_val is not None:
+            try:
+                slice_end = qbs_val * kcs_val
+            except TypeError:
+                slice_end = None
+        term_bd_reshaped = term_bd_reshaped[..., :slice_end]
         term_bd_shifted = keras.ops.reshape(
             term_bd_reshaped,
             (
-                batch_size,
-                num_heads,
-                -1,
-                query_block_size,
-                key_context_size,
+                B if B is not None else -1,
+                H if H is not None else -1,
+                U if U is not None else -1,
+                W if W is not None else -1,
+                kcs_val if kcs_val is not None else -1,
             ),
         )
         return term_bd_shifted
@@ -140,7 +177,7 @@ class Gemma3nAudioRelativePositionEmbedding(keras.layers.Layer):
             ),
             0,
         )
-        max_span_plus_1 = pos_indices.shape[1]
+        max_span_plus_1 = keras.ops.shape(pos_indices)[1]
         sin_emb_timing_signal = self._get_timing_signal_1d_pos(
             pos_indices, dtype=queries.dtype
         )
@@ -157,29 +194,8 @@ class Gemma3nAudioRelativePositionEmbedding(keras.layers.Layer):
         term_ac = keras.ops.matmul(queries_p, keys_p_t)
         q_permuted = keras.ops.transpose(queries, (0, 3, 1, 2, 4))
         s_permuted = keras.ops.transpose(sin_emb, (1, 2, 0))
-
-        q_reshaped_dim = -1
-        if num_query_blocks is not None:
-            q_reshaped_dim = num_query_blocks * query_block_size
-
-        q_reshaped = keras.ops.reshape(
-            q_permuted,
-            (
-                batch_size * num_heads,
-                q_reshaped_dim,
-                head_dim,
-            ),
-        )
-        term_bd_unshifed_matmul = keras.ops.matmul(q_reshaped, s_permuted)
-        term_bd_unshifed = keras.ops.reshape(
-            term_bd_unshifed_matmul,
-            (
-                batch_size,
-                num_heads,
-                -1,
-                query_block_size,
-                max_span_plus_1,
-            ),
+        term_bd_unshifed = keras.ops.einsum(
+            "bhuwd,hdf->bhuwf", q_permuted, s_permuted
         )
         term_bd_shifted = self._relative_shift(
             term_bd_unshifed,
@@ -311,8 +327,12 @@ class Gemma3nTextAttention(keras.layers.Layer):
             self.head_dim,
         )
         self.q_norm.build(norm_shape)
-        self.k_norm.build(norm_shape)
-        self.v_norm.build(norm_shape)
+        k_norm_shape = input_shape[:-1] + (
+            self.num_key_value_heads,
+            self.head_dim,
+        )
+        self.k_norm.build(k_norm_shape)
+        self.v_norm.build(k_norm_shape)
         super().build(input_shape)
 
     def call(
@@ -488,12 +508,26 @@ class Gemma3nAudioAttention(keras.layers.Layer):
         self.q_proj.build(input_shape)
         self.k_proj.build(input_shape)
         self.v_proj.build(input_shape)
-        self.relative_position_embedding.build(input_shape)
+        q_build_shape = (
+            None,
+            None,
+            self.chunk_size,
+            self.num_heads,
+            self.head_dim,
+        )
+        k_build_shape = (
+            None,
+            None,
+            self.context_size,
+            self.num_heads,
+            self.head_dim,
+        )
+        self.relative_position_embedding.build((q_build_shape, k_build_shape))
         super().build(input_shape)
 
     def _pad_dim1(self, x, pad_left, pad_right):
         paddings = [[0, 0], [pad_left, pad_right]] + [
-            [0, 0] for _ in range(len(x.shape) - 2)
+            [0, 0] for _ in range(len(keras.ops.shape(x)) - 2)
         ]
         return keras.ops.pad(x, paddings)
 
@@ -541,11 +575,21 @@ class Gemma3nAudioAttention(keras.layers.Layer):
         extracted_valid_mask_blocks = self._extract_block_context(
             original_valid_mask
         )
+        mask_block_shape = keras.ops.shape(extracted_valid_mask_blocks)
+        if len(mask_block_shape) > 3:
+            axes_to_squeeze = [
+                i
+                for i, dim in enumerate(mask_block_shape)
+                if i > 0 and i < len(mask_block_shape) - 1 and dim == 1
+            ]
+            if axes_to_squeeze:
+                extracted_valid_mask_blocks = keras.ops.squeeze(
+                    extracted_valid_mask_blocks, axis=axes_to_squeeze
+                )
+        mask_block_shape = keras.ops.shape(extracted_valid_mask_blocks)
         if (
-            len(extracted_valid_mask_blocks.shape) == 4
-            and extracted_valid_mask_blocks.shape[2]
-            * extracted_valid_mask_blocks.shape[3]
-            == self.context_size
+            len(mask_block_shape) == 4
+            and mask_block_shape[2] * mask_block_shape[3] == self.context_size
         ):
             extracted_valid_mask_blocks = keras.ops.reshape(
                 extracted_valid_mask_blocks,
@@ -569,7 +613,12 @@ class Gemma3nAudioAttention(keras.layers.Layer):
         logits = logits / softcap
         logits = keras.ops.tanh(logits)
         logits = logits * softcap
-        min_val = np.finfo(keras.backend.floatx()).min
+        compute_dtype = logits.dtype
+        if "float16" in str(compute_dtype):
+            min_val = np.finfo(np.float16).min
+        else:
+            min_val = np.finfo(np.float32).min
+        min_val = keras.ops.convert_to_tensor(min_val, dtype=compute_dtype)
         logits = keras.ops.where(final_condition_for_where, logits, min_val)
         probabilities = keras.ops.softmax(
             keras.ops.cast(logits, "float32"), axis=-1

@@ -123,6 +123,21 @@ class Gemma3nAudioSubSampleConvProjection(keras.layers.Layer):
         f_out_0 = self.calculated_f_out_dims[0]
         conv1_input_shape = (None, c_out_0, t_out_0, f_out_0)
         self.conv_1.build(conv1_input_shape)
+        if t_out_0 is not None:
+            t_padded_1 = (
+                t_out_0
+                + self.calculated_block_padding[1][2]
+                + self.calculated_block_padding[1][3]
+            )
+            kernel_h_1, _ = self.sscp_conv_kernel_size[1]
+            stride_h_1, _ = self.sscp_conv_stride_size[1]
+            t_out_1 = (t_padded_1 - kernel_h_1) // stride_h_1 + 1
+        else:
+            t_out_1 = None
+        c_out_1 = self.sscp_conv_channel_size[1]
+        f_out_1 = self.calculated_f_out_dims[1]
+        proj_input_shape = (None, t_out_1, f_out_1 * c_out_1)
+        self.input_proj_linear.build(proj_input_shape)
         super().build(input_shape)
 
     def compute_output_shape(self, input_shape):
@@ -262,7 +277,19 @@ class Gemma3nAudioConformerBlock(keras.layers.Layer):
         )
 
     def build(self, input_shape):
-        audio_encodings_shape, _ = input_shape
+        if (
+            isinstance(input_shape, tuple)
+            and len(input_shape) == 2
+            and isinstance(input_shape[0], tuple)
+        ):
+            audio_encodings_shape, _ = input_shape
+        elif isinstance(input_shape, tuple) and len(input_shape) >= 3:
+            audio_encodings_shape = input_shape
+        else:
+            raise ValueError(
+                f"Unexpected `input_shape` structure for "
+                f"Gemma3nAudioConformerBlock: {input_shape}"
+            )
         self.ffw_layer_start.build(audio_encodings_shape)
         self.attention.build(audio_encodings_shape)
         self.lconv1d.build(audio_encodings_shape)
@@ -279,8 +306,14 @@ class Gemma3nAudioConformerBlock(keras.layers.Layer):
         audio_encodings = self.ffw_layer_start(audio_encodings)
         audio_encodings = self.attention(audio_encodings, audio_mel_mask)
         validity_mask_for_lconv = keras.ops.logical_not(audio_mel_mask)
+        mask_shape = keras.ops.shape(validity_mask_for_lconv)
+        enc_shape = keras.ops.shape(audio_encodings)
+        if len(mask_shape) < len(enc_shape):
+            validity_mask_for_lconv = keras.ops.expand_dims(
+                validity_mask_for_lconv, -1
+            )
         audio_encodings_for_lconv_input = audio_encodings * keras.ops.cast(
-            keras.ops.expand_dims(validity_mask_for_lconv, -1),
+            validity_mask_for_lconv,
             audio_encodings.dtype,
         )
         audio_encodings = self.lconv1d(audio_encodings_for_lconv_input)
@@ -420,7 +453,17 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
         ]
 
     def build(self, input_shape):
-        audio_mel_shape, _ = input_shape
+        if (
+            isinstance(input_shape, tuple)
+            and len(input_shape) == 2
+            and isinstance(input_shape[0], tuple)
+        ):
+            audio_mel_shape, _ = input_shape
+        else:
+            raise ValueError(
+                f"Unexpected `input_shape` structure for Gemma3nAudioEncoder: "
+                f"{input_shape}"
+            )
         self.subsample_conv_projection.build(audio_mel_shape)
         encodings_shape = self.subsample_conv_projection.compute_output_shape(
             audio_mel_shape
@@ -429,10 +472,10 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
         time_stride_product = 1
         for stride_pair in self.sscp_conv_stride_size:
             time_stride_product *= stride_pair[0]
-        batch_size = (
-            audio_mel_shape[0] if audio_mel_shape[0] is not None else -1
+        batch_size = audio_mel_shape[0]
+        current_mask_shape = (
+            (batch_size, t_sub) if t_sub is not None else (batch_size, None)
         )
-        current_mask_shape = (batch_size, t_sub)
         current_encodings_shape = encodings_shape
         for block in self.conformer:
             block.build((current_encodings_shape, current_mask_shape))
@@ -446,11 +489,20 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
         encodings_shape = self.subsample_conv_projection.compute_output_shape(
             audio_mel_shape
         )
+        t_sub = encodings_shape[1]
+        time_stride_product = 1
+        for stride_pair in self.sscp_conv_stride_size:
+            time_stride_product *= stride_pair[0]
+        batch_size = audio_mel_shape[0]
+        current_mask_shape = (
+            (batch_size, t_sub) if t_sub is not None else (batch_size, None)
+        )
         current_encodings_shape = encodings_shape
         for block in self.conformer:
             current_encodings_shape = block.compute_output_shape(
-                (current_encodings_shape, None)
+                (current_encodings_shape, current_mask_shape)
             )
+        final_mask_shape = current_mask_shape
         if self.conf_reduction_factor > 1:
             t_sub = current_encodings_shape[1]
             if t_sub is not None:
@@ -460,7 +512,12 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
                     new_t,
                     current_encodings_shape[2],
                 )
-        return current_encodings_shape, None
+                final_mask_shape = (
+                    (current_mask_shape[0], new_t)
+                    if current_mask_shape[1] is not None
+                    else (current_mask_shape[0], None)
+                )
+        return current_encodings_shape, final_mask_shape
 
     def call(self, inputs):
         audio_mel, audio_mel_mask = inputs
@@ -469,19 +526,31 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
         time_stride_product = 1
         for stride_pair in self.sscp_conv_stride_size:
             time_stride_product *= stride_pair[0]
+        mask_rank = len(keras.ops.shape(audio_mel_mask))
+        audio_mel_mask_to_take = audio_mel_mask
+        if mask_rank > 2:
+            audio_mel_mask_to_take = keras.ops.squeeze(
+                audio_mel_mask, axis=list(range(1, mask_rank - 1))
+            )
         indices = keras.ops.arange(0, t_sub) * time_stride_product
         indices = keras.ops.clip(
-            indices, 0, keras.ops.shape(audio_mel_mask)[1] - 1
+            indices, 0, keras.ops.shape(audio_mel_mask_to_take)[1] - 1
         )
-        current_mask = keras.ops.take(audio_mel_mask, indices, axis=1)
+        current_mask = keras.ops.take(audio_mel_mask_to_take, indices, axis=1)
         for block in self.conformer:
             audio_encodings = block((audio_encodings, current_mask))
 
         if self.conf_reduction_factor > 1:
             audio_encodings = audio_encodings[:, :: self.conf_reduction_factor]
             current_mask = current_mask[:, :: self.conf_reduction_factor]
+        mask_shape = keras.ops.shape(current_mask)
+        enc_shape = keras.ops.shape(audio_encodings)
+        if len(mask_shape) < len(enc_shape):
+            current_mask_expanded = keras.ops.expand_dims(current_mask, axis=-1)
+        else:
+            current_mask_expanded = current_mask
         return audio_encodings * keras.ops.cast(
-            keras.ops.logical_not(keras.ops.expand_dims(current_mask, axis=-1)),
+            keras.ops.logical_not(current_mask_expanded),
             audio_encodings.dtype,
         ), current_mask
 
