@@ -438,14 +438,35 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
     def _prepare_litert_inputs(self, input_data, input_details):
         """Prepare input data for LiteRT interpreter."""
         if isinstance(input_data, dict):
-            input_values = list(input_data.values())
             litert_input_values = []
-            for i, detail in enumerate(input_details):
-                if i < len(input_values):
-                    converted_value = ops.convert_to_numpy(
-                        input_values[i]
-                    ).astype(detail["dtype"])
-                    litert_input_values.append(converted_value)
+            for detail in input_details:
+                # Match inputs by name - TFLite uses "serving_default_*:0"
+                detail_name = detail["name"]
+                # Extract the actual input name from TFLite naming convention
+                if ":" in detail_name:
+                    base_name = detail_name.split(":")[0]
+                    if base_name.startswith("serving_default_"):
+                        base_name = base_name[len("serving_default_") :]
+                else:
+                    base_name = detail_name
+
+                # Find matching input data by name
+                matched = False
+                for input_name, input_value in input_data.items():
+                    if input_name == base_name or base_name == input_name:
+                        converted_value = ops.convert_to_numpy(
+                            input_value
+                        ).astype(detail["dtype"])
+                        litert_input_values.append(converted_value)
+                        matched = True
+                        break
+
+                if not matched:
+                    raise ValueError(
+                        f"Could not find input data for TFLite input "
+                        f"'{detail_name}' (extracted name: '{base_name}'). "
+                        f"Available inputs: {list(input_data.keys())}"
+                    )
             return input_data, litert_input_values
         else:
             litert_input_values = [
@@ -617,15 +638,31 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 self.assertGreater(os.path.getsize(export_path), 0)
 
                 interpreter = Interpreter(model_path=export_path)
-                interpreter.allocate_tensors()
-                os.remove(export_path)
 
                 input_details = interpreter.get_input_details()
-                output_details = interpreter.get_output_details()
 
                 keras_input_data, litert_input_values = (
                     self._prepare_litert_inputs(input_data, input_details)
                 )
+
+                # Resize dynamic tensors before allocating
+                for i, detail in enumerate(input_details):
+                    if "shape_signature" in detail and i < len(
+                        litert_input_values
+                    ):
+                        # Check if any dimension is dynamic (-1)
+                        if -1 in detail["shape_signature"]:
+                            # Resize to match actual input data shape
+                            interpreter.resize_tensor_input(
+                                detail["index"],
+                                list(litert_input_values[i].shape),
+                            )
+
+                # Allocate tensors (after resizing if needed)
+                interpreter.allocate_tensors()
+                os.remove(export_path)
+
+                output_details = interpreter.get_output_details()
 
                 if verify_numerical_accuracy:
                     keras_output = model(keras_input_data)

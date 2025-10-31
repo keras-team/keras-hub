@@ -16,12 +16,14 @@ from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.text_classifier import TextClassifier
 
 
-def _get_text_input_signature(model, sequence_length=128):
+def _get_text_input_signature(model, sequence_length=None):
     """Get input signature for text models with token_ids and padding_mask.
 
     Args:
         model: The model instance.
-        sequence_length: `int`. Sequence length (default: 128).
+        sequence_length: `int` or `None`. Sequence length. If None, uses
+            dynamic shape to support variable-length inputs via
+            resize_tensor_input at runtime.
 
     Returns:
         `dict`. Dictionary mapping input names to their specifications
@@ -38,12 +40,14 @@ def _get_text_input_signature(model, sequence_length=128):
     }
 
 
-def _get_seq2seq_input_signature(model, sequence_length=128):
+def _get_seq2seq_input_signature(model, sequence_length=None):
     """Get input signature for seq2seq models with encoder/decoder tokens.
 
     Args:
         model: The model instance.
-        sequence_length: `int`. Sequence length (default: 128).
+        sequence_length: `int` or `None`. Sequence length. If None, uses
+            dynamic shape to support variable-length inputs via
+            resize_tensor_input at runtime.
 
     Returns:
         `dict`. Dictionary mapping input names to their specifications
@@ -70,25 +74,6 @@ def _get_seq2seq_input_signature(model, sequence_length=128):
             name="decoder_padding_mask",
         ),
     }
-
-
-def _infer_sequence_length(model, default_length):
-    """Infer sequence length from model preprocessor or use default.
-
-    Args:
-        model: The model instance.
-        default_length: `int`. Default sequence length to use if not found.
-
-    Returns:
-        `int`. Sequence length from preprocessor or default.
-    """
-    if hasattr(model, "preprocessor") and model.preprocessor:
-        return getattr(
-            model.preprocessor,
-            "sequence_length",
-            default_length,
-        )
-    return default_length
 
 
 def _infer_image_size(model):
@@ -154,7 +139,6 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
 
     MODEL_TYPE = "causal_lm"
     EXPECTED_INPUTS = ["token_ids", "padding_mask"]
-    DEFAULT_SEQUENCE_LENGTH = 128
 
     def _is_model_compatible(self):
         """Check if model is a causal language model.
@@ -168,16 +152,14 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
         """Get input signature for causal LM models.
 
         Args:
-            sequence_length: `int` or `None`. Optional sequence length.
+            sequence_length: `int` or `None`. Optional sequence length. If None,
+                exports with dynamic shape for flexibility.
 
         Returns:
             `dict`. Dictionary mapping input names to their specifications
         """
-        if sequence_length is None:
-            sequence_length = _infer_sequence_length(
-                self.model, self.DEFAULT_SEQUENCE_LENGTH
-            )
-
+        # Use dynamic shape (None) by default for TFLite flexibility
+        # Users can resize at runtime via interpreter.resize_tensor_input()
         return _get_text_input_signature(self.model, sequence_length)
 
 
@@ -187,7 +169,6 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
 
     MODEL_TYPE = "text_classifier"
     EXPECTED_INPUTS = ["token_ids", "padding_mask"]
-    DEFAULT_SEQUENCE_LENGTH = 128
 
     def _is_model_compatible(self):
         """Check if model is a text classifier.
@@ -201,16 +182,14 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
         """Get input signature for text classifier models.
 
         Args:
-            sequence_length: `int` or `None`. Optional sequence length.
+            sequence_length: `int` or `None`. Optional sequence length. If None,
+                exports with dynamic shape for flexibility.
 
         Returns:
             `dict`. Dictionary mapping input names to their specifications
         """
-        if sequence_length is None:
-            sequence_length = _infer_sequence_length(
-                self.model, self.DEFAULT_SEQUENCE_LENGTH
-            )
-
+        # Use dynamic shape (None) by default for TFLite flexibility
+        # Users can resize at runtime via interpreter.resize_tensor_input()
         return _get_text_input_signature(self.model, sequence_length)
 
 
@@ -225,7 +204,6 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
         "decoder_token_ids",
         "decoder_padding_mask",
     ]
-    DEFAULT_SEQUENCE_LENGTH = 128
 
     def _is_model_compatible(self):
         """Check if model is a seq2seq language model.
@@ -239,16 +217,14 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
         """Get input signature for seq2seq models.
 
         Args:
-            sequence_length: `int` or `None`. Optional sequence length.
+            sequence_length: `int` or `None`. Optional sequence length. If None,
+                exports with dynamic shape for flexibility.
 
         Returns:
             `dict`. Dictionary mapping input names to their specifications
         """
-        if sequence_length is None:
-            sequence_length = _infer_sequence_length(
-                self.model, self.DEFAULT_SEQUENCE_LENGTH
-            )
-
+        # Use dynamic shape (None) by default for TFLite flexibility
+        # Users can resize at runtime via interpreter.resize_tensor_input()
         return _get_seq2seq_input_signature(self.model, sequence_length)
 
 

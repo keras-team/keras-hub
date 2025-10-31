@@ -2,6 +2,11 @@
 
 This module provides LiteRT export functionality specifically designed for
 Keras-Hub models, handling their unique input structures and requirements.
+
+The exporter supports dynamic shape inputs by default, leveraging TFLite's
+native capability to resize input tensors at runtime. When applicable parameters
+are not specified, models are exported with flexible dimensions that can be
+resized via `interpreter.resize_tensor_input()` before inference.
 """
 
 import keras
@@ -30,7 +35,25 @@ class LiteRTExporter(KerasHubExporter):
 
     This exporter handles the conversion of Keras-Hub models to TensorFlow Lite
     format, properly managing the dictionary input structures that Keras-Hub
-    models expect.
+    models expect. By default, it exports models with dynamic shape support,
+    allowing runtime flexibility via `interpreter.resize_tensor_input()`.
+
+    For text-based models (CausalLM, TextClassifier, Seq2SeqLM), sequence
+    dimensions are dynamic when max_sequence_length is not specified. For
+    image-based models (ImageClassifier, ObjectDetector, ImageSegmenter),
+    image dimensions are dynamic by default.
+
+    Example usage with dynamic shapes:
+        ```python
+        # Export with dynamic shape support (default)
+        model.export("model.tflite", format="litert")
+
+        # At inference time, resize as needed:
+        interpreter = tf.lite.Interpreter(model_path="model.tflite")
+        input_details = interpreter.get_input_details()
+        interpreter.resize_tensor_input(input_details[0]["index"], [1, 256])
+        interpreter.allocate_tensors()
+        ```
     """
 
     def __init__(
@@ -45,7 +68,11 @@ class LiteRTExporter(KerasHubExporter):
 
         Args:
             config: `KerasHubExporterConfig`. Exporter configuration.
-            max_sequence_length: `int` or `None`. Maximum sequence length.
+            max_sequence_length: `int` or `None`. Maximum sequence length for
+                text-based models (CausalLM, TextClassifier, Seq2SeqLM). If
+                `None`, exports with dynamic sequence shapes, allowing runtime
+                resizing via `interpreter.resize_tensor_input()`. Ignored for
+                image-based models.
             aot_compile_targets: `list` or `None`. AOT compilation targets.
             verbose: `bool` or `None`. Whether to print progress. Defaults to
                 `None`, which will use `True`.
@@ -67,24 +94,45 @@ class LiteRTExporter(KerasHubExporter):
         """Determine the appropriate adapter class for the model.
 
         Returns:
-            `str`. The adapter type to use ("text" or "image").
+            `str`. The adapter type to use ("text", "image", or "multimodal").
 
         Raises:
             ValueError: If the model type is not supported for LiteRT export.
         """
+        # Check if this is a multimodal model (has both vision and text inputs)
+        model_to_check = self.model
+        if hasattr(self.model, "backbone"):
+            model_to_check = self.model.backbone
+
+        # Check if model has multimodal inputs
+        if hasattr(model_to_check, "input") and isinstance(
+            model_to_check.input, dict
+        ):
+            input_names = set(model_to_check.input.keys())
+            has_images = "images" in input_names
+            has_text = any(
+                name in input_names
+                for name in ["token_ids", "encoder_token_ids"]
+            )
+            if has_images and has_text:
+                return "multimodal"
+
+        # Check for text-only models
         if isinstance(self.model, (CausalLM, TextClassifier, Seq2SeqLM)):
             return "text"
+        # Check for image-only models
         elif isinstance(
             self.model, (ImageClassifier, ObjectDetector, ImageSegmenter)
         ):
             return "image"
         else:
-            # For other model types (audio, multimodal, custom, etc.)
+            # For other model types (audio, custom, etc.)
             raise ValueError(
                 f"Model type {self.model.__class__.__name__} is not supported "
                 "for LiteRT export. Currently supported model types are: "
                 "CausalLM, TextClassifier, Seq2SeqLM, ImageClassifier, "
-                "ObjectDetector, ImageSegmenter."
+                "ObjectDetector, ImageSegmenter, and multimodal models "
+                "(Gemma3CausalLM, PaliGemmaCausalLM, CLIPBackbone)."
             )
 
     def _get_export_param(self):
@@ -92,14 +140,15 @@ class LiteRTExporter(KerasHubExporter):
 
         Returns:
             The parameter to use for export (sequence_length for text models,
-            image_size for image models, or None for other model types).
+            image_size for image models, dict for multimodal, or None for
+            other model types).
         """
-        if isinstance(self.model, (CausalLM, TextClassifier, Seq2SeqLM)):
+        adapter_type = self._get_model_adapter_class()
+
+        if adapter_type == "text":
             # For text models, use sequence_length
             return self.max_sequence_length
-        elif isinstance(
-            self.model, (ImageClassifier, ObjectDetector, ImageSegmenter)
-        ):
+        elif adapter_type == "image":
             # For image models, get image_size from preprocessor
             if hasattr(self.model, "preprocessor") and hasattr(
                 self.model.preprocessor, "image_size"
@@ -107,8 +156,40 @@ class LiteRTExporter(KerasHubExporter):
                 return self.model.preprocessor.image_size
             else:
                 return None  # Will use default in get_input_signature
+        elif adapter_type == "multimodal":
+            # For multimodal models, return dict with both params
+            model_to_check = self.model
+            if hasattr(self.model, "backbone"):
+                model_to_check = self.model.backbone
+
+            # Try to infer image size from vision encoder
+            image_size = None
+            for attr in ["vision_encoder", "vit", "image_encoder"]:
+                if hasattr(model_to_check, attr):
+                    encoder = getattr(model_to_check, attr)
+                    if hasattr(encoder, "image_shape"):
+                        image_shape = encoder.image_shape
+                        if image_shape:
+                            image_size = image_shape[:2]
+                            break
+                    elif hasattr(encoder, "image_size"):
+                        size = encoder.image_size
+                        image_size = (
+                            (size, size) if isinstance(size, int) else size
+                        )
+                        break
+
+            # Check model's image_size attribute
+            if image_size is None and hasattr(model_to_check, "image_size"):
+                size = model_to_check.image_size
+                image_size = (size, size) if isinstance(size, int) else size
+
+            return {
+                "image_size": image_size,
+                "sequence_length": self.max_sequence_length,
+            }
         else:
-            # For other model types (audio, multimodal, custom, etc.)
+            # For other model types
             return None
 
     def export(self, filepath):
@@ -145,7 +226,8 @@ class LiteRTExporter(KerasHubExporter):
         # LiteRT exporter
         wrapped_model = self._create_export_wrapper(param, adapter_type)
 
-        # Convert input signature to list format expected by Keras exporter
+        # Convert dict input signature to list format for all models
+        # The adapter's call() method will handle converting back to dict
         if isinstance(input_signature, dict):
             # Extract specs in the order expected by the model
             signature_list = []
@@ -179,26 +261,34 @@ class LiteRTExporter(KerasHubExporter):
         """Create a wrapper model that handles the input structure conversion.
 
         This creates a type-specific adapter that converts between the
-        list-based inputs that Keras LiteRT exporter provides and the format
-        expected by Keras-Hub models.
+        list-based inputs that Keras LiteRT exporter provides and the
+        dictionary format expected by Keras-Hub models. Note: This adapter
+        is independent of dynamic shape support - it only handles input
+        format conversion.
 
         Args:
-            param: The parameter for input signature (sequence_length for text
-                models, image_size for image models, or None for other types).
-            adapter_type: `str`. The type of adapter to use - "text", "image",
-                or "base".
+            param: The parameter for input signature (sequence_length for
+                text models, image_size for image models, or None for
+                dynamic shapes).
+            adapter_type: `str`. The type of adapter to use - "text",
+                "image", "multimodal", or "base".
         """
 
         class BaseModelAdapter(keras.Model):
             """Base adapter for Keras-Hub models."""
 
             def __init__(
-                self, keras_hub_model, expected_inputs, input_signature
+                self,
+                keras_hub_model,
+                expected_inputs,
+                input_signature,
+                is_multimodal=False,
             ):
                 super().__init__()
                 self.keras_hub_model = keras_hub_model
                 self.expected_inputs = expected_inputs
                 self.input_signature = input_signature
+                self.is_multimodal = is_multimodal
 
                 # Create Input layers based on the input signature
                 self._input_layers = []
@@ -231,24 +321,20 @@ class LiteRTExporter(KerasHubExporter):
             def non_trainable_variables(self):
                 return self._non_trainable_variables
 
-            @property
-            def inputs(self):
-                """Return the input layers for the Keras exporter to use."""
-                return self._input_layers
-
             def get_config(self):
                 """Return the configuration of the wrapped model."""
                 return self.keras_hub_model.get_config()
 
-        class TextModelAdapter(BaseModelAdapter):
-            """Adapter for text models (CausalLM, TextClassifier, Seq2SeqLM).
+        class ModelAdapter(BaseModelAdapter):
+            """Universal adapter for all Keras-Hub models.
 
-            Text models expect dictionary inputs with keys like 'token_ids'
-            and 'padding_mask'.
+            Handles conversion between list-based inputs (from TFLite) and
+            dictionary format expected by Keras-Hub models. Supports text,
+            image, and multimodal models.
             """
 
             def call(self, inputs, training=None, mask=None):
-                """Convert list inputs to dictionary format for text models."""
+                """Convert list inputs to Keras-Hub model format."""
                 if isinstance(inputs, dict):
                     return self.keras_hub_model(inputs, training=training)
 
@@ -256,36 +342,11 @@ class LiteRTExporter(KerasHubExporter):
                 if not isinstance(inputs, (list, tuple)):
                     inputs = [inputs]
 
-                # Map inputs to expected dictionary keys
-                input_dict = {}
-                for i, input_name in enumerate(self.expected_inputs):
-                    if i < len(inputs):
-                        input_dict[input_name] = inputs[i]
-
-                return self.keras_hub_model(input_dict, training=training)
-
-        class ImageModelAdapter(BaseModelAdapter):
-            """Adapter for image models (ImageClassifier, ObjectDetector,
-            ImageSegmenter).
-
-            Image models typically expect a single tensor input but may also
-            accept dictionary format with 'images' key.
-            """
-
-            def call(self, inputs, training=None, mask=None):
-                """Convert list inputs to format expected by image models."""
-                if isinstance(inputs, dict):
-                    return self.keras_hub_model(inputs, training=training)
-
-                # Convert to list if needed
-                if not isinstance(inputs, (list, tuple)):
-                    inputs = [inputs]
-
-                # Most image models expect a single tensor input
-                if len(self.expected_inputs) == 1:
+                # Single input image models can receive tensor directly
+                if len(self.expected_inputs) == 1 and not self.is_multimodal:
                     return self.keras_hub_model(inputs[0], training=training)
 
-                # If multiple inputs, use dictionary format
+                # Multi-input models need dictionary format
                 input_dict = {}
                 for i, input_name in enumerate(self.expected_inputs):
                     if i < len(inputs):
@@ -293,20 +354,31 @@ class LiteRTExporter(KerasHubExporter):
 
                 return self.keras_hub_model(input_dict, training=training)
 
-        # Select the appropriate adapter based on adapter_type
-        if adapter_type == "text":
-            adapter_class = TextModelAdapter
-        elif adapter_type == "image":
-            adapter_class = ImageModelAdapter
-        else:
-            # For other model types (audio, multimodal, custom, etc.)
-            adapter_class = BaseModelAdapter
-
-        return adapter_class(
+        # Create adapter with multimodal flag if needed
+        is_multimodal = adapter_type == "multimodal"
+        adapter = ModelAdapter(
             self.model,
             self.config.EXPECTED_INPUTS,
             self.config.get_input_signature(param),
+            is_multimodal=is_multimodal,
         )
+
+        # Build the adapter as a Functional model by calling it with the
+        # inputs. Pass the input layers as a list - the adapter's call()
+        # will convert to dict format as needed.
+        outputs = adapter(adapter._input_layers)
+        functional_model = keras.Model(
+            inputs=adapter._input_layers, outputs=outputs
+        )
+
+        # Copy over the variables from the original model
+        functional_model._variables = adapter._variables
+        functional_model._trainable_variables = adapter._trainable_variables
+        functional_model._non_trainable_variables = (
+            adapter._non_trainable_variables
+        )
+
+        return functional_model
 
 
 # Convenience function for direct export

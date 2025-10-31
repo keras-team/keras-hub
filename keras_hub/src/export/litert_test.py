@@ -98,7 +98,7 @@ class CausalLMExportTest(TestCase):
             shutil.rmtree(self.temp_dir)
 
     def test_export_causal_lm_mock(self):
-        """Test exporting a mock CausalLM model."""
+        """Test exporting a mock CausalLM model with dynamic shape support."""
         from keras_hub.src.models.causal_lm import CausalLM
 
         # Create a minimal mock CausalLM
@@ -120,12 +120,12 @@ class CausalLMExportTest(TestCase):
         model = SimpleCausalLM()
         model.build(
             input_shape={
-                "token_ids": (None, 128),
-                "padding_mask": (None, 128),
+                "token_ids": (None, None),  # Dynamic sequence length
+                "padding_mask": (None, None),
             }
         )
 
-        # Export using the model's export method
+        # Export using the model's export method with dynamic shapes
         export_path = os.path.join(self.temp_dir, "test_causal_lm")
         model.export(export_path, format="litert")
 
@@ -135,23 +135,39 @@ class CausalLMExportTest(TestCase):
 
         # Load and verify the exported model
         interpreter = Interpreter(model_path=tflite_path)
+
+        input_details = interpreter.get_input_details()
+
+        # Verify that inputs support dynamic shapes (shape_signature has -1)
+        # This is the key improvement - TFLite now exports with dynamic shapes
+        for input_detail in input_details:
+            if "shape_signature" in input_detail:
+                # Check that sequence dimension is dynamic (-1)
+                self.assertEqual(input_detail["shape_signature"][1], -1)
+
+        # Resize tensors to specific sequence length before allocating
+        # This demonstrates TFLite's dynamic shape support
+        seq_len = 128
+        interpreter.resize_tensor_input(input_details[0]["index"], [1, seq_len])
+        interpreter.resize_tensor_input(input_details[1]["index"], [1, seq_len])
         interpreter.allocate_tensors()
 
         # Delete the TFLite file after loading to free disk space
         if os.path.exists(tflite_path):
             os.remove(tflite_path)
 
-        input_details = interpreter.get_input_details()
         output_details = interpreter.get_output_details()
 
         # Verify we have the expected inputs
         self.assertEqual(len(input_details), 2)
 
         # Create test inputs with dtypes from the interpreter
-        test_token_ids = np.random.randint(0, 1000, (1, 128)).astype(
+        test_token_ids = np.random.randint(0, 1000, (1, seq_len)).astype(
             input_details[0]["dtype"]
         )
-        test_padding_mask = np.ones((1, 128), dtype=input_details[1]["dtype"])
+        test_padding_mask = np.ones(
+            (1, seq_len), dtype=input_details[1]["dtype"]
+        )
 
         # Set inputs and run inference
         interpreter.set_tensor(input_details[0]["index"], test_token_ids)
@@ -161,7 +177,7 @@ class CausalLMExportTest(TestCase):
         # Get output
         output = interpreter.get_tensor(output_details[0]["index"])
         self.assertEqual(output.shape[0], 1)  # Batch size
-        self.assertEqual(output.shape[1], 128)  # Sequence length
+        self.assertEqual(output.shape[1], seq_len)  # Sequence length
         self.assertEqual(output.shape[2], 1000)  # Vocab size
 
         # Clean up interpreter, free memory
@@ -169,6 +185,82 @@ class CausalLMExportTest(TestCase):
         import gc
 
         gc.collect()
+
+    def test_export_causal_lm_dynamic_shape_resize(self):
+        """Test exported CausalLM can resize inputs dynamically."""
+        from keras_hub.src.models.causal_lm import CausalLM
+
+        # Create a minimal mock CausalLM
+        class SimpleCausalLM(CausalLM):
+            def __init__(self):
+                super().__init__()
+                self.preprocessor = None
+                self.embedding = keras.layers.Embedding(1000, 64)
+                self.dense = keras.layers.Dense(1000)
+
+            def call(self, inputs):
+                if isinstance(inputs, dict):
+                    token_ids = inputs["token_ids"]
+                else:
+                    token_ids = inputs
+                x = self.embedding(token_ids)
+                return self.dense(x)
+
+        model = SimpleCausalLM()
+        model.build(
+            input_shape={
+                "token_ids": (None, None),
+                "padding_mask": (None, None),
+            }
+        )
+
+        # Export using dynamic shapes (no max_sequence_length specified)
+        export_path = os.path.join(self.temp_dir, "test_causal_lm_dynamic")
+        model.export(export_path, format="litert")
+
+        tflite_path = export_path + ".tflite"
+        self.assertTrue(os.path.exists(tflite_path))
+
+        # Test with different sequence lengths via resize_tensor_input
+        for seq_len in [32, 64, 128]:
+            interpreter = Interpreter(model_path=tflite_path)
+
+            # Resize input tensors to desired sequence length
+            input_details = interpreter.get_input_details()
+            interpreter.resize_tensor_input(
+                input_details[0]["index"], [1, seq_len]
+            )
+            interpreter.resize_tensor_input(
+                input_details[1]["index"], [1, seq_len]
+            )
+            interpreter.allocate_tensors()
+
+            # Create test inputs with the resized shape
+            test_token_ids = np.random.randint(
+                0, 1000, (1, seq_len), dtype=input_details[0]["dtype"]
+            )
+            test_padding_mask = np.ones(
+                (1, seq_len), dtype=input_details[1]["dtype"]
+            )
+
+            # Run inference
+            interpreter.set_tensor(input_details[0]["index"], test_token_ids)
+            interpreter.set_tensor(input_details[1]["index"], test_padding_mask)
+            interpreter.invoke()
+
+            # Verify output shape matches input sequence length
+            output_details = interpreter.get_output_details()
+            output = interpreter.get_tensor(output_details[0]["index"])
+            self.assertEqual(output.shape[1], seq_len)
+
+            del interpreter
+            import gc
+
+            gc.collect()
+
+        # Clean up
+        if os.path.exists(tflite_path):
+            os.remove(tflite_path)
 
 
 @pytest.mark.skipif(

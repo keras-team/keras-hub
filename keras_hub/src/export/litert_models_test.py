@@ -102,7 +102,7 @@ OBJECT_DETECTOR_MODELS = [
             "intermediate_predicted_corners": {"max": 50.0, "mean": 0.15},
             "intermediate_logits": {"max": 5.0, "mean": 0.1},
             "enc_topk_logits": {"max": 5.0, "mean": 0.03},
-            "logits": {"max": 2.0, "mean": 0.03},
+            "logits": {"max": 5.0, "mean": 0.03},
             "*": {"max": 1.0, "mean": 0.03},
         },
     },

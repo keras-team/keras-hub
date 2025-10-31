@@ -76,7 +76,7 @@ class CausalLMExporterConfigTest(TestCase):
         self.assertEqual(config.EXPECTED_INPUTS, ["token_ids", "padding_mask"])
 
     def test_get_input_signature_default(self):
-        """Test get_input_signature with default sequence length."""
+        """Test get_input_signature with dynamic shape (default)."""
         from keras_hub.src.models.causal_lm import CausalLM
 
         class MockCausalLMForTest(CausalLM):
@@ -90,11 +90,12 @@ class CausalLMExporterConfigTest(TestCase):
 
         self.assertIn("token_ids", signature)
         self.assertIn("padding_mask", signature)
-        self.assertEqual(signature["token_ids"].shape, (None, 128))
-        self.assertEqual(signature["padding_mask"].shape, (None, 128))
+        # Default is now dynamic shape (None) for flexibility
+        self.assertEqual(signature["token_ids"].shape, (None, None))
+        self.assertEqual(signature["padding_mask"].shape, (None, None))
 
     def test_get_input_signature_from_preprocessor(self):
-        """Test get_input_signature infers from preprocessor."""
+        """Test get_input_signature defaults to dynamic shape."""
         from keras_hub.src.models.causal_lm import CausalLM
 
         class MockCausalLMForTest(CausalLM):
@@ -105,11 +106,12 @@ class CausalLMExporterConfigTest(TestCase):
         preprocessor = MockPreprocessor(sequence_length=256)
         model = MockCausalLMForTest(preprocessor)
         config = CausalLMExporterConfig(model)
+        # Without explicit sequence_length parameter, uses dynamic shape
         signature = config.get_input_signature()
 
-        # Should use preprocessor's sequence length
-        self.assertEqual(signature["token_ids"].shape, (None, 256))
-        self.assertEqual(signature["padding_mask"].shape, (None, 256))
+        # Should use dynamic shape by default for flexibility
+        self.assertEqual(signature["token_ids"].shape, (None, None))
+        self.assertEqual(signature["padding_mask"].shape, (None, None))
 
     def test_get_input_signature_custom_length(self):
         """Test get_input_signature with custom sequence length."""
@@ -147,7 +149,7 @@ class TextClassifierExporterConfigTest(TestCase):
         self.assertEqual(config.EXPECTED_INPUTS, ["token_ids", "padding_mask"])
 
     def test_get_input_signature_default(self):
-        """Test get_input_signature with default sequence length."""
+        """Test get_input_signature with dynamic shape (default)."""
         from keras_hub.src.models.text_classifier import TextClassifier
 
         class MockTextClassifierForTest(TextClassifier):
@@ -161,7 +163,8 @@ class TextClassifierExporterConfigTest(TestCase):
 
         self.assertIn("token_ids", signature)
         self.assertIn("padding_mask", signature)
-        self.assertEqual(signature["token_ids"].shape, (None, 128))
+        # Default is now dynamic shape (None) for flexibility
+        self.assertEqual(signature["token_ids"].shape, (None, None))
 
 
 class ImageClassifierExporterConfigTest(TestCase):
