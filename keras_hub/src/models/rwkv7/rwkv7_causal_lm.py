@@ -115,7 +115,7 @@ class RWKV7CausalLM(CausalLM):
             current_state_cache = state_cache[:, i, ...]
             current_token_cache = last_token_cache[:, i, ...]
             x, v_first, new_cache_state, cache_tmix_x, cache_cmix_x = (
-                self.backbone.rwkv_layers[i].call(
+                self.backbone.rwkv_layers[i].generate_call(
                     x,
                     v_first=v_first,
                     padding_mask=padding_mask,
@@ -123,7 +123,6 @@ class RWKV7CausalLM(CausalLM):
                     cache_tmix_x=current_token_cache[:, 0],
                     cache_cmix_x=current_token_cache[:, 1],
                     rnn_mode=rnn_mode,
-                    train_mode=False,
                 )
             )
             new_token_cache = ops.stack([cache_tmix_x, cache_cmix_x], axis=1)

@@ -589,7 +589,7 @@ class RWKV7_Block(Layer):
         )
         self.ffn.build(input_shape)
 
-    def call(
+    def generate_call(
         self,
         x,
         v_first=None,
@@ -598,7 +598,6 @@ class RWKV7_Block(Layer):
         cache_tmix_x=None,
         cache_cmix_x=None,
         rnn_mode=False,
-        train_mode=True,
     ):
         """Process input through RWKV block.
 
@@ -610,46 +609,57 @@ class RWKV7_Block(Layer):
             cache_tmix_x: Cached time mixer values.
             cache_cmix_x: Cached channel mixer values.
             rnn_mode: Whether to use RNN mode.
-            train_mode: Whether in training mode.
 
         Returns:
             Processed output tensor and cache information.
         """
+        train_mode = False
         if padding_mask is not None:
             padding_mask = ops.cast(padding_mask, x.dtype)
             padding_mask = ops.expand_dims(padding_mask, axis=-1)
         if self.use_initial_norm:
             x = self.ln0(x)
-        if train_mode:
-            xx, v_first = self.att(
-                self.ln1(x),
-                v_first=v_first,
-                padding_mask=padding_mask,
-                train_mode=train_mode,
-            )
-            x = x + xx
-            xx = self.ln2(x)
-            if padding_mask is not None:
-                xx = xx * padding_mask
-            x = x + self.ffn(xx, train_mode=train_mode)
-            return x, v_first
-        else:
-            xx, v_first, cache_tmix_x, cache_state = self.att.call(
-                self.ln1(x),
-                v_first=v_first,
-                padding_mask=padding_mask,
-                last_cache_x=cache_tmix_x,
-                cache_state=cache_state,
-                rnn_mode=rnn_mode,
-                train_mode=train_mode,
-            )
-            x = x + xx
-            xx = self.ln2(x)
-            if padding_mask is not None:
-                xx = xx * padding_mask
-            xx, cache_cmix_x = self.ffn(xx, cache_cmix_x, train_mode=train_mode)
-            x = x + xx
-            return x, v_first, cache_state, cache_tmix_x, cache_cmix_x
+        xx, v_first, cache_tmix_x, cache_state = self.att.call(
+            self.ln1(x),
+            v_first=v_first,
+            padding_mask=padding_mask,
+            last_cache_x=cache_tmix_x,
+            cache_state=cache_state,
+            rnn_mode=rnn_mode,
+            train_mode=train_mode,
+        )
+        x = x + xx
+        xx = self.ln2(x)
+        if padding_mask is not None:
+            xx = xx * padding_mask
+        xx, cache_cmix_x = self.ffn(xx, cache_cmix_x, train_mode=train_mode)
+        x = x + xx
+        return x, v_first, cache_state, cache_tmix_x, cache_cmix_x
+
+    def call(
+        self,
+        x,
+        v_first=None,
+        padding_mask=None,
+    ):
+        train_mode = True
+        if padding_mask is not None:
+            padding_mask = ops.cast(padding_mask, x.dtype)
+            padding_mask = ops.expand_dims(padding_mask, axis=-1)
+        if self.use_initial_norm:
+            x = self.ln0(x)
+        xx, v_first = self.att(
+            self.ln1(x),
+            v_first=v_first,
+            padding_mask=padding_mask,
+            train_mode=train_mode,
+        )
+        x = x + xx
+        xx = self.ln2(x)
+        if padding_mask is not None:
+            xx = xx * padding_mask
+        x = x + self.ffn(xx, train_mode=train_mode)
+        return x, v_first
 
     def compute_output_shape(self, input_shape):
         output_shapes = [
