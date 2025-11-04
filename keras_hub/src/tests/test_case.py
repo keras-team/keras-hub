@@ -476,16 +476,65 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             ]
             return input_data, litert_input_values
 
-    def _get_litert_output(self, interpreter, output_details):
-        """Get output from LiteRT interpreter."""
-        if len(output_details) == 1:
-            return interpreter.get_tensor(output_details[0]["index"])
+    def _set_litert_inputs(
+        self, interpreter, input_details, input_data, litert_input_values
+    ):
+        """Set input tensors on LiteRT interpreter."""
+        if isinstance(input_data, dict):
+            for i, detail in enumerate(input_details):
+                if i < len(litert_input_values):
+                    interpreter.set_tensor(
+                        detail["index"], litert_input_values[i]
+                    )
         else:
-            litert_output = {}
-            for detail in output_details:
-                output_tensor = interpreter.get_tensor(detail["index"])
-                litert_output[detail["name"]] = output_tensor
-            return litert_output
+            interpreter.set_tensor(
+                input_details[0]["index"], litert_input_values[0]
+            )
+
+    def _get_litert_outputs(
+        self, interpreter, sig_inputs, litert_input_values, input_data
+    ):
+        """Get LiteRT outputs using SignatureDef or output_details as fallback.
+
+        Prefers SignatureDef-based signature_runner to get outputs with
+        meaningful names. Falls back to output_details if signature_runner
+        fails (e.g., older TFLite format).
+
+        Returns outputs as a dict with meaningful names from SignatureDef when
+        available, or as retrieved from output_details on fallback.
+        """
+        try:
+            # Try to use SignatureDef for meaningful output names
+            signature_runner = interpreter.get_signature_runner(
+                "serving_default"
+            )
+
+            # Run inference using signature runner to get named outputs
+            if isinstance(input_data, dict):
+                # Convert input_data to match signature runner expectations
+                sig_input_data = {}
+                for key, value in zip(sig_inputs, litert_input_values):
+                    sig_input_data[key] = value
+                sig_output = signature_runner(**sig_input_data)
+            else:
+                # Single input case - use actual input name from SignatureDef
+                first_input_name = sig_inputs[0] if sig_inputs else "input"
+                sig_output = signature_runner(
+                    **{first_input_name: litert_input_values[0]}
+                )
+
+            return sig_output
+        except Exception:
+            # Fallback to traditional output_details if signature_runner fails
+            output_details = interpreter.get_output_details()
+            if len(output_details) == 1:
+                return interpreter.get_tensor(output_details[0]["index"])
+            else:
+                litert_output = {}
+                for detail in output_details:
+                    output_tensor = interpreter.get_tensor(detail["index"])
+                    litert_output[detail["name"]] = output_tensor
+                return litert_output
 
     def _verify_outputs(
         self,
@@ -496,38 +545,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
     ):
         """Verify numerical accuracy between Keras and LiteRT outputs.
 
-        This method uses name-based matching with sorted keys to reliably
-        map LiteRT outputs to Keras outputs, even when LiteRT generates
-        generic names like "StatefulPartitionedCall:0". This approach:
-        - Provides better error messages with semantic output names
-        - Supports per-output threshold configurations
-        - Is more robust than relying on output ordering
+        This method compares outputs by name. Since we now use SignatureDef
+        (signature_runner) as the primary method for getting LiteRT outputs,
+        the output names are meaningful and should match Keras output keys.
         """
         if isinstance(keras_output, dict) and isinstance(litert_output, dict):
-            # Map LiteRT generic keys to Keras semantic keys if needed
-            if all(
-                key.startswith("StatefulPartitionedCall")
-                for key in litert_output.keys()
-            ):
-                litert_keys_sorted = sorted(litert_output.keys())
-                keras_keys_sorted = sorted(keras_output.keys())
-                if len(litert_keys_sorted) != len(keras_keys_sorted):
-                    self.fail(
-                        f"Different number of outputs:\n"
-                        f"Keras: {len(keras_keys_sorted)} outputs -\n"
-                        f"  {keras_keys_sorted}\n"
-                        f"LiteRT: {len(litert_keys_sorted)} outputs -\n"
-                        f"  {litert_keys_sorted}"
-                    )
-                output_name_mapping = dict(
-                    zip(litert_keys_sorted, keras_keys_sorted)
-                )
-                mapped_litert = {
-                    keras_key: litert_output[litert_key]
-                    for litert_key, keras_key in output_name_mapping.items()
-                }
-                litert_output = mapped_litert
-
+            # Both outputs are dicts - compare by key
             common_keys = set(keras_output.keys()) & set(litert_output.keys())
             if not common_keys:
                 self.fail(
@@ -536,6 +559,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     f"LiteRT keys: {list(litert_output.keys())}"
                 )
 
+            # Sort keys for deterministic iteration order in test messages
             for key in sorted(common_keys):
                 keras_val_np = ops.convert_to_numpy(keras_output[key])
                 litert_val = litert_output[key]
@@ -553,6 +577,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         elif not isinstance(keras_output, dict) and not isinstance(
             litert_output, dict
         ):
+            # Both outputs are single tensors - direct comparison
             keras_output_np = ops.convert_to_numpy(keras_output)
             output_threshold = output_thresholds.get(
                 "*", {"max": 10.0, "mean": 0.1}
@@ -639,11 +664,79 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
                 interpreter = Interpreter(model_path=export_path)
 
+                # Always verify SignatureDef
+                signature_defs = interpreter.get_signature_list()
+                self.assertIn(
+                    "serving_default",
+                    signature_defs,
+                    "Missing serving_default signature",
+                )
+
+                serving_sig = signature_defs["serving_default"]
+                sig_inputs = serving_sig.get("inputs", [])
+                sig_outputs = serving_sig.get("outputs", [])
+
+                self.assertGreater(
+                    len(sig_inputs),
+                    0,
+                    "Should have at least one input in SignatureDef",
+                )
+                self.assertGreater(
+                    len(sig_outputs),
+                    0,
+                    "Should have at least one output in SignatureDef",
+                )
+
+                # Determine expected inputs from input_data
+                if isinstance(input_data, dict):
+                    expected_signature_inputs = list(input_data.keys())
+                else:
+                    # For numpy arrays, assume "images" for vision models
+                    expected_signature_inputs = ["images"]
+
+                # Verify that expected inputs are present in SignatureDef
+                for expected_input in expected_signature_inputs:
+                    self.assertIn(
+                        expected_input,
+                        sig_inputs,
+                        f"Expected '{expected_input}' in SignatureDef "
+                        f"inputs: {sig_inputs}",
+                    )
+
                 input_details = interpreter.get_input_details()
 
                 keras_input_data, litert_input_values = (
                     self._prepare_litert_inputs(input_data, input_details)
                 )
+
+                # Get Keras output early for verification
+                keras_output = None
+                if verify_numerical_accuracy:
+                    keras_output = model(keras_input_data)
+
+                    # Verify output SignatureDef matches Keras output structure
+                    if isinstance(keras_output, dict):
+                        keras_output_keys = set(keras_output.keys())
+                        sig_output_keys = set(sig_outputs)
+
+                        # Check that all Keras outputs have corresponding
+                        # SignatureDef outputs
+                        missing_outputs = keras_output_keys - sig_output_keys
+                        if missing_outputs:
+                            self.fail(
+                                f"Keras outputs {missing_outputs} missing from "
+                                f"SignatureDef outputs: {sig_outputs}"
+                            )
+
+                        # Check that all SignatureDef outputs exist in Keras
+                        extra_outputs = sig_output_keys - keras_output_keys
+                        if extra_outputs:
+                            self.fail(
+                                "SignatureDef outputs {} not found in Keras "
+                                "outputs: {}".format(
+                                    extra_outputs, list(keras_output_keys)
+                                )
+                            )
 
                 # Resize dynamic tensors before allocating
                 for i, detail in enumerate(input_details):
@@ -662,27 +755,27 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 interpreter.allocate_tensors()
                 os.remove(export_path)
 
-                output_details = interpreter.get_output_details()
-
-                if verify_numerical_accuracy:
-                    keras_output = model(keras_input_data)
-
-                if isinstance(input_data, dict):
-                    for i, detail in enumerate(input_details):
-                        if i < len(litert_input_values):
-                            interpreter.set_tensor(
-                                detail["index"], litert_input_values[i]
-                            )
-                else:
-                    interpreter.set_tensor(
-                        input_details[0]["index"], litert_input_values[0]
-                    )
+                # Set input tensors
+                self._set_litert_inputs(
+                    interpreter, input_details, input_data, litert_input_values
+                )
 
                 interpreter.invoke()
 
-                litert_output = self._get_litert_output(
-                    interpreter, output_details
+                # Get LiteRT outputs using SignatureDef with fallback
+                litert_output = self._get_litert_outputs(
+                    interpreter, sig_inputs, litert_input_values, input_data
                 )
+
+                # Handle single output case - extract value if keras_output
+                # is not a dict
+                if (
+                    verify_numerical_accuracy
+                    and not isinstance(keras_output, dict)
+                    and isinstance(litert_output, dict)
+                    and len(litert_output) == 1
+                ):
+                    litert_output = list(litert_output.values())[0]
 
                 if expected_output_shape is not None:
                     self.assertEqual(litert_output.shape, expected_output_shape)

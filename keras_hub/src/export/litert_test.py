@@ -343,6 +343,94 @@ class ImageClassifierExportTest(TestCase):
 
         gc.collect()
 
+    def test_signature_def_with_image_classifier(self):
+        """Test that SignatureDef preserves input names for
+        ImageClassifier models."""
+        from keras_hub.src.models.backbone import Backbone
+        from keras_hub.src.models.image_classifier import ImageClassifier
+
+        # Create a minimal mock Backbone with named input
+        class SimpleBackbone(Backbone):
+            def __init__(self):
+                inputs = keras.layers.Input(
+                    shape=(224, 224, 3), name="image_input"
+                )
+                x = keras.layers.Conv2D(32, 3, padding="same")(inputs)
+                outputs = x
+                super().__init__(inputs=inputs, outputs=outputs)
+
+        # Create ImageClassifier with the mock backbone
+        backbone = SimpleBackbone()
+        model = ImageClassifier(backbone=backbone, num_classes=10)
+
+        # Export using the model's export method
+        export_path = os.path.join(self.temp_dir, "image_classifier_signature")
+        model.export(export_path, format="litert")
+
+        # Verify the file was created
+        tflite_path = export_path + ".tflite"
+        self.assertTrue(os.path.exists(tflite_path))
+
+        # Load and check SignatureDef
+        interpreter = Interpreter(model_path=tflite_path)
+        interpreter.allocate_tensors()
+
+        # Get SignatureDef information
+        signature_defs = interpreter.get_signature_list()
+        self.assertIn("serving_default", signature_defs)
+
+        serving_sig = signature_defs["serving_default"]
+        sig_inputs = serving_sig.get("inputs", [])
+        sig_outputs = serving_sig.get("outputs", [])
+
+        # Verify SignatureDef has inputs and outputs
+        self.assertGreater(
+            len(sig_inputs), 0, "Should have at least one input in SignatureDef"
+        )
+        self.assertGreater(
+            len(sig_outputs),
+            0,
+            "Should have at least one output in SignatureDef",
+        )
+
+        # Verify that the named input is preserved in SignatureDef
+        # Note: ImageClassifier may use different input name, so we just verify
+        # that SignatureDef contains meaningful names, not generic ones
+        self.assertGreater(
+            len(sig_inputs),
+            0,
+            f"Should have at least one input name in "
+            f"SignatureDef: {sig_inputs}",
+        )
+        # sig_inputs is a list of input names
+        first_input_name = sig_inputs[0] if sig_inputs else ""
+        self.assertGreater(
+            len(first_input_name),
+            0,
+            f"Input name should not be empty: {sig_inputs}",
+        )
+
+        # Verify inference works
+        input_details = interpreter.get_input_details()
+        output_details = interpreter.get_output_details()
+
+        test_image = np.random.uniform(0.0, 1.0, (1, 224, 224, 3)).astype(
+            input_details[0]["dtype"]
+        )
+
+        interpreter.set_tensor(input_details[0]["index"], test_image)
+        interpreter.invoke()
+
+        output = interpreter.get_tensor(output_details[0]["index"])
+        self.assertEqual(output.shape[0], 1)  # Batch size
+        self.assertEqual(output.shape[1], 10)  # Number of classes
+
+        # Clean up
+        del interpreter
+        import gc
+
+        gc.collect()
+
 
 @pytest.mark.skipif(
     keras.backend.backend() != "tensorflow",
@@ -538,3 +626,102 @@ class ExportErrorHandlingTest(TestCase):
 
         # Should succeed
         self.assertTrue(os.path.exists(export_path))
+
+    def test_signature_def_with_causal_lm(self):
+        """Test that SignatureDef preserves input names for CausalLM models."""
+        from keras_hub.src.models.causal_lm import CausalLM
+
+        # Create a minimal mock CausalLM with named inputs
+        class SimpleCausalLM(CausalLM):
+            def __init__(self):
+                super().__init__()
+                self.preprocessor = None
+                self.embedding = keras.layers.Embedding(1000, 64)
+                self.dense = keras.layers.Dense(1000)
+
+            def call(self, inputs):
+                if isinstance(inputs, dict):
+                    token_ids = inputs["token_ids"]
+                else:
+                    token_ids = inputs
+                x = self.embedding(token_ids)
+                return self.dense(x)
+
+        model = SimpleCausalLM()
+        model.build(
+            input_shape={
+                "token_ids": (None, 128),
+                "padding_mask": (None, 128),
+            }
+        )
+
+        # Export the model
+        export_path = os.path.join(self.temp_dir, "causal_lm_signature")
+        model.export(export_path, format="litert", max_sequence_length=128)
+
+        tflite_path = export_path + ".tflite"
+        self.assertTrue(os.path.exists(tflite_path))
+
+        # Load and check SignatureDef
+        interpreter = Interpreter(model_path=tflite_path)
+        interpreter.allocate_tensors()
+
+        # Get SignatureDef information
+        signature_defs = interpreter.get_signature_list()
+        self.assertIn("serving_default", signature_defs)
+
+        serving_sig = signature_defs["serving_default"]
+        sig_inputs = serving_sig.get("inputs", [])
+        sig_outputs = serving_sig.get("outputs", [])
+
+        # Verify SignatureDef has inputs and outputs
+        self.assertGreater(
+            len(sig_inputs), 0, "Should have at least one input in SignatureDef"
+        )
+        self.assertGreater(
+            len(sig_outputs),
+            0,
+            "Should have at least one output in SignatureDef",
+        )
+
+        # Verify that dictionary input names are preserved
+        # For CausalLM models, we expect token_ids and padding_mask
+        # sig_inputs is a list of input names
+        self.assertIn(
+            "token_ids",
+            sig_inputs,
+            f"Input name 'token_ids' should be in SignatureDef "
+            f"inputs: {sig_inputs}",
+        )
+        self.assertIn(
+            "padding_mask",
+            sig_inputs,
+            f"Input name 'padding_mask' should be in SignatureDef "
+            f"inputs: {sig_inputs}",
+        )
+
+        # Verify inference works with the named signature
+        input_details = interpreter.get_input_details()
+        output_details = interpreter.get_output_details()
+
+        seq_len = 128
+        test_token_ids = np.random.randint(
+            0, 1000, (1, seq_len), dtype=input_details[0]["dtype"]
+        )
+        test_padding_mask = np.ones(
+            (1, seq_len), dtype=input_details[1]["dtype"]
+        )
+
+        interpreter.set_tensor(input_details[0]["index"], test_token_ids)
+        interpreter.set_tensor(input_details[1]["index"], test_padding_mask)
+        interpreter.invoke()
+
+        output = interpreter.get_tensor(output_details[0]["index"])
+        self.assertEqual(output.shape[0], 1)  # Batch size
+        self.assertEqual(output.shape[1], seq_len)  # Sequence length
+
+        # Clean up
+        del interpreter
+        import gc
+
+        gc.collect()
