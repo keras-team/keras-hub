@@ -78,10 +78,10 @@ def export_to_hf(backbone, keras_tokenizer, path):
 
     # Helper function to convert bfloat16 weights to torch tensors
     def to_torch(weight):
-        # Convert bfloat16 to float32 first, then to torch, then to bfloat16
-        if hasattr(weight.dtype, "name") and "bfloat16" in str(weight.dtype):
-            weight = np.array(weight, dtype=np.float32)
-        return torch.from_numpy(weight).to(torch.bfloat16)
+        # Convert array-like weights (e.g., from JAX) to a float32 NumPy
+        # array before creating a bfloat16 torch tensor for compatibility.
+        np_weight = np.array(weight, dtype=np.float32)
+        return torch.from_numpy(np_weight).to(torch.bfloat16)
 
     # Token embeddings
     token_embedding = backbone.get_layer("token_embedding").get_weights()[0]
@@ -90,43 +90,35 @@ def export_to_hf(backbone, keras_tokenizer, path):
     for i in range(backbone.num_layers):
         block = backbone.get_layer(f"decoder_block_{i}")
         q_kernel = block.attention.query_dense.get_weights()[0]
-        q_kernel = (
-            torch.from_numpy(np.array(q_kernel, dtype=np.float32))
-            .to(torch.bfloat16)
+        weights_dict[f"model.layers.{i}.self_attn.q_proj.weight"] = (
+            to_torch(q_kernel)
             .permute(1, 0, 2)
             .reshape(backbone.hidden_dim, -1)
             .T
         )
-        weights_dict[f"model.layers.{i}.self_attn.q_proj.weight"] = q_kernel
 
         k_kernel = block.attention.key_dense.get_weights()[0]
-        k_kernel = (
-            torch.from_numpy(np.array(k_kernel, dtype=np.float32))
-            .to(torch.bfloat16)
+        weights_dict[f"model.layers.{i}.self_attn.k_proj.weight"] = (
+            to_torch(k_kernel)
             .permute(1, 0, 2)
             .reshape(backbone.hidden_dim, -1)
             .T
         )
-        weights_dict[f"model.layers.{i}.self_attn.k_proj.weight"] = k_kernel
 
         v_kernel = block.attention.value_dense.get_weights()[0]
-        v_kernel = (
-            torch.from_numpy(np.array(v_kernel, dtype=np.float32))
-            .to(torch.bfloat16)
+        weights_dict[f"model.layers.{i}.self_attn.v_proj.weight"] = (
+            to_torch(v_kernel)
             .permute(1, 0, 2)
             .reshape(backbone.hidden_dim, -1)
             .T
         )
-        weights_dict[f"model.layers.{i}.self_attn.v_proj.weight"] = v_kernel
 
         o_kernel = block.attention.output_dense.get_weights()[0]
-        o_kernel = (
-            torch.from_numpy(np.array(o_kernel, dtype=np.float32))
-            .to(torch.bfloat16)
+        weights_dict[f"model.layers.{i}.self_attn.o_proj.weight"] = (
+            to_torch(o_kernel)
             .permute(2, 0, 1)
             .reshape(backbone.hidden_dim, -1)
         )
-        weights_dict[f"model.layers.{i}.self_attn.o_proj.weight"] = o_kernel
 
         q_norm = block.attention.query_norm.get_weights()[0]
         weights_dict[f"model.layers.{i}.self_attn.q_norm.weight"] = to_torch(
@@ -139,28 +131,19 @@ def export_to_hf(backbone, keras_tokenizer, path):
         )
 
         gate_kernel = block.gating_ffw.get_weights()[0]
-        gate_kernel = (
-            torch.from_numpy(np.array(gate_kernel, dtype=np.float32))
-            .to(torch.bfloat16)
-            .T
+        weights_dict[f"model.layers.{i}.mlp.gate_proj.weight"] = (
+            to_torch(gate_kernel).T
         )
-        weights_dict[f"model.layers.{i}.mlp.gate_proj.weight"] = gate_kernel
 
         up_kernel = block.gating_ffw_2.get_weights()[0]
-        up_kernel = (
-            torch.from_numpy(np.array(up_kernel, dtype=np.float32))
-            .to(torch.bfloat16)
-            .T
+        weights_dict[f"model.layers.{i}.mlp.up_proj.weight"] = (
+            to_torch(up_kernel).T
         )
-        weights_dict[f"model.layers.{i}.mlp.up_proj.weight"] = up_kernel
 
         down_kernel = block.ffw_linear.get_weights()[0]
-        down_kernel = (
-            torch.from_numpy(np.array(down_kernel, dtype=np.float32))
-            .to(torch.bfloat16)
-            .T
+        weights_dict[f"model.layers.{i}.mlp.down_proj.weight"] = (
+            to_torch(down_kernel).T
         )
-        weights_dict[f"model.layers.{i}.mlp.down_proj.weight"] = down_kernel
 
         input_layer_norm = block.pre_attention_norm.get_weights()[0]
         weights_dict[f"model.layers.{i}.input_layernorm.weight"] = to_torch(
@@ -230,7 +213,7 @@ def infer(
             temperature=temperature,
             top_k=top_k,
             top_p=top_p,
-            do_sample=True,
+            do_sample=False,
         )
 
     # Decode generated tokens
@@ -336,8 +319,8 @@ flags.DEFINE_string(
 flags.DEFINE_bool(
     "export_safetensors",
     False,
-    "Export model to Safetensors format (HuggingFace-compatible). \
-        Only for text-only models.",
+    "Export model to Safetensors format (HuggingFace-compatible). "
+    "Only for text-only models.",
 )
 
 
@@ -804,3 +787,4 @@ def main(_):
 
 if __name__ == "__main__":
     app.run(main)
+
