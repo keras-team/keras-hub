@@ -381,10 +381,14 @@ class Gemma3nTextAltUp(keras.layers.Layer):
         modalities = self.compute_router_modalities(
             hidden_states[self.altup_active_idx]
         )
+        modalities_shape = keras.ops.shape(modalities)
+        reshape_shape = modalities_shape[:-1] + (
+            self.altup_num_inputs,
+            self.altup_num_inputs,
+        )
         all_coefs = keras.ops.reshape(
             self.prediction_coefs(modalities),
-            modalities.shape[:-1]
-            + (self.altup_num_inputs, self.altup_num_inputs),
+            reshape_shape,
         )
         all_coefs = keras.ops.transpose(all_coefs, (0, 1, 3, 2))
         predictions = keras.ops.matmul(

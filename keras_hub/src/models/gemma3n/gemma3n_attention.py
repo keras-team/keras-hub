@@ -336,7 +336,14 @@ class Gemma3nTextAttention(keras.layers.Layer):
         super().build(input_shape)
 
     def call(
-        self, hidden_states, position_embeddings, attention_mask, training=False
+        self,
+        hidden_states,
+        position_embeddings,
+        attention_mask,
+        cache=None,
+        cache_update_index=0,
+        cache_update_mask=None,
+        training=False,
     ):
         input_shape = keras.ops.shape(hidden_states)[:-1]
         cos, sin = position_embeddings
@@ -351,20 +358,71 @@ class Gemma3nTextAttention(keras.layers.Layer):
             query_states, cos, sin, unsqueeze_dim=2
         )
         query_states = keras.ops.transpose(query_states, (0, 2, 1, 3))
-        key_states = self.k_proj(hidden_states)
-        key_states = keras.ops.reshape(
-            key_states, input_shape + (self.num_key_value_heads, self.head_dim)
-        )
-        key_states = self.k_norm(key_states)
-        key_states = apply_rotary_pos_emb(key_states, cos, sin, unsqueeze_dim=2)
-        key_states = keras.ops.transpose(key_states, (0, 2, 1, 3))
-        value_states = self.v_proj(hidden_states)
-        value_states = keras.ops.reshape(
-            value_states,
-            input_shape + (self.num_key_value_heads, self.head_dim),
-        )
-        value_states = self.v_norm(value_states)
-        value_states = keras.ops.transpose(value_states, (0, 2, 1, 3))
+        if cache is not None:
+            key_cache = cache[:, 0, ...]
+            value_cache = cache[:, 1, ...]
+            key_update = self.k_proj(hidden_states)
+            key_update = keras.ops.reshape(
+                key_update,
+                input_shape + (self.num_key_value_heads, self.head_dim),
+            )
+            key_update = self.k_norm(key_update)
+            key_update = apply_rotary_pos_emb(
+                key_update, cos, sin, unsqueeze_dim=2
+            )
+            key_update = keras.ops.transpose(key_update, (0, 2, 1, 3))
+            value_update = self.v_proj(hidden_states)
+            value_update = keras.ops.reshape(
+                value_update,
+                input_shape + (self.num_key_value_heads, self.head_dim),
+            )
+            value_update = self.v_norm(value_update)
+            value_update = keras.ops.transpose(value_update, (0, 2, 1, 3))
+            start = [0, 0, cache_update_index, 0]
+            if cache_update_mask is not None:
+                cache_update_mask = keras.ops.expand_dims(
+                    keras.ops.expand_dims(cache_update_mask, axis=1),
+                    axis=-1,
+                )
+                key_original = keras.ops.slice(
+                    key_cache, start, keras.ops.shape(key_update)
+                )
+                value_original = keras.ops.slice(
+                    value_cache, start, keras.ops.shape(value_update)
+                )
+                key_update = keras.ops.where(
+                    cache_update_mask,
+                    key_update,
+                    key_original,
+                )
+                value_update = keras.ops.where(
+                    cache_update_mask,
+                    value_update,
+                    value_original,
+                )
+            key_states = keras.ops.slice_update(key_cache, start, key_update)
+            value_states = keras.ops.slice_update(
+                value_cache, start, value_update
+            )
+            cache = keras.ops.stack((key_states, value_states), axis=1)
+        else:
+            key_states = self.k_proj(hidden_states)
+            key_states = keras.ops.reshape(
+                key_states,
+                input_shape + (self.num_key_value_heads, self.head_dim),
+            )
+            key_states = self.k_norm(key_states)
+            key_states = apply_rotary_pos_emb(
+                key_states, cos, sin, unsqueeze_dim=2
+            )
+            key_states = keras.ops.transpose(key_states, (0, 2, 1, 3))
+            value_states = self.v_proj(hidden_states)
+            value_states = keras.ops.reshape(
+                value_states,
+                input_shape + (self.num_key_value_heads, self.head_dim),
+            )
+            value_states = self.v_norm(value_states)
+            value_states = keras.ops.transpose(value_states, (0, 2, 1, 3))
         attn_output, attn_weights = eager_attention_forward(
             query_states,
             key_states,
@@ -377,6 +435,8 @@ class Gemma3nTextAttention(keras.layers.Layer):
         )
         attn_output = keras.ops.reshape(attn_output, input_shape + (-1,))
         attn_output = self.o_proj(attn_output)
+        if cache is not None:
+            return attn_output, attn_weights, cache
         return attn_output, attn_weights
 
     def get_config(self):

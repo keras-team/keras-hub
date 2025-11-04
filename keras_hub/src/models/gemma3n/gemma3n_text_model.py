@@ -126,7 +126,7 @@ class Gemma3nTextModel(keras.layers.Layer):
         )
         if activation_sparsity_pattern is None:
             self.activation_sparsity_pattern = [0.0] * num_hidden_layers
-        self.layers = [
+        self.transformer_layers = [
             Gemma3nTextDecoderBlock(
                 hidden_size,
                 rms_norm_eps,
@@ -151,7 +151,7 @@ class Gemma3nTextModel(keras.layers.Layer):
             )
             for i in range(num_hidden_layers)
         ]
-        self.norm = Gemma3nRMSNorm(
+        self.final_normalization = Gemma3nRMSNorm(
             hidden_size, eps=rms_norm_eps, name="norm", dtype=self.dtype_policy
         )
         self.rotary_emb = Gemma3nTextRotaryEmbedding(
@@ -250,9 +250,9 @@ class Gemma3nTextModel(keras.layers.Layer):
             decoder_per_layer_input_shape,
             None,  # attention_mask
         )
-        for layer in self.layers:
+        for layer in self.transformer_layers:
             layer.build(decoder_input_shape)
-        self.norm.build(inputs_embeds_shape)
+        self.final_normalization.build(inputs_embeds_shape)
         super().build(input_shape)
 
     def get_per_layer_inputs(self, input_ids):
@@ -282,6 +282,26 @@ class Gemma3nTextModel(keras.layers.Layer):
             per_layer_projection + per_layer_inputs
         ) * self.per_layer_input_scale
 
+    def token_embedding(self, inputs, reverse=False):
+        """Apply or reverse the token embedding.
+
+        Args:
+            inputs: If `reverse=False`, token IDs to embed. If `reverse=True`,
+                hidden states to convert to logits.
+            reverse: bool. If False, performs embedding lookup. If True,
+                computes logits by projecting hidden states through
+                the transpose of the embedding matrix.
+        """
+        if not reverse:
+            return self.embed_tokens(inputs)
+        else:
+            embedding_weights = self.embed_tokens.embedding.embeddings
+            logits = keras.ops.matmul(
+                inputs, keras.ops.transpose(embedding_weights)
+            )
+            logits = logits / self.embed_tokens.embed_scale
+            return logits
+
     def compute_output_shape(self, input_shape):
         if isinstance(input_shape, (list, tuple)) and isinstance(
             input_shape[0], (list, tuple)
@@ -292,7 +312,16 @@ class Gemma3nTextModel(keras.layers.Layer):
         hidden_size = self.embed_tokens.embedding_dim
         return input_ids_shape + (hidden_size,)
 
-    def call(self, input_ids, attention_mask, inputs_embeds, per_layer_inputs):
+    def call(
+        self,
+        input_ids,
+        attention_mask,
+        inputs_embeds,
+        per_layer_inputs,
+        cache=None,
+        cache_update_index=0,
+        cache_update_mask=None,
+    ):
         position_ids = keras.ops.expand_dims(
             keras.ops.arange(0, keras.ops.shape(input_ids)[1]), 0
         )
@@ -317,17 +346,37 @@ class Gemma3nTextModel(keras.layers.Layer):
             current_hidden_state = altup_proj * target_magnitude / new_magnitude
             temp_hidden_states.append(current_hidden_state)
         hidden_states = keras.ops.stack(temp_hidden_states, axis=0)
-        for i, decoder_layer in enumerate(self.layers):
-            per_layer_input = per_layer_inputs[:, :, i, :]
-            hidden_states = decoder_layer(
-                (
-                    hidden_states,
-                    (cos_global, sin_global),
-                    (cos_local, sin_local),
-                    per_layer_input,
-                    attention_mask,
+        if cache is not None:
+            caches = []
+            for i, decoder_layer in enumerate(self.transformer_layers):
+                per_layer_input = per_layer_inputs[:, :, i, :]
+                current_cache = cache[:, i, ...]
+                hidden_states, new_cache = decoder_layer(
+                    (
+                        hidden_states,
+                        (cos_global, sin_global),
+                        (cos_local, sin_local),
+                        per_layer_input,
+                        attention_mask,
+                    ),
+                    cache=current_cache,
+                    cache_update_index=cache_update_index,
+                    cache_update_mask=cache_update_mask,
                 )
-            )
+                caches.append(new_cache)
+            cache = keras.ops.stack(caches, axis=1)
+        else:
+            for i, decoder_layer in enumerate(self.transformer_layers):
+                per_layer_input = per_layer_inputs[:, :, i, :]
+                hidden_states = decoder_layer(
+                    (
+                        hidden_states,
+                        (cos_global, sin_global),
+                        (cos_local, sin_local),
+                        per_layer_input,
+                        attention_mask,
+                    )
+                )
         target_magnitude = keras.ops.sqrt(
             keras.ops.mean(hidden_states[0] ** 2, axis=-1, keepdims=True)
         )
@@ -346,7 +395,10 @@ class Gemma3nTextModel(keras.layers.Layer):
             temp_hidden_states.append(current_hidden_state)
         hidden_states = keras.ops.stack(temp_hidden_states)
         hidden_states = keras.ops.mean(hidden_states, axis=0)
-        return self.norm(hidden_states)
+        normalized = self.final_normalization(hidden_states)
+        if cache is not None:
+            return normalized, cache
+        return normalized
 
     def get_config(self):
         config = super().get_config()

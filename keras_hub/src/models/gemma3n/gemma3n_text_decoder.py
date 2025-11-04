@@ -193,7 +193,14 @@ class Gemma3nTextDecoderBlock(keras.layers.Layer):
             self.act_fn = keras.activations.get(self.hidden_activation)
         super().build(input_shape)
 
-    def call(self, inputs):
+    def call(
+        self,
+        inputs,
+        cache=None,
+        cache_update_index=0,
+        cache_update_mask=None,
+        training=False,
+    ):
         (
             hidden_states,
             position_embeddings_global,
@@ -210,9 +217,23 @@ class Gemma3nTextDecoderBlock(keras.layers.Layer):
             if self.is_sliding
             else position_embeddings_global
         )
-        attn, _ = self.attention(
-            active_prediction_normed, position_embeddings, attention_mask
-        )
+        if cache is not None:
+            attn, _, new_cache = self.attention(
+                active_prediction_normed,
+                position_embeddings,
+                attention_mask,
+                cache=cache,
+                cache_update_index=cache_update_index,
+                cache_update_mask=cache_update_mask,
+                training=training,
+            )
+        else:
+            attn, _ = self.attention(
+                active_prediction_normed,
+                position_embeddings,
+                attention_mask,
+                training=training,
+            )
         attn = self.post_attention_layernorm(attn)
         attn_gated = active_prediction + attn
         attn_laurel = (attn_gated + laurel_output) / math.sqrt(2)
@@ -244,8 +265,13 @@ class Gemma3nTextDecoderBlock(keras.layers.Layer):
             first_prediction_projected
         )
         for i in range(1, len(corrected_predictions_list)):
-            corrected_predictions_list[i] += first_prediction_normed
-        return keras.ops.stack(corrected_predictions_list, axis=0)
+            corrected_predictions_list[i] = (
+                corrected_predictions_list[i] + first_prediction_normed
+            )
+        output = keras.ops.stack(corrected_predictions_list, axis=0)
+        if cache is not None:
+            return output, new_cache
+        return output
 
     def get_config(self):
         config = super().get_config()

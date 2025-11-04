@@ -25,6 +25,7 @@ class Gemma3nBackboneTest(TestCase):
         self.image_width = 32
         self.audio_sequence_length = 8
         self.audio_feature_size = 16
+
         # === Vision Encoder ===
         vision_arch_def = [["er_r1_k3_s1_e1_c8"]]
         stackwise_params = convert_arch_def_to_stackwise(vision_arch_def)
@@ -35,6 +36,7 @@ class Gemma3nBackboneTest(TestCase):
             use_msfa=False,
         )
         vision_encoder_config = vision_encoder.get_config()
+
         # === Audio Encoder ===
         audio_encoder = Gemma3nAudioEncoder(
             hidden_size=4,
@@ -55,6 +57,7 @@ class Gemma3nBackboneTest(TestCase):
             conf_conv_kernel_size=3,
             conf_reduction_factor=1,
         )
+
         # === Multimodal ===
         self.multimodal_init_kwargs = {
             "text_vocab_size": self.text_vocab_size,
@@ -86,27 +89,23 @@ class Gemma3nBackboneTest(TestCase):
                 size=(self.batch_size, self.text_sequence_length),
                 dtype="int32",
             ),
-            "attention_mask": np.ones(
-                (
-                    self.batch_size,
-                    1,
-                    self.text_sequence_length,
-                    self.text_sequence_length,
-                ),
-                dtype=bool,
+            "padding_mask": np.ones(
+                (self.batch_size, self.text_sequence_length), dtype=bool
             ),
-            "pixel_values": np.random.rand(
+            "images": np.random.rand(
                 self.batch_size, 1, self.image_height, self.image_width, 3
             ).astype("float32"),
             "input_features": np.random.rand(
                 self.batch_size,
+                1,
                 self.audio_sequence_length,
                 self.audio_feature_size,
             ).astype("float32"),
             "input_features_mask": np.zeros(
-                (self.batch_size, self.audio_sequence_length), dtype=bool
+                (self.batch_size, 1, self.audio_sequence_length), dtype=bool
             ),
         }
+
         # === Text-Only ===
         self.text_init_kwargs = deepcopy(self.multimodal_init_kwargs)
         del self.text_init_kwargs["vision_encoder_config"]
@@ -114,7 +113,7 @@ class Gemma3nBackboneTest(TestCase):
         del self.text_init_kwargs["vision_hidden_size"]
         del self.text_init_kwargs["audio_hidden_size"]
         self.text_input_data = deepcopy(self.multimodal_input_data)
-        del self.text_input_data["pixel_values"]
+        del self.text_input_data["images"]
         del self.text_input_data["input_features"]
         del self.text_input_data["input_features_mask"]
 

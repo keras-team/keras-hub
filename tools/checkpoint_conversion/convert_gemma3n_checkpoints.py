@@ -243,7 +243,7 @@ class HfToKerasConverter:
                 layer_or_variable.set_weights([weights, current_weights[1]])
         else:
             print(
-                f"❓ Unexpected number of weights in layer "
+                f"❌ Unexpected number of weights in layer "
                 f"{layer_or_variable.name}"
             )
 
@@ -436,7 +436,7 @@ class HfToKerasConverter:
         self._port_weights(
             lm.embed_tokens.embedding, f"{hf_prefix}.embed_tokens.weight"
         )
-        self._port_rms_norm(lm.norm, f"{hf_prefix}.norm")
+        self._port_rms_norm(lm.final_normalization, f"{hf_prefix}.norm")
         self._port_weights(
             lm.embed_tokens_per_layer.embedding,
             f"{hf_prefix}.embed_tokens_per_layer.weight",
@@ -464,7 +464,7 @@ class HfToKerasConverter:
                 transpose_dims=(1, 0),
             )
 
-        for i, layer in enumerate(lm.layers):
+        for i, layer in enumerate(lm.transformer_layers):
             layer_prefix = f"{hf_prefix}.layers.{i}"
 
             # Attention
@@ -789,27 +789,30 @@ def validate_output(keras_model, hf_model, hf_processor):
         hf_output = hf_output.detach().cpu().float().numpy()
     print(f"  -> HF model output shape: {hf_output.shape}")
     keras_inputs = {k: v.numpy() for k, v in hf_inputs.items()}
-    keras_inputs["token_ids"] = keras_inputs.pop("input_ids")
-    if "token_type_ids" in keras_inputs:
-        del keras_inputs["token_type_ids"]
-    keras_inputs["pixel_values"] = np.transpose(
-        keras_inputs["pixel_values"], (0, 2, 3, 1)
-    )
-    if keras_inputs["pixel_values"].ndim == 4:
-        keras_inputs["pixel_values"] = np.expand_dims(
-            keras_inputs["pixel_values"], axis=1
+    backbone_keras_inputs = {}
+    backbone_keras_inputs["token_ids"] = keras_inputs.pop("input_ids")
+    backbone_keras_inputs["padding_mask"] = keras_inputs.pop(
+        "attention_mask"
+    ).astype(bool)
+    # Images.
+    pixel_values = keras_inputs.pop("pixel_values")
+    pixel_values_transposed = np.transpose(pixel_values, (0, 2, 3, 1))
+    if pixel_values_transposed.ndim == 4:
+        pixel_values_transposed = np.expand_dims(
+            pixel_values_transposed, axis=1
         )
-    input_shape = keras_inputs["token_ids"].shape
-    seq_len = input_shape[1]
-    attention_mask_2d = keras_inputs["attention_mask"]
-    attention_mask_4d = attention_mask_2d[:, None, None, :]
-    causal_mask = np.tril(np.ones((seq_len, seq_len), dtype=bool))[
-        None, None, :, :
-    ]
-    final_mask = causal_mask & attention_mask_4d
-    keras_inputs["attention_mask"] = final_mask
+    backbone_keras_inputs["images"] = pixel_values_transposed
+    # Audio.
+    input_features = keras_inputs.pop("input_features")
+    input_features_mask = keras_inputs.pop("input_features_mask")
+    if input_features.ndim == 3:
+        input_features = np.expand_dims(input_features, axis=1)
+    if input_features_mask.ndim == 2:
+        input_features_mask = np.expand_dims(input_features_mask, axis=1)
+    backbone_keras_inputs["input_features"] = input_features
+    backbone_keras_inputs["input_features_mask"] = input_features_mask
     print("  -> Running Keras model forward pass...")
-    keras_output = keras_model.predict(keras_inputs)
+    keras_output = keras_model.predict(backbone_keras_inputs)
     print(f"  -> Keras model output shape: {keras_output.shape}")
     mean_diff = np.mean(np.abs(keras_output - hf_output))
     print(f"🔶 Mean absolute difference: {mean_diff}")
@@ -829,7 +832,7 @@ def main(_):
     ):
         print(
             "  -> Loading cached Hugging Face model and processor from "
-            "{cache_dir}"
+            f"{cache_dir}"
         )
         try:
             hf_model = Gemma3nForConditionalGeneration.from_pretrained(
@@ -864,7 +867,7 @@ def main(_):
     validate_output(keras_model, hf_model, hf_processor)
     print(f"💾 Saving Keras preset to ./{save_path}")
     keras_model.save_to_preset(f"./{save_path}")
-    print("🏁 Conversion complete.")
+    print("🎉 Conversion complete.")
     del hf_model
     gc.collect()
 
