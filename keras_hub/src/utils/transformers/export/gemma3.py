@@ -34,11 +34,11 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
 
     def _convert_qkv_kernel(kernel, hidden_dim):
         """Helper to convert Q/K/V projection kernels to HF format.
-        
+
         Args:
             kernel: The kernel weight tensor to convert.
             hidden_dim: The hidden dimension size for reshaping.
-        
+
         Returns:
             Converted kernel in HF format.
         """
@@ -116,9 +116,9 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
         # Post-attention normalization
         if hasattr(block, "post_attention_norm"):
             post_attn_norm = block.post_attention_norm.weights[0]
-            weights_dict[f"{prefix}layers.{i}.post_attention_layernorm.weight"] = (
-                post_attn_norm
-            )
+            weights_dict[
+                f"{prefix}layers.{i}.post_attention_layernorm.weight"
+            ] = post_attn_norm
         # Pre-feedforward normalization
         pre_feedforward_layernorm = block.pre_ffw_norm.weights[0]
         weights_dict[f"{prefix}layers.{i}.pre_feedforward_layernorm.weight"] = (
@@ -179,4 +179,3 @@ def get_gemma3_tokenizer_config(tokenizer):
             }
     tokenizer_config["added_tokens_decoder"] = added_tokens_decoder
     return tokenizer_config
-

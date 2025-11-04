@@ -115,9 +115,7 @@ def export_to_hf(backbone, keras_tokenizer, path):
 
         o_kernel = block.attention.output_dense.get_weights()[0]
         weights_dict[f"model.layers.{i}.self_attn.o_proj.weight"] = (
-            to_torch(o_kernel)
-            .permute(2, 0, 1)
-            .reshape(backbone.hidden_dim, -1)
+            to_torch(o_kernel).permute(2, 0, 1).reshape(backbone.hidden_dim, -1)
         )
 
         q_norm = block.attention.query_norm.get_weights()[0]
@@ -131,19 +129,19 @@ def export_to_hf(backbone, keras_tokenizer, path):
         )
 
         gate_kernel = block.gating_ffw.get_weights()[0]
-        weights_dict[f"model.layers.{i}.mlp.gate_proj.weight"] = (
-            to_torch(gate_kernel).T
-        )
+        weights_dict[f"model.layers.{i}.mlp.gate_proj.weight"] = to_torch(
+            gate_kernel
+        ).T
 
         up_kernel = block.gating_ffw_2.get_weights()[0]
-        weights_dict[f"model.layers.{i}.mlp.up_proj.weight"] = (
-            to_torch(up_kernel).T
-        )
+        weights_dict[f"model.layers.{i}.mlp.up_proj.weight"] = to_torch(
+            up_kernel
+        ).T
 
         down_kernel = block.ffw_linear.get_weights()[0]
-        weights_dict[f"model.layers.{i}.mlp.down_proj.weight"] = (
-            to_torch(down_kernel).T
-        )
+        weights_dict[f"model.layers.{i}.mlp.down_proj.weight"] = to_torch(
+            down_kernel
+        ).T
 
         input_layer_norm = block.pre_attention_norm.get_weights()[0]
         weights_dict[f"model.layers.{i}.input_layernorm.weight"] = to_torch(
@@ -787,4 +785,3 @@ def main(_):
 
 if __name__ == "__main__":
     app.run(main)
-
