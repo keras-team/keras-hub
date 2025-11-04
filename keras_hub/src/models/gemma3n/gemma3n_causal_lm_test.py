@@ -3,8 +3,10 @@ from unittest.mock import patch
 
 import keras
 import numpy as np
+import pytest
 from absl.testing import parameterized
 from keras import ops
+from packaging import version
 
 from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
     Gemma3nAudioConverter,
@@ -35,6 +37,10 @@ from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
 from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
+@pytest.mark.skipif(
+    version.parse(keras.__version__) > version.parse("3.8.0"),
+    reason=("Some facets of Gemma3nCausalLM are unsupported in keras > 3.8.0"),
+)
 class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
     def setUp(self):
         self.tokenizer = MockGemma3nTokenizer()
