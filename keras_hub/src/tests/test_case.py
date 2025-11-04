@@ -445,77 +445,39 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         Returns:
             LiteRT model outputs (tensor or dict of tensors)
         """
-        input_details = interpreter.get_input_details()
+        # Get signature information
+        signature_defs = interpreter.get_signature_list()
+        serving_sig = signature_defs["serving_default"]
+        sig_outputs = serving_sig.get("outputs", [])
 
-        # Handle dynamic shapes: resize if needed, then allocate
+        # Use signature runner for inference - it handles all the complexity
+        signature_runner = interpreter.get_signature_runner("serving_default")
+
+        # Run inference using signature runner
         if isinstance(input_data, dict):
-            # Match dict inputs by name
-            for detail in input_details:
-                # Extract base name from TFLite naming:
-                # "serving_default_name:0" -> "name"
-                base_name = (
-                    detail["name"]
-                    .split(":")[0]
-                    .removeprefix("serving_default_")
+            # For dict inputs, pass as kwargs
+            litert_output = signature_runner(**input_data)
+        else:
+            # For single tensor input, we need to know the input name
+            sig_inputs = serving_sig.get("inputs", [])
+            if len(sig_inputs) == 1:
+                input_name = sig_inputs[0]
+                litert_output = signature_runner(**{input_name: input_data})
+            else:
+                raise ValueError(
+                    "Single tensor input provided but model expects "
+                    f"multiple inputs: {sig_inputs}"
                 )
 
-                if base_name in input_data:
-                    converted = ops.convert_to_numpy(
-                        input_data[base_name]
-                    ).astype(detail["dtype"])
+        # Convert output to match expected format
+        if len(sig_outputs) == 1:
+            # For single output, return the tensor directly (not wrapped in
+            # dict)
+            output_name = sig_outputs[0]
+            if isinstance(litert_output, dict):
+                litert_output = litert_output[output_name]
 
-                    # Resize if dynamic shape
-                    if (
-                        "shape_signature" in detail
-                        and -1 in detail["shape_signature"]
-                    ):
-                        interpreter.resize_tensor_input(
-                            detail["index"], list(converted.shape)
-                        )
-        else:
-            # Single tensor input
-            detail = input_details[0]
-            converted = ops.convert_to_numpy(input_data).astype(detail["dtype"])
-
-            # Resize if dynamic shape
-            if "shape_signature" in detail and -1 in detail["shape_signature"]:
-                interpreter.resize_tensor_input(
-                    detail["index"], list(converted.shape)
-                )
-
-        # Allocate tensors after any resizing
-        interpreter.allocate_tensors()
-
-        # Now set input tensors
-        if isinstance(input_data, dict):
-            for detail in input_details:
-                base_name = (
-                    detail["name"]
-                    .split(":")[0]
-                    .removeprefix("serving_default_")
-                )
-                if base_name in input_data:
-                    converted = ops.convert_to_numpy(
-                        input_data[base_name]
-                    ).astype(detail["dtype"])
-                    interpreter.set_tensor(detail["index"], converted)
-        else:
-            detail = input_details[0]
-            converted = ops.convert_to_numpy(input_data).astype(detail["dtype"])
-            interpreter.set_tensor(detail["index"], converted)
-
-        # Run inference
-        interpreter.invoke()
-
-        # Get outputs
-        output_details = interpreter.get_output_details()
-        if len(output_details) == 1:
-            return interpreter.get_tensor(output_details[0]["index"])
-        else:
-            return {
-                detail["name"]: interpreter.get_tensor(detail["index"])
-                for detail in output_details
-            }
+        return litert_output
 
     def _verify_litert_outputs(
         self,
@@ -738,13 +700,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                             f"but SignatureDef has {sorted(actual_inputs)}"
                         )
                 else:
-                    # For numpy arrays, assume "images" for vision models
-                    self.assertIn(
-                        "images",
-                        sig_inputs,
-                        f"Expected 'images' in SignatureDef inputs: "
-                        f"{sig_inputs}",
-                    )
+                    # For numpy arrays, just verify we have exactly one input
+                    # (since we're passing a single tensor)
+                    if len(sig_inputs) != 1:
+                        self.fail(
+                            "Expected 1 input for numpy array input_data, "
+                            f"but SignatureDef has {len(sig_inputs)}: "
+                            f"{sig_inputs}"
+                        )
 
                 # Verify output signature
                 if verify_numerics and isinstance(keras_output, dict):

@@ -519,10 +519,11 @@ class ExportNumericalVerificationTest(TestCase):
 
     def test_simple_model_numerical_accuracy(self):
         """Test that exported model produces similar outputs to original."""
-        # Create a simple sequential model
+        # Create a simple sequential model with explicit Input layer
         model = keras.Sequential(
             [
-                keras.layers.Dense(10, activation="relu", input_shape=(5,)),
+                keras.layers.Input(shape=(5,)),
+                keras.layers.Dense(10, activation="relu"),
                 keras.layers.Dense(3, activation="softmax"),
             ]
         )
@@ -540,7 +541,8 @@ class ExportNumericalVerificationTest(TestCase):
             cls=keras.Sequential,
             init_kwargs={
                 "layers": [
-                    keras.layers.Dense(10, activation="relu", input_shape=(5,)),
+                    keras.layers.Input(shape=(5,)),
+                    keras.layers.Dense(10, activation="relu"),
                     keras.layers.Dense(3, activation="softmax"),
                 ]
             },
