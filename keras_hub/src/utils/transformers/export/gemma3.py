@@ -32,6 +32,21 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
                     If False, exports for backbone only (without prefix).
     """
 
+    def _convert_qkv_kernel(kernel, hidden_dim):
+        """Helper to convert Q/K/V projection kernels to HF format.
+        
+        Args:
+            kernel: The kernel weight tensor to convert.
+            hidden_dim: The hidden dimension size for reshaping.
+        
+        Returns:
+            Converted kernel in HF format.
+        """
+        kernel = ops.transpose(kernel, axes=(1, 0, 2))  # permute(1, 0, 2)
+        kernel = ops.reshape(kernel, (hidden_dim, -1))
+        kernel = ops.transpose(kernel)  # .T
+        return kernel
+
     weights_dict = {}
 
     # For CausalLM export, use "model." prefix
@@ -47,24 +62,21 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
         block = backbone.get_layer(f"decoder_block_{i}")
 
         # Attention query projection
-        q_kernel = block.attention.query_dense.weights[0]
-        q_kernel = ops.transpose(q_kernel, axes=(1, 0, 2))  # permute(1, 0, 2)
-        q_kernel = ops.reshape(q_kernel, (backbone.hidden_dim, -1))
-        q_kernel = ops.transpose(q_kernel)  # .T
+        q_kernel = _convert_qkv_kernel(
+            block.attention.query_dense.weights[0], backbone.hidden_dim
+        )
         weights_dict[f"{prefix}layers.{i}.self_attn.q_proj.weight"] = q_kernel
 
         # Attention key projection
-        k_kernel = block.attention.key_dense.weights[0]
-        k_kernel = ops.transpose(k_kernel, axes=(1, 0, 2))  # permute(1, 0, 2)
-        k_kernel = ops.reshape(k_kernel, (backbone.hidden_dim, -1))
-        k_kernel = ops.transpose(k_kernel)  # .T
+        k_kernel = _convert_qkv_kernel(
+            block.attention.key_dense.weights[0], backbone.hidden_dim
+        )
         weights_dict[f"{prefix}layers.{i}.self_attn.k_proj.weight"] = k_kernel
 
         # Attention value projection
-        v_kernel = block.attention.value_dense.weights[0]
-        v_kernel = ops.transpose(v_kernel, axes=(1, 0, 2))  # permute(1, 0, 2)
-        v_kernel = ops.reshape(v_kernel, (backbone.hidden_dim, -1))
-        v_kernel = ops.transpose(v_kernel)  # .T
+        v_kernel = _convert_qkv_kernel(
+            block.attention.value_dense.weights[0], backbone.hidden_dim
+        )
         weights_dict[f"{prefix}layers.{i}.self_attn.v_proj.weight"] = v_kernel
 
         # Attention output projection
@@ -104,28 +116,20 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
         # Post-attention normalization
         if hasattr(block, "post_attention_norm"):
             post_attn_norm = block.post_attention_norm.weights[0]
-        else:
-            # Fallback to pre_ffw_norm if post_attention_norm doesn't exist
-            post_attn_norm = block.pre_ffw_norm.weights[0]
-        weights_dict[f"{prefix}layers.{i}.post_attention_layernorm.weight"] = (
-            post_attn_norm
-        )
-
+            weights_dict[f"{prefix}layers.{i}.post_attention_layernorm.weight"] = (
+                post_attn_norm
+            )
         # Pre-feedforward normalization
         pre_feedforward_layernorm = block.pre_ffw_norm.weights[0]
         weights_dict[f"{prefix}layers.{i}.pre_feedforward_layernorm.weight"] = (
             pre_feedforward_layernorm
         )
-
         # Post-feedforward normalization
         if hasattr(block, "post_ffw_norm"):
             post_feedforward_layernorm = block.post_ffw_norm.weights[0]
-        else:
-            # Fallback to pre_ffw_norm if post_ffw_norm doesn't exist
-            post_feedforward_layernorm = block.pre_ffw_norm.weights[0]
-        weights_dict[
-            f"{prefix}layers.{i}.post_feedforward_layernorm.weight"
-        ] = post_feedforward_layernorm
+            weights_dict[
+                f"{prefix}layers.{i}.post_feedforward_layernorm.weight"
+            ] = post_feedforward_layernorm
 
     # Final normalization
     final_norm = backbone.get_layer("final_normalization").weights[0]
@@ -175,3 +179,4 @@ def get_gemma3_tokenizer_config(tokenizer):
             }
     tokenizer_config["added_tokens_decoder"] = added_tokens_decoder
     return tokenizer_config
+
