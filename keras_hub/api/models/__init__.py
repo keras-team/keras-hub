@@ -315,6 +315,15 @@ from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
 from keras_hub.src.models.gemma3n.gemma3n_backbone import (
     Gemma3nBackbone as Gemma3nBackbone,
 )
+from keras_hub.src.models.gemma3n.gemma3n_causal_lm import (
+    Gemma3nCausalLM as Gemma3nCausalLM,
+)
+from keras_hub.src.models.gemma3n.gemma3n_causal_lm_preprocessor import (
+    Gemma3nCausalLMPreprocessor as Gemma3nCausalLMPreprocessor,
+)
+from keras_hub.src.models.gemma3n.gemma3n_tokenizer import (
+    Gemma3nTokenizer as Gemma3nTokenizer,
+)
 from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone as GPT2Backbone
 from keras_hub.src.models.gpt2.gpt2_causal_lm import (
     GPT2CausalLM as GPT2CausalLM,

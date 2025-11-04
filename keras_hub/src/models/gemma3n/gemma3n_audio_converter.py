@@ -7,8 +7,10 @@ try:
     import tensorflow as tf
 except ImportError:
     tf = None
+from keras_hub.src.api_export import keras_hub_export
 
 
+@keras_hub_export("keras_hub.layers.Gemma3nAudioConverter")
 class Gemma3nAudioConverter(keras.layers.Layer):
     """Converts raw audio waveforms into log-mel spectrograms.
 
