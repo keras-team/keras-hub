@@ -230,7 +230,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         vocabulary=None,
         dtype="int32",
         **kwargs,
-    ) -> None:
+    ):
         """Initialize RWKV tokenizer.
 
         Args:

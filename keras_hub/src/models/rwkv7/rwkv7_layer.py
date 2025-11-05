@@ -22,8 +22,8 @@ def rnn_generalized_delta_rule(
     a,
     b,
     initial_state=None,
-    output_final_state: bool = True,
-    head_first: bool = False,
+    output_final_state=True,
+    head_first=False,
 ):
     """Implements the generalized delta rule for RWKV."""
     DTYPE = r.dtype
@@ -72,7 +72,7 @@ class TimeShift(Layer):
     """
 
     def __init__(self, name="time_shift"):
-        super(TimeShift, self).__init__(name=name)
+        super().__init__(name=name)
 
     def call(self, inputs, cache_x=None):
         if cache_x is not None:
@@ -445,7 +445,7 @@ class RWKV7_TimeMix(Layer):
                 return x
             return ops.cast(x, dtype)
 
-        x, finnal_state = rwkv7_op(
+        x, final_state = rwkv7_op(
             reshape_and_cast(r, (B, T, self.n_head, self.head_size)),
             reshape_and_cast(w, (B, T, self.n_head, self.head_size)),
             reshape_and_cast(k, (B, T, self.n_head, self.head_size)),
@@ -472,13 +472,14 @@ class RWKV7_TimeMix(Layer):
         x = x + ops.reshape(rwkv, (B, T, C))
         x = self.output_layer(x * g)
         if train_mode:
-            return x, v_first
-        return x, v_first, last_cache_x, finnal_state
+            return x, v_first, final_state
+        return x, v_first, last_cache_x, final_state
 
     def compute_output_shape(self, input_shape):
         output_shapes = [
             [None, None, self.hidden_size],
             [None, None, self.hidden_size],
+            [None, self.n_head, self.head_size, self.head_size],
         ]
         return output_shapes
 
@@ -589,6 +590,8 @@ class RWKV7_Block(Layer):
         )
         self.ffn.build(input_shape)
 
+    # The generate call should be separated from the call method.
+    # Otherwise, keras.remat will report an error.
     def generate_call(
         self,
         x,
@@ -648,7 +651,10 @@ class RWKV7_Block(Layer):
             padding_mask = ops.expand_dims(padding_mask, axis=-1)
         if self.use_initial_norm:
             x = self.ln0(x)
-        xx, v_first = self.att(
+        # For our model, returning the state is not necessary.
+        # However, other researchers might need it when using it
+        # so we provide a return.
+        xx, v_first, state = self.att(
             self.ln1(x),
             v_first=v_first,
             padding_mask=padding_mask,
