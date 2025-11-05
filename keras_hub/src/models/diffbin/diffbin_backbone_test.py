@@ -11,9 +11,9 @@ class DiffBinBackboneTest(TestCase):
         self.resnet_kwargs = {
             "input_conv_filters": [64],
             "input_conv_kernel_sizes": [7],
-            "stackwise_num_filters": [64, 4, 4],
-            "stackwise_num_blocks": [3, 4, 6],
-            "stackwise_num_strides": [1, 2, 2],
+            "stackwise_num_filters": [64, 128, 256, 512],
+            "stackwise_num_blocks": [3, 4, 6, 3],
+            "stackwise_num_strides": [1, 2, 2, 2],
             "block_type": "basic_block",
             "use_pre_activation": False,
             "image_shape": (640, 640, 3),

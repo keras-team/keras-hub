@@ -94,7 +94,6 @@ class DiffBinBackbone(Backbone):
             {
                 "fpn_channels": self.fpn_channels,
                 "head_kernel_list": self.head_kernel_list,
-                # Use keras.saving.serialize_keras_object for custom Models
                 "image_encoder": keras.saving.serialize_keras_object(
                     self.image_encoder
                 ),
@@ -116,7 +115,7 @@ def diffbin_fpn_model(inputs, out_channels, dtype=None):
     # pointwise convolutions of ResNet's pyramid outputs
     image_data_format = keras.config.image_data_format()
     channel_axis = -1 if image_data_format == "channels_last" else 1
-    p2, p3, p4 = inputs["P2"], inputs["P3"], inputs["P4"]
+    p2, p3, p4, p5 = inputs["P2"], inputs["P3"], inputs["P4"], inputs["P5"]
 
     lateral_p2 = layers.Conv2D(
         out_channels,
@@ -142,9 +141,22 @@ def diffbin_fpn_model(inputs, out_channels, dtype=None):
         dtype=dtype,
         data_format=image_data_format,
     )(p4)
+    lateral_p5 = layers.Conv2D(
+        out_channels,
+        kernel_size=1,
+        use_bias=False,
+        name="neck_lateral_p5",
+        dtype=dtype,
+        data_format=image_data_format,
+    )(p5)
 
-    # top-down fusion
-    topdown_p4 = lateral_p4
+    topdown_p5 = lateral_p5
+    topdown_p4 = layers.Add()(
+        [
+            resize_like(topdown_p5, lateral_p4, image_data_format, dtype),
+            lateral_p4,
+        ]
+    )
     topdown_p3 = layers.Add()(
         [
             resize_like(topdown_p4, lateral_p3, image_data_format, dtype),
@@ -159,6 +171,15 @@ def diffbin_fpn_model(inputs, out_channels, dtype=None):
     )
 
     # construct merged feature maps for each pyramid level
+    featuremap_p5 = layers.Conv2D(
+        out_channels // 4,
+        kernel_size=3,
+        padding="same",
+        use_bias=False,
+        name="neck_featuremap_p5",
+        dtype=dtype,
+        data_format=image_data_format,
+    )(topdown_p5)
     featuremap_p4 = layers.Conv2D(
         out_channels // 4,
         kernel_size=3,
@@ -187,6 +208,9 @@ def diffbin_fpn_model(inputs, out_channels, dtype=None):
         data_format=image_data_format,
     )(topdown_p2)
 
+    final_p5 = resize_like(
+        featuremap_p5, featuremap_p2, image_data_format, dtype
+    )
     final_p4 = resize_like(
         featuremap_p4, featuremap_p2, image_data_format, dtype
     )
@@ -195,7 +219,7 @@ def diffbin_fpn_model(inputs, out_channels, dtype=None):
     )
     final_p2 = featuremap_p2
     featuremap = layers.Concatenate(axis=channel_axis, dtype=dtype)(
-        [final_p4, final_p3, final_p2]
+        [final_p5, final_p4, final_p3, final_p2]
     )
     return featuremap
 
