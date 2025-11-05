@@ -14,10 +14,10 @@ from keras_hub.src.models.image_classifier_preprocessor import (
 class DiffBinTextDetector(keras.Model):
     """
     Differentiable Binarization Image Text Detector.
-    This class implements the Differentiable Binarization architecture for
-    detecting text in natural images, described in
-    [Real-time Scene Text Detection with Differentiable Binarization](
-    https://arxiv.org/abs/1911.08947).
+    This class combines the feature-extracting backbone with the necessary
+    post-processing logic to predict the text detection maps. It processes the
+    input image, calculates the Probability Map and Threshold Map, and uses
+    the step_function to compute the final Binary Map.
     Args:
         backbone: A `DiffBinBackbone` instance.
         preprocessor: An `ImageTextDetectorPreprocessor` instance.
