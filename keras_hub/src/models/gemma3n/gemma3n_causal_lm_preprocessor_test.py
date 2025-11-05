@@ -118,40 +118,34 @@ class Gemma3nCausalLMPreprocessorTest(TestCase):
             input_data=input_data,
             return_output=True,
         )
-        expected_output = [
-            {
-                "vision_indices": [list(range(7, 12)) + [0] * 5],
-                "audio_indices": [[]],
-                "vision_mask": [[0] * 7 + [1] * 5 + [0] * 8],
-                "audio_mask": [[0] * 20],
-                "token_ids": [
-                    [1, 9, 14, 10, 12, 16, 4]
-                    + [8] * 5
-                    + [5, 16, 15, 2]
-                    + [0] * 4
-                ],
-                "padding_mask": [[1] * 16 + [0] * 4],
-            },
-            [
-                [9, 14, 10, 12, 16, 4] + [8] * 5 + [5, 16, 15, 2] + [0] * 5
-            ],  # Labels shifted.
-            [[0] * 13 + [1] * 2 + [0] * 5],  # Zero out unlabeled examples.
-        ]
+        expected_x = {
+            "token_ids": [
+                [1, 9, 14, 10, 12, 16, 4] + [8] * 5 + [5, 16, 15, 2] + [0] * 4
+            ],
+            "padding_mask": [[1] * 16 + [0] * 4],
+        }
+        expected_y = [
+            [9, 14, 10, 12, 16, 4] + [8] * 5 + [5, 16, 15, 2] + [0] * 5
+        ]  # Labels shifted.
+        expected_sw = [
+            [0] * 13 + [1] * 2 + [0] * 5
+        ]  # Zero out unlabeled examples.
         # Check shape for images.
+        self.assertIn("images", output[0])
         self.assertAllEqual(output[0]["images"].shape, [1, 2, 4, 4, 3])
-        # Check shape for audios (should be empty).
-        self.assertAllEqual(output[0]["audios"].shape, [1, 0, 0])
-        self.assertAllEqual(output[0]["input_features"].shape, [1, 0, 0, 128])
-        self.assertAllEqual(output[0]["input_features_mask"].shape, [1, 0, 0])
-        # For everything else, check the actual values.
-        del output[0]["images"]
-        del output[0]["audios"]
-        del output[0]["input_features"]
-        del output[0]["input_features_mask"]
-        for key in expected_output[0].keys():
-            self.assertAllEqual(output[0][key], expected_output[0][key])
-        self.assertAllEqual(output[1], expected_output[1])
-        self.assertAllEqual(output[2], expected_output[2])
+        self.assertNotIn("audios", output[0])
+        self.assertNotIn("input_features", output[0])
+        self.assertNotIn("input_features_mask", output[0])
+        self.assertNotIn("vision_indices", output[0])
+        self.assertNotIn("audio_indices", output[0])
+        self.assertNotIn("vision_mask", output[0])
+        self.assertNotIn("audio_mask", output[0])
+        self.assertAllEqual(output[0]["token_ids"], expected_x["token_ids"])
+        self.assertAllEqual(
+            output[0]["padding_mask"], expected_x["padding_mask"]
+        )
+        self.assertAllEqual(output[1], expected_y)
+        self.assertAllEqual(output[2], expected_sw)
 
     def test_audio_preprocessor_basics(self):
         input_data = {
@@ -163,21 +157,20 @@ class Gemma3nCausalLMPreprocessorTest(TestCase):
         output = preprocessor(input_data)
         # Check that we have the right keys.
         self.assertIn("token_ids", output[0])
-        self.assertIn("vision_indices", output[0])
-        self.assertIn("audio_indices", output[0])
-        self.assertIn("vision_mask", output[0])
-        self.assertIn("audio_mask", output[0])
         self.assertIn("padding_mask", output[0])
-        self.assertIn("images", output[0])
-        self.assertIn("audios", output[0])
         self.assertIn("input_features", output[0])
         self.assertIn("input_features_mask", output[0])
-        # Check shapes for images (should be empty).
-        self.assertAllEqual(output[0]["images"].shape[0:2], [1, 0])
-        # Check shapes for audios (should have data).
-        self.assertAllEqual(output[0]["audios"].shape[0:2], [1, 2])
+        self.assertNotIn("images", output[0])
+        self.assertNotIn("audios", output[0])
+        self.assertNotIn("vision_indices", output[0])
+        self.assertNotIn("audio_indices", output[0])
+        self.assertNotIn("vision_mask", output[0])
+        self.assertNotIn("audio_mask", output[0])
         self.assertEqual(output[0]["input_features"].shape[0], 1)
         self.assertEqual(output[0]["input_features_mask"].shape[0], 1)
+        self.assertAllEqual(output[0]["input_features"].shape[0:2], [1, 2])
+        self.assertGreater(output[0]["input_features"].shape[2], 0)
+        self.assertGreater(output[0]["input_features_mask"].shape[2], 0)
 
     def test_multimodal_preprocessor_basics(self):
         input_data = {
@@ -192,26 +185,24 @@ class Gemma3nCausalLMPreprocessorTest(TestCase):
         output = preprocessor(input_data)
         # Check that we have all the right keys.
         self.assertIn("token_ids", output[0])
-        self.assertIn("vision_indices", output[0])
-        self.assertIn("audio_indices", output[0])
-        self.assertIn("vision_mask", output[0])
-        self.assertIn("audio_mask", output[0])
         self.assertIn("padding_mask", output[0])
         self.assertIn("images", output[0])
-        self.assertIn("audios", output[0])
         self.assertIn("input_features", output[0])
         self.assertIn("input_features_mask", output[0])
+        self.assertNotIn("vision_indices", output[0])
+        self.assertNotIn("audio_indices", output[0])
+        self.assertNotIn("vision_mask", output[0])
+        self.assertNotIn("audio_mask", output[0])
+        self.assertNotIn("audios", output[0])
         # Check shapes for images.
         self.assertAllEqual(output[0]["images"].shape, [1, 2, 4, 4, 3])
         # Check shapes for audios.
-        self.assertAllEqual(output[0]["audios"].shape[0:2], [1, 2])
         self.assertEqual(output[0]["input_features"].shape[0], 1)
         self.assertEqual(output[0]["input_features_mask"].shape[0], 1)
-        # Check that both vision and audio masks have some True values.
-        vision_mask_sum = np.sum(np.array(output[0]["vision_mask"]))
-        audio_mask_sum = np.sum(np.array(output[0]["audio_mask"]))
-        self.assertGreater(vision_mask_sum, 0)
-        self.assertGreater(audio_mask_sum, 0)
+        self.assertAllEqual(output[0]["images"].shape[0:2], [1, 2])
+        self.assertAllEqual(output[0]["input_features"].shape[0:2], [1, 2])
+        self.assertGreater(output[0]["input_features"].shape[2], 0)
+        self.assertGreater(output[0]["input_features_mask"].shape[2], 0)
 
     def test_text_no_start_end_token(self):
         input_data = {

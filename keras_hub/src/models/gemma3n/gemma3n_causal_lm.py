@@ -100,39 +100,8 @@ class Gemma3nCausalLM(CausalLM):
         self.backbone = backbone
 
         # === Functional Model ===
-        backbone_inputs = backbone.input.copy()
-        inputs = backbone_inputs.copy()
-        hidden_state = backbone(backbone_inputs)
-        is_text_only = "images" not in inputs and "input_features" not in inputs
-        if not is_text_only:
-            if "images" not in inputs:
-                inputs["images"] = keras.Input(
-                    shape=(None, None, None, 3), name="images", dtype="float32"
-                )
-            inputs["vision_indices"] = keras.Input(
-                shape=(None,), dtype="int32", name="vision_indices"
-            )
-            inputs["vision_mask"] = keras.Input(
-                shape=(None,), dtype="bool", name="vision_mask"
-            )
-            if "input_features" not in inputs:
-                inputs["input_features"] = keras.Input(
-                    shape=(None, None, None),
-                    name="input_features",
-                    dtype="float32",
-                )
-                inputs["input_features_mask"] = keras.Input(
-                    shape=(None, None), name="input_features_mask", dtype="bool"
-                )
-            inputs["audios"] = keras.Input(
-                shape=(None, None), dtype="float32", name="audios"
-            )
-            inputs["audio_indices"] = keras.Input(
-                shape=(None,), dtype="int32", name="audio_indices"
-            )
-            inputs["audio_mask"] = keras.Input(
-                shape=(None,), dtype="bool", name="audio_mask"
-            )
+        inputs = backbone.input
+        hidden_state = backbone(inputs)
         outputs = backbone.language_model.token_embedding(
             hidden_state, reverse=True
         )
