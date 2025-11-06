@@ -129,7 +129,7 @@ class RWKV7Backbone(Backbone):
         )
 
         padding_mask_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
+            shape=(None,), dtype="int32", name="padding_mask"
         )
 
         x = self.token_embedding(token_id_input)
