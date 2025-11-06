@@ -20,7 +20,8 @@ class RWKV7CausalLMPreprocessorTest(TestCase):
     def test_preprocessor_basics(self):
         result = self.preprocessor(x=["hello world hello world hello world"])
         self.assertAllEqual(
-            result[0], [[0, 0, 0, 0, 0, 0, 4, 1, 5, 1, 4, 1, 5, 1, 4, 1]]
+            result[0]["token_ids"],
+            [[0, 0, 0, 0, 0, 0, 4, 1, 5, 1, 4, 1, 5, 1, 4, 1]],
         )
         self.assertAllEqual(
             result[1], [[0, 0, 0, 0, 0, 4, 1, 5, 1, 4, 1, 5, 1, 4, 1, 5]]

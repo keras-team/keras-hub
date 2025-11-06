@@ -1,3 +1,4 @@
+import pytest
 from keras import ops
 
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
@@ -20,18 +21,21 @@ class RWKV7BackboneTest(TestCase):
             "aaa_lora": 16,
             "decay_lora": 16,
         }
-        self.input_data = ops.ones((2, 5), dtype="int32")
-        self.backbone = RWKV7Backbone(**self.init_kwargs)
+        t = ops.ones((2, 16), dtype="int32")
+        self.input_data = {"token_ids": t, "padding_mask": t}
 
     def test_backbone_basics(self):
-        """
-        Test basic functionality of the RWKV7 backbone.
-        """
-        y = self.backbone(self.input_data)
-        self.assertEqual(y.shape, (2, 5, 10))
+        self.run_backbone_test(
+            cls=RWKV7Backbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(2, 16, 10),
+        )
 
-    def test_num_parameters(self):
-        """
-        Test that the model has the expected number of parameters.
-        """
-        self.assertEqual(self.backbone.count_params(), 10208)
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=RWKV7Backbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )

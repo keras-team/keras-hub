@@ -71,9 +71,6 @@ class TimeShift(Layer):
     It also be called short conv
     """
 
-    def __init__(self, name="time_shift"):
-        super().__init__(name=name)
-
     def call(self, inputs, cache_x=None):
         if cache_x is not None:
             x = ops.concatenate([cache_x, inputs], axis=1)
@@ -130,23 +127,28 @@ class RWKV7_ChannelMix(Layer):
         super().build(input_shape)
         if isinstance(input_shape, list):
             input_shape = input_shape[0]
+
         self.x_k = self.add_weight(
             shape=(1, 1, input_shape[-1]),
             name="time_mix_k",
             initializer=self.kernel_initializer,
         )
-        self.time_shift = TimeShift()
+        self.time_shift = TimeShift(
+            dtype=self.dtype_policy,
+        )
         self.key = keras.layers.Dense(
             self.dim_ffn,
             use_bias=False,
             name="dense_k",
             kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
         )
         self.value = keras.layers.Dense(
             input_shape[-1],
             use_bias=False,
             name="dense_v",
             kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
         )
         self.key.build(input_shape)
         self.value.build([None, None, self.dim_ffn])
@@ -321,32 +323,42 @@ class RWKV7_TimeMix(Layer):
             shape=(H, N), name="r_k", initializer=self.kernel_initializer
         )
 
-        self.time_shift = TimeShift()
+        self.time_shift = TimeShift(
+            dtype=self.dtype_policy,
+        )
         self.receptance = keras.layers.Dense(
             C,
             use_bias=False,
             kernel_initializer=self.kernel_initializer,
             name="receptance",
+            dtype=self.dtype_policy,
         )
         self.key = keras.layers.Dense(
             C,
             use_bias=False,
             kernel_initializer=self.kernel_initializer,
             name="key",
+            dtype=self.dtype_policy,
         )
         self.value = keras.layers.Dense(
             C,
             use_bias=False,
             kernel_initializer=self.kernel_initializer,
             name="value",
+            dtype=self.dtype_policy,
         )
         self.output_layer = keras.layers.Dense(
             C,
             use_bias=False,
             kernel_initializer=self.kernel_initializer,
             name="output_layer",
+            dtype=self.dtype_policy,
         )
-        self.ln_x = GroupNorm(groups=H, epsilon=64e-5)
+        self.ln_x = GroupNorm(
+            groups=H,
+            epsilon=64e-5,
+            dtype=self.dtype_policy,
+        )
 
         self.receptance.build(input_shape)
         self.value.build(input_shape)
@@ -557,17 +569,17 @@ class RWKV7_Block(Layer):
         super().build(input_shape)
         if self.use_initial_norm:
             self.ln0 = keras.layers.LayerNormalization(
-                epsilon=1e-5, name="init_norm"
+                epsilon=1e-5, dtype=self.dtype_policy, name="init_norm"
             )
             self.ln0.build(input_shape)
 
         self.ln1 = keras.layers.LayerNormalization(
-            epsilon=1e-5, name="att_norm"
+            epsilon=1e-5, dtype=self.dtype_policy, name="att_norm"
         )
         self.ln1.build(input_shape)
 
         self.ln2 = keras.layers.LayerNormalization(
-            epsilon=1e-5, name="ffn_norm"
+            epsilon=1e-5, dtype=self.dtype_policy, name="ffn_norm"
         )
         self.ln2.build(input_shape)
 
@@ -580,6 +592,7 @@ class RWKV7_Block(Layer):
             self.decay_lora,
             name="RWKV_TIME_MIX",
             kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
         )
         self.att.build(input_shape)
 
@@ -587,6 +600,7 @@ class RWKV7_Block(Layer):
             self.intermediate_dim,
             name="RWKV_CMIX",
             kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
         )
         self.ffn.build(input_shape)
 
@@ -631,9 +645,10 @@ class RWKV7_Block(Layer):
             rnn_mode=rnn_mode,
             train_mode=train_mode,
         )
-        x = x + xx
+        x = ops.cast(x, xx.dtype) + xx
         xx = self.ln2(x)
         if padding_mask is not None:
+            padding_mask = ops.cast(padding_mask, x.dtype)
             xx = xx * padding_mask
         xx, cache_cmix_x = self.ffn(xx, cache_cmix_x, train_mode=train_mode)
         x = x + xx
@@ -651,18 +666,20 @@ class RWKV7_Block(Layer):
             padding_mask = ops.expand_dims(padding_mask, axis=-1)
         if self.use_initial_norm:
             x = self.ln0(x)
+        xx = self.ln1(x)
         # For our model, returning the state is not necessary.
         # However, other researchers might need it when using it
         # so we provide a return.
         xx, v_first, state = self.att(
-            self.ln1(x),
+            xx,
             v_first=v_first,
             padding_mask=padding_mask,
             train_mode=train_mode,
         )
-        x = x + xx
+        x = ops.cast(x, xx.dtype) + xx
         xx = self.ln2(x)
         if padding_mask is not None:
+            padding_mask = ops.cast(padding_mask, x.dtype)
             xx = xx * padding_mask
         x = x + self.ffn(xx, train_mode=train_mode)
         return x, v_first

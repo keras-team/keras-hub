@@ -12,7 +12,12 @@ def rwkv7_kernel_initializer(stddev=0.02):
 
 @keras_hub_export("keras_hub.models.RWKV7Backbone")
 class RWKV7Backbone(Backbone):
-    """The [RWKV-7](https://arxiv.org/abs/2503.14456) core architecture.
+    """
+    The RWKV7 Transformer core architecture with hyperparameters.
+
+    This network implements a RNN-based decoder network,
+    Goose, as described in
+    [RWKV-7](https://arxiv.org/abs/2503.14456).
 
     This network implements a Modern RNN architecture based on linear
     attention mechanisms with recurrent processing, as described in the
@@ -31,10 +36,10 @@ class RWKV7Backbone(Backbone):
         vocabulary_size: int. The size of the token vocabulary.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
-        gate_lora: int. LoRA dimension for gating.
-        mv_lora: int. LoRA dimension for value mixing.
-        aaa_lora: int. LoRA dimension for alpha parameters.
-        decay_lora: int. LoRA dimension for decay parameters.
+        gate_lora: int. LoRA dimension for gating.Defaults to 128.
+        mv_lora: int. LoRA dimension for value mixing.Defaults to 32.
+        aaa_lora: int. LoRA dimension for alpha parameters.Defaults to 64.
+        decay_lora: int. LoRA dimension for decay parameters.Defaults to 64.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -83,12 +88,12 @@ class RWKV7Backbone(Backbone):
             dtype=dtype,
             name="token_embedding",
         )
-        self.token_embedding.build([None, None])
 
         self.output_layer_norm = keras.layers.LayerNormalization(
-            epsilon=1e-5, name="output_norm"
+            epsilon=1e-5,
+            name="output_norm",
+            dtype=dtype,
         )
-        self.output_layer_norm.build([None, None, hidden_size])
         self.dropout = keras.layers.Dropout(
             dropout_rate,
             dtype=dtype,
@@ -116,13 +121,16 @@ class RWKV7Backbone(Backbone):
             kernel_initializer=rwkv7_kernel_initializer(),
             use_bias=False,
             name="head",
+            dtype=dtype,
         )
         # === Functional Model ===
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
 
-        padding_mask = ops.not_equal(token_id_input, 0)
+        padding_mask = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
 
         x = self.token_embedding(token_id_input)
         padding_mask = ops.cast(padding_mask, dtype=x.dtype)
@@ -132,14 +140,13 @@ class RWKV7Backbone(Backbone):
             x = self.dropout(x)
         sequence_output = self.output_layer_norm(x)
         sequence_output = self.head(sequence_output)
+
         super().__init__(
-            inputs=token_id_input,
+            inputs={"token_ids": token_id_input, "padding_mask": padding_mask},
             outputs=sequence_output,
             dtype=dtype,
             **kwargs,
         )
-        # Initialize the graph to avoid potential errors in some cases
-        self.call(ops.ones([1, 16], "int32"))
 
         self.num_layers = num_layers
         self.head_size = head_size

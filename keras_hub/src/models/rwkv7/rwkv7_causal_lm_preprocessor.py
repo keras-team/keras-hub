@@ -147,7 +147,10 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         )
 
         # The last token does not have a next token, so we truncate it out.
-        x = token_ids[..., :-1]
+        x = {
+            "token_ids": token_ids[..., :-1],
+            "padding_mask": padding_mask[..., 1:],
+        }
         # Target `y` will be the next token.
         y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)

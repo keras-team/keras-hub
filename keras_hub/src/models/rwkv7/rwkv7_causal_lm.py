@@ -107,6 +107,7 @@ class RWKV7CausalLM(CausalLM):
         x = self.backbone.token_embedding(token_ids)
         if padding_mask is None:
             padding_mask = ops.not_equal(token_ids, 0)
+        padding_mask = ops.cast(padding_mask, x.dtype)
         v_first = None
         updated_state_cache = []
         updated_last_token_cache = []
@@ -139,7 +140,7 @@ class RWKV7CausalLM(CausalLM):
             logits = None
         return logits, hidden_states, cache
 
-    def _build_cache(self, token_ids):
+    def _build_cache(self, token_ids, padding_mask):
         """Build an empty cache for use with `call_with_cache()`."""
         batch_size = ops.shape(token_ids)[0]
         num_layers = self.backbone.num_layers
@@ -164,6 +165,7 @@ class RWKV7CausalLM(CausalLM):
             cache,
             rnn_mode=False,
             compute_head=False,
+            padding_mask=padding_mask,
         )
 
         return hidden_states, cache
@@ -193,7 +195,9 @@ class RWKV7CausalLM(CausalLM):
         )
         # Create and seed cache with a single forward pass.
 
-        hidden_states, cache = self._build_cache(token_ids)
+        hidden_states, cache = self._build_cache(
+            token_ids, inputs["padding_mask"]
+        )
 
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.
