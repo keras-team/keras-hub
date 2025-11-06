@@ -73,7 +73,6 @@ class RWKV7CausalLM(CausalLM):
             outputs=backbone.outputs,
             **kwargs,
         )
-        self.call(ops.ones([1, 16], "int32"))
 
     def call_with_cache(
         self,
