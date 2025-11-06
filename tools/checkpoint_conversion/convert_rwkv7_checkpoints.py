@@ -441,7 +441,7 @@ def main(_):
     x = tokenizer(["i love u"])
     x = np.reshape(x, [1, -1])
     keras_input = ops.convert_to_tensor(x, "int32")
-    my_output = my_model(
+    my_output = my_model.predict_on_batch(
         {"token_ids": keras_input, "padding_mask": ops.ones_like(keras_input)}
     )
     xx = torch.from_numpy(x).int()
