@@ -128,12 +128,12 @@ class RWKV7Backbone(Backbone):
             shape=(None,), dtype="int32", name="token_ids"
         )
 
-        padding_mask = keras.Input(
+        padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
 
         x = self.token_embedding(token_id_input)
-        padding_mask = ops.cast(padding_mask, dtype=x.dtype)
+        padding_mask = ops.cast(padding_mask_input, dtype=x.dtype)
         v_first = None
         for rwkv_layer in self.rwkv_layers:
             x, v_first = rwkv_layer(x, v_first, padding_mask)
@@ -142,7 +142,10 @@ class RWKV7Backbone(Backbone):
         sequence_output = self.head(sequence_output)
 
         super().__init__(
-            inputs={"token_ids": token_id_input, "padding_mask": padding_mask},
+            inputs={
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input,
+            },
             outputs=sequence_output,
             dtype=dtype,
             **kwargs,
