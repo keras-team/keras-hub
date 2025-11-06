@@ -195,7 +195,7 @@ class RWKV7CausalLM(CausalLM):
         # Create and seed cache with a single forward pass.
 
         hidden_states, cache = self._build_cache(
-            token_ids, inputs["padding_mask"]
+            token_ids, inputs["input_padding_mask"]
         )
 
         def next(prompt, cache, index):

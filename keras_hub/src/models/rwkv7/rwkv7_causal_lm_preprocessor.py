@@ -206,7 +206,7 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         start_token = [[t[-1]] for t in x]
         x = [t[:-1] if len(t) > 1 else [0] for t in x]
 
-        token_ids, __ = self.packer(
+        token_ids, input_padding_mask = self.packer(
             x, sequence_length=sequence_length, add_end_value=False
         )
         start_token = ops.convert_to_tensor(start_token, "int32")
@@ -215,6 +215,7 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
 
         return {
             "token_ids": token_ids,
+            "input_padding_mask": input_padding_mask,
             "padding_mask": padding_mask,
             "predict_token_ids": y,
         }
