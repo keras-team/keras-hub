@@ -440,7 +440,10 @@ def main(_):
     # Sanity check: tokenize & compare outputs
     x = tokenizer(["i love u"])
     x = np.reshape(x, [1, -1])
-    my_output = my_model(ops.convert_to_tensor(x, "int32"))
+    keras_input = ops.convert_to_tensor(x, "int32")
+    my_output = my_model(
+        {"token_ids": keras_input, "padding_mask": ops.ones_like(keras_input)}
+    )
     xx = torch.from_numpy(x).int()
     if torch.cuda.is_available():
         xx = xx.cuda()
