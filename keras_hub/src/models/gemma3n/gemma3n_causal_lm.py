@@ -100,7 +100,25 @@ class Gemma3nCausalLM(CausalLM):
         self.backbone = backbone
 
         # === Functional Model ===
-        inputs = backbone.input
+        inputs = backbone._model_inputs_dict.copy()
+        if "images" in inputs:
+            if "vision_indices" not in inputs:
+                inputs["vision_indices"] = keras.Input(
+                    shape=(None,), dtype="int32", name="vision_indices"
+                )
+            if "vision_mask" not in inputs:
+                inputs["vision_mask"] = keras.Input(
+                    shape=(None,), dtype="bool", name="vision_mask"
+                )
+        if "input_features" in inputs:
+            if "audio_indices" not in inputs:
+                inputs["audio_indices"] = keras.Input(
+                    shape=(None,), dtype="int32", name="audio_indices"
+                )
+            if "audio_mask" not in inputs:
+                inputs["audio_mask"] = keras.Input(
+                    shape=(None,), dtype="bool", name="audio_mask"
+                )
         hidden_state = backbone(inputs)
         outputs = backbone.language_model.token_embedding(
             hidden_state, reverse=True
@@ -222,15 +240,17 @@ class Gemma3nCausalLM(CausalLM):
             the final hidden representation of the input tokens, and `cache` is
             the decoding cache.
         """
-        # TODO: Make design decisions for `vision_indices`, `audio_indices`,
-        # `vision_mask` and `audio_mask`.
         # Build inputs dict for embedding processor.
         processor_inputs = {"token_ids": token_ids}
         if pixel_values is not None:
             processor_inputs["pixel_values"] = pixel_values
+            processor_inputs["vision_indices"] = vision_indices
+            processor_inputs["vision_mask"] = vision_mask
         if input_features is not None:
             processor_inputs["input_features"] = input_features
             processor_inputs["input_features_mask"] = input_features_mask
+            processor_inputs["audio_indices"] = audio_indices
+            processor_inputs["audio_mask"] = audio_mask
         # Get embeddings and per-layer inputs.
         inputs_embeds, per_layer_inputs = self.backbone.embedding_processor(
             processor_inputs

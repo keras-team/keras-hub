@@ -190,6 +190,26 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
     def build(self, input_shape):
         super().build(input_shape)
 
+    def compute_output_spec(self, inputs):
+        input_ids_spec = inputs["token_ids"]
+        batch_size = input_ids_spec.shape[0]
+        seq_len = input_ids_spec.shape[1]
+        inputs_embeds_spec = keras.KerasTensor(
+            shape=(batch_size, seq_len, self.text_hidden_size),
+            dtype=input_ids_spec.dtype
+            if hasattr(input_ids_spec.dtype, "name")
+            else "float32",
+        )
+        num_layers = self.language_model.num_hidden_layers
+        per_layer_hidden_size = self.language_model.hidden_size_per_layer_input
+        per_layer_inputs_spec = keras.KerasTensor(
+            shape=(batch_size, seq_len, num_layers, per_layer_hidden_size),
+            dtype=input_ids_spec.dtype
+            if hasattr(input_ids_spec.dtype, "name")
+            else "float32",
+        )
+        return inputs_embeds_spec, per_layer_inputs_spec
+
     def call(self, inputs):
         input_ids = inputs["token_ids"]
         pixel_values = inputs.get("pixel_values")
@@ -640,6 +660,9 @@ class Gemma3nBackbone(Backbone):
             self.vision_encoder = MobileNetV5Backbone.from_config(
                 local_vision_encoder_config
             )
+            if not self.vision_encoder.built:
+                input_shape = (None,) + tuple(self.vision_encoder.image_shape)
+                self.vision_encoder.build(input_shape)
         self.audio_encoder = None
         if audio_encoder_config:
             audio_encoder_sig = inspect.signature(Gemma3nAudioEncoder.__init__)
@@ -660,6 +683,14 @@ class Gemma3nBackbone(Backbone):
             self.audio_encoder = Gemma3nAudioEncoder(
                 dtype=dtype, **filtered_kwargs
             )
+            if not self.audio_encoder.built:
+                mel_shape = (
+                    None,
+                    None,
+                    self.audio_encoder.input_feat_size,
+                )
+                mask_shape = (None, None)
+                self.audio_encoder.build((mel_shape, mask_shape))
         self.language_model = Gemma3nTextModel(
             pad_token_id=pad_token_id,
             vocab_size=text_vocab_size,
@@ -702,6 +733,8 @@ class Gemma3nBackbone(Backbone):
                 dtype=dtype,
                 name="vision_embedder",
             )
+            if not self.embed_vision.built:
+                self.embed_vision.build((None, None))
         self.embed_audio = None
         if self.audio_encoder:
             self.embed_audio = Gemma3nMultimodalEmbedder(
@@ -713,6 +746,8 @@ class Gemma3nBackbone(Backbone):
                 dtype=dtype,
                 name="audio_embedder",
             )
+            if not self.embed_audio.built:
+                self.embed_audio.build((None, None))
         self.embedding_processor = Gemma3nMultimodalEmbeddingProcessor(
             language_model=self.language_model,
             vision_encoder=self.vision_encoder,
@@ -739,7 +774,8 @@ class Gemma3nBackbone(Backbone):
         processor_inputs = {
             "token_ids": token_ids_input,
         }
-        model_inputs = {
+        model_inputs_list = [token_ids_input, padding_mask_input]
+        model_inputs_dict = {
             "token_ids": token_ids_input,
             "padding_mask": padding_mask_input,
         }
@@ -753,7 +789,8 @@ class Gemma3nBackbone(Backbone):
                 name="images",
             )
             processor_inputs["pixel_values"] = images_input
-            model_inputs["images"] = images_input
+            model_inputs_list.append(images_input)
+            model_inputs_dict["images"] = images_input
         if self.audio_encoder:
             input_features_input = keras.Input(
                 shape=(None, None, self.audio_encoder.input_feat_size),
@@ -765,8 +802,10 @@ class Gemma3nBackbone(Backbone):
             )
             processor_inputs["input_features"] = input_features_input
             processor_inputs["input_features_mask"] = input_features_mask_input
-            model_inputs["input_features"] = input_features_input
-            model_inputs["input_features_mask"] = input_features_mask_input
+            model_inputs_list.append(input_features_input)
+            model_inputs_list.append(input_features_mask_input)
+            model_inputs_dict["input_features"] = input_features_input
+            model_inputs_dict["input_features_mask"] = input_features_mask_input
         final_embeds, per_layer_inputs = self.embedding_processor(
             processor_inputs
         )
@@ -783,13 +822,14 @@ class Gemma3nBackbone(Backbone):
             per_layer_inputs,
         )
         super().__init__(
-            inputs=model_inputs,
+            inputs=model_inputs_list,
             outputs=sequence_output,
             dtype=dtype,
             **kwargs,
         )
 
         # === Config ===
+        self._model_inputs_dict = model_inputs_dict
         self.text_vocab_size = text_vocab_size
         self.text_hidden_size = text_hidden_size
         self.num_hidden_layers = num_hidden_layers
@@ -876,7 +916,3 @@ class Gemma3nBackbone(Backbone):
             }
         )
         return config
-
-    @classmethod
-    def from_config(cls, config):
-        return cls(**config)

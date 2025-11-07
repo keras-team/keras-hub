@@ -408,75 +408,46 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             audio_mask = audio_mask[..., :-1]
             response_mask = response_mask[..., :-1]
             padding_mask = padding_mask[..., :-1]
-        if return_labels:
-            x = {
-                "token_ids": (
-                    token_ids if batched else tf.squeeze(token_ids, axis=0)
-                ),
-                "padding_mask": (
-                    padding_mask
-                    if batched
-                    else tf.squeeze(padding_mask, axis=0)
-                ),
-            }
-            if self.image_converter is not None:
-                x["images"] = images if batched else tf.squeeze(images, axis=0)
-            if self.audio_converter is not None:
-                x["input_features"] = (
-                    input_features
-                    if batched
-                    else tf.squeeze(input_features, axis=0)
-                )
-                x["input_features_mask"] = (
-                    input_features_mask
-                    if batched
-                    else tf.squeeze(input_features_mask, axis=0)
-                )
-        else:
-            x = {
-                "token_ids": (
-                    token_ids if batched else tf.squeeze(token_ids, axis=0)
-                ),
-                "padding_mask": (
-                    padding_mask
-                    if batched
-                    else tf.squeeze(padding_mask, axis=0)
-                ),
-            }
-            if self.image_converter is not None:
-                vision_indices = self._get_vision_indices(
-                    vision_mask=vision_mask
-                )
-                x["images"] = images if batched else tf.squeeze(images, axis=0)
-                x["vision_indices"] = (
-                    vision_indices
-                    if batched
-                    else tf.squeeze(vision_indices, axis=0)
-                )
-                x["vision_mask"] = (
-                    vision_mask if batched else tf.squeeze(vision_mask, axis=0)
-                )
-            if self.audio_converter is not None:
-                audio_indices = self._get_audio_indices(audio_mask=audio_mask)
+        x = {
+            "token_ids": token_ids
+            if batched
+            else tf.squeeze(token_ids, axis=0),
+            "padding_mask": padding_mask
+            if batched
+            else tf.squeeze(padding_mask, axis=0),
+        }
+        if self.image_converter is not None:
+            vision_indices = self._get_vision_indices(vision_mask=vision_mask)
+            x["images"] = images if batched else tf.squeeze(images, axis=0)
+            x["vision_indices"] = (
+                vision_indices
+                if batched
+                else tf.squeeze(vision_indices, axis=0)
+            )
+            x["vision_mask"] = (
+                vision_mask if batched else tf.squeeze(vision_mask, axis=0)
+            )
+        if self.audio_converter is not None:
+            audio_indices = self._get_audio_indices(audio_mask=audio_mask)
+            x["input_features"] = (
+                input_features
+                if batched
+                else tf.squeeze(input_features, axis=0)
+            )
+            x["input_features_mask"] = (
+                input_features_mask
+                if batched
+                else tf.squeeze(input_features_mask, axis=0)
+            )
+            x["audio_indices"] = (
+                audio_indices if batched else tf.squeeze(audio_indices, axis=0)
+            )
+            x["audio_mask"] = (
+                audio_mask if batched else tf.squeeze(audio_mask, axis=0)
+            )
+            # For generation only.
+            if not return_labels:
                 x["audios"] = audios if batched else tf.squeeze(audios, axis=0)
-                x["input_features"] = (
-                    input_features
-                    if batched
-                    else tf.squeeze(input_features, axis=0)
-                )
-                x["input_features_mask"] = (
-                    input_features_mask
-                    if batched
-                    else tf.squeeze(input_features_mask, axis=0)
-                )
-                x["audio_indices"] = (
-                    audio_indices
-                    if batched
-                    else tf.squeeze(audio_indices, axis=0)
-                )
-                x["audio_mask"] = (
-                    audio_mask if batched else tf.squeeze(audio_mask, axis=0)
-                )
         if return_labels:
             if not batched:
                 y = tf.squeeze(y, axis=0)
