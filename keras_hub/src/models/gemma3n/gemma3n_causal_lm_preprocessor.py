@@ -709,7 +709,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
                 dtype="float32",
             )
             input_features = tf.ones(
-                shape=[batch_size, 0, 0, 128],
+                shape=[batch_size, 0, 0, self.audio_converter.feature_size],
                 dtype="float32",
             )
             input_features_mask = tf.ones(
@@ -724,12 +724,17 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             audio_mask = token_ids == self.tokenizer.audio_placeholder_id
         else:
             # No audio converter.
+            feature_size = (
+                self.audio_converter.feature_size
+                if self.audio_converter is not None
+                else 128
+            )
             audios = tf.ones(
                 shape=[batch_size, 0, 0],
                 dtype="float32",
             )
             input_features = tf.ones(
-                shape=[batch_size, 0, 0, 128],
+                shape=[batch_size, 0, 0, feature_size],
                 dtype="float32",
             )
             input_features_mask = tf.ones(
@@ -893,7 +898,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
                 dtype="float32",
             )
             input_features = tf.ones(
-                shape=[batch_size, 0, 0, 128],
+                shape=[batch_size, 0, 0, self.audio_converter.feature_size],
                 dtype="float32",
             )
             input_features_mask = tf.ones(
@@ -908,12 +913,17 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             audio_mask = token_ids == self.tokenizer.audio_placeholder_id
         else:
             # No audio converter.
+            feature_size = (
+                self.audio_converter.feature_size
+                if self.audio_converter is not None
+                else 128
+            )
             audios = tf.ones(
                 shape=[batch_size, 0, 0],
                 dtype="float32",
             )
             input_features = tf.ones(
-                shape=[batch_size, 0, 0, 128],
+                shape=[batch_size, 0, 0, feature_size],
                 dtype="float32",
             )
             input_features_mask = tf.ones(

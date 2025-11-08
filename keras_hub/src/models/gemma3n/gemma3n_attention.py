@@ -674,7 +674,8 @@ class Gemma3nAudioAttention(keras.layers.Layer):
         logits = keras.ops.tanh(logits)
         logits = logits * softcap
         compute_dtype = logits.dtype
-        if "float16" in str(compute_dtype):
+        dtype_str = str(compute_dtype)
+        if "float16" in dtype_str or "bfloat16" in dtype_str:
             min_val = np.finfo(np.float16).min
         else:
             min_val = np.finfo(np.float32).min
