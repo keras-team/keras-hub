@@ -232,6 +232,9 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         self,
         vocabulary=None,
         dtype="int32",
+        pad_token_id=0,
+        start_token_id=None,
+        end_token_id=None,
         **kwargs,
     ):
         """Initialize RWKV tokenizer.
@@ -253,9 +256,9 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         if vocabulary is not None:
             self.set_vocabulary(vocabulary)
         self.file_assets = [VOCAB_FILENAME]
-        self.pad_token_id = 0
-        self.start_token_id = None
-        self.end_token_id = self.pad_token_id
+        self.pad_token_id = pad_token_id
+        self.start_token_id = start_token_id
+        self.end_token_id = end_token_id or self.pad_token_id
 
     def set_vocabulary(self, vocabulary):
         """Set the tokenizer vocabulary.
@@ -265,12 +268,16 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         """
         self.vocabulary = vocabulary
         self._tokenizer = RWKV_TOKENIZER(vocabulary)
-        for line in vocabulary:
-            idx = int(line[: line.index(" ")])
-            repr_str = eval(line[line.index(" ") : line.rindex(" ")])
-            if repr_str == "\n\n":
-                self.end_token_id = idx
-                break
+        if (
+            self.end_token_id is not None
+            and self.end_token_id != self.pad_token_id
+        ):
+            for line in vocabulary:
+                idx = int(line[: line.index(" ")])
+                repr_str = eval(line[line.index(" ") : line.rindex(" ")])
+                if repr_str == "\n\n":
+                    self.end_token_id = idx
+                    break
 
     def save_assets(self, dir_path):
         """Save vocabulary to directory.
