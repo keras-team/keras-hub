@@ -270,7 +270,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         self._tokenizer = RWKV_TOKENIZER(vocabulary)
         if (
             self.end_token_id is not None
-            and self.end_token_id != self.pad_token_id
+            or self.end_token_id == self.pad_token_id
         ):
             for line in vocabulary:
                 idx = int(line[: line.index(" ")])
