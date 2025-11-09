@@ -253,12 +253,13 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         super().__init__(dtype=dtype, **kwargs)
 
         self.vocabulary = None
+        self.pad_token_id = pad_token_id
+        self.start_token_id = start_token_id
+        self.end_token_id = end_token_id
         if vocabulary is not None:
             self.set_vocabulary(vocabulary)
         self.file_assets = [VOCAB_FILENAME]
-        self.pad_token_id = pad_token_id
-        self.start_token_id = start_token_id
-        self.end_token_id = end_token_id or self.pad_token_id
+
 
     def set_vocabulary(self, vocabulary):
         """Set the tokenizer vocabulary.
