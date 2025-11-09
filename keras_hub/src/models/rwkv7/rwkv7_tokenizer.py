@@ -155,7 +155,7 @@ class RWKV_TOKENIZER:
         Returns:
             Decoded byte sequence.
         """
-        return b"".join(map(lambda i: self.idx2token[i], tokens))
+        return b"".join(map(lambda i: self.idx2token[int(i)], tokens))
 
     def encode(self, src):
         """Encode text to token IDs.
