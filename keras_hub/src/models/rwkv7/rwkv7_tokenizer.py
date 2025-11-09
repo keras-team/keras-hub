@@ -268,10 +268,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         """
         self.vocabulary = vocabulary
         self._tokenizer = RWKV_TOKENIZER(vocabulary)
-        if (
-            self.end_token_id is not None
-            or self.end_token_id == self.pad_token_id
-        ):
+        if self.end_token_id is None or self.end_token_id == self.pad_token_id:
             for line in vocabulary:
                 idx = int(line[: line.index(" ")])
                 repr_str = eval(line[line.index(" ") : line.rindex(" ")])
