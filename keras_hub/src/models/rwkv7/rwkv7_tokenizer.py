@@ -1,16 +1,19 @@
 import os
 
 import keras
+import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
 from keras_hub.src.tokenizers import tokenizer
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import tensor_to_list
+from keras_hub.src.utils.tensor_utils import tf
 
 # Vocabulary file name constant
-VOCAB_FILENAME = "vocab.txt"
+VOCAB_FILENAME = "vocabulary.txt"
 
 
 class TRIE:
@@ -261,7 +264,12 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         self._tokenizer = RWKV_TOKENIZER(vocabulary)
         self.pad_token_id = 0
         self.start_token_id = None
-        self.end_token_id = self.tokenize(["\n\n"])[0][0]
+        for line in vocabulary:
+            idx = int(line[: line.index(" ")])
+            repr_str = eval(line[line.index(" ") : line.rindex(" ")])
+            if repr_str == "\n\n":
+                self.end_token_id = idx
+                break
 
     def save_assets(self, dir_path):
         """Save vocabulary to directory.
@@ -346,27 +354,86 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         )
         return config
 
+    @preprocessing_function
     def tokenize(self, inputs):
-        """Tokenize input text.
-
-        Args:
-            inputs: Text to tokenize.
-
-        Returns:
-            Tokenized representation.
-        """
         self._check_vocabulary()
+
+        if not tf.executing_eagerly() and tf.is_tensor(inputs):
+
+            def tokenize_wrapper(text_tensor):
+                text_list = (
+                    text_tensor.numpy()
+                    if hasattr(text_tensor, "numpy")
+                    else text_tensor
+                )
+                if isinstance(text_list, bytes):
+                    text_list = [text_list.decode("utf-8")]
+                elif isinstance(text_list, np.ndarray):
+                    text_list = [x.decode("utf-8") for x in text_list.flatten()]
+
+                tokens = self._tokenizer.encode(text_list)
+
+                if is_string_dtype(self.dtype):
+                    result = [
+                        self.id_to_token(i).decode("utf-8", errors="replace")
+                        for i in tokens[0]
+                    ]
+                    return tf.constant(result, dtype=tf.string)
+                else:
+                    return tf.constant(tokens[0], dtype=self.compute_dtype)
+
+            if inputs.shape.rank == 0:
+                output = tf.py_function(
+                    tokenize_wrapper,
+                    [inputs],
+                    Tout=tf.string
+                    if is_string_dtype(self.dtype)
+                    else self.compute_dtype,
+                )
+                output.set_shape([None])
+                return output
+            else:
+                output = tf.map_fn(
+                    lambda x: tf.py_function(
+                        tokenize_wrapper,
+                        [x],
+                        Tout=tf.string
+                        if is_string_dtype(self.dtype)
+                        else self.compute_dtype,
+                    ),
+                    inputs,
+                    fn_output_signature=tf.TensorSpec(
+                        [None],
+                        dtype=tf.string
+                        if is_string_dtype(self.dtype)
+                        else self.compute_dtype,
+                    ),
+                )
+                return output
+
+        if tf.is_tensor(inputs):
+            inputs = tensor_to_list(inputs)
+
         tokens = self._tokenizer.encode(inputs)
 
-        def tokens2ids(x):
-            return [self.id_to_token(t) for t in x]
-
         if is_string_dtype(self.dtype):
-            if isinstance(inputs, str):
-                return tokens2ids(tokens)
-            return [tokens2ids(t) for t in tokens]
-        return tokens
 
+            def ids_to_str(ids):
+                return [
+                    self.id_to_token(i).decode("utf-8", errors="replace")
+                    for i in ids
+                ]
+
+            if isinstance(inputs, str):
+                return ids_to_str(tokens)
+            return [ids_to_str(ts) for ts in tokens]
+
+        if isinstance(inputs, str):
+            return tf.convert_to_tensor(tokens, dtype=self.compute_dtype)
+        else:
+            return tf.ragged.constant(tokens, dtype=self.compute_dtype)
+
+    @preprocessing_function
     def detokenize(self, inputs):
         """Convert tokens back to text.
 
@@ -377,11 +444,29 @@ class RWKVTokenizer(tokenizer.Tokenizer):
             Detokenized text.
         """
         self._check_vocabulary()
-        strip_zero_inputs = []
-        for t in inputs:
-            strip_zero_inputs.append([x for x in t if x != 0])
 
-        return self._tokenizer.decode(strip_zero_inputs)
+        # 1. 将 tf.Tensor/RaggedTensor 转换为 Python list
+        if tf.is_tensor(inputs):
+            inputs = tensor_to_list(inputs)
+
+        # 2. 处理输入形状：确保是二维列表（batch of sequences）
+        #    如果是一维列表，包装成二维
+        if len(inputs) > 0 and isinstance(inputs[0], (int, np.integer)):
+            inputs = [inputs]
+
+        # 3. 移除 padding tokens (0)
+        strip_zero_inputs = []
+        for seq in inputs:
+            # 确保 seq 是 Python list 而不是 tensor
+            if tf.is_tensor(seq):
+                seq = tensor_to_list(seq)
+            strip_zero_inputs.append([x for x in seq if x != 0])
+
+        # 4. 使用纯 Python 分词器解码
+        result = self._tokenizer.decode(strip_zero_inputs)
+
+        # 5. 返回 tf.Tensor（保持与 KerasHub 其他分词器一致）
+        return tf.convert_to_tensor(result, dtype=tf.string)
 
     def compute_output_spec(self, input_spec):
         """Compute output specification.

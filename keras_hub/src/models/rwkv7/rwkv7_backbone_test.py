@@ -7,9 +7,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 class RWKV7BackboneTest(TestCase):
     def setUp(self):
-        """
-        Set up the test case with default arguments and input data.
-        """
         self.init_kwargs = {
             "vocabulary_size": 10,
             "hidden_size": 16,

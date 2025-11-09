@@ -24,6 +24,7 @@ from modelscope import snapshot_download
 
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
 from keras_hub.src.models.rwkv7.rwkv7_causal_lm import RWKV7CausalLM
+from keras_hub.src.models.rwkv7.rwkv7_tokenizer import VOCAB_FILENAME
 
 # Local modules
 from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
@@ -402,7 +403,7 @@ def main(_):
 
     vocabs = requests.get(url, timeout=30).text
     with open(
-        os.path.join(FLAGS.preset, "vocab.txt"), "w", encoding="utf-8"
+        os.path.join(FLAGS.preset, VOCAB_FILENAME), "w", encoding="utf-8"
     ) as f:
         f.write(vocabs)
     tokenizer = RWKVTokenizer()
