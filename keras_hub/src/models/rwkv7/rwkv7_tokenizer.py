@@ -260,7 +260,6 @@ class RWKVTokenizer(tokenizer.Tokenizer):
             self.set_vocabulary(vocabulary)
         self.file_assets = [VOCAB_FILENAME]
 
-
     def set_vocabulary(self, vocabulary):
         """Set the tokenizer vocabulary.
 
