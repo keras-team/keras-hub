@@ -264,6 +264,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         self._tokenizer = RWKV_TOKENIZER(vocabulary)
         self.pad_token_id = 0
         self.start_token_id = None
+        self.end_token_id = self.pad_token_id
         for line in vocabulary:
             idx = int(line[: line.index(" ")])
             repr_str = eval(line[line.index(" ") : line.rindex(" ")])
@@ -445,27 +446,20 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         """
         self._check_vocabulary()
 
-        # 1. 将 tf.Tensor/RaggedTensor 转换为 Python list
         if tf.is_tensor(inputs):
             inputs = tensor_to_list(inputs)
 
-        # 2. 处理输入形状：确保是二维列表（batch of sequences）
-        #    如果是一维列表，包装成二维
         if len(inputs) > 0 and isinstance(inputs[0], (int, np.integer)):
             inputs = [inputs]
 
-        # 3. 移除 padding tokens (0)
         strip_zero_inputs = []
         for seq in inputs:
-            # 确保 seq 是 Python list 而不是 tensor
             if tf.is_tensor(seq):
                 seq = tensor_to_list(seq)
             strip_zero_inputs.append([x for x in seq if x != 0])
 
-        # 4. 使用纯 Python 分词器解码
         result = self._tokenizer.decode(strip_zero_inputs)
 
-        # 5. 返回 tf.Tensor（保持与 KerasHub 其他分词器一致）
         return tf.convert_to_tensor(result, dtype=tf.string)
 
     def compute_output_spec(self, input_spec):
