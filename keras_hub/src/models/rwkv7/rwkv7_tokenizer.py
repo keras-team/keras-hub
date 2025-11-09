@@ -253,6 +253,9 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         if vocabulary is not None:
             self.set_vocabulary(vocabulary)
         self.file_assets = [VOCAB_FILENAME]
+        self.pad_token_id = 0
+        self.start_token_id = None
+        self.end_token_id = self.pad_token_id
 
     def set_vocabulary(self, vocabulary):
         """Set the tokenizer vocabulary.
@@ -262,9 +265,6 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         """
         self.vocabulary = vocabulary
         self._tokenizer = RWKV_TOKENIZER(vocabulary)
-        self.pad_token_id = 0
-        self.start_token_id = None
-        self.end_token_id = self.pad_token_id
         for line in vocabulary:
             idx = int(line[: line.index(" ")])
             repr_str = eval(line[line.index(" ") : line.rindex(" ")])
@@ -350,7 +350,10 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         config = super().get_config()
         config.update(
             {
-                "vocabulary": None,  # Save vocabulary via an asset!
+                "vocabulary": self.vocabulary,
+                "end_token_id": self.end_token_id,
+                "pad_token_id": self.pad_token_id,
+                "start_token_id": self.start_token_id,
             }
         )
         return config
