@@ -864,6 +864,13 @@ class VideoSwinTransformerBlock(keras.Model):
         self.apply_pad = any(
             value > 0 for value in (self.pad_d1, self.pad_r, self.pad_b)
         )
+        
+        if self.apply_pad:
+            self.crop = keras.layers.Cropping3D(
+                cropping=((0, self.pad_d1), (0, self.pad_b), (0, self.pad_r))
+            )
+            self.crop.build((None, depth + self.pad_d1, height + self.pad_b, width + self.pad_r, self.input_dim))
+        
         self.built = True
 
     def apply_attention(self, x, mask_matrix, training):
@@ -935,7 +942,7 @@ class VideoSwinTransformerBlock(keras.Model):
 
         # pad if required
         if self.apply_pad:
-            return x[:, :depth, :height, :width, :]
+            return self.crop(x)
 
         return x
 
