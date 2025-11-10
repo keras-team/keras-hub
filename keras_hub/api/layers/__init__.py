@@ -93,6 +93,9 @@ from keras_hub.src.models.depth_anything.depth_anything_image_converter import (
 from keras_hub.src.models.dinov2.dinov2_image_converter import (
     DINOV2ImageConverter as DINOV2ImageConverter,
 )
+from keras_hub.src.models.dinov3.dinov3_image_converter import (
+    DINOV3ImageConverter as DINOV3ImageConverter,
+)
 from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
     EfficientNetImageConverter as EfficientNetImageConverter,
 )
