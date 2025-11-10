@@ -240,6 +240,9 @@ class MLP(keras.layers.Layer):
         x = self.dropout(x, training=training)
         return x
 
+    def compute_output_shape(self, input_shape):
+        return (*input_shape[:-1], self.output_dim)
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -279,16 +282,16 @@ class VideoSwinPatchingAndEmbedding(keras.layers.Layer):
         self.embed_dim = embed_dim
         self.norm_layer = norm_layer
 
-    def __compute_padding(self, dim, patch_size):
+    def _compute_padding(self, dim, patch_size):
         pad_amount = patch_size - (dim % patch_size)
         return [0, pad_amount if pad_amount != patch_size else 0]
 
     def build(self, input_shape):
         self.pads = [
             [0, 0],
-            self.__compute_padding(input_shape[1], self.patch_size[0]),
-            self.__compute_padding(input_shape[2], self.patch_size[1]),
-            self.__compute_padding(input_shape[3], self.patch_size[2]),
+            self._compute_padding(input_shape[1], self.patch_size[0]),
+            self._compute_padding(input_shape[2], self.patch_size[1]),
+            self._compute_padding(input_shape[3], self.patch_size[2]),
             [0, 0],
         ]
 
@@ -315,6 +318,13 @@ class VideoSwinPatchingAndEmbedding(keras.layers.Layer):
             x = self.norm(x)
 
         return x
+
+    def compute_output_shape(self, input_shape):
+        batch_size, depth, height, width, _ = input_shape
+        depth_out = (depth + self.pads[1][1]) // self.patch_size[0]
+        height_out = (height + self.pads[2][1]) // self.patch_size[1]
+        width_out = (width + self.pads[3][1]) // self.patch_size[2]
+        return (batch_size, depth_out, height_out, width_out, self.embed_dim)
 
     def get_config(self):
         config = super().get_config()
@@ -552,6 +562,9 @@ class VideoSwinWindowAttention(keras.Model):
         x = self.proj_drop(x, training=training)
         return x
 
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -621,7 +634,7 @@ class VideoSwinTransformerLayer(keras.layers.Layer):
         self.norm_layer = norm_layer
         self.downsampling_layer = downsampling_layer
 
-    def __compute_dim_padded(self, input_dim, window_dim_size):
+    def _compute_dim_padded(self, input_dim, window_dim_size):
         input_dim = ops.cast(input_dim, dtype="float32")
         window_dim_size = ops.cast(window_dim_size, dtype="float32")
         return ops.cast(
@@ -632,13 +645,13 @@ class VideoSwinTransformerLayer(keras.layers.Layer):
         self.window_size, self.shift_size = get_window_size(
             input_shape[1:-1], self.window_size, self.shift_size
         )
-        self.depth_pad = self.__compute_dim_padded(
+        self.depth_pad = self._compute_dim_padded(
             input_shape[1], self.window_size[0]
         )
-        self.height_pad = self.__compute_dim_padded(
+        self.height_pad = self._compute_dim_padded(
             input_shape[2], self.window_size[1]
         )
-        self.width_pad = self.__compute_dim_padded(
+        self.width_pad = self._compute_dim_padded(
             input_shape[3], self.window_size[2]
         )
         self.attn_mask = compute_mask(
@@ -938,6 +951,9 @@ class VideoSwinTransformerBlock(keras.Model):
         x = shortcut + self.drop_path(x)
         x = x + self.second_forward(x, training)
         return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
     def get_config(self):
         config = super().get_config()
