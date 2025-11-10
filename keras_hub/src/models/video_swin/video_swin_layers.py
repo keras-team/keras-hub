@@ -866,7 +866,7 @@ class VideoSwinTransformerBlock(keras.Model):
         )
         self.built = True
 
-    def first_forward(self, x, mask_matrix, training):
+    def apply_attention(self, x, mask_matrix, training):
         input_shape = ops.shape(x)
         batch_size, depth, height, width, _ = (
             input_shape[0],
@@ -939,17 +939,16 @@ class VideoSwinTransformerBlock(keras.Model):
 
         return x
 
-    def second_forward(self, x, training):
+    def apply_mlp(self, x, training):
         x = self.norm2(x)
         x = self.mlp(x)
-        x = self.drop_path(x, training=training)
-        return x
+        return self.drop_path(x, training=training)
 
     def call(self, x, mask_matrix=None, training=None):
         shortcut = x
-        x = self.first_forward(x, mask_matrix, training)
-        x = shortcut + self.drop_path(x)
-        x = x + self.second_forward(x, training)
+        x = self.apply_attention(x, mask_matrix, training)
+        x = shortcut + self.drop_path(x, training=training)
+        x = x + self.apply_mlp(x, training)
         return x
 
     def compute_output_shape(self, input_shape):
