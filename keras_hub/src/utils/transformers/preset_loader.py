@@ -8,6 +8,7 @@ from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
 from keras_hub.src.utils.transformers import convert_deit
 from keras_hub.src.utils.transformers import convert_dinov2
+from keras_hub.src.utils.transformers import convert_dinov3
 from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_gemma
@@ -21,6 +22,7 @@ from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
+from keras_hub.src.utils.transformers import convert_smollm3
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_vit
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
@@ -42,6 +44,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_distilbert
         elif model_type in ("dinov2", "dinov2_with_registers"):
             self.converter = convert_dinov2
+        elif model_type == "dinov3_vit":
+            self.converter = convert_dinov3
         elif model_type == "esm":
             self.converter = convert_esm
         elif model_type in ("gemma", "gemma2"):
@@ -69,6 +73,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen3_moe
         elif model_type == "qwen3":
             self.converter = convert_qwen3
+        elif model_type == "smollm3":
+            self.converter = convert_smollm3
         elif model_type == "t5gemma":
             self.converter = convert_t5gemma
         else:
