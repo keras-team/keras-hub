@@ -70,14 +70,18 @@ class GptOssBackboneTest(TestCase):
             + 2  # num_layers
             * (
                 # Attention
-                (16 * 8 * head_dim)  # Query
-                + (16 * 4 * head_dim)  # Key
-                + (16 * 4 * head_dim)  # Value
-                + (8 * head_dim * 16)  # Output
+                (16 * 8 * head_dim)
+                + 8 * head_dim  # Query weight, bias
+                + (16 * 4 * head_dim)
+                + 4 * head_dim  # Key weight, bias
+                + (16 * 4 * head_dim)
+                + 4 * head_dim  # Value weight, bias
+                + (8 * head_dim * 16)
+                + 16  # Output weight, bias
                 + 8  # Sinks
                 # MoE
-                + (16 * 2)  # Router weight
-                + 2  # Router bias
+                + (16 * 2)
+                + 2  # Router weight, bias
                 + (2 * 16 * 2 * 8)  # Experts gate_up_proj weight
                 + (2 * 2 * 8)  # Experts gate_up_proj bias
                 + (2 * 8 * 16)  # Experts down_proj weight

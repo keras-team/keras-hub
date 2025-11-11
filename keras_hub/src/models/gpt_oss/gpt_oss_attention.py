@@ -55,7 +55,7 @@ class GptOssAttention(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         sliding_window=4096,
         dropout=0,
-        head_dim=None,  # Accept but handle head_dim parameter for HF compatibility
+        head_dim=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -63,8 +63,10 @@ class GptOssAttention(keras.layers.Layer):
         self.num_key_value_heads = num_key_value_heads
         self.sliding_window = sliding_window
         self.dropout = dropout
-        self.head_dim = head_dim  # Store for use in build()
-        self.rope_max_wavelength = rope_max_wavelength  # Needed for RotaryEmbedding
+        self.head_dim = head_dim
+        self.rope_max_wavelength = (
+            rope_max_wavelength  # Needed for RotaryEmbedding
+        )
         self.rope_scaling_factor = rope_scaling_factor
 
         self.num_key_value_groups = num_query_heads // num_key_value_heads
@@ -83,7 +85,7 @@ class GptOssAttention(keras.layers.Layer):
         # v = num key/value heads
         # h = head dim
         self._hidden_dim = inputs_shape[-1]
-        # Use HF head_dim if provided, otherwise calculate dynamically
+        # Use head_dim if provided, otherwise calculate dynamically
         if self.head_dim is not None:
             self._head_dim = self.head_dim
         else:
@@ -156,13 +158,11 @@ class GptOssAttention(keras.layers.Layer):
 
         self.rotary_embedding_layer = RotaryEmbedding(
             max_wavelength=self.rope_max_wavelength,
-            scaling_factor=self.rope_scaling_factor,
-            rope_scaling={
-                'beta_fast': 32.0,
-                'beta_slow': 1.0,
-                'type': 'yarn',
-                'original_max_position_embeddings': 4096,
-                'factor': 32.0},
+            scaling_factor=self.rope_scaling_factor,  # YaRN scaling factor
+            rope_type="yarn",
+            beta_fast=32.0,
+            beta_slow=1.0,
+            original_max_position_embeddings=4096,
             dtype=self.dtype_policy,
         )
 
@@ -192,7 +192,7 @@ class GptOssAttention(keras.layers.Layer):
 
         query = self.query_dense(hidden_states)
 
-        # Compute RoPE for queries (only 
+        # Compute RoPE for queries (only
         #  to first _rotary_dim dimensions)
         if self._rotary_dim < self._head_dim:
             query_rot = query[..., : self._rotary_dim]
@@ -272,13 +272,18 @@ class GptOssAttention(keras.layers.Layer):
             seq_len = ops.shape(attention_scores)[-1]
             # Create sliding window mask
             positions = ops.arange(seq_len)
-            sliding_mask = ops.abs(positions[:, None] - positions[None, :]) > self.sliding_window
+            sliding_mask = (
+                ops.abs(positions[:, None] - positions[None, :])
+                > self.sliding_window
+            )
             # Convert to large negative value for masking
             if self.compute_dtype == "float32":
                 sliding_adder = ops.cast(-1e9, self.compute_dtype)
             else:
                 sliding_adder = ops.cast(-1e4, self.compute_dtype)
-            attention_scores = ops.where(sliding_mask[None, None, :, :], sliding_adder, attention_scores)
+            attention_scores = ops.where(
+                sliding_mask[None, None, :, :], sliding_adder, attention_scores
+            )
 
         if attention_mask is not None:
             # The mask is a boolean tensor, True for positions to be masked.

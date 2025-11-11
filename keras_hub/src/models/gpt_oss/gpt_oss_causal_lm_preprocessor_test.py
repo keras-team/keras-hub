@@ -38,30 +38,25 @@ class GptOssCausalLMPreprocessorTest(TestCase):
             "tokenizer": self.tokenizer,
             "sequence_length": 8,
         }
-        self.input_data = (["the quick brown fox"],)
+        self.input_data = ["airplane at airport"]
 
     def test_preprocessor_basics(self):
-        # The default behavior of CausalLMPreprocessor is to add a start and
-        # end token.
-        # `[1, 3, 8, 4, 6, 2]` -> `<s> the quick brown fox </s>`
-        # `y` is the next token after each token in `x`.
-        # `sample_weight` is 0 for the last token and padding tokens.
         self.run_preprocessor_test(
             cls=GptOssCausalLMPreprocessor,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[1, 3, 8, 4, 6, 2, 0, 0]],
-                    "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
+                    "token_ids": [[6, 1, 3, 4, 2, 5, 7, 0]],
+                    "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 0]],
                 },
-                [[3, 8, 4, 6, 2, 0, 0, 0]],  # Pass through labels.
-                [[1, 1, 1, 1, 1, 0, 0, 0]],  # Pass through sample_weights.
+                [[1, 3, 4, 2, 5, 7, 0, 0]],  # Pass through labels.
+                [[1, 1, 1, 1, 1, 1, 0, 0]],  # Pass through sample_weights.
             ),
         )
 
     def test_no_start_end_token(self):
-        input_data = ["the quick brown fox"] * 4
+        input_data = ["airplane at airport"] * 4
 
         preprocessor = GptOssCausalLMPreprocessor(
             **self.init_kwargs,
@@ -70,28 +65,28 @@ class GptOssCausalLMPreprocessorTest(TestCase):
         )
         x, y, sw = preprocessor(input_data)
         # `[3, 8, 4, 6]` -> ` the quick brown fox`
-        self.assertAllEqual(x["token_ids"], [[3, 8, 4, 6, 0, 0, 0, 0]] * 4)
-        self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 0, 0, 0, 0]] * 4)
-        self.assertAllEqual(y, [[8, 4, 6, 0, 0, 0, 0, 0]] * 4)
-        self.assertAllEqual(sw, [[1, 1, 1, 0, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(x["token_ids"], [[1, 3, 4, 2, 5, 0, 0, 0]] * 4)
+        self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 1, 0, 0, 0]] * 4)
+        self.assertAllEqual(y, [[3, 4, 2, 5, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(sw, [[1, 1, 1, 1, 0, 0, 0, 0]] * 4)
 
     def test_generate_preprocess(self):
-        input_data = "the quick brown fox"
+        input_data = "airplane at airport"
         preprocessor = GptOssCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_preprocess(input_data)
         # `[1, 3, 8, 4, 6]` -> `<s> the quick brown fox`
         # `generate_preprocess` should not add an end token.
-        self.assertAllEqual(x["token_ids"], [1, 3, 8, 4, 6, 0, 0, 0])
-        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
+        self.assertAllEqual(x["token_ids"], [6, 1, 3, 4, 2, 5, 0, 0])
+        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0])
 
     def test_generate_postprocess(self):
         input_data = {
-            "token_ids": [1, 3, 8, 4, 6, 0, 0, 0],
+            "token_ids": [1, 3, 4, 2, 5, 7, 7, 7],
             "padding_mask": [1, 1, 1, 1, 1, 0, 0, 0],
         }
         preprocessor = GptOssCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_postprocess(input_data)
-        self.assertAllEqual(x, "the quick brown fox")
+        self.assertAllEqual(x, "airplane at airport")
 
     @pytest.mark.extra_large
     def test_all_presets(self):
