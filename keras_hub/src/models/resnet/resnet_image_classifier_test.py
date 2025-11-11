@@ -71,7 +71,8 @@ class ResNetImageClassifierTest(TestCase):
         reason="LiteRT export only supports TensorFlow backend.",
     )
     def test_litert_export(self):
-        """Test LiteRT export for ResNetImageClassifier with small test model."""
+        """Test LiteRT export for ResNetImageClassifier with
+        small test model."""
         model = ResNetImageClassifier(**self.init_kwargs)
         expected_output_shape = (2, 2)  # 2 images, 2 classes
 

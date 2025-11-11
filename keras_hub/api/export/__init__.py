@@ -5,6 +5,9 @@ since your modifications would be overwritten.
 """
 
 from keras_hub.src.export.configs import (
+    AudioToTextExporterConfig as AudioToTextExporterConfig,
+)
+from keras_hub.src.export.configs import (
     CausalLMExporterConfig as CausalLMExporterConfig,
 )
 from keras_hub.src.export.configs import (
@@ -17,9 +20,15 @@ from keras_hub.src.export.configs import (
     ObjectDetectorExporterConfig as ObjectDetectorExporterConfig,
 )
 from keras_hub.src.export.configs import (
+    SAMImageSegmenterExporterConfig as SAMImageSegmenterExporterConfig,
+)
+from keras_hub.src.export.configs import (
     Seq2SeqLMExporterConfig as Seq2SeqLMExporterConfig,
 )
 from keras_hub.src.export.configs import (
     TextClassifierExporterConfig as TextClassifierExporterConfig,
+)
+from keras_hub.src.export.configs import (
+    TextToImageExporterConfig as TextToImageExporterConfig,
 )
 from keras_hub.src.export.litert import LiteRTExporter as LiteRTExporter

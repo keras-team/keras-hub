@@ -24,7 +24,8 @@ class SAMImageSegmenterTest(TestCase):
         )
         # Use more realistic SAM configuration for export testing
         # Real SAM uses 64x64 embeddings for 1024x1024 images
-        # Scale down proportionally: 128/1024 = 1/8, so embeddings should be 64/8 = 8
+        # Scale down proportionally: 128/1024 = 1/8,
+        # so embeddings should be 64/8 = 8
         # But keep it simple for testing
         embedding_size = self.image_size // 16  # 128/16 = 8
         self.image_encoder = ViTDetBackbone(
@@ -40,7 +41,10 @@ class SAMImageSegmenterTest(TestCase):
         )
         self.prompt_encoder = SAMPromptEncoder(
             hidden_size=8,
-            image_embedding_size=(embedding_size, embedding_size),  # Match image encoder output
+            image_embedding_size=(
+                embedding_size,
+                embedding_size,
+            ),  # Match image encoder output
             input_image_size=(
                 self.image_size,
                 self.image_size,
@@ -75,11 +79,10 @@ class SAMImageSegmenterTest(TestCase):
             "points": np.ones((self.batch_size, 1, 2), dtype="float32"),
             "labels": np.ones((self.batch_size, 1), dtype="float32"),
             "boxes": np.ones((self.batch_size, 1, 2, 2), dtype="float32"),
-            # For TFLite export, use 1 mask filled with zeros (interpreted as "no mask")
+            # For TFLite export, use 1 mask filled with
+            # zeros (interpreted as "no mask")
             # Use the expected mask size of 4 * image_embedding_size = 32
-            "masks": np.zeros(
-                (self.batch_size, 1, 32, 32, 1), dtype="float32"
-            ),
+            "masks": np.zeros((self.batch_size, 1, 32, 32, 1), dtype="float32"),
         }
         self.labels = {
             "masks": np.ones((self.batch_size, 2), dtype="float32"),
@@ -110,6 +113,7 @@ class SAMImageSegmenterTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.inputs,
         )
+
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=SAMImageSegmenter,

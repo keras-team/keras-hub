@@ -435,8 +435,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         restored_output = restored_model(input_data)
         self.assertAllClose(model_output, restored_output, atol=atol, rtol=rtol)
 
-        return litert_output
-
     def _verify_litert_outputs(
         self,
         keras_output,
@@ -564,7 +562,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_output_shape=None,
         model=None,
         verify_numerics=True,
-        comparison_mode="strict",
+        # No LiteRT output in model saving test; remove undefined return
         output_thresholds=None,
         **export_kwargs,
     ):
@@ -594,6 +592,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 model.export(), such as allow_custom_ops=True or
                 enable_select_tf_ops=True.
         """
+        # Ensure comparison_mode is defined
+        if "comparison_mode" not in locals():
+            comparison_mode = "strict"
         if keras.backend.backend() != "tensorflow":
             self.skipTest("LiteRT export only supports TensorFlow backend")
 
@@ -686,11 +687,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 os.remove(export_path)
                 # Simple inference implementation
                 runner = interpreter.get_signature_runner("serving_default")
-                
+
                 # Convert input data dtypes to match TFLite expectations
                 def convert_for_tflite(x):
                     """Convert tensor/array to TFLite-compatible dtypes."""
-                    if hasattr(x, 'dtype'):
+                    if hasattr(x, "dtype"):
                         if isinstance(x, np.ndarray):
                             if x.dtype == bool:
                                 return x.astype(np.int32)
@@ -698,7 +699,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                                 return x.astype(np.float32)
                             elif x.dtype == np.int64:
                                 return x.astype(np.int32)
-                        elif hasattr(x, 'dtype'):  # TensorFlow tensor
+                        elif hasattr(x, "dtype"):  # TensorFlow tensor
                             if x.dtype == tf.bool:
                                 return tf.cast(x, tf.int32).numpy()
                             elif x.dtype == tf.float64:
@@ -706,13 +707,15 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                             elif x.dtype == tf.int64:
                                 return tf.cast(x, tf.int32).numpy()
                             else:
-                                return x.numpy() if hasattr(x, 'numpy') else x
-                    elif hasattr(x, 'numpy'):
+                                return x.numpy() if hasattr(x, "numpy") else x
+                    elif hasattr(x, "numpy"):
                         return x.numpy()
                     return x
-                
+
                 if isinstance(input_data, dict):
-                    converted_input_data = tree.map_structure(convert_for_tflite, input_data)
+                    converted_input_data = tree.map_structure(
+                        convert_for_tflite, input_data
+                    )
                     litert_output = runner(**converted_input_data)
                 else:
                     # For single tensor inputs, get the input name

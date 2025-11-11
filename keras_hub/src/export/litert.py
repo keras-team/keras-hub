@@ -120,7 +120,10 @@ class LiteRTExporter(KerasHubExporter):
                 return "multimodal"
 
         # Check for text-only models
-        if isinstance(self.model, (CausalLM, TextClassifier, Seq2SeqLM, AudioToText, TextToImage)):
+        if isinstance(
+            self.model,
+            (CausalLM, TextClassifier, Seq2SeqLM, AudioToText, TextToImage),
+        ):
             return "text"
         # Check for image-only models
         elif isinstance(
@@ -132,8 +135,10 @@ class LiteRTExporter(KerasHubExporter):
             raise ValueError(
                 f"Model type {self.model.__class__.__name__} is not supported "
                 "for LiteRT export. Currently supported model types are: "
-                "CausalLM, TextClassifier, Seq2SeqLM, AudioToText, TextToImage, "
-                "ImageClassifier, ObjectDetector, ImageSegmenter, and multimodal "
+                "CausalLM, TextClassifier, Seq2SeqLM, AudioToText, "
+                "TextToImage, "
+                "ImageClassifier, ObjectDetector, ImageSegmenter, and "
+                "multimodal "
                 "models (Gemma3CausalLM, PaliGemmaCausalLM, CLIPBackbone)."
             )
 
@@ -267,7 +272,7 @@ class LiteRTExporter(KerasHubExporter):
         dictionary format expected by Keras-Hub models. Note: This adapter
         is independent of dynamic shape support - it only handles input
         format conversion.
-        
+
         For TextToImage models like StableDiffusion3, we export the backbone
         directly (which is a Functional model) instead of the full TextToImage
         model to avoid triggering scheduler/generation code that may have
@@ -280,23 +285,26 @@ class LiteRTExporter(KerasHubExporter):
             adapter_type: `str`. The type of adapter to use - "text",
                 "image", "multimodal", or "base".
         """
-        
+
         # Determine which model to wrap
-        # For TextToImage, use the backbone to avoid Python control flow in generate()
+        # For TextToImage, use the backbone to avoid Python control flow in
+        # generate()
         model_to_wrap = self.model
         if isinstance(self.model, TextToImage):
-            if (hasattr(self.model, "backbone") and 
-                isinstance(self.model.backbone, keras.Model)):
+            if hasattr(self.model, "backbone") and isinstance(
+                self.model.backbone, keras.Model
+            ):
                 # Create a wrapper for the backbone that accepts positional args
-                # and converts them to the dict format expected by Functional models
+                # and converts them to the dict format expected by Functional
+                # models
                 backbone = self.model.backbone
-                
+
                 class BackboneWrapper(keras.Model):
                     def __init__(self, backbone_model, input_names):
                         super().__init__()
                         self.backbone = backbone_model
                         self.input_names = input_names
-                    
+
                     def call(self, *args, **kwargs):
                         # Convert positional args to dict for Functional model
                         if len(args) == len(self.input_names):
@@ -305,23 +313,25 @@ class LiteRTExporter(KerasHubExporter):
                         else:
                             # Fallback - pass through as-is
                             return self.backbone(*args, **kwargs)
-                    
+
                     @property
                     def variables(self):
                         return self.backbone.variables
-                    
+
                     @property
                     def trainable_variables(self):
                         return self.backbone.trainable_variables
-                    
+
                     @property
                     def non_trainable_variables(self):
                         return self.backbone.non_trainable_variables
-                    
+
                     def get_config(self):
                         return self.backbone.get_config()
-                
-                model_to_wrap = BackboneWrapper(backbone, self.config.EXPECTED_INPUTS)
+
+                model_to_wrap = BackboneWrapper(
+                    backbone, self.config.EXPECTED_INPUTS
+                )
 
         class BaseModelAdapter(keras.Model):
             """Base adapter for Keras-Hub models."""
@@ -391,8 +401,12 @@ class LiteRTExporter(KerasHubExporter):
                 if not isinstance(inputs, (list, tuple)):
                     inputs = [inputs]
 
-                # Handle Functional models (like backbones) that expect inputs as a dict
-                if hasattr(self.keras_hub_model, 'input_names') and self.keras_hub_model.input_names:
+                # Handle Functional models (like backbones) that expect inputs
+                # as a dict
+                if (
+                    hasattr(self.keras_hub_model, "input_names")
+                    and self.keras_hub_model.input_names
+                ):
                     # This is a Functional model - create inputs dict
                     input_dict = {}
                     for i, input_name in enumerate(self.expected_inputs):
@@ -415,7 +429,8 @@ class LiteRTExporter(KerasHubExporter):
         # Create adapter with multimodal flag if needed
         is_multimodal = adapter_type == "multimodal"
         adapter = ModelAdapter(
-            model_to_wrap,  # Use the model we determined to wrap (backbone for TextToImage)
+            model_to_wrap,  # Use the model we determined to wrap
+            # (backbone for TextToImage)
             self.config.EXPECTED_INPUTS,
             self.config.get_input_signature(param),
             is_multimodal=is_multimodal,

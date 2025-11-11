@@ -239,9 +239,15 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         input_data = self.text_input_data.copy()
         # Convert boolean padding_mask to int32 for LiteRT compatibility
         if "padding_mask" in input_data:
-            input_data["padding_mask"] = tf.cast(input_data["padding_mask"], tf.int32)
+            input_data["padding_mask"] = tf.cast(
+                input_data["padding_mask"], tf.int32
+            )
 
-        expected_output_shape = (2, 20, self.text_preprocessor.tokenizer.vocabulary_size())
+        expected_output_shape = (
+            2,
+            20,
+            self.text_preprocessor.tokenizer.vocabulary_size(),
+        )
 
         self.run_litert_export_test(
             model=model,
@@ -256,7 +262,8 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         reason="LiteRT export only supports TensorFlow backend.",
     )
     def test_litert_export_multimodal(self):
-        """Test LiteRT export for multimodal Gemma3CausalLM with small test model."""
+        """Test LiteRT export for multimodal Gemma3CausalLM with small test
+        model."""
         # Use the small multimodal model for testing
         model = Gemma3CausalLM(**self.init_kwargs)
 
@@ -264,9 +271,15 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         input_data = self.input_data.copy()
         # Convert boolean padding_mask to int32 for LiteRT compatibility
         if "padding_mask" in input_data:
-            input_data["padding_mask"] = tf.cast(input_data["padding_mask"], tf.int32)
+            input_data["padding_mask"] = tf.cast(
+                input_data["padding_mask"], tf.int32
+            )
 
-        expected_output_shape = (2, 20, self.preprocessor.tokenizer.vocabulary_size())
+        expected_output_shape = (
+            2,
+            20,
+            self.preprocessor.tokenizer.vocabulary_size(),
+        )
 
         self.run_litert_export_test(
             model=model,

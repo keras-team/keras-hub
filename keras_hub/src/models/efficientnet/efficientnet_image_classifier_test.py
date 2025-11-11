@@ -1,6 +1,5 @@
 import pytest
 from keras import ops
-import keras
 
 from keras_hub.src.models.efficientnet.efficientnet_backbone import (
     EfficientNetBackbone,

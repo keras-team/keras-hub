@@ -113,7 +113,9 @@ class PARSeqCausalLMTest(TestCase):
                 self.num_channels,
             ),
             "token_ids": np.random.randint(
-                0, self.vocabulary_size, (self.batch_size, self.max_label_length)
+                0,
+                self.vocabulary_size,
+                (self.batch_size, self.max_label_length),
             ),
             "padding_mask": np.ones(
                 (self.batch_size, self.max_label_length), dtype="int32"

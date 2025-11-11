@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-import keras
 
 from keras_hub.src.models.densenet.densenet_backbone import DenseNetBackbone
 from keras_hub.src.models.densenet.densenet_image_classifier import (

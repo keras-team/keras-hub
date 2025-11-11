@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-import keras
 
 from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
     MobileNetV5Backbone,

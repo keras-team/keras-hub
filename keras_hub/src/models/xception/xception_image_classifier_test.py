@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-import keras
 
 from keras_hub.src.models.xception.xception_backbone import XceptionBackbone
 from keras_hub.src.models.xception.xception_image_classifier import (

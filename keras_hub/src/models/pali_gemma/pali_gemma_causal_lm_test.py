@@ -110,7 +110,10 @@ class PaliGemmaCausalLMTest(TestCase):
     def test_litert_export(self):
         input_data = {
             "token_ids": np.random.randint(
-                0, self.vocabulary_size, size=(self.batch_size, self.text_sequence_length), dtype="int32"
+                0,
+                self.vocabulary_size,
+                size=(self.batch_size, self.text_sequence_length),
+                dtype="int32",
             ),
             "images": np.ones(
                 (self.batch_size, self.image_size, self.image_size, 3)

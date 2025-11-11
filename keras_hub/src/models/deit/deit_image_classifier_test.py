@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-import keras
 
 from keras_hub.src.models.deit.deit_backbone import DeiTBackbone
 from keras_hub.src.models.deit.deit_image_classifier import DeiTImageClassifier

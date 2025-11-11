@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-import keras
 
 from keras_hub.src.models.cspnet.cspnet_backbone import CSPNetBackbone
 from keras_hub.src.models.cspnet.cspnet_image_classifier import (

@@ -107,18 +107,19 @@ class RetinaNetObjectDetectorTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.images,
         )
+
     def test_litert_export(self):
         # ObjectDetector models need both images and image_shape as inputs
         batch_size = self.images.shape[0]
         height = self.images.shape[1]
         width = self.images.shape[2]
         image_shape = np.array([[height, width]] * batch_size, dtype=np.int32)
-        
+
         input_data = {
             "images": self.images,
             "image_shape": image_shape,
         }
-        
+
         self.run_litert_export_test(
             cls=RetinaNetObjectDetector,
             init_kwargs=self.init_kwargs,

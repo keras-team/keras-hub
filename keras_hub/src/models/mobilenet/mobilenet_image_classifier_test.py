@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-import keras
 
 from keras_hub.src.models.mobilenet.mobilenet_backbone import MobileNetBackbone
 from keras_hub.src.models.mobilenet.mobilenet_image_classifier import (

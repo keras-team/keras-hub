@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-import keras
 
 from keras_hub.src.models.mit.mit_backbone import MiTBackbone
 from keras_hub.src.models.mit.mit_image_classifier import MiTImageClassifier

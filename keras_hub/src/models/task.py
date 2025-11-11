@@ -418,7 +418,7 @@ class Task(PipelineModel):
             format="litert",
             optimizations=[tf.lite.Optimize.DEFAULT]
         )
-        
+
         # Export model with custom TFLite operations
         # (e.g., StableDiffusion3 with Erfc op)
         model.export(
@@ -426,7 +426,7 @@ class Task(PipelineModel):
             format="litert",
             allow_custom_ops=True
         )
-        
+
         # Export model with TensorFlow Select ops (Flex delegate)
         model.export(
             "model_with_flex.tflite",

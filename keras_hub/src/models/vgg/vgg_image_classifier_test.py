@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-import keras
 
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageClassifier
