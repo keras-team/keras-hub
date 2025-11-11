@@ -152,6 +152,7 @@ class DFineObjectDetectorTest(TestCase):
             input_data=self.images,
         )
 
+    @pytest.mark.large
     def test_litert_export(self):
         backbone = DFineBackbone(**self.base_backbone_kwargs)
         init_kwargs = {

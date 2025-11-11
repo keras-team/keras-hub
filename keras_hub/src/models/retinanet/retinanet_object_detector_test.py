@@ -108,6 +108,7 @@ class RetinaNetObjectDetectorTest(TestCase):
             input_data=self.images,
         )
 
+    @pytest.mark.large
     def test_litert_export(self):
         # ObjectDetector models need both images and image_shape as inputs
         batch_size = self.images.shape[0]

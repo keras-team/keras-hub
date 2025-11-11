@@ -226,6 +226,7 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
             input_data=input_data,
         )
 
+    @pytest.mark.large
     @pytest.mark.skipif(
         keras.backend.backend() != "tensorflow",
         reason="LiteRT export only supports TensorFlow backend.",
@@ -257,6 +258,7 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
             output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
         )
 
+    @pytest.mark.large
     @pytest.mark.skipif(
         keras.backend.backend() != "tensorflow",
         reason="LiteRT export only supports TensorFlow backend.",

@@ -699,7 +699,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                                 return x.astype(np.float32)
                             elif x.dtype == np.int64:
                                 return x.astype(np.int32)
-                        elif hasattr(x, "dtype"):  # TensorFlow tensor
+                        else:  # TensorFlow tensor
                             if x.dtype == tf.bool:
                                 return tf.cast(x, tf.int32).numpy()
                             elif x.dtype == tf.float64:
