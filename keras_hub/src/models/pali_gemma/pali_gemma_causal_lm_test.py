@@ -1,5 +1,6 @@
 import os.path
 
+import keras
 import numpy as np
 import pytest
 
@@ -107,6 +108,10 @@ class PaliGemmaCausalLMTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="LiteRT export only supports TensorFlow backend.",
+    )
     def test_litert_export(self):
         input_data = {
             "token_ids": np.random.randint(

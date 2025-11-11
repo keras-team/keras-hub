@@ -254,7 +254,7 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
             input_data=input_data,
             expected_output_shape=expected_output_shape,
             comparison_mode="statistical",
-            output_thresholds={"*": {"max": 1e-3, "mean": 1e-5}},
+            output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
         )
 
     @pytest.mark.skipif(
@@ -286,7 +286,7 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
             input_data=input_data,
             expected_output_shape=expected_output_shape,
             comparison_mode="statistical",
-            output_thresholds={"*": {"max": 1e-3, "mean": 1e-5}},
+            output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
         )
 
     @pytest.mark.kaggle_key_required

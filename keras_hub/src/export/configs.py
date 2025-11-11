@@ -10,6 +10,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporterConfig
 from keras_hub.src.models.audio_to_text import AudioToText
 from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.depth_estimator import DepthEstimator
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.object_detector import ObjectDetector
@@ -531,20 +532,39 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
         Returns:
             `dict`. Dictionary mapping input names to their specifications
         """
-        # Object detectors use dynamic image shapes to support variable input
-        # sizes
-        # The preprocessor image_size is used for training but export allows any
-        # size
+        if image_size is None:
+            # Try to infer from preprocessor, but fall back to dynamic shapes
+            # for object detectors which support variable input sizes
+            try:
+                image_size = _infer_image_size(self.model)
+            except ValueError:
+                # If cannot infer, use dynamic shapes
+                image_size = None
+        elif isinstance(image_size, int):
+            image_size = (image_size, image_size)
+
         dtype = _infer_image_dtype(self.model)
 
-        return {
-            "images": keras.layers.InputSpec(
-                dtype=dtype, shape=(None, None, None, 3)
-            ),
-            "image_shape": keras.layers.InputSpec(
-                dtype="int32", shape=(None, 2)
-            ),
-        }
+        if image_size is not None:
+            # Use concrete shapes when image_size is available
+            return {
+                "images": keras.layers.InputSpec(
+                    dtype=dtype, shape=(None, *image_size, 3)
+                ),
+                "image_shape": keras.layers.InputSpec(
+                    dtype="int32", shape=(None, 2)
+                ),
+            }
+        else:
+            # Use dynamic shapes for variable input sizes
+            return {
+                "images": keras.layers.InputSpec(
+                    dtype=dtype, shape=(None, None, None, 3)
+                ),
+                "image_shape": keras.layers.InputSpec(
+                    dtype="int32", shape=(None, 2)
+                ),
+            }
 
 
 @keras_hub_export("keras_hub.export.ImageSegmenterExporterConfig")
@@ -657,6 +677,41 @@ class SAMImageSegmenterExporterConfig(KerasHubExporterConfig):
                     *mask_size,
                     1,
                 ),  # Fixed: 1 mask at correct resolution
+            ),
+        }
+
+
+@keras_hub_export("keras_hub.export.DepthEstimatorExporterConfig")
+class DepthEstimatorExporterConfig(KerasHubExporterConfig):
+    """Exporter configuration for Depth Estimation models."""
+
+    MODEL_TYPE = "depth_estimator"
+    EXPECTED_INPUTS = ["images"]
+
+    def _is_model_compatible(self):
+        """Check if model is a depth estimator.
+        Returns:
+            `bool`. True if compatible, False otherwise
+        """
+        return isinstance(self.model, DepthEstimator)
+
+    def get_input_signature(self, image_size=None):
+        """Get input signature for depth estimation models.
+        Args:
+            image_size: `int`, `tuple` or `None`. Optional image size.
+        Returns:
+            `dict`. Dictionary mapping input names to their specifications
+        """
+        if image_size is None:
+            image_size = _infer_image_size(self.model)
+        elif isinstance(image_size, int):
+            image_size = (image_size, image_size)
+
+        dtype = _infer_image_dtype(self.model)
+
+        return {
+            "images": keras.layers.InputSpec(
+                dtype=dtype, shape=(None, *image_size, 3)
             ),
         }
 
@@ -819,6 +874,7 @@ def get_exporter_config(model):
         (ObjectDetector, ObjectDetectorExporterConfig),
         (ImageSegmenter, SAMImageSegmenterExporterConfig),  # Check SAM first
         (ImageSegmenter, ImageSegmenterExporterConfig),  # Then generic
+        (DepthEstimator, DepthEstimatorExporterConfig),
         (TextToImage, TextToImageExporterConfig),
     ]
 

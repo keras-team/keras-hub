@@ -15,6 +15,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporter
 from keras_hub.src.models.audio_to_text import AudioToText
 from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.depth_estimator import DepthEstimator
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.object_detector import ObjectDetector
@@ -127,7 +128,8 @@ class LiteRTExporter(KerasHubExporter):
             return "text"
         # Check for image-only models
         elif isinstance(
-            self.model, (ImageClassifier, ObjectDetector, ImageSegmenter)
+            self.model,
+            (ImageClassifier, ObjectDetector, ImageSegmenter, DepthEstimator),
         ):
             return "image"
         else:
@@ -137,8 +139,8 @@ class LiteRTExporter(KerasHubExporter):
                 "for LiteRT export. Currently supported model types are: "
                 "CausalLM, TextClassifier, Seq2SeqLM, AudioToText, "
                 "TextToImage, "
-                "ImageClassifier, ObjectDetector, ImageSegmenter, and "
-                "multimodal "
+                "ImageClassifier, ObjectDetector, ImageSegmenter, "
+                "DepthEstimator, and multimodal "
                 "models (Gemma3CausalLM, PaliGemmaCausalLM, CLIPBackbone)."
             )
 

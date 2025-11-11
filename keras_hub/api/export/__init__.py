@@ -11,6 +11,9 @@ from keras_hub.src.export.configs import (
     CausalLMExporterConfig as CausalLMExporterConfig,
 )
 from keras_hub.src.export.configs import (
+    DepthEstimatorExporterConfig as DepthEstimatorExporterConfig,
+)
+from keras_hub.src.export.configs import (
     ImageClassifierExporterConfig as ImageClassifierExporterConfig,
 )
 from keras_hub.src.export.configs import (

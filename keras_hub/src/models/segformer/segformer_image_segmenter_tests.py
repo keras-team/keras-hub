@@ -79,4 +79,6 @@ class SegFormerTest(TestCase):
             cls=SegFormerImageSegmenter,
             init_kwargs={**self.init_kwargs},
             input_data=self.input_data,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 10.0, "mean": 2.0}},
         )

@@ -7,7 +7,6 @@ import tempfile
 
 import keras
 import numpy as np
-import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 from keras import tree
@@ -19,6 +18,14 @@ from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 
+# Import tensorflow conditionally for backend-specific functionality
+try:
+    import tensorflow as tf
+
+    TF_AVAILABLE = True
+except ImportError:
+    TF_AVAILABLE = False
+
 
 def convert_to_comparible_type(x):
     """Convert tensors to comparable types.
@@ -26,20 +33,21 @@ def convert_to_comparible_type(x):
     Any string are converted to plain python types. Any jax or torch tensors
     are converted to numpy.
     """
-    if getattr(x, "dtype", None) == tf.string:
-        if isinstance(x, tf.RaggedTensor):
-            x = x.to_list()
-        if isinstance(x, tf.Tensor):
-            x = x.numpy() if x.shape.rank == 0 else x.numpy().tolist()
-        return tree.map_structure(lambda x: x.decode("utf-8"), x)
-    if isinstance(x, (tf.Tensor, tf.RaggedTensor)):
-        return x
+    if TF_AVAILABLE:
+        if getattr(x, "dtype", None) == tf.string:
+            if isinstance(x, tf.RaggedTensor):
+                x = x.to_list()
+            if isinstance(x, tf.Tensor):
+                x = x.numpy() if x.shape.rank == 0 else x.numpy().tolist()
+            return tree.map_structure(lambda x: x.decode("utf-8"), x)
+        if isinstance(x, (tf.Tensor, tf.RaggedTensor)):
+            return x
     if hasattr(x, "__array__"):
         return ops.convert_to_numpy(x)
     return x
 
 
-class TestCase(tf.test.TestCase, parameterized.TestCase):
+class TestCase(parameterized.TestCase):
     """Base test case class for KerasHub."""
 
     def assertAllClose(self, x1, x2, atol=1e-6, rtol=1e-6, msg=None):
@@ -51,7 +59,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             x2 = dict(x2)
         x1 = tree.map_structure(convert_to_comparible_type, x1)
         x2 = tree.map_structure(convert_to_comparible_type, x2)
-        super().assertAllClose(x1, x2, atol=atol, rtol=rtol, msg=msg)
+
+        # Convert to numpy arrays for comparison
+        if not isinstance(x1, np.ndarray):
+            x1 = ops.convert_to_numpy(x1)
+        if not isinstance(x2, np.ndarray):
+            x2 = ops.convert_to_numpy(x2)
+        np.testing.assert_allclose(x1, x2, atol=atol, rtol=rtol, err_msg=msg)
 
     def assertEqual(self, x1, x2, msg=None):
         x1 = tree.map_structure(convert_to_comparible_type, x1)
@@ -61,7 +75,36 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
     def assertAllEqual(self, x1, x2, msg=None):
         x1 = tree.map_structure(convert_to_comparible_type, x1)
         x2 = tree.map_structure(convert_to_comparible_type, x2)
-        super().assertAllEqual(x1, x2, msg=msg)
+
+        # Handle nested structures
+        if isinstance(x1, (list, tuple)) and isinstance(x2, (list, tuple)):
+            self.assertEqual(len(x1), len(x2), msg=msg)
+            for e1, e2 in zip(x1, x2):
+                if isinstance(e1, (list, tuple)) or isinstance(
+                    e2, (list, tuple)
+                ):
+                    self.assertAllEqual(e1, e2, msg=msg)
+                else:
+                    e1 = (
+                        ops.convert_to_numpy(e1)
+                        if hasattr(e1, "__array__")
+                        else e1
+                    )
+                    e2 = (
+                        ops.convert_to_numpy(e2)
+                        if hasattr(e2, "__array__")
+                        else e2
+                    )
+                    self.assertEqual(e1, e2, msg=msg)
+        else:
+            # For non-nested values, use standard assertEqual
+            x1 = ops.convert_to_numpy(x1) if hasattr(x1, "__array__") else x1
+            x2 = ops.convert_to_numpy(x2) if hasattr(x2, "__array__") else x2
+            super().assertEqual(x1, x2, msg=msg)
+
+    def assertLen(self, iterable, expected_len, msg=None):
+        """Assert that an iterable has the expected length."""
+        self.assertEqual(len(iterable), expected_len, msg=msg)
 
     def assertDTypeEqual(self, x, expected_dtype, msg=None):
         input_dtype = keras.backend.standardize_dtype(x.dtype)

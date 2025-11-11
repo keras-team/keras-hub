@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 
@@ -114,6 +115,30 @@ class SAMImageSegmenterTest(TestCase):
             input_data=self.inputs,
         )
 
+    def test_end_to_end_model_predict(self):
+        model = SAMImageSegmenter(**self.init_kwargs)
+        outputs = model.predict(self.inputs)
+        masks, iou_pred = outputs["masks"], outputs["iou_pred"]
+        self.assertAllEqual(masks.shape, (2, 4, 32, 32))
+        self.assertAllEqual(iou_pred.shape, (2, 4))
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in SAMImageSegmenter.presets:
+            self.run_preset_test(
+                cls=SAMImageSegmenter,
+                preset=preset,
+                input_data=self.inputs,
+                expected_output_shape={
+                    "masks": [2, 2, 1],
+                    "iou_pred": [2],
+                },
+            )
+
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="LiteRT export only supports TensorFlow backend.",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=SAMImageSegmenter,
