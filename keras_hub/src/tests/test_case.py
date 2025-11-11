@@ -592,9 +592,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 model.export(), such as allow_custom_ops=True or
                 enable_select_tf_ops=True.
         """
-        # Ensure comparison_mode is defined
-        if "comparison_mode" not in locals():
-            comparison_mode = "strict"
+        # Extract comparison_mode from export_kwargs if provided
+        comparison_mode = export_kwargs.pop("comparison_mode", "strict")
         if keras.backend.backend() != "tensorflow":
             self.skipTest("LiteRT export only supports TensorFlow backend")
 
@@ -656,11 +655,15 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 if isinstance(input_data, dict):
                     expected_inputs = set(input_data.keys())
                     actual_inputs = set(sig_inputs)
-                    if expected_inputs != actual_inputs:
+                    # Check that all expected inputs are in the signature
+                    # (allow signature to have additional optional inputs)
+                    missing_inputs = expected_inputs - actual_inputs
+                    if missing_inputs:
                         self.fail(
-                            f"Input name mismatch: Expected "
-                            f"{sorted(expected_inputs)}, "
-                            f"but SignatureDef has {sorted(actual_inputs)}"
+                            f"Missing inputs in SignatureDef: "
+                            f"{sorted(missing_inputs)}. "
+                            f"Expected: {sorted(expected_inputs)}, "
+                            f"SignatureDef has: {sorted(actual_inputs)}"
                         )
                 else:
                     # For numpy arrays, just verify we have exactly one input

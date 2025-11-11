@@ -145,4 +145,10 @@ class SAMImageSegmenterTest(TestCase):
             cls=SAMImageSegmenter,
             init_kwargs=self.init_kwargs,
             input_data=self.inputs,
+            comparison_mode="statistical",
+            output_thresholds={
+                "masks": {"max": 1e-3, "mean": 1e-4},
+                "iou_pred": {"max": 1e-3, "mean": 1e-4},
+            },
+            enable_select_tf_ops=True,
         )

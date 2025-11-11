@@ -1,6 +1,7 @@
 import os
 
 import pytest
+import tensorflow as tf
 
 from keras_hub.src.models.f_net.f_net_backbone import FNetBackbone
 from keras_hub.src.models.f_net.f_net_text_classifier import FNetTextClassifier
@@ -59,10 +60,17 @@ class FNetTextClassifierTest(TestCase):
 
     @pytest.mark.large
     def test_litert_export(self):
+        # Add padding_mask to input_data for LiteRT export compatibility
+        input_data = self.input_data.copy()
+        batch_size, seq_length = input_data["token_ids"].shape
+        input_data["padding_mask"] = tf.zeros(
+            (batch_size, seq_length), dtype=tf.int32
+        )
+
         self.run_litert_export_test(
             cls=FNetTextClassifier,
             init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
+            input_data=input_data,
         )
 
     @pytest.mark.extra_large

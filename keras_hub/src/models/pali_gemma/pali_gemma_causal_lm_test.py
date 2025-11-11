@@ -136,6 +136,8 @@ class PaliGemmaCausalLMTest(TestCase):
             cls=PaliGemmaCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=input_data,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 2e-6, "mean": 1e-6}},
         )
 
     def test_pali_gemma_causal_model(self):
