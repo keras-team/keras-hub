@@ -196,3 +196,12 @@ class StableDiffusion3TextToImageTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    @pytest.mark.large
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=StableDiffusion3TextToImage,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            litert_kwargs={"allow_custom_ops": True},  # StableDiffusion3 uses Erfc and other custom TFLite ops
+        )

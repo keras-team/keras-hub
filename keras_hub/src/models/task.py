@@ -389,9 +389,13 @@ class Task(PipelineModel):
                 - `max_sequence_length`: Maximum sequence length for text models
                 - `optimizations`: List of TFLite optimizations (e.g.,
                     `[tf.lite.Optimize.DEFAULT]`)
-                - `allow_custom_ops`: Whether to allow custom operations
+                - `allow_custom_ops`: Whether to allow custom TFLite operations.
+                    Set to `True` for models using unsupported ops (e.g.,
+                    StableDiffusion3 with Erfc). Defaults to `False`.
                 - `enable_select_tf_ops`: Whether to enable TensorFlow Select
-                    ops
+                    ops (Flex delegate). Set to `True` for models using certain
+                    TF operations not natively supported in TFLite. Defaults
+                    to `False`.
 
         Examples:
 
@@ -413,6 +417,21 @@ class Task(PipelineModel):
             "gemma_model_quantized.tflite",
             format="litert",
             optimizations=[tf.lite.Optimize.DEFAULT]
+        )
+        
+        # Export model with custom TFLite operations
+        # (e.g., StableDiffusion3 with Erfc op)
+        model.export(
+            "sd3_model.tflite",
+            format="litert",
+            allow_custom_ops=True
+        )
+        
+        # Export model with TensorFlow Select ops (Flex delegate)
+        model.export(
+            "model_with_flex.tflite",
+            format="litert",
+            enable_select_tf_ops=True
         )
         ```
         """

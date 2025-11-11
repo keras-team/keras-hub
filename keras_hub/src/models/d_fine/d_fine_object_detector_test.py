@@ -138,7 +138,6 @@ class DFineObjectDetectorTest(TestCase):
             },
         )
 
-    @pytest.mark.large
     def test_saved_model(self):
         backbone = DFineBackbone(**self.base_backbone_kwargs)
         init_kwargs = {
@@ -151,4 +150,37 @@ class DFineObjectDetectorTest(TestCase):
             cls=DFineObjectDetector,
             init_kwargs=init_kwargs,
             input_data=self.images,
+        )
+    def test_litert_export(self):
+        backbone = DFineBackbone(**self.base_backbone_kwargs)
+        init_kwargs = {
+            "backbone": backbone,
+            "num_classes": 4,
+            "bounding_box_format": self.bounding_box_format,
+            "preprocessor": self.preprocessor,
+        }
+        
+        # ObjectDetector models need both images and image_shape as inputs
+        batch_size = self.images.shape[0]
+        height = self.images.shape[1]
+        width = self.images.shape[2]
+        image_shape = np.array([[height, width]] * batch_size, dtype=np.int32)
+        
+        input_data = {
+            "images": self.images,
+            "image_shape": image_shape,
+        }
+        
+        self.run_litert_export_test(
+            cls=DFineObjectDetector,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+            comparison_mode="statistical",
+            output_thresholds={
+                "intermediate_predicted_corners": {"max": 5.0, "mean": 0.05},
+                "intermediate_logits": {"max": 5.0, "mean": 0.1},
+                "enc_topk_logits": {"max": 5.0, "mean": 0.03},
+                "logits": {"max": 2.0, "mean": 0.03},
+                "*": {"max": 1.0, "mean": 0.03},
+            },
         )

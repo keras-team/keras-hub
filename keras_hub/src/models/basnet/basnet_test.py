@@ -49,6 +49,14 @@ class BASNetTest(TestCase):
             input_data=self.images,
         )
 
+    @pytest.mark.large
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=BASNetImageSegmenter,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+        )
+
     def test_end_to_end_model_predict(self):
         model = BASNetImageSegmenter(**self.init_kwargs)
         output = model.predict(self.images)

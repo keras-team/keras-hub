@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import keras
 
 from keras_hub.src.models.mit.mit_backbone import MiTBackbone
 from keras_hub.src.models.mit.mit_image_classifier import MiTImageClassifier
@@ -46,6 +47,14 @@ class MiTImageClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
+            cls=MiTImageClassifier,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+        )
+
+    @pytest.mark.large
+    def test_litert_export(self):
+        self.run_litert_export_test(
             cls=MiTImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,

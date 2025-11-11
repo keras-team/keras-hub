@@ -72,3 +72,11 @@ class SegFormerTest(TestCase):
             init_kwargs={**self.init_kwargs},
             input_data=self.input_data,
         )
+
+    @pytest.mark.large
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=SegFormerImageSegmenter,
+            init_kwargs={**self.init_kwargs},
+            input_data=self.input_data,
+        )

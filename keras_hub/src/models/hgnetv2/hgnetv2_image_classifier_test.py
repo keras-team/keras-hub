@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import keras
 
 from keras_hub.src.models.hgnetv2.hgnetv2_backbone import HGNetV2Backbone
 from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier import (
@@ -85,6 +86,14 @@ class HGNetV2ImageClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
+            cls=HGNetV2ImageClassifier,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+        )
+
+    @pytest.mark.large
+    def test_litert_export(self):
+        self.run_litert_export_test(
             cls=HGNetV2ImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,

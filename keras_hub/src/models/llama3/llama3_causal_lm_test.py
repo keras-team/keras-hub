@@ -1,6 +1,8 @@
 from unittest.mock import patch
 
+import keras
 import pytest
+import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
@@ -112,6 +114,29 @@ class Llama3CausalLMTest(TestCase):
             cls=Llama3CausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
+        )
+
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="LiteRT export only supports TensorFlow backend.",
+    )
+    def test_litert_export(self):
+        """Test LiteRT export for Llama3CausalLM with small test model."""
+        model = Llama3CausalLM(**self.init_kwargs)
+
+        # Convert boolean padding_mask to int32 for LiteRT compatibility
+        input_data = self.input_data.copy()
+        if "padding_mask" in input_data:
+            input_data["padding_mask"] = tf.cast(input_data["padding_mask"], tf.int32)
+
+        expected_output_shape = (2, 7, self.preprocessor.tokenizer.vocabulary_size())
+
+        self.run_litert_export_test(
+            model=model,
+            input_data=input_data,
+            expected_output_shape=expected_output_shape,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-3, "mean": 1e-5}},
         )
 
     @pytest.mark.extra_large

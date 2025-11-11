@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import keras
 
 from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
     MobileNetV5Backbone,
@@ -70,6 +71,14 @@ class MobileNetV5ImageClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
+            cls=MobileNetV5ImageClassifier,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+        )
+
+    @pytest.mark.large
+    def test_litert_export(self):
+        self.run_litert_export_test(
             cls=MobileNetV5ImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
