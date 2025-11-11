@@ -13,12 +13,14 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.export.base import KerasHubExporter
+from keras_hub.src.models.audio_to_text import AudioToText
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.image_segmenter import ImageSegmenter
 from keras_hub.src.models.object_detector import ObjectDetector
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.text_classifier import TextClassifier
+from keras_hub.src.models.text_to_image import TextToImage
 
 try:
     from keras.src.export.litert import LiteRTExporter as KerasLitertExporter
@@ -118,7 +120,7 @@ class LiteRTExporter(KerasHubExporter):
                 return "multimodal"
 
         # Check for text-only models
-        if isinstance(self.model, (CausalLM, TextClassifier, Seq2SeqLM)):
+        if isinstance(self.model, (CausalLM, TextClassifier, Seq2SeqLM, AudioToText, TextToImage)):
             return "text"
         # Check for image-only models
         elif isinstance(
@@ -130,9 +132,9 @@ class LiteRTExporter(KerasHubExporter):
             raise ValueError(
                 f"Model type {self.model.__class__.__name__} is not supported "
                 "for LiteRT export. Currently supported model types are: "
-                "CausalLM, TextClassifier, Seq2SeqLM, ImageClassifier, "
-                "ObjectDetector, ImageSegmenter, and multimodal models "
-                "(Gemma3CausalLM, PaliGemmaCausalLM, CLIPBackbone)."
+                "CausalLM, TextClassifier, Seq2SeqLM, AudioToText, TextToImage, "
+                "ImageClassifier, ObjectDetector, ImageSegmenter, and multimodal "
+                "models (Gemma3CausalLM, PaliGemmaCausalLM, CLIPBackbone)."
             )
 
     def _get_export_param(self):
@@ -265,6 +267,11 @@ class LiteRTExporter(KerasHubExporter):
         dictionary format expected by Keras-Hub models. Note: This adapter
         is independent of dynamic shape support - it only handles input
         format conversion.
+        
+        For TextToImage models like StableDiffusion3, we export the backbone
+        directly (which is a Functional model) instead of the full TextToImage
+        model to avoid triggering scheduler/generation code that may have
+        Python control flow issues.
 
         Args:
             param: The parameter for input signature (sequence_length for
@@ -273,6 +280,48 @@ class LiteRTExporter(KerasHubExporter):
             adapter_type: `str`. The type of adapter to use - "text",
                 "image", "multimodal", or "base".
         """
+        
+        # Determine which model to wrap
+        # For TextToImage, use the backbone to avoid Python control flow in generate()
+        model_to_wrap = self.model
+        if isinstance(self.model, TextToImage):
+            if (hasattr(self.model, "backbone") and 
+                isinstance(self.model.backbone, keras.Model)):
+                # Create a wrapper for the backbone that accepts positional args
+                # and converts them to the dict format expected by Functional models
+                backbone = self.model.backbone
+                
+                class BackboneWrapper(keras.Model):
+                    def __init__(self, backbone_model, input_names):
+                        super().__init__()
+                        self.backbone = backbone_model
+                        self.input_names = input_names
+                    
+                    def call(self, *args, **kwargs):
+                        # Convert positional args to dict for Functional model
+                        if len(args) == len(self.input_names):
+                            inputs = dict(zip(self.input_names, args))
+                            return self.backbone(inputs, **kwargs)
+                        else:
+                            # Fallback - pass through as-is
+                            return self.backbone(*args, **kwargs)
+                    
+                    @property
+                    def variables(self):
+                        return self.backbone.variables
+                    
+                    @property
+                    def trainable_variables(self):
+                        return self.backbone.trainable_variables
+                    
+                    @property
+                    def non_trainable_variables(self):
+                        return self.backbone.non_trainable_variables
+                    
+                    def get_config(self):
+                        return self.backbone.get_config()
+                
+                model_to_wrap = BackboneWrapper(backbone, self.config.EXPECTED_INPUTS)
 
         class BaseModelAdapter(keras.Model):
             """Base adapter for Keras-Hub models."""
@@ -342,6 +391,15 @@ class LiteRTExporter(KerasHubExporter):
                 if not isinstance(inputs, (list, tuple)):
                     inputs = [inputs]
 
+                # Handle Functional models (like backbones) that expect inputs as a dict
+                if hasattr(self.keras_hub_model, 'input_names') and self.keras_hub_model.input_names:
+                    # This is a Functional model - create inputs dict
+                    input_dict = {}
+                    for i, input_name in enumerate(self.expected_inputs):
+                        if i < len(inputs):
+                            input_dict[input_name] = inputs[i]
+                    return self.keras_hub_model(input_dict, training=training)
+
                 # Single input image models can receive tensor directly
                 if len(self.expected_inputs) == 1 and not self.is_multimodal:
                     return self.keras_hub_model(inputs[0], training=training)
@@ -357,7 +415,7 @@ class LiteRTExporter(KerasHubExporter):
         # Create adapter with multimodal flag if needed
         is_multimodal = adapter_type == "multimodal"
         adapter = ModelAdapter(
-            self.model,
+            model_to_wrap,  # Use the model we determined to wrap (backbone for TextToImage)
             self.config.EXPECTED_INPUTS,
             self.config.get_input_signature(param),
             is_multimodal=is_multimodal,

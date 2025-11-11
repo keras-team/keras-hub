@@ -104,7 +104,10 @@ class KerasHubExporter(ABC):
                 models).
         """
         # Get input signature (returns dict of InputSpec objects)
-        input_signature = self.config.get_input_signature(param)
+        if isinstance(param, dict):
+            input_signature = param
+        else:
+            input_signature = self.config.get_input_signature(param)
 
         # Extract shapes from InputSpec objects
         input_shapes = {}

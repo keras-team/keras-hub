@@ -435,48 +435,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         restored_output = restored_model(input_data)
         self.assertAllClose(model_output, restored_output, atol=atol, rtol=rtol)
 
-    def _run_litert_inference(self, interpreter, input_data):
-        """Prepare inputs, run LiteRT inference, and return outputs.
-
-        Args:
-            interpreter: LiteRT interpreter instance
-            input_data: Input data (dict or tensor)
-
-        Returns:
-            LiteRT model outputs (tensor or dict of tensors)
-        """
-        # Get signature information
-        signature_defs = interpreter.get_signature_list()
-        serving_sig = signature_defs["serving_default"]
-        sig_outputs = serving_sig.get("outputs", [])
-
-        # Use signature runner for inference - it handles all the complexity
-        signature_runner = interpreter.get_signature_runner("serving_default")
-
-        # Run inference using signature runner
-        if isinstance(input_data, dict):
-            # For dict inputs, pass as kwargs
-            litert_output = signature_runner(**input_data)
-        else:
-            # For single tensor input, we need to know the input name
-            sig_inputs = serving_sig.get("inputs", [])
-            if len(sig_inputs) == 1:
-                input_name = sig_inputs[0]
-                litert_output = signature_runner(**{input_name: input_data})
-            else:
-                raise ValueError(
-                    "Single tensor input provided but model expects "
-                    f"multiple inputs: {sig_inputs}"
-                )
-
-        # Convert output to match expected format
-        if len(sig_outputs) == 1:
-            # For single output, return the tensor directly (not wrapped in
-            # dict)
-            output_name = sig_outputs[0]
-            if isinstance(litert_output, dict):
-                litert_output = litert_output[output_name]
-
         return litert_output
 
     def _verify_litert_outputs(
@@ -608,6 +566,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         verify_numerics=True,
         comparison_mode="strict",
         output_thresholds=None,
+        **export_kwargs,
     ):
         """Export model to LiteRT format and verify outputs.
 
@@ -631,6 +590,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 with "max" and "mean" keys. Use "*" as wildcard for defaults.
                 Example: {"output1": {"max": 1e-4, "mean": 1e-5},
                          "*": {"max": 1e-3, "mean": 1e-4}}
+            **export_kwargs: Additional keyword arguments to pass to
+                model.export(), such as allow_custom_ops=True or
+                enable_select_tf_ops=True.
         """
         if keras.backend.backend() != "tensorflow":
             self.skipTest("LiteRT export only supports TensorFlow backend")
@@ -659,7 +621,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 export_path = os.path.join(temp_dir, "model.tflite")
 
                 # Step 1: Export model and get Keras output
-                model.export(export_path, format="litert")
+                model.export(export_path, format="litert", **export_kwargs)
                 self.assertTrue(os.path.exists(export_path))
                 self.assertGreater(os.path.getsize(export_path), 0)
 
@@ -722,9 +684,46 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
                 # Step 3: Run LiteRT inference
                 os.remove(export_path)
-                litert_output = self._run_litert_inference(
-                    interpreter, input_data
-                )
+                # Simple inference implementation
+                runner = interpreter.get_signature_runner("serving_default")
+                
+                # Convert input data dtypes to match TFLite expectations
+                def convert_for_tflite(x):
+                    """Convert tensor/array to TFLite-compatible dtypes."""
+                    if hasattr(x, 'dtype'):
+                        if isinstance(x, np.ndarray):
+                            if x.dtype == bool:
+                                return x.astype(np.int32)
+                            elif x.dtype == np.float64:
+                                return x.astype(np.float32)
+                            elif x.dtype == np.int64:
+                                return x.astype(np.int32)
+                        elif hasattr(x, 'dtype'):  # TensorFlow tensor
+                            if x.dtype == tf.bool:
+                                return tf.cast(x, tf.int32).numpy()
+                            elif x.dtype == tf.float64:
+                                return tf.cast(x, tf.float32).numpy()
+                            elif x.dtype == tf.int64:
+                                return tf.cast(x, tf.int32).numpy()
+                            else:
+                                return x.numpy() if hasattr(x, 'numpy') else x
+                    elif hasattr(x, 'numpy'):
+                        return x.numpy()
+                    return x
+                
+                if isinstance(input_data, dict):
+                    converted_input_data = tree.map_structure(convert_for_tflite, input_data)
+                    litert_output = runner(**converted_input_data)
+                else:
+                    # For single tensor inputs, get the input name
+                    sig_inputs = serving_sig.get("inputs", [])
+                    if len(sig_inputs) == 1:
+                        input_name = sig_inputs[0]
+                        converted_input = convert_for_tflite(input_data)
+                        litert_output = runner(**{input_name: converted_input})
+                    else:
+                        converted_input = convert_for_tflite(input_data)
+                        litert_output = runner(converted_input)
 
                 # Step 4: Verify outputs
                 self._verify_litert_outputs(
