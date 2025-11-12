@@ -41,12 +41,7 @@ class GptOssTokenizer(BytePairTokenizer):
 
     backbone_cls = GptOssBackbone
 
-    def __init__(
-            self, 
-            vocabulary=None, 
-            merges=None,
-            **kwargs
-        ):
+    def __init__(self, vocabulary=None, merges=None, **kwargs):
         """Initializes the GptOssTokenizer.
 
         Args:

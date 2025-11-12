@@ -106,9 +106,7 @@ def main(_):
 
     # === Load the Huggingface model ===
     hf_model = AutoModelForCausalLM.from_pretrained(
-        hf_preset,
-        device_map=device,
-        torch_dtype=torch.float32
+        hf_preset, device_map=device, torch_dtype=torch.float32
     )
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
@@ -150,7 +148,8 @@ def main(_):
         assert keras_hub_params == hf_params
     else:
         print(
-            "   INFO: Small parameter count difference, continuing with output comparison..."
+            " INFO: Small parameter count difference, "
+            "continuing with output comparison..."
         )
 
     keras_hub_output_logits = compute_keras_output(
@@ -158,17 +157,32 @@ def main(_):
     )
 
     # Add detailed debugging information
-    print(f"\n-> Output comparison:")
+    print("\n-> Output comparison:")
     print(f"   HF output shape: {hf_output_logits.shape}")
     print(f"   KH output shape: {keras_hub_output_logits.shape}")
-    print(f"   HF output stats: min={hf_output_logits.min():.6f}, max={hf_output_logits.max():.6f}, mean={hf_output_logits.mean():.6f}")
-    print(f"   KH output stats: min={keras_hub_output_logits.min():.6f}, max={keras_hub_output_logits.max():.6f}, mean={keras_hub_output_logits.mean():.6f}")
+    print(
+        f"HF output stats: min={hf_output_logits.min():.6f}, "
+        f"max={hf_output_logits.max():.6f}, "
+        f"mean={hf_output_logits.mean():.6f}"
+    )
+    print(
+        f"KH output stats: min={keras_hub_output_logits.min():.6f}, "
+        f"max={keras_hub_output_logits.max():.6f}, "
+        f"mean={keras_hub_output_logits.mean():.6f}"
+    )
 
     # Calculate difference statistics
     if hf_output_logits.shape == keras_hub_output_logits.shape:
         diff = np.abs(hf_output_logits - keras_hub_output_logits)
-        print(f"   Absolute difference stats: min={diff.min():.6f}, max={diff.max():.6f}, mean={diff.mean():.6f}")
-        print(f"   Number of mismatched elements: {np.sum(diff > 1e-3)} / {diff.size}")
+        print(
+            f"Absolute difference stats: min={diff.min():.6f}, "
+            f"max={diff.max():.6f}, "
+            f"mean={diff.mean():.6f}"
+        )
+        print(
+            f"Number of mismatched elements: "
+            f"{np.sum(diff > 1e-3)} / {diff.size}"
+        )
 
     try:
         np.testing.assert_allclose(
