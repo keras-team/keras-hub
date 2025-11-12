@@ -247,7 +247,7 @@ class GptOssAttention(keras.layers.Layer):
         value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
 
         attention_output = self._compute_attention(
-            query, key, value, attention_mask
+            query, key, value, attention_mask, start_index
         )
 
         attention_output = self.dropout_layer(
@@ -260,7 +260,9 @@ class GptOssAttention(keras.layers.Layer):
             return attention_output, cache
         return attention_output
 
-    def _compute_attention(self, query, key, value, attention_mask=None):
+    def _compute_attention(
+        self, query, key, value, attention_mask=None, start_index=0
+    ):
         attention_scores = ops.einsum(self._dot_product_equation, query, key)
         attention_scores = ops.multiply(
             attention_scores,
@@ -269,20 +271,25 @@ class GptOssAttention(keras.layers.Layer):
 
         # Apply sliding window mask if specified
         if self.sliding_window is not None and self.sliding_window > 0:
-            seq_len = ops.shape(attention_scores)[-1]
-            # Create sliding window mask
-            positions = ops.arange(seq_len)
-            sliding_mask = (
-                ops.abs(positions[:, None] - positions[None, :])
-                > self.sliding_window
+            q_len = ops.shape(attention_scores)[-2]
+            kv_len = ops.shape(attention_scores)[-1]
+
+            # Query positions are offset by start_index during generation
+            q_positions = ops.arange(q_len) + start_index
+            kv_positions = ops.arange(kv_len)
+
+            # Mask true for positions outside sliding window
+            # For causal attention: mask if kv_pos < q_pos - sliding_window
+            mask = (
+                kv_positions[None, :]
+                >= q_positions[:, None] - self.sliding_window
             )
-            # Convert to large negative value for masking
             if self.compute_dtype == "float32":
                 sliding_adder = ops.cast(-1e9, self.compute_dtype)
             else:
                 sliding_adder = ops.cast(-1e4, self.compute_dtype)
             attention_scores = ops.where(
-                sliding_mask[None, None, :, :], sliding_adder, attention_scores
+                mask[None, None, :, :], attention_scores, sliding_adder
             )
 
         if attention_mask is not None:
@@ -298,8 +305,9 @@ class GptOssAttention(keras.layers.Layer):
             )
 
         # Handle sink tokens by concatenating them to the logits.
-        b = ops.shape(query)[0]
-        q = ops.shape(query)[1]
+        b = ops.shape(attention_scores)[0]
+        q = ops.shape(attention_scores)[2]
+
         sinks = ops.reshape(self.sinks, (1, self.num_query_heads, 1, 1))
         sinks = ops.broadcast_to(sinks, (b, self.num_query_heads, q, 1))
         # attention_scores shape: [b, num_heads, q, k]

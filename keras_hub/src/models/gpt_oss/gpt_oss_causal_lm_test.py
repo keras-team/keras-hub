@@ -52,7 +52,7 @@ class GptOssCausalLMTest(TestCase):
             "preprocessor": self.preprocessor,
             "backbone": self.backbone,
         }
-        self.train_data = (["the quick brown fox", "the earth is round"],)
+        self.train_data = ([" airplane at airport", " airplane at airport"],)
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_causal_lm_basics(self):
@@ -60,13 +60,13 @@ class GptOssCausalLMTest(TestCase):
             cls=GptOssCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 8, 10),
+            expected_output_shape=(2, 8, 8),
         )
 
     def test_generate(self):
         causal_lm = GptOssCausalLM(**self.init_kwargs)
         # String input.
-        prompt = "the quick brown fox"
+        prompt = " airplane at airport"
         output = causal_lm.generate(prompt)
         self.assertTrue(prompt in output)
         # Int tensor input.
@@ -97,7 +97,7 @@ class GptOssCausalLMTest(TestCase):
             return logits, hidden_states, cache
 
         with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
-            prompt = ["the quick brown fox", "the earth"]
+            prompt = [" airplane at airport", " airplane"]
             output = causal_lm.generate(prompt)
             # We should immediately abort and output the prompt.
             self.assertEqual(prompt, output)
@@ -105,9 +105,9 @@ class GptOssCausalLMTest(TestCase):
     def test_generate_compilation(self):
         causal_lm = GptOssCausalLM(**self.init_kwargs)
         # Assert we do not recompile with successive calls.
-        causal_lm.generate("the quick brown fox")
+        causal_lm.generate(" airplane at airport")
         first_fn = causal_lm.generate_function
-        causal_lm.generate("the quick brown fox")
+        causal_lm.generate(" airplane at airport")
         second_fn = causal_lm.generate_function
         self.assertEqual(first_fn, second_fn)
         # Assert we do recompile after compile is called.
@@ -133,9 +133,9 @@ class GptOssCausalLMTest(TestCase):
 
     def test_score_logits(self):
         # Setup prompts, models, and associated expected shapes.
-        prompts = ["the quick brown fox", "the quick brown fox"]
+        prompts = [" airplane at airport", " airplane"]
         causal_lm = GptOssCausalLM(**self.init_kwargs)
-        expected_score_shape = (2, 8, 10)
+        expected_score_shape = (2, 8, 8)
 
         # Preprocess prompts to get tokenized representations and padding masks.
         preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(
@@ -155,7 +155,7 @@ class GptOssCausalLMTest(TestCase):
 
     def test_score_loss(self):
         # Setup prompts, models, and associated expected shapes.
-        prompts = ["the quick brown fox", "the quick brown fox"]
+        prompts = [" airplane at airport", " airplane"]
         causal_lm = GptOssCausalLM(**self.init_kwargs)
         expected_score_shape = (2, 8)
 
@@ -179,10 +179,10 @@ class GptOssCausalLMTest(TestCase):
 
     def test_score_layer_intercept_fn_exfiltration(self):
         # Setup prompts, models, and associated expected shapes.
-        prompts = ["the quick brown fox", "the quick brown fox"]
+        prompts = [" airplane at airport", " airplane"]
         causal_lm = GptOssCausalLM(**self.init_kwargs)
         expected_embedded_shape = (2, 8, 8)
-        expected_score_shape = (2, 8, 10)
+        expected_score_shape = (2, 8, 8)
 
         # Preprocess prompts to get tokenized representations and padding masks.
         preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(
