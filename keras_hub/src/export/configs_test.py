@@ -198,10 +198,11 @@ class ImageClassifierExporterConfigTest(TestCase):
         config = ImageClassifierExporterConfig(model)
         signature = config.get_input_signature()
 
-        self.assertIn("images", signature)
+        # ImageClassifier returns single InputSpec (not dict)
+        self.assertIsInstance(signature, keras.layers.InputSpec)
         # Image shape should be (batch, height, width, channels)
         expected_shape = (None, 224, 224, 3)
-        self.assertEqual(signature["images"].shape, expected_shape)
+        self.assertEqual(signature.shape, expected_shape)
 
 
 class Seq2SeqLMExporterConfigTest(TestCase):
@@ -239,7 +240,8 @@ class ObjectDetectorExporterConfigTest(TestCase):
         model = MockObjectDetectorForTest()
         config = ObjectDetectorExporterConfig(model)
         self.assertEqual(config.MODEL_TYPE, "object_detector")
-        self.assertEqual(config.EXPECTED_INPUTS, ["images", "image_shape"])
+        # ObjectDetector only takes images input (not image_shape)
+        self.assertEqual(config.EXPECTED_INPUTS, ["images"])
 
     def test_get_input_signature_with_preprocessor(self):
         """Test get_input_signature infers from preprocessor."""
@@ -255,13 +257,10 @@ class ObjectDetectorExporterConfigTest(TestCase):
         config = ObjectDetectorExporterConfig(model)
         signature = config.get_input_signature()
 
-        self.assertIn("images", signature)
-        self.assertIn("image_shape", signature)
+        # ObjectDetector returns single InputSpec for images (not dict)
+        self.assertIsInstance(signature, keras.layers.InputSpec)
         # Images shape should be (batch, height, width, channels)
-        self.assertEqual(signature["images"].shape, (None, 512, 512, 3))
-        # Image shape is (batch, 2) for (height, width)
-        self.assertEqual(signature["image_shape"].shape, (None, 2))
-        self.assertEqual(signature["image_shape"].dtype, "int32")
+        self.assertEqual(signature.shape, (None, 512, 512, 3))
 
 
 class ImageSegmenterExporterConfigTest(TestCase):
@@ -279,4 +278,5 @@ class ImageSegmenterExporterConfigTest(TestCase):
         model = MockImageSegmenterForTest()
         config = ImageSegmenterExporterConfig(model)
         self.assertEqual(config.MODEL_TYPE, "image_segmenter")
-        self.assertEqual(config.EXPECTED_INPUTS, ["images"])
+        # ImageSegmenter uses 'inputs' not 'images'
+        self.assertEqual(config.EXPECTED_INPUTS, ["inputs"])

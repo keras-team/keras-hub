@@ -90,34 +90,3 @@ class KerasHubExporter(ABC):
             filepath: `str`. Path where to save the exported model.
         """
         pass
-
-    def _ensure_model_built(self, param=None):
-        """Ensure the model is properly built with correct input structure.
-
-        This method builds the model using model.build() with input shapes.
-        This creates the necessary variables and initializes the model structure
-        for export without needing dummy data.
-
-        Args:
-            param: `int` or `None`. Optional parameter for input signature
-                (e.g., sequence_length for text models, image_size for vision
-                models).
-        """
-        # Get input signature (returns dict of InputSpec objects)
-        if isinstance(param, dict):
-            input_signature = param
-        else:
-            input_signature = self.config.get_input_signature(param)
-
-        # Extract shapes from InputSpec objects
-        input_shapes = {}
-        for name, spec in input_signature.items():
-            if hasattr(spec, "shape"):
-                input_shapes[name] = spec.shape
-            else:
-                # Fallback for unexpected formats
-                input_shapes[name] = spec
-
-        # Build the model using shapes only (no actual data allocation)
-        # This creates variables and initializes the model structure
-        self.model.build(input_shape=input_shapes)

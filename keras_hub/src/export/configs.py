@@ -344,6 +344,9 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
             # RoformerV2 doesn't use padding_mask
             if "RoformerV2" in backbone_class_name:
                 return False
+            # ESM computes attention mask internally from token_ids
+            if "ESM" in backbone_class_name:
+                return False
         return True
 
     def _is_model_compatible(self):
@@ -495,7 +498,8 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
         Args:
             image_size: `int`, `tuple` or `None`. Optional image size.
         Returns:
-            `dict`. Dictionary mapping input names to their specifications
+            Single `InputSpec` for the images input (not a dict, since
+            ImageClassifier models expect a single tensor, not dict inputs).
         """
         if image_size is None:
             image_size = _infer_image_size(self.model)
@@ -504,11 +508,8 @@ class ImageClassifierExporterConfig(KerasHubExporterConfig):
 
         dtype = _infer_image_dtype(self.model)
 
-        return {
-            "images": keras.layers.InputSpec(
-                dtype=dtype, shape=(None, *image_size, 3)
-            ),
-        }
+        # Return single InputSpec (not dict) for single-input models
+        return keras.layers.InputSpec(dtype=dtype, shape=(None, *image_size, 3))
 
 
 @keras_hub_export("keras_hub.export.ObjectDetectorExporterConfig")
@@ -516,7 +517,7 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
     """Exporter configuration for Object Detection models."""
 
     MODEL_TYPE = "object_detector"
-    EXPECTED_INPUTS = ["images", "image_shape"]
+    EXPECTED_INPUTS = ["images"]  # ObjectDetector models only take images
 
     def _is_model_compatible(self):
         """Check if model is an object detector.
@@ -527,10 +528,15 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
 
     def get_input_signature(self, image_size=None):
         """Get input signature for object detector models.
+
+        Note: ObjectDetector models only take 'images' as input,
+        not 'image_shape'. The image_shape parameter is used to determine
+        the input dimensions.
+
         Args:
             image_size: `int`, `tuple` or `None`. Optional image size.
         Returns:
-            `dict`. Dictionary mapping input names to their specifications
+            Single InputSpec for images (not a dict, as there's only one input)
         """
         if image_size is None:
             # Try to infer from preprocessor, but fall back to dynamic shapes
@@ -547,24 +553,14 @@ class ObjectDetectorExporterConfig(KerasHubExporterConfig):
 
         if image_size is not None:
             # Use concrete shapes when image_size is available
-            return {
-                "images": keras.layers.InputSpec(
-                    dtype=dtype, shape=(None, *image_size, 3)
-                ),
-                "image_shape": keras.layers.InputSpec(
-                    dtype="int32", shape=(None, 2)
-                ),
-            }
+            return keras.layers.InputSpec(
+                dtype=dtype, shape=(None, *image_size, 3)
+            )
         else:
             # Use dynamic shapes for variable input sizes
-            return {
-                "images": keras.layers.InputSpec(
-                    dtype=dtype, shape=(None, None, None, 3)
-                ),
-                "image_shape": keras.layers.InputSpec(
-                    dtype="int32", shape=(None, 2)
-                ),
-            }
+            return keras.layers.InputSpec(
+                dtype=dtype, shape=(None, None, None, 3)
+            )
 
 
 @keras_hub_export("keras_hub.export.ImageSegmenterExporterConfig")
@@ -572,7 +568,9 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
     """Exporter configuration for Image Segmentation models."""
 
     MODEL_TYPE = "image_segmenter"
-    EXPECTED_INPUTS = ["images"]
+    EXPECTED_INPUTS = [
+        "inputs"
+    ]  # ImageSegmenter models use 'inputs' not 'images'
 
     def _is_model_compatible(self):
         """Check if model is an image segmenter.
@@ -583,10 +581,14 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
 
     def get_input_signature(self, image_size=None):
         """Get input signature for image segmenter models.
+
+        Note: ImageSegmenter models use 'inputs' as the input name,
+        not 'images'.
+
         Args:
             image_size: `int`, `tuple` or `None`. Optional image size.
         Returns:
-            `dict`. Dictionary mapping input names to their specifications
+            Single InputSpec for inputs (not a dict, as there's only one input)
         """
         if image_size is None:
             image_size = _infer_image_size(self.model)
@@ -595,11 +597,9 @@ class ImageSegmenterExporterConfig(KerasHubExporterConfig):
 
         dtype = _infer_image_dtype(self.model)
 
-        return {
-            "images": keras.layers.InputSpec(
-                dtype=dtype, shape=(None, *image_size, 3)
-            ),
-        }
+        return keras.layers.InputSpec(
+            dtype=dtype, shape=(None, *image_size, 3), name="inputs"
+        )
 
 
 @keras_hub_export("keras_hub.export.SAMImageSegmenterExporterConfig")

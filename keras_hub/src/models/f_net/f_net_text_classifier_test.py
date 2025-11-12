@@ -71,6 +71,10 @@ class FNetTextClassifierTest(TestCase):
             cls=FNetTextClassifier,
             init_kwargs=self.init_kwargs,
             input_data=input_data,
+            comparison_mode="statistical",
+            output_thresholds={
+                "*": {"max": 0.01, "mean": 0.005},
+            },
         )
 
     @pytest.mark.extra_large

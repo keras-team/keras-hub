@@ -285,15 +285,12 @@ def test_object_detector_litert_export(model_config):
         if image_size is None:
             raise ValueError(f"Could not determine image size for {preset}")
 
-        # ObjectDetector typically needs images (H, W, 3) and image_shape (H, W)
-        test_inputs = {
-            "images": np.random.uniform(
-                input_range[0],
-                input_range[1],
-                size=(1,) + image_size + (3,),
-            ).astype(np.float32),
-            "image_shape": np.array([image_size], dtype=np.int32),
-        }
+        # ObjectDetector only needs images input (not image_shape)
+        test_inputs = np.random.uniform(
+            input_range[0],
+            input_range[1],
+            size=(1,) + image_size + (3,),
+        ).astype(np.float32)
 
         # Validate LiteRT export with numerical verification
         TestCase().run_litert_export_test(
