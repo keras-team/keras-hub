@@ -52,7 +52,7 @@ class RWKV7CausalLMPreprocessorTest(TestCase):
 
     def test_generate_preprocess(self):
         result = self.preprocessor.generate_preprocess(
-            ["hello world hello world hello world"], 16
+            ["hello world hello world hello world"], sequence_length=16
         )
 
         self.assertAllEqual(

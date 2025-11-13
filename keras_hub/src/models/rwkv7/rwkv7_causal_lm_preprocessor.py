@@ -6,6 +6,7 @@ from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
 from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_hub_export("keras_hub.models.RWKV7CausalLMPreprocessor")
@@ -112,6 +113,7 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
             tokenizer=tokenizer, add_start_token=add_start_token, **kwargs
         )
 
+    @preprocessing_function
     def call(
         self,
         x,
@@ -166,10 +168,11 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         )
         self.built = True
 
+    @preprocessing_function
     def generate_preprocess(
         self,
         x,
-        sequence_length,
+        sequence_length=None,
     ):
         """Preprocess input for generation.
 
@@ -220,6 +223,7 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
             "predict_token_ids": y,
         }
 
+    @preprocessing_function
     def generate_postprocess(
         self,
         x,
