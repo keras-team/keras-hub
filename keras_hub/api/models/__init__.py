@@ -166,12 +166,6 @@ from keras_hub.src.models.densenet.densenet_image_classifier import (
 from keras_hub.src.models.densenet.densenet_image_classifier_preprocessor import (
     DenseNetImageClassifierPreprocessor as DenseNetImageClassifierPreprocessor,
 )
-from keras_hub.src.models.diffbin.diffbin_backbone import (
-    DiffBinBackbone as DiffBinBackbone,
-)
-from keras_hub.src.models.diffbin.diffbin_textdetector import (
-    DiffBinTextDetector as DiffBinImageTextDetector
-)
 from keras_hub.src.models.depth_anything.depth_anything_backbone import (
     DepthAnythingBackbone as DepthAnythingBackbone,
 )
@@ -186,6 +180,12 @@ from keras_hub.src.models.depth_estimator import (
 )
 from keras_hub.src.models.depth_estimator_preprocessor import (
     DepthEstimatorPreprocessor as DepthEstimatorPreprocessor,
+)
+from keras_hub.src.models.diffbin.diffbin_backbone import (
+    DiffBinBackbone as DiffBinBackbone,
+)
+from keras_hub.src.models.diffbin.diffbin_textdetector import (
+    DiffBinTextDetector as DiffBinImageTextDetector,
 )
 from keras_hub.src.models.dinov2.dinov2_backbone import (
     DINOV2Backbone as DINOV2Backbone,
