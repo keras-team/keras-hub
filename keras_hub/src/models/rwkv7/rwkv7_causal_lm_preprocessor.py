@@ -1,5 +1,4 @@
 import keras
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
@@ -7,6 +6,7 @@ from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
 from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.models.RWKV7CausalLMPreprocessor")
@@ -203,7 +203,7 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
             generate_length = generate_length + (16 - generate_length % 16)
 
         x = [t[-sequence_length:] for t in self.tokenizer(x)]
-        y = ops.zeros((len(x), generate_length), "int32")
+        y = tf.zeros((len(x), generate_length), "int32")
         # Utilize RNN characteristics where prefill and decode are two sequences
         # But the first token of decode should be the last token of prefill
         start_token = [[t[-1]] for t in x]
@@ -212,9 +212,11 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         token_ids, input_padding_mask = self.packer(
             x, sequence_length=sequence_length, add_end_value=False
         )
-        start_token = ops.convert_to_tensor(start_token, "int32")
-        y = ops.slice_update(y, [0, 0], start_token)
-        padding_mask = ops.not_equal(y, 0)
+        start_token = tf.convert_to_tensor(start_token, "int32")
+        from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
+
+        y = dynamic_update_slice(y, start_token, [0, 0])
+        padding_mask = tf.not_equal(y, 0)
 
         return {
             "token_ids": token_ids,
@@ -244,6 +246,4 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
             self.build(None)
 
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
-        token_ids = ops.convert_to_numpy(token_ids)
-        padding_mask = ops.convert_to_numpy(padding_mask)
         return self.tokenizer.detokenize(token_ids * padding_mask)
