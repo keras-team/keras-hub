@@ -170,7 +170,8 @@ from keras_hub.src.models.diffbin.diffbin_backbone import (
     DiffBinBackbone as DiffBinBackbone,
 )
 from keras_hub.src.models.diffbin.diffbin_textdetector import (
-    DiffBinTextDetector as DiffBinImageTextDetector,
+    DiffBinTextDetector as DiffBinImageTextDetector
+)
 from keras_hub.src.models.depth_anything.depth_anything_backbone import (
     DepthAnythingBackbone as DepthAnythingBackbone,
 )
