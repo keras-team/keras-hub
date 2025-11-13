@@ -8,7 +8,7 @@ import keras
 import numpy as np
 import pytest
 
-from keras_hub.src.export.litert import LiteRTExporter
+from keras_hub.src.export.litert import export_litert
 from keras_hub.src.tests.test_case import TestCase
 
 # Lazy import LiteRT interpreter with fallback logic
@@ -28,8 +28,8 @@ if keras.backend.backend() == "tensorflow":
     keras.backend.backend() != "tensorflow",
     reason="LiteRT export only supports TensorFlow backend.",
 )
-class LiteRTExporterTest(TestCase):
-    """Tests for LiteRTExporter class."""
+class LiteRTExportTest(TestCase):
+    """Tests for LiteRT export functionality."""
 
     def setUp(self):
         """Set up test fixtures."""
@@ -43,38 +43,10 @@ class LiteRTExporterTest(TestCase):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
-    def test_exporter_init_without_litert_available(self):
-        """Test that LiteRTExporter raises error if Keras LiteRT unavailable."""
-        # We can't easily test this without mocking, so we'll skip
-        self.skipTest("Requires mocking KERAS_LITE_RT_AVAILABLE")
-
-    def test_exporter_init_with_parameters(self):
-        """Test LiteRTExporter initialization with custom parameters."""
-        from keras_hub.src.export.configs import CausalLMExporterConfig
-        from keras_hub.src.models.causal_lm import CausalLM
-
-        # Create a minimal mock model
-        class MockCausalLM(CausalLM):
-            def __init__(self):
-                keras.Model.__init__(self)
-                self.preprocessor = None
-                self.dense = keras.layers.Dense(10)
-
-            def call(self, inputs):
-                return self.dense(inputs["token_ids"])
-
-        model = MockCausalLM()
-        config = CausalLMExporterConfig(model)
-        exporter = LiteRTExporter(
-            config,
-            max_sequence_length=256,
-            verbose=True,
-            custom_param="test",
-        )
-
-        self.assertEqual(exporter.max_sequence_length, 256)
-        self.assertTrue(exporter.verbose)
-        self.assertEqual(exporter.export_kwargs["custom_param"], "test")
+    def test_export_litert_function_exists(self):
+        """Test that export_litert function is available."""
+        # Simply test that the function can be imported and called
+        self.assertTrue(callable(export_litert))
 
 
 @pytest.mark.skipif(
@@ -637,7 +609,13 @@ class ExportErrorHandlingTest(TestCase):
         class SimpleCausalLM(CausalLM):
             def __init__(self):
                 super().__init__()
-                self.preprocessor = None
+
+                # Create a mock preprocessor with sequence_length
+                class MockPreprocessor:
+                    def __init__(self):
+                        self.sequence_length = 128
+
+                self.preprocessor = MockPreprocessor()
                 self.embedding = keras.layers.Embedding(1000, 64)
                 self.dense = keras.layers.Dense(1000)
 
@@ -659,7 +637,7 @@ class ExportErrorHandlingTest(TestCase):
 
         # Export the model
         export_path = os.path.join(self.temp_dir, "causal_lm_signature")
-        model.export(export_path, format="litert", max_sequence_length=128)
+        model.export(export_path, format="litert")
 
         tflite_path = export_path + ".tflite"
         self.assertTrue(os.path.exists(tflite_path))

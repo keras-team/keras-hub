@@ -1,13 +1,16 @@
 """Configuration classes for different Keras-Hub model types.
 
 This module provides specific configurations for exporting different types
-of Keras-Hub models, following the Optimum pattern.
+of Keras-Hub models. Each configuration knows how to generate the appropriate
+input signature for its model type, which is then used by Keras Core's export.
 """
+
+from abc import ABC
+from abc import abstractmethod
 
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.export.base import KerasHubExporterConfig
 from keras_hub.src.models.audio_to_text import AudioToText
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.depth_estimator import DepthEstimator
@@ -17,6 +20,63 @@ from keras_hub.src.models.object_detector import ObjectDetector
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.models.text_classifier import TextClassifier
 from keras_hub.src.models.text_to_image import TextToImage
+
+
+class KerasHubExporterConfig(ABC):
+    """Base configuration class for Keras-Hub model exporters.
+
+    This class defines the interface for exporter configurations that specify
+    how different types of Keras-Hub models should be exported. Each subclass
+    provides domain-specific knowledge about input signatures for its model
+    type.
+    """
+
+    # Model type this exporter handles (e.g., "causal_lm", "text_classifier")
+    MODEL_TYPE = None
+
+    # Expected input structure for this model type
+    EXPECTED_INPUTS = []
+
+    def __init__(self, model, **kwargs):
+        """Initialize the exporter configuration.
+
+        Args:
+            model: `keras.Model`. The Keras-Hub model to export.
+            **kwargs: Additional configuration parameters.
+        """
+        self.model = model
+        self.config_kwargs = kwargs
+        self._validate_model()
+
+    def _validate_model(self):
+        """Validate that the model is compatible with this exporter."""
+        if not self._is_model_compatible():
+            raise ValueError(
+                f"Model {self.model.__class__.__name__} is not compatible "
+                f"with {self.__class__.__name__}"
+            )
+
+    @abstractmethod
+    def _is_model_compatible(self):
+        """Check if the model is compatible with this exporter.
+
+        Returns:
+            `bool`. True if compatible, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    def get_input_signature(self, sequence_length=None):
+        """Get the input signature for this model type.
+
+        Args:
+            sequence_length: `int` or `None`. Optional sequence length for
+                input tensors.
+
+        Returns:
+            `dict`. Dictionary mapping input names to tensor specifications.
+        """
+        pass
 
 
 def _get_text_input_signature(model, sequence_length=None):
@@ -197,13 +257,25 @@ class CausalLMExporterConfig(KerasHubExporterConfig):
 
         Args:
             sequence_length: `int`, `None`, or `dict`. Optional sequence length.
-                If None, exports with dynamic shape for flexibility. If dict,
+                If None, uses preprocessor's sequence_length if available,
+                otherwise exports with dynamic shape for flexibility. If dict,
                 should contain 'sequence_length' and 'image_size' for
                 multimodal models.
 
         Returns:
             `dict`. Dictionary mapping input names to their specifications
         """
+        # If no sequence_length provided, try to get it from preprocessor
+        if (
+            sequence_length is None
+            and hasattr(self.model, "preprocessor")
+            and self.model.preprocessor is not None
+        ):
+            if hasattr(self.model.preprocessor, "sequence_length"):
+                sequence_length = self.model.preprocessor.sequence_length
+            elif hasattr(self.model.preprocessor, "max_sequence_length"):
+                sequence_length = self.model.preprocessor.max_sequence_length
+
         # Use dynamic shape (None) by default for TFLite flexibility
         # Users can resize at runtime via interpreter.resize_tensor_input()
 
@@ -362,11 +434,23 @@ class TextClassifierExporterConfig(KerasHubExporterConfig):
 
         Args:
             sequence_length: `int` or `None`. Optional sequence length. If None,
+                uses preprocessor's sequence_length if available, otherwise
                 exports with dynamic shape for flexibility.
 
         Returns:
             `dict`. Dictionary mapping input names to their specifications
         """
+        # If no sequence_length provided, try to get it from preprocessor
+        if (
+            sequence_length is None
+            and hasattr(self.model, "preprocessor")
+            and self.model.preprocessor is not None
+        ):
+            if hasattr(self.model.preprocessor, "sequence_length"):
+                sequence_length = self.model.preprocessor.sequence_length
+            elif hasattr(self.model.preprocessor, "max_sequence_length"):
+                sequence_length = self.model.preprocessor.max_sequence_length
+
         # Use dynamic shape (None) by default for TFLite flexibility
         # Users can resize at runtime via interpreter.resize_tensor_input()
         signature = {
@@ -415,11 +499,23 @@ class Seq2SeqLMExporterConfig(KerasHubExporterConfig):
 
         Args:
             sequence_length: `int` or `None`. Optional sequence length. If None,
+                uses preprocessor's sequence_length if available, otherwise
                 exports with dynamic shape for flexibility.
 
         Returns:
             `dict`. Dictionary mapping input names to their specifications
         """
+        # If no sequence_length provided, try to get it from preprocessor
+        if (
+            sequence_length is None
+            and hasattr(self.model, "preprocessor")
+            and self.model.preprocessor is not None
+        ):
+            if hasattr(self.model.preprocessor, "sequence_length"):
+                sequence_length = self.model.preprocessor.sequence_length
+            elif hasattr(self.model.preprocessor, "max_sequence_length"):
+                sequence_length = self.model.preprocessor.max_sequence_length
+
         # Use dynamic shape (None) by default for TFLite flexibility
         # Users can resize at runtime via interpreter.resize_tensor_input()
         return _get_seq2seq_input_signature(self.model, sequence_length)

@@ -95,7 +95,8 @@ class CausalLMExporterConfigTest(TestCase):
         self.assertEqual(signature["padding_mask"].shape, (None, None))
 
     def test_get_input_signature_from_preprocessor(self):
-        """Test get_input_signature defaults to dynamic shape."""
+        """Test get_input_signature uses preprocessor's sequence_length by
+        default."""
         from keras_hub.src.models.causal_lm import CausalLM
 
         class MockCausalLMForTest(CausalLM):
@@ -106,10 +107,29 @@ class CausalLMExporterConfigTest(TestCase):
         preprocessor = MockPreprocessor(sequence_length=256)
         model = MockCausalLMForTest(preprocessor)
         config = CausalLMExporterConfig(model)
-        # Without explicit sequence_length parameter, uses dynamic shape
+        # Without explicit sequence_length parameter, uses preprocessor's
+        # sequence_length
         signature = config.get_input_signature()
 
-        # Should use dynamic shape by default for flexibility
+        # Should use preprocessor's sequence_length by default
+        self.assertEqual(signature["token_ids"].shape, (None, 256))
+        self.assertEqual(signature["padding_mask"].shape, (None, 256))
+
+    def test_get_input_signature_dynamic_when_no_preprocessor(self):
+        """Test get_input_signature uses dynamic shape when no preprocessor."""
+        from keras_hub.src.models.causal_lm import CausalLM
+
+        class MockCausalLMForTest(CausalLM):
+            def __init__(self):
+                keras.Model.__init__(self)
+                self.preprocessor = None
+
+        model = MockCausalLMForTest()
+        config = CausalLMExporterConfig(model)
+        # Without preprocessor, uses dynamic shape
+        signature = config.get_input_signature()
+
+        # Should use dynamic shape when no preprocessor available
         self.assertEqual(signature["token_ids"].shape, (None, None))
         self.assertEqual(signature["padding_mask"].shape, (None, None))
 

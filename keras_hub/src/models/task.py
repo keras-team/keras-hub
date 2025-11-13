@@ -386,7 +386,6 @@ class Task(PipelineModel):
                 Defaults to `False`.
             **kwargs: Additional arguments passed to the exporter. For LiteRT
                 export, common options include:
-                - `max_sequence_length`: Maximum sequence length for text models
                 - `optimizations`: List of TFLite optimizations (e.g.,
                     `[tf.lite.Optimize.DEFAULT]`)
                 - `allow_custom_ops`: Whether to allow custom TFLite operations.
@@ -403,13 +402,6 @@ class Task(PipelineModel):
         # Export a text model to TensorFlow Lite
         model = keras_hub.models.GemmaCausalLM.from_preset("gemma_2b_en")
         model.export("gemma_model.tflite", format="litert")
-
-        # Export with custom sequence length
-        model.export(
-            "gemma_model.tflite",
-            format="litert",
-            max_sequence_length=512
-        )
 
         # Export with quantization
         import tensorflow as tf
@@ -436,16 +428,30 @@ class Task(PipelineModel):
         ```
         """
         if format == "litert":
+            # Ensure filepath ends with .tflite
+            if not filepath.endswith(".tflite"):
+                filepath = filepath + ".tflite"
+
+            from keras.src.export.litert import export_litert
+
             from keras_hub.src.export.configs import get_exporter_config
-            from keras_hub.src.export.litert import LiteRTExporter
 
             # Get the appropriate configuration for this model type
             config = get_exporter_config(self)
 
-            # Create and use the LiteRT exporter
-            kwargs["verbose"] = verbose
-            exporter = LiteRTExporter(config, **kwargs)
-            exporter.export(filepath)
+            # Get domain-specific input signature from config
+            input_signature = config.get_input_signature()
+
+            export_kwargs = kwargs.copy()
+            export_kwargs["verbose"] = verbose
+
+            # Call Keras Core's export_litert directly
+            export_litert(
+                self,
+                filepath,
+                input_signature=input_signature,
+                **export_kwargs,
+            )
         else:
             # Fall back to parent class (keras.Model) export for other formats
             super().export(filepath, format=format, verbose=verbose, **kwargs)

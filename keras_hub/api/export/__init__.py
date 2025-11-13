@@ -34,4 +34,3 @@ from keras_hub.src.export.configs import (
 from keras_hub.src.export.configs import (
     TextToImageExporterConfig as TextToImageExporterConfig,
 )
-from keras_hub.src.export.litert import LiteRTExporter as LiteRTExporter
