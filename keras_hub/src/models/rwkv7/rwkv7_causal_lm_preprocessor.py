@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
@@ -207,8 +208,8 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         # Utilize RNN characteristics where prefill and decode are two sequences
         # But the first token of decode should be the last token of prefill
         start_token = [[t[-1]] for t in x]
-        x = [t[:-1] if len(t) > 1 else [0] for t in x]
-
+        x = [np.array(t[:-1]) if len(t) > 1 else [0] for t in x]
+        x = tf.ragged.constant(x)
         token_ids, input_padding_mask = self.packer(
             x, sequence_length=sequence_length, add_end_value=False
         )
