@@ -137,6 +137,7 @@ class DFineObjectDetectorTest(TestCase):
                 "num_detections": (1,),
             },
         )
+
     @pytest.mark.large
     def test_saved_model(self):
         backbone = DFineBackbone(**self.base_backbone_kwargs)

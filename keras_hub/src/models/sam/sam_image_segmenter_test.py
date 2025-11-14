@@ -108,6 +108,7 @@ class SAMImageSegmenterTest(TestCase):
             },
         )
 
+    @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=SAMImageSegmenter,
