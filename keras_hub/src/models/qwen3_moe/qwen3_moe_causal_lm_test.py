@@ -122,6 +122,7 @@ class Qwen3MoeCausalLMTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.large
     @pytest.mark.skipif(
         keras.backend.backend() != "tensorflow",
         reason="LiteRT export only supports TensorFlow backend.",

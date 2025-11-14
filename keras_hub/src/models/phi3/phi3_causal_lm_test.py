@@ -108,6 +108,7 @@ class Phi3CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.large
     @pytest.mark.skipif(
         keras.backend.backend() != "tensorflow",
         reason="LiteRT export only supports TensorFlow backend.",

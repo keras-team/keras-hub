@@ -389,8 +389,8 @@ class Task(PipelineModel):
                 - `optimizations`: List of TFLite optimizations (e.g.,
                     `[tf.lite.Optimize.DEFAULT]`)
                 - `allow_custom_ops`: Whether to allow custom TFLite operations.
-                    Set to `True` for models using unsupported ops (e.g.,
-                    StableDiffusion3 with Erfc). Defaults to `False`.
+                    Set to `True` for models using unsupported ops. Defaults
+                    to `False`.
                 - `enable_select_tf_ops`: Whether to enable TensorFlow Select
                     ops (Flex delegate). Set to `True` for models using certain
                     TF operations not natively supported in TFLite. Defaults

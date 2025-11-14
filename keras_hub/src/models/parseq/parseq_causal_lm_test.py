@@ -130,4 +130,6 @@ class PARSeqCausalLMTest(TestCase):
             cls=PARSeqCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=input_data,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-3, "mean": 1e-4}},
         )

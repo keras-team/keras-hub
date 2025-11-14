@@ -66,6 +66,7 @@ class ResNetImageClassifierTest(TestCase):
             input_data=self.images,
         )
 
+    @pytest.mark.large
     @pytest.mark.skipif(
         keras.backend.backend() != "tensorflow",
         reason="LiteRT export only supports TensorFlow backend.",

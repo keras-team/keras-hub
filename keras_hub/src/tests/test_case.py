@@ -723,13 +723,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 else:
                     # For single tensor inputs, get the input name
                     sig_inputs = serving_sig.get("inputs", [])
-                    if len(sig_inputs) == 1:
-                        input_name = sig_inputs[0]
-                        converted_input = convert_for_tflite(input_data)
-                        litert_output = runner(**{input_name: converted_input})
-                    else:
-                        converted_input = convert_for_tflite(input_data)
-                        litert_output = runner(converted_input)
+                    input_name = sig_inputs[
+                        0
+                    ]  # We verified len(sig_inputs) == 1 above
+                    converted_input = convert_for_tflite(input_data)
+                    litert_output = runner(**{input_name: converted_input})
 
                 # Step 4: Verify outputs
                 self._verify_litert_outputs(
