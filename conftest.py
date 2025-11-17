@@ -3,6 +3,22 @@ import os
 import keras
 import pytest
 
+# OpenVINO supported test paths
+OPENVINO_SUPPORTED_PATHS = [
+    "keras-hub/integration_tests",
+    "keras_hub/src/models/gemma",
+    "keras_hub/src/models/gpt2",
+    "keras_hub/src/models/mistral",
+    "keras_hub/src/tokenizers",
+]
+
+# OpenVINO specific test skips
+OPENVINO_SPECIFIC_SKIPPING_TESTS = {
+    "test_backbone_basics": "bfloat16 dtype not supported",
+    "test_score_loss": "Non-implemented roll operation",
+    "test_causal_lm_basics": "Missing ops and requires trainable backend",
+}
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -32,6 +48,15 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
+    # Monkey-patch training methods for OpenVINO backend
+    if keras.config.backend() == "openvino":
+        keras.Model.fit = lambda *args, **kwargs: pytest.skip(
+            "Model.fit() not supported on OpenVINO backend"
+        )
+        keras.Model.train_on_batch = lambda *args, **kwargs: pytest.skip(
+            "Model.train_on_batch() not supported on OpenVINO backend"
+        )
+
     # Verify that device has GPU and detected by backend
     if config.getoption("--check_gpu"):
         found_gpu = False
@@ -109,6 +134,34 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(tf_only)
         if "kaggle_key_required" in item.keywords:
             item.add_marker(kaggle_key_required)
+
+        # OpenVINO-specific test skipping
+        if keras.config.backend() == "openvino":
+            test_name = item.name.split("[")[0]
+
+            if test_name in OPENVINO_SPECIFIC_SKIPPING_TESTS:
+                item.add_marker(
+                    pytest.mark.skipif(
+                        True,
+                        reason="OpenVINO: "
+                        f"{OPENVINO_SPECIFIC_SKIPPING_TESTS[test_name]}",
+                    )
+                )
+                continue
+
+            is_whitelisted = any(
+                item.nodeid.startswith(supported_path + "/")
+                or item.nodeid.startswith(supported_path + "::")
+                or item.nodeid == supported_path
+                for supported_path in OPENVINO_SUPPORTED_PATHS
+            )
+
+            if not is_whitelisted:
+                item.add_marker(
+                    pytest.mark.skipif(
+                        True, reason="OpenVINO: File/directory not in whitelist"
+                    )
+                )
 
 
 # Disable traceback filtering for quicker debugging of tests failures.

@@ -46,6 +46,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         layer_norm_epsilon=1e-6,
         rope_wavelength=10_000.0,
         rope_scaling_factor=1.0,
+        use_bidirectional_attention=False,
         dropout=0,
         **kwargs,
     ):
@@ -61,6 +62,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.rope_wavelength = rope_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.use_bidirectional_attention = use_bidirectional_attention
         self.dropout = dropout
 
         self._kernel_initializer = keras.initializers.get(
@@ -240,12 +242,58 @@ class CachedGemma3Attention(keras.layers.Layer):
         results = ops.einsum("bkgts,bskh->btkgh", attention_softmax, v)
         return ops.reshape(results, (b, q_len, self.num_query_heads, h))
 
+    def _compute_bidirectional_sliding_mask(self, batch_size, sequence_length):
+        """Computes a bidirectional sliding window attention mask.
+
+        A token can attend to any other token if their absolute distance is
+        within  half the sliding window size. This mask is used in embedding
+        models like `EmbeddingGemma`.
+
+        Args:
+            batch_size: The batch size for the mask.
+            sequence_length: The length of the sequence.
+
+        Returns:
+            A boolean attention mask with shape
+            `(batch_size, sequence_length, sequence_length)`.
+        """
+        i = keras.ops.expand_dims(
+            keras.ops.arange(sequence_length, dtype="int32"), axis=1
+        )
+        j = keras.ops.arange(sequence_length, dtype="int32")
+
+        # If sliding window size is 4, the token in question attends to 1
+        # token before and 2 tokens after.
+        w_right = self.sliding_window_size // 2
+        w_left = self.sliding_window_size - w_right - 1
+
+        # Calculate the relative distance.
+        distance = i - j
+
+        mask = keras.ops.logical_and(distance <= w_left, distance >= -w_right)
+
+        mask = keras.ops.expand_dims(mask, axis=0)
+        return keras.ops.broadcast_to(
+            mask, (batch_size, sequence_length, sequence_length)
+        )
+
     def _mask_sliding_window(
         self,
         attention_mask,
         cache_update_index=0,
     ):
         batch_size, query_len, key_len = ops.shape(attention_mask)
+
+        if self.use_bidirectional_attention:
+            bidirectional_sliding_mask = (
+                self._compute_bidirectional_sliding_mask(
+                    batch_size=batch_size,
+                    # `query_len = key_len` for embedding models
+                    sequence_length=query_len,
+                )
+            )
+            return ops.logical_and(attention_mask, bidirectional_sliding_mask)
+
         # Compute the sliding window for square attention.
         all_ones = ops.ones((key_len, key_len), "bool")
         if keras.config.backend() == "tensorflow":
