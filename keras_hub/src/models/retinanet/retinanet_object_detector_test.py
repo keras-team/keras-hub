@@ -76,7 +76,7 @@ class RetinaNetObjectDetectorTest(TestCase):
             "preprocessor": preprocessor,
         }
 
-        self.input_size = 512
+        self.input_size = 800
         self.images = np.random.uniform(
             low=0, high=255, size=(1, self.input_size, self.input_size, 3)
         ).astype("float32")
@@ -107,4 +107,26 @@ class RetinaNetObjectDetectorTest(TestCase):
             cls=RetinaNetObjectDetector,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
+        )
+
+    @pytest.mark.large
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="LiteRT export only supports TensorFlow backend.",
+    )
+    def test_litert_export(self):
+        # ObjectDetector models need both images and image_shape as inputs
+        # ObjectDetector only needs images input (not image_shape)
+        input_data = self.images
+
+        self.run_litert_export_test(
+            cls=RetinaNetObjectDetector,
+            init_kwargs=self.init_kwargs,
+            input_data=input_data,
+            comparison_mode="statistical",
+            output_thresholds={
+                "enc_topk_logits": {"max": 5.0, "mean": 0.05},
+                "logits": {"max": 2.0, "mean": 0.05},
+                "*": {"max": 1.5, "mean": 0.05},
+            },
         )

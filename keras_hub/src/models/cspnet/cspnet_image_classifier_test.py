@@ -76,3 +76,11 @@ class CSPNetImageClassifierTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.images,
         )
+
+    @pytest.mark.large
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=CSPNetImageClassifier,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+        )
