@@ -278,7 +278,7 @@ class RWKV(nn.Module):
 def convert_cmix(my_chnnal_mix, weights, i):
     my_chnnal_mix.set_weights(
         [
-            weights.pop("blocks.%d.ffn.x_k" % i),
+            weights.pop("blocks.%d.ffn.x_k" % i).reshape([-1]),
             weights.pop("blocks.%d.ffn.key.weight" % i).T,
             weights.pop("blocks.%d.ffn.value.weight" % i).T,
         ]
@@ -287,25 +287,25 @@ def convert_cmix(my_chnnal_mix, weights, i):
 
 def convert_tmix(my_time_mix, weights, i):
     weights_list = [
-        weights.pop("blocks.%d.att.x_r" % i),
-        weights.pop("blocks.%d.att.x_w" % i),
-        weights.pop("blocks.%d.att.x_k" % i),
-        weights.pop("blocks.%d.att.x_v" % i),
-        weights.pop("blocks.%d.att.x_a" % i),
-        weights.pop("blocks.%d.att.x_g" % i),
-        weights.pop("blocks.%d.att.w0" % i),
+        weights.pop("blocks.%d.att.x_r" % i).reshape([-1]),
+        weights.pop("blocks.%d.att.x_w" % i).reshape([-1]),
+        weights.pop("blocks.%d.att.x_k" % i).reshape([-1]),
+        weights.pop("blocks.%d.att.x_v" % i).reshape([-1]),
+        weights.pop("blocks.%d.att.x_a" % i).reshape([-1]),
+        weights.pop("blocks.%d.att.x_g" % i).reshape([-1]),
+        weights.pop("blocks.%d.att.w0" % i).reshape([-1]),
         weights.pop("blocks.%d.att.w1" % i),
         weights.pop("blocks.%d.att.w2" % i),
-        weights.pop("blocks.%d.att.a0" % i),
+        weights.pop("blocks.%d.att.a0" % i).reshape([-1]),
         weights.pop("blocks.%d.att.a1" % i),
         weights.pop("blocks.%d.att.a2" % i),
-        weights.pop("blocks.%d.att.v0" % i),
+        weights.pop("blocks.%d.att.v0" % i).reshape([-1]),
         weights.pop("blocks.%d.att.v1" % i),
         weights.pop("blocks.%d.att.v2" % i),
         weights.pop("blocks.%d.att.g1" % i),
         weights.pop("blocks.%d.att.g2" % i),
-        weights.pop("blocks.%d.att.k_k" % i),
-        weights.pop("blocks.%d.att.k_a" % i),
+        weights.pop("blocks.%d.att.k_k" % i).reshape([-1]),
+        weights.pop("blocks.%d.att.k_a" % i).reshape([-1]),
         weights.pop("blocks.%d.att.r_k" % i),
         weights.pop("blocks.%d.att.receptance.weight" % i).T,
         weights.pop("blocks.%d.att.key.weight" % i).T,

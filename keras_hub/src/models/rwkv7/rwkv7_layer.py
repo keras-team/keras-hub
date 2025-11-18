@@ -129,7 +129,7 @@ class RWKV7_ChannelMix(Layer):
             input_shape = input_shape[0]
 
         self.x_k = self.add_weight(
-            shape=(1, 1, input_shape[-1]),
+            shape=(input_shape[-1],),
             name="time_mix_k",
             initializer=self.kernel_initializer,
         )
@@ -242,26 +242,26 @@ class RWKV7_TimeMix(Layer):
         B, T, C = input_shape
 
         self.x_r = self.add_weight(
-            shape=(1, 1, C), name="x_r", initializer=self.kernel_initializer
+            shape=(C,), name="x_r", initializer=self.kernel_initializer
         )
         self.x_w = self.add_weight(
-            shape=(1, 1, C), name="x_w", initializer=self.kernel_initializer
+            shape=(C,), name="x_w", initializer=self.kernel_initializer
         )
         self.x_k = self.add_weight(
-            shape=(1, 1, C), name="x_k", initializer=self.kernel_initializer
+            shape=(C,), name="x_k", initializer=self.kernel_initializer
         )
         self.x_v = self.add_weight(
-            shape=(1, 1, C), name="x_v", initializer=self.kernel_initializer
+            shape=(C,), name="x_v", initializer=self.kernel_initializer
         )
         self.x_a = self.add_weight(
-            shape=(1, 1, C), name="x_a", initializer=self.kernel_initializer
+            shape=(C,), name="x_a", initializer=self.kernel_initializer
         )
         self.x_g = self.add_weight(
-            shape=(1, 1, C), name="x_g", initializer=self.kernel_initializer
+            shape=(C,), name="x_g", initializer=self.kernel_initializer
         )
 
         self.w0 = self.add_weight(
-            shape=(1, 1, C), name="w0", initializer=self.kernel_initializer
+            shape=(C,), name="w0", initializer=self.kernel_initializer
         )
         self.w1 = self.add_weight(
             shape=(C, self.decay_lora),
@@ -275,7 +275,7 @@ class RWKV7_TimeMix(Layer):
         )
 
         self.a0 = self.add_weight(
-            shape=(1, 1, C), name="a0", initializer=self.kernel_initializer
+            shape=(C,), name="a0", initializer=self.kernel_initializer
         )
         self.a1 = self.add_weight(
             shape=(C, self.aaa_lora),
@@ -289,7 +289,7 @@ class RWKV7_TimeMix(Layer):
         )
 
         self.v0 = self.add_weight(
-            shape=(1, 1, C), name="v0", initializer=self.kernel_initializer
+            shape=(C,), name="v0", initializer=self.kernel_initializer
         )
         self.v1 = self.add_weight(
             shape=(C, self.mv_lora),
@@ -314,10 +314,10 @@ class RWKV7_TimeMix(Layer):
         )
 
         self.k_k = self.add_weight(
-            shape=(1, 1, C), name="k_k", initializer=self.kernel_initializer
+            shape=(C,), name="k_k", initializer=self.kernel_initializer
         )
         self.k_a = self.add_weight(
-            shape=(1, 1, C), name="k_a", initializer=self.kernel_initializer
+            shape=(C,), name="k_a", initializer=self.kernel_initializer
         )
         self.r_k = self.add_weight(
             shape=(H, N), name="r_k", initializer=self.kernel_initializer
