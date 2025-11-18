@@ -207,7 +207,11 @@ class StableDiffusion3TextToImageTest(TestCase):
             cls=StableDiffusion3TextToImage,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            litert_kwargs={
-                "allow_custom_ops": True
-            },  # StableDiffusion3 uses Erfc and other custom TFLite ops
+            allow_custom_ops=True,  # Allow custom ops like Erfc
+            target_spec={
+                "supported_ops": [
+                    "tf.lite.OpsSet.TFLITE_BUILTINS",
+                    "tf.lite.OpsSet.SELECT_TF_OPS",
+                ]
+            },  # Also specify supported ops
         )

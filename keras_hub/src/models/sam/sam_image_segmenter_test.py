@@ -151,5 +151,7 @@ class SAMImageSegmenterTest(TestCase):
                 "masks": {"max": 1e-3, "mean": 1e-4},
                 "iou_pred": {"max": 1e-3, "mean": 1e-4},
             },
-            enable_select_tf_ops=True,
+            target_spec={
+                "experimental_disable_xnnpack": True
+            },  # Disable XNNPack delegate to avoid runtime issues
         )

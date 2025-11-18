@@ -92,7 +92,7 @@ class DepthAnythingDepthEstimatorTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.images,
             comparison_mode="statistical",
-            tolerances={"depths": {"max": 2e-4, "mean": 1e-5}},
+            output_thresholds={"depths": {"max": 2e-4, "mean": 1e-5}},
         )
 
     @pytest.mark.extra_large

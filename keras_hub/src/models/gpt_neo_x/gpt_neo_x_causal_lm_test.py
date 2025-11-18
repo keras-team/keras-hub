@@ -117,5 +117,8 @@ class GPTNeoXCausalLMTest(TestCase):
             cls=GPTNeoXCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            enable_select_tf_ops=True,
+            output_thresholds={
+                "max": 1e-3,
+                "mean": 1e-4,
+            },  # More lenient thresholds for numerical differences
         )

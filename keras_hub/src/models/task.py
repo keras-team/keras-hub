@@ -443,7 +443,8 @@ class Task(PipelineModel):
             input_signature = config.get_input_signature()
 
             export_kwargs = kwargs.copy()
-            export_kwargs["verbose"] = verbose
+            # Note: verbose is handled at the keras-hub level,
+            # not passed to core export
 
             # Call Keras Core's export_litert directly
             export_litert(
