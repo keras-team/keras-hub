@@ -192,6 +192,7 @@ class RWKV7_TimeMix(Layer):
         aaa_lora=64,
         decay_lora=64,
         kernel_initializer="glorot_uniform",
+        add_v_first=True,
         **kwargs,
     ):
         """Initialize RWKV7 time mixer.
@@ -215,6 +216,7 @@ class RWKV7_TimeMix(Layer):
         self.aaa_lora = aaa_lora
         self.decay_lora = decay_lora
         self.kernel_initializer = initializers.get(kernel_initializer)
+        self.add_v_first = add_v_first
         self.initial_state = None
         try:
             from rwkv_ops import generalized_delta_rule
@@ -287,20 +289,20 @@ class RWKV7_TimeMix(Layer):
             name="a2",
             initializer=self.kernel_initializer,
         )
-
-        self.v0 = self.add_weight(
-            shape=(C,), name="v0", initializer=self.kernel_initializer
-        )
-        self.v1 = self.add_weight(
-            shape=(C, self.mv_lora),
-            name="v1",
-            initializer=self.kernel_initializer,
-        )
-        self.v2 = self.add_weight(
-            shape=(self.mv_lora, C),
-            name="v2",
-            initializer=self.kernel_initializer,
-        )
+        if self.add_v_first:
+            self.v0 = self.add_weight(
+                shape=(C,), name="v0", initializer=self.kernel_initializer
+            )
+            self.v1 = self.add_weight(
+                shape=(C, self.mv_lora),
+                name="v1",
+                initializer=self.kernel_initializer,
+            )
+            self.v2 = self.add_weight(
+                shape=(self.mv_lora, C),
+                name="v2",
+                initializer=self.kernel_initializer,
+            )
 
         self.g1 = self.add_weight(
             shape=(C, self.gate_lora),
@@ -426,7 +428,7 @@ class RWKV7_TimeMix(Layer):
         )  # soft-clamp to (-inf, -0.5)
         k = self.key(xk)
         v = self.value(xv)
-        if v_first is None:
+        if v_first is None or not self.add_v_first:
             v_first = v
         else:
             v = v + (v_first - v) * ops.sigmoid(
@@ -518,6 +520,7 @@ class RWKV7_TimeMix(Layer):
             "mv_lora": self.mv_lora,
             "aaa_lora": self.aaa_lora,
             "decay_lora": self.decay_lora,
+            "add_v_first": self.add_v_first,
             "kernel_initializer": initializers.serialize(
                 self.kernel_initializer
             ),
@@ -591,6 +594,7 @@ class RWKV7_Block(Layer):
             self.aaa_lora,
             self.decay_lora,
             name="RWKV_TIME_MIX",
+            add_v_first=not self.use_initial_norm,
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
         )
