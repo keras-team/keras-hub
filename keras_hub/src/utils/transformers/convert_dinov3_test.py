@@ -6,7 +6,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class TestTask(TestCase):
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_convert_tiny_preset(self):
         pytest.skip(reason="TODO: enable after HF token is available in CI")
         model = DINOV3Backbone.from_preset(
