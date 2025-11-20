@@ -16,7 +16,7 @@ from keras_hub.src.tests.test_case import TestCase
     reason="TensorFlow GPU CI OOM (ResourceExhaustedError)",
 )
 class TestTask(TestCase):
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_convert_tiny_preset(self):
         model = T5GemmaSeq2SeqLM.from_preset(
             "hf://harshaljanjani/tiny-t5gemma-test"

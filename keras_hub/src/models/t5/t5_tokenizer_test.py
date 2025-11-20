@@ -31,7 +31,7 @@ class T5TokenizerTest(TestCase):
                 )
             )
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         for preset in T5Tokenizer.presets:
             self.run_preset_test(
