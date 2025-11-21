@@ -101,6 +101,7 @@ class MistralBackbone(Backbone):
         layer_norm_epsilon=1e-6,
         sliding_window=512,
         dropout=0,
+        mistral_type='Mistral',
         dtype=None,
         **kwargs,
     ):
@@ -127,6 +128,7 @@ class MistralBackbone(Backbone):
                 sliding_window=sliding_window,
                 dropout=dropout,
                 dtype=dtype,
+                mistral_type=mistral_type,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
