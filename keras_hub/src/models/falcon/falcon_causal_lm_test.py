@@ -31,6 +31,7 @@ class FalconCausalLMTest(TestCase):
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_attention_heads=2,
+            num_kv_heads=1,
             hidden_dim=4,
             intermediate_dim=16,
         )
