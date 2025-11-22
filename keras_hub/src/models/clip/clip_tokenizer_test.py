@@ -35,7 +35,7 @@ class CLIPTokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             CLIPTokenizer(vocabulary={"foo": 0, "bar": 1}, merges=["fo o"])
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=CLIPTokenizer,
