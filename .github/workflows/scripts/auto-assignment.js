@@ -34,31 +34,22 @@ module.exports = async ({ github, context }) => {
   let selectionIndex = itemNumber % candidates.length;
   let selectedUser = candidates[selectionIndex];
 
-  // 3. Safety Check: If it's a PR, ensure the reviewer is not the author
-  if (isPr && selectedUser === author) {
-    console.log(`${selectedUser} is the author. Picking the next candidate...`);
-    // Pick the next person in the list
-    selectionIndex = (selectionIndex + 1) % candidates.length;
-    selectedUser = candidates[selectionIndex];
-
-    // If the list only has 1 person (or everyone is the author), stop.
-    if (selectedUser === author) {
-      console.log("Unable to assign: The only candidate is the author.");
-      return;
-    }
+  // 3. No author restriction: allow assigning any candidate (including the PR author)
+  if (isPr) {
+    console.log(`Processing #${itemNumber}. Reviewers: ${candidates.join(', ')}`);
+  } else {
+    console.log(`Processing #${itemNumber}. Selected: ${selectedUser}`);
   }
-
-  console.log(`Processing #${itemNumber}. Selected: ${selectedUser}`);
 
   // 4. Perform the action
   try {
     if (isPr) {
-      // For PRs: Request a Review
+      // For PRs: Request Reviews from all reviewers in the PR list
       await github.rest.pulls.requestReviewers({
         owner: context.repo.owner,
         repo: context.repo.repo,
         pull_number: itemNumber,
-        reviewers: [selectedUser],
+        reviewers: candidates,
       });
     } else {
       // For Issues: Add an Assignee
