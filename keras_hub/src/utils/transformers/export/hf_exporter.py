@@ -105,8 +105,7 @@ def export_backbone(backbone, path, include_lm_head=False):
 
         if wte.data_ptr() == lm.data_ptr():
             weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
-        # --------------------------------
-
+        
         save_file(weights_dict_torch, weights_path, metadata={"format": "pt"})
 
     elif backend == "tensorflow":

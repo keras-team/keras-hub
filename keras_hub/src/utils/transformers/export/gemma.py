@@ -26,7 +26,7 @@ def get_gemma_config(backbone):
 def get_gemma_weights_map(backbone, include_lm_head=False):
     weights_dict = {}
 
-    # Map token embedding
+    # Map token embeddings
     token_embedding_layer = backbone.get_layer("token_embedding")
     weights_dict["model.embed_tokens.weight"] = token_embedding_layer.weights[0]
 

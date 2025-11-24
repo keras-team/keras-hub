@@ -105,6 +105,7 @@ class GPT2ExportTest(tf.test.TestCase, parameterized.TestCase):
         # HF logits are (batch_size, sequence_length, vocab_size)
         # We need to convert Keras logits to numpy and then to torch tensor
         # for comparison.
+        
         # Convert Keras logits (TF) -> numpy
         keras_logits_np = to_numpy(keras_logits)
 
