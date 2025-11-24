@@ -10,19 +10,27 @@ from keras_hub.src.utils.transformers.export.gemma import (
     get_gemma_tokenizer_config,
 )
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
+from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_config
+from keras_hub.src.utils.transformers.export.gpt2 import (
+    get_gpt2_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_weights_map
 
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
+    "GPT2Backbone": get_gpt2_config,
     # Add for future models, e.g., "MistralBackbone": get_mistral_config
 }
 
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
+    "GPT2Backbone": get_gpt2_weights_map,
     # Add for future models, e.g., "MistralBackbone": get_mistral_weights_map
 }
 
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
+    "GPT2Tokenizer": get_gpt2_tokenizer_config,
     # Add for future models, e.g., "MistralTokenizer":
     # get_mistral_tokenizer_config
 }
@@ -58,19 +66,49 @@ def export_backbone(backbone, path, include_lm_head=False):
     os.makedirs(path, exist_ok=True)
     config_path = os.path.join(path, "config.json")
     with open(config_path, "w") as f:
-        json.dump(hf_config, f)
+        json.dump(hf_config.to_dict(), f)
     # Save weights based on backend
     weights_path = os.path.join(path, "model.safetensors")
     if backend == "torch":
+        import torch
         from safetensors.torch import save_file
 
-        weights_dict_contiguous = {
-            k: v.value.contiguous() if hasattr(v, "value") else v.contiguous()
-            for k, v in weights_dict.items()
-        }
-        save_file(
-            weights_dict_contiguous, weights_path, metadata={"format": "pt"}
-        )
+        weights_dict_torch = {}
+
+        for k, v in weights_dict.items():
+            tensor = v.value if hasattr(v, "value") else v
+
+            # Torch tensor -> move to CPU
+            if isinstance(tensor, torch.Tensor):
+                t = tensor.detach().to("cpu")
+
+            # TensorFlow / JAX -> convert via numpy()
+            elif hasattr(tensor, "numpy"):
+                t = torch.tensor(tensor.numpy())
+
+            # numpy array
+            elif hasattr(tensor, "__array__"):
+                t = torch.tensor(tensor)
+
+            else:
+                raise TypeError(f"Unsupported tensor type: {type(tensor)}")
+
+            weights_dict_torch[k] = t.contiguous()
+
+        # ----  GPT-2 tied weights ----
+        if (
+            "lm_head.weight" in weights_dict_torch
+            and "transformer.wte.weight" in weights_dict_torch
+        ):
+            wte = weights_dict_torch["transformer.wte.weight"]
+            lm = weights_dict_torch["lm_head.weight"]
+
+        if wte.data_ptr() == lm.data_ptr():
+            weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
+        # --------------------------------
+
+        save_file(weights_dict_torch, weights_path, metadata={"format": "pt"})
+
     elif backend == "tensorflow":
         from safetensors.tensorflow import save_file
 
@@ -104,18 +142,33 @@ def export_tokenizer(tokenizer, path):
     tokenizer_config_path = os.path.join(path, "tokenizer_config.json")
     with open(tokenizer_config_path, "w") as f:
         json.dump(tokenizer_config, f, indent=4)
-    # Rename vocabulary file
-    vocab_spm_path = os.path.join(path, "vocabulary.spm")
-    tokenizer_model_path = os.path.join(path, "tokenizer.model")
-    if os.path.exists(vocab_spm_path):
-        shutil.move(vocab_spm_path, tokenizer_model_path)
-    else:
-        warnings.warn(
-            f"{vocab_spm_path} not found. Tokenizer may not load "
-            "correctly. Ensure that the tokenizer configuration "
-            "is correct and that the vocabulary file is present "
-            "in the original model."
-        )
+
+    if tokenizer_type == "GemmaTokenizer":
+        # Rename vocabulary file
+        vocab_spm_path = os.path.join(path, "vocabulary.spm")
+        tokenizer_model_path = os.path.join(path, "tokenizer.model")
+        if os.path.exists(vocab_spm_path):
+            shutil.move(vocab_spm_path, tokenizer_model_path)
+        else:
+            warnings.warn(
+                f"{vocab_spm_path} not found. Tokenizer may not load "
+                "correctly. Ensure that the tokenizer configuration "
+                "is correct and that the vocabulary file is present "
+                "in the original model."
+            )
+    elif tokenizer_type == "GPT2Tokenizer":
+        # Rename vocabulary file
+        vocab_json_path = os.path.join(path, "vocabulary.json")
+        renamed_vocab_json_path = os.path.join(path, "vocab.json")
+        if os.path.exists(vocab_json_path):
+            shutil.move(vocab_json_path, renamed_vocab_json_path)
+        else:
+            warnings.warn(
+                f"{vocab_json_path} not found. Tokenizer may not load "
+                "correctly. Ensure that the tokenizer configuration "
+                "is correct and that the vocabulary file is present "
+                "in the original model."
+            )
 
 
 def export_to_safetensors(keras_model, path):
