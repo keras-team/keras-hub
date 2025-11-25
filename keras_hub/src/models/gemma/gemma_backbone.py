@@ -10,6 +10,16 @@ from keras_hub.src.models.gemma.gemma_decoder_block import GemmaDecoderBlock
 from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 
 
+def _gemma_embedding_initializer():
+    from keras_hub.src.utils import dist_initializer
+
+    return dist_initializer.DistributedVarianceScaling(
+        scale=1.0,
+        mode="fan_in",
+        distribution="untruncated_normal",
+    )
+
+
 @keras_hub_export("keras_hub.models.GemmaBackbone")
 class GemmaBackbone(Backbone):
     """Gemma core network with hyperparameters.
@@ -110,11 +120,7 @@ class GemmaBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=True,
-            embeddings_initializer=keras.initializers.VarianceScaling(
-                scale=1.0,
-                mode="fan_in",
-                distribution="untruncated_normal",
-            ),
+            embeddings_initializer=_gemma_embedding_initializer(),
             dtype=dtype,
             logit_soft_cap=final_logit_soft_cap,
             name="token_embedding",
