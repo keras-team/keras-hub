@@ -1,9 +1,10 @@
 import keras.ops as ops
+import transformers
 
 
 def get_gemma_config(backbone):
     token_embedding_layer = backbone.get_layer("token_embedding")
-    hf_config = {
+    hf_config_dict = {
         "vocab_size": backbone.vocabulary_size,
         "num_hidden_layers": backbone.num_layers,
         "num_attention_heads": backbone.num_query_heads,
@@ -18,13 +19,14 @@ def get_gemma_config(backbone):
         "eos_token_id": 1,
         "model_type": "gemma",
     }
+    hf_config = transformers.GemmaConfig(**hf_config_dict)
     return hf_config
 
 
 def get_gemma_weights_map(backbone, include_lm_head=False):
     weights_dict = {}
 
-    # Map token embedding
+    # Map token embeddings
     token_embedding_layer = backbone.get_layer("token_embedding")
     weights_dict["model.embed_tokens.weight"] = token_embedding_layer.weights[0]
 
