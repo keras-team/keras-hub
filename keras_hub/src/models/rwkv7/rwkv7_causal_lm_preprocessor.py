@@ -58,40 +58,6 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         ["Bubble sort\n```python", "Hello World\n```python\n"], 16
     )
     ```
-    Outputs (torch Backend) :
-    tensor([[    0,  0,  0,  0,  0,  0,  0,  0,  0,   893,
-          1760,  2011, 32082,    11,  6884],
-            [    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-            33155, 37576,    11,  6884, 42114]], dtype=torch.int32),
-    tensor([[    0,  0,  0,  0,  0,  0,  0,  0,   893,  1760,
-            2011, 32082,    11,  6884, 42114],
-            [    0,  0,  0,  0,  0,  0,  0,  0,  0, 33155,
-            37576,    11,  6884, 42114,    11]], dtype=torch.int32),
-    tensor([[False, False, False, False, False, False, False, False,  True,
-            True,  True,  True,  True,  True,  True],
-            [False, False, False, False, False, False, False, False, False,
-            True,  True,  True,  True,  True,  True]])
-
-    {'token_ids': tensor([[    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-            893,  1760,  2011, 32082,    11,  6884],
-            [    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-             0, 33155, 37576,    11,  6884, 42114]], dtype=torch.int32),
-    'padding_mask': tensor([[ True, False, False, False, False, False, False,
-            False, False, False, False, False, False, False, False, False,
-            False, False, False, False, False, False, False, False, False,
-            False, False, False, False, False, False, False],
-            [True, False, False, False, False, False, False, False, False,
-            False, False, False, False, False, False, False, False, False,
-            False, False, False, False, False, False, False, False, False,
-            False, False, False, False, False]]),
-    'predict_token_ids': tensor([[42114,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-             0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-             0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-             0,  0],
-            [   11,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-             0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-             0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-             0,  0]], dtype=torch.int32)}
     """
 
     backbone_cls = RWKV7Backbone

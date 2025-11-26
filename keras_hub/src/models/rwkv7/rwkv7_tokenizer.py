@@ -23,30 +23,30 @@ class TRIE:
     sequences and allows efficient longest prefix matching.
     """
 
-    __slots__ = tuple("ch,to,values,front".split(","))
-    to: list
+    __slots__ = tuple("ch,children,values,parent".split(","))
+    children: list
     values: set
 
-    def __init__(self, front=None, ch=None):
+    def __init__(self, parent=None, ch=None):
         """Initialize a TRIE node.
 
         Args:
-            front: Parent node reference.
+            parent: Parent node reference.
             ch: Byte value for this node.
         """
         self.ch = ch
-        self.to = [None for ch in range(256)]
+        self.children = [None for _ in range(256)]
         self.values = set()
-        self.front = front
+        self.parent = parent
 
     def __repr__(self):
         """String representation of the TRIE node."""
-        fr = self
+        current_node = self
         ret = []
-        while fr is not None:
-            if fr.ch is not None:
-                ret.append(fr.ch)
-            fr = fr.front
+        while current_node is not None:
+            if current_node.ch is not None:
+                ret.append(current_node.ch)
+            current_node = current_node.parent
         return "<TRIE %s %s>" % (ret[::-1], self.values)
 
     def add(self, key: bytes, idx: int = 0, val=None):
@@ -65,12 +65,14 @@ class TRIE:
                 val = key
             self.values.add(val)
             return self
-        ch = key[idx]
-        if self.to[ch] is None:
-            self.to[ch] = TRIE(front=self, ch=ch)
-        return self.to[ch].add(key, idx=idx + 1, val=val)
 
-    def find_longest(self, key: bytes, idx: int = 0):
+        ch = key[idx]
+        if self.children[ch] is None:
+            self.children[ch] = TRIE(parent=self, ch=ch)
+
+        return self.children[ch].add(key, idx + 1, val)
+
+    def find_longest(self, key, idx=0):
         """Find longest match in trie for given key.
 
         Args:
@@ -80,21 +82,24 @@ class TRIE:
         Returns:
             Tuple of (end_index, node, values) for match.
         """
-        u: TRIE = self
-        ch: int = key[idx]
+        current_node = self
+        ch = key[idx]
+        ret = None
 
-        while u.to[ch] is not None:
-            u = u.to[ch]
+        while current_node.children[ch] is not None:
+            current_node = current_node.children[ch]
             idx += 1
-            if u.values:
-                ret = idx, u, u.values
+            if current_node.values:
+                ret = idx, current_node, current_node.values
             if idx == len(key):
                 break
             ch = key[idx]
+        if ret is None:
+            raise ValueError(f"No valid token found in trie for key: {key}")
         return ret
 
 
-class RWKV_TOKENIZER:
+class RWKVTokenizerBase:
     """RWKV tokenizer implementation using byte-level trie.
 
     Implements tokenization using a fixed vocabulary and greedy
@@ -109,14 +114,12 @@ class RWKV_TOKENIZER:
                    "<idx> <repr> <len>".
         """
         self.idx2token = {}
-        sorted = []  # must be already sorted
-        for l in vocabs:
-            idx = int(l[: l.index(" ")])
-            x = eval(l[l.index(" ") : l.rindex(" ")])
+        for line in vocabs:
+            idx = int(line[: line.index(" ")])
+            x = eval(line[line.index(" ") : line.rindex(" ")])
             x = x.encode("utf-8") if isinstance(x, str) else x
             assert isinstance(x, bytes)
-            assert len(x) == int(l[l.rindex(" ") :])
-            sorted += [x]
+            assert len(x) == int(line[line.rindex(" ") :])
             self.idx2token[idx] = x
 
         self.token2idx = {}
@@ -124,10 +127,10 @@ class RWKV_TOKENIZER:
             self.token2idx[v] = int(k)
 
         self.root = TRIE()
-        for t, i in self.token2idx.items():
-            _ = self.root.add(t, val=(t, i))
+        for token, token_id in self.token2idx.items():
+            _ = self.root.add(token, val=(token, token_id))
 
-    def encodeBytes(self, src: bytes):
+    def encodeBytes(self, src):
         """Encode byte sequence to token IDs.
 
         Args:
@@ -136,12 +139,12 @@ class RWKV_TOKENIZER:
         Returns:
             List of token IDs.
         """
-        idx: int = 0
+        idx = 0
         tokens = []
         while idx < len(src):
-            _idx: int = idx
+            prev_idx = idx
             idx, _, values = self.root.find_longest(src, idx)
-            assert idx != _idx
+            assert idx != prev_idx
             _, token = next(iter(values))
             tokens.append(token)
         return tokens
@@ -192,13 +195,13 @@ class RWKV_TOKENIZER:
         Args:
             tokens: List of token IDs to print.
         """
-        for i in tokens:
-            s = self.idx2token[i]
+        for token_id in tokens:
+            token = self.idx2token[token_id]
             try:
-                s = s.decode("utf-8")
+                token = token.decode("utf-8")
             except BaseException:
                 pass
-            print(f"{repr(s)}{i}", end=" ")
+            print(f"{repr(token)}{token_id}", end=" ")
         print()
 
 
@@ -267,7 +270,7 @@ class RWKVTokenizer(tokenizer.Tokenizer):
             vocabulary: Vocabulary list to set.
         """
         self.vocabulary = vocabulary
-        self._tokenizer = RWKV_TOKENIZER(vocabulary)
+        self._tokenizer = RWKVTokenizerBase(vocabulary)
         if self.end_token_id is None or self.end_token_id == self.pad_token_id:
             for line in vocabulary:
                 idx = int(line[: line.index(" ")])

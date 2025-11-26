@@ -634,6 +634,7 @@ class RWKV7_Block(Layer):
         Returns:
             Processed output tensor and cache information.
         """
+
         train_mode = False
         if padding_mask is not None:
             padding_mask = ops.cast(padding_mask, x.dtype)

@@ -1,6 +1,3 @@
-# ==============================================================================
-# Environment & Dependency Setup
-# ==============================================================================
 import os
 
 import numpy as np
@@ -9,12 +6,10 @@ import torch
 from absl import app
 from absl import flags
 
-# Force CPU only (GPU index -1 disables CUDA)
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-# Use native kernel implementations
 os.environ["KERNEL_TYPE"] = "native"
 
-# Keras-Ops is imported **after** environment variables are set
+
 import types
 
 import torch.nn as nn
@@ -25,13 +20,8 @@ from modelscope import snapshot_download
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
 from keras_hub.src.models.rwkv7.rwkv7_causal_lm import RWKV7CausalLM
 from keras_hub.src.models.rwkv7.rwkv7_tokenizer import VOCAB_FILENAME
-
-# Local modules
 from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
 
-# ==============================================================================
-# Model Preset Registry
-# ==============================================================================
 PRESET_MAP = {
     "RWKV7_G1a_0.1B": "rwkv7-g1a-0.1b-20250728-ctx4096.pth",
     "RWKV7_G1a_0.3B": "rwkv7-g1a-0.4b-20250905-ctx4096.pth",
@@ -41,18 +31,15 @@ PRESET_MAP = {
     "RWKV7_G0a_13B": "rwkv7-g0a3-13.3b-20251031-ctx4096.pth",
 }
 
-# ==============================================================================
-# Command-line Interface
-# ==============================================================================
+
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
 
-# ==============================================================================
+
 # RWKV-v7 official PyTorch implementation
 # From https://github.com/BlinkDL/RWKV-LM/blob/main/RWKV-v7/rwkv_v7_demo.py
-# ==============================================================================
 HEAD_SIZE = 64
 D_DECAY_LORA = 64
 D_AAA_LORA = 64
@@ -94,9 +81,7 @@ def RWKV7_OP(r, w, k, v, a, b):
     return out.view(B, T, C).to(DTYPE)
 
 
-# ==============================================================================
 # RWKV Time-Mix Layer (Attention)
-# ==============================================================================
 class RWKV_Tmix_x070(nn.Module):
     def __init__(self, args, layer_id):
         super().__init__()
@@ -148,7 +133,6 @@ class RWKV_Tmix_x070(nn.Module):
         # GroupNorm with very small epsilon for numerical stability
         self.ln_x = nn.GroupNorm(H, C, eps=64e-5)
 
-    # --------------------------------------------------------------------------
     def forward(self, x, v_first=None):
         B, T, C = x.size()
         H = self.n_head
@@ -200,9 +184,7 @@ class RWKV_Tmix_x070(nn.Module):
         return x, v_first
 
 
-# ==============================================================================
 # RWKV Channel-Mix Layer (Feed-Forward)
-# ==============================================================================
 class RWKV_CMix_x070(nn.Module):
     def __init__(self, args, layer_id):
         super().__init__()
@@ -222,9 +204,7 @@ class RWKV_CMix_x070(nn.Module):
         return self.value(k)
 
 
-# ==============================================================================
 # RWKV Building Block (Time-Mix + Channel-Mix + Norms)
-# ==============================================================================
 class Block(nn.Module):
     def __init__(self, args, layer_id):
         super().__init__()
@@ -246,9 +226,7 @@ class Block(nn.Module):
         return x, v_first
 
 
-# ==============================================================================
 # Full RWKV Model
-# ==============================================================================
 class RWKV(nn.Module):
     def __init__(self, args):
         super().__init__()
@@ -272,9 +250,6 @@ class RWKV(nn.Module):
         return x
 
 
-# ==============================================================================
-# Weight Conversion Utilities (PyTorch ↔ Keras)
-# ==============================================================================
 def convert_cmix(my_chnnal_mix, weights, i):
     my_chnnal_mix.set_weights(
         [
@@ -372,9 +347,6 @@ def convert_backbone(my_backbone, standard_RWKV):
     convert_layernorm(my_backbone.output_layer_norm, standard_RWKV.ln_out)
 
 
-# ==============================================================================
-# Checkpoint Conversion Entry Point
-# ==============================================================================
 def convert_rwkv7_checkpoints(weights_path):
     weights = torch.load(weights_path, map_location="cpu")
     weights = {k: v.float().numpy() for k, v in weights.items()}
@@ -416,9 +388,6 @@ def convert_rwkv7_checkpoints(weights_path):
     return model
 
 
-# ==============================================================================
-# Main Script
-# ==============================================================================
 url = "https://raw.githubusercontent.com/BlinkDL/RWKV-LM/main/RWKV-v7/rwkv_vocab_v20230424.txt"
 
 
@@ -494,9 +463,8 @@ def main(_):
     tokenizer.save_to_preset(f"./{FLAGS.preset}")
 
 
-# ==============================================================================
 # Entry Guard
-# ==============================================================================
+
 if __name__ == "__main__":
     flags.mark_flag_as_required("preset")
     app.run(main)

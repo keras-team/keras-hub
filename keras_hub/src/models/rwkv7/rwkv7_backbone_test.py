@@ -18,8 +18,8 @@ class RWKV7BackboneTest(TestCase):
             "aaa_lora": 16,
             "decay_lora": 16,
         }
-        t = ops.ones((2, 16), dtype="int32")
-        self.input_data = {"token_ids": t, "padding_mask": t}
+        test_input = ops.ones((2, 16), dtype="int32")
+        self.input_data = {"token_ids": test_input, "padding_mask": test_input}
 
     def test_backbone_basics(self):
         self.run_backbone_test(

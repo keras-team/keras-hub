@@ -8,32 +8,54 @@ class RWKVTokenizerTest(TestCase):
             "0 '\\n' 1",
             "1 ' ' 1",
             "2 'the' 3",
-            "3 'hello' 5",
-            "4 'world' 5",
+            "3 'def' 3",
+            "4 'code' 4",
+            "5 'hello' 5",
+            "6 'world' 5",
+            "7 'python' 6",
+            "8 'return' 6",
+            "9 'function' 8",
         ]
-        self.tokenizer = RWKVTokenizer(vocabulary=self.vocab)
+        self.tokenizer = RWKVTokenizer(
+            vocabulary=self.vocab,
+            pad_token_id=0,
+        )
+        self.input_data = [
+            "hello world",
+            "def function",
+            "the python",
+        ]
+
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=RWKVTokenizer,
+            init_kwargs={"vocabulary": self.vocab, "pad_token_id": 0},
+            input_data=self.input_data,
+            expected_output=[[5, 1, 6], [3, 1, 9], [2, 1, 7]],
+        )
 
     def test_tokenize_basics(self):
         result = self.tokenizer("hello world")
-        self.assertAllEqual(result, [3, 1, 4])
+        self.assertAllEqual(result, [5, 1, 6])
 
     def test_tokenize_list(self):
-        result = self.tokenizer(["hello world", "the world world"])
-        self.assertAllEqual(result, [[3, 1, 4], [2, 1, 4, 1, 4]])
+        result = self.tokenizer(["hello world", "the python code"])
+        self.assertAllEqual(result, [[5, 1, 6], [2, 1, 7, 1, 4]])
 
     def test_detokenize(self):
-        result = self.tokenizer.detokenize([[3, 1, 4, 0]])
+        result = self.tokenizer.detokenize([[5, 1, 6, 0, 0]])
         self.assertAllEqual(result, ["hello world"])
 
     def test_detokenize_batch(self):
-        result = self.tokenizer.detokenize([[3, 1, 4], [2, 1, 4, 0]])
-        self.assertAllEqual(result, ["hello world", "the world"])
+        result = self.tokenizer.detokenize([[5, 1, 6], [3, 1, 9, 0]])
+        self.assertAllEqual(result, ["hello world", "def function"])
 
     def test_accessors(self):
-        self.assertEqual(self.tokenizer.vocabulary_size(), 5)
+        self.assertEqual(self.tokenizer.vocabulary_size(), 10)
         self.assertEqual(self.tokenizer.get_vocabulary(), self.vocab)
-        self.assertEqual(self.tokenizer.id_to_token(3), b"hello")
-        self.assertEqual(self.tokenizer.token_to_id(b"world"), 4)
+        self.assertEqual(self.tokenizer.id_to_token(5), b"hello")
+        self.assertEqual(self.tokenizer.token_to_id(b"world"), 6)
+        self.assertEqual(self.tokenizer.pad_token_id, 0)
 
     def test_error_id_out_of_vocabulary(self):
         with self.assertRaises(ValueError):
@@ -45,15 +67,13 @@ class RWKVTokenizerTest(TestCase):
         config = self.tokenizer.get_config()
         cloned = RWKVTokenizer.from_config(config)
         cloned.set_vocabulary(self.vocab)
-
         inputs = ["hello world"]
         self.assertAllEqual(self.tokenizer(inputs), cloned(inputs))
 
     def test_preprocessing_layer(self):
-        """Standard preprocessing layer test."""
         self.run_preprocessing_layer_test(
             cls=RWKVTokenizer,
-            init_kwargs={"vocabulary": self.vocab},
-            input_data=["hello world", "the world"],
-            expected_output=[[3, 1, 4], [2, 1, 4]],
+            init_kwargs={"vocabulary": self.vocab, "pad_token_id": 0},
+            input_data=["hello world", "def function", "pythoncodereturn"],
+            expected_output=[[5, 1, 6], [3, 1, 9], [7, 4, 8]],
         )

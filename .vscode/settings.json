@@ -3,5 +3,9 @@
     "python.formatting.provider": "black",
     "editor.rulers": [
         80
-    ]
+    ],
+    "python.testing.pytestArgs": [
+        "keras_hub"
+    ],
+    "python.testing.unittestEnabled": false
 }
