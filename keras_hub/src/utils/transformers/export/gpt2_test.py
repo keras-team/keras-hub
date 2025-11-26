@@ -7,7 +7,7 @@ from os.path import dirname
 
 # import keras
 import numpy as np
-import tensorflow as tf
+import keras.ops as ops
 
 # import torch
 from absl.testing import parameterized
