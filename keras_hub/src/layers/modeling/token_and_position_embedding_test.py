@@ -1,6 +1,8 @@
+import keras
 import numpy as np
 from keras import ops
 from keras import random
+from keras.src import backend
 
 from keras_hub.src.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
@@ -34,4 +36,7 @@ class TokenAndPositionEmbeddingTest(TestCase):
         input_data = np.array([[1, 0], [1, 0]])
         mask = input_data != 0
         outputs = test_layer(input_data)
-        self.assertAllEqual(outputs._keras_mask, mask)
+        if keras.config.backend() == "mlx":
+            self.assertAllEqual(backend.get_keras_mask(outputs), mask)
+        else:
+            self.assertAllEqual(outputs._keras_mask, mask)
