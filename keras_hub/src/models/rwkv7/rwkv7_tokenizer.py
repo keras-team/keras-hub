@@ -49,7 +49,7 @@ class TRIE:
             current_node = current_node.parent
         return "<TRIE %s %s>" % (ret[::-1], self.values)
 
-    def add(self, key: bytes, idx: int = 0, val=None):
+    def add(self, key, idx=0, val=None):
         """Add a key-value pair to the trie.
 
         Args:
