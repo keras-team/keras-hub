@@ -62,9 +62,9 @@ def get_gpt2_weights_map(keras_model, include_lm_head=False):
             f"transformer_layer_{i}"
         )._self_attention_layer._value_dense.bias
 
-        q_w = tf.reshape(q_w, (keras_model.hidden_dim, keras_model.hidden_dim))
-        k_w = tf.reshape(k_w, (keras_model.hidden_dim, keras_model.hidden_dim))
-        v_w = tf.reshape(v_w, (keras_model.hidden_dim, keras_model.hidden_dim))
+        q_w = ops.reshape(q_w, (keras_model.hidden_dim, keras_model.hidden_dim))
+        k_w = ops.reshape(k_w, (keras_model.hidden_dim, keras_model.hidden_dim))
+        v_w = ops.reshape(v_w, (keras_model.hidden_dim, keras_model.hidden_dim))
 
         c_attn_w = tf.concat([q_w, k_w, v_w], axis=-1)
         weights_map[f"transformer.h.{i}.attn.c_attn.weight"] = c_attn_w
