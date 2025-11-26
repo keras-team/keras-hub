@@ -232,8 +232,8 @@ def check_output(
     input_str = ["the quick brown fox ran, galloped and jumped."]
 
     # KerasHub
-    token_ids_list = keras_hub_tokenizer(tf.constant(input_str))
-    token_ids = tf.ragged.constant(token_ids_list)
+    token_ids_list = keras_hub_tokenizer(ops.array(input_str))
+    token_ids = ops.convert_to_tensor(token_ids_list)
     padding_mask = token_ids != 0
 
     keras_hub_inputs = {
