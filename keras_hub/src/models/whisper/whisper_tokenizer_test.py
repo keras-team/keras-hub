@@ -57,7 +57,7 @@ class WhisperTokenizerTest(TestCase):
                 vocabulary=["a", "b", "c"], merges=[], special_tokens={}
             )
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=WhisperTokenizer,
