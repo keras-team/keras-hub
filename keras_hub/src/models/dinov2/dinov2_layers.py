@@ -502,7 +502,9 @@ class DINOV2LayerScale(layers.Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({"hidden_dim": self.hidden_dim})
+        config.update(
+            {"hidden_dim": self.hidden_dim, "init_values": self.init_values}
+        )
         return config
 
     def compute_output_shape(self, input_shape):

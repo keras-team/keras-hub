@@ -10,7 +10,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class TestTask(TestCase):
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_convert_tiny_preset(self):
         model = AlbertTextClassifier.from_preset(
             "hf://albert/albert-base-v2", num_classes=2

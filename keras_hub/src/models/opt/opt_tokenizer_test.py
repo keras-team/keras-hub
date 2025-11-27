@@ -29,7 +29,7 @@ class OPTTokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             OPTTokenizer(vocabulary=["a", "b", "c"], merges=[])
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=OPTTokenizer,
