@@ -1,6 +1,7 @@
 import os
 from unittest.mock import patch
 
+import keras
 import pytest
 from keras import ops
 
@@ -101,6 +102,18 @@ class LlamaCausalLMTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
+            cls=LlamaCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    @pytest.mark.large
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="LiteRT export only supports TensorFlow backend.",
+    )
+    def test_litert_export(self):
+        self.run_litert_export_test(
             cls=LlamaCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
