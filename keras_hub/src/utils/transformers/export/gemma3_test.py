@@ -22,22 +22,22 @@ class TestGemma3Export(TestCase):
         # Create a small backbone (text-only, no vision encoder)
         backbone = Gemma3Backbone(
             vocabulary_size=tokenizer.vocabulary_size(),
-            image_size=896,  # Default value even for text-only
+            image_size=896,
             num_layers=2,
-            num_query_heads=4,
+            num_query_heads=2,
             num_key_value_heads=1,
-            hidden_dim=512,
-            intermediate_dim=1028,
-            head_dim=128,
+            hidden_dim=128,
+            intermediate_dim=256,
+            head_dim=64,
             query_head_dim_normalize=True,
             use_query_key_norm=True,
-            use_post_ffw_norm=True,  # Real Gemma3 models have these
-            use_post_attention_norm=True,  # Real Gemma3 models have these
+            use_post_ffw_norm=True,
+            use_post_attention_norm=True,
             attention_logit_soft_cap=None,
             final_logit_soft_cap=None,
             use_sliding_window_attention=False,
             sliding_window_size=4096,
-            vision_encoder=None,  # Text-only model for testing
+            vision_encoder=None,  # TODO: enable for vision models
             layer_norm_epsilon=1e-6,
             dropout=0,
         )
@@ -72,9 +72,11 @@ class TestGemma3Export(TestCase):
         keras_model.export_to_transformers(export_path_task)
 
         # Load Hugging Face models and tokenizer
-        # Note: We only test the slow tokenizer because the test vocab file
-        # may not be compatible with fast tokenizer conversion
         hf_backbone = AutoModel.from_pretrained(export_path_backbone)
+        # Note: We only test the slow tokenizer because the test vocab file
+        # is not compatible with the fast tokenizer (Unigram vs BPE mismatch).
+        # Using fast tokenizer raises: "You're trying to run a `Unigram` model
+        # but you're file was trained with a different algorithm"
         hf_tokenizer_slow = AutoTokenizer.from_pretrained(
             export_path_tokenizer, use_fast=False
         )
@@ -136,6 +138,7 @@ class TestGemma3Export(TestCase):
         )
 
         # Compare generated outputs using full model
+        # Test with small input since we set the seed, we expect same outcome
         prompt = "the quick"
 
         # Generate with Keras model
@@ -157,5 +160,5 @@ class TestGemma3Export(TestCase):
         self.assertEqual(
             keras_output,
             hf_slow_output,
-            "Generated outputs do not match",
+            "Generated outputs do not match (slow)",
         )
