@@ -415,3 +415,8 @@ class ImageToImage(Task):
         # Image-to-image.
         outputs = [generate(*x) for x in inputs]
         return self._normalize_generate_outputs(outputs, input_is_scalar)
+
+    def _post_quantize(self, mode, **kwargs):
+        super()._post_quantize(mode, **kwargs)
+        # Reset the compiled generate function.
+        self.generate_function = None

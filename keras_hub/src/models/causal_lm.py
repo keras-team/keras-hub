@@ -424,3 +424,8 @@ class CausalLM(Task):
         )
 
         export_to_safetensors(self, path)
+
+    def _post_quantize(self, mode, **kwargs):
+        super()._post_quantize(mode, **kwargs)
+        # Reset the compiled generate function.
+        self.generate_function = None
