@@ -224,7 +224,7 @@ class RWKV7_TimeMix(Layer):
 
             self.RWKV7_OP = rwkv7_op
             # faster inference op
-            self.RWKV7_OP_rnn = rwkv7_op_rnn
+            self.RWKV7_OP_RNN = rwkv7_op_rnn
         except ImportError:
             warnings.warn(
                 "The 'rwkv_ops' package is not installed. "
@@ -235,7 +235,7 @@ class RWKV7_TimeMix(Layer):
                 stacklevel=2,
             )
             self.RWKV7_OP = rnn_generalized_delta_rule
-            self.RWKV7_OP_rnn = rnn_generalized_delta_rule
+            self.RWKV7_OP_RNN = rnn_generalized_delta_rule
 
         assert self.hidden_size % self.n_head == 0
 
@@ -454,7 +454,7 @@ class RWKV7_TimeMix(Layer):
             w = ops.where(padding_mask, w, -1e9)
         if rnn_mode:
             # T=1，single step
-            rwkv7_op = self.RWKV7_OP_rnn
+            rwkv7_op = self.RWKV7_OP_RNN
         else:
             rwkv7_op = self.RWKV7_OP
 
