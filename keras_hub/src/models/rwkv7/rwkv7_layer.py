@@ -218,24 +218,27 @@ class RWKV7_TimeMix(Layer):
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.add_v_first = add_v_first
         self.initial_state = None
-        try:
-            from rwkv_ops import rwkv7_op
-            from rwkv_ops import rwkv7_op_rnn
 
-            self.RWKV7_OP = rwkv7_op
-            # faster inference op
-            self.RWKV7_OP_RNN = rwkv7_op_rnn
-        except ImportError:
-            warnings.warn(
-                "The 'rwkv_ops' package is not installed. "
-                "Falling back to the default (pure-Python) operators"
-                "pure-Python which will be very slow. "
-                "Please 'pip install rwkv_ops' to enable the optimized kernels",
-                UserWarning,
-                stacklevel=2,
-            )
-            self.RWKV7_OP = rnn_generalized_delta_rule
-            self.RWKV7_OP_RNN = rnn_generalized_delta_rule
+        self.RWKV7_OP = rnn_generalized_delta_rule
+        self.RWKV7_OP_RNN = rnn_generalized_delta_rule
+        if keras.config.backend() in ["torch", "jax"]:
+            # only torch and jax support cuda kernel speedup
+            try:
+                from rwkv_ops import rwkv7_op
+                from rwkv_ops import rwkv7_op_rnn
+
+                self.RWKV7_OP = rwkv7_op
+                # faster inference op
+                self.RWKV7_OP_RNN = rwkv7_op_rnn
+            except ImportError:
+                warnings.warn(
+                    "The 'rwkv_ops' package is not installed. "
+                    "Falling back to the default (pure-Python) operators"
+                    "pure-Python which will be very slow. "
+                    "Please 'pip install rwkv_ops' to enable the cuda kernels",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
         assert self.hidden_size % self.n_head == 0
 
