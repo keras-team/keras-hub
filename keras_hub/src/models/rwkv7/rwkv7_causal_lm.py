@@ -250,5 +250,5 @@ class RWKV7CausalLM(CausalLM):
             padding_mask = ops.ones_like(token_ids, dtype="bool")
         return {
             "token_ids": token_ids,
-            "padding_mask": padding_mask,
+            "padding_mask": ops.cast(padding_mask, token_ids.dtype),
         }
