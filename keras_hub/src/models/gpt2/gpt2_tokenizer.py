@@ -93,7 +93,7 @@ class GPT2Tokenizer(BytePairTokenizer):
             # If `merges` is a file path, copy it.
             shutil.copy(self.merges, os.path.join(dir_path, "merges.txt"))
         else:
-            # Otherwise,  `merges` is a list and save it to a text file.
+            # Otherwise,  `merges` is a list. Save it to a text file.
             with open(os.path.join(dir_path, "merges.txt"), "w") as f:
                 for merge in self.merges:
                     f.write(f"{merge}\n")

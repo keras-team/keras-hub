@@ -12,7 +12,7 @@ from absl import flags
 from checkpoint_conversion_utils import get_md5_checksum
 from keras import ops
 
-# Add the project root to the Python path
+# Add the project root to the Python path.
 sys.path.insert(0, dirname(dirname(dirname(abspath(__file__)))))
 
 

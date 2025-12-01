@@ -19,7 +19,7 @@ from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_weights_map
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
     "GPT2Backbone": get_gpt2_config,
-    # Add for future models, e.g., "MistralBackbone": get_mistral_config.
+    # Add for future models, e.g., "MistralBackbone": get_mistral_config
 }
 
 MODEL_EXPORTERS = {
