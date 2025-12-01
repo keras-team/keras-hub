@@ -79,9 +79,7 @@ class GPT2ExportTest(TestCase):
 
         # Test logits.
         prompt = "Hello, my name is"
-        token_ids = ops.array(
-            keras_model.preprocessor.tokenizer(ops.array([prompt]))
-        )
+        token_ids = ops.array(keras_model.preprocessor.tokenizer([prompt]))
         padding_mask = ops.ones_like(token_ids, dtype="int32")
         keras_inputs = {"token_ids": token_ids, "padding_mask": padding_mask}
         keras_logits = keras_model(keras_inputs)

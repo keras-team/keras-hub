@@ -264,7 +264,6 @@ def main(_):
     num_params = PRESET_MAP[FLAGS.preset][0]
     hf_model_name = PRESET_MAP[FLAGS.preset][1]
 
-    os.system("pip install requests")
     download_model(num_params)
 
     # keras_hub_model_backbone = convert_checkpoints(num_params)
