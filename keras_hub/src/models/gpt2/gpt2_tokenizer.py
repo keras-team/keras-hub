@@ -1,3 +1,7 @@
+import json
+import os
+import shutil
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
@@ -73,10 +77,6 @@ class GPT2Tokenizer(BytePairTokenizer):
         )
 
     def save_assets(self, dir_path):
-        import json
-        import os
-        import shutil
-
         # Save vocabulary.
         if isinstance(self.vocabulary, str):
             # If `vocabulary` is a file path, copy it.

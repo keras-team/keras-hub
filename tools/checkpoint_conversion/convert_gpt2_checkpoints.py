@@ -6,11 +6,11 @@ from os.path import dirname
 
 import numpy as np
 import requests
-import tensorflow as tf
 import transformers
 from absl import app
 from absl import flags
 from checkpoint_conversion_utils import get_md5_checksum
+from keras import ops
 
 # Add the project root to the Python path.
 sys.path.insert(0, dirname(dirname(dirname(abspath(__file__)))))
@@ -73,11 +73,11 @@ def convert_checkpoints(num_params):
     print("Config:", cfg)
 
     print("Original weights:")
-    vars = tf.train.list_variables(checkpoint_path)
+    vars = ops.train.list_variables(checkpoint_path)
     weights = {}
     for name, shape in vars:
         print(name, shape)
-        weight = tf.train.load_variable(checkpoint_path, name)
+        weight = ops.train.load_variable(checkpoint_path, name)
         weights[name] = weight
 
     # Temporary direct import, as we aren't exposing this quite yet.

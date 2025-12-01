@@ -66,21 +66,21 @@ def get_gpt2_weights_map(keras_model, include_lm_head=False):
         k_w = ops.reshape(k_w, (keras_model.hidden_dim, keras_model.hidden_dim))
         v_w = ops.reshape(v_w, (keras_model.hidden_dim, keras_model.hidden_dim))
 
-        c_attn_w = tf.concat([q_w, k_w, v_w], axis=-1)
+        c_attn_w = ops.concatenate([q_w, k_w, v_w], axis=-1)
         weights_map[f"transformer.h.{i}.attn.c_attn.weight"] = c_attn_w
 
-        q_b = tf.reshape(q_b, [-1])
-        k_b = tf.reshape(k_b, [-1])
-        v_b = tf.reshape(v_b, [-1])
+        q_b = ops.reshape(q_b, [-1])
+        k_b = ops.reshape(k_b, [-1])
+        v_b = ops.reshape(v_b, [-1])
 
-        c_attn_b = tf.concat([q_b, k_b, v_b], axis=-1)
+        c_attn_b = ops.concatenate([q_b, k_b, v_b], axis=-1)
         weights_map[f"transformer.h.{i}.attn.c_attn.bias"] = c_attn_b
 
         # Attention projection
         c_proj_w = keras_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._output_dense.kernel
-        c_proj_w = tf.reshape(
+        c_proj_w = ops.reshape(
             c_proj_w, (keras_model.hidden_dim, keras_model.hidden_dim)
         )
         weights_map[f"transformer.h.{i}.attn.c_proj.weight"] = c_proj_w
