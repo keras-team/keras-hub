@@ -19,5 +19,11 @@ build/
 # Pycharm files
 .idea/
 
+# Virtual environments
 venv/
+env/
+ENV/
+gpt2/
+*.venv/
+
 .DS_Store
