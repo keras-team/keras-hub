@@ -11,7 +11,7 @@ from absl.testing import parameterized
 from transformers import AutoModelForCausalLM
 from transformers import AutoTokenizer
 
-# Add the project root to the Python path.
+# Add the project root to the Python path
 sys.path.insert(
     0, dirname(dirname(dirname(dirname(dirname(abspath(__file__))))))
 )

@@ -131,7 +131,7 @@ def get_gpt2_weights_map(keras_model, include_lm_head=False):
     ).beta
 
     if include_lm_head:
-        # lm_head is tied to token embeddings
+        # lm_head is tied to token embeddings.
         weights_map["lm_head.weight"] = weights_map["transformer.wte.weight"]
 
     return weights_map
