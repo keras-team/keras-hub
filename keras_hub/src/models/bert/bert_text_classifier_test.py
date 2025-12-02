@@ -53,7 +53,7 @@ class BertTextClassifierTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=BertTextClassifier,

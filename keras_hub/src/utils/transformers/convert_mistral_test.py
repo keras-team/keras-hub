@@ -8,7 +8,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class TestTask(TestCase):
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_convert_tiny_preset(self):
         model = MistralCausalLM.from_preset("hf://cosmo3769/tiny-mistral-test")
         prompt = "What is your favorite condiment?"

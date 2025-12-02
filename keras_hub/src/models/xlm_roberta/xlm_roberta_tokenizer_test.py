@@ -26,7 +26,7 @@ class XLMRobertaTokenizerTest(TestCase):
             expected_output=[[6, 11, 7, 9], [6, 8, 10, 12]],
         )
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=XLMRobertaTokenizer,

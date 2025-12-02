@@ -34,7 +34,7 @@ class BartTokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             BartTokenizer(vocabulary=["a", "b", "c"], merges=[])
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=BartTokenizer,

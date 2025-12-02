@@ -30,7 +30,7 @@ class GPT2TokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             GPT2Tokenizer(vocabulary=["a", "b", "c"], merges=[])
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=GPT2Tokenizer,

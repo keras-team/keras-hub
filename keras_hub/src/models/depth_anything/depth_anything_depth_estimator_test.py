@@ -61,7 +61,7 @@ class DepthAnythingDepthEstimatorTest(TestCase):
             expected_output_shape={"depths": (2, 70, 70, 1)},
         )
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         image_batch = (
             self.load_test_image(target_size=(518, 518))[None, ...] / 255.0

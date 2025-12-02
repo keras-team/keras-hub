@@ -58,7 +58,7 @@ class CSPNetImageClassifierTest(TestCase):
             expected_output_shape=(2, 3),
         )
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         image_batch = self.load_test_image()[None, ...] / 255.0
         self.run_preset_test(
