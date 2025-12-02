@@ -87,12 +87,9 @@ class GPT2ExportTest(TestCase):
         hf_inputs = hf_tokenizer(prompt, return_tensors="pt")
         hf_logits = hf_model(**hf_inputs).logits
 
-        # Compare logits.
-        # Convert Keras logits (TF/Torch/JAX) -> numpy
-        keras_logits_np = to_numpy(keras_logits)
-
-        # Convert HF logits (Torch) -> numpy
-        hf_logits_np = to_numpy(hf_logits)
+        
+        keras_logits_np = ops.convert_to_numpy(keras_logits)
+        hf_logits_np = hf_logits.detach().cpu().numpy()
 
         self.assertAllClose(keras_logits_np, hf_logits_np, atol=1e-3, rtol=1e-3)
 
