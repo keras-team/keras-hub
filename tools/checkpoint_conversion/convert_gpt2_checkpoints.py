@@ -1,27 +1,17 @@
 import json
 import os
-import sys
-from os.path import abspath
-from os.path import dirname
 
 import numpy as np
 import requests
+import tensorflow as tf
 import transformers
 from absl import app
 from absl import flags
 from checkpoint_conversion_utils import get_md5_checksum
-from keras import ops
 
-# Add the project root to the Python path.
-sys.path.insert(0, dirname(dirname(dirname(abspath(__file__)))))
-
-
-import keras_hub
-from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone
-from keras_hub.src.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
-from keras_hub.src.utils.transformers.export.hf_exporter import (
-    export_to_safetensors,
-)
+# Temporarily directly import gpt2 until we expose it.
+from keras_hub.models.gpt2.gpt2_backbone import GPT2Backbone
+from keras_hub.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 
 PRESET_MAP = {
     "gpt2_base_en": ("124M", "gpt2"),
@@ -40,17 +30,6 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
-flags.DEFINE_string(
-    "output_path",
-    None,
-    "The path to save the converted model.",
-)
-
-flags.DEFINE_bool(
-    "export_safetensors",
-    False,
-    "Whether to export the model in Safetensors format.",
-)
 
 
 def download_model(num_params):
@@ -58,7 +37,7 @@ def download_model(num_params):
     response = requests.get(DOWNLOAD_SCRIPT_URL)
     open("download_model.py", "wb").write(response.content)
 
-    os.system(f"{sys.executable} download_model.py {num_params}")
+    os.system(f"python download_model.py {num_params}")
 
 
 def convert_checkpoints(num_params):
@@ -73,11 +52,11 @@ def convert_checkpoints(num_params):
     print("Config:", cfg)
 
     print("Original weights:")
-    vars = ops.train.list_variables(checkpoint_path)
+    vars = tf.train.list_variables(checkpoint_path)
     weights = {}
     for name, shape in vars:
         print(name, shape)
-        weight = ops.train.load_variable(checkpoint_path, name)
+        weight = tf.train.load_variable(checkpoint_path, name)
         weights[name] = weight
 
     # Temporary direct import, as we aren't exposing this quite yet.
@@ -197,8 +176,8 @@ def convert_checkpoints(num_params):
     keras_hub_model.get_layer("layer_norm").beta.assign(weights["model/ln_f/b"])
 
     # Save the model.
-    print(f"\n-> Save KerasHub model weights to {FLAGS.preset}.weights.h5.")
-    keras_hub_model.save_weights(f"{FLAGS.preset}.weights.h5")
+    print(f"\n-> Save KerasHub model weights to `{FLAGS.preset}.h5`.")
+    keras_hub_model.save_weights(f"{FLAGS.preset}.h5")
 
     return keras_hub_model
 
@@ -232,8 +211,7 @@ def check_output(
     input_str = ["the quick brown fox ran, galloped and jumped."]
 
     # KerasHub
-    token_ids_list = keras_hub_tokenizer(ops.array(input_str))
-    token_ids = ops.convert_to_tensor(token_ids_list)
+    token_ids = keras_hub_tokenizer(input_str)
     padding_mask = token_ids != 0
 
     keras_hub_inputs = {
@@ -251,7 +229,7 @@ def check_output(
     print("Difference:", np.mean(keras_hub_output - hf_output.detach().numpy()))
 
     # Show the MD5 checksum of the model weights.
-    print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.weights.h5"))
+    print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.h5"))
 
     return keras_hub_output
 
@@ -266,23 +244,7 @@ def main(_):
 
     download_model(num_params)
 
-    # keras_hub_model_backbone = convert_checkpoints(num_params)
-    # # This saves .h5
-
-    # Load the KerasHub GPT2CausalLM model from the preset
-    # (which will use the .h5)
-    # This is the model we want to export to SafeTensors.
-    keras_hub_causal_lm_model = keras_hub.models.GPT2CausalLM.from_preset(
-        FLAGS.preset
-    )
-
-    if FLAGS.export_safetensors:
-        output_path = FLAGS.output_path or FLAGS.preset
-        export_to_safetensors(
-            keras_hub_causal_lm_model,
-            output_path,
-        )
-        print(f"\n-> Exported GPT-2 model to SafeTensors at `{output_path}`.")
+    keras_hub_model = convert_checkpoints(num_params)
 
     print("\n-> Load HF model.")
     hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
@@ -293,7 +255,7 @@ def main(_):
     )
 
     check_output(
-        keras_hub_causal_lm_model.backbone,
+        keras_hub_model,
         keras_hub_tokenizer,
         hf_model,
         hf_tokenizer,

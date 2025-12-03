@@ -43,6 +43,9 @@ def get_gpt2_weights_map(keras_model, include_lm_head=False):
 
     for i in range(keras_model.num_layers):
         # Attention weights
+        # KerasHub uses Dense layers:
+        # kernel shape [hidden_dim, num_heads, key_dim]
+        # HF uses Conv1D: weight shape [hidden_dim, 3 * hidden_dim]
         q_w = keras_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._query_dense.kernel
@@ -62,13 +65,16 @@ def get_gpt2_weights_map(keras_model, include_lm_head=False):
             f"transformer_layer_{i}"
         )._self_attention_layer._value_dense.bias
 
+        # Flatten the head dimensions to match HF Conv1D input
         q_w = ops.reshape(q_w, (keras_model.hidden_dim, keras_model.hidden_dim))
         k_w = ops.reshape(k_w, (keras_model.hidden_dim, keras_model.hidden_dim))
         v_w = ops.reshape(v_w, (keras_model.hidden_dim, keras_model.hidden_dim))
 
+        # Concatenate Q, K, V
         c_attn_w = ops.concatenate([q_w, k_w, v_w], axis=-1)
         weights_map[f"transformer.h.{i}.attn.c_attn.weight"] = c_attn_w
 
+        # Reshape biases
         q_b = ops.reshape(q_b, [-1])
         k_b = ops.reshape(k_b, [-1])
         v_b = ops.reshape(v_b, [-1])

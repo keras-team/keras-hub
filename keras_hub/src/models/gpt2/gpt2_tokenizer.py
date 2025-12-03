@@ -1,7 +1,3 @@
-import json
-import os
-import shutil
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
@@ -75,25 +71,3 @@ class GPT2Tokenizer(BytePairTokenizer):
             merges=merges,
             **kwargs,
         )
-
-    def save_assets(self, dir_path):
-        # Save vocabulary.
-        if isinstance(self.vocabulary, str):
-            # If `vocabulary` is a file path, copy it.
-            shutil.copy(
-                self.vocabulary, os.path.join(dir_path, "vocabulary.json")
-            )
-        else:
-            # Otherwise, `vocabulary` is a dict. Save it to a JSON file.
-            with open(os.path.join(dir_path, "vocabulary.json"), "w") as f:
-                json.dump(self.vocabulary, f)
-
-        # Save merges.
-        if isinstance(self.merges, str):
-            # If `merges` is a file path, copy it.
-            shutil.copy(self.merges, os.path.join(dir_path, "merges.txt"))
-        else:
-            # Otherwise,  `merges` is a list. Save it to a text file.
-            with open(os.path.join(dir_path, "merges.txt"), "w") as f:
-                for merge in self.merges:
-                    f.write(f"{merge}\n")

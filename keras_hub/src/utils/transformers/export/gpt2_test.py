@@ -1,42 +1,17 @@
 import os
 import shutil
-import sys
 import tempfile
-from os.path import abspath
-from os.path import dirname
 
 import keras.ops as ops
-import numpy as np
 from absl.testing import parameterized
 from transformers import AutoModelForCausalLM
 from transformers import AutoTokenizer
-
-# Add the project root to the Python path.
-sys.path.insert(
-    0, dirname(dirname(dirname(dirname(dirname(abspath(__file__))))))
-)
 
 from keras_hub.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.transformers.export.hf_exporter import (
     export_to_safetensors,
 )
-
-
-def to_numpy(x):
-    # Torch tensor
-    if hasattr(x, "detach") and hasattr(x, "cpu"):
-        return x.detach().cpu().numpy()
-
-    # TF tensor
-    if hasattr(x, "numpy"):
-        return x.numpy()
-
-    # Numpy
-    if isinstance(x, np.ndarray):
-        return x
-
-    raise TypeError(f"Cannot convert value of type {type(x)} to numpy")
 
 
 class GPT2ExportTest(TestCase):
@@ -87,7 +62,6 @@ class GPT2ExportTest(TestCase):
         hf_inputs = hf_tokenizer(prompt, return_tensors="pt")
         hf_logits = hf_model(**hf_inputs).logits
 
-        
         keras_logits_np = ops.convert_to_numpy(keras_logits)
         hf_logits_np = hf_logits.detach().cpu().numpy()
 
