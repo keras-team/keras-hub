@@ -86,7 +86,9 @@ def convert_backbone_config(transformers_config):
         "query_head_dim_normalize": True,
         "sliding_window_size": transformer_config.get("sliding_window", 4096),
         "local_rope_scaling_factor": 1.0,
-        "global_rope_scaling_factor": rope_global_config.get("factor", 1.0),
+        "global_rope_scaling_factor": (
+            rope_global_config.get("factor", 1.0) if rope_global_config else 1.0
+        ),
         "layer_norm_epsilon": transformer_config.get("rms_norm_eps", 1e-6),
         "use_bidirectional_attention": transformer_config.get(
             "use_bidirectional_attention", False
