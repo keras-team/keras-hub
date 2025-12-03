@@ -21,21 +21,31 @@ from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_weights_map
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
     "GPT2Backbone": get_gpt2_config,
+    # Add for future models, e.g., "MistralBackbone": get_mistral_config
 }
 
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
     "GPT2Backbone": get_gpt2_weights_map,
+    # Add for future models, e.g., "MistralBackbone": get_mistral_weights_map
 }
 
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
     "GPT2Tokenizer": get_gpt2_tokenizer_config,
+    # Add for future models, e.g., "MistralTokenizer":
+    # get_mistral_tokenizer_config
 }
 
 
 def export_backbone(backbone, path, include_lm_head=False):
-    """Export the backbone model to HuggingFace format."""
+    """Export the backbone model to HuggingFace format.
+
+    Args:
+        backbone: The Keras backbone model to convert.
+        path: str. Path to save the exported model.
+        include_lm_head: bool. If True, include lm_head weights if applicable.
+    """
     backend = keras.config.backend()
     model_type = backbone.__class__.__name__
     if model_type not in MODEL_CONFIGS:
@@ -115,21 +125,22 @@ def export_backbone(backbone, path, include_lm_head=False):
 
 
 def export_tokenizer(tokenizer, path):
-    """Export only the tokenizer to HuggingFace Transformers format."""
+    """Export only the tokenizer to HuggingFace Transformers format.
+
+    Args:
+        tokenizer: The Keras tokenizer to convert.
+        path: str. Path to save the exported tokenizer.
+    """
     os.makedirs(path, exist_ok=True)
 
-    # 1. Save Assets (Inherited from Parent)
-    # GPT2Tokenizer inherits from BytePairTokenizer ->
-    # saves "vocabulary.json", "merges.txt"
-    # GemmaTokenizer inherits from SentencePieceTokenizer ->
-    # saves "vocabulary.spm"
+    # Save tokenizer assets
     tokenizer.save_assets(path)
 
     # Export tokenizer config
     tokenizer_type = tokenizer.__class__.__name__
     if tokenizer_type not in MODEL_TOKENIZER_CONFIGS:
         raise ValueError(
-            f"Export to Transformersformat not implemented for {tokenizer_type}"
+            f"Export to Transformer format not implemented for {tokenizer_type}"
         )
     get_tokenizer_config_fn = MODEL_TOKENIZER_CONFIGS[tokenizer_type]
     tokenizer_config = get_tokenizer_config_fn(tokenizer)
@@ -157,7 +168,17 @@ def export_tokenizer(tokenizer, path):
 
 
 def export_to_safetensors(keras_model, path):
-    """Converts a Keras model to Hugging Face Transformers format."""
+    """Converts a Keras model to Hugging Face Transformers format.
+
+    It does the following:
+    - Exports the backbone (config and weights).
+    - Exports the tokenizer assets.
+
+    Args:
+        keras_model: The Keras model to convert.
+        path: str. Path of the directory to which the safetensors file,
+          config and tokenizer will be saved.
+    """
     backbone = keras_model.backbone
     export_backbone(backbone, path, include_lm_head=True)
     if (
