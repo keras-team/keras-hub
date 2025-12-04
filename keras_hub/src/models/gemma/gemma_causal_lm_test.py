@@ -295,3 +295,17 @@ class GemmaCausalLMTest(TestCase):
         # Assert shapes for info exfiltrated into the parent context.
         self.assertEqual(ops.shape(embedded_prompts), expected_embedded_shape)
         self.assertEqual(ops.shape(scores), expected_score_shape)
+
+    def test_get_quantization_layer_structure(self):
+        causal_lm = GemmaCausalLM(**self.init_kwargs)
+        structure = causal_lm.get_quantization_layer_structure("gptq")
+        self.assertIsInstance(structure, dict)
+        self.assertIn("pre_block_layers", structure)
+        self.assertIn("sequential_blocks", structure)
+        self.assertLen(structure["pre_block_layers"], 1)
+        self.assertIsInstance(structure["pre_block_layers"][0], keras.Model)
+        self.assertEqual(
+            structure["sequential_blocks"], self.backbone.transformer_layers
+        )
+
+        self.assertIsNone(causal_lm.get_quantization_layer_structure("int8"))
