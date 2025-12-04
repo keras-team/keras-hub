@@ -30,8 +30,9 @@ def get_gemma_weights_map(backbone, include_lm_head=False):
         decoder_layer = backbone.get_layer(f"decoder_block_{i}")
 
         # Pre-attention normalization
-        yield f"model.layers.{i}.input_layernorm.weight", (
-            decoder_layer.pre_attention_norm.weights[0]
+        yield (
+            f"model.layers.{i}.input_layernorm.weight",
+            (decoder_layer.pre_attention_norm.weights[0]),
         )
 
         # Attention query projection
@@ -43,14 +44,16 @@ def get_gemma_weights_map(backbone, include_lm_head=False):
 
         # Attention key projection
         key_kernel = decoder_layer.attention.key_dense.weights[0][0]
-        yield f"model.layers.{i}.self_attn.k_proj.weight", (
-            ops.transpose(key_kernel)
+        yield (
+            f"model.layers.{i}.self_attn.k_proj.weight",
+            (ops.transpose(key_kernel)),
         )
 
         # Attention value projection
         value_kernel = decoder_layer.attention.value_dense.weights[0][0]
-        yield f"model.layers.{i}.self_attn.v_proj.weight", (
-            ops.transpose(value_kernel)
+        yield (
+            f"model.layers.{i}.self_attn.v_proj.weight",
+            (ops.transpose(value_kernel)),
         )
 
         # Attention output projection
@@ -60,37 +63,40 @@ def get_gemma_weights_map(backbone, include_lm_head=False):
         yield f"model.layers.{i}.self_attn.o_proj.weight", out_kernel
 
         # Post-attention normalization
-        yield f"model.layers.{i}.post_attention_layernorm.weight", (
-            decoder_layer.pre_ffw_norm.weights[0]
+        yield (
+            f"model.layers.{i}.post_attention_layernorm.weight",
+            (decoder_layer.pre_ffw_norm.weights[0]),
         )
 
         # MLP gate projection
         gate_kernel = decoder_layer.gating_ffw.weights[0]
-        yield f"model.layers.{i}.mlp.gate_proj.weight", ops.transpose(
-            gate_kernel
+        yield (
+            f"model.layers.{i}.mlp.gate_proj.weight",
+            ops.transpose(gate_kernel),
         )
 
         # MLP up projection
         up_kernel = decoder_layer.gating_ffw_2.weights[0]
-        yield f"model.layers.{i}.mlp.up_proj.weight", ops.transpose(
-            up_kernel
-        )
+        yield f"model.layers.{i}.mlp.up_proj.weight", ops.transpose(up_kernel)
 
         # MLP down projection
         down_kernel = decoder_layer.ffw_linear.weights[0]
-        yield f"model.layers.{i}.mlp.down_proj.weight", ops.transpose(
-            down_kernel
+        yield (
+            f"model.layers.{i}.mlp.down_proj.weight",
+            ops.transpose(down_kernel),
         )
 
     # Map final normalization
-    yield "model.norm.weight", backbone.get_layer(
-        "final_normalization"
-    ).weights[0]
+    yield (
+        "model.norm.weight",
+        backbone.get_layer("final_normalization").weights[0],
+    )
 
     # Map lm_head if embeddings are not tied
     if include_lm_head and not token_embedding_layer.tie_weights:
-        yield "lm_head.weight", ops.transpose(
-            token_embedding_layer.reverse_embeddings
+        yield (
+            "lm_head.weight",
+            ops.transpose(token_embedding_layer.reverse_embeddings),
         )
 
 
