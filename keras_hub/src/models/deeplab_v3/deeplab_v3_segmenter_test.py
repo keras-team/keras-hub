@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 
@@ -69,4 +70,20 @@ class DeepLabV3ImageSegmenterTest(TestCase):
             cls=DeepLabV3ImageSegmenter,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
+        )
+
+    @pytest.mark.large
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="LiteRT export only supports TensorFlow backend.",
+    )
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=DeepLabV3ImageSegmenter,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+            comparison_mode="statistical",
+            output_thresholds={
+                "*": {"max": 0.6, "mean": 0.3},
+            },
         )
