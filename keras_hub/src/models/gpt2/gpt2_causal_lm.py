@@ -424,7 +424,6 @@ class GPT2CausalLM(CausalLM):
     def get_quantization_layer_structure(self, mode):
         if mode != "gptq":
             return None
-        import keras
 
         backbone = self.backbone
         token_ids = keras.Input(shape=(None,), dtype="int32")
