@@ -2,7 +2,7 @@ import os
 import traceback
 
 os.environ["KERAS_BACKEND"] = "torch"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Hide any CUDA devices
 
 import numpy as np
 import torch
@@ -15,6 +15,7 @@ from transformers import AutoTokenizer
 import keras_hub
 
 device = torch.device("cpu")
+# Force PyTorch to use CPU
 torch.set_default_device(device)
 
 PRESET_MAP = {
@@ -38,11 +39,9 @@ def compute_hf_output(hf_model, hf_model_tokenizer):
     return hf_output_logits
 
 
-def compute_keras_output(keras_hub_model, keras_hub_tokenizer):
+def compute_keras_output(keras_hub_model, keras_hub_preprocessor):
     """Computes the output of the KerasHub model."""
-    keras_hub_preprocessor = keras_hub.models.SmolLM3CausalLMPreprocessor(
-        keras_hub_tokenizer
-    )
+
     keras_hub_inputs = keras_hub_preprocessor(
         ["What is Keras?"], sequence_length=5
     )[0]
@@ -61,6 +60,7 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     hf_output = hf_tokenizer(["What is Keras?"], return_tensors="pt")
     hf_output = hf_output["input_ids"].detach().cpu().numpy()
 
+    # Use tokenizer directly to avoid preprocessor padding
     keras_hub_output = keras_hub_tokenizer(["What is Keras?"])
     keras_hub_output = ops.convert_to_numpy(keras_hub_output)
 
@@ -136,8 +136,11 @@ def main(_):
     print(f"   HuggingFace model: {hf_params:,}")
     print(f"   KerasHub model: {keras_hub_params:,}")
 
+    preprocessor = keras_hub.models.SmolLM3CausalLMPreprocessor(
+        keras_hub_tokenizer
+    )
     keras_hub_output_logits = compute_keras_output(
-        keras_hub_backbone, keras_hub_tokenizer
+        keras_hub_backbone, preprocessor
     )
 
     try:
@@ -152,9 +155,6 @@ def main(_):
 
     print("\n-> Tests passed!")
 
-    preprocessor = keras_hub.models.SmolLM3CausalLMPreprocessor(
-        keras_hub_tokenizer
-    )
     keras_hub_model = keras_hub.models.SmolLM3CausalLM(
         keras_hub_backbone, preprocessor
     )
@@ -164,6 +164,7 @@ def main(_):
     keras_hub_model.save_to_preset(f"./{preset}")
 
     print("\n-> Model presets saved successfully")
+
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("preset")

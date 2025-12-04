@@ -8,7 +8,7 @@ backbone_presets = {
                 "built on 36 layers and utilizes 16 query and "
                 "4 key/value attention heads."
             ),
-            "params": "3075100928",
+            "params": 3075100928,
             "path": "smollm3",
         },
         "kaggle_handle": "kaggle://keras/smollm3/keras/smollm3_3b_en/1",
