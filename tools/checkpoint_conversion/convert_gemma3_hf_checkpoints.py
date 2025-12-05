@@ -9,6 +9,11 @@ import numpy as np
 import torch
 from absl import app
 from absl import flags
+from keras import ops
+from transformers import AutoModelForCausalLM
+from transformers import AutoTokenizer
+
+import keras_hub
 
 random.seed(123)
 torch.manual_seed(123)
@@ -16,15 +21,18 @@ device = torch.device("cpu")
 # Force PyTorch to use CPU
 torch.set_default_device(device)
 
-from keras import ops  # noqa: E402
-from transformers import AutoModelForCausalLM  # noqa: E402
-from transformers import AutoTokenizer  # noqa: E402
-
-import keras_hub  # noqa: E402
 
 PRESET_MAP = {
+    "gemma3_270m": "google/gemma-3-270m",
+    "gemma3_instruct_270m": "google/gemma-3-270m-it",
+    "gemma3_1b": "google/gemma-3-1b-pt",
     "gemma3_instruct_1b": "google/gemma-3-1b-it",
+    "gemma3_4b": "google/gemma-3-4b-pt",
     "gemma3_instruct_4b": "google/gemma-3-4b-it",
+    "gemma3_12b": "google/gemma-3-12b-pt",
+    "gemma3_instruct_12b": "google/gemma-3-12b-it",
+    "gemma3_27b": "google/gemma-3-27b-pt",
+    "gemma3_instruct_27b": "google/gemma-3-27b-it",
 }
 
 FLAGS = flags.FLAGS
@@ -158,6 +166,8 @@ def main(_):
 
     validate_output(gemma3_lm, hf_model, hf_tokenizer)
     gemma3_lm.save_to_preset(f"./{preset}")
+
+    print(f"\n-> Saved converted model to ./{preset}")
 
 
 if __name__ == "__main__":

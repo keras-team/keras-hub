@@ -6,17 +6,24 @@ from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
     Gemma3VisionEncoder,
 )
 from keras_hub.src.utils.preset_utils import get_file
+from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = Gemma3Backbone
 
 
-def load_image_converter_config(transformers_config):
+def load_image_converter_config(preset, transformers_config):
     if "vision_config" in transformers_config:
+        preprocessor_config = load_json(preset, "preprocessor_config.json")
+        mean = preprocessor_config["image_mean"]
+        std = preprocessor_config["image_std"]
+        rescale_factor = preprocessor_config["rescale_factor"]
+        offset = [(-m / s) for m, s in zip(mean, std)]
+        scale = [(s * rescale_factor) for s in std]
         image_size = transformers_config["vision_config"].get("image_size", 224)
         return {
             "image_size": (image_size, image_size),
-            "scale": 1 / 127.5,
-            "offset": -1.0,
+            "scale": scale,
+            "offset": offset,
         }
     else:
         return None
@@ -28,29 +35,18 @@ def convert_backbone_config(transformers_config):
         vision_encoder = None
         transformer_config = transformers_config
     else:
-        image_size = transformers_config["vision_config"].get("image_size", 224)
+        vision_config = transformers_config["vision_config"]
+        image_size = vision_config["image_size"]
         vision_encoder_config = {
             "image_size": image_size,
-            "patch_size": transformers_config["vision_config"].get(
-                "patch_size", 16
-            ),
-            "num_heads": transformers_config["vision_config"].get(
-                "num_attention_heads", 12
-            ),
-            "hidden_dim": transformers_config["vision_config"].get(
-                "hidden_size", 768
-            ),
-            "num_layers": transformers_config["vision_config"].get(
-                "num_hidden_layers", 12
-            ),
-            "intermediate_dim": transformers_config["vision_config"].get(
-                "intermediate_size", 3072
-            ),
+            "patch_size": vision_config["patch_size"],
+            "num_heads": vision_config["num_attention_heads"],
+            "hidden_dim": vision_config["hidden_size"],
+            "num_layers": vision_config["num_hidden_layers"],
+            "intermediate_dim": vision_config["intermediate_size"],
             "output_dim": 2560,
             "pool_size": 4,
-            "layer_norm_epsilon": transformers_config["vision_config"].get(
-                "layer_norm_eps", 1e-6
-            ),
+            "layer_norm_epsilon": vision_config.get("layer_norm_eps", 1e-6),
         }
         vision_encoder = Gemma3VisionEncoder(**vision_encoder_config)
         transformer_config = transformers_config["text_config"]
@@ -68,12 +64,12 @@ def convert_backbone_config(transformers_config):
             "vocab_size", 262144 if vision_encoder is None else 262208
         ),
         "image_size": image_size,
-        "num_layers": transformer_config.get("num_hidden_layers", 26),
+        "num_layers": transformer_config["num_hidden_layers"],
         "num_query_heads": transformer_config.get("num_attention_heads", 8),
         "num_key_value_heads": transformer_config.get("num_key_value_heads", 4),
-        "hidden_dim": transformer_config.get("hidden_size", 2304),
-        "intermediate_dim": transformer_config.get("intermediate_size", 9216),
-        "head_dim": transformer_config.get("head_dim", 256),
+        "hidden_dim": transformer_config["hidden_size"],
+        "intermediate_dim": transformer_config["intermediate_size"],
+        "head_dim": transformer_config["head_dim"],
         "use_post_ffw_norm": True,
         "use_post_attention_norm": True,
         "attention_logit_softcap": transformer_config.get(
@@ -84,7 +80,7 @@ def convert_backbone_config(transformers_config):
         ),
         "use_sliding_window_attention": True,
         "query_head_dim_normalize": True,
-        "sliding_window_size": transformer_config.get("sliding_window", 4096),
+        "sliding_window_size": transformer_config["sliding_window"],
         "local_rope_scaling_factor": 1.0,
         "global_rope_scaling_factor": (
             rope_global_config.get("factor", 1.0) if rope_global_config else 1.0
@@ -348,10 +344,10 @@ def convert_tokenizer(cls, preset, **kwargs):
     else:
         sp.load(proto)
 
-    is_vision_model = (
+    has_vision_tokens = (
         sp.PieceToId("<start_of_image>") != sp.unk_id()
         and sp.PieceToId("<img>") != sp.unk_id()
         and sp.PieceToId("<end_of_image>") != sp.unk_id()
     )
 
-    return cls(proto, is_vision_model=is_vision_model, **kwargs)
+    return cls(proto, has_vision_tokens=has_vision_tokens, **kwargs)

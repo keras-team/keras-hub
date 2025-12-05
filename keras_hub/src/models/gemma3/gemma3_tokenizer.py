@@ -77,16 +77,16 @@ class Gemma3Tokenizer(SentencePieceTokenizer):
 
     backbone_cls = Gemma3Backbone
 
-    def __init__(self, proto, is_vision_model=True, **kwargs):
+    def __init__(self, proto, has_vision_tokens=True, **kwargs):
         # Add special tokens.
 
-        self.is_vision_model = is_vision_model
+        self.has_vision_tokens = has_vision_tokens
         # The usual tokens.
         self._add_special_token("<bos>", "start_token")
         self._add_special_token("<eos>", "end_token")
         self._add_special_token("<pad>", "pad_token")
 
-        if is_vision_model:
+        if has_vision_tokens:
             # Image placeholder token.
             self._add_special_token("<img>", "image_placeholder")
             # Some tokens which are used in the preprocessor.
@@ -104,5 +104,5 @@ class Gemma3Tokenizer(SentencePieceTokenizer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({"is_vision_model": self.is_vision_model})
+        config.update({"has_vision_tokens": self.has_vision_tokens})
         return config
