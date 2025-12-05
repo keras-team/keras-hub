@@ -34,12 +34,17 @@ import keras
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
 from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
 
+PRESET_MAP = {
+    "embedding_gemma3_270m_en": "gemma3_instruct_270m",
+    "embedding_gemma3_1b_en": "gemma3_instruct_1b",
+    "embedding_gemma3_4b_en": "gemma3_instruct_4b_text",
+}
 
 def convert_to_embedding_preset(
-    source_preset: str,
-    output_preset: str,
-    pooling_intermediate_dim: int,
-    embedding_dim: int,
+    source_preset,
+    output_preset,
+    pooling_intermediate_dim,
+    embedding_dim,
 ):
     """
     Converts a standard causal Gemma3 preset to an Embedding Gemma preset.
@@ -49,11 +54,11 @@ def convert_to_embedding_preset(
     weights, and saves the result as a new Keras Hub preset.
 
     Args:
-        source_preset (str): The path or name of source causal Gemma3 preset.
-        output_preset (str): The path to save the new embedding model preset.
-        pooling_intermediate_dim (int): The intermediate dimension for the
+        source_preset: The path or name of source causal Gemma3 preset.
+        output_preset: The path to save the new embedding model preset.
+        pooling_intermediate_dim: The intermediate dimension for the
             pooling head's dense layer.
-        embedding_dim (int): The final output dimension of sentence embedding.
+        embedding_dim: The final output dimension of sentence embedding.
     """
     source_model = Gemma3Backbone.from_preset(source_preset)
     source_tokenizer = Gemma3Tokenizer.from_preset(source_preset)
