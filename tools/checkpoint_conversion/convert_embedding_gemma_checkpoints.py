@@ -40,6 +40,7 @@ PRESET_MAP = {
     "embedding_gemma3_4b_en": "gemma3_instruct_4b_text",
 }
 
+
 def convert_to_embedding_preset(
     source_preset,
     output_preset,
