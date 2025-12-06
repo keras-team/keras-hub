@@ -52,7 +52,7 @@ class RWKV7CausalLMPreprocessorTest(TestCase):
 
     def test_generate_preprocess(self):
         result = self.preprocessor.generate_preprocess(
-            ["hello world hello world hello world"], sequence_length=16
+            ["hello world hello world hello world"], sequence_length=4
         )
 
         self.assertAllEqual(
@@ -65,30 +65,11 @@ class RWKV7CausalLMPreprocessorTest(TestCase):
         )
         self.assertAllEqual(
             result["padding_mask"],
-            [
-                [
-                    1,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                ]
-            ],
+            [[1, 0, 0, 0, 0]],
         )
         self.assertAllEqual(
             result["predict_token_ids"],
-            [[5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+            [[5, 0, 0, 0, 0]],
         )
 
     def test_generate_postprocess(self):

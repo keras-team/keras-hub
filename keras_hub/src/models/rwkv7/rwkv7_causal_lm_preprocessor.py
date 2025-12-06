@@ -166,8 +166,6 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         # Pad length to multiples of 16 to meet kernel requirements
         if sequence_length % 16 != 0:
             sequence_length = sequence_length + (16 - sequence_length % 16)
-        if generate_length % 16 != 0:
-            generate_length = generate_length + (16 - generate_length % 16)
 
         x = [t[-sequence_length:] for t in self.tokenizer(x)]
         y = tf.zeros((len(x), generate_length), "int32")
@@ -180,9 +178,8 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
             x, sequence_length=sequence_length, add_end_value=False
         )
         start_token = tf.convert_to_tensor(start_token, "int32")
-        from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
-        y = dynamic_update_slice(y, start_token, [0, 0])
+        y = tf.concat([start_token, y], axis=1)
         padding_mask = tf.not_equal(y, 0)
 
         return {
