@@ -461,24 +461,18 @@ class RWKV7_TimeMix(Layer):
         else:
             rwkv7_op = self.RWKV7_OP
 
-        def reshape_and_cast(x, new_shape, dtype="float32"):
-            x = ops.reshape(x, new_shape)
-            if rnn_mode:
-                return x
-            return ops.cast(x, dtype)
-
         x, final_state = rwkv7_op(
-            reshape_and_cast(r, (B, T, self.n_head, self.head_size)),
-            reshape_and_cast(w, (B, T, self.n_head, self.head_size)),
-            reshape_and_cast(k, (B, T, self.n_head, self.head_size)),
-            reshape_and_cast(v, (B, T, self.n_head, self.head_size)),
-            reshape_and_cast(-kk, (B, T, self.n_head, self.head_size)),
-            reshape_and_cast(kk * a, (B, T, self.n_head, self.head_size)),
+            ops.reshape(r, (B, T, self.n_head, self.head_size)),
+            ops.reshape(w, (B, T, self.n_head, self.head_size)),
+            ops.reshape(k, (B, T, self.n_head, self.head_size)),
+            ops.reshape(v, (B, T, self.n_head, self.head_size)),
+            ops.reshape(-kk, (B, T, self.n_head, self.head_size)),
+            ops.reshape(kk * a, (B, T, self.n_head, self.head_size)),
             initial_state=ops.cast(initial_state, "float32")
             if initial_state is not None
             else None,
         )
-        x = reshape_and_cast(x, (B, T, C), self.compute_dtype)
+        x = ops.reshape(x, (B, T, C))
 
         x = ops.reshape(self.ln_x(ops.reshape(x, (B * T, C))), ops.shape(x))
 
