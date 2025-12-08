@@ -364,19 +364,14 @@ class PARSeqDecoder(keras.layers.Layer):
         null_context = self.hidden_dim**0.5 * self.token_embedding(
             token_ids[:, :1]
         )
-        # Use ops.cond for TFLite/graph mode compatibility
-        def _content_with_positions():
-            c = self.pos_query_embeddings[:, : tokens_length - 1, :]
-            c = c + self.hidden_dim**0.5 * self.token_embedding(
-                token_ids[:, 1:]
-            )
-            return ops.concatenate([null_context, c], axis=1)
 
-        content = ops.cond(
-            tokens_length > 1,
-            _content_with_positions,
-            lambda: null_context,
-        )
+        # Build content in a branchless way so both graph and JAX backends
+        # see a consistent tensor shape. Slicing with length 0 yields empty
+        # tensors, so concatenation still produces the correct (bs, tokens_length, hidden_dim)
+        # shape even when tokens_length == 1.
+        c = self.pos_query_embeddings[:, : tokens_length - 1, :]
+        c = c + self.hidden_dim**0.5 * self.token_embedding(token_ids[:, 1:])
+        content = ops.concatenate([null_context, c], axis=1)
 
         content = self.dropout(content)
 
