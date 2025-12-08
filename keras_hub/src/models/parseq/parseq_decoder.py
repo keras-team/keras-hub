@@ -369,7 +369,9 @@ class PARSeqDecoder(keras.layers.Layer):
         # see a consistent tensor shape. Slicing with length 0 yields empty
         # tensors, so concatenation still produces the correct
         # (bs, tokens_length, hidden_dim) shape even when tokens_length == 1.
-        c = self.pos_query_embeddings[:, : tokens_length - 1, :]
+        # Use ops.maximum to ensure non-negative slice length when
+        # tokens_length is 0.
+        c = self.pos_query_embeddings[:, : ops.maximum(0, tokens_length - 1), :]
         c = c + self.hidden_dim**0.5 * self.token_embedding(token_ids[:, 1:])
         content = ops.concatenate([null_context, c], axis=1)
 
