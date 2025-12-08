@@ -364,14 +364,19 @@ class PARSeqDecoder(keras.layers.Layer):
         null_context = self.hidden_dim**0.5 * self.token_embedding(
             token_ids[:, :1]
         )
-        if tokens_length > 1:
-            content = self.pos_query_embeddings[:, : tokens_length - 1, :]
-            content = content + self.hidden_dim**0.5 * self.token_embedding(
+        # Use ops.cond for TFLite/graph mode compatibility
+        def _content_with_positions():
+            c = self.pos_query_embeddings[:, : tokens_length - 1, :]
+            c = c + self.hidden_dim**0.5 * self.token_embedding(
                 token_ids[:, 1:]
             )
-            content = ops.concatenate([null_context, content], axis=1)
-        else:
-            content = null_context
+            return ops.concatenate([null_context, c], axis=1)
+
+        content = ops.cond(
+            tokens_length > 1,
+            _content_with_positions,
+            lambda: null_context,
+        )
 
         content = self.dropout(content)
 
