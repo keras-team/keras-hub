@@ -12,6 +12,7 @@ from keras_hub.src.utils.transformers import convert_dinov3
 from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_gemma
+from keras_hub.src.utils.transformers import convert_gemma3
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
@@ -50,6 +51,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_esm
         elif model_type in ("gemma", "gemma2"):
             self.converter = convert_gemma
+        elif model_type in ("gemma3", "gemma3_text"):
+            self.converter = convert_gemma3
         elif model_type == "gpt2":
             self.converter = convert_gpt2
         elif model_type == "gpt_oss":
@@ -118,5 +121,11 @@ class TransformersPresetLoader(PresetLoader):
         return self.converter.convert_tokenizer(cls, self.preset, **kwargs)
 
     def load_image_converter(self, cls, **kwargs):
+        if hasattr(self.converter, "load_image_converter_config"):
+            config = self.converter.load_image_converter_config(
+                self.preset, self.config
+            )
+            if config is not None:
+                return cls(**{**config, **kwargs})
         # TODO: set image size for pali gemma checkpoints.
         return None
