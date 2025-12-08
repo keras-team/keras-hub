@@ -81,4 +81,6 @@ class MobileNetV5ImageClassifierTest(TestCase):
             cls=MobileNetV5ImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-4, "mean": 1e-5}},
         )

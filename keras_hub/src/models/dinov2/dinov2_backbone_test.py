@@ -50,6 +50,16 @@ class DINOV2BackboneTest(TestCase):
         )
 
     @pytest.mark.large
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=DINOV2Backbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-4, "mean": 1e-5}},
+        )
+
+    @pytest.mark.large
     def test_position_embedding_interpolation(self):
         model = DINOV2Backbone(**self.init_kwargs)
         model_output = model(self.input_data)
@@ -142,6 +152,16 @@ class DINOV2BackboneWithRegistersTest(TestCase):
             cls=DINOV2Backbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
+        )
+
+    @pytest.mark.large
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=DINOV2Backbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-4, "mean": 1e-5}},
         )
 
     @pytest.mark.kaggle_key_required

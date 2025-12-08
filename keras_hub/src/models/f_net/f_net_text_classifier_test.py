@@ -60,17 +60,12 @@ class FNetTextClassifierTest(TestCase):
 
     @pytest.mark.large
     def test_litert_export(self):
-        # Add padding_mask to input_data for LiteRT export compatibility
-        input_data = self.input_data.copy()
-        batch_size, seq_length = input_data["token_ids"].shape
-        input_data["padding_mask"] = tf.zeros(
-            (batch_size, seq_length), dtype=tf.int32
-        )
-
+        # F-Net does NOT use padding_mask - it only uses token_ids and
+        # segment_ids. Don't add padding_mask to input_data.
         self.run_litert_export_test(
             cls=FNetTextClassifier,
             init_kwargs=self.init_kwargs,
-            input_data=input_data,
+            input_data=self.input_data,
             comparison_mode="statistical",
             output_thresholds={
                 "*": {"max": 0.01, "mean": 0.005},
