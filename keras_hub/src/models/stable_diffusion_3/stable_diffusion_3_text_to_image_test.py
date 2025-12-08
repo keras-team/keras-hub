@@ -207,11 +207,6 @@ class StableDiffusion3TextToImageTest(TestCase):
             cls=StableDiffusion3TextToImage,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            allow_custom_ops=True,  # Allow custom ops like Erfc
-            target_spec={
-                "supported_ops": [
-                    "tf.lite.OpsSet.TFLITE_BUILTINS",
-                    "tf.lite.OpsSet.SELECT_TF_OPS",
-                ]
-            },  # Also specify supported ops
+            allow_custom_ops=True,  # Allow custom ops like GatherV2, Erfc
+            enable_select_tf_ops=True,  # Enable TensorFlow Select ops
         )

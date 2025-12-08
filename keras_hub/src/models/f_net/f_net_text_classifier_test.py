@@ -1,7 +1,6 @@
 import os
 
 import pytest
-import tensorflow as tf
 
 from keras_hub.src.models.f_net.f_net_backbone import FNetBackbone
 from keras_hub.src.models.f_net.f_net_text_classifier import FNetTextClassifier

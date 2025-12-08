@@ -364,6 +364,7 @@ class PARSeqDecoder(keras.layers.Layer):
         null_context = self.hidden_dim**0.5 * self.token_embedding(
             token_ids[:, :1]
         )
+
         # Use ops.cond for TFLite/graph mode compatibility
         def _content_with_positions():
             c = self.pos_query_embeddings[:, : tokens_length - 1, :]
