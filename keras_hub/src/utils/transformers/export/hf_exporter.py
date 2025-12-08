@@ -15,23 +15,18 @@ from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
 
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
-    # Add for future models, e.g., "MistralBackbone": get_mistral_config
 }
 
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
-    # Add for future models, e.g., "MistralBackbone": get_mistral_weights_map
 }
 
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
-    # Add for future models, e.g., "MistralTokenizer":
-    # get_mistral_tokenizer_config
 }
 
 MODEL_TRANSFORMERS = {
     "GemmaBackbone": get_gemma_transform_fn,
-    # Add for future models, e.g., "MistralBackbone": get_mistral_transform_fn
 }
 
 
@@ -66,9 +61,11 @@ def get_native_tools():
 
     elif backend == "torch":
         import torch
-        from safetensors.torch import save_file as torch_save
+        from safetensors.torch import save_file as torch_save_raw
 
         def move_to_cpu(tensor):
+            if hasattr(tensor, "value"):
+                tensor = tensor.value
             if not isinstance(tensor, torch.Tensor):
                 tensor = torch.as_tensor(tensor)
             return tensor.detach().cpu()
@@ -76,12 +73,19 @@ def get_native_tools():
         def get_size(tensor):
             return tensor.numel() * tensor.element_size()
 
+        # Wrapper to ensure tensors are contiguous before saving.
+        def torch_save_contiguous(tensors_dict, filename, metadata=None):
+            for k, v in tensors_dict.items():
+                if not v.is_contiguous():
+                    tensors_dict[k] = v.contiguous()
+            torch_save_raw(tensors_dict, filename, metadata=metadata)
+
         def clear_mem():
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             gc.collect()
 
-        return move_to_cpu, torch_save, get_size, clear_mem
+        return move_to_cpu, torch_save_contiguous, get_size, clear_mem
 
     elif backend == "jax":
         import jax
@@ -117,14 +121,8 @@ def export_backbone(backbone, path, include_lm_head=False, max_shard_size=2.0):
         raise ValueError(
             f"Export to Transformers format not implemented for {model_type}"
         )
-    if model_type not in MODEL_EXPORTERS:
-        raise ValueError(
-            f"Export to Transformers format not implemented for {model_type}"
-        )
-    if model_type not in MODEL_TRANSFORMERS:
-        raise ValueError(f"Transformations not implemented for {model_type}")
 
-    # 1. Get Native Tools
+    # Get Native Tools
     move_to_cpu, save_fn, get_size, clear_mem = get_native_tools()
 
     # Get config
@@ -135,11 +133,10 @@ def export_backbone(backbone, path, include_lm_head=False, max_shard_size=2.0):
     config_path = os.path.join(path, "config.json")
     with open(config_path, "w") as f:
         json.dump(hf_config, f)
-    # Get model-specific transform function
+
+    # Setup Loop
     get_transform_fn = MODEL_TRANSFORMERS[model_type]
-    transform_fn = get_transform_fn(backbone)
-    # Single pass: dynamic sharding based on actual tensor sizes,
-    # processing one tensor at a time
+    transform_fn = get_transform_fn(backbone)  # Keras Ops
 
     get_weights_fn = MODEL_EXPORTERS[model_type]
     weights_generator = get_weights_fn(
@@ -151,29 +148,29 @@ def export_backbone(backbone, path, include_lm_head=False, max_shard_size=2.0):
     weight_map = {}
     total_size_bytes = 0
     temp_shard_files = []
-    current_temp_file = None
 
+    # Processing Loop (Sequential / One-by-One)
     for name, backend_tensor in weights_generator:
         # Move to CPU (Preserving dtype)
         cpu_tensor = move_to_cpu(backend_tensor)
-        # Model-specific transform
+
+        # Transform on CPU
+        # Note: This often creates non-contiguous views in PyTorch
         cpu_tensor = transform_fn(name, cpu_tensor)
 
-        tensor_size_bytes = get_size(cpu_tensor)
-        tensor_size_gb = tensor_size_bytes / (1024**3)
-        total_size_bytes += tensor_size_bytes
+        # Calculate Size
+        tensor_bytes = get_size(cpu_tensor)
+        tensor_gb = tensor_bytes / (1024**3)
+        total_size_bytes += tensor_bytes
 
-        if (
-            current_size_gb + tensor_size_gb > max_shard_size
-            and current_shard_dict
-        ):
-            # Save current shard as temp
-            current_temp_file = f"temp_shard_{shard_num}.safetensors"
-            weights_path = os.path.join(path, current_temp_file)
+        # Sharding Logic
+        if current_size_gb + tensor_gb > max_shard_size and current_shard_dict:
+            fname = f"temp_shard_{shard_num}.safetensors"
+            weights_path = os.path.join(path, fname)
+
+            # The wrapped save_fn will fix contiguous memory layout
             save_fn(current_shard_dict, weights_path, metadata={"format": "pt"})
-            temp_shard_files.append(
-                (current_temp_file, list(current_shard_dict.keys()))
-            )
+            temp_shard_files.append((fname, list(current_shard_dict.keys())))
             del current_shard_dict
             current_shard_dict = {}
             current_size_gb = 0.0
@@ -181,17 +178,15 @@ def export_backbone(backbone, path, include_lm_head=False, max_shard_size=2.0):
             clear_mem()
 
         current_shard_dict[name] = cpu_tensor
-        current_size_gb += tensor_size_gb
+        current_size_gb += tensor_gb
         del cpu_tensor  # Explicitly del to aid GC after adding to shard
 
     # Save last shard
     if current_shard_dict:
-        current_temp_file = f"temp_shard_{shard_num}.safetensors"
-        weights_path = os.path.join(path, current_temp_file)
+        fname = f"temp_shard_{shard_num}.safetensors"
+        weights_path = os.path.join(path, fname)
         save_fn(current_shard_dict, weights_path, metadata={"format": "pt"})
-        temp_shard_files.append(
-            (current_temp_file, list(current_shard_dict.keys()))
-        )
+        temp_shard_files.append((fname, list(current_shard_dict.keys())))
         del current_shard_dict
         clear_mem()
 
@@ -245,10 +240,7 @@ def export_tokenizer(tokenizer, path):
         shutil.move(vocab_spm_path, tokenizer_model_path)
     else:
         warnings.warn(
-            f"{vocab_spm_path} not found. Tokenizer may not load "
-            "correctly. Ensure that the tokenizer configuration "
-            "is correct and that the vocabulary file is present "
-            "in the original model."
+            f"{vocab_spm_path} not found. Tokenizer may not load correctly."
         )
 
 
