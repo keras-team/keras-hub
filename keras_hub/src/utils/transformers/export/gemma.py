@@ -1,4 +1,4 @@
-import numpy as np
+import keras.ops as ops
 
 
 def get_gemma_config(backbone, include_lm_head=False):
@@ -7,6 +7,9 @@ def get_gemma_config(backbone, include_lm_head=False):
         architectures = ["GemmaForCausalLM"]  # Full model with LM head
     else:
         architectures = ["GemmaForBackbone"]  # Just backbone
+
+    torch_dtype = getattr(backbone, "dtype", "float32")
+
     hf_config = {
         "architectures": architectures,
         "vocab_size": backbone.vocabulary_size,
@@ -22,6 +25,7 @@ def get_gemma_config(backbone, include_lm_head=False):
         "bos_token_id": 2,
         "eos_token_id": 1,
         "model_type": "gemma",
+        "torch_dtype": torch_dtype,
     }
     return hf_config
 
@@ -77,26 +81,36 @@ def get_gemma_weights_map(backbone, include_lm_head=False):
 def get_gemma_transform_fn(backbone):
     """Return a transform function for Gemma weights."""
 
-    def transform(name, np_tensor):
+    def transform(name, tensor):
+        # Quantization Safety
+        # Check string representation to catch all int/uint types dynamically
+        dtype_str = str(tensor.dtype).lower()
+        if "int" in dtype_str or "uint" in dtype_str:
+            return tensor
+
+        # 1D Array Safety
+        if len(tensor.shape) < 2:
+            return tensor
+
         if name.endswith("q_proj.weight"):
-            np_tensor = np.transpose(np_tensor, axes=(1, 0, 2))
-            np_tensor = np.reshape(np_tensor, (-1, backbone.hidden_dim))
-            np_tensor = np.transpose(np_tensor)
+            tensor = ops.transpose(tensor, axes=(1, 0, 2))
+            tensor = ops.reshape(tensor, (-1, backbone.hidden_dim))
+            tensor = ops.transpose(tensor)
         elif name.endswith("k_proj.weight") or name.endswith("v_proj.weight"):
-            np_tensor = np.transpose(np_tensor, axes=(0, 2, 1))
-            np_tensor = np.reshape(np_tensor, (-1, backbone.hidden_dim))
+            tensor = ops.transpose(tensor, axes=(0, 2, 1))
+            tensor = ops.reshape(tensor, (-1, backbone.hidden_dim))
         elif name.endswith("o_proj.weight"):
-            np_tensor = np.transpose(np_tensor, axes=(2, 0, 1))
-            np_tensor = np.reshape(np_tensor, (backbone.hidden_dim, -1))
+            tensor = ops.transpose(tensor, axes=(2, 0, 1))
+            tensor = ops.reshape(tensor, (backbone.hidden_dim, -1))
         elif (
             name.endswith("gate_proj.weight")
             or name.endswith("up_proj.weight")
             or name.endswith("down_proj.weight")
         ):
-            np_tensor = np.transpose(np_tensor)
+            tensor = ops.transpose(tensor)
         elif name == "lm_head.weight":
-            np_tensor = np.transpose(np_tensor)
-        return np_tensor
+            tensor = ops.transpose(tensor)
+        return tensor
 
     return transform
 

@@ -1,9 +1,10 @@
+import gc
 import json
 import os
 import shutil
 import warnings
 
-from safetensors.numpy import save_file
+import keras
 
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_config
 from keras_hub.src.utils.transformers.export.gemma import (
@@ -34,6 +35,74 @@ MODEL_TRANSFORMERS = {
 }
 
 
+def get_native_tools():
+    """
+    Returns native tools for the active backend.
+    """
+    backend = keras.config.backend()
+
+    if backend == "tensorflow":
+        import tensorflow as tf
+        from safetensors.tensorflow import save_file as tf_save
+
+        def move_to_cpu(tensor):
+            if not isinstance(tensor, (tf.Tensor, tf.Variable)):
+                tensor = tf.convert_to_tensor(tensor)
+            # Force CPU move immediately
+            with tf.device("CPU:0"):
+                return tf.identity(tensor)
+
+        def get_size(tensor):
+            nelem = tensor.shape.num_elements()
+            if nelem is None:
+                nelem = tf.reduce_prod(tf.shape(tensor)).numpy()
+            return nelem * tensor.dtype.size
+
+        def clear_mem():
+            # Use GC only to avoid killing Tokenizer resources
+            gc.collect()
+
+        return move_to_cpu, tf_save, get_size, clear_mem
+
+    elif backend == "torch":
+        import torch
+        from safetensors.torch import save_file as torch_save
+
+        def move_to_cpu(tensor):
+            if not isinstance(tensor, torch.Tensor):
+                tensor = torch.as_tensor(tensor)
+            return tensor.detach().cpu()
+
+        def get_size(tensor):
+            return tensor.numel() * tensor.element_size()
+
+        def clear_mem():
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+
+        return move_to_cpu, torch_save, get_size, clear_mem
+
+    elif backend == "jax":
+        import jax
+        from safetensors.flax import save_file as flax_save
+
+        def move_to_cpu(tensor):
+            return jax.device_put(tensor, jax.devices("cpu")[0])
+
+        def get_size(tensor):
+            return tensor.nbytes
+
+        def clear_mem():
+            jax.clear_caches()
+            gc.collect()
+
+        return move_to_cpu, flax_save, get_size, clear_mem
+
+    else:
+        raise ValueError(f"Unsupported Keras backend: {backend}")
+
+
 def export_backbone(backbone, path, include_lm_head=False, max_shard_size=2.0):
     """Export the backbone model to HuggingFace format.
 
@@ -55,8 +124,8 @@ def export_backbone(backbone, path, include_lm_head=False, max_shard_size=2.0):
     if model_type not in MODEL_TRANSFORMERS:
         raise ValueError(f"Transformations not implemented for {model_type}")
 
-    def to_numpy(tensor):
-        return tensor.numpy()
+    # 1. Get Native Tools
+    move_to_cpu, save_fn, get_size, clear_mem = get_native_tools()
 
     # Get config
     get_config_fn = MODEL_CONFIGS[model_type]
@@ -69,7 +138,7 @@ def export_backbone(backbone, path, include_lm_head=False, max_shard_size=2.0):
     # Get model-specific transform function
     get_transform_fn = MODEL_TRANSFORMERS[model_type]
     transform_fn = get_transform_fn(backbone)
-    # Single pass: dynamic sharding based on actual NumPy sizes,
+    # Single pass: dynamic sharding based on actual tensor sizes,
     # processing one tensor at a time
 
     get_weights_fn = MODEL_EXPORTERS[model_type]
@@ -83,11 +152,17 @@ def export_backbone(backbone, path, include_lm_head=False, max_shard_size=2.0):
     total_size_bytes = 0
     temp_shard_files = []
     current_temp_file = None
+
     for name, backend_tensor in weights_generator:
-        np_tensor = to_numpy(backend_tensor)
-        np_tensor = transform_fn(name, np_tensor)  # Model-specific transform
-        tensor_size_gb = np_tensor.nbytes / (1024**3)
-        total_size_bytes += np_tensor.nbytes
+        # Move to CPU (Preserving dtype)
+        cpu_tensor = move_to_cpu(backend_tensor)
+        # Model-specific transform
+        cpu_tensor = transform_fn(name, cpu_tensor)
+
+        tensor_size_bytes = get_size(cpu_tensor)
+        tensor_size_gb = tensor_size_bytes / (1024**3)
+        total_size_bytes += tensor_size_bytes
+
         if (
             current_size_gb + tensor_size_gb > max_shard_size
             and current_shard_dict
@@ -95,9 +170,7 @@ def export_backbone(backbone, path, include_lm_head=False, max_shard_size=2.0):
             # Save current shard as temp
             current_temp_file = f"temp_shard_{shard_num}.safetensors"
             weights_path = os.path.join(path, current_temp_file)
-            save_file(
-                current_shard_dict, weights_path, metadata={"format": "pt"}
-            )
+            save_fn(current_shard_dict, weights_path, metadata={"format": "pt"})
             temp_shard_files.append(
                 (current_temp_file, list(current_shard_dict.keys()))
             )
@@ -105,18 +178,23 @@ def export_backbone(backbone, path, include_lm_head=False, max_shard_size=2.0):
             current_shard_dict = {}
             current_size_gb = 0.0
             shard_num += 1
-        current_shard_dict[name] = np_tensor
+            clear_mem()
+
+        current_shard_dict[name] = cpu_tensor
         current_size_gb += tensor_size_gb
-        del np_tensor  # Explicitly del to aid GC after adding to shard
+        del cpu_tensor  # Explicitly del to aid GC after adding to shard
+
     # Save last shard
     if current_shard_dict:
         current_temp_file = f"temp_shard_{shard_num}.safetensors"
         weights_path = os.path.join(path, current_temp_file)
-        save_file(current_shard_dict, weights_path, metadata={"format": "pt"})
+        save_fn(current_shard_dict, weights_path, metadata={"format": "pt"})
         temp_shard_files.append(
             (current_temp_file, list(current_shard_dict.keys()))
         )
         del current_shard_dict
+        clear_mem()
+
     num_shards = shard_num
     # Rename temp files to final format and build weight_map
     for i, (temp_file, keys) in enumerate(temp_shard_files, 1):
@@ -187,17 +265,15 @@ def export_to_safetensors(keras_model, path, max_shard_size=2.0):
           config and tokenizer will be saved.
         max_shard_size: float. Maximum size in GB for each shard during export.
     """
+    if keras_model.preprocessor is not None:
+        if keras_model.preprocessor.tokenizer is None:
+            raise ValueError(
+                "CausalLM preprocessor must have a tokenizer for export "
+                "if attached."
+            )
+        export_tokenizer(keras_model.preprocessor.tokenizer, path)
+
     backbone = keras_model.backbone
     export_backbone(
         backbone, path, include_lm_head=True, max_shard_size=max_shard_size
     )
-    if (
-        keras_model.preprocessor is not None
-        and keras_model.preprocessor.tokenizer is None
-    ):
-        raise ValueError(
-            "CausalLM preprocessor must have a tokenizer for export "
-            "if attached."
-        )
-    if keras_model.preprocessor is not None:
-        export_tokenizer(keras_model.preprocessor.tokenizer, path)
