@@ -1,17 +1,3 @@
-# Copyright 2024 The KerasNLP Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import keras
 from keras import ops
 
@@ -35,15 +21,15 @@ class GptOssExperts(keras.layers.Layer):
     paper. It uses a custom GLU activation.
 
     Args:
-        num_experts (int): The total number of experts.
-        hidden_dim (int): The hidden size of the model.
-        intermediate_dim (int): The intermediate size of the feed-forward
+        num_experts: int. The total number of experts.
+        hidden_dim: int. The hidden size of the model.
+        intermediate_dim: int. The intermediate size of the feed-forward
             network.
-        kernel_initializer (str, optional): The initializer for the kernel
+        kernel_initializer: string. The initializer for the kernel
             weights. Defaults to "glorot_uniform".
-        alpha (float, optional): The alpha parameter for the custom GLU
+        alpha: float. The alpha parameter for the custom GLU
             activation. Defaults to 1.702.
-        limit (float, optional): The clamping limit for gate and up
+        limit: float. The clamping limit for gate and up
             projections. Defaults to 7.0.
     """
 
@@ -122,9 +108,9 @@ class GptOssTopKRouter(keras.layers.Layer):
     """A layer for routing tokens to the top-k experts.
 
     Args:
-        num_experts (int): The total number of experts.
-        top_k (int): The number of experts to route each token to.
-        kernel_initializer (str, optional): The initializer for the kernel
+        num_experts: int. The total number of experts.
+        top_k: int. The number of experts to route each token to.
+        kernel_initializer: string. The initializer for the kernel
             weights. Defaults to "glorot_uniform".
     """
 
@@ -180,13 +166,13 @@ class GptOssSparseMoeBlock(keras.layers.Layer):
     the MoE layer.
 
     Args:
-        hidden_dim (int): The hidden size of the model.
-        intermediate_dim (int): The intermediate size of the feed-forward
+        hidden_dim: int. The hidden size of the model.
+        intermediate_dim: int. The intermediate size of the feed-forward
             network.
-        num_experts (int): The total number of experts.
-        top_k (int, optional): The number of experts to route each token to.
+        num_experts: int. The total number of experts.
+        top_k: int. The number of experts to route each token to.
             Defaults to 2.
-        kernel_initializer (str, optional): The initializer for the kernel
+        kernel_initializer: string. The initializer for the kernel
             weights. Defaults to "glorot_uniform".
     """
 
@@ -263,27 +249,27 @@ class GptOssTransformerDecoder(keras.layers.Layer):
     model, which includes self-attention and a sparse MoE block.
 
     Args:
-        intermediate_dim (int): The intermediate size of the feed-forward
+        intermediate_dim: int. The intermediate size of the feed-forward
             network.
-        num_query_heads (int): The number of query attention heads.
-        num_key_value_heads (int): The number of key and value attention
+        num_query_heads: int. The number of query attention heads.
+        num_key_value_heads: int. The number of key and value attention
             heads.
-        num_experts (int): The total number of experts in the MoE layer.
-        top_k (int, optional): The number of experts to route each token to.
+        num_experts: int. The total number of experts in the MoE layer.
+        top_k: int. The number of experts to route each token to.
             Defaults to 2.
-        output_router_logits (bool, optional): If True, the router logits will
+        output_router_logits: bool. If True, the router logits will
             be returned by the layer. Defaults to False.
-        rope_max_wavelength (int, optional): The maximum wavelength for the
+        rope_max_wavelength: int. The maximum wavelength for the
             rotary position embedding. Defaults to 10000.
-        rope_scaling_factor (float, optional): The scaling factor for the
+        rope_scaling_factor: float. The scaling factor for the
             rotary position embedding. Defaults to 1.0.
-        layer_norm_epsilon (float, optional): The epsilon for layer
+        layer_norm_epsilon: float. The epsilon for layer
             normalization. Defaults to 1e-6.
-        kernel_initializer (str, optional): The initializer for the kernel
+        kernel_initializer: string. The initializer for the kernel
             weights. Defaults to "glorot_uniform".
-        sliding_window (int, optional): The size of the sliding window for
+        sliding_window: int. The size of the sliding window for
             attention. Defaults to 4096.
-        dropout (float, optional): The dropout rate. Defaults to 0.
+        dropout: float. The dropout rate. Defaults to 0.
     """
 
     def __init__(

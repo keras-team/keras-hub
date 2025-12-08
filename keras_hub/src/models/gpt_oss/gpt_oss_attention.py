@@ -1,17 +1,3 @@
-# Copyright 2024 The KerasHub Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import math
 
 import keras
@@ -30,19 +16,19 @@ class GptOssAttention(keras.layers.Layer):
     long sequences.
 
     Args:
-        num_query_heads (int): The number of query attention heads.
-        num_key_value_heads (int): The number of key and value attention
+        num_query_heads: int. The number of query attention heads.
+        num_key_value_heads: int. The number of key and value attention
             heads.
-        rope_max_wavelength (int, optional): The maximum wavelength for the
+        rope_max_wavelength: int. The maximum wavelength for the
             rotary position embedding. Defaults to 10000.
-        rope_scaling_factor (float, optional): The scaling factor for the
+        rope_scaling_factor: float. The scaling factor for the
             rotary position embedding. Defaults to 1.0.
-        kernel_initializer (str, optional): The initializer for the kernel
+        kernel_initializer: str. The initializer for the kernel
             weights. Defaults to "glorot_uniform".
-        sliding_window (int, optional): The size of the sliding window.
+        sliding_window: int. The size of the sliding window.
             Defaults to 4096.
-        dropout (float, optional): The dropout rate. Defaults to 0.
-        head_dim (int, optional): Head dimension for attention. If None,
+        dropout: float. The dropout rate. Defaults to 0.
+        head_dim: int. Head dimension for attention. If None,
             calculated as hidden_dim // num_query_heads. Defaults to None.
     """
 
@@ -64,13 +50,9 @@ class GptOssAttention(keras.layers.Layer):
         self.sliding_window = sliding_window
         self.dropout = dropout
         self.head_dim = head_dim
-        self.rope_max_wavelength = (
-            rope_max_wavelength  # Needed for RotaryEmbedding
-        )
+        self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
-
         self.num_key_value_groups = num_query_heads // num_key_value_heads
-
         self._kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
@@ -80,7 +62,7 @@ class GptOssAttention(keras.layers.Layer):
         # b = batch size
         # q = query length
         # k = key/value length
-        # m = model dim
+        # m = the model's hidden_dim
         # u = num query heads
         # v = num key/value heads
         # h = head dim

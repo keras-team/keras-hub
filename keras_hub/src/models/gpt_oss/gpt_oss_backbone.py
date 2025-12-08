@@ -1,17 +1,3 @@
-# Copyright 2024 The KerasHub Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
@@ -47,35 +33,35 @@ class GptOssBackbone(Backbone):
     constructor.
 
     Args:
-        vocabulary_size (int): The size of the token vocabulary.
-        num_layers (int): The number of transformer layers.
-        num_query_heads (int): The number of query attention heads for
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_query_heads: int. The number of query attention heads for
             each transformer.
-        hidden_dim (int): The size of the transformer encoding and pooling
+        hidden_dim: int. The size of the transformer encoding and pooling
             layers.
-        intermediate_dim (int): The output dimension of the first Dense layer
+        intermediate_dim: int. The output dimension of the first Dense layer
             in a three-layer feedforward network for each transformer.
-        num_key_value_heads (int): The number of key and value attention heads
+        num_key_value_heads: int. The number of key and value attention heads
             for each transformer.
-        num_experts (int): The number of experts for the MoE layers.
-        top_k (int, optional): The number of experts to use for each token.
-            Defaults to `2`.
-        rope_max_wavelength (int, optional): The maximum angular wavelength of
-            the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
-        rope_scaling_factor (float, optional): The scaling factor for
-            calculation of roatary embedding. Defaults to `1.0`.
-        layer_norm_epsilon (float, optional): Epsilon for the layer
-            normalization layers in the transformer decoder. Defaults to `1e-6`.
-        sliding_window (int, optional): The sliding window for the attention
+        num_experts: int. The number of experts for the MoE layers.
+        top_k: int. The number of experts to use for each token.
+            Defaults to 2.
+        rope_max_wavelength: int. The maximum angular wavelength of
+            the sine/cosine curves, for rotary embeddings. Defaults to 10000.
+        rope_scaling_factor: float. The scaling factor for
+            calculation of roatary embedding. Defaults to 1.0.
+        layer_norm_epsilon: float. Epsilon for the layer
+            normalization layers in the transformer decoder. Defaults to 1e-6.
+        sliding_window: int. The sliding window for the attention
             layers. This controls the maximum cache size for the attention
             layers in each transformer decoder. Only `sliding_window` number
             of tokens are saved in the cache and used to generate the next
-            token. Defaults to `4096`.
-        head_dim (int, optional): Head dimension for attention layers. This
+            token. Defaults to 4096.
+        head_dim: int. Head dimension for attention layers. This
             parameter is accepted for HuggingFace compatibility but ignored.
             The head dimension is calculated dynamically as hidden_dim //
             num_query_heads. Defaults to `None`.
-        **kwargs: Additional keyword arguments.
+        dropout: float. Attention dropout probability.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -126,10 +112,10 @@ class GptOssBackbone(Backbone):
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
         sliding_window=4096,
-        dropout=0,
-        dtype=None,
-        output_router_logits=False,
         head_dim=None,
+        dropout=0,
+        output_router_logits=False,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===

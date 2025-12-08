@@ -1,17 +1,3 @@
-# Copyright 2024 The KerasHub Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
 """
 A conversion script for gpt_oss checkpoints.
 
@@ -23,7 +9,6 @@ python convert_gpt_oss_checkpoints.py --preset=gpt_oss_8x7b_en
 """
 
 import os
-import traceback
 
 os.environ["KERAS_BACKEND"] = "torch"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Hide any CUDA devices
@@ -32,11 +17,11 @@ import numpy as np
 import torch
 from absl import app
 from absl import flags
-from keras import ops  # noqa: E402
-from transformers import AutoModelForCausalLM  # noqa: E402
-from transformers import AutoTokenizer  # noqa: E402
+from keras import ops
+from transformers import AutoModelForCausalLM
+from transformers import AutoTokenizer
 
-import keras_hub  # noqa: E402
+import keras_hub
 
 device = torch.device("cpu")
 # Force PyTorch to use CPU
@@ -44,7 +29,7 @@ torch.set_default_device(device)
 
 PRESET_MAP = {
     "gpt_oss_20b_en": "openai/gpt-oss-20b",
-    # "gpt_oss_instruct_8x7b_en": "openai/gpt-oss-20b",
+    "gpt_oss_120b_en": "openai/gpt-oss-120b",
 }
 
 FLAGS = flags.FLAGS
@@ -122,6 +107,18 @@ def main(_):
 
     hf_params = hf_model.num_parameters()
     hf_output_logits = compute_hf_output(hf_model, hf_tokenizer)
+
+    generate_length = 32
+    hf_inputs = hf_tokenizer(["What is Keras?"], return_tensors="pt").to(device)
+    outputs = hf_model.generate(
+        **hf_inputs,
+        max_length=generate_length,
+        pad_token_id=hf_tokenizer.pad_token_id,
+        do_sample=False,
+    )
+    hf_generated_text = hf_tokenizer.batch_decode(
+        outputs, skip_special_tokens=True
+    )[0]
     print("\n -> Computed HF outputs successfully")
 
     del hf_model, hf_tokenizer
@@ -134,65 +131,15 @@ def main(_):
     print("\n-> Parameter count comparison:")
     print(f"   HuggingFace model: {hf_params:,}")
     print(f"   KerasHub model: {keras_hub_params:,}")
-    print(f"   Difference: {abs(keras_hub_params - hf_params):,}")
-
-    # Calculate and display percentage difference
-    diff_percentage = (abs(keras_hub_params - hf_params) / hf_params) * 100
-    print(f"   Difference percentage: {diff_percentage:.6f}%")
-
-    # For now, allow small differences and continue with output comparison
-    if (
-        abs(keras_hub_params - hf_params) > 1000000
-    ):  # Only fail if difference > 1M parameters
-        print("   WARNING: Large parameter count difference detected!")
-        assert keras_hub_params == hf_params
-    else:
-        print(
-            " INFO: Small parameter count difference, "
-            "continuing with output comparison..."
-        )
+    assert keras_hub_params == hf_params
 
     keras_hub_output_logits = compute_keras_output(
         keras_hub_backbone, keras_hub_tokenizer
     )
 
-    # Add detailed debugging information
-    print("\n-> Output comparison:")
-    print(f"   HF output shape: {hf_output_logits.shape}")
-    print(f"   KH output shape: {keras_hub_output_logits.shape}")
-    print(
-        f"HF output stats: min={hf_output_logits.min():.6f}, "
-        f"max={hf_output_logits.max():.6f}, "
-        f"mean={hf_output_logits.mean():.6f}"
+    np.testing.assert_allclose(
+        keras_hub_output_logits, hf_output_logits, atol=1e-4
     )
-    print(
-        f"KH output stats: min={keras_hub_output_logits.min():.6f}, "
-        f"max={keras_hub_output_logits.max():.6f}, "
-        f"mean={keras_hub_output_logits.mean():.6f}"
-    )
-
-    # Calculate difference statistics
-    if hf_output_logits.shape == keras_hub_output_logits.shape:
-        diff = np.abs(hf_output_logits - keras_hub_output_logits)
-        print(
-            f"Absolute difference stats: min={diff.min():.6f}, "
-            f"max={diff.max():.6f}, "
-            f"mean={diff.mean():.6f}"
-        )
-        print(
-            f"Number of mismatched elements: "
-            f"{np.sum(diff > 1e-3)} / {diff.size}"
-        )
-
-    try:
-        np.testing.assert_allclose(
-            keras_hub_output_logits, hf_output_logits, atol=1e-3
-        )
-    except AssertionError as err:
-        print("\n")
-        print(traceback.format_exc())
-        print(err.args[0])
-        print("\n")
 
     print("\n-> Tests passed!")
 
@@ -202,6 +149,14 @@ def main(_):
     keras_hub_model = keras_hub.models.GptOssCausalLM(
         keras_hub_backbone, preprocessor
     )
+
+    keras_hub_model.compile(sampler="greedy")
+    keras_output = keras_hub_model.generate(
+        ["What is Keras?"], max_length=generate_length
+    )
+    keras_output = keras_output[0]
+    print("🔶 KerasHub output:", keras_output)
+    print("🔶 Huggingface output:", hf_generated_text)
 
     keras_hub_model.save_to_preset(f"./{preset}")
 
