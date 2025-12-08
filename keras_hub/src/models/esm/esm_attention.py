@@ -33,7 +33,11 @@ class ESMRotaryEmbedding(RotaryEmbedding):
 
     def rotate_half(self, x):
         x1, x2 = ops.split(x, 2, -1)
-        return ops.concatenate((-x2, x1), axis=-1)
+        # Avoid `ops.concatenate` to prevent XLA compilation issues on JAX
+        # backend. Use stack + reshape approach from base RotaryEmbedding.
+        half_rot_x = ops.stack((-x2, x1), axis=-2)
+        half_rot_x = ops.reshape(half_rot_x, ops.shape(x))
+        return half_rot_x
 
     def apply_rotary_pos_emb(self, x, cos, sin):
         # Use ops.shape for dynamic shape compatibility with TFLite
