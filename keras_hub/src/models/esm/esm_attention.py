@@ -14,7 +14,8 @@ class ESMRotaryEmbedding(RotaryEmbedding):
         inv_freq = self.scaling_factor / (
             self.max_wavelength ** (ops.arange(0, dim, 2, dtype=x.dtype) / dim)
         )
-        t = ops.arange(x.shape[position], dtype=x.dtype)
+        # Use ops.shape for dynamic shape compatibility with TFLite
+        t = ops.arange(ops.shape(x)[position], dtype=x.dtype)
         freqs = ops.outer(t, inv_freq)
         emb = ops.concatenate((freqs, freqs), axis=-1)
 
@@ -35,8 +36,10 @@ class ESMRotaryEmbedding(RotaryEmbedding):
         return ops.concatenate((-x2, x1), axis=-1)
 
     def apply_rotary_pos_emb(self, x, cos, sin):
-        cos = cos[:, : x.shape[1], :, :]
-        sin = sin[:, : x.shape[1], :, :]
+        # Use ops.shape for dynamic shape compatibility with TFLite
+        seq_len = ops.shape(x)[1]
+        cos = cos[:, :seq_len, :, :]
+        sin = sin[:, :seq_len, :, :]
 
         return (x * cos) + (self.rotate_half(x) * sin)
 
