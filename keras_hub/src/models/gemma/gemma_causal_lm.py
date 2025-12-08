@@ -431,3 +431,19 @@ class GemmaCausalLM(CausalLM):
         )
         per_token_loss = per_token_loss_fn(target_ids, logits)
         return per_token_loss
+
+    def get_quantization_layer_structure(self, mode):
+        if mode != "gptq":
+            return None
+
+        # Wrap embedding + scaling
+        backbone = self.backbone
+        inputs = keras.Input(shape=(None,), dtype="int32")
+        x = backbone.token_embedding(inputs)
+        x = x * ops.cast(ops.sqrt(backbone.hidden_dim), x.dtype)
+        pre_processor = keras.Model(inputs=inputs, outputs=x)
+
+        return {
+            "pre_block_layers": [pre_processor],
+            "sequential_blocks": backbone.transformer_layers,
+        }

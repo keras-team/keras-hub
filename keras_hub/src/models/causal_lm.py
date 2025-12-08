@@ -429,3 +429,25 @@ class CausalLM(Task):
         super()._post_quantize(mode, **kwargs)
         # Reset the compiled generate function.
         self.generate_function = None
+
+    def get_quantization_layer_structure(self, mode):
+        if mode != "gptq":
+            return None
+
+        backbone = self.backbone
+        # Check for standard backbone structure.
+        if not hasattr(backbone, "transformer_layers"):
+            return None
+
+        # Check for embedding.
+        embedding = getattr(backbone, "token_embedding", None)
+        if embedding is None:
+            embedding = getattr(backbone, "embedding", None)
+
+        if embedding is None:
+            return None
+
+        return {
+            "pre_block_layers": [embedding],
+            "sequential_blocks": backbone.transformer_layers,
+        }
