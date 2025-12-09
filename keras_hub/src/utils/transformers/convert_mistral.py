@@ -113,4 +113,6 @@ def convert_weights(backbone, loader, transformers_config):
 
 
 def convert_tokenizer(cls, preset, **kwargs):
+    if "devstral" in preset.lower():
+        preset = "mistralai/Mistral-Small-24B-Base-2501"
     return cls(get_file(preset, "tokenizer.model"), **kwargs)

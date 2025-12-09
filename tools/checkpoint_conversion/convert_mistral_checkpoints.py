@@ -240,7 +240,10 @@ def main(_):
         )
         keras_hub_backbone = MistralBackbone(**backbone_kwargs)
 
-        keras_hub_tokenizer = MistralTokenizer.from_preset(f"hf://{hf_preset}")
+        if "devstral" in hf_preset.lower():
+            keras_hub_tokenizer = MistralTokenizer.from_preset(f"hf://mistralai/Mistral-Small-24B-Base-2501")
+        else:
+            keras_hub_tokenizer = MistralTokenizer.from_preset(f"hf://{hf_preset}")
         print("\n-> Keras 3 model and tokenizer loaded.")
 
         # === Port the weights ===
