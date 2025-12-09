@@ -1,7 +1,6 @@
 from unittest.mock import patch
 
 import pytest
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
@@ -123,8 +122,8 @@ class Llama3CausalLMTest(TestCase):
         # Convert boolean padding_mask to int32 for LiteRT compatibility
         input_data = self.input_data.copy()
         if "padding_mask" in input_data:
-            input_data["padding_mask"] = tf.cast(
-                input_data["padding_mask"], tf.int32
+            input_data["padding_mask"] = ops.cast(
+                input_data["padding_mask"], "int32"
             )
 
         expected_output_shape = (
