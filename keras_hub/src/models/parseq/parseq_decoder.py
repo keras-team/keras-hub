@@ -371,15 +371,21 @@ class PARSeqDecoder(keras.layers.Layer):
         # (bs, tokens_length, hidden_dim) shape even when tokens_length == 1.
         # Use ops.maximum to ensure non-negative slice length when
         # tokens_length is 0.
-        c = self.pos_query_embeddings[:, : ops.maximum(0, tokens_length - 1), :]
+        slice_length = ops.maximum(0, tokens_length - 1)
+        indices = ops.arange(slice_length)
+        c_pos = ops.take(self.pos_query_embeddings[0], indices, axis=0)
+        c = ops.expand_dims(c_pos, axis=0)
         c = c + self.hidden_dim**0.5 * self.token_embedding(token_ids[:, 1:])
         content = ops.concatenate([null_context, c], axis=1)
 
         content = self.dropout(content)
 
+        indices = ops.arange(tokens_length)
+        query_pos = ops.take(self.pos_query_embeddings[0], indices, axis=0)
+        query_pos = ops.expand_dims(query_pos, axis=0)
         query = ops.multiply(
             ops.ones((bs, 1, 1), dtype=self.dtype),
-            self.pos_query_embeddings[:, :tokens_length, :],
+            query_pos,
         )
         query = self.dropout(query)
 
