@@ -60,7 +60,7 @@ class RetinaNetObjectDetectorTest(TestCase):
         )
 
         image_converter = RetinaNetImageConverter(
-            bounding_box_format="yxyx", scale=1 / 255.0, image_size=(800, 800)
+            bounding_box_format="yxyx", scale=1 / 255.0, image_size=(512, 512)
         )
 
         preprocessor = RetinaNetObjectDetectorPreprocessor(
@@ -76,7 +76,7 @@ class RetinaNetObjectDetectorTest(TestCase):
             "preprocessor": preprocessor,
         }
 
-        self.input_size = 800
+        self.input_size = 512
         self.images = np.random.uniform(
             low=0, high=255, size=(1, self.input_size, self.input_size, 3)
         ).astype("float32")
