@@ -36,7 +36,7 @@ class GptOssCausalLMPreprocessorTest(TestCase):
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
                 },
                 [[3, 4, 2, 5, 7, 0, 0, 0]],  # Pass through labels.
-                [[1, 1, 1, 1, 1, 1, 0, 0]],  # Pass through sample_weights.
+                [[1, 1, 1, 1, 1, 0, 0, 0]],  # Pass through sample_weights.
             ),
         )
 
