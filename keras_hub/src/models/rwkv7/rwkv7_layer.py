@@ -221,14 +221,17 @@ class RWKV7_TimeMix(Layer):
 
         self.RWKV7_OP = rnn_generalized_delta_rule
         self.RWKV7_OP_RNN = rnn_generalized_delta_rule
+        self.RWKV7_OP_INFERENCE = rnn_generalized_delta_rule
         if keras.config.backend() in ["torch", "jax"]:
             # only torch and jax support cuda kernel speedup
             try:
                 from rwkv_ops import rwkv7_op
+                from rwkv_ops import rwkv7_op_inference
                 from rwkv_ops import rwkv7_op_rnn
 
                 self.RWKV7_OP = rwkv7_op
                 # faster inference op
+                self.RWKV7_OP_INFERENCE = rwkv7_op_inference
                 self.RWKV7_OP_RNN = rwkv7_op_rnn
             except ImportError:
                 warnings.warn(
@@ -384,6 +387,7 @@ class RWKV7_TimeMix(Layer):
         cache_state=None,
         rnn_mode=False,
         train_mode=True,
+        training=None,
     ):
         """Process input through time mixer.
 
@@ -455,11 +459,13 @@ class RWKV7_TimeMix(Layer):
         k = k * (1 + (a - 1) * self.k_a)
         if padding_mask is not None:
             w = ops.where(padding_mask, w, -1e9)
-        if rnn_mode:
+        if training:
+            rwkv7_op = self.RWKV7_OP
+        elif rnn_mode:
             # T=1，single step
             rwkv7_op = self.RWKV7_OP_RNN
         else:
-            rwkv7_op = self.RWKV7_OP
+            rwkv7_op = self.RWKV7_OP_INFERENCE
 
         x, final_state = rwkv7_op(
             ops.reshape(r, (B, T, self.n_head, self.head_size)),
@@ -651,6 +657,7 @@ class RWKV7_Block(Layer):
             cache_state=cache_state,
             rnn_mode=rnn_mode,
             train_mode=train_mode,
+            training=False,
         )
         x = ops.cast(x, xx.dtype) + xx
         xx = self.ln2(x)
