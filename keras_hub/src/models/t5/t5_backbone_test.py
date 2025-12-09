@@ -1,4 +1,5 @@
 import pytest
+import keras
 from keras import ops
 
 from keras_hub.src.models.t5.t5_backbone import T5Backbone
@@ -41,6 +42,10 @@ class T5BackboneTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="LiteRT export only supports TensorFlow backend.",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=T5Backbone,

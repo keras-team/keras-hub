@@ -1,4 +1,5 @@
 import pytest
+import keras
 
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone
 from keras_hub.src.models.esm.esm_classifier import ESMProteinClassifier
@@ -54,7 +55,7 @@ class ESMProteinClassifierTest(TestCase):
 
     @pytest.mark.large
     @pytest.mark.skipif(
-        __import__("keras").backend.backend() != "tensorflow",
+        keras.backend.backend() != "tensorflow",
         reason="LiteRT export only supports TensorFlow backend.",
     )
     def test_litert_export(self):

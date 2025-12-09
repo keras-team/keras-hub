@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import keras
 
 from keras_hub.src.models.vit_det.vit_det_backbone import ViTDetBackbone
 from keras_hub.src.tests.test_case import TestCase
@@ -39,6 +40,10 @@ class ViTDetBackboneTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="LiteRT export only supports TensorFlow backend.",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=ViTDetBackbone,
