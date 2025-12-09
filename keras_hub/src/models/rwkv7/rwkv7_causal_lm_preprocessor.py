@@ -163,10 +163,6 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
             raise ValueError("`sequence_length` must be specified.")
         sequence_length = self.sequence_length
 
-        # Pad length to multiples of 16 to meet kernel requirements
-        if sequence_length % 16 != 0:
-            sequence_length = sequence_length + (16 - sequence_length % 16)
-
         x = [t[-sequence_length:] for t in self.tokenizer(x)]
         y = tf.zeros((len(x), generate_length), "int32")
         # Utilize RNN characteristics where prefill and decode are two sequences
