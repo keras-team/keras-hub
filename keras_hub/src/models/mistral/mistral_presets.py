@@ -44,7 +44,7 @@ backbone_presets = {
     },
     "devstral_small_1_1": {
         "metadata": {
-            "description": "Devstral Small 1.1 finetuned from Mistral-Small-3.1 24B base model",
+            "description": "Devstral Small 1.1 24B finetuned base model",
             "params": 23572403200,
             "path": "devstral_small_1_1",
         },
