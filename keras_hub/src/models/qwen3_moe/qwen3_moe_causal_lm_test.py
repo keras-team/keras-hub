@@ -121,7 +121,6 @@ class Qwen3MoeCausalLMTest(TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.large
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=Qwen3MoeCausalLM,
