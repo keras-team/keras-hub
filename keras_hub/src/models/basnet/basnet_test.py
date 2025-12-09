@@ -1,6 +1,6 @@
+import keras
 import numpy as np
 import pytest
-import keras
 
 from keras_hub.src.models.basnet.basnet import BASNetImageSegmenter
 from keras_hub.src.models.basnet.basnet_backbone import BASNetBackbone

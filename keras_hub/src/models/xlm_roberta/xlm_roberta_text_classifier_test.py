@@ -1,5 +1,6 @@
 import os
 
+import keras
 import pytest
 
 from keras_hub.src.models.xlm_roberta.xlm_roberta_backbone import (
@@ -65,6 +66,10 @@ class XLMRobertaTextClassifierTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="LiteRT export only supports TensorFlow backend.",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=XLMRobertaTextClassifier,

@@ -1,6 +1,6 @@
+import keras
 import numpy as np
 import pytest
-import keras
 
 from keras_hub.src.models.depth_anything.depth_anything_backbone import (
     DepthAnythingBackbone,

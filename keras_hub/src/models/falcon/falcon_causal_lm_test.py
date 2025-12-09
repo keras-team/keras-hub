@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
-import pytest
 import keras
+import pytest
 from keras import ops
 
 from keras_hub.src.models.falcon.falcon_backbone import FalconBackbone

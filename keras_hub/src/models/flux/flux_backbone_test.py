@@ -1,5 +1,5 @@
-import pytest
 import keras
+import pytest
 from keras import ops
 
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder

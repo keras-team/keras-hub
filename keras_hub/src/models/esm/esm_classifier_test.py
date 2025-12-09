@@ -1,5 +1,5 @@
-import pytest
 import keras
+import pytest
 
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone
 from keras_hub.src.models.esm.esm_classifier import ESMProteinClassifier

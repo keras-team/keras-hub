@@ -1,6 +1,6 @@
+import keras
 import numpy as np
 import pytest
-import keras
 
 from keras_hub.src.models.vit_det.vit_det_backbone import ViTDetBackbone
 from keras_hub.src.tests.test_case import TestCase

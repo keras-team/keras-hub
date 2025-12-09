@@ -1,7 +1,7 @@
 import os
 
-import pytest
 import keras
+import pytest
 
 from keras_hub.src.models.f_net.f_net_backbone import FNetBackbone
 from keras_hub.src.models.f_net.f_net_text_classifier import FNetTextClassifier
