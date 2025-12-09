@@ -154,10 +154,6 @@ class DFineObjectDetectorTest(TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="LiteRT export only supports TensorFlow backend.",
-    )
     def test_litert_export(self):
         backbone = DFineBackbone(**self.base_backbone_kwargs)
         init_kwargs = {

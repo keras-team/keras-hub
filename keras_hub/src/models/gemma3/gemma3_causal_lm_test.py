@@ -227,10 +227,6 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="LiteRT export only supports TensorFlow backend.",
-    )
     def test_litert_export(self):
         """Test LiteRT export for Gemma3CausalLM with small test model."""
         # Use the small text-only model for fast testing
@@ -259,10 +255,6 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="LiteRT export only supports TensorFlow backend.",
-    )
     def test_litert_export_multimodal(self):
         """Test LiteRT export for multimodal Gemma3CausalLM with small test
         model."""

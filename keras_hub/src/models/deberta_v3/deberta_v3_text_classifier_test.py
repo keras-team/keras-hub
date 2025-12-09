@@ -1,6 +1,5 @@
 import os
 
-import keras
 import pytest
 
 from keras_hub.src.models.deberta_v3.deberta_v3_backbone import (
@@ -66,10 +65,6 @@ class DebertaV3TextClassifierTest(TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="LiteRT export only supports TensorFlow backend.",
-    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=DebertaV3TextClassifier,

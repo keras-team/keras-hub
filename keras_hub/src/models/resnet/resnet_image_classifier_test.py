@@ -1,4 +1,3 @@
-import keras
 import pytest
 from keras import ops
 
@@ -67,10 +66,6 @@ class ResNetImageClassifierTest(TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="LiteRT export only supports TensorFlow backend.",
-    )
     def test_litert_export(self):
         """Test LiteRT export for ResNetImageClassifier with small test
         model."""

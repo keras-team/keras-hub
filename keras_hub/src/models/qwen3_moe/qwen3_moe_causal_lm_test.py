@@ -3,7 +3,6 @@ from unittest.mock import patch
 
 os.environ["KERAS_BACKEND"] = "jax"
 
-import keras
 import pytest
 from keras import ops
 
@@ -123,10 +122,6 @@ class Qwen3MoeCausalLMTest(TestCase):
 
     @pytest.mark.large
     @pytest.mark.large
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="LiteRT export only supports TensorFlow backend.",
-    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=Qwen3MoeCausalLM,

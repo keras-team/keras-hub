@@ -1,6 +1,5 @@
 import os
 
-import keras
 import pytest
 
 from keras_hub.src.models.f_net.f_net_backbone import FNetBackbone
@@ -59,10 +58,6 @@ class FNetTextClassifierTest(TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="LiteRT export only supports TensorFlow backend.",
-    )
     def test_litert_export(self):
         # F-Net does NOT use padding_mask - it only uses token_ids and
         # segment_ids. Don't add padding_mask to input_data.

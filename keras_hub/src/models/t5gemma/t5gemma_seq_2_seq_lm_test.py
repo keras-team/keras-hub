@@ -157,10 +157,6 @@ class T5GemmaSeq2SeqLMTest(TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="LiteRT export only supports TensorFlow backend.",
-    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=T5GemmaSeq2SeqLM,

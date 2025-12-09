@@ -1,7 +1,6 @@
 import os
 from unittest.mock import patch
 
-import keras
 import pytest
 from keras import ops
 
@@ -109,10 +108,6 @@ class Phi3CausalLMTest(TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="LiteRT export only supports TensorFlow backend.",
-    )
     def test_litert_export(self):
         """Test LiteRT export for Phi3CausalLM with small test model."""
         model = Phi3CausalLM(**self.init_kwargs)

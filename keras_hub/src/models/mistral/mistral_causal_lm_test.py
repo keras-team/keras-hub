@@ -1,7 +1,6 @@
 import os
 from unittest.mock import patch
 
-import keras
 import pytest
 from keras import ops
 
@@ -108,10 +107,6 @@ class MistralCausalLMTest(TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="LiteRT export only supports TensorFlow backend.",
-    )
     def test_litert_export(self):
         """Test LiteRT export for MistralCausalLM with small test model."""
         model = MistralCausalLM(**self.init_kwargs)

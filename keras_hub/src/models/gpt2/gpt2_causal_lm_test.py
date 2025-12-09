@@ -1,6 +1,5 @@
 from unittest.mock import patch
 
-import keras
 import pytest
 from keras import ops
 
@@ -108,10 +107,6 @@ class GPT2CausalLMTest(TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="LiteRT export only supports TensorFlow backend.",
-    )
     def test_litert_export(self):
         """Test LiteRT export for GPT2CausalLM with small test model."""
         model = GPT2CausalLM(**self.init_kwargs)
