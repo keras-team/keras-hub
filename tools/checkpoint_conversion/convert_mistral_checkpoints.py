@@ -223,8 +223,8 @@ def main(_):
         hf_model = MistralForCausalLM.from_pretrained(hf_preset)
         if "devstral" in hf_preset.lower():
             hf_tokenizer = AutoTokenizer.from_pretrained(
-                "mistralai/Mistral-Small-24B-Base-2501"
-            )
+        if preset == "devstral_small_1_1":
+            hf_tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-Small-24B-Base-2501")
         else:
             hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
         hf_model.eval()
