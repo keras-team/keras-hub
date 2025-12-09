@@ -32,8 +32,8 @@ class GptOssCausalLMPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[6, 1, 3, 4, 2, 5, 7, 0]],
-                    "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 0]],
+                    "token_ids": [[1, 3, 4, 2, 5, 7, 0, 0]],
+                    "padding_mask": [[1, 1, 1, 1, 1, 0, 0, 0]],
                 },
                 [[1, 3, 4, 2, 5, 7, 0, 0]],  # Pass through labels.
                 [[1, 1, 1, 1, 1, 1, 0, 0]],  # Pass through sample_weights.
@@ -61,8 +61,8 @@ class GptOssCausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_preprocess(input_data)
         # `[1, 3, 8, 4, 6]` -> `<s> the quick brown fox`
         # `generate_preprocess` should not add an end token.
-        self.assertAllEqual(x["token_ids"], [6, 1, 3, 4, 2, 5, 0, 0])
-        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0])
+        self.assertAllEqual(x["token_ids"], [1, 3, 4, 2, 5, 0, 0, 0])
+        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
 
     def test_generate_postprocess(self):
         input_data = {
