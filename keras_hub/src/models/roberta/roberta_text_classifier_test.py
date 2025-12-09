@@ -1,4 +1,5 @@
 import pytest
+import keras
 
 from keras_hub.src.models.roberta.roberta_backbone import RobertaBackbone
 from keras_hub.src.models.roberta.roberta_text_classifier import (
@@ -60,6 +61,10 @@ class RobertaTextClassifierTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="LiteRT export only supports TensorFlow backend.",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=RobertaTextClassifier,

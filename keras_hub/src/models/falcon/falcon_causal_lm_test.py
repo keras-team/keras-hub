@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pytest
+import keras
 from keras import ops
 
 from keras_hub.src.models.falcon.falcon_backbone import FalconBackbone
@@ -165,6 +166,10 @@ class FalconCausalLMTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="LiteRT export only supports TensorFlow backend.",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=FalconCausalLM,

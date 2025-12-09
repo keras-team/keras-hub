@@ -1,4 +1,5 @@
 import pytest
+import keras
 from keras import ops
 
 from keras_hub.src.models.vae.vae_backbone import VAEBackbone
@@ -35,6 +36,10 @@ class VAEBackboneTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="LiteRT export only supports TensorFlow backend.",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=VAEBackbone,
