@@ -33,7 +33,7 @@ class GptOssTokenizer(BytePairTokenizer):
             merges: string or list, contains the merge rule.
             **kwargs: Additional keyword arguments.
         """
-        self._add_special_token("<|startoftext|>", "start_token")
+        self.start_token_id = None
         self._add_special_token("<|endoftext|>", "end_token")
         self.pad_token_id = 0
         super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
