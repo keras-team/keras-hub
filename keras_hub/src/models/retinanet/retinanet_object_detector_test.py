@@ -110,10 +110,6 @@ class RetinaNetObjectDetectorTest(TestCase):
         )
 
     @pytest.mark.large
-    @pytest.mark.skipif(
-        keras.backend.backend() != "tensorflow",
-        reason="LiteRT export only supports TensorFlow backend.",
-    )
     def test_litert_export(self):
         # ObjectDetector models need both images and image_shape as inputs
         # ObjectDetector only needs images input (not image_shape)
