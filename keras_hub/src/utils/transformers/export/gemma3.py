@@ -168,7 +168,7 @@ def get_gemma3_tokenizer_config(tokenizer):
         "unk_token": "<unk>",
         "add_bos_token": True,
         "add_eos_token": False,
-        "model_max_length": 32768,
+        "model_max_length": 1000000000000000019884624838656,
     }
     # Add added_tokens_decoder
     added_tokens_decoder = {}
