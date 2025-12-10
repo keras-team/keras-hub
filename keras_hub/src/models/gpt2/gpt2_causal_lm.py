@@ -420,3 +420,20 @@ class GPT2CausalLM(CausalLM):
         )
         per_token_loss = per_token_loss_fn(target_ids, logits)
         return per_token_loss
+
+    def get_quantization_layer_structure(self, mode):
+        if mode != "gptq":
+            return None
+
+        backbone = self.backbone
+        token_ids = keras.Input(shape=(None,), dtype="int32")
+        tokens = backbone.token_embedding(token_ids)
+        positions = backbone.position_embedding(tokens)
+        x = backbone.embeddings_add((tokens, positions))
+        x = backbone.embeddings_dropout(x)
+        pre_processor = keras.Model(inputs=token_ids, outputs=x)
+
+        return {
+            "pre_block_layers": [pre_processor],
+            "sequential_blocks": backbone.transformer_layers,
+        }

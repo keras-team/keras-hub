@@ -115,3 +115,19 @@ class Phi3CausalLMTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+    def test_get_quantization_layer_structure(self):
+        causal_lm = Phi3CausalLM(**self.init_kwargs)
+        structure = causal_lm.get_quantization_layer_structure("gptq")
+        self.assertIsInstance(structure, dict)
+        self.assertIn("pre_block_layers", structure)
+        self.assertIn("sequential_blocks", structure)
+        self.assertEqual(
+            structure["pre_block_layers"],
+            [self.backbone.token_embedding],
+        )
+        self.assertEqual(
+            structure["sequential_blocks"], self.backbone.transformer_layers
+        )
+
+        self.assertIsNone(causal_lm.get_quantization_layer_structure("int8"))
