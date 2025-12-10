@@ -1,14 +1,14 @@
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.dinov2.dinov2_layers import DINOV2Embedding
 from keras_hub.src.models.dinov2.dinov2_layers import DINOV2Encoder
+from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 @keras_hub_export("keras_hub.models.DINOV2Backbone")
-class DINOV2Backbone(Backbone):
+class DINOV2Backbone(FeaturePyramidBackbone):
     """DINOV2 core network with hyperparameters.
 
     DINOV2 offers a powerful, generalist visual backbone learned entirely from
@@ -18,6 +18,10 @@ class DINOV2Backbone(Backbone):
     The default constructor gives a fully customizable, randomly initialized
     DINOV2 model with any number of layers, heads, and embedding dimensions. To
     load preset architectures and weights, use the `from_preset` constructor.
+
+    Note that this backbone is a Feature Pyramid Backbone that can output
+    intermediate feature maps from different stages of the model. See the
+    example below for how to access these feature pyramid outputs.
 
     Note that this backbone supports interpolation of the position embeddings
     to the input image shape. This is useful when the input image shape is
@@ -50,6 +54,8 @@ class DINOV2Backbone(Backbone):
             embeddings to the actual input shape. Defaults to `(518, 518)`.
         antialias_in_interpolation: bool. Whether to use antialiasing in the
             interpolation of the position embeddings. Defaults to `False`.
+        apply_layernorm: bool. Whether to apply layer normalization to the
+            outputs of each stage in the feature pyramid. Defaults to `False`.
         data_format: `None` or str. If specified, either `"channels_last"` or
             `"channels_first"`. The ordering of the dimensions in the
             inputs. `"channels_last"` corresponds to inputs with shape
@@ -95,6 +101,16 @@ class DINOV2Backbone(Backbone):
         position_embedding_shape=(518, 518),
     )
     model(input_data)
+
+    # Accessing feature pyramid outputs.
+    backbone = keras_hub.models.DINOV2Backbone.from_preset(
+        "dinov2_base", image_shape=(224, 224, 3)
+    )
+    model = keras.Model(
+        inputs=backbone.inputs,
+        outputs=backbone.pyramid_outputs,
+    )
+    features = model(input_data)
     ```
     """
 
@@ -114,6 +130,7 @@ class DINOV2Backbone(Backbone):
         image_shape=(224, 224, 3),
         position_embedding_shape=(518, 518, 3),
         antialias_in_interpolation=False,
+        apply_layernorm=False,
         data_format=None,
         dtype=None,
         name=None,
@@ -176,10 +193,16 @@ class DINOV2Backbone(Backbone):
         )
 
         # === Functional Model ===
+        pyramid_outputs = {}
         image_input = layers.Input(shape=image_shape, name="images")
         x = self.embeddings(image_input)
-        x = self.encoder(x)
+        pyramid_outputs["stem"] = x
+        x, encoder_pyramid_outputs = self.encoder(x)
+        pyramid_outputs.update(encoder_pyramid_outputs)
         x = self.layernorm(x)
+        if apply_layernorm:
+            for key in pyramid_outputs:
+                pyramid_outputs[key] = self.layernorm(pyramid_outputs[key])
         outputs = x
         super().__init__(
             inputs={"images": image_input},
@@ -204,6 +227,8 @@ class DINOV2Backbone(Backbone):
         self.image_shape = image_shape
         self.position_embedding_shape = position_embedding_shape
         self.antialias_in_interpolation = bool(antialias_in_interpolation)
+        self.apply_layernorm = apply_layernorm
+        self.pyramid_outputs = pyramid_outputs
 
     def get_config(self):
         config = super().get_config()
@@ -223,6 +248,7 @@ class DINOV2Backbone(Backbone):
                 "image_shape": self.image_shape,
                 "position_embedding_shape": self.position_embedding_shape,
                 "antialias_in_interpolation": self.antialias_in_interpolation,
+                "apply_layernorm": self.apply_layernorm,
             }
         )
         return config

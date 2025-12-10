@@ -12,7 +12,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class TestTask(TestCase):
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_convert_tiny_preset(self):
         model = DistilBertTextClassifier.from_preset(
             "hf://distilbert/distilbert-base-uncased", num_classes=2

@@ -94,3 +94,16 @@ class SinePositionEncodingTest(TestCase):
                 sequential_output, (0, i, 0), parial_output
             )
         self.assertAllClose(full_output, sequential_output)
+
+    def test_positions(self):
+        batch_size, seq_length, feature_size = 2, 2, 4
+        data = random.uniform(shape=(batch_size, seq_length, feature_size))
+        positions = ops.array([[0, 1], [1, 0]])
+
+        layer = SinePositionEncoding()
+        output = layer(data, positions=positions)
+
+        pos_0 = [0.0, 1.0, 0.0, 1.0]
+        pos_1 = [0.84147, 0.54030, 0.009999, 0.99995]
+        expected = [[pos_0, pos_1], [pos_1, pos_0]]
+        self.assertAllClose(expected, output, rtol=1e-5, atol=1e-5)

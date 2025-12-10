@@ -8,7 +8,7 @@ backbone_presets = {
                 "efficiency and fast inference on resource-constrained devices."
             ),
             "params": 596049920,
-            "path": "qwen-3",
+            "path": "qwen3",
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_0.6b_en/1",
     },
@@ -19,7 +19,7 @@ backbone_presets = {
                 "a good balance between performance and resource usage."
             ),
             "params": 1720574976,
-            "path": "qwen-3",
+            "path": "qwen3",
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_1.7b_en/1",
     },
@@ -31,7 +31,7 @@ backbone_presets = {
                 "variants."
             ),
             "params": 4022468096,
-            "path": "qwen-3",
+            "path": "qwen3",
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_4b_en/1",
     },
@@ -43,7 +43,7 @@ backbone_presets = {
                 "capabilities."
             ),
             "params": 8190735360,
-            "path": "qwen-3",
+            "path": "qwen3",
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_8b_en/1",
     },
@@ -54,7 +54,7 @@ backbone_presets = {
                 "advanced reasoning, coding, and multilingual capabilities."
             ),
             "params": 14768307200,
-            "path": "qwen-3",
+            "path": "qwen3",
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_14b_en/1",
     },
@@ -66,8 +66,44 @@ backbone_presets = {
                 "general language tasks."
             ),
             "params": 32762123264,
-            "path": "qwen-3",
+            "path": "qwen3",
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_32b_en/1",
+    },
+    "qwen3_embedding_0.6b_en": {
+        "metadata": {
+            "description": (
+                "This text embedding model features a 32k context length and "
+                "offers flexible, user-defined embedding dimensions that can "
+                "range from 32 to 1024."
+            ),
+            "params": 595776512,
+            "path": "qwen3",
+        },
+        "kaggle_handle": "kaggle://keras/qwen-3-embedding/keras/qwen3_embedding_0.6b_en/1",
+    },
+    "qwen3_embedding_4b_en": {
+        "metadata": {
+            "description": (
+                "This text embedding model features a 32k context length and "
+                "offers flexible, user-defined embedding dimensions that can "
+                "range from 32 to 2560."
+            ),
+            "params": 4021774336,
+            "path": "qwen3",
+        },
+        "kaggle_handle": "kaggle://keras/qwen-3-embedding/keras/qwen3_embedding_4b_en/1",
+    },
+    "qwen3_embedding_8b_en": {
+        "metadata": {
+            "description": (
+                "This text embedding model features a 32k context length and "
+                "offers flexible, user-defined embedding dimensions that can "
+                "range from 32 to 4096."
+            ),
+            "params": 8188515328,
+            "path": "qwen3",
+        },
+        "kaggle_handle": "kaggle://keras/qwen-3-embedding/keras/qwen3_embedding_8b_en/1",
     },
 }

@@ -31,6 +31,11 @@ class PositionEmbedding(keras.layers.Layer):
         start_index: An integer or integer tensor. The starting position to
             compute the position embedding from. This is useful during cached
             decoding, where each position is predicted separately in a loop.
+        positions: Tensor of shape `(sequence_length,)` or
+            `(batch_size, sequence_length)`. Custom positions for the input
+            sequence. If specified, this tensor will be used to
+            compute the position embedding, and the `start_index` argument will
+            be ignored. This is useful for cases with non-standard positions.
 
     Example:
 
@@ -91,18 +96,28 @@ class PositionEmbedding(keras.layers.Layer):
         )
         self.built = True
 
-    def call(self, inputs, start_index=0):
+    def call(self, inputs, start_index=0, positions=None):
         shape = ops.shape(inputs)
         feature_length = shape[-1]
         sequence_length = shape[-2]
         # trim to match the length of the input sequence, which might be less
         # than the sequence_length of the layer.
         position_embeddings = ops.convert_to_tensor(self.position_embeddings)
-        position_embeddings = ops.slice(
-            position_embeddings,
-            (start_index, 0),
-            (sequence_length, feature_length),
-        )
+        if positions is None:
+            position_embeddings = ops.slice(
+                position_embeddings,
+                (start_index, 0),
+                (sequence_length, feature_length),
+            )
+        else:
+            # Take care of unbatched `positions`.
+            if len(ops.shape(positions)) == 1:
+                positions = ops.expand_dims(positions, axis=0)
+
+            position_embeddings = ops.take(
+                position_embeddings, positions, axis=0
+            )
+
         return ops.broadcast_to(position_embeddings, shape)
 
     def compute_output_shape(self, input_shape):

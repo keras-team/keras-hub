@@ -120,11 +120,12 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         )
         return config
 
-    def call(self, inputs, start_index=0):
+    def call(self, inputs, start_index=0, positions=None):
         embedded_tokens = self.token_embedding(inputs)
         embedded_positions = self.position_embedding(
             embedded_tokens,
             start_index=start_index,
+            positions=positions,
         )
         outputs = embedded_tokens + embedded_positions
         return outputs

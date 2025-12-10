@@ -111,8 +111,6 @@ class HGNetV2BackboneTest(TestCase):
             init_kwargs=test_kwargs,
             input_data=self.input_data,
             expected_output_shape=expected_shapes,
-            run_mixed_precision_check=False,
-            run_data_format_check=False,
         )
 
     @pytest.mark.large

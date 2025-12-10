@@ -37,6 +37,11 @@ class RotaryEmbedding(keras.layers.Layer):
         start_index: An integer or integer tensor. The starting position to
             compute the rotary embedding from. This is useful during cached
             decoding, where each position is predicted separately in a loop.
+        positions: Tensor of shape `(sequence_length,)` or
+            `(batch_size, sequence_length)`. Custom positions for the input
+            sequence. If specified, this tensor will be used to
+            compute the rotary embedding, and the `start_index` argument will
+            be ignored. This is useful for cases with non-standard positions.
 
     Examples:
 
@@ -76,6 +81,11 @@ class RotaryEmbedding(keras.layers.Layer):
         self.built = True
 
     def call(self, inputs, start_index=0, positions=None):
+        # Take care of unbatched `positions`.
+        if positions is not None:
+            if len(ops.shape(positions)) == 1:
+                positions = ops.expand_dims(positions, axis=0)
+
         inputs = ops.moveaxis(
             inputs, (self.feature_axis, self.sequence_axis), (-1, 1)
         )
@@ -103,6 +113,7 @@ class RotaryEmbedding(keras.layers.Layer):
         return positions + ops.cast(start_index, dtype="float32")
 
     def _compute_cos_sin_embedding(self, inputs, start_index=0, positions=None):
+        batch_axis = 0
         feature_axis = len(inputs.shape) - 1
         sequence_axis = 1
 
@@ -111,21 +122,20 @@ class RotaryEmbedding(keras.layers.Layer):
 
         if positions is None:
             positions = self._compute_positions(inputs, start_index)
+            positions = ops.expand_dims(positions, axis=batch_axis)
         else:
             positions = ops.cast(positions, "float32")
-
         positions = positions / ops.cast(self.scaling_factor, "float32")
-        freq = ops.einsum("i,j->ij", positions, inverse_freq)
+
+        freq = ops.einsum("bi,j->bij", positions, inverse_freq)
+
         embedding = ops.stack((freq, freq), axis=-2)
         embedding = ops.reshape(
             embedding, (*ops.shape(freq)[:-1], ops.shape(freq)[-1] * 2)
         )
 
-        # Reshape the embedding to be broadcastable with input shape.
-        if feature_axis < sequence_axis:
-            embedding = ops.transpose(embedding)
         for axis in range(len(inputs.shape)):
-            if axis != sequence_axis and axis != feature_axis:
+            if axis not in (batch_axis, sequence_axis, feature_axis):
                 embedding = ops.expand_dims(embedding, axis)
 
         cos_emb = ops.cast(ops.cos(embedding), self.compute_dtype)

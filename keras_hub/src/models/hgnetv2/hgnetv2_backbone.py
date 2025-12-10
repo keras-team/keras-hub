@@ -157,7 +157,10 @@ class HGNetV2Backbone(Backbone):
             if stage_name in self.out_features
         }
         super().__init__(
-            inputs=pixel_values, outputs=feature_maps_output, **kwargs
+            inputs=pixel_values,
+            outputs=feature_maps_output,
+            dtype=dtype,
+            **kwargs,
         )
 
         # === Config ===

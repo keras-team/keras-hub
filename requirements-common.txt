@@ -18,4 +18,5 @@ sentencepiece
 tensorflow-datasets
 safetensors
 pillow
+openvino
 transformers
