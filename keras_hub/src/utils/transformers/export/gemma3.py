@@ -160,7 +160,7 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
 
 def get_gemma3_tokenizer_config(tokenizer):
     tokenizer_config = {
-        "tokenizer_class": "GemmaTokenizer",
+        "tokenizer_class": "Gemma3Tokenizer",
         "clean_up_tokenization_spaces": False,
         "bos_token": "<bos>",
         "eos_token": "<eos>",
