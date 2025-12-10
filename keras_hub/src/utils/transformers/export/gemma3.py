@@ -3,7 +3,15 @@ import keras.ops as ops
 
 def get_gemma3_config(backbone):
     """Convert Keras Gemma3 config to Hugging Face config dictionary."""
-    token_embedding_layer = backbone.get_layer("token_embedding")
+
+    # Generate layer types pattern: 5 sliding attention layers followed by 1 full attention layer
+    layer_types = []
+    for i in range(backbone.num_layers):
+        if (i + 1) % 6 == 0:
+            layer_types.append("full_attention")
+        else:
+            layer_types.append("sliding_attention")
+
     hf_config = {
         "architectures": ["Gemma3ForCausalLM"],
         "model_type": "gemma3_text",
@@ -15,13 +23,20 @@ def get_gemma3_config(backbone):
         "intermediate_size": backbone.intermediate_dim,
         "head_dim": backbone.head_dim,
         "max_position_embeddings": 32768,
-        "tie_word_embeddings": token_embedding_layer.tie_weights,
         "rms_norm_eps": 1e-6,
-        "rope_theta": 10000.0,
+        "rope_theta": 1000000.0, # Fixed: Updated to 1M to match official config
         "attention_bias": False,
         "attention_dropout": 0.0,
         "hidden_activation": "gelu_pytorch_tanh",
+        # Added missing keys to match official config
+        "sliding_window": 512,
+        "_sliding_window_pattern": 6,
+        "use_cache": True,
+        "torch_dtype": "bfloat16",
+        "layer_types": layer_types,
+        "query_pre_attn_scalar": backbone.head_dim, 
     }
+
     return hf_config
 
 
@@ -162,8 +177,8 @@ def get_gemma3_tokenizer_config(tokenizer):
         "<bos>",
         "<eos>",
         "<unk>",
-        "<start_of_image>",
-        "<end_of_image>",
+        "<mask>",
+        "[multimodal]",
         "<img>",
     ]
     for token in special_tokens:
