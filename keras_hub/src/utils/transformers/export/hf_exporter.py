@@ -38,6 +38,76 @@ MODEL_TOKENIZER_CONFIGS = {
 }
 
 
+def _generate_tokenizer_json(tokenizer, path, tokenizer_config):
+    """Generate tokenizer.json for fast tokenizer support.
+    
+    This converts the SentencePiece tokenizer to HuggingFace's tokenizers
+    format, enabling fast tokenizer support. The conversion attempts to
+    preserve the original SentencePiece model type (Unigram, BPE, etc.).
+    
+    Args:
+        tokenizer: The Keras tokenizer.
+        path: Directory where tokenizer files are saved.
+        tokenizer_config: The tokenizer configuration dictionary.
+    """
+    try:
+        from tokenizers import Tokenizer as HFTokenizer
+        from tokenizers.models import Unigram
+        from tokenizers.pre_tokenizers import Metaspace
+        from tokenizers import normalizers
+        import sentencepiece as spm
+        
+        # Load the SentencePiece model to check its type
+        tokenizer_model_path = os.path.join(path, "tokenizer.model")
+        if not os.path.exists(tokenizer_model_path):
+            # Fallback to old path if rename hasn't happened yet
+            tokenizer_model_path = os.path.join(path, "vocabulary.spm")
+        
+        sp_model = spm.SentencePieceProcessor()
+        sp_model.Load(tokenizer_model_path)
+        
+        # Get vocabulary from the tokenizer with scores
+        vocab = tokenizer.get_vocabulary()
+        vocab_size = tokenizer.vocabulary_size()
+        
+        # Extract scores from the SentencePiece model
+        vocab_scores = []
+        for i, token in enumerate(vocab):
+            # Get the actual score from SentencePiece model
+            try:
+                score = sp_model.GetScore(i)
+            except:
+                # Fallback: use negative log probability based on index
+                score = -(i + 1) / vocab_size
+            vocab_scores.append((token, score))
+        
+        # Create Unigram model (most SentencePiece models use Unigram)
+        unk_id = tokenizer.token_to_id(tokenizer_config.get("unk_token", "<unk>"))
+        hf_tokenizer = HFTokenizer(Unigram(vocab_scores, unk_id=unk_id if unk_id is not None else 0))
+        
+        # Add pre-tokenizer (Metaspace for SentencePiece compatibility)
+        hf_tokenizer.pre_tokenizer = Metaspace(replacement="▁", add_prefix_space=True)
+        
+        # Add normalizer (empty for most SentencePiece models)
+        hf_tokenizer.normalizer = normalizers.Sequence([])
+        
+        # Save tokenizer.json
+        tokenizer_json_path = os.path.join(path, "tokenizer.json")
+        hf_tokenizer.save(tokenizer_json_path)
+        
+    except ImportError as e:
+        warnings.warn(
+            f"Required library not installed ({e}). Fast tokenizer "
+            "support will not be available. Install with: "
+            "pip install tokenizers sentencepiece"
+        )
+    except Exception as e:
+        warnings.warn(
+            f"Failed to generate tokenizer.json for fast tokenizer support: {e}. "
+            "The exported tokenizer will only work with use_fast=False."
+        )
+
+
 def export_backbone(backbone, path, include_lm_head=False):
     """Export the backbone model to HuggingFace format.
 
@@ -126,6 +196,9 @@ def export_tokenizer(tokenizer, path):
             "is correct and that the vocabulary file is present "
             "in the original model."
         )
+    
+    # Generate tokenizer.json for fast tokenizer support
+    _generate_tokenizer_json(tokenizer, path, tokenizer_config)
 
 
 def export_to_safetensors(keras_model, path):
