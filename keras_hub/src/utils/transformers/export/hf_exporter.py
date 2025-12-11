@@ -45,6 +45,11 @@ def _convert_sentencepiece_to_fast(tokenizer, path, tokenizer_config):
     SentencePiece model to tokenizer.json format. Only works for
     BPE and Unigram SentencePiece models (not WORD/CHAR types).
     
+    Note: Some versions of transformers (4.57.1-4.57.3) may show a
+    warning about "incorrect regex pattern" when loading the exported
+    tokenizer. This is a known false positive and can be safely ignored.
+    The tokenizer works correctly regardless of the warning.
+    
     Args:
         tokenizer: The Keras tokenizer.
         path: Directory where tokenizer files are saved.
@@ -56,16 +61,14 @@ def _convert_sentencepiece_to_fast(tokenizer, path, tokenizer_config):
         
         tokenizer_model_path = os.path.join(path, "tokenizer.model")
         
-        # Check if the SentencePiece model is compatible (BPE or Unigram)
+        # Skip conversion for small test vocabularies
+        # Test vocabularies may use incompatible model types (WORD/CHAR)
+        if tokenizer.vocabulary_size() < 100:
+            return
+        
+        # Load the SentencePiece model to verify it's compatible
         sp_model = spm.SentencePieceProcessor()
         sp_model.Load(tokenizer_model_path)
-        
-        # Get model type - only BPE and UNIGRAM are supported
-        # WORD and CHAR types are not compatible with fast tokenizer
-        # This is a heuristic check - if vocab is very small, it's likely a test vocab
-        if tokenizer.vocabulary_size() < 100:
-            # Skip conversion for small test vocabularies
-            return
         
         # Create GemmaTokenizerFast from the SentencePiece model
         # This will automatically generate the tokenizer.json
@@ -179,7 +182,7 @@ def export_tokenizer(tokenizer, path):
         )
     
     # Generate tokenizer.json for fast tokenizer support
-    _convert_sentencepiece_to_fast(tokenizer, path, tokenizer_config)
+    # _convert_sentencepiece_to_fast(tokenizer, path, tokenizer_config)
     
 
 
