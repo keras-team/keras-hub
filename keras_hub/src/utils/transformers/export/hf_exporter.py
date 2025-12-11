@@ -41,8 +41,8 @@ MODEL_TOKENIZER_CONFIGS = {
 def _export_additional_tokenizer_files(tokenizer, path, tokenizer_config):
     """Export additional tokenizer files required by HuggingFace.
     
-    Exports special_tokens_map.json and added_tokens.json files that are
-    required for proper tokenizer loading in HuggingFace Transformers.
+    Exports special_tokens_map.json, added_tokens.json, and tokenizer.json
+    files that are required for proper tokenizer loading in HuggingFace Transformers.
     
     Args:
         tokenizer: The Keras tokenizer.
@@ -101,10 +101,52 @@ def _export_additional_tokenizer_files(tokenizer, path, tokenizer_config):
             with open(added_tokens_path, "w") as f:
                 json.dump(added_tokens, f, indent=2)
         
+        # Generate tokenizer.json using HuggingFace's converter
+        _generate_tokenizer_json_from_sentencepiece(tokenizer, path, tokenizer_config)
+        
     except Exception as e:
         warnings.warn(
             f"Failed to export additional tokenizer files: {e}. "
             "The tokenizer may not load correctly in some cases."
+        )
+
+
+def _generate_tokenizer_json_from_sentencepiece(tokenizer, path, tokenizer_config):
+    """Generate tokenizer.json from SentencePiece model using HF converter.
+    
+    Args:
+        tokenizer: The Keras tokenizer.
+        path: Directory where tokenizer files are saved.
+        tokenizer_config: The tokenizer configuration dictionary.
+    """
+    try:
+        from transformers import GemmaTokenizer
+        
+        # Load the tokenizer using HuggingFace's GemmaTokenizer
+        # This will create the tokenizer.json automatically
+        tokenizer_model_path = os.path.join(path, "tokenizer.model")
+        
+        # Create a temporary HF tokenizer to generate tokenizer.json
+        hf_tokenizer = GemmaTokenizer(
+            vocab_file=tokenizer_model_path,
+            bos_token=tokenizer_config.get("bos_token", "<bos>"),
+            eos_token=tokenizer_config.get("eos_token", "<eos>"),
+            unk_token=tokenizer_config.get("unk_token", "<unk>"),
+            pad_token=tokenizer_config.get("pad_token", "<pad>"),
+        )
+        
+        # Save the tokenizer which will generate tokenizer.json
+        hf_tokenizer.save_pretrained(path)
+        
+    except ImportError:
+        warnings.warn(
+            "transformers library not available. tokenizer.json will not be generated. "
+            "Fast tokenizer may not work. Install with: pip install transformers"
+        )
+    except Exception as e:
+        warnings.warn(
+            f"Failed to generate tokenizer.json: {e}. "
+            "Fast tokenizer may not work correctly."
         )
 
 
