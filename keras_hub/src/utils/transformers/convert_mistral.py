@@ -1,6 +1,7 @@
 import numpy as np
 
 from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
+from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
 
 backbone_cls = MistralBackbone
@@ -113,6 +114,7 @@ def convert_weights(backbone, loader, transformers_config):
 
 
 def convert_tokenizer(cls, preset, **kwargs):
-    if preset == "devstral_small_1_1":
-        preset = "mistralai/Mistral-Small-24B-Base-2501"
+
+    if check_file_exists(preset, "tekken.json"):
+        return cls(get_file(preset, "tekken.json"), **kwargs)
     return cls(get_file(preset, "tokenizer.model"), **kwargs)

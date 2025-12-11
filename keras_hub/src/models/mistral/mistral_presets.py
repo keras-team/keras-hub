@@ -48,6 +48,6 @@ backbone_presets = {
             "params": 23572403200,
             "path": "devstral_small_1_1",
         },
-        # "kaggle_handle": "kaggle://keras/mistral/keras/devstral_small_1_1/1",
+        "kaggle_handle": "kaggle://keras/mistral/keras/devstral_small_1_1/1",
     },
 }

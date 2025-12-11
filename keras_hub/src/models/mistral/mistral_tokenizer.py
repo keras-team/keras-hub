@@ -3,14 +3,13 @@ from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
+from keras_hub.src.tokenizers.tiktoken_tokenizer import TiktokenTokenizer
 
 
-@keras_hub_export(
-    [
-        "keras_hub.tokenizers.MistralTokenizer",
-        "keras_hub.models.MistralTokenizer",
-    ]
-)
+@keras_hub_export([
+    "keras_hub.tokenizers.MistralTokenizer",
+    "keras_hub.models.MistralTokenizer",
+])
 class MistralTokenizer(SentencePieceTokenizer):
     """Mistral tokenizer layer based on SentencePiece.
 
@@ -55,3 +54,32 @@ class MistralTokenizer(SentencePieceTokenizer):
         self._add_special_token("</s>", "end_token")
         self.pad_token_id = 0
         super().__init__(proto=proto, **kwargs)
+
+
+@keras_hub_export([
+    "keras_hub.tokenizers.NewMistralTokenizer",
+    "keras_hub.models.NewMistralTokenizer",
+])
+class NewMistralTokenizer(TiktokenTokenizer):
+    """
+    Tekken-based tokenizer for Mistral models.
+
+    Responsibilities:
+      • Add required Mistral special tokens (<s>, </s>, pad)
+      • Delegate tekken.json parsing to TiktokenTokenizer
+      • Use Tiktoken backend via TiktokenTokenizer normalisation
+    """
+
+    backbone_cls = MistralBackbone
+
+    def __init__(self, proto, sequence_length=None, dtype="int32", **kwargs):
+        self._add_special_token("<s>", "start_token")
+        self._add_special_token("</s>", "end_token")
+        self.pad_token_id = 0
+
+        super().__init__(
+            proto=proto,
+            sequence_length=sequence_length,
+            dtype=dtype,
+            **kwargs,
+        )
