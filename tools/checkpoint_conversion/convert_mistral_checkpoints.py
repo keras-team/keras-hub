@@ -222,12 +222,7 @@ def main(_):
         # === Load the Huggingface model ===
         hf_model = MistralForCausalLM.from_pretrained(hf_preset)
 
-        if preset == "devstral_small_1_1":
-            hf_tokenizer = AutoTokenizer.from_pretrained(
-                "mistralai/Mistral-Small-24B-Base-2501"
-            )
-        else:
-            hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
+        hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
         hf_model.eval()
         print("\n-> Huggingface model and tokenizer loaded")
 
@@ -246,14 +241,7 @@ def main(_):
         )
         keras_hub_backbone = MistralBackbone(**backbone_kwargs)
 
-        if "devstral" in hf_preset.lower():
-            keras_hub_tokenizer = MistralTokenizer.from_preset(
-                "hf://mistralai/Mistral-Small-24B-Base-2501"
-            )
-        else:
-            keras_hub_tokenizer = MistralTokenizer.from_preset(
-                f"hf://{hf_preset}"
-            )
+        keras_hub_tokenizer = MistralTokenizer.from_preset(f"hf://{hf_preset}")
         print("\n-> Keras 3 model and tokenizer loaded.")
 
         # === Port the weights ===

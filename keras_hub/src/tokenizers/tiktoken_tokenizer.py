@@ -2,8 +2,6 @@ import base64
 import json
 import os
 from pathlib import Path
-from typing import Any
-from typing import Dict
 
 import keras
 
@@ -41,12 +39,12 @@ def _load_json_like(proto):
     raise ValueError(f"Unsupported proto type: {type(proto)}")
 
 
-def _is_normalized_proto(model_data: Dict[str, Any]) -> bool:
+def _is_normalized_proto(model_data) -> bool:
     """Check whether the proto already has the normalized shape."""
     return "pattern" in model_data and "mergeable_ranks" in model_data
 
 
-def _normalize_tekken_proto(model_data: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_tekken_proto(model_data) -> dict:
     """Convert tekken.json structure into normalized proto for tiktoken."""
     if "config" not in model_data or "vocab" not in model_data:
         raise ValueError(
@@ -101,7 +99,7 @@ def _decode_token_ids(token_ids_list, model):
     return model.decode(token_ids_list)
 
 
-def _normalize_mergeable_ranks(mr: Dict[Any, Any]) -> Dict[bytes, int]:
+def _normalize_mergeable_ranks(mr) -> dict:
     """Ensure mergeable_ranks has bytes keys and integer ranks.
 
     JSON cannot store byte keys, so Tekken-format or similar loaders
