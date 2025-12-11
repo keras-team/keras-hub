@@ -86,7 +86,12 @@ def _generate_tokenizer_json(tokenizer, path, tokenizer_config):
         hf_tokenizer = HFTokenizer(Unigram(vocab_scores, unk_id=unk_id if unk_id is not None else 0))
         
         # Add pre-tokenizer (Metaspace for SentencePiece compatibility)
-        hf_tokenizer.pre_tokenizer = Metaspace(replacement="▁", add_prefix_space=True)
+        # Note: Metaspace parameters changed in tokenizers>=0.13.0
+        try:
+            hf_tokenizer.pre_tokenizer = Metaspace(replacement="▁", prepend_scheme="always")
+        except TypeError:
+            # Fallback for older versions
+            hf_tokenizer.pre_tokenizer = Metaspace(replacement="▁", add_prefix_space=True)
         
         # Add normalizer (empty for most SentencePiece models)
         hf_tokenizer.normalizer = normalizers.Sequence([])
