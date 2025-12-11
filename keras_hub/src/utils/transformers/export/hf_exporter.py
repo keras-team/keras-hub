@@ -38,12 +38,11 @@ MODEL_TOKENIZER_CONFIGS = {
 }
 
 
-def _generate_tokenizer_json(tokenizer, path, tokenizer_config):
-    """Generate tokenizer.json for fast tokenizer support.
+def _export_additional_tokenizer_files(tokenizer, path, tokenizer_config):
+    """Export additional tokenizer files required by HuggingFace.
     
-    This converts the SentencePiece tokenizer to HuggingFace's tokenizers
-    format, enabling fast tokenizer support. The conversion attempts to
-    preserve the original SentencePiece model type (Unigram, BPE, etc.).
+    Exports special_tokens_map.json and added_tokens.json files that are
+    required for proper tokenizer loading in HuggingFace Transformers.
     
     Args:
         tokenizer: The Keras tokenizer.
@@ -51,74 +50,61 @@ def _generate_tokenizer_json(tokenizer, path, tokenizer_config):
         tokenizer_config: The tokenizer configuration dictionary.
     """
     try:
-        from tokenizers import Tokenizer as HFTokenizer
-        from tokenizers.models import BPE
-        from tokenizers import normalizers, pre_tokenizers
-        import sentencepiece as spm
+        # Create special_tokens_map.json
+        special_tokens_map = {
+            "bos_token": {
+                "content": tokenizer_config.get("bos_token", "<bos>"),
+                "lstrip": False,
+                "normalized": False,
+                "rstrip": False,
+                "single_word": False,
+            },
+            "eos_token": {
+                "content": tokenizer_config.get("eos_token", "<eos>"),
+                "lstrip": False,
+                "normalized": False,
+                "rstrip": False,
+                "single_word": False,
+            },
+            "unk_token": {
+                "content": tokenizer_config.get("unk_token", "<unk>"),
+                "lstrip": False,
+                "normalized": False,
+                "rstrip": False,
+                "single_word": False,
+            },
+            "pad_token": {
+                "content": tokenizer_config.get("pad_token", "<pad>"),
+                "lstrip": False,
+                "normalized": False,
+                "rstrip": False,
+                "single_word": False,
+            },
+        }
         
-        # Load the SentencePiece model to check its type
-        tokenizer_model_path = os.path.join(path, "tokenizer.model")
-        if not os.path.exists(tokenizer_model_path):
-            # Fallback to old path if rename hasn't happened yet
-            tokenizer_model_path = os.path.join(path, "vocabulary.spm")
+        # Add vision-specific tokens if present (for Gemma3)
+        if hasattr(tokenizer, 'start_of_image_token_id') and tokenizer.start_of_image_token_id != -1:
+            special_tokens_map["boi_token"] = "<start_of_image>"
+            special_tokens_map["eoi_token"] = "<end_of_image>"
+            special_tokens_map["image_token"] = "<image_soft_token>"
         
-        sp_model = spm.SentencePieceProcessor()
-        sp_model.Load(tokenizer_model_path)
+        special_tokens_map_path = os.path.join(path, "special_tokens_map.json")
+        with open(special_tokens_map_path, "w") as f:
+            json.dump(special_tokens_map, f, indent=2)
         
-        # Get vocabulary from the tokenizer
-        vocab = tokenizer.get_vocabulary()
-        vocab_size = tokenizer.vocabulary_size()
+        # Create added_tokens.json for image soft token (Gemma3 specific)
+        if hasattr(tokenizer, 'start_of_image_token_id') and tokenizer.start_of_image_token_id != -1:
+            added_tokens = {
+                "<image_soft_token>": 262144  # Standard image token ID for Gemma3
+            }
+            added_tokens_path = os.path.join(path, "added_tokens.json")
+            with open(added_tokens_path, "w") as f:
+                json.dump(added_tokens, f, indent=2)
         
-        # Build vocab dict
-        vocab_dict = {token: i for i, token in enumerate(vocab)}
-        
-        # Build merges list from SentencePiece model
-        # For SentencePiece BPE models, we need to extract merge rules
-        merges = []
-        for i in range(vocab_size):
-            piece = sp_model.IdToPiece(i)
-            # Skip special tokens and single characters
-            if len(piece) > 1 and not piece.startswith("<") and not piece.endswith(">"):
-                # Try to infer merges from multi-character pieces
-                # This is a simplification; real BPE merges would need proper extraction
-                pass
-        
-        # Create BPE model with byte fallback like official Gemma
-        unk_token = tokenizer_config.get("unk_token", "<unk>")
-        hf_tokenizer = HFTokenizer(
-            BPE(
-                vocab=vocab_dict,
-                merges=merges,
-                unk_token=unk_token,
-                fuse_unk=True,
-                byte_fallback=True,
-            )
-        )
-        
-        # Add normalizer: Replace spaces with ▁ (like official Gemma)
-        hf_tokenizer.normalizer = normalizers.Replace(" ", "▁")
-        
-        # Add pre-tokenizer: Split on spaces with MergedWithPrevious (like official Gemma)
-        hf_tokenizer.pre_tokenizer = pre_tokenizers.Split(
-            pattern=" ",
-            behavior="merged_with_previous",
-            invert=False
-        )
-        
-        # Save tokenizer.json
-        tokenizer_json_path = os.path.join(path, "tokenizer.json")
-        hf_tokenizer.save(tokenizer_json_path)
-        
-    except ImportError as e:
-        warnings.warn(
-            f"Required library not installed ({e}). Fast tokenizer "
-            "support will not be available. Install with: "
-            "pip install tokenizers sentencepiece"
-        )
     except Exception as e:
         warnings.warn(
-            f"Failed to generate tokenizer.json for fast tokenizer support: {e}. "
-            "The exported tokenizer will only work with use_fast=False."
+            f"Failed to export additional tokenizer files: {e}. "
+            "The tokenizer may not load correctly in some cases."
         )
 
 
@@ -211,8 +197,8 @@ def export_tokenizer(tokenizer, path):
             "in the original model."
         )
     
-    # Generate tokenizer.json for fast tokenizer support
-    _generate_tokenizer_json(tokenizer, path, tokenizer_config)
+    # Export additional tokenizer files for HuggingFace compatibility
+    _export_additional_tokenizer_files(tokenizer, path, tokenizer_config)
 
 
 def export_to_safetensors(keras_model, path):
