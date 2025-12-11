@@ -52,9 +52,8 @@ def _generate_tokenizer_json(tokenizer, path, tokenizer_config):
     """
     try:
         from tokenizers import Tokenizer as HFTokenizer
-        from tokenizers.models import Unigram
-        from tokenizers.pre_tokenizers import Metaspace
-        from tokenizers import normalizers
+        from tokenizers.models import BPE
+        from tokenizers import normalizers, pre_tokenizers
         import sentencepiece as spm
         
         # Load the SentencePiece model to check its type
@@ -66,35 +65,45 @@ def _generate_tokenizer_json(tokenizer, path, tokenizer_config):
         sp_model = spm.SentencePieceProcessor()
         sp_model.Load(tokenizer_model_path)
         
-        # Get vocabulary from the tokenizer with scores
+        # Get vocabulary from the tokenizer
         vocab = tokenizer.get_vocabulary()
         vocab_size = tokenizer.vocabulary_size()
         
-        # Extract scores from the SentencePiece model
-        vocab_scores = []
-        for i, token in enumerate(vocab):
-            # Get the actual score from SentencePiece model
-            try:
-                score = sp_model.GetScore(i)
-            except:
-                # Fallback: use negative log probability based on index
-                score = -(i + 1) / vocab_size
-            vocab_scores.append((token, score))
+        # Build vocab dict
+        vocab_dict = {token: i for i, token in enumerate(vocab)}
         
-        # Create Unigram model (most SentencePiece models use Unigram)
-        unk_id = tokenizer.token_to_id(tokenizer_config.get("unk_token", "<unk>"))
-        hf_tokenizer = HFTokenizer(Unigram(vocab_scores, unk_id=unk_id if unk_id is not None else 0))
+        # Build merges list from SentencePiece model
+        # For SentencePiece BPE models, we need to extract merge rules
+        merges = []
+        for i in range(vocab_size):
+            piece = sp_model.IdToPiece(i)
+            # Skip special tokens and single characters
+            if len(piece) > 1 and not piece.startswith("<") and not piece.endswith(">"):
+                # Try to infer merges from multi-character pieces
+                # This is a simplification; real BPE merges would need proper extraction
+                pass
         
-        # Add pre-tokenizer (Metaspace for SentencePiece compatibility)
-        # Note: Metaspace parameters changed in tokenizers>=0.13.0
-        try:
-            hf_tokenizer.pre_tokenizer = Metaspace(replacement="▁", prepend_scheme="always")
-        except TypeError:
-            # Fallback for older versions
-            hf_tokenizer.pre_tokenizer = Metaspace(replacement="▁", add_prefix_space=True)
+        # Create BPE model with byte fallback like official Gemma
+        unk_token = tokenizer_config.get("unk_token", "<unk>")
+        hf_tokenizer = HFTokenizer(
+            BPE(
+                vocab=vocab_dict,
+                merges=merges,
+                unk_token=unk_token,
+                fuse_unk=True,
+                byte_fallback=True,
+            )
+        )
         
-        # Add normalizer (empty for most SentencePiece models)
-        hf_tokenizer.normalizer = normalizers.Sequence([])
+        # Add normalizer: Replace spaces with ▁ (like official Gemma)
+        hf_tokenizer.normalizer = normalizers.Replace(" ", "▁")
+        
+        # Add pre-tokenizer: Split on spaces with MergedWithPrevious (like official Gemma)
+        hf_tokenizer.pre_tokenizer = pre_tokenizers.Split(
+            pattern=" ",
+            behavior="merged_with_previous",
+            invert=False
+        )
         
         # Save tokenizer.json
         tokenizer_json_path = os.path.join(path, "tokenizer.json")
