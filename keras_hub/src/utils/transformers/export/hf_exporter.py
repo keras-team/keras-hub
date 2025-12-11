@@ -112,7 +112,7 @@ def _export_additional_tokenizer_files(tokenizer, path, tokenizer_config):
 
 
 def _generate_tokenizer_json_from_sentencepiece(tokenizer, path, tokenizer_config):
-    """Generate tokenizer.json from SentencePiece model using HF converter.
+    """Generate tokenizer.json from SentencePiece model.
     
     Args:
         tokenizer: The Keras tokenizer.
@@ -120,28 +120,43 @@ def _generate_tokenizer_json_from_sentencepiece(tokenizer, path, tokenizer_confi
         tokenizer_config: The tokenizer configuration dictionary.
     """
     try:
-        from transformers import GemmaTokenizer
+        from tokenizers.implementations import SentencePieceBPETokenizer
+        from tokenizers import AddedToken
         
-        # Load the tokenizer using HuggingFace's GemmaTokenizer
-        # This will create the tokenizer.json automatically
+        # Path to the SentencePiece model
         tokenizer_model_path = os.path.join(path, "tokenizer.model")
         
-        # Create a temporary HF tokenizer to generate tokenizer.json
-        hf_tokenizer = GemmaTokenizer(
-            vocab_file=tokenizer_model_path,
-            bos_token=tokenizer_config.get("bos_token", "<bos>"),
-            eos_token=tokenizer_config.get("eos_token", "<eos>"),
-            unk_token=tokenizer_config.get("unk_token", "<unk>"),
-            pad_token=tokenizer_config.get("pad_token", "<pad>"),
-        )
+        # Create tokenizer from SentencePiece model
+        sp_tokenizer = SentencePieceBPETokenizer.from_file(tokenizer_model_path)
         
-        # Save the tokenizer which will generate tokenizer.json
-        hf_tokenizer.save_pretrained(path)
+        # Add special tokens
+        special_tokens = [
+            AddedToken(tokenizer_config.get("pad_token", "<pad>"), special=True),
+            AddedToken(tokenizer_config.get("bos_token", "<bos>"), special=True),
+            AddedToken(tokenizer_config.get("eos_token", "<eos>"), special=True),
+            AddedToken(tokenizer_config.get("unk_token", "<unk>"), special=True),
+        ]
+        
+        # Add vision tokens if they exist (Gemma3)
+        if hasattr(tokenizer, 'start_of_image_token_id') and tokenizer.start_of_image_token_id != -1:
+            special_tokens.extend([
+                AddedToken("<mask>", special=False),
+                AddedToken("[multimodal]", special=False),
+                AddedToken("<img>", special=False),
+                AddedToken("<start_of_image>", special=False),
+                AddedToken("<end_of_image>", special=False),
+            ])
+        
+        sp_tokenizer.add_special_tokens(special_tokens)
+        
+        # Save the tokenizer.json
+        tokenizer_json_path = os.path.join(path, "tokenizer.json")
+        sp_tokenizer.save(tokenizer_json_path)
         
     except ImportError:
         warnings.warn(
-            "transformers library not available. tokenizer.json will not be generated. "
-            "Fast tokenizer may not work. Install with: pip install transformers"
+            "tokenizers library not available. tokenizer.json will not be generated. "
+            "Fast tokenizer may not work. Install with: pip install tokenizers"
         )
     except Exception as e:
         warnings.warn(
