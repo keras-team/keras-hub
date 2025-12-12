@@ -70,3 +70,15 @@ class DeepLabV3ImageSegmenterTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.images,
         )
+
+    @pytest.mark.large
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=DeepLabV3ImageSegmenter,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+            comparison_mode="statistical",
+            output_thresholds={
+                "*": {"max": 0.6, "mean": 0.3},
+            },
+        )

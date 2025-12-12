@@ -292,7 +292,7 @@ class SAMPromptEncoder(keras.layers.Layer):
             )
 
         dense_embeddings = ops.cond(
-            ops.equal(ops.size(masks), 0),
+            ops.equal(ops.shape(masks)[1], 0),
             _no_mask_embed,
             _maybe_input_mask_embed,
         )
