@@ -11,4 +11,3 @@ torchvision>=0.16.0
 jax[cpu]
 
 -r requirements-common.txt
-
