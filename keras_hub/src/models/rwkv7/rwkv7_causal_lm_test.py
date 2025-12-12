@@ -105,7 +105,7 @@ class RWKV7CausalLMTest(TestCase):
 
         def wrapper(*args, **kwargs):
             logits, hidden_states, cache = call_with_cache(*args, **kwargs)
-            if logits is not None:  # 避开 _build_cache 阶段
+            if logits is not None:
                 index = self.preprocessor.tokenizer.end_token_id
                 update = ops.ones_like(logits)[:, :, index] * 1.0e9
                 update = ops.expand_dims(update, axis=-1)
