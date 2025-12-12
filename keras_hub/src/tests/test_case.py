@@ -536,7 +536,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             # Both outputs are single tensors - direct comparison
             keras_output_np = ops.convert_to_numpy(keras_output)
             output_threshold = output_thresholds.get(
-                "*", {"max": 10.0, "mean": 0.1}
+                "*", {"max": 1e-2, "mean": 1e-3}
             )
             self._compare_outputs(
                 keras_output_np,
