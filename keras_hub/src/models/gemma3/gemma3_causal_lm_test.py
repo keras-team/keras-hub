@@ -265,8 +265,8 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         input_data = self.input_data.copy()
         # Convert boolean padding_mask to int32 for LiteRT compatibility
         if "padding_mask" in input_data:
-            input_data["padding_mask"] = tf.cast(
-                input_data["padding_mask"], tf.int32
+            input_data["padding_mask"] = ops.cast(
+                input_data["padding_mask"], "int32"
             )
 
         expected_output_shape = (

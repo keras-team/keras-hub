@@ -472,7 +472,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         # Verify numerical correctness if requested
         if verify_numerics:
-            self._verify_outputs(
+            self._verify_litert_numerics(
                 keras_output,
                 litert_output,
                 sig_outputs,
@@ -480,7 +480,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 comparison_mode,
             )
 
-    def _verify_outputs(
+    def _verify_litert_numerics(
         self,
         keras_output,
         litert_output,
@@ -704,11 +704,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                                 return x.astype(np.int32)
                         else:  # TensorFlow tensor
                             if x.dtype == tf.bool:
-                                return tf.cast(x, tf.int32).numpy()
+                                return ops.cast(x, "int32").numpy()
                             elif x.dtype == tf.float64:
-                                return tf.cast(x, tf.float32).numpy()
+                                return ops.cast(x, "float32").numpy()
                             elif x.dtype == tf.int64:
-                                return tf.cast(x, tf.int32).numpy()
+                                return ops.cast(x, "int32").numpy()
                             else:
                                 return x.numpy() if hasattr(x, "numpy") else x
                     elif hasattr(x, "numpy"):

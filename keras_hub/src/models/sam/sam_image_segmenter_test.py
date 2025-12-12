@@ -27,7 +27,6 @@ class SAMImageSegmenterTest(TestCase):
         # Scale down proportionally: 128/1024 = 1/8,
         # so embeddings should be 64/8 = 8
         # But keep it simple for testing
-        embedding_size = self.image_size // 16  # 128/16 = 8
         self.image_encoder = ViTDetBackbone(
             hidden_size=16,
             num_layers=16,
