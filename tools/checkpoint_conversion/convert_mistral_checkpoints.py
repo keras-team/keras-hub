@@ -5,6 +5,7 @@ import tempfile
 import traceback
 
 import numpy as np
+import torch
 from absl import app
 from absl import flags
 from keras import ops
@@ -223,7 +224,9 @@ def main(_):
 
     try:
         # === Load the Huggingface model ===
-        hf_model = MistralForCausalLM.from_pretrained(hf_preset)
+        hf_model = MistralForCausalLM.from_pretrained(
+            hf_preset, torch_dtype=torch.float16
+        )
 
         hf_tokenizer = MistralCommonBackend.from_pretrained(hf_preset)
         hf_model.eval()
