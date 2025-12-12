@@ -43,6 +43,11 @@ class RWKV7CausalLM(CausalLM):
     # Initialize the model with a backbone and preprocessor.
     causal_lm = RWKV7CausalLM(backbone, preprocessor)
 
+    # you also can load model by from_preset
+    rwkv_path = "./RWKV7_G1a_0.1B"
+    tokenizer = RWKVTokenizer.from_preset(rwkv_path)
+    causal_lm = RWKV7CausalLM.from_preset(rwkv_path)
+
     prompts = ["Bubble sort\n```python", "Hello World\n```python\n"]
 
     causal_lm.compile(sampler="greedy")
@@ -69,8 +74,8 @@ class RWKV7CausalLM(CausalLM):
         self.backbone = backbone
         self.preprocessor = preprocessor
         super().__init__(
-            inputs=backbone.inputs,
-            outputs=backbone.outputs,
+            inputs=backbone.input,
+            outputs=backbone.output,
             **kwargs,
         )
 

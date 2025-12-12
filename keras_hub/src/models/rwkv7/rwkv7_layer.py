@@ -25,7 +25,6 @@ def rnn_generalized_delta_rule(
     output_final_state=True,
     head_first=False,
 ):
-    """Implements the generalized delta rule for RWKV."""
     DTYPE = r.dtype
     B, T, H, N = ops.shape(r)
     r = transpose_head(r, head_first)
@@ -45,7 +44,8 @@ def rnn_generalized_delta_rule(
     else:
         state = ops.zeros((B, H, N, N))
     state = ops.cast(state, "float32")
-    out = ops.zeros((B, T, H, N), DTYPE)
+
+    keras_backend = keras.config.backend()
 
     def step(t, inputs):
         state, out = inputs
@@ -56,11 +56,26 @@ def rnn_generalized_delta_rule(
         bb = ops.reshape(b[:, t, :], (B, H, 1, N))
         state = state * w[:, t, :, None, :] + state @ aa @ bb + vv @ kk
         o = ops.cast((state @ rr), out.dtype)
-        out = ops.slice_update(out, [0, t, 0, 0], ops.reshape(o, (B, 1, H, N)))
+        if keras_backend == "tensorflow":
+            out = out.write(t, ops.reshape(o, (B, H, N)))
+        elif keras_backend == "torch":
+            out[:, t : t + 1] = ops.reshape(o, (B, 1, H, N))
+        else:
+            out = ops.slice_update(
+                out, [0, t, 0, 0], ops.reshape(o, (B, 1, H, N))
+            )
         return [state, out]
 
-    state, out = ops.fori_loop(0, T, step, [state, out])
+    if keras_backend == "tensorflow":
+        # slice_update has no gradient in the TensorFlow backend
+        import tensorflow as tf
 
+        out = tf.TensorArray(DTYPE, size=T)
+    else:
+        out = ops.zeros((B, T, H, N), DTYPE)
+    state, out = ops.fori_loop(0, T, step, [state, out])
+    if keras_backend == "tensorflow":
+        out = ops.transpose(out.stack(), [1, 0, 2, 3])
     if output_final_state:
         return ops.cast(out, DTYPE), state
     return ops.cast(out, DTYPE)

@@ -12,8 +12,7 @@ def rwkv7_kernel_initializer(stddev=0.02):
 
 @keras_hub_export("keras_hub.models.RWKV7Backbone")
 class RWKV7Backbone(Backbone):
-    """
-    The RWKV7 Transformer core architecture with hyperparameters.
+    """The RWKV7 Transformer core architecture with hyperparameters.
 
     This network implements a RNN-based decoder network,
     Goose, as described in

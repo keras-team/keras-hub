@@ -104,21 +104,26 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length = sequence_length or self.sequence_length
         # Pad length to multiples of 16 to meet kernel requirements
         if sequence_length is None:
-            raise (ValueError("`sequence_length` must be specified."))
-        if (sequence_length - 1) % 16 != 0:
-            sequence_length = sequence_length + (
-                16 - (sequence_length - 1) % 16
-            )
+            raise ValueError("sequence_length must be specified.")
+        if keras.config.backend() in ["torch", "jax"]:
+            # When using rwkv_ops, ensure sequence_length is divisible by 16.
+            try:
+                import rwkv_ops  # noqa: F401
+
+                if sequence_length % 16 != 0:
+                    sequence_length += (16 - sequence_length % 16) % 16
+            except ImportError:
+                pass
         x = self.tokenizer(x)
 
         token_ids, padding_mask = self.packer(
-            x, sequence_length=sequence_length, add_end_value=False
+            x, sequence_length=sequence_length + 1, add_end_value=False
         )
 
         # The last token does not have a next token, so we truncate it out.
         x = {
             "token_ids": token_ids[..., :-1],
-            "padding_mask": padding_mask[..., 1:],
+            "padding_mask": padding_mask[..., :-1],
         }
         # Target `y` will be the next token.
         y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]

@@ -9,77 +9,73 @@ from keras_hub.src.tests.test_case import TestCase
 
 class RWKV7CausalLMPreprocessorTest(TestCase):
     def setUp(self):
-        self.tokenizer = RWKVTokenizer(
-            ["1 ' ' 1", "2 '\\n' 1", "3 'the' 3", "4 'hello' 5", "5 'world' 5"]
-        )
-        self.preprocessor = RWKV7CausalLMPreprocessor(
-            tokenizer=self.tokenizer,
-            sequence_length=15,
-        )
+        self.vocab = [
+            "1 ' ' 1",
+            "2 '\\n' 1",
+            "3 'the' 3",
+            "4 'hello' 5",
+            "5 'world' 5",
+            "6 'python' 6",
+            "7 'code' 4",
+            "8 'def' 3",
+            "9 'function' 8",
+            "10 'return' 6",
+        ]
+        self.tokenizer = RWKVTokenizer(vocabulary=self.vocab)
+        self.init_kwargs = {
+            "tokenizer": self.tokenizer,
+            "sequence_length": 16,
+        }
+        self.input_data = ["the python code"]
 
     def test_preprocessor_basics(self):
-        result = self.preprocessor(x=["hello world hello world hello world"])
-        self.assertAllEqual(
-            result[0]["token_ids"],
-            [[0, 0, 0, 0, 0, 0, 4, 1, 5, 1, 4, 1, 5, 1, 4, 1]],
-        )
-        self.assertAllEqual(
-            result[1], [[0, 0, 0, 0, 0, 4, 1, 5, 1, 4, 1, 5, 1, 4, 1, 5]]
-        )
-        self.assertAllEqual(
-            result[2],
-            [
-                [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                ]
-            ],
+        self.run_preprocessor_test(
+            cls=RWKV7CausalLMPreprocessor,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=(
+                {
+                    "token_ids": [
+                        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1, 6, 1]
+                    ],
+                    "padding_mask": [
+                        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1]
+                    ],
+                },
+                [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1, 6, 1, 7]],
+                [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]],
+            ),
         )
 
     def test_generate_preprocess(self):
-        result = self.preprocessor.generate_preprocess(
-            ["hello world hello world hello world"], sequence_length=4
-        )
-
-        self.assertAllEqual(
-            result["token_ids"],
-            [[0, 0, 0, 0, 0, 4, 1, 5, 1, 4, 1, 5, 1, 4, 1]],
+        preprocessor = RWKV7CausalLMPreprocessor(**self.init_kwargs)
+        x = preprocessor.generate_preprocess(
+            self.input_data, sequence_length=14
         )
         self.assertAllEqual(
-            result["input_padding_mask"],
-            [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]],
+            x["token_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1, 6, 1]]
         )
         self.assertAllEqual(
-            result["padding_mask"],
-            [[1, 0, 0, 0, 0]],
+            x["input_padding_mask"],
+            [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1]],
         )
         self.assertAllEqual(
-            result["predict_token_ids"],
-            [[5, 0, 0, 0, 0]],
+            x["padding_mask"], [[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+        )
+        self.assertAllEqual(
+            x["predict_token_ids"],
+            [[7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
         )
 
     def test_generate_postprocess(self):
-        input_data = {
+        input_tokens = {
             "token_ids": np.array(
-                [[3, 2, 4, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+                [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1, 6, 1, 7]]
             ),
             "padding_mask": np.array(
-                [[1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+                [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1]]
             ),
         }
-        result = self.preprocessor.generate_postprocess(input_data)
-        self.assertEqual(result, ["the\nhellothe"])
+        preprocessor = RWKV7CausalLMPreprocessor(**self.init_kwargs)
+        x = preprocessor.generate_postprocess(input_tokens)
+        self.assertEqual(x[0], "the python code")
