@@ -5,34 +5,43 @@ import warnings
 
 import keras
 
+# --- Gemma Utils ---
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_config
 from keras_hub.src.utils.transformers.export.gemma import (
     get_gemma_tokenizer_config,
 )
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
+
+# --- GPT-2 Utils ---
 from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_config
 from keras_hub.src.utils.transformers.export.gpt2 import (
     get_gpt2_tokenizer_config,
 )
 from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_weights_map
 
+# --- Qwen Utils ---
+from keras_hub.src.utils.transformers.export.qwen import get_qwen_config
+from keras_hub.src.utils.transformers.export.qwen import (
+    get_qwen_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.qwen import get_qwen_weights_map
+
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
     "GPT2Backbone": get_gpt2_config,
-    # Add for future models, e.g., "MistralBackbone": get_mistral_config
+    "QwenBackbone": get_qwen_config,
 }
 
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
     "GPT2Backbone": get_gpt2_weights_map,
-    # Add for future models, e.g., "MistralBackbone": get_mistral_weights_map
+    "QwenBackbone": get_qwen_weights_map,
 }
 
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
     "GPT2Tokenizer": get_gpt2_tokenizer_config,
-    # Add for future models, e.g., "MistralTokenizer":
-    # get_mistral_tokenizer_config
+    "QwenTokenizer": get_qwen_tokenizer_config,
 }
 
 
@@ -62,50 +71,64 @@ def export_backbone(backbone, path, include_lm_head=False):
     weights_dict = get_weights_fn(backbone, include_lm_head=include_lm_head)
     if not weights_dict:
         raise ValueError("No weights to save.")
+
     # Save config
     os.makedirs(path, exist_ok=True)
     config_path = os.path.join(path, "config.json")
+
+    # Handle Config Objects (GPT2/Qwen) vs Dicts (Gemma)
+    config_to_save = hf_config
+    if hasattr(hf_config, "to_dict"):
+        config_to_save = hf_config.to_dict()
+
     with open(config_path, "w") as f:
-        json.dump(hf_config.to_dict(), f)
+        json.dump(config_to_save, f, indent=2)
+
     # Save weights based on backend
     weights_path = os.path.join(path, "model.safetensors")
     if backend == "torch":
+        # Lazy import to prevent crash on TF-only environments
         import torch
         from safetensors.torch import save_file
 
         weights_dict_torch = {}
-
         for k, v in weights_dict.items():
             tensor = v.value if hasattr(v, "value") else v
 
-            # Torch tensor -> move to CPU
             if isinstance(tensor, torch.Tensor):
                 t = tensor.detach().to("cpu")
-
-            # TensorFlow / JAX -> convert via numpy()
             elif hasattr(tensor, "numpy"):
                 t = torch.tensor(tensor.numpy())
-
-            # numpy array
             elif hasattr(tensor, "__array__"):
                 t = torch.tensor(tensor)
-
             else:
-                raise TypeError(f"Unsupported tensor type: {type(tensor)}")
+                t = tensor
 
-            weights_dict_torch[k] = t.contiguous()
+            if hasattr(t, "contiguous"):
+                t = t.contiguous()
 
-        # ----  GPT-2 tied weights ----
+            weights_dict_torch[k] = t
+
+        # Handle Tied Weights (GPT-2, Qwen)
+        # Safetensors crashes if we try to save the same shared memory twice.
         if (
+            "lm_head.weight" in weights_dict_torch
+            and "model.embed_tokens.weight" in weights_dict_torch
+        ):
+            # Qwen / Llama naming convention
+            wte = weights_dict_torch["model.embed_tokens.weight"]
+            lm = weights_dict_torch["lm_head.weight"]
+            if wte.data_ptr() == lm.data_ptr():
+                weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
+        elif (
             "lm_head.weight" in weights_dict_torch
             and "transformer.wte.weight" in weights_dict_torch
         ):
+            # GPT-2 naming convention
             wte = weights_dict_torch["transformer.wte.weight"]
             lm = weights_dict_torch["lm_head.weight"]
-
-        if wte.data_ptr() == lm.data_ptr():
-            weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
-        # --------------------------------
+            if wte.data_ptr() == lm.data_ptr():
+                weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
 
         save_file(weights_dict_torch, weights_path, metadata={"format": "pt"})
 
@@ -129,13 +152,17 @@ def export_tokenizer(tokenizer, path):
         path: str. Path to save the exported tokenizer.
     """
     os.makedirs(path, exist_ok=True)
+
     # Save tokenizer assets
+    # BytePairTokenizer (GPT2, Qwen) -> "vocabulary.json", "merges.txt"
+    # SentencePieceTokenizer (Gemma) -> "vocabulary.spm"
     tokenizer.save_assets(path)
+
     # Export tokenizer config
     tokenizer_type = tokenizer.__class__.__name__
     if tokenizer_type not in MODEL_TOKENIZER_CONFIGS:
         raise ValueError(
-            "Export to Transformers format not implemented for {tokenizer_type}"
+            f"Export to Transformer format not implemented for {tokenizer_type}"
         )
     get_tokenizer_config_fn = MODEL_TOKENIZER_CONFIGS[tokenizer_type]
     tokenizer_config = get_tokenizer_config_fn(tokenizer)
@@ -143,32 +170,23 @@ def export_tokenizer(tokenizer, path):
     with open(tokenizer_config_path, "w") as f:
         json.dump(tokenizer_config, f, indent=4)
 
+    # Rename files to match Hugging Face expectations
     if tokenizer_type == "GemmaTokenizer":
-        # Rename vocabulary file
         vocab_spm_path = os.path.join(path, "vocabulary.spm")
         tokenizer_model_path = os.path.join(path, "tokenizer.model")
         if os.path.exists(vocab_spm_path):
             shutil.move(vocab_spm_path, tokenizer_model_path)
         else:
-            warnings.warn(
-                f"{vocab_spm_path} not found. Tokenizer may not load "
-                "correctly. Ensure that the tokenizer configuration "
-                "is correct and that the vocabulary file is present "
-                "in the original model."
-            )
-    elif tokenizer_type == "GPT2Tokenizer":
-        # Rename vocabulary file
+            warnings.warn(f"{vocab_spm_path} not found.")
+
+    elif tokenizer_type in ["GPT2Tokenizer", "QwenTokenizer"]:
+        # Both GPT-2 and Qwen (BPE) use vocab.json in HF
         vocab_json_path = os.path.join(path, "vocabulary.json")
-        renamed_vocab_json_path = os.path.join(path, "vocab.json")
+        vocab_hf_path = os.path.join(path, "vocab.json")
         if os.path.exists(vocab_json_path):
-            shutil.move(vocab_json_path, renamed_vocab_json_path)
+            shutil.move(vocab_json_path, vocab_hf_path)
         else:
-            warnings.warn(
-                f"{vocab_json_path} not found. Tokenizer may not load "
-                "correctly. Ensure that the tokenizer configuration "
-                "is correct and that the vocabulary file is present "
-                "in the original model."
-            )
+            warnings.warn(f"{vocab_json_path} not found.")
 
 
 def export_to_safetensors(keras_model, path):
