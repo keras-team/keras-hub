@@ -365,19 +365,31 @@ class PARSeqDecoder(keras.layers.Layer):
             token_ids[:, :1]
         )
 
-        # Build content in a branchless way so both graph and JAX backends
-        # see a consistent tensor shape. Slicing with length 0 yields empty
-        # tensors, so concatenation still produces the correct
-        # (bs, tokens_length, hidden_dim) shape even when tokens_length == 1.
-        c = self.pos_query_embeddings[:, : tokens_length - 1, :]
-        c = c + self.hidden_dim**0.5 * self.token_embedding(token_ids[:, 1:])
-        content = ops.concatenate([null_context, c], axis=1)
+        # Build content embeddings. When tokens_length == 1, this produces an
+        # empty tensor (shape: bs, 0, hidden), avoiding the need for a Python
+        # conditional.
+        content_embeddings = self.hidden_dim**0.5 * self.token_embedding(
+            token_ids[:, 1:]
+        )
+        # Use ops.take instead of dynamic slicing for JAX/TF graph compatibility
+        pos_embeds = ops.take(
+            self.pos_query_embeddings,
+            ops.arange(ops.shape(content_embeddings)[1], dtype="int32"),
+            axis=1,
+        )
+        content = ops.concatenate(
+            [null_context, pos_embeds + content_embeddings], axis=1
+        )
 
         content = self.dropout(content)
 
         query = ops.multiply(
             ops.ones((bs, 1, 1), dtype=self.dtype),
-            self.pos_query_embeddings[:, :tokens_length, :],
+            ops.take(
+                self.pos_query_embeddings,
+                ops.arange(tokens_length, dtype="int32"),
+                axis=1,
+            ),
         )
         query = self.dropout(query)
 
