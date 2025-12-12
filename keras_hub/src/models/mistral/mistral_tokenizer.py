@@ -6,10 +6,12 @@ from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
 from keras_hub.src.tokenizers.tiktoken_tokenizer import TiktokenTokenizer
 
 
-@keras_hub_export([
-    "keras_hub.tokenizers.MistralTokenizer",
-    "keras_hub.models.MistralTokenizer",
-])
+@keras_hub_export(
+    [
+        "keras_hub.tokenizers.MistralTokenizer",
+        "keras_hub.models.MistralTokenizer",
+    ]
+)
 class MistralTokenizer(SentencePieceTokenizer):
     """Mistral tokenizer layer based on SentencePiece.
 
@@ -56,18 +58,15 @@ class MistralTokenizer(SentencePieceTokenizer):
         super().__init__(proto=proto, **kwargs)
 
 
-@keras_hub_export([
-    "keras_hub.tokenizers.NewMistralTokenizer",
-    "keras_hub.models.NewMistralTokenizer",
-])
-class NewMistralTokenizer(TiktokenTokenizer):
+@keras_hub_export(
+    [
+        "keras_hub.tokenizers.MistralTiktokenTokenizer",
+        "keras_hub.models.MistralTiktokenTokenizer",
+    ]
+)
+class MistralTiktokenTokenizer(TiktokenTokenizer):
     """
-    Tekken-based tokenizer for Mistral models.
-
-    Responsibilities:
-      • Add required Mistral special tokens (<s>, </s>, pad)
-      • Delegate tekken.json parsing to TiktokenTokenizer
-      • Use Tiktoken backend via TiktokenTokenizer normalisation
+    Tiktoken-based tokenizer for Mistral models.
     """
 
     backbone_cls = MistralBackbone

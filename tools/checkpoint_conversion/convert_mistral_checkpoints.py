@@ -8,7 +8,10 @@ import numpy as np
 from absl import app
 from absl import flags
 from keras import ops
-from transformers import AutoTokenizer
+
+# !pip install git+https://github.com/huggingface/transformers.git
+# !pip install mistral-common
+from transformers import MistralCommonBackend
 from transformers import MistralForCausalLM
 
 from keras_hub.models import MistralBackbone
@@ -222,7 +225,7 @@ def main(_):
         # === Load the Huggingface model ===
         hf_model = MistralForCausalLM.from_pretrained(hf_preset)
 
-        hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
+        hf_tokenizer = MistralCommonBackend.from_pretrained(hf_preset)
         hf_model.eval()
         print("\n-> Huggingface model and tokenizer loaded")
 

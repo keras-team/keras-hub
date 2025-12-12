@@ -54,6 +54,9 @@ from keras_hub.src.models.llama3.llama3_tokenizer import (
     Llama3Tokenizer as Llama3Tokenizer,
 )
 from keras_hub.src.models.mistral.mistral_tokenizer import (
+    MistralTiktokenTokenizer as MistralTiktokenTokenizer,
+)
+from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
 from keras_hub.src.models.mixtral.mixtral_tokenizer import (
@@ -120,6 +123,9 @@ from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
 )
 from keras_hub.src.tokenizers.sentence_piece_tokenizer_trainer import (
     compute_sentence_piece_proto as compute_sentence_piece_proto,
+)
+from keras_hub.src.tokenizers.tiktoken_tokenizer import (
+    TiktokenTokenizer as TiktokenTokenizer,
 )
 from keras_hub.src.tokenizers.tokenizer import Tokenizer as Tokenizer
 from keras_hub.src.tokenizers.unicode_codepoint_tokenizer import (
