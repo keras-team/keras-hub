@@ -37,61 +37,6 @@ MODEL_TOKENIZER_CONFIGS = {
     # get_mistral_tokenizer_config
 }
 
-
-def _convert_sentencepiece_to_fast(tokenizer, path, tokenizer_config):
-    """Convert SentencePiece model to fast tokenizer format.
-    
-    Uses HuggingFace's GemmaTokenizerFast to properly convert the 
-    SentencePiece model to tokenizer.json format. Only works for
-    BPE and Unigram SentencePiece models (not WORD/CHAR types).
-    
-    Note: Some versions of transformers (4.57.1-4.57.3) may show a
-    warning about "incorrect regex pattern" when loading the exported
-    tokenizer. This is a known false positive and can be safely ignored.
-    The tokenizer works correctly regardless of the warning.
-    
-    Args:
-        tokenizer: The Keras tokenizer.
-        path: Directory where tokenizer files are saved.
-        tokenizer_config: The tokenizer configuration dictionary.
-    """
-    try:
-        import sentencepiece as spm
-        from transformers import GemmaTokenizerFast
-        
-        tokenizer_model_path = os.path.join(path, "tokenizer.model")
-        
-        # Skip conversion for small test vocabularies
-        # Test vocabularies may use incompatible model types (WORD/CHAR)
-        if tokenizer.vocabulary_size() < 100:
-            return
-        
-        # Load the SentencePiece model to verify it's compatible
-        sp_model = spm.SentencePieceProcessor()
-        sp_model.Load(tokenizer_model_path)
-        
-        # Create GemmaTokenizerFast from the SentencePiece model
-        # This will automatically generate the tokenizer.json
-        fast_tokenizer = GemmaTokenizerFast(
-            vocab_file=tokenizer_model_path,
-            bos_token=tokenizer_config.get("bos_token", "<bos>"),
-            eos_token=tokenizer_config.get("eos_token", "<eos>"),
-            unk_token=tokenizer_config.get("unk_token", "<unk>"),
-            pad_token=tokenizer_config.get("pad_token", "<pad>"),
-        )
-        
-        # Save to generate tokenizer.json
-        fast_tokenizer.save_pretrained(path)
-        
-    except ImportError:
-        # Silently skip if libraries not available
-        pass
-    except Exception:
-        # Silently skip if conversion fails (e.g., incompatible model type)
-        # This is expected for test vocabularies
-        pass
-
-
 def export_backbone(backbone, path, include_lm_head=False):
     """Export the backbone model to HuggingFace format.
 
@@ -179,12 +124,7 @@ def export_tokenizer(tokenizer, path):
             "correctly. Ensure that the tokenizer configuration "
             "is correct and that the vocabulary file is present "
             "in the original model."
-        )
-    
-    # Generate tokenizer.json for fast tokenizer support
-    # _convert_sentencepiece_to_fast(tokenizer, path, tokenizer_config)
-    
-
+        )    
 
 
 def export_to_safetensors(keras_model, path):
