@@ -115,7 +115,7 @@ def validate_output(
     hf_outputs = hf_outputs[0].detach().cpu().numpy()
 
     # Call with keras.
-    keras_outputs = keras_hub_model.predict({"images": images}, verbose=0)
+    keras_outputs = keras_hub_model.predict({"pixel_values": images}, verbose=0)
     keras_outputs = keras.ops.convert_to_numpy(keras_outputs)
 
     print("🔶 Keras output:", keras_outputs[0, 0, :10])
