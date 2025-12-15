@@ -6,33 +6,24 @@ import warnings
 import keras
 import torch
 
-# --- Import GPT2Tokenizer ---
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_config
 from keras_hub.src.utils.transformers.export.gemma import (
     get_gemma_tokenizer_config,
 )
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
-from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_config
-from keras_hub.src.utils.transformers.export.gpt2 import (
-    get_gpt2_tokenizer_config,
-)
-from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_weights_map
 
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
-    "GPT2Backbone": get_gpt2_config,
     # Add for future models, e.g., "MistralBackbone": get_mistral_config
 }
 
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
-    "GPT2Backbone": get_gpt2_weights_map,
     # Add for future models, e.g., "MistralBackbone": get_mistral_weights_map
 }
 
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
-    "GPT2Tokenizer": get_gpt2_tokenizer_config,
     # Add for future models, e.g., "MistralTokenizer":
     # get_mistral_tokenizer_config
 }
