@@ -1,4 +1,5 @@
 import keras
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.llama3.llama3_backbone import Llama3BackboneConfig
 
@@ -37,9 +38,15 @@ class Llama3VisionConfig(Llama3BackboneConfig):
 
     def get_config(self):
         config = super().get_config()
+
+        # specific fix for "vision_encoder_config is not JSON serializable"
+        vision_config_val = self.vision_encoder_config
+        if hasattr(vision_config_val, "get_config"):
+            vision_config_val = vision_config_val.get_config()
+
         config.update(
             {
-                "vision_encoder_config": self.vision_encoder_config,
+                "vision_encoder_config": vision_config_val,
                 "vision_projection_dim": self.vision_projection_dim,
                 "cross_attention_layers": self.cross_attention_layers,
             }
