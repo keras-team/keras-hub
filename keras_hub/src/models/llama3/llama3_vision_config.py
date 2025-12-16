@@ -1,14 +1,12 @@
-import keras
-
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.llama3.llama3_backbone import Llama3BackboneConfig
+from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
 
 
 @keras_hub_export("keras_hub.models.Llama3VisionConfig")
-class Llama3VisionConfig(Llama3BackboneConfig):
+class Llama3VisionConfig(Llama3Backbone):
     """Configuration for the Llama 3.2 Vision Backbone.
 
-    This class extends `Llama3BackboneConfig` to include parameters for the
+    This class extends `Llama3Backbone` to include parameters for the
     vision encoder and the gated cross-attention mechanism used in
     Llama 3.2 multimodal models (11B and 90B).
 
@@ -20,7 +18,7 @@ class Llama3VisionConfig(Llama3BackboneConfig):
         cross_attention_layers: list of int. The indices of the transformer
             layers that should include gated cross-attention blocks.
             For Llama 3.2 11B, this is typically every 4th layer.
-        **kwargs: Arguments for the parent `Llama3BackboneConfig`.
+        **kwargs: Arguments for the parent `Llama3Backbone`.
     """
 
     def __init__(

@@ -1,8 +1,5 @@
-import keras
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
 
 
 @keras_hub_export("keras_hub.models.Llama3VisionBackbone")
@@ -43,8 +40,9 @@ class Llama3VisionBackbone(Backbone):
     @classmethod
     def from_config(cls, config):
         # We must manually deserialize the nested config object
-        from keras_hub.src.models.llama3.llama3_vision_config import \
-            Llama3VisionConfig
+        from keras_hub.src.models.llama3.llama3_vision_config import (
+            Llama3VisionConfig,
+        )
 
         config_data = config.pop("config")
         vision_config = Llama3VisionConfig(**config_data)
