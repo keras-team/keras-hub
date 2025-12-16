@@ -4,28 +4,39 @@ import shutil
 import warnings
 
 import keras
-import torch
 
+try:
+    from keras_hub.src.models.qwen.qwen_tokenizer import QwenTokenizer
+except ImportError:
+    QwenTokenizer = None
+
+# --- Gemma Utils ---
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_config
 from keras_hub.src.utils.transformers.export.gemma import (
     get_gemma_tokenizer_config,
 )
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
 
+# --- Qwen Utils ---
+from keras_hub.src.utils.transformers.export.qwen import get_qwen_config
+from keras_hub.src.utils.transformers.export.qwen import (
+    get_qwen_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.qwen import get_qwen_weights_map
+
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
-    # Add for future models, e.g., "MistralBackbone": get_mistral_config
+    "QwenBackbone": get_qwen_config,
 }
 
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
-    # Add for future models, e.g., "MistralBackbone": get_mistral_weights_map
+    "QwenBackbone": get_qwen_weights_map,
 }
 
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
-    # Add for future models, e.g., "MistralTokenizer":
-    # get_mistral_tokenizer_config
+    "QwenTokenizer": get_qwen_tokenizer_config,
 }
 
 
@@ -60,7 +71,7 @@ def export_backbone(backbone, path, include_lm_head=False):
     os.makedirs(path, exist_ok=True)
     config_path = os.path.join(path, "config.json")
 
-    # Handle Config Objects vs Dicts
+    # Handle Config Objects (Qwen) vs Dicts (Gemma)
     config_to_save = hf_config
     if hasattr(hf_config, "to_dict"):
         config_to_save = hf_config.to_dict()
@@ -71,6 +82,7 @@ def export_backbone(backbone, path, include_lm_head=False):
     # Save weights based on backend
     weights_path = os.path.join(path, "model.safetensors")
     if backend == "torch":
+        import torch
         from safetensors.torch import save_file
 
         weights_dict_torch = {}
@@ -91,12 +103,13 @@ def export_backbone(backbone, path, include_lm_head=False):
 
             weights_dict_torch[k] = t
 
-        # Handle Tied Weights (GPT-2)
+        # Handle Tied Weights (Qwen naming convention)
+        # Safetensors crashes if we try to save the same shared memory twice.
         if (
             "lm_head.weight" in weights_dict_torch
-            and "transformer.wte.weight" in weights_dict_torch
+            and "model.embed_tokens.weight" in weights_dict_torch
         ):
-            wte = weights_dict_torch["transformer.wte.weight"]
+            wte = weights_dict_torch["model.embed_tokens.weight"]
             lm = weights_dict_torch["lm_head.weight"]
             if wte.data_ptr() == lm.data_ptr():
                 weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
@@ -125,6 +138,8 @@ def export_tokenizer(tokenizer, path):
     os.makedirs(path, exist_ok=True)
 
     # Save tokenizer assets
+    # BytePairTokenizer (Qwen) -> "vocabulary.json", "merges.txt"
+    # SentencePieceTokenizer (Gemma) -> "vocabulary.spm"
     tokenizer.save_assets(path)
 
     # Export tokenizer config
@@ -139,7 +154,7 @@ def export_tokenizer(tokenizer, path):
     with open(tokenizer_config_path, "w") as f:
         json.dump(tokenizer_config, f, indent=4)
 
-    # 2. Rename files to match Hugging Face expectations
+    # Rename files to match Hugging Face expectations
     if tokenizer_type == "GemmaTokenizer":
         vocab_spm_path = os.path.join(path, "vocabulary.spm")
         tokenizer_model_path = os.path.join(path, "tokenizer.model")
@@ -148,8 +163,8 @@ def export_tokenizer(tokenizer, path):
         else:
             warnings.warn(f"{vocab_spm_path} not found.")
 
-    elif tokenizer_type == "GPT2Tokenizer":
-        # Rename vocabulary.json -> vocab.json
+    elif tokenizer_type == "QwenTokenizer":
+        # Qwen (BPE) uses vocab.json in HF
         vocab_json_path = os.path.join(path, "vocabulary.json")
         vocab_hf_path = os.path.join(path, "vocab.json")
         if os.path.exists(vocab_json_path):
