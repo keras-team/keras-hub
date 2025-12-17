@@ -45,18 +45,18 @@ class GptOssBackbone(Backbone):
             for each transformer.
         num_experts: int. The number of experts for the MoE layers.
         top_k: int. The number of experts to use for each token.
-            Defaults to 2.
+            Defaults to `2`.
         rope_max_wavelength: int. The maximum angular wavelength of
-            the sine/cosine curves, for rotary embeddings. Defaults to 10000.
+            the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_scaling_factor: float. The scaling factor for
-            calculation of roatary embedding. Defaults to 1.0.
+            calculation of roatary embedding. Defaults to `1.0`.
         layer_norm_epsilon: float. Epsilon for the layer
-            normalization layers in the transformer decoder. Defaults to 1e-6.
+            normalization layers in the transformer decoder. Defaults to `1e-6`.
         sliding_window: int. The sliding window for the attention
             layers. This controls the maximum cache size for the attention
             layers in each transformer decoder. Only `sliding_window` number
             of tokens are saved in the cache and used to generate the next
-            token. Defaults to 4096.
+            token. Defaults to `4096`.
         head_dim: int. Head dimension for attention layers. This
             parameter is accepted for HuggingFace compatibility but ignored.
             The head dimension is calculated dynamically as hidden_dim //
@@ -65,7 +65,7 @@ class GptOssBackbone(Backbone):
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
-            float32 precision regardless of dtype.
+            `float32` precision regardless of dtype.
 
     Examples:
 
@@ -73,12 +73,17 @@ class GptOssBackbone(Backbone):
     import numpy as np
     import keras_hub
 
+    # Load a pretrained GptOss backbone from a preset.
+    model = keras_hub.models.GptOssBackbone.from_preset("gpt_oss_20b_en")
+
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
         "padding_mask": np.array(
             [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]], dtype="int32"
         ),
     }
+
+    model(input_data)
 
     # Randomly initialized GptOss decoder with custom config.
     model = keras_hub.models.GptOssBackbone(
@@ -143,7 +148,7 @@ class GptOssBackbone(Backbone):
                 # GPT-OSS uses SW attention in every other layer
                 sliding_window=sliding_window if i % 2 == 1 else None,
                 dropout=dropout,
-                head_dim=head_dim,  # Pass head_dim to decoder layers
+                head_dim=head_dim,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )

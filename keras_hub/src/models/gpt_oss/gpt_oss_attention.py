@@ -67,16 +67,13 @@ class GptOssAttention(keras.layers.Layer):
         # v = num key/value heads
         # h = head dim
         self._hidden_dim = inputs_shape[-1]
-        # Use head_dim if provided, otherwise calculate dynamically
+
         if self.head_dim is not None:
             self._head_dim = self.head_dim
         else:
-            # Calculate head_dim dynamically based on the model configuration
             self._head_dim = self._hidden_dim // self.num_query_heads
         self._inv_norm_factor = 1.0 / math.sqrt(self._head_dim)
 
-        # Calculate rotary dimension -
-        # use the largest even number <= head_dim
         self._rotary_dim = (self._head_dim // 2) * 2
 
         self.query_dense = keras.layers.EinsumDense(

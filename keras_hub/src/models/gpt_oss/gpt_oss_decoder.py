@@ -28,9 +28,9 @@ class GptOssExperts(keras.layers.Layer):
         kernel_initializer: string. The initializer for the kernel
             weights. Defaults to "glorot_uniform".
         alpha: float. The alpha parameter for the custom GLU
-            activation. Defaults to 1.702.
+            activation. Defaults to `1.702`.
         limit: float. The clamping limit for gate and up
-            projections. Defaults to 7.0.
+            projections. Defaults to `7.0`.
     """
 
     def __init__(
@@ -85,19 +85,15 @@ class GptOssExperts(keras.layers.Layer):
         gate_up = ops.einsum("th,ehm->etm", hidden_states, self.gate_up_proj)
         gate_up = gate_up + self.gate_up_proj_bias[:, None, :]
 
-        # Split into gate and up projections
         gate = gate_up[..., ::2]
         up = gate_up[..., 1::2]
 
-        # Apply clamping
         gate = ops.clip(gate, -1e9, self.limit)
         up = ops.clip(up, -self.limit, self.limit)
 
-        # Custom GLU activation
         glu = gate * ops.sigmoid(gate * self.alpha)
         gated_output = (up + 1) * glu
 
-        # Down projection
         # [num_experts, num_tokens, hidden_dim]
         out = ops.einsum("etm,emh->eth", gated_output, self.down_proj)
         out = out + self.down_proj_bias[:, None, :]
@@ -140,19 +136,17 @@ class GptOssTopKRouter(keras.layers.Layer):
         # hidden_states shape: (num_tokens, hidden_dim)
         router_logits = self.router_dense(hidden_states)
 
-        # Get top-k routing weights and indices
         routing_weights, selected_experts = ops.top_k(
             router_logits, k=self.top_k
         )
         routing_weights = ops.softmax(routing_weights, axis=-1)
 
-        # Create a sparse tensor for the routing scores
         expert_mask = ops.one_hot(selected_experts, self.num_experts)
         expert_mask = ops.cast(expert_mask, dtype=routing_weights.dtype)
-        # Combine weights with the one-hot mask
+
         # Shape: (num_tokens, top_k, num_experts)
         weighted_mask = expert_mask * ops.expand_dims(routing_weights, axis=-1)
-        # Sum over the top_k dimension to get final scores
+
         # Shape: (num_tokens, num_experts)
         router_scores = ops.sum(weighted_mask, axis=1)
 
@@ -219,10 +213,8 @@ class GptOssSparseMoeBlock(keras.layers.Layer):
             hidden_states, (-1, self.hidden_dim)
         )
 
-        # Get routing scores from the router
         router_scores = self.router(hidden_states_flattened)
 
-        # Get outputs from all experts
         expert_outputs = self.experts(hidden_states_flattened)
 
         # Weight expert outputs by router scores and sum
@@ -316,7 +308,7 @@ class GptOssTransformerDecoder(keras.layers.Layer):
             sliding_window=self.sliding_window,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
-            head_dim=self.head_dim,  # Pass head_dim to attention layer
+            head_dim=self.head_dim,
             dtype=self.dtype_policy,
             name="self_attention",
         )
