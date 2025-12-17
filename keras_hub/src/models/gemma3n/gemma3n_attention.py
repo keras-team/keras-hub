@@ -431,6 +431,7 @@ class Gemma3nTextAttention(keras.layers.Layer):
             self.head_dim,
             attention_mask,
             dropout=self.attention_dropout if training else 0.0,
+            scaling=1.0,
             training=training,
         )
         attn_output = keras.ops.reshape(attn_output, input_shape + (-1,))

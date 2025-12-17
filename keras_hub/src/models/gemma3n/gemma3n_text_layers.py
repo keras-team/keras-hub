@@ -40,7 +40,9 @@ class Gemma3nTextScaledWordEmbedding(keras.layers.Layer):
         super().build(input_shape)
 
     def call(self, inputs):
-        return self.embedding(inputs) * self.embed_scale
+        embeddings = self.embedding(inputs)
+        scale = keras.ops.cast(self.embed_scale, embeddings.dtype)
+        return embeddings * scale
 
     def get_config(self):
         config = super().get_config()
@@ -201,13 +203,17 @@ class Gemma3nTextMLP(keras.layers.Layer):
         return keras.ops.relu(inputs - cutoff_x)
 
     def call(self, hidden_states):
+        input_dtype = hidden_states.dtype
         gate_proj = self.gate_proj(hidden_states)
+        gate_proj_calc = keras.ops.cast(gate_proj, "float32")
         if self.activation_sparsity > 0.0:
-            gate_proj = self._gaussian_topk(gate_proj)
-        activations = self.act_fn(gate_proj)
+            gate_proj_calc = self._gaussian_topk(gate_proj_calc)
+        activations_calc = self.act_fn(gate_proj_calc)
         up_proj = self.up_proj(hidden_states)
-        down_proj = self.down_proj(activations * up_proj)
-        return down_proj
+        up_proj_calc = keras.ops.cast(up_proj, "float32")
+        mult_calc = activations_calc * up_proj_calc
+        down_proj_calc = self.down_proj(mult_calc)
+        return keras.ops.cast(down_proj_calc, input_dtype)
 
     def get_config(self):
         config = super().get_config()
