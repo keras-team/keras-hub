@@ -16,7 +16,8 @@ from keras_hub.src.tests.test_case import TestCase
 
 class TestGemma3Export(TestCase):
     def test_export_to_hf(self):
-        proto = os.path.join(self.get_test_data_dir(), "gemma3_test_vocab.spm")
+        # Use the full BPE-based vocabulary to test fast tokenizer support
+        proto = os.path.join(self.get_test_data_dir(), "gemma3_vocabulary.spm")
         tokenizer = Gemma3Tokenizer(proto=proto)
 
         # Create a small backbone (text-only, no vision encoder)
@@ -71,12 +72,8 @@ class TestGemma3Export(TestCase):
         export_path_task = os.path.join(self.get_temp_dir(), "export_task")
         keras_model.export_to_transformers(export_path_task)
 
-        # Load Hugging Face models and tokenizer
         hf_backbone = AutoModel.from_pretrained(export_path_backbone)
-        # Note: We only test the slow tokenizer because the test vocab file
-        # is not compatible with the fast tokenizer (Unigram vs BPE mismatch).
-        # Using fast tokenizer raises: "You're trying to run a `Unigram` model
-        # but you're file was trained with a different algorithm"
+        hf_tokenizer_fast = AutoTokenizer.from_pretrained(export_path_tokenizer)
         hf_tokenizer_slow = AutoTokenizer.from_pretrained(
             export_path_tokenizer, use_fast=False
         )
@@ -130,21 +127,22 @@ class TestGemma3Export(TestCase):
             "Tie word embeddings do not match",
         )
 
-        # Verify tokenizer compatibility (using slow tokenizer)
         self.assertEqual(
             hf_tokenizer_slow.vocab_size,
             tokenizer.vocabulary_size(),
             "Tokenizer vocabulary sizes do not match",
         )
+        self.assertEqual(
+            hf_tokenizer_fast.vocab_size,
+            tokenizer.vocabulary_size(),
+            "Fast tokenizer vocabulary sizes do not match",
+        )
 
-        # Compare generated outputs using full model
-        # Test with small input since we set the seed, we expect same outcome
         prompt = "the quick"
 
-        # Generate with Keras model
         keras_output = keras_model.generate(prompt, max_length=20)
 
-        # Generate with HuggingFace model using slow tokenizer
+        # Test slow tokenizer
         input_ids_slow = hf_tokenizer_slow.encode(prompt, return_tensors="pt")
         output_ids_slow = hf_full_model.generate(
             input_ids_slow, max_length=20, do_sample=False
@@ -153,12 +151,31 @@ class TestGemma3Export(TestCase):
             output_ids_slow[0], skip_special_tokens=True
         )
 
-        # Debug print to see the actual outputs
+        # Test fast tokenizer
+        input_ids_fast = hf_tokenizer_fast.encode(prompt, return_tensors="pt")
+        output_ids_fast = hf_full_model.generate(
+            input_ids_fast, max_length=20, do_sample=False
+        )
+        hf_fast_output = hf_tokenizer_fast.decode(
+            output_ids_fast[0], skip_special_tokens=True
+        )
+
         print(f"Keras output: '{keras_output}'")
         print(f"HF slow output: '{hf_slow_output}'")
+        print(f"HF fast output: '{hf_fast_output}'")
 
         self.assertEqual(
             keras_output,
             hf_slow_output,
             "Generated outputs do not match (slow)",
+        )
+        self.assertEqual(
+            keras_output,
+            hf_fast_output,
+            "Generated outputs do not match (fast)",
+        )
+        self.assertEqual(
+            hf_slow_output,
+            hf_fast_output,
+            "Fast and slow tokenizer outputs do not match",
         )
