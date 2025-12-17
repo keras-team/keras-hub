@@ -17,7 +17,7 @@ from keras_hub.src.tests.test_case import TestCase
 class TestGemma3Export(TestCase):
     def test_export_to_hf(self):
         # Use the full BPE-based vocabulary to test fast tokenizer support
-        proto = os.path.join(self.get_test_data_dir(), "gemma3_vocabulary.spm")
+        proto = os.path.join(self.get_test_data_dir(), "gemma3_bpe_vocabulary.spm")
         tokenizer = Gemma3Tokenizer(proto=proto)
 
         # Create a small backbone (text-only, no vision encoder)
