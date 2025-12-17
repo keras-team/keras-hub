@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -25,6 +26,17 @@ class RotaryEmbedding(keras.layers.Layer):
             curves.
         scaling_factor: float. The scaling factor used to scale positions of
             the tokens.
+        rope_type: str. The type of RoPE scaling to apply. Supported types:
+            "linear", "dynamic", "yarn". Defaults to "linear".
+        beta_fast: float. Beta fast parameter for YaRN scaling. Only used
+            when rope_type="yarn". Defaults to 32.0.
+        beta_slow: float. Beta slow parameter for YaRN scaling. Only used
+            when rope_type="yarn". Defaults to 1.0.
+        original_max_position_embeddings: int. Original maximum position
+            embeddings for YaRN scaling. Only used when rope_type="yarn".
+            Defaults to 4096.
+        truncate: bool. Whether to apply truncation for YaRN scaling. Only used
+            when rope_type="yarn". Defaults to False.
         sequence_axis: int. Sequence axis in the input tensor.
         feature_axis: int. Feature axis in the input tensor.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
@@ -69,6 +81,11 @@ class RotaryEmbedding(keras.layers.Layer):
         self,
         max_wavelength=10000,
         scaling_factor=1.0,
+        rope_type="linear",
+        beta_fast=32.0,
+        beta_slow=1.0,
+        original_max_position_embeddings=4096,
+        truncate=False,
         sequence_axis=1,
         feature_axis=-1,
         **kwargs,
@@ -78,24 +95,70 @@ class RotaryEmbedding(keras.layers.Layer):
         self.sequence_axis = sequence_axis
         self.feature_axis = feature_axis
         self.scaling_factor = scaling_factor
+        self.rope_type = rope_type
+
+        # YaRN-specific parameters (only used when rope_type="yarn")
+        self.beta_fast = beta_fast
+        self.beta_slow = beta_slow
+        self.original_max_position_embeddings = original_max_position_embeddings
+        self.truncate = truncate
         self.built = True
 
+    def _normalize_axes(self, input_shape):
+        """Normalize and validate axis indices for the given input shape."""
+        rank = len(input_shape)
+
+        # Normalize negative indices
+        sequence_axis = self.sequence_axis
+        feature_axis = self.feature_axis
+
+        if sequence_axis < 0:
+            sequence_axis += rank
+        if feature_axis < 0:
+            feature_axis += rank
+
+        if sequence_axis < 0 or sequence_axis >= rank:
+            raise ValueError(
+                f"sequence_axis {self.sequence_axis} "
+                f"is out of range for input with rank {rank}"
+            )
+        if feature_axis < 0 or feature_axis >= rank:
+            raise ValueError(
+                f"feature_axis {self.feature_axis} "
+                f"is out of range for input with rank {rank}"
+            )
+        if sequence_axis == feature_axis:
+            raise ValueError("sequence_axis and feature_axis must be different")
+
+        return sequence_axis, feature_axis
+
+    def _validate_rotary_dimension(self, rotary_dim):
+        if rotary_dim % 2 != 0:
+            raise ValueError(
+                f"Rotary dimension must be even, got {rotary_dim}."
+                "The rotary embedding splits the feature dimension "
+                "into two halves. Consider using a different feature "
+                "dimension or padding."
+            )
+
     def call(self, inputs, start_index=0, positions=None):
+        input_shape = ops.shape(inputs)
+        sequence_axis, feature_axis = self._normalize_axes(input_shape)
+
+        rotary_dim = input_shape[feature_axis]
+        self._validate_rotary_dimension(rotary_dim)
+
         # Take care of unbatched `positions`.
         if positions is not None:
             if len(ops.shape(positions)) == 1:
                 positions = ops.expand_dims(positions, axis=0)
 
-        inputs = ops.moveaxis(
-            inputs, (self.feature_axis, self.sequence_axis), (-1, 1)
-        )
+        inputs = ops.moveaxis(inputs, (feature_axis, sequence_axis), (-1, 1))
         cos_emb, sin_emb = self._compute_cos_sin_embedding(
             inputs, start_index, positions
         )
         output = self._apply_rotary_pos_emb(inputs, cos_emb, sin_emb)
-        return ops.moveaxis(
-            output, (-1, 1), (self.feature_axis, self.sequence_axis)
-        )
+        return ops.moveaxis(output, (-1, 1), (feature_axis, sequence_axis))
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
         x1, x2 = ops.split(tensor, 2, axis=-1)
@@ -113,19 +176,35 @@ class RotaryEmbedding(keras.layers.Layer):
         return positions + ops.cast(start_index, dtype="float32")
 
     def _compute_cos_sin_embedding(self, inputs, start_index=0, positions=None):
+        """Compute cos & sin RoPE embeddings with optional YaRN scaling.
+        Uses tensor ops only to remain JIT/backends friendly.
+        """
         batch_axis = 0
-        feature_axis = len(inputs.shape) - 1
         sequence_axis = 1
+        feature_axis = len(inputs.shape) - 1
 
         rotary_dim = ops.shape(inputs)[feature_axis]
         inverse_freq = self._get_inverse_freq(rotary_dim)
 
         if positions is None:
             positions = self._compute_positions(inputs, start_index)
-            positions = ops.expand_dims(positions, axis=batch_axis)
+            positions = ops.expand_dims(
+                positions, axis=batch_axis
+            )  # shape (1, seq_len)
         else:
             positions = ops.cast(positions, "float32")
-        positions = positions / ops.cast(self.scaling_factor, "float32")
+            if len(ops.shape(positions)) == 1:
+                positions = ops.expand_dims(positions, axis=batch_axis)
+
+        if (
+            self.rope_type == "yarn"
+            and self.truncate
+            and self.original_max_position_embeddings is not None
+        ):
+            positions = ops.minimum(
+                positions,
+                ops.cast(self.original_max_position_embeddings, "float32"),
+            )
 
         freq = ops.einsum("bi,j->bij", positions, inverse_freq)
 
@@ -140,15 +219,103 @@ class RotaryEmbedding(keras.layers.Layer):
 
         cos_emb = ops.cast(ops.cos(embedding), self.compute_dtype)
         sin_emb = ops.cast(ops.sin(embedding), self.compute_dtype)
+
+        if self.rope_type == "yarn":
+            # YaRN temperature scaling
+            factor = ops.add(
+                ops.multiply(
+                    ops.cast(0.1, self.compute_dtype),
+                    ops.log(ops.cast(self.scaling_factor, self.compute_dtype)),
+                ),
+                ops.cast(1.0, self.compute_dtype),
+            )
+            cos_emb = cos_emb * factor
+            sin_emb = sin_emb * factor
         return cos_emb, sin_emb
 
     def _get_inverse_freq(self, rotary_dim):
-        freq_range = ops.divide(
-            ops.arange(0, rotary_dim, 2, dtype="float32"),
-            ops.cast(rotary_dim, "float32"),
+        """Return inverse frequencies."""
+        idx = ops.arange(0, rotary_dim, 2, dtype="float32")
+        denom = ops.cast(rotary_dim, "float32")
+        freq_range = idx / denom
+        inv = ops.power(ops.cast(self.max_wavelength, "float32"), -freq_range)
+
+        if self.rope_type == "linear":
+            return inv / ops.cast(self.scaling_factor, "float32")
+        elif self.rope_type == "dynamic":
+            exponent = ops.cast(rotary_dim, "float32") / ops.cast(
+                max(1, rotary_dim - 2), "float32"
+            )
+            return inv / ops.power(
+                ops.cast(self.scaling_factor, "float32"), exponent
+            )
+        elif self.rope_type == "yarn":
+            return self._get_yarn_inverse_freq(rotary_dim)
+        else:
+            return inv
+
+    def _get_yarn_inverse_freq(self, rotary_dim):
+        # Get the base (rope_theta equivalent) from max_wavelength
+        base = ops.cast(self.max_wavelength, "float32")
+
+        # Compute base frequencies: base ** (idx / dim)
+        idx = ops.arange(0, rotary_dim, 2, dtype="float32")
+        pos_freqs = ops.power(base, idx / ops.cast(rotary_dim, "float32"))
+
+        # Compute interpolation and extrapolation frequencies
+        inv_freq_extrapolation = 1.0 / pos_freqs
+        inv_freq_interpolation = 1.0 / (
+            ops.cast(self.scaling_factor, "float32") * pos_freqs
         )
-        inverse_freq = 1.0 / (self.max_wavelength**freq_range)
-        return inverse_freq
+
+        # Find correction range
+        beta_fast = ops.cast(self.beta_fast, "float32")
+        beta_slow = ops.cast(self.beta_slow, "float32")
+
+        # Find correction dimensions for beta_fast and beta_slow
+        def find_correction_dim_tensor(num_rotations, dim):
+            max_pos = ops.cast(self.original_max_position_embeddings, "float32")
+            return (dim * ops.log(max_pos / (num_rotations * 2 * np.pi))) / (
+                2 * ops.log(base)
+            )
+
+        low = find_correction_dim_tensor(
+            beta_fast, ops.cast(rotary_dim, "float32")
+        )
+        high = find_correction_dim_tensor(
+            beta_slow, ops.cast(rotary_dim, "float32")
+        )
+
+        # Apply truncation if specified
+        if self.truncate:
+            low = ops.floor(low)
+            high = ops.ceil(high)
+
+        # Clamp to valid range
+        low = ops.maximum(low, ops.cast(0, "float32"))
+        high = ops.minimum(high, ops.cast(rotary_dim // 2 - 1, "float32"))
+
+        # Linear ramp function
+        dim_half = rotary_dim // 2
+        idx_half = ops.arange(0, dim_half, dtype="float32")
+
+        # Prevent singularity
+        diff = high - low
+        diff = ops.maximum(diff, ops.cast(0.001, "float32"))
+
+        linear_func = (idx_half - low) / diff
+        ramp_func = ops.clip(linear_func, 0, 1)
+
+        # Apply the ramp to get extrapolation factor
+        inv_freq_extrapolation_factor = 1 - ramp_func
+
+        # Combine interpolation and extrapolation
+        scaled_inverse_freq = (
+            inv_freq_interpolation * (1 - inv_freq_extrapolation_factor)
+            + inv_freq_extrapolation * inv_freq_extrapolation_factor
+        )
+
+        return scaled_inverse_freq
 
     def get_config(self):
         config = super().get_config()
@@ -156,6 +323,13 @@ class RotaryEmbedding(keras.layers.Layer):
             {
                 "max_wavelength": self.max_wavelength,
                 "scaling_factor": self.scaling_factor,
+                "rope_type": self.rope_type,
+                "beta_fast": self.beta_fast,
+                "beta_slow": self.beta_slow,
+                "original_max_position_embeddings": (
+                    self.original_max_position_embeddings
+                ),
+                "truncate": self.truncate,
                 "sequence_axis": self.sequence_axis,
                 "feature_axis": self.feature_axis,
             }
