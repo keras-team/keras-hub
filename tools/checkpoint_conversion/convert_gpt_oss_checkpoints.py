@@ -32,7 +32,6 @@ PRESET_MAP = {
     "gpt_oss_120b_en": "openai/gpt-oss-120b",
     "gpt_oss_safeguard_20b_en": "openai/gpt-oss-safeguard-20b",
     "gpt_oss_safeguard_120b_en": "openai/gpt-oss-safeguard-120b",
-
 }
 
 FLAGS = flags.FLAGS

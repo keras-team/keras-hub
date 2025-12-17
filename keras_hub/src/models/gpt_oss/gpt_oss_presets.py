@@ -49,4 +49,3 @@ backbone_presets = {
         "kaggle_handle": "kaggle://keras/gpt-oss-safeguard/keras/gpt_oss_safeguard_120b_en/1",
     },
 }
-
