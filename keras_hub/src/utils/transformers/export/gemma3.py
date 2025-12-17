@@ -4,7 +4,6 @@ import keras.ops as ops
 def get_gemma3_config(backbone):
     """Convert Keras Gemma3 config to Hugging Face config dictionary."""
 
-    # Generate layer types pattern: 5 sliding attention layers followed by 1 full attention layer
     layer_types = []
     for i in range(backbone.num_layers):
         if (i + 1) % 6 == 0:
@@ -24,7 +23,7 @@ def get_gemma3_config(backbone):
         "head_dim": backbone.head_dim,
         "max_position_embeddings": 32768,
         "rms_norm_eps": 1e-6,
-        "rope_theta": 1000000.0, # Fixed: Updated to 1M to match official config
+        "rope_theta": 1000000.0,
         "attention_bias": False,
         "attention_dropout": 0.0,
         "hidden_activation": "gelu_pytorch_tanh",
@@ -34,7 +33,7 @@ def get_gemma3_config(backbone):
         "use_cache": True,
         "torch_dtype": "bfloat16",
         "layer_types": layer_types,
-        "query_pre_attn_scalar": backbone.head_dim, 
+        "query_pre_attn_scalar": backbone.head_dim,
     }
 
     return hf_config

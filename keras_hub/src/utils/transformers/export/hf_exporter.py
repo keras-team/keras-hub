@@ -124,7 +124,7 @@ def export_tokenizer(tokenizer, path):
             "correctly. Ensure that the tokenizer configuration "
             "is correct and that the vocabulary file is present "
             "in the original model."
-        )    
+        )
 
 
 def export_to_safetensors(keras_model, path):
