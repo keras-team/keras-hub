@@ -1,189 +1,110 @@
-# KerasHub: Multi-framework Pretrained Models
-[![](https://github.com/keras-team/keras-hub/workflows/Tests/badge.svg?branch=master)](https://github.com/keras-team/keras-hub/actions?query=workflow%3ATests+branch%3Amaster)
-![Python](https://img.shields.io/badge/python-v3.10.0+-success.svg)
-[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-hub/issues)
+---
+library_name: keras-hub
+---
+### Model Overview
+EfficientNets are a family of image classification models, which achieve state-of-the-art accuracy, yet being an order-of-magnitude smaller and faster than previous models.
 
-> [!IMPORTANT]
-> 📢 KerasNLP is now KerasHub! 📢 Read
-> [the announcement](https://github.com/keras-team/keras-hub/issues/1831).
+We develop EfficientNets based on AutoML and Compound Scaling. In particular, we first use AutoML MNAS Mobile framework to develop a mobile-size baseline network, named as EfficientNet-B0; Then, we use the compound scaling method to scale up this baseline to obtain EfficientNet-B1 to EfficientNet-B7.
 
-**KerasHub** is a pretrained modeling library that aims to be simple, flexible,
-and fast. The library provides [Keras 3](https://keras.io/keras_3/)
-implementations of popular model architectures, paired with a collection of
-pretrained checkpoints available on [Kaggle Models](https://kaggle.com/models/).
-Models can be used with text, image, and audio data for generation, classification,
-and many other built in tasks.
+This class encapsulates the architectures for both EfficientNetV1 and EfficientNetV2. EfficientNetV2 uses Fused-MBConv Blocks and Neural Architecture Search (NAS) to make models sizes much smaller while still improving overall model quality.
 
-KerasHub is an extension of the core Keras API; KerasHub components are provided
-as `Layer` and `Model` implementations. If you are  familiar with Keras,
-congratulations! You already understand most of KerasHub.
+This model is supported in both KerasCV and KerasHub. KerasCV will no longer be actively developed, so please try to use KerasHub.
 
-All models support JAX, TensorFlow, and PyTorch from a single model
-definition and can be fine-tuned on GPUs and TPUs out of the box. Models can
-be trained on individual accelerators with built-in PEFT techniques, or
-fine-tuned at scale with model and data parallel training. See our
-[Getting Started guide](https://keras.io/guides/keras_hub/getting_started)
-to start learning our API.
+## Links
 
-## Quick Links
+* [EfficientNet Quickstart Notebook](https://www.kaggle.com/code/prasadsachin/efficientnet-quickstart-kerashub)
+* [EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks](https://arxiv.org/abs/1905.11946)(ICML 2019)
+* [Based on the original keras.applications EfficientNet](https://github.com/keras-team/keras/blob/master/keras/applications/efficientnet.py)
+* [EfficientNetV2: Smaller Models and Faster Training](https://arxiv.org/abs/2104.00298) (ICML 2021)
+* [EfficientNet API Documentation](https://keras.io/keras_hub/api/models/efficientnet/)
+* [KerasHub Beginner Guide](https://keras.io/guides/keras_hub/getting_started/)
+* [KerasHub Model Publishing Guide](https://keras.io/guides/keras_hub/upload/)
 
-### For everyone
-
-- [Home page](https://keras.io/keras_hub)
-- [Getting started](https://keras.io/keras_hub/getting_started)
-- [Guides](https://keras.io/keras_hub/guides)
-- [API documentation](https://keras.io/keras_hub/api)
-- [Pre-trained models](https://keras.io/keras_hub/presets/)
-
-### For contributors
-
-- [Call for Contributions](https://github.com/keras-team/keras-hub/issues/1835)
-- [Roadmap](https://github.com/keras-team/keras-hub/issues/1836)
-- [Contributing Guide](CONTRIBUTING.md)
-- [Style Guide](STYLE_GUIDE.md)
-- [API Design Guide](API_DESIGN_GUIDE.md)
-
-## Quickstart
-
-Choose a backend:
-
-```python
-import os
-os.environ["KERAS_BACKEND"] = "jax"  # Or "tensorflow" or "torch"!
-```
-
-Import KerasHub and other libraries:
-
-```python
-import keras
-import keras_hub
-import numpy as np
-import tensorflow_datasets as tfds
-```
-
-Load a resnet model and use it to predict a label for an image:
-
-```python
-classifier = keras_hub.models.ImageClassifier.from_preset(
-    "resnet_50_imagenet",
-    activation="softmax",
-)
-url = "https://upload.wikimedia.org/wikipedia/commons/a/aa/California_quail.jpg"
-path = keras.utils.get_file(origin=url)
-image = keras.utils.load_img(path)
-preds = classifier.predict(np.array([image]))
-print(keras_hub.utils.decode_imagenet_predictions(preds))
-```
-
-Load a Bert model and fine-tune it on IMDb movie reviews:
-
-```python
-classifier = keras_hub.models.TextClassifier.from_preset(
-    "bert_base_en_uncased",
-    activation="softmax",
-    num_classes=2,
-)
-imdb_train, imdb_test = tfds.load(
-    "imdb_reviews",
-    split=["train", "test"],
-    as_supervised=True,
-    batch_size=16,
-)
-classifier.fit(imdb_train, validation_data=imdb_test)
-preds = classifier.predict(["What an amazing movie!", "A total waste of time."])
-print(preds)
-```
 
 ## Installation
 
-To install the latest KerasHub release with Keras 3, simply run:
+Keras and KerasHub can be installed with:
 
 ```
-pip install --upgrade keras-hub
+pip install -U -q keras-hub
+pip install -U -q keras
 ```
 
-Our text tokenizers are based on TensorFlow Text. Hence, if you are using any
-model which has language as a modality, you will have to run:
+Jax, TensorFlow, and Torch come preinstalled in Kaggle Notebooks. For instructions on installing them in another environment see the [Keras Getting Started](https://keras.io/getting_started/) page.
 
-```
-pip install --upgrade keras-hub[nlp]
-```
+## Presets
 
-To install the latest nightly changes for both KerasHub and Keras, you can use
-our nightly package.
+The following model checkpoints are provided by the Keras team. Full code examples for each are available below.
 
-```
-pip install --upgrade keras-hub-nightly
-```
+| Preset name                        | Parameters | Description                                                                                                                                                                                                                                                                                               |
+|------------------------------------|------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| efficientnet_b0_ra_imagenet | 5.3M      | EfficientNet B0 model pre-trained on the ImageNet 1k dataset with RandAugment recipe. |
+| efficientnet_b0_ra4_e3600_r224_imagenet | 5.3M      | EfficientNet B0 model pre-trained on the ImageNet 1k dataset by Ross Wightman. Trained with timm scripts using hyper-parameters inspired by the MobileNet-V4 small, mixed with go-to hparams from timm and 'ResNet Strikes Back'. |
+| efficientnet_b1_ft_imagenet | 7.8M      | EfficientNet B1 model fine-tuned on the ImageNet 1k dataset. |
+| efficientnet_b1_ra4_e3600_r240_imagenet | 7.8M      | EfficientNet B1 model pre-trained on the ImageNet 1k dataset by Ross Wightman. Trained with timm scripts using hyper-parameters inspired by the MobileNet-V4 small, mixed with go-to hparams from timm and 'ResNet Strikes Back'. |
+| efficientnet_b2_ra_imagenet | 9.1M      | EfficientNet B2 model pre-trained on the ImageNet 1k dataset with RandAugment recipe. |
+| efficientnet_b3_ra2_imagenet | 12.2M      | EfficientNet B3 model pre-trained on the ImageNet 1k dataset with RandAugment2 recipe. |
+| efficientnet_b4_ra2_imagenet | 19.3M      | EfficientNet B4 model pre-trained on the ImageNet 1k dataset with RandAugment2 recipe. |
+| efficientnet_b5_sw_imagenet | 30.4M      | EfficientNet B5 model pre-trained on the ImageNet 12k dataset by Ross Wightman. Based on Swin Transformer train / pretrain recipe with modifications (related to both DeiT and ConvNeXt recipes). |
+| efficientnet_b5_sw_ft_imagenet | 30.4M      | EfficientNet B5 model pre-trained on the ImageNet 12k dataset and fine-tuned on ImageNet-1k by Ross Wightman. Based on Swin Transformer train / pretrain recipe with modifications (related to both DeiT and ConvNeXt recipes). |
+| efficientnet_el_ra_imagenet | 10.6M      | EfficientNet-EdgeTPU Large model trained on the ImageNet 1k dataset with RandAugment recipe. |
+| efficientnet_em_ra2_imagenet | 6.9M      | EfficientNet-EdgeTPU Medium model trained on the ImageNet 1k dataset with RandAugment2 recipe. |
+| efficientnet_es_ra_imagenet | 5.4M      | EfficientNet-EdgeTPU Small model trained on the ImageNet 1k dataset with RandAugment recipe. |
+| efficientnet2_rw_m_agc_imagenet | 53.2M      | EfficientNet-v2 Medium model trained on the ImageNet 1k dataset with adaptive gradient clipping. |
+| efficientnet2_rw_s_ra2_imagenet | 23.9M      | EfficientNet-v2 Small model trained on the ImageNet 1k dataset with RandAugment2 recipe. |
+| efficientnet2_rw_t_ra2_imagenet | 13.6M      | EfficientNet-v2 Tiny model trained on the ImageNet 1k dataset with RandAugment2 recipe. |
+| efficientnet_lite0_ra_imagenet | 4.7M      | EfficientNet-Lite model fine-trained on the ImageNet 1k dataset with RandAugment recipe. |
 
-Currently, installing KerasHub will always pull in TensorFlow for use of the
-`tf.data` API for preprocessing. When pre-processing with `tf.data`, training
-can still happen on any backend.
+## Model card
+https://arxiv.org/abs/1905.11946
 
-Visit the [core Keras getting started page](https://keras.io/getting_started/)
-for more information on installing Keras 3, accelerator support, and
-compatibility with different frameworks.
-
-## Configuring your backend
-
-If you have Keras 3 installed in your environment (see installation above),
-you can use KerasHub with any of JAX, TensorFlow and PyTorch. To do so, set the
-`KERAS_BACKEND` environment variable. For example:
-
-```shell
-export KERAS_BACKEND=jax
-```
-
-Or in Colab, with:
-
+## Example Usage
+Load
 ```python
-import os
-os.environ["KERAS_BACKEND"] = "jax"
-
-import keras_hub
+classifier = keras_hub.models.EfficientNetImageClassifier.from_preset(
+    "efficientnet_b0_ra_imagenet",
+)
+```
+Predict
+```python
+batch_size = 1
+images = keras.random.normal(shape=(batch_size, 96, 96, 3))
+classifier.predict(images)
+```
+Train, specify `num_classes` to load randomly initialized classifier head.
+```python
+num_classes = 2
+labels = keras.random.randint(shape=(batch_size,), minval=0, maxval=num_classes)
+classifier = keras_hub.models.EfficientNetImageClassifier.from_preset(
+    "efficientnet_b0_ra_imagenet",
+    num_classes=num_classes,
+)
+classifier.preprocessor.image_size = (96, 96)
+classifier.fit(images, labels, epochs=3)
 ```
 
-> [!IMPORTANT]
-> Make sure to set the `KERAS_BACKEND` **before** importing any Keras libraries;
-> it will be used to set up Keras when it is first imported.
+## Example Usage with Hugging Face URI
 
-## Compatibility
-
-We follow [Semantic Versioning](https://semver.org/), and plan to
-provide backwards compatibility guarantees both for code and saved models built
-with our components. While we continue with pre-release `0.y.z` development, we
-may break compatibility at any time and APIs should not be considered stable.
-
-## Disclaimer
-
-KerasHub provides access to pre-trained models via the `keras_hub.models` API.
-These pre-trained models are provided on an "as is" basis, without warranties
-or conditions of any kind. The following underlying models are provided by third
-parties, and subject to separate licenses:
-BART, BLOOM, DeBERTa, DistilBERT, GPT-2, Llama, Mistral, OPT, RoBERTa, Whisper,
-and XLM-RoBERTa.
-
-## Citing KerasHub
-
-If KerasHub helps your research, we appreciate your citations.
-Here is the BibTeX entry:
-
-```bibtex
-@misc{kerashub2024,
-  title={KerasHub},
-  author={Watson, Matthew, and  Chollet, Fran\c{c}ois and Sreepathihalli,
-  Divyashree, and Saadat, Samaneh and Sampath, Ramesh, and Rasskin, Gabriel and
-  and Zhu, Scott and Singh, Varun and Wood, Luke and Tan, Zhenyu and Stenbit,
-  Ian and Qian, Chen, and Bischof, Jonathan and others},
-  year={2024},
-  howpublished={\url{https://github.com/keras-team/keras-hub}},
-}
+Load
+```python
+classifier = keras_hub.models.EfficientNetImageClassifier.from_preset(
+    "efficientnet_b0_ra_imagenet",
+)
 ```
-
-## Acknowledgements
-
-Thank you to all of our wonderful contributors!
-
-<a href="https://github.com/keras-team/keras-hub/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=keras-team/keras-hub" />
-</a>
+Predict
+```python
+batch_size = 1
+images = keras.random.normal(shape=(batch_size, 96, 96, 3))
+classifier.predict(images)
+```
+Train, specify `num_classes` to load randomly initialized classifier head.
+```python
+num_classes = 2
+labels = keras.random.randint(shape=(batch_size,), minval=0, maxval=num_classes)
+classifier = keras_hub.models.EfficientNetImageClassifier.from_preset(
+    "efficientnet_b0_ra_imagenet",
+    num_classes=num_classes,
+)
+classifier.preprocessor.image_size = (96, 96)
+classifier.fit(images, labels, epochs=3)
+```
