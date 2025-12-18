@@ -220,4 +220,16 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/medgemma/keras/medgemma_instruct_27b_text/1",
     },
+    "function_gemma_instruct_270m": {
+        "metadata": {
+            "description": (
+                "A 270M Million parameter text-only model based on Gemma 3. "
+                "This model is trained specifically for function calling "
+                "improvements."
+            ),
+            "params": 268098176,
+            "path": "gemma3",
+        },
+        "kaggle_handle": "kaggle://keras/function-gemma/keras/function_gemma_instruct_270m/1",
+    },
 }
