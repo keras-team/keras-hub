@@ -186,17 +186,19 @@ class ReversibleEmbedding(keras.layers.Embedding):
         else:
             self._quantization_mode_error(self.quantization_mode)
 
-    def _int8_build(self, embeddings_shape=None):
+    def _int8_build(self, embeddings_shape=None, config=None):
         if (
             "embeddings_shape"
             in inspect.signature(super()._int8_build).parameters
         ):
             if embeddings_shape is None:
                 embeddings_shape = (self.input_dim, self.output_dim)
-            super()._int8_build(embeddings_shape=embeddings_shape)
+            super()._int8_build(
+                embeddings_shape=embeddings_shape, config=config
+            )
         else:
             # Backward compatibility for older versions of Keras.
-            super()._int8_build()
+            super()._int8_build(config=config)
         self.inputs_quantizer = keras.quantizers.AbsMaxQuantizer(axis=-1)
         if not self.tie_weights:
             self.reverse_embeddings = self.add_weight(
