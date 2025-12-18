@@ -71,29 +71,8 @@ def update_hf_uploads_json(json_file_path, latest_kaggle_handles):
 
 
 def update_model_cards_on_hugging_face(presets):
-    # upstream `KaggleApi` if `kagglehub` is not present.
-    if kagglehub is not None:
-        from kagglehub.clients import KaggleApiV1Client
-
-        kaggle_client = KaggleApiV1Client()
-
-        def _get_model_metadata(owner, slug):
-            return kaggle_client.get(f"/models/{owner}/{slug}/get")
-    else:
-        kaggle_api = KaggleApi()
-        kaggle_api.authenticate()
-
-        def _get_model_metadata(owner, slug):
-            for name in ("get_model_with_http_info", "model_view", "get_model"):
-                if hasattr(kaggle_api, name):
-                    return getattr(kaggle_api, name)(owner, slug)
-            raise AttributeError(
-                "KaggleApi has no method to fetch model metadata"
-            )
-
-    failed_updates = []
-    successful_updates = []
-
+    kaggle_api = KaggleApi()
+    kaggle_api.authenticate()
     for model, data in presets.items():
         try:
             kaggle_handle = data["kaggle_handle"].removeprefix("kaggle://")
@@ -101,38 +80,13 @@ def update_model_cards_on_hugging_face(presets):
             repo_id = f"keras/{model}"
             readme_path = "README.md"
             model_slug = kaggle_handle.split("/")[1]
-            try:
-                model_metadata = _get_model_metadata(owner, model_slug)
-            except Exception as e:
-                print(
-                    f"Could not fetch model metadata from Kaggle for {model}"
-                    f": {e}"
-                )
-                # Skip model card metadata enrichment if we can't fetch metadata
-                description = ""
-                usage = ""
-            else:
-                # Normalize different client shapes: some clients return a
-                # list (e.g. [metadata,...]) while others return a dict.
-                if isinstance(model_metadata, list) and model_metadata:
-                    md = model_metadata[0]
-                elif isinstance(model_metadata, dict):
-                    md = model_metadata
-                else:
-                    md = {}
-
-                description = md.get("description", "")
-                instances = (
-                    md.get("instances") or md.get("modelInstances") or []
-                )
-                if instances and isinstance(instances, (list, tuple)):
-                    usage = (
-                        instances[0]
-                        .get("usage", "")
-                        .replace("${VARIATION_SLUG}", model)
-                    )
-                else:
-                    usage = ""
+            model_metadata = kaggle_api.get_model_with_http_info(
+                owner, model_slug
+            )
+            description = model_metadata[0]["description"]
+            usage = model_metadata[0]["instances"][0]["usage"].replace(
+                "${VARIATION_SLUG}", model
+            )
             usage = re.sub(
                 r'\.from_preset\(".*?"\)', f'.from_preset("{model}")', usage
             )
@@ -201,34 +155,12 @@ def update_model_cards_on_hugging_face(presets):
             print(f"Uploaded README.md to Hugging Face repository: {repo_id}")
 
             # --- Clean up the README.md file after upload ---
-            try:
-                os.remove(readme_path)
-                print(f"Deleted local README.md for {model}")
-            except Exception:
-                # not critical
-                pass
-
-            successful_updates.append(model)
+            os.remove(readme_path)
+            print(f"Deleted local README.md for {model}")
 
         except Exception as e:
-            err_msg = str(e)
-            print(f"Error updating model card for {model}: {err_msg}")
-            # ensure we don't leave a stray README file
-            try:
-                if readme_path and os.path.exists(readme_path):
-                    os.remove(readme_path)
-            except Exception:
-                pass
-
-            failed_updates.append({"model": model, "error": err_msg})
+            print(f"Error updating model card for {model}: {e}")
             continue
-
-    print(f"Model cards updated: {len(successful_updates)}")
-    if failed_updates:
-        # avoid an overly long f-string; build the joined list first
-        failed_models = [f["model"] for f in failed_updates]
-        failed_list = ", ".join(failed_models)
-        print(f"Model cards failed: {len(failed_updates)} ({failed_list})")
 
 
 def main():
