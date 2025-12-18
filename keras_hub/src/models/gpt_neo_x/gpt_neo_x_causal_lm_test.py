@@ -106,12 +106,9 @@ class GPTNeoXCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    pytest.skip(
-        reason="TODO: Need to fix the bug in TFLite export for GPTNeoX model"
-    )
-
     @pytest.mark.large
     def test_litert_export(self):
+        pytest.skip(reason="TODO: Fix TFLite export bug for GPTNeoX")
         self.run_litert_export_test(
             cls=GPTNeoXCausalLM,
             init_kwargs=self.init_kwargs,
