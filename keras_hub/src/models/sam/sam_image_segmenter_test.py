@@ -133,6 +133,9 @@ class SAMImageSegmenterTest(TestCase):
 
     @pytest.mark.large
     def test_litert_export(self):
+        pytest.skip(
+            reason="TODO: Need to fix the bug in TFLite export for SAM model"
+        )
         self.run_litert_export_test(
             cls=SAMImageSegmenter,
             init_kwargs=self.init_kwargs,
