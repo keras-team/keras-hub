@@ -387,6 +387,12 @@ from keras_hub.src.models.llama3.llama3_causal_lm_preprocessor import (
 from keras_hub.src.models.llama3.llama3_tokenizer import (
     Llama3Tokenizer as Llama3Tokenizer,
 )
+from keras_hub.src.models.llama3.llama3_vision_backbone import (
+    Llama3VisionBackbone as Llama3VisionBackbone,
+)
+from keras_hub.src.models.llama3.llama3_vision_config import (
+    Llama3VisionConfig as Llama3VisionConfig,
+)
 from keras_hub.src.models.masked_lm import MaskedLM as MaskedLM
 from keras_hub.src.models.masked_lm_preprocessor import (
     MaskedLMPreprocessor as MaskedLMPreprocessor,
