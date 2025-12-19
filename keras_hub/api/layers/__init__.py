@@ -24,6 +24,9 @@ from keras_hub.src.layers.modeling.non_max_supression import (
 from keras_hub.src.layers.modeling.position_embedding import (
     PositionEmbedding as PositionEmbedding,
 )
+from keras_hub.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding as ReversibleEmbedding,
+)
 from keras_hub.src.layers.modeling.rms_normalization import (
     RMSNormalization as RMSNormalization,
 )

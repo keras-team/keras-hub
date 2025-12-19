@@ -3,7 +3,7 @@ import math
 from keras import initializers
 from keras import layers
 from keras import ops
-from keras.src.layers.core.reversible_embedding import ReversibleEmbedding
+from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import gelu_approximate

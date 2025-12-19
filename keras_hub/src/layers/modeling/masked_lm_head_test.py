@@ -1,7 +1,9 @@
 from keras import random
-from keras.src.layers.core.reversible_embedding import ReversibleEmbedding
 
 from keras_hub.src.layers.modeling.masked_lm_head import MaskedLMHead
+from keras_hub.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 

@@ -9,7 +9,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 from keras import tree
-from keras.src.layers.core.reversible_embedding import ReversibleEmbedding
+from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer

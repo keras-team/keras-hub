@@ -1,5 +1,5 @@
 import keras
-from keras.src.layers.core.reversible_embedding import ReversibleEmbedding
+from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.f_net_encoder import FNetEncoder

@@ -1,6 +1,6 @@
 import keras
 from keras import ops
-from keras.src.layers.core.reversible_embedding import ReversibleEmbedding
+from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
