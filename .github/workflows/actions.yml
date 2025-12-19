@@ -20,8 +20,6 @@ jobs:
         version: [keras-stable]
         include:
           - backend: jax
-            version: keras-3.9
-          - backend: jax
             version: keras-nightly
           - backend: openvino
             version: keras-nightly
