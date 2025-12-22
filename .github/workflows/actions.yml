@@ -20,7 +20,7 @@ jobs:
         version: [keras-stable]
         include:
           - backend: jax
-            version: keras-3.12
+            version: keras-3.9
           - backend: jax
             version: keras-nightly
           - backend: openvino
@@ -50,17 +50,17 @@ jobs:
       run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
-    - name: Pin Keras 3.12
-      if: ${{ matrix.version == 'keras-3.12'}}
+    - name: Pin Keras 3.9
+      if: ${{ matrix.version == 'keras-3.9'}}
       run: |
         pip uninstall -y keras jaxlib jax
-        pip install keras==3.12.0 --progress-bar off
+        pip install keras==3.9.0 --progress-bar off
         pip install jax==0.6.0 --progress-bar off
     - name: Pin Keras Nightly
       if: ${{ matrix.version == 'keras-nightly'}}
       run: |
         pip uninstall -y keras
-        pip install keras-nightly --no-cache-dir --progress-bar off
+        pip install keras-nightly --progress-bar off
     - name: Test with pytest
       run: |
         pytest keras_hub/
