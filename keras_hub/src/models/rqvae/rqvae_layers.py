@@ -4,7 +4,24 @@ from keras import ops
 
 
 class Encoder(layers.Layer):
-    """A simple feed-forward encoder with ReLU activations."""
+    """A simple feed-forward encoder with ReLU activations.
+
+    This layer consists of a sequence of Dense layers with ReLU activation,
+    followed by a final Dense layer with no activation.
+
+    Args:
+        layer_dims: A list of integers specifying the size of each hidden Dense
+            layer.
+        output_dim: Integer. The size of the output Dense layer.
+        **kwargs: Base layer keyword arguments, such as `name` and `dtype`.
+
+    Example:
+    >>> encoder = Encoder(layer_dims=[64, 32], output_dim=16)
+    >>> x = keras.random.uniform(shape=(1, 10))
+    >>> output = encoder(x)
+    >>> output.shape
+    (1, 16)
+    """
 
     def __init__(self, layer_dims, output_dim, **kwargs):
         super().__init__(**kwargs)
@@ -33,7 +50,24 @@ class Encoder(layers.Layer):
 
 
 class Decoder(layers.Layer):
-    """A simple feed-forward decoder with ReLU activations."""
+    """A simple feed-forward decoder with ReLU activations.
+
+    This layer consists of a sequence of Dense layers with ReLU activation,
+    followed by a final Dense layer with no activation.
+
+    Args:
+        layer_dims: A list of integers specifying the size of each hidden Dense
+            layer.
+        output_dim: Integer. The size of the output Dense layer.
+        **kwargs: Base layer keyword arguments, such as `name` and `dtype`.
+
+    Example:
+    >>> decoder = Decoder(layer_dims=[32, 64], output_dim=10)
+    >>> x = keras.random.uniform(shape=(1, 16))
+    >>> output = decoder(x)
+    >>> output.shape
+    (1, 10)
+    """
 
     def __init__(self, layer_dims, output_dim, **kwargs):
         super().__init__(**kwargs)
@@ -62,7 +96,31 @@ class Decoder(layers.Layer):
 
 
 class VectorQuantizerEMA(layers.Layer):
-    """Vector Quantizer with Exponential Moving Average updates."""
+    """Vector Quantizer with Exponential Moving Average (EMA) updates.
+
+    This layer implements a vector quantization module using EMA to update certain
+    states, which stabilizes the training process compared to codebook collapse.
+    It takes an input tensor, flattens it, and maps each vector to the nearest
+    element in a codebook (embeddings).
+
+    Args:
+        num_embeddings: Integer. The number of embeddings in the codebook.
+        embedding_dim: Integer. The dimensionality of each embedding vector.
+        decay: Float. The decay rate for the EMA updates. Defaults to `0.99`.
+        eps: Float. A small epsilon value for numerical stability to avoid
+            division by zero. Defaults to `1e-5`.
+        **kwargs: Base layer keyword arguments, such as `name` and `dtype`.
+
+    References:
+        - [Neural Discrete Representation Learning](https://arxiv.org/abs/1711.00937)
+
+    Example:
+    >>> vq = VectorQuantizerEMA(num_embeddings=10, embedding_dim=16)
+    >>> x = keras.random.uniform(shape=(1, 5, 16))
+    >>> quantized, encodings, usage_ratio, loss = vq(x)
+    >>> quantized.shape
+    (1, 5, 16)
+    """
 
     def __init__(
         self, num_embeddings, embedding_dim, decay=0.99, eps=1e-5, **kwargs
@@ -186,7 +244,29 @@ class VectorQuantizerEMA(layers.Layer):
 
 
 class ResidualVectorQuantizer(layers.Layer):
-    """A Residual Vector Quantizer."""
+    """A Residual Vector Quantizer.
+
+    This layer applies a sequence of vector quantizers to the residual of the
+    input. The first quantizer quantizes the input, the second quantizer
+    quantizes the error (residual) from the first, and so on.
+
+    Args:
+        quantizers: A list of `VectorQuantizerEMA` instances (or compatible
+            layers) to be applied sequentially.
+        **kwargs: Base layer keyword arguments, such as `name` and `dtype`.
+
+    References:
+        - [SoundStream: An End-to-End Neural Audio Codec](https://arxiv.org/abs/2107.03312)
+
+    Example:
+    >>> vq1 = VectorQuantizerEMA(num_embeddings=10, embedding_dim=16)
+    >>> vq2 = VectorQuantizerEMA(num_embeddings=10, embedding_dim=16)
+    >>> rvq = ResidualVectorQuantizer(quantizers=[vq1, vq2])
+    >>> x = keras.random.uniform(shape=(1, 5, 16))
+    >>> quantized_sum, encodings, usage_ratios, loss = rvq(x)
+    >>> quantized_sum.shape
+    (1, 5, 16)
+    """
 
     def __init__(self, quantizers, **kwargs):
         super().__init__(**kwargs)

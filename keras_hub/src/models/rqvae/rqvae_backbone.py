@@ -6,7 +6,49 @@ from keras_hub.src.models.rqvae import rqvae_layers
 
 
 class RQVAEBackbone(Backbone):
-    """Residual Quantized Variational Autoencoder (RQVAE) backbone."""
+    """Residual Quantized Variational Autoencoder (RQVAE) backbone.
+
+    This class implements the RQ-VAE backbone, which consists of an encoder,
+    a residual vector quantizer, and a decoder. It is used for learning discrete
+    representations of data.
+
+    Args:
+        input_dim: Integer. The dimensionality of the input data.
+        encoder_layer_dims: A list of integers specifying the size of each hidden
+            Dense layer in the encoder.
+        output_dim: Integer. The dimensionality of the latent space (embedding dimension).
+        decoder_layer_dims: A list of integers specifying the size of each hidden
+            Dense layer in the decoder.
+        num_embeddings: Integer. The number of embeddings in the codebook.
+        num_quantizers: Integer. The number of sequential quantizers in the
+            residual vector quantizer.
+        decay: Float. The decay rate for the EMA updates in the quantizers.
+            Defaults to `0.99`.
+        data_variance: Float. The variance of the data, used to scale the
+            reconstruction loss. Defaults to `1.0`.
+        commitment_cost: Float. The weight of the commitment loss (quantization
+            loss) in the total loss. Defaults to `0.25`.
+        dtype: Optional dtype of the layer's computations and weights.
+            Alias of `variable_type`. Default to `None`.
+        **kwargs: Base backbone keyword arguments.
+
+    References:
+        - [SoundStream: An End-to-End Neural Audio Codec](https://arxiv.org/abs/2107.03312)
+
+    Example:
+    >>> model = RQVAEBackbone(
+    ...     input_dim=10,
+    ...     encoder_layer_dims=[32, 16],
+    ...     output_dim=8,
+    ...     decoder_layer_dims=[16, 32],
+    ...     num_embeddings=64,
+    ...     num_quantizers=4,
+    ... )
+    >>> x = keras.random.uniform(shape=(1, 10))
+    >>> outputs = model(x)
+    >>> outputs["reconstructions"].shape
+    (1, 10)
+    """
 
     def __init__(
         self,
