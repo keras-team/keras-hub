@@ -25,7 +25,7 @@ classifiers = [
     "Topic :: Software Development",
 ]
 dependencies = [
-    "keras>=3.8",
+    "keras>=3.13",
     "absl-py",
     "numpy",
     "packaging",
