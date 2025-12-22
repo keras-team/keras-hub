@@ -35,7 +35,8 @@ class RQVAEBackboneTest(TestCase):
             input_data=self.input_data,
             expected_output_shape={
                 "reconstructions": (self.batch_size, self.input_dim),
-                # Encodings stacked on axis 0: (num_quantizers, batch_size, num_embeddings)
+                # Encodings stacked on axis 0: (num_quantizers, batch_size,
+                # num_embeddings)
                 "encodings": (
                     self.num_quantizers,
                     self.batch_size,
@@ -45,7 +46,7 @@ class RQVAEBackboneTest(TestCase):
                 "usage_ratios": (self.num_quantizers,),
                 "quantization_loss": (),  # scalar
             },
-            run_mixed_precision_check=False,  # Often flaky with custom layers if not careful
+            run_mixed_precision_check=False,
             run_quantization_check=False,  # Skip for now
         )
 

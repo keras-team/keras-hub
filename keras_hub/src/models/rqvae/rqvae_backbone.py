@@ -14,10 +14,12 @@ class RQVAEBackbone(Backbone):
 
     Args:
         input_dim: Integer. The dimensionality of the input data.
-        encoder_layer_dims: A list of integers specifying the size of each hidden
-            Dense layer in the encoder.
-        output_dim: Integer. The dimensionality of the latent space (embedding dimension).
-        decoder_layer_dims: A list of integers specifying the size of each hidden
+        encoder_layer_dims: A list of integers specifying the size of each
+            hidden Dense layer in the encoder.
+        output_dim: Integer. The dimensionality of the latent space (embedding
+            dimension).
+        decoder_layer_dims: A list of integers specifying the size of each
+            hidden
             Dense layer in the decoder.
         num_embeddings: Integer. The number of embeddings in the codebook.
         num_quantizers: Integer. The number of sequential quantizers in the

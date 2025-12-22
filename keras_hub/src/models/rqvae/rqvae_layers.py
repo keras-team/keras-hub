@@ -98,7 +98,7 @@ class Decoder(layers.Layer):
 class VectorQuantizerEMA(layers.Layer):
     """Vector Quantizer with Exponential Moving Average (EMA) updates.
 
-    This layer implements a vector quantization module using EMA to update certain
+    This layer implements a vector quantization module using EMA to update
     states, which stabilizes the training process compared to codebook collapse.
     It takes an input tensor, flattens it, and maps each vector to the nearest
     element in a codebook (embeddings).
