@@ -60,7 +60,7 @@ jobs:
       if: ${{ matrix.version == 'keras-nightly'}}
       run: |
         pip uninstall -y keras
-        pip install keras-nightly --progress-bar off
+        pip install keras-nightly --no-cache-dir --progress-bar off
     - name: Test with pytest
       run: |
         pytest keras_hub/
