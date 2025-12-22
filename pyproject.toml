@@ -26,7 +26,7 @@ classifiers = [
 ]
 dependencies = [
 
-    "keras>=3.12",
+    "keras>=3.13",
     "absl-py",
     "numpy",
     "packaging",
