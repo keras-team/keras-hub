@@ -114,7 +114,7 @@ class Llama3CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.large
+
     def test_litert_export(self):
         """Test LiteRT export for Llama3CausalLM with small test model."""
         model = Llama3CausalLM(**self.init_kwargs)

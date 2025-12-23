@@ -90,7 +90,7 @@ class HGNetV2ImageClassifierTest(TestCase):
             input_data=self.images,
         )
 
-    @pytest.mark.large
+
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=HGNetV2ImageClassifier,

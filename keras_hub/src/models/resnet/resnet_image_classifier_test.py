@@ -65,7 +65,7 @@ class ResNetImageClassifierTest(TestCase):
             input_data=self.images,
         )
 
-    @pytest.mark.large
+
     def test_litert_export(self):
         """Test LiteRT export for ResNetImageClassifier with small test
         model."""

@@ -201,7 +201,7 @@ class GemmaCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.large
+
     def test_litert_export(self):
         """Test LiteRT export for GemmaCausalLM with small test model."""
         model = GemmaCausalLM(**self.init_kwargs)

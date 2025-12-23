@@ -57,7 +57,7 @@ class FNetTextClassifierTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.large
+
     def test_litert_export(self):
         # F-Net does NOT use padding_mask - it only uses token_ids and
         # segment_ids. Don't add padding_mask to input_data.

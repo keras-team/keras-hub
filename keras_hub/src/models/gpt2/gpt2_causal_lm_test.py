@@ -107,7 +107,7 @@ class GPT2CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.large
+
     def test_litert_export(self):
         """Test LiteRT export for GPT2CausalLM with small test model."""
         model = GPT2CausalLM(**self.init_kwargs)

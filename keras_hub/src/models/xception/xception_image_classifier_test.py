@@ -74,7 +74,7 @@ class XceptionImageClassifierTest(TestCase):
             input_data=self.images,
         )
 
-    @pytest.mark.large
+
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=XceptionImageClassifier,

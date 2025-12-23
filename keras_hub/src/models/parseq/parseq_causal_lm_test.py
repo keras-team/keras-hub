@@ -102,7 +102,7 @@ class PARSeqCausalLMTest(TestCase):
             expected_output_shape=expected_shape_full,
         )
 
-    @pytest.mark.large
+
     def test_litert_export(self):
         # Create input data for export test
         input_data = {

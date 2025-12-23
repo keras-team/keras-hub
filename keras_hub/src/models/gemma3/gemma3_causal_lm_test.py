@@ -226,7 +226,7 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
             input_data=input_data,
         )
 
-    @pytest.mark.large
+
     def test_litert_export(self):
         """Test LiteRT export for Gemma3CausalLM with small test model."""
         # Use the small text-only model for fast testing

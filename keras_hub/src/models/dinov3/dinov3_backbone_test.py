@@ -52,7 +52,7 @@ class DINOV3BackboneTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.large
+
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=DINOV3Backbone,
