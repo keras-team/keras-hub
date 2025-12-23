@@ -17,30 +17,9 @@ set -x
 cd "${KOKORO_ROOT}/"
 
 export DEBIAN_FRONTEND=noninteractive
-sudo apt-get update
-sudo apt-get install -y software-properties-common
-sudo add-apt-repository universe
-sudo add-apt-repository -y ppa:deadsnakes/ppa
-sudo apt-get update
+cd "${KOKORO_ROOT}/"
 
-# Diagnostics
-echo "Checking available python versions..."
-pyenv versions || echo "pyenv not found"
-apt-cache policy python3.11 || echo "python3.11 not in apt cache"
-
-if ! command -v python3.11 &> /dev/null; then
-    echo "python3.11 not found, attempting install..."
-    sudo apt-get install -y python3.11 python3.11-venv python3.11-dev || echo "apt install failed"
-fi
-
-PYTHON_BINARY="python3.11"
-if [ -x "/usr/bin/python3.11" ]; then
-    PYTHON_BINARY="/usr/bin/python3.11"
-elif [ -x "$(which python3.11)" ]; then
-    PYTHON_BINARY="$(which python3.11)"
-fi
-
-echo "Using PYTHON_BINARY: ${PYTHON_BINARY}"
+PYTHON_BINARY="/usr/bin/python3.10"
 
 "${PYTHON_BINARY}" -m venv venv
 source venv/bin/activate
