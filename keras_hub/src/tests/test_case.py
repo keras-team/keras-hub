@@ -9,10 +9,8 @@ import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 from keras import tree
+from keras.layers import ReversibleEmbedding
 
-from keras_hub.src.layers.modeling.reversible_embedding import (
-    ReversibleEmbedding,
-)
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.tensor_utils import is_float_dtype
