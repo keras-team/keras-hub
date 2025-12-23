@@ -114,6 +114,31 @@ class Qwen3CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    def test_litert_export(self):
+        """Test LiteRT export for Qwen3CausalLM with small test model."""
+        model = Qwen3CausalLM(**self.init_kwargs)
+
+        # Convert boolean padding_mask to int32 for LiteRT compatibility
+        input_data = self.input_data.copy()
+        if "padding_mask" in input_data:
+            input_data["padding_mask"] = ops.cast(
+                input_data["padding_mask"], "int32"
+            )
+
+        expected_output_shape = (
+            2,
+            7,
+            self.preprocessor.tokenizer.vocabulary_size(),
+        )
+
+        self.run_litert_export_test(
+            model=model,
+            input_data=input_data,
+            expected_output_shape=expected_output_shape,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-3, "mean": 1e-5}},
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in Qwen3CausalLM.presets:

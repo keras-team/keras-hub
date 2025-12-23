@@ -50,3 +50,10 @@ class MiTImageClassifierTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.images,
         )
+
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=MiTImageClassifier,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+        )

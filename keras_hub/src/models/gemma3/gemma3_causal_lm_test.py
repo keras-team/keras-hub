@@ -226,6 +226,62 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
             input_data=input_data,
         )
 
+    def test_litert_export(self):
+        """Test LiteRT export for Gemma3CausalLM with small test model."""
+        # Use the small text-only model for fast testing
+        model = Gemma3CausalLM(**self.text_init_kwargs)
+
+        # Test with text input data
+        input_data = self.text_input_data.copy()
+        # Convert boolean padding_mask to int32 for LiteRT compatibility
+        if "padding_mask" in input_data:
+            input_data["padding_mask"] = ops.cast(
+                input_data["padding_mask"], "int32"
+            )
+
+        expected_output_shape = (
+            2,
+            20,
+            self.text_preprocessor.tokenizer.vocabulary_size(),
+        )
+
+        self.run_litert_export_test(
+            model=model,
+            input_data=input_data,
+            expected_output_shape=expected_output_shape,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
+        )
+
+    @pytest.mark.large
+    def test_litert_export_multimodal(self):
+        """Test LiteRT export for multimodal Gemma3CausalLM with small test
+        model."""
+        # Use the small multimodal model for testing
+        model = Gemma3CausalLM(**self.init_kwargs)
+
+        # Test with multimodal input data
+        input_data = self.input_data.copy()
+        # Convert boolean padding_mask to int32 for LiteRT compatibility
+        if "padding_mask" in input_data:
+            input_data["padding_mask"] = ops.cast(
+                input_data["padding_mask"], "int32"
+            )
+
+        expected_output_shape = (
+            2,
+            20,
+            self.preprocessor.tokenizer.vocabulary_size(),
+        )
+
+        self.run_litert_export_test(
+            model=model,
+            input_data=input_data,
+            expected_output_shape=expected_output_shape,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
+        )
+
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):

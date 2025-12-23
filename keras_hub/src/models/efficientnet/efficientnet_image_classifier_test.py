@@ -7,6 +7,12 @@ from keras_hub.src.models.efficientnet.efficientnet_backbone import (
 from keras_hub.src.models.efficientnet.efficientnet_image_classifier import (
     EfficientNetImageClassifier,
 )
+from keras_hub.src.models.efficientnet.efficientnet_image_classifier_preprocessor import (  # noqa: E501
+    EfficientNetImageClassifierPreprocessor,
+)
+from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
+    EfficientNetImageConverter,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -38,6 +44,9 @@ class EfficientNetImageClassifierTest(TestCase):
         self.init_kwargs = {
             "backbone": backbone,
             "num_classes": 1000,
+            "preprocessor": EfficientNetImageClassifierPreprocessor(
+                image_converter=EfficientNetImageConverter(image_size=(16, 16))
+            ),
         }
         self.train_data = (self.images, self.labels)
 
@@ -82,3 +91,10 @@ class EfficientNetImageClassifierTest(TestCase):
                 input_data=self.images,
                 expected_output_shape=(2, 2),
             )
+
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=EfficientNetImageClassifier,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+        )
