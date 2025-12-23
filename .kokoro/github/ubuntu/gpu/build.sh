@@ -18,8 +18,8 @@ cd "${KOKORO_ROOT}/"
 
 export DEBIAN_FRONTEND=noninteractive
 if ! command -v python3.11 >/dev/null 2>&1; then
-    apt-get update
-    apt-get install -y python3.11 python3.11-venv
+    sudo apt-get update
+    sudo apt-get install -y python3.11 python3.11-venv
 fi
 cd "${KOKORO_ROOT}/"
 
