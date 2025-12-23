@@ -196,7 +196,7 @@ class CausalLM(Task):
 
                 # Create an explicit tuple of all variable state.
                 state = (
-                    self.sampler.variables,
+                    [v.value for v in self.sampler.variables],
                     # Use the explicit variable.value to preserve the
                     # sharding spec of distribution.
                     [v.value for v in self.trainable_variables],
