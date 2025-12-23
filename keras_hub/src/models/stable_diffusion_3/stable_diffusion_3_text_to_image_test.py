@@ -204,5 +204,4 @@ class StableDiffusion3TextToImageTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             allow_custom_ops=True,  # Allow custom ops like GatherV2, Erfc
-            enable_select_tf_ops=True,  # Enable TensorFlow Select ops
         )
