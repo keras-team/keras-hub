@@ -109,7 +109,6 @@ class RetinaNetObjectDetectorTest(TestCase):
             input_data=self.images,
         )
 
-
     def test_litert_export(self):
         input_data = self.images
 

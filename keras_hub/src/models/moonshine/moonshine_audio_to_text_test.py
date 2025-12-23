@@ -148,8 +148,6 @@ class MoonshineAudioToTextTest(TestCase):
     @pytest.mark.skip(
         reason="TODO: Bug with MoonshineAudioToText liteRT export"
     )
-
-
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=MoonshineAudioToText,

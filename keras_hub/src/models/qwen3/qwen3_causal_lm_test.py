@@ -114,7 +114,6 @@ class Qwen3CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-
     def test_litert_export(self):
         """Test LiteRT export for Qwen3CausalLM with small test model."""
         model = Qwen3CausalLM(**self.init_kwargs)

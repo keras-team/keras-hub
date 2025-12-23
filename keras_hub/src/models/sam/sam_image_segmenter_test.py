@@ -131,7 +131,6 @@ class SAMImageSegmenterTest(TestCase):
                 },
             )
 
-
     def test_litert_export(self):
         pytest.skip(
             reason="TODO: Need to fix the bug in TFLite export for SAM model"

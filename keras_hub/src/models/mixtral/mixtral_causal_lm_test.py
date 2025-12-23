@@ -107,7 +107,6 @@ class MixtralCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=MixtralCausalLM,

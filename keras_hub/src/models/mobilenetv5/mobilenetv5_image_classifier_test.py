@@ -75,7 +75,6 @@ class MobileNetV5ImageClassifierTest(TestCase):
             input_data=self.images,
         )
 
-
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=MobileNetV5ImageClassifier,

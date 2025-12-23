@@ -106,7 +106,6 @@ class PaliGemmaCausalLMTest(TestCase):
             input_data=input_data,
         )
 
-
     def test_litert_export(self):
         input_data = {
             "token_ids": np.random.randint(

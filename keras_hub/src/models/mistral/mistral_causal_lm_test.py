@@ -106,7 +106,6 @@ class MistralCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-
     def test_litert_export(self):
         """Test LiteRT export for MistralCausalLM with small test model."""
         model = MistralCausalLM(**self.init_kwargs)

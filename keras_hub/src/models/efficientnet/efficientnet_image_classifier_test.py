@@ -92,7 +92,6 @@ class EfficientNetImageClassifierTest(TestCase):
                 expected_output_shape=(2, 2),
             )
 
-
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=EfficientNetImageClassifier,

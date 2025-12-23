@@ -200,8 +200,6 @@ class StableDiffusion3TextToImageTest(TestCase):
     @pytest.mark.skip(
         reason="TODO: Bug with StableDiffusion3TextToImage export"
     )
-
-
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=StableDiffusion3TextToImage,

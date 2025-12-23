@@ -49,7 +49,6 @@ class DINOV2BackboneTest(TestCase):
             input_data=self.input_data,
         )
 
-
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=DINOV2Backbone,
@@ -153,7 +152,6 @@ class DINOV2BackboneWithRegistersTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
-
 
     def test_litert_export(self):
         self.run_litert_export_test(
