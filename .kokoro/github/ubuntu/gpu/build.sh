@@ -19,7 +19,10 @@ cd "${KOKORO_ROOT}/"
 export DEBIAN_FRONTEND=noninteractive
 if ! command -v python3.11 >/dev/null 2>&1; then
     sudo apt-get update
+    sudo add-apt-repository ppa:deadsnakes/ppa -y
+    sudo apt-get update
     sudo apt-get install -y python3.11 python3.11-venv
+    sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 2
 fi
 cd "${KOKORO_ROOT}/"
 
