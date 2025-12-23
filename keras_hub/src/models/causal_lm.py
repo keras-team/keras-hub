@@ -181,11 +181,13 @@ class CausalLM(Task):
                     outputs = self.generate_step(inputs, stop_token_ids)
 
                 # Get updated sampler variables from the stateless scope.
-                sampler_variables = []
-                for v in self.sampler.variables:
+                new_sampler_variables = []
+                for i, v in enumerate(self.sampler.variables):
                     new_v = scope.get_current_value(v)
-                    sampler_variables.append(new_v if new_v is not None else v)
-                return outputs, sampler_variables
+                    new_sampler_variables.append(
+                        new_v if new_v is not None else v
+                    )
+                return outputs, new_sampler_variables
 
             def wrapped_generate_function(
                 inputs,
@@ -196,7 +198,7 @@ class CausalLM(Task):
 
                 # Create an explicit tuple of all variable state.
                 state = (
-                    self.sampler.variables,
+                    [v.value for v in self.sampler.variables],
                     # Use the explicit variable.value to preserve the
                     # sharding spec of distribution.
                     [v.value for v in self.trainable_variables],
