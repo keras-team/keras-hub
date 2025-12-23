@@ -1,6 +1,6 @@
 # KerasHub: Multi-framework Pretrained Models
 [![](https://github.com/keras-team/keras-hub/workflows/Tests/badge.svg?branch=master)](https://github.com/keras-team/keras-hub/actions?query=workflow%3ATests+branch%3Amaster)
-![Python](https://img.shields.io/badge/python-v3.10.0+-success.svg)
+![Python](https://img.shields.io/badge/python-v3.11.0+-success.svg)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-hub/issues)
 
 > [!IMPORTANT]
