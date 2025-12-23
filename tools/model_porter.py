@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Author: [Laxma Reddy Patlolla](https://www.github.com/laxmareddyp)
-date: 2025-12-23
+Date: 2025-12-23
 Title: Smart Hugging Face to Keras-hub Model Porter
 
 This script automatically:
@@ -11,6 +11,8 @@ This script automatically:
 4. Includes utility files (checkpoint conversion, transformers conversion)
 5. Follows KerasHub structure and format strictly
 6. Generates complete files without truncation
+7. Uses AST parsing to extract function and class interfaces for accurate
+   dependency handling
 
 Usage Examples:
 # Use Gemini (default) with output directory
@@ -31,13 +33,12 @@ python tools/model_porter.py --model_name qwen3 --reference_model mixtral \
 
 import argparse
 import ast
-from collections import OrderedDict
-from collections import deque
 import re
 import sys
 import time
+from collections import OrderedDict
+from collections import deque
 from pathlib import Path
-
 
 import requests
 
@@ -157,9 +158,7 @@ class SmartHFToKerasHubPorter:
         print(f"❌ No modular or modeling file found for {model_name}")
         return None
 
-    def analyze_keras_hub_structure(
-        self, reference_model
-    ):
+    def analyze_keras_hub_structure(self, reference_model):
         """
         Analyze the complete KerasHub structure for a reference model.
 
@@ -195,9 +194,7 @@ class SmartHFToKerasHubPorter:
 
         return structure
 
-    def fetch_reference_files_from_github(
-        self, reference_model, structure
-    ):
+    def fetch_reference_files_from_github(self, reference_model, structure):
         """Fetch reference files from KerasHub GitHub repository dynamically."""
         print(f"🌐 Fetching {reference_model} reference files from GitHub...")
 
@@ -271,9 +268,7 @@ class SmartHFToKerasHubPorter:
         # Fetch transformers utility file
         self.fetch_transformers_utility_from_github(reference_model, structure)
 
-    def fetch_common_files_from_github(
-        self, reference_model, structure
-    ):
+    def fetch_common_files_from_github(self, reference_model, structure):
         """Fallback method to fetch files when API discovery fails - tries
         alternative API endpoints.
         """
@@ -568,8 +563,6 @@ class SmartHFToKerasHubPorter:
         """Determine which files need to be generated for the target model."""
         print(f"🔍 Determining target files for: {reference_model}")
 
-
-
         # This will map canonical filenames (without model-specific prefix) to:
         # {
         #   "target_path": path for new model's file,
@@ -843,7 +836,7 @@ Generate the complete {target_file} file with no truncation:"""
 
         return prompt
 
-    def call_gemini_api(self, prompt: str) -> Optional[str]:
+    def call_gemini_api(self, prompt):
         """Call Gemini API with maximum token limit to avoid truncation."""
         print("🤖 Calling Gemini API...")
 
@@ -889,7 +882,7 @@ Generate the complete {target_file} file with no truncation:"""
             print(f"❌ Failed to call Gemini API: {e}")
             return None
 
-    def call_claude_api(self, prompt: str) -> Optional[str]:
+    def call_claude_api(self, prompt):
         """Call Claude API with maximum token limit to avoid truncation."""
         print("🤖 Calling Claude API...")
 
@@ -935,7 +928,7 @@ Generate the complete {target_file} file with no truncation:"""
             print(f"❌ Failed to call Claude API: {e}")
             return None
 
-    def call_openai_api(self, prompt: str) -> Optional[str]:
+    def call_openai_api(self, prompt):
         """Call OpenAI API with maximum token limit to avoid truncation."""
         print("🤖 Calling OpenAI API...")
 
@@ -980,7 +973,7 @@ Generate the complete {target_file} file with no truncation:"""
             print(f"❌ Failed to call OpenAI API: {e}")
             return None
 
-    def call_api(self, prompt: str) -> Optional[str]:
+    def call_api(self, prompt):
         """Route to the appropriate API based on provider."""
         if self.api_provider == "claude":
             return self.call_claude_api(prompt)
@@ -989,9 +982,7 @@ Generate the complete {target_file} file with no truncation:"""
         else:
             return self.call_gemini_api(prompt)
 
-    def extract_generated_code(
-        self, generated_text: str, target_file: str
-    ) -> str:
+    def extract_generated_code(self, generated_text, target_file):
         """Extract generated code from Gemini response."""
         print("🔧 Extracting generated code...")
 
@@ -1199,7 +1190,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Smart HF to KerasHub Model Porter - Generates complete "
         "models "
-    "with dependencies using Gemini, Claude, or OpenAI APIs"
+        "with dependencies using Gemini, Claude, or OpenAI APIs"
     )
 
     parser.add_argument(
