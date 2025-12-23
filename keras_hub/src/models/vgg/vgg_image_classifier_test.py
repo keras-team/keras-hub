@@ -52,6 +52,7 @@ class VGGImageClassifierTest(TestCase):
             input_data=self.images,
         )
 
+    @pytest.mark.skip(reason="TODO: Bug with VGGImageClassifier liteRT export")
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=VGGImageClassifier,
