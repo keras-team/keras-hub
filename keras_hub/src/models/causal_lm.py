@@ -182,7 +182,7 @@ class CausalLM(Task):
 
                 # Get updated sampler variables from the stateless scope.
                 new_sampler_variables = []
-                for i, v in enumerate(self.sampler.variables):
+                for v in self.sampler.variables:
                     new_v = scope.get_current_value(v)
                     new_sampler_variables.append(
                         new_v if new_v is not None else v

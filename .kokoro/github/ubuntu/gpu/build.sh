@@ -17,7 +17,6 @@ set -x
 cd "${KOKORO_ROOT}/"
 
 export DEBIAN_FRONTEND=noninteractive
-cd "${KOKORO_ROOT}/"
 
 PYTHON_BINARY="/usr/bin/python3.10"
 
