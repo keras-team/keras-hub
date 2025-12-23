@@ -19,7 +19,7 @@ cd "${KOKORO_ROOT}/"
 export DEBIAN_FRONTEND=noninteractive
 cd "${KOKORO_ROOT}/"
 
-PYTHON_BINARY="/usr/bin/python3.10"
+PYTHON_BINARY="/usr/bin/python3.11"
 
 "${PYTHON_BINARY}" -m venv venv
 source venv/bin/activate
@@ -54,8 +54,8 @@ then
 fi
 
 
-# Temporarily relax Config to allow 3.10 for GPU tests.
-sed -i 's/requires-python = ">=3.11"/requires-python = ">=3.10"/' pyproject.toml
+# Python 3.11 is now the standard version
+# sed -i 's/requires-python = ">=3.11"/requires-python = ">=3.10"/' pyproject.toml
 
 pip install --no-deps -e "." --progress-bar off
 pip install huggingface_hub
