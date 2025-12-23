@@ -10,12 +10,14 @@ from absl.testing import parameterized
 from keras import ops
 from keras import tree
 
+# from keras.src.trainers.data_adapters import is_mlx_array
 from keras_hub.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.tensor_utils import is_float_dtype
+from keras_hub.src.utils.tensor_utils import is_mlx_array
 
 
 def convert_to_comparible_type(x):
@@ -33,6 +35,10 @@ def convert_to_comparible_type(x):
     if isinstance(x, (tf.Tensor, tf.RaggedTensor)):
         return x
     if hasattr(x, "__array__"):
+        return ops.convert_to_numpy(x)
+    if keras.config.backend() == "mlx" and is_mlx_array(x):
+        # this is to handle bfloat16
+        # mlx arrays don't have an __array__ attribute
         return ops.convert_to_numpy(x)
     return x
 
