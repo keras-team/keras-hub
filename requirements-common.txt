@@ -20,4 +20,3 @@ safetensors
 pillow
 openvino
 transformers
-ai-edge-litert
