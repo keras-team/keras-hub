@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
 Author: [Laxma Reddy Patlolla](https://www.github.com/laxmareddyp)
+date: 2025-12-23
 Title: Smart Hugging Face to Keras-hub Model Porter
-
-Description:
 
 This script automatically:
 1. Analyzes the complete KerasHub structure for any reference model
@@ -13,8 +12,6 @@ This script automatically:
 5. Follows KerasHub structure and format strictly
 6. Generates complete files without truncation
 
-Usage Examples:
-# Use Gemini (default) with output directory
 Usage Examples:
 # Use Gemini (default) with output directory
 python tools/model_porter.py --model_name qwen3 --reference_model mixtral \
@@ -34,13 +31,13 @@ python tools/model_porter.py --model_name qwen3 --reference_model mixtral \
 
 import argparse
 import ast
+from collections import OrderedDict
+from collections import deque
 import re
 import sys
 import time
 from pathlib import Path
-from typing import Dict
-from typing import List
-from typing import Optional
+
 
 import requests
 
@@ -52,10 +49,17 @@ class SmartHFToKerasHubPorter:
 
     def __init__(
         self,
-        api_key: str,
-        base_url: str = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
-        api_provider: str = "gemini",
+        api_key,
+        base_url="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
+        api_provider="gemini",
     ):
+        """Initialize the porter.
+
+        Args:
+            api_key: API key for the selected provider.
+            base_url: API base URL (only used for Gemini).
+            api_provider: API provider to use (default: gemini).
+        """
         self.api_key = api_key
         self.base_url = base_url
         self.api_provider = api_provider
@@ -113,7 +117,7 @@ class SmartHFToKerasHubPorter:
 
         self.core_file_aliases = {"layer_norm.py": ["layernorm.py"]}
 
-    def find_hf_modular_file(self, model_name: str) -> Optional[str]:
+    def find_hf_modular_file(self, model_name):
         """Find and read the relevant modular file from transformers."""
         print(f"🔍 Searching for modular file for model: {model_name}")
 
@@ -154,8 +158,8 @@ class SmartHFToKerasHubPorter:
         return None
 
     def analyze_keras_hub_structure(
-        self, reference_model: str
-    ) -> Dict[str, Dict]:
+        self, reference_model
+    ):
         """
         Analyze the complete KerasHub structure for a reference model.
 
@@ -192,8 +196,8 @@ class SmartHFToKerasHubPorter:
         return structure
 
     def fetch_reference_files_from_github(
-        self, reference_model: str, structure: Dict[str, Dict]
-    ) -> None:
+        self, reference_model, structure
+    ):
         """Fetch reference files from KerasHub GitHub repository dynamically."""
         print(f"🌐 Fetching {reference_model} reference files from GitHub...")
 
@@ -268,8 +272,8 @@ class SmartHFToKerasHubPorter:
         self.fetch_transformers_utility_from_github(reference_model, structure)
 
     def fetch_common_files_from_github(
-        self, reference_model: str, structure: Dict[str, Dict]
-    ) -> None:
+        self, reference_model, structure
+    ):
         """Fallback method to fetch files when API discovery fails - tries
         alternative API endpoints.
         """
@@ -335,8 +339,8 @@ class SmartHFToKerasHubPorter:
             print(f"❌ Unable to fetch {reference_model} files from GitHub")
 
     def fetch_checkpoint_conversion_from_github(
-        self, reference_model: str, structure: Dict[str, Dict]
-    ) -> None:
+        self, reference_model, structure
+    ):
         """Fetch checkpoint conversion file from GitHub."""
         kh_github_base = (
             "https://raw.githubusercontent.com/keras-team/keras-hub/master"
@@ -366,8 +370,8 @@ class SmartHFToKerasHubPorter:
             print(f"⚠️  Failed to fetch checkpoint conversion from GitHub: {e}")
 
     def fetch_transformers_utility_from_github(
-        self, reference_model: str, structure: Dict[str, Dict]
-    ) -> None:
+        self, reference_model, structure
+    ):
         """Fetch transformers utility file from GitHub."""
         kh_github_base = (
             "https://raw.githubusercontent.com/keras-team/keras-hub/master"
@@ -396,7 +400,7 @@ class SmartHFToKerasHubPorter:
         except Exception as e:
             print(f"⚠️  Failed to fetch transformers utility from GitHub: {e}")
 
-    def extract_imports(self, content: str) -> List[str]:
+    def extract_imports(self, content):
         """Extract import statements from Python code."""
         imports = []
 
@@ -413,7 +417,7 @@ class SmartHFToKerasHubPorter:
 
         return imports
 
-    def extract_interfaces(self, content: str) -> str:
+    def extract_interfaces(self, content):
         """Extract function and class interfaces from Python code using AST.
 
         Replaces all function and method bodies with 'pass' to create clean
@@ -524,7 +528,7 @@ class SmartHFToKerasHubPorter:
             # Fallback: return original content if AST parsing fails
             return content
 
-    def topological_sort(self, graph: Dict[str, List[str]]) -> List[str]:
+    def topological_sort(self, graph):
         # Step 1: Calculate in-degree of each node
         in_degree = {node: 0 for node in graph}
         for deps in graph.values():
@@ -532,8 +536,6 @@ class SmartHFToKerasHubPorter:
                 if dep not in in_degree:
                     in_degree[dep] = 0
                 in_degree[dep] += 1
-
-        from collections import deque
 
         # Step 2: Initialize queue with nodes of in-degree 0
         queue = deque(
@@ -559,14 +561,14 @@ class SmartHFToKerasHubPorter:
 
     def determine_target_files(
         self,
-        target_model: str,
-        reference_model: str,
-        structure: Dict[str, Dict],
-    ) -> List[str]:
+        target_model,
+        reference_model,
+        structure,
+    ):
         """Determine which files need to be generated for the target model."""
         print(f"🔍 Determining target files for: {reference_model}")
 
-        from collections import OrderedDict
+
 
         # This will map canonical filenames (without model-specific prefix) to:
         # {
@@ -644,15 +646,15 @@ class SmartHFToKerasHubPorter:
 
     def generate_file_prompt(
         self,
-        target_file: str,
-        reference_file: str,
-        reference_content: str,
-        pytorch_code: str,
-        target_model: str,
-        reference_model: str,
-        dependencies: Dict[str, str],
-        structure: Dict[str, Dict],
-    ) -> str:
+        target_file,
+        reference_file,
+        reference_content,
+        pytorch_code,
+        target_model,
+        reference_model,
+        dependencies,
+        structure,
+    ):
         """
         Generate a comprehensive prompt for file generation.
 
@@ -1052,11 +1054,11 @@ Generate the complete {target_file} file with no truncation:"""
 
     def save_generated_file(
         self,
-        code: str,
-        target_file: str,
-        target_model: str,
-        output_dir: str = None,
-    ) -> str:
+        code,
+        target_file,
+        target_model,
+        output_dir=None,
+    ):
         """Save generated code to the specified output directory."""
         if output_dir is None:
             output_dir = Path.cwd()
@@ -1075,8 +1077,8 @@ Generate the complete {target_file} file with no truncation:"""
         return str(output_path)
 
     def generate_complete_model(
-        self, target_model: str, reference_model: str, output_dir: str = None
-    ) -> Dict[str, bool]:
+        self, target_model, reference_model, output_dir=None
+    ):
         """Generate the complete model with all dependencies."""
         print(
             f"🚀 Starting generation of complete {target_model} model using "
@@ -1183,7 +1185,7 @@ Generate the complete {target_file} file with no truncation:"""
 
         return results
 
-    def validate_model_name(self, model_name: str) -> bool:
+    def validate_model_name(self, model_name):
         """Validate model name."""
         if not re.match(r"^[a-zA-Z0-9_]+$", model_name):
             return False
@@ -1197,7 +1199,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Smart HF to KerasHub Model Porter - Generates complete "
         "models "
-        "with dependencies using Gemini, Claude, or OpenAI APIs"
+    "with dependencies using Gemini, Claude, or OpenAI APIs"
     )
 
     parser.add_argument(
