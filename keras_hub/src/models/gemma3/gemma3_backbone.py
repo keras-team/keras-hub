@@ -342,35 +342,33 @@ class Gemma3Backbone(Backbone):
 
         if is_embedding_model:
             if embedding_dim is None or pooling_intermediate_dim is None:
-                raise ValueError(
-                    "`embedding_dim` and `pooling_intermediate_dim` must be "
-                    "specified when `is_embedding_model` is `True`."
-                )
+                raise ValueError("Must specify embedding_dim and pooling_intermediate_dim.")
 
+            # 1. Mask-aware Mean Pooling
             pooled_output = MeanPooling(dtype=dtype, name="mean_pooling")(
                 [sequence_output, padding_mask_input]
             )
 
+            # 2. First Projection (Non-linear or Linear depending on preset)
             pooled_output = layers.Dense(
                 pooling_intermediate_dim,
                 dtype=dtype,
                 name="pooling_dense_1",
-                activation=None,
                 use_bias=False,
             )(pooled_output)
 
+            # 3. Final Projection
             pooled_output = layers.Dense(
                 embedding_dim,
                 dtype=dtype,
                 name="embedding_projection",
-                activation=None,
                 use_bias=False,
             )(pooled_output)
 
-            outputs = {
-                "sequence_output": sequence_output,
-                "pooled_output": pooled_output,
-            }
+            # 4. L2 Normalization (Crucial for Retrieval)
+            pooled_output = layers.UnitNormalization(axis=-1, name="unit_normalization")(pooled_output)
+
+            outputs = {"sequence_output": sequence_output, "pooled_output": pooled_output}
         else:
             outputs = sequence_output
 
