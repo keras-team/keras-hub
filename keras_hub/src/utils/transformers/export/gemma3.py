@@ -6,7 +6,6 @@ def get_gemma3_config(backbone):
 
     layer_types = []
     for i in range(backbone.num_layers):
-        # Match backbone logic: sliding_window = use_sliding_window_attention and (i % 6 < 5)
         if backbone.use_sliding_window_attention and (i % 6 < 5):
             layer_types.append("sliding_attention")
         else:
