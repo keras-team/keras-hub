@@ -120,11 +120,6 @@ class TestGemma3Export(TestCase):
             "Head dimensions do not match",
         )
         self.assertEqual(
-            hf_config.max_position_embeddings,
-            32768,
-            "Max position embeddings do not match",
-        )
-        self.assertEqual(
             hf_config.tie_word_embeddings,
             backbone.token_embedding.tie_weights,
             "Tie word embeddings do not match",

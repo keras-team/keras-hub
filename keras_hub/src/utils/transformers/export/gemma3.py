@@ -6,10 +6,11 @@ def get_gemma3_config(backbone):
 
     layer_types = []
     for i in range(backbone.num_layers):
-        if (i + 1) % 6 == 0:
-            layer_types.append("full_attention")
-        else:
+        # Match backbone logic: sliding_window = use_sliding_window_attention and (i % 6 < 5)
+        if backbone.use_sliding_window_attention and (i % 6 < 5):
             layer_types.append("sliding_attention")
+        else:
+            layer_types.append("full_attention")
 
     hf_config = {
         "architectures": ["Gemma3ForCausalLM"],
@@ -21,19 +22,20 @@ def get_gemma3_config(backbone):
         "hidden_size": backbone.hidden_dim,
         "intermediate_size": backbone.intermediate_dim,
         "head_dim": backbone.head_dim,
-        "max_position_embeddings": 32768,
-        "rms_norm_eps": 1e-6,
+        "rms_norm_eps": backbone.layer_norm_epsilon,
         "rope_theta": 1000000.0,
         "attention_bias": False,
-        "attention_dropout": 0.0,
+        "attention_dropout": backbone.dropout,
         "hidden_activation": "gelu_pytorch_tanh",
         # Added missing keys to match official config
-        "sliding_window": 512,
+        "sliding_window": backbone.sliding_window_size,
         "_sliding_window_pattern": 6,
         "use_cache": True,
-        "torch_dtype": "bfloat16",
+        "torch_dtype": backbone.dtype_policy.name,
         "layer_types": layer_types,
-        "query_pre_attn_scalar": backbone.head_dim,
+        "query_pre_attn_scalar": backbone.head_dim
+        if backbone.query_head_dim_normalize
+        else backbone.hidden_dim // backbone.num_query_heads,
     }
 
     return hf_config
