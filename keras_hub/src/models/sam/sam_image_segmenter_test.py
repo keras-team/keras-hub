@@ -29,12 +29,12 @@ class SAMImageSegmenterTest(TestCase):
             num_heads=16,
             global_attention_layer_indices=[2, 5, 8, 11],
             patch_size=16,
-            num_output_channels=8,
+            num_output_channels=32,
             window_size=2,
             image_shape=(self.image_size, self.image_size, 3),
         )
         self.prompt_encoder = SAMPromptEncoder(
-            hidden_size=8,
+            hidden_size=32,
             image_embedding_size=(8, 8),
             input_image_size=(
                 self.image_size,
@@ -44,10 +44,10 @@ class SAMImageSegmenterTest(TestCase):
         )
         self.mask_decoder = SAMMaskDecoder(
             num_layers=2,
-            hidden_size=8,
+            hidden_size=32,
             intermediate_dim=32,
             num_heads=8,
-            embedding_dim=8,
+            embedding_dim=32,
             num_multimask_outputs=3,
             iou_head_depth=3,
             iou_head_hidden_dim=8,

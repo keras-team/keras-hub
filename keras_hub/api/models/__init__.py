@@ -184,6 +184,9 @@ from keras_hub.src.models.depth_estimator_preprocessor import (
 from keras_hub.src.models.dinov2.dinov2_backbone import (
     DINOV2Backbone as DINOV2Backbone,
 )
+from keras_hub.src.models.dinov3.dinov3_backbone import (
+    DINOV3Backbone as DINOV3Backbone,
+)
 from keras_hub.src.models.distil_bert.distil_bert_backbone import (
     DistilBertBackbone as DistilBertBackbone,
 )
@@ -348,6 +351,18 @@ from keras_hub.src.models.gpt_neo_x.gpt_neo_x_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_tokenizer import (
     GPTNeoXTokenizer as GPTNeoXTokenizer,
+)
+from keras_hub.src.models.gpt_oss.gpt_oss_backbone import (
+    GptOssBackbone as GptOssBackbone,
+)
+from keras_hub.src.models.gpt_oss.gpt_oss_causal_lm import (
+    GptOssCausalLM as GptOssCausalLM,
+)
+from keras_hub.src.models.gpt_oss.gpt_oss_causal_lm_preprocessor import (
+    GptOssCausalLMPreprocessor as GptOssCausalLMPreprocessor,
+)
+from keras_hub.src.models.gpt_oss.gpt_oss_tokenizer import (
+    GptOssTokenizer as GptOssTokenizer,
 )
 from keras_hub.src.models.hgnetv2.hgnetv2_backbone import (
     HGNetV2Backbone as HGNetV2Backbone,
@@ -660,6 +675,30 @@ from keras_hub.src.models.siglip.siglip_tokenizer import (
 )
 from keras_hub.src.models.siglip.siglip_vision_encoder import (
     SigLIPVisionEncoder as SigLIPVisionEncoder,
+)
+from keras_hub.src.models.smollm3.smollm3_backbone import (
+    SmolLM3Backbone as SmolLM3Backbone,
+)
+from keras_hub.src.models.smollm3.smollm3_backbone import (
+    SmolLM3Backbone as SmolLMBackbone,
+)
+from keras_hub.src.models.smollm3.smollm3_causal_lm import (
+    SmolLM3CausalLM as SmolLM3CausalLM,
+)
+from keras_hub.src.models.smollm3.smollm3_causal_lm import (
+    SmolLM3CausalLM as SmolLMCausalLM,
+)
+from keras_hub.src.models.smollm3.smollm3_causal_lm_preprocessor import (
+    SmolLM3CausalLMPreprocessor as SmolLM3CausalLMPreprocessor,
+)
+from keras_hub.src.models.smollm3.smollm3_causal_lm_preprocessor import (
+    SmolLM3CausalLMPreprocessor as SmolLMCausalLMPreprocessor,
+)
+from keras_hub.src.models.smollm3.smollm3_tokenizer import (
+    SmolLM3Tokenizer as SmolLM3Tokenizer,
+)
+from keras_hub.src.models.smollm3.smollm3_tokenizer import (
+    SmolLM3Tokenizer as SmolLMTokenizer,
 )
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone as StableDiffusion3Backbone,

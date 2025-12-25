@@ -12,9 +12,11 @@ from packaging import version
 
 try:
     import tensorflow as tf
-    import tensorflow_text as tf_text
 except ImportError:
     tf = None
+try:
+    import tensorflow_text as tf_text
+except ImportError:
     tf_text = None
 
 

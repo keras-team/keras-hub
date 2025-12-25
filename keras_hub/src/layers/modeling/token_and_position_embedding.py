@@ -1,10 +1,8 @@
 import keras
+from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
-from keras_hub.src.layers.modeling.reversible_embedding import (
-    ReversibleEmbedding,
-)
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 

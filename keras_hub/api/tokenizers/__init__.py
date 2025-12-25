@@ -50,6 +50,9 @@ from keras_hub.src.models.gpt2.gpt2_tokenizer import (
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_tokenizer import (
     GPTNeoXTokenizer as GPTNeoXTokenizer,
 )
+from keras_hub.src.models.gpt_oss.gpt_oss_tokenizer import (
+    GptOssTokenizer as GptOssTokenizer,
+)
 from keras_hub.src.models.llama.llama_tokenizer import (
     LlamaTokenizer as LlamaTokenizer,
 )
@@ -95,6 +98,12 @@ from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
 )
 from keras_hub.src.models.siglip.siglip_tokenizer import (
     SigLIPTokenizer as SigLIPTokenizer,
+)
+from keras_hub.src.models.smollm3.smollm3_tokenizer import (
+    SmolLM3Tokenizer as SmolLM3Tokenizer,
+)
+from keras_hub.src.models.smollm3.smollm3_tokenizer import (
+    SmolLM3Tokenizer as SmolLMTokenizer,
 )
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer as T5Tokenizer
 from keras_hub.src.models.t5gemma.t5gemma_tokenizer import (
