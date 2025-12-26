@@ -296,3 +296,25 @@ Create unit tests for `DINOV3Backbone` at @keras_hub/src/models/dinov3. Refer to
 ```
 
 If you successfully run through all these steps, congratulations! You have now successfully added a new model to KerasHub through effective co-working with the Gemini CLI.
+
+## Using the Model Porter Tool
+
+The Model Porter tool automates the process of porting models from Hugging Face to KerasHub. It analyzes the KerasHub structure, understands file dependencies, and generates files in the correct order using an LLM (Gemini, Claude, or OpenAI).
+
+### Usage
+
+To use the tool, run the [`tools/model_porter.py`](tools/model_porter.py) script. You need to provide the target model name, a reference model name (an existing KerasHub model), your API key, and an output directory.
+
+```shell
+# Use Gemini (default)
+python tools/model_porter.py --model_name <target_model> --reference_model <reference_model> --api_key <YOUR_API_KEY> --output_dir <output_dir>
+
+# Use Claude
+python tools/model_porter.py --model_name <target_model> --reference_model <reference_model> --api_key <YOUR_API_KEY> --api_provider claude --output_dir <output_dir>
+```
+
+For example, to port `qwen3` using `mixtral` as a reference:
+
+```shell
+python tools/model_porter.py --model_name qwen3 --reference_model mixtral --api_key $GEMINI_API_KEY --output_dir qwen3
+```
