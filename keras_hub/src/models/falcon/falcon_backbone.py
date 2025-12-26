@@ -42,8 +42,10 @@ class FalconBackbone(Backbone):
     }
 
     # Pretrained Falcon decoder.
-    # TODO: Update the preset.
-    model = keras_hub.models.FalconBackbone.from_preset("falcon_preset")
+    model = keras_hub.models.FalconBackbone.from_preset("falcon-7b-instruct")
+    model(input_data)
+
+    model = keras_hub.models.FalconBackbone.from_preset("falcon-rw-1b")
     model(input_data)
 
     # Randomly initialized Falcon decoder with a custom config.
@@ -68,6 +70,7 @@ class FalconBackbone(Backbone):
         num_layers,
         num_attention_heads,
         hidden_dim,
+        num_kv_heads,
         intermediate_dim,
         layer_norm_epsilon=1e-5,
         attention_dropout_rate=0,
@@ -75,6 +78,8 @@ class FalconBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+        use_bias = True if hidden_dim == 2048 else False
+
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
@@ -90,7 +95,9 @@ class FalconBackbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 attention_dropout_rate=attention_dropout_rate,
                 feedforward_dropout_rate=feedforward_dropout_rate,
+                num_kv_heads=num_kv_heads,
                 dtype=dtype,
+                use_bias=use_bias,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
@@ -132,6 +139,7 @@ class FalconBackbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.attention_dropout_rate = attention_dropout_rate
         self.feedforward_dropout_rate = feedforward_dropout_rate
+        self.num_kv_heads = num_kv_heads
         self.layer_norm_epsilon = layer_norm_epsilon
 
     def get_config(self):
@@ -144,6 +152,7 @@ class FalconBackbone(Backbone):
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "attention_dropout_rate": self.attention_dropout_rate,
+                "num_kv_heads": self.num_kv_heads,
                 "feedforward_dropout_rate": self.feedforward_dropout_rate,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
             }
