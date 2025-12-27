@@ -61,18 +61,18 @@ def convert_backbone_config(transformers_config):
     # Handle RoPE scaling for Llama 3.1+
     rope_scaling = text_config.get("rope_scaling", None)
     if rope_scaling is not None:
-        text_backbone_config[
-            "rope_frequency_adjustment_factor"
-        ] = rope_scaling.get("factor", 1.0)
+        text_backbone_config["rope_frequency_adjustment_factor"] = (
+            rope_scaling.get("factor", 1.0)
+        )
         text_backbone_config["rope_low_freq_factor"] = rope_scaling.get(
             "low_freq_factor", 1.0
         )
         text_backbone_config["rope_high_freq_factor"] = rope_scaling.get(
             "high_freq_factor", 4.0
         )
-        text_backbone_config[
-            "rope_pretraining_sequence_length"
-        ] = rope_scaling.get("original_max_position_embeddings", 8192)
+        text_backbone_config["rope_pretraining_sequence_length"] = (
+            rope_scaling.get("original_max_position_embeddings", 8192)
+        )
 
     # Cross-attention layers (every 5th layer starting from layer 3)
     # This varies depending on the model size
@@ -402,7 +402,9 @@ def _convert_text_backbone_weights(backbone, loader):
 
     # Final layer norm
     loader.port_weight(
-        keras_variable=text_backbone.get_layer("sequence_output_layernorm").scale,
+        keras_variable=text_backbone.get_layer(
+            "sequence_output_layernorm"
+        ).scale,
         hf_weight_key="language_model.model.norm.weight",
     )
 
@@ -464,8 +466,9 @@ def load_image_converter_config(preset, transformers_config):
 
     try:
         preprocessor_config = load_json(preset, "preprocessor_config.json")
-    except FileNotFoundError:
-        # Fallback to default values
+    except (FileNotFoundError, ValueError):
+        # Fallback to default values when file doesn't exist 
+        # or preset is invalid
         return {
             "image_size": transformers_config["vision_config"].get(
                 "image_size", 560

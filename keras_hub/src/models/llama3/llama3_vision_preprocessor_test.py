@@ -89,16 +89,16 @@ class Llama3VisionPreprocessorTest(TestCase):
     def test_image_only_preprocessing(self):
         """Test preprocessing with only images (no text)."""
         preprocessor = Llama3VisionPreprocessor(**self.init_kwargs)
-        
+
         # Input with only images
         input_data = {
             "images": np.random.randint(0, 255, (1, 32, 32, 3)).astype(
                 "float32"
             ),
         }
-        
+
         output = preprocessor(input_data)
-        
+
         # Should only have images, no text outputs
         self.assertIn("images", output)
         self.assertNotIn("token_ids", output)
@@ -108,13 +108,13 @@ class Llama3VisionPreprocessorTest(TestCase):
     def test_preprocessing_with_labels(self):
         """Test preprocessing with labels (y parameter)."""
         preprocessor = Llama3VisionPreprocessor(**self.init_kwargs)
-        
+
         input_data = ["airplane"]
         labels = ["airport"]
-        
+
         # Call with both x and y
         output = preprocessor(input_data, y=labels)
-        
+
         # Should return packed x, y, sample_weight tuple
         # The keras.utils.pack_x_y_sample_weight structure
         self.assertIsNotNone(output)
@@ -122,16 +122,16 @@ class Llama3VisionPreprocessorTest(TestCase):
     def test_sequence_length_setter(self):
         """Test sequence_length property setter."""
         preprocessor = Llama3VisionPreprocessor(**self.init_kwargs)
-        
+
         # Build the preprocessor first (creates packer)
         preprocessor.build(None)
-        
+
         # Initial value
         self.assertEqual(preprocessor.sequence_length, 10)
-        
+
         # Change sequence length
         preprocessor.sequence_length = 20
-        
+
         # Verify it changed
         self.assertEqual(preprocessor.sequence_length, 20)
         # Verify packer was updated

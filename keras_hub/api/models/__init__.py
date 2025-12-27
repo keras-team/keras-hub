@@ -378,6 +378,9 @@ from keras_hub.src.models.llama.llama_tokenizer import (
 from keras_hub.src.models.llama3.llama3_backbone import (
     Llama3Backbone as Llama3Backbone,
 )
+from keras_hub.src.models.llama3.llama3_backbone import (
+    Llama3BackboneConfig as Llama3BackboneConfig,
+)
 from keras_hub.src.models.llama3.llama3_causal_lm import (
     Llama3CausalLM as Llama3CausalLM,
 )
@@ -390,8 +393,29 @@ from keras_hub.src.models.llama3.llama3_tokenizer import (
 from keras_hub.src.models.llama3.llama3_vision_backbone import (
     Llama3VisionBackbone as Llama3VisionBackbone,
 )
+from keras_hub.src.models.llama3.llama3_vision_causal_lm import (
+    Llama3VisionCausalLM as Llama3VisionCausalLM,
+)
 from keras_hub.src.models.llama3.llama3_vision_config import (
     Llama3VisionConfig as Llama3VisionConfig,
+)
+from keras_hub.src.models.llama3.llama3_vision_config import (
+    Llama3VisionEncoderConfig as Llama3VisionEncoderConfig,
+)
+from keras_hub.src.models.llama3.llama3_vision_cross_attention import (
+    Llama3VisionCrossAttention as Llama3VisionCrossAttention,
+)
+from keras_hub.src.models.llama3.llama3_vision_encoder import (
+    Llama3VisionEncoder as Llama3VisionEncoder,
+)
+from keras_hub.src.models.llama3.llama3_vision_image_converter import (
+    Llama3VisionImageConverter as Llama3VisionImageConverter,
+)
+from keras_hub.src.models.llama3.llama3_vision_preprocessor import (
+    Llama3VisionPreprocessor as Llama3VisionPreprocessor,
+)
+from keras_hub.src.models.llama3.llama3_vision_projector import (
+    Llama3VisionProjector as Llama3VisionProjector,
 )
 from keras_hub.src.models.masked_lm import MaskedLM as MaskedLM
 from keras_hub.src.models.masked_lm_preprocessor import (
