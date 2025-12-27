@@ -27,7 +27,7 @@ from keras_hub.src.utils.transformers import convert_smollm3
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_vit
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
-
+import re
 
 class TransformersPresetLoader(PresetLoader):
     def __init__(self, preset, config):
@@ -91,7 +91,12 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_backbone(self, cls, load_weights, **kwargs):
         keras_config = self.converter.convert_backbone_config(self.config)
+
+        if  re.search(r'devstral', self.preset,re.I):
+            keras_config["mistral_type"] = "devstral"
+
         backbone = cls(**{**keras_config, **kwargs})
+        
         if load_weights:
             jax_memory_cleanup(backbone)
             with SafetensorLoader(self.preset) as loader:
