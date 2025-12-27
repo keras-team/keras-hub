@@ -206,16 +206,17 @@ class Llama3VisionBackboneTest(TestCase):
 
     def test_missing_text_config_raises_error(self):
         """Test that missing text_config raises ValueError."""
+
         # Create a minimal config with None text_config
         class BadConfig:
             pass
-        
+
         bad_config = BadConfig()
         bad_config.vision_encoder_config = self.vision_config
         bad_config.text_config = None
         bad_config.cross_attention_layers = [1]
         bad_config.dtype = None
-        
+
         with self.assertRaisesRegex(
             ValueError, "`text_config` must be provided"
         ):
@@ -231,15 +232,15 @@ class Llama3VisionBackboneTest(TestCase):
             "hidden_dim": 16,
             "intermediate_dim": 32,
         }
-        
+
         config = Llama3VisionConfig(
             vision_encoder_config=self.vision_config,
             text_config=text_config_dict,
             cross_attention_layers=[1],
         )
-        
+
         backbone = Llama3VisionBackbone(config=config)
-        
+
         # Verify it works
         batch_size = 2
         seq_len = 10
@@ -262,10 +263,10 @@ class Llama3VisionBackboneTest(TestCase):
         """Test from_config class method."""
         backbone = Llama3VisionBackbone(config=self.config)
         config_dict = backbone.get_config()
-        
+
         # Recreate from config
         restored_backbone = Llama3VisionBackbone.from_config(config_dict)
-        
+
         # Verify config matches
         self.assertEqual(
             restored_backbone.config.vision_encoder_config.hidden_dim,
@@ -275,28 +276,28 @@ class Llama3VisionBackboneTest(TestCase):
     def test_freeze_vision_encoder(self):
         """Test freezing the vision encoder."""
         backbone = Llama3VisionBackbone(config=self.config)
-        
+
         # Initially trainable
         self.assertTrue(backbone.vision_encoder.trainable)
-        
+
         # Freeze
         backbone.freeze_vision_encoder()
-        
+
         # Should now be frozen
         self.assertFalse(backbone.vision_encoder.trainable)
 
     def test_unfreeze_all(self):
         """Test unfreezing all components."""
         backbone = Llama3VisionBackbone(config=self.config)
-        
+
         # Freeze everything first
         backbone.freeze_vision_encoder()
         backbone.freeze_text_backbone()
         backbone.freeze_cross_attention()
-        
+
         # Unfreeze all
         backbone.unfreeze_all()
-        
+
         # Everything should be trainable again
         self.assertTrue(backbone.vision_encoder.trainable)
         self.assertTrue(backbone.text_backbone.trainable)
@@ -306,21 +307,21 @@ class Llama3VisionBackboneTest(TestCase):
     def test_unfreeze_all_without_encoder_method(self):
         """Test unfreeze_all when vision_encoder lacks unfreeze_all method."""
         import keras
-        
+
         backbone = Llama3VisionBackbone(config=self.config)
-        
+
         # Create a simple layer without unfreeze_all method
         simple_layer = keras.layers.Dense(16, name="simple_vision_encoder")
-        
+
         # Replace vision_encoder temporarily
         original_encoder = backbone.vision_encoder
         backbone.vision_encoder = simple_layer
-        
+
         try:
             # This should work without calling vision_encoder.unfreeze_all()
             # because simple_layer doesn't have that method
             backbone.unfreeze_all()
-            
+
             # Basic unfreezing should still work
             self.assertTrue(backbone.vision_encoder.trainable)
         finally:
@@ -330,28 +331,27 @@ class Llama3VisionBackboneTest(TestCase):
     def test_freeze_text_backbone(self):
         """Test freezing the text backbone."""
         backbone = Llama3VisionBackbone(config=self.config)
-        
+
         # Initially trainable
         self.assertTrue(backbone.text_backbone.trainable)
-        
+
         # Freeze
         backbone.freeze_text_backbone()
-        
+
         # Should now be frozen
         self.assertFalse(backbone.text_backbone.trainable)
-
 
     def test_freeze_cross_attention(self):
         """Test freezing cross-attention blocks."""
         backbone = Llama3VisionBackbone(config=self.config)
-        
+
         # Initially trainable
         for layer_idx, ca_block in backbone.cross_attention_blocks.items():
             self.assertTrue(ca_block.trainable)
-        
+
         # Freeze
         backbone.freeze_cross_attention()
-        
+
         # Should now be frozen
         for layer_idx, ca_block in backbone.cross_attention_blocks.items():
             self.assertFalse(ca_block.trainable)
@@ -359,10 +359,10 @@ class Llama3VisionBackboneTest(TestCase):
     def test_freeze_for_vision_adapter_training(self):
         """Test freeze_for_vision_adapter_training method."""
         backbone = Llama3VisionBackbone(config=self.config)
-        
+
         # Apply adapter training freeze pattern
         backbone.freeze_for_vision_adapter_training()
-        
+
         # Vision encoder should be frozen
         self.assertFalse(backbone.vision_encoder.trainable)
         # Text backbone should be frozen
@@ -376,10 +376,10 @@ class Llama3VisionBackboneTest(TestCase):
     def test_freeze_for_lora_training(self):
         """Test freeze_for_lora_training method."""
         backbone = Llama3VisionBackbone(config=self.config)
-        
+
         # Apply LoRA freeze pattern
         backbone.freeze_for_lora_training()
-        
+
         # Everything should be frozen
         self.assertFalse(backbone.vision_encoder.trainable)
         self.assertFalse(backbone.vision_projector.trainable)
@@ -389,18 +389,19 @@ class Llama3VisionBackboneTest(TestCase):
 
     def test_invalid_text_config_type_raises_error(self):
         """Test that invalid text_config type raises ValueError."""
+
         # Create a config with text_config that is neither dict
         # nor has get_config
         class BadConfig:
             pass
-        
+
         bad_config = BadConfig()
         bad_config.vision_encoder_config = self.vision_config
         # Not dict, not object with get_config
         bad_config.text_config = "invalid_string"
         bad_config.cross_attention_layers = [1]
         bad_config.dtype = None
-        
+
         with self.assertRaisesRegex(
             ValueError, "text_config must be either a dict or have a"
         ):
@@ -409,20 +410,20 @@ class Llama3VisionBackboneTest(TestCase):
     def test_get_trainable_summary(self):
         """Test get_trainable_summary method."""
         backbone = Llama3VisionBackbone(config=self.config)
-        
+
         summary = backbone.get_trainable_summary()
-        
+
         # Check structure
         self.assertIn("vision_encoder", summary)
         self.assertIn("vision_projector", summary)
         self.assertIn("text_backbone", summary)
         self.assertIn("cross_attention", summary)
         self.assertIn("total", summary)
-        
+
         # Check vision_encoder info
         self.assertTrue(summary["vision_encoder"]["trainable"])
         self.assertGreater(summary["vision_encoder"]["params"], 0)
-        
+
         # Check total info
         self.assertIn("trainable_params", summary["total"])
         self.assertIn("total_params", summary["total"])
@@ -431,39 +432,39 @@ class Llama3VisionBackboneTest(TestCase):
     def test_get_trainable_summary_frozen_components(self):
         """Test get_trainable_summary with frozen components."""
         backbone = Llama3VisionBackbone(config=self.config)
-        
+
         # Freeze vision encoder to test trainable_only=True path
         backbone.freeze_vision_encoder()
-        
+
         summary = backbone.get_trainable_summary()
-        
+
         # Vision encoder should show as not trainable
         self.assertFalse(summary["vision_encoder"]["trainable"])
         self.assertFalse(summary["vision_projector"]["trainable"])
-        
+
         # Total params should still be counted correctly
         self.assertGreater(summary["total"]["total_params"], 0)
         # Trainable params should be less than total
         self.assertLess(
             summary["total"]["trainable_params"],
-            summary["total"]["total_params"]
+            summary["total"]["total_params"],
         )
 
     def test_print_trainable_summary(self):
         """Test print_trainable_summary executes without error."""
         import io
         import sys
-        
+
         backbone = Llama3VisionBackbone(config=self.config)
-        
+
         # Capture stdout
         captured_output = io.StringIO()
         sys.stdout = captured_output
-        
+
         try:
             backbone.print_trainable_summary()
             output = captured_output.getvalue()
-            
+
             # Check that output contains expected strings
             self.assertIn("TRAINABLE PARAMETERS SUMMARY", output)
             self.assertIn("vision_encoder", output)

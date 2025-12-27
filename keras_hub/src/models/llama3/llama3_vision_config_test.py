@@ -41,7 +41,7 @@ class Llama3VisionEncoderConfigTest(TestCase):
             image_size=224,
         )
         config_dict = config.get_config()
-        
+
         self.assertEqual(config_dict["hidden_dim"], 512)
         self.assertEqual(config_dict["num_layers"], 8)
         self.assertEqual(config_dict["num_heads"], 8)
@@ -61,7 +61,7 @@ class Llama3VisionEncoderConfigTest(TestCase):
             global_layers=2,
         )
         config_dict = config.get_config()
-        
+
         self.assertEqual(config_dict["local_layers"], 4)
         self.assertEqual(config_dict["global_layers"], 2)
         self.assertTrue(config.is_two_stage)
@@ -76,7 +76,7 @@ class Llama3VisionConfigTest(TestCase):
             vision_encoder_config=None,
             text_config={"hidden_dim": 256},
         )
-        
+
         self.assertIsInstance(
             config.vision_encoder_config, Llama3VisionEncoderConfig
         )
@@ -95,7 +95,7 @@ class Llama3VisionConfigTest(TestCase):
             vision_encoder_config=vision_config_dict,
             text_config={"hidden_dim": 256},
         )
-        
+
         self.assertIsInstance(
             config.vision_encoder_config, Llama3VisionEncoderConfig
         )
@@ -108,7 +108,7 @@ class Llama3VisionConfigTest(TestCase):
             vision_encoder_config=Llama3VisionEncoderConfig(),
             text_config=None,
         )
-        
+
         self.assertIsInstance(config.text_config, dict)
         self.assertEqual(config.text_config, {})
 
@@ -123,31 +123,31 @@ class Llama3VisionConfigTest(TestCase):
             text_config=text_config_dict,
             cross_attention_layers=[3, 8],
         )
-        
+
         config_dict = config.get_config()
-        
+
         self.assertIn("vision_encoder_config", config_dict)
         self.assertEqual(config_dict["text_config"], text_config_dict)
         self.assertEqual(config_dict["cross_attention_layers"], [3, 8])
 
     def test_get_config_with_object_text_config(self):
         """Test get_config when text_config has get_config method."""
+
         # Create a mock config object with get_config
         class MockTextConfig:
             def get_config(self):
                 return {"hidden_dim": 1024, "num_layers": 16}
-        
+
         text_config = MockTextConfig()
         config = Llama3VisionConfig(
             vision_encoder_config=Llama3VisionEncoderConfig(),
             text_config=text_config,
         )
-        
+
         config_dict = config.get_config()
-        
+
         self.assertEqual(
-            config_dict["text_config"], 
-            {"hidden_dim": 1024, "num_layers": 16}
+            config_dict["text_config"], {"hidden_dim": 1024, "num_layers": 16}
         )
 
     def test_default_cross_attention_layers(self):
@@ -156,11 +156,10 @@ class Llama3VisionConfigTest(TestCase):
             vision_encoder_config=Llama3VisionEncoderConfig(),
             text_config={},
         )
-        
+
         # Should use default layers
         self.assertEqual(
-            config.cross_attention_layers, 
-            [3, 8, 13, 18, 23, 28, 33, 38]
+            config.cross_attention_layers, [3, 8, 13, 18, 23, 28, 33, 38]
         )
 
     def test_custom_cross_attention_layers(self):
@@ -171,5 +170,5 @@ class Llama3VisionConfigTest(TestCase):
             text_config={},
             cross_attention_layers=custom_layers,
         )
-        
+
         self.assertEqual(config.cross_attention_layers, custom_layers)
