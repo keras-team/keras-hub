@@ -1,6 +1,7 @@
 """Llama 3.2 Vision Backbone with Cross-Attention fusion."""
 
 import keras
+import numpy as np
 from keras import layers
 from keras import ops
 
@@ -102,7 +103,7 @@ class Llama3VisionBackbone(Backbone):
         padding_mask_input = keras.Input(
             shape=(None,),
             name="padding_mask",
-            dtype="bool",
+            dtype="int32",
         )
 
         # 3. Instantiate Sub-Components
@@ -373,8 +374,6 @@ class Llama3VisionBackbone(Backbone):
                 )
             return sum(int(np.prod(w.shape)) for w in layer.weights)
 
-        import numpy as np
-
         summary = {
             "vision_encoder": {
                 "trainable": self.vision_encoder.trainable,
@@ -412,7 +411,11 @@ class Llama3VisionBackbone(Backbone):
         summary["total"] = {
             "trainable_params": total_trainable,
             "total_params": total_params,
-            "trainable_ratio": f"{total_trainable/total_params*100:.1f}%",
+            "trainable_ratio": (
+                f"{(total_trainable / total_params * 100):.1f}%"
+                if total_params > 0
+                else "0.0%"
+            ),
         }
 
         return summary

@@ -47,7 +47,8 @@ class Llama3VisionEncoderConfig:
         layer_norm_epsilon=1e-6,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        self._kwargs = kwargs
+        super().__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -86,6 +87,7 @@ class Llama3VisionEncoderConfig:
                 "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )
+        config.update(self._kwargs)
         return config
 
 
@@ -112,7 +114,8 @@ class Llama3VisionConfig:
         dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        self._kwargs = kwargs
+        super().__init__()
 
         # Handle Vision Encoder Config
         if vision_encoder_config is None:
@@ -154,6 +157,7 @@ class Llama3VisionConfig:
                 "dtype": self.dtype,
             }
         )
+        config.update(self._kwargs)
         return config
 
 

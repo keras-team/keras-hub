@@ -74,7 +74,7 @@ def convert_backbone_config(transformers_config):
             "rope_pretraining_sequence_length"
         ] = rope_scaling.get("original_max_position_embeddings", 8192)
 
-    # Cross-attention layers (every 4th layer starting from layer 3)
+    # Cross-attention layers (every 5th layer starting from layer 3)
     # This varies depending on the model size
     num_text_layers = text_config.get("num_hidden_layers", 40)
     cross_attention_layers = transformers_config.get(
@@ -464,7 +464,7 @@ def load_image_converter_config(preset, transformers_config):
 
     try:
         preprocessor_config = load_json(preset, "preprocessor_config.json")
-    except Exception:
+    except FileNotFoundError:
         # Fallback to default values
         return {
             "image_size": transformers_config["vision_config"].get(

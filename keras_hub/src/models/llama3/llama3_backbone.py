@@ -45,11 +45,12 @@ class Llama3BackboneConfig:
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dtype = dtype
         # Store any extra kwargs
+        self._kwargs = kwargs
         for k, v in kwargs.items():
             setattr(self, k, v)
 
     def get_config(self):
-        return {
+        config = {
             "vocabulary_size": self.vocabulary_size,
             "num_layers": self.num_layers,
             "num_query_heads": self.num_query_heads,
@@ -61,6 +62,8 @@ class Llama3BackboneConfig:
             "layer_norm_epsilon": self.layer_norm_epsilon,
             "dtype": self.dtype,
         }
+        config.update(self._kwargs)
+        return config
 
 
 # LLaMA 3 shares the same architecture as its predecessors
