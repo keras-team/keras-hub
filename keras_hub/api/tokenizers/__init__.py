@@ -93,6 +93,9 @@ from keras_hub.src.models.roberta.roberta_tokenizer import (
 from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
     RoformerV2Tokenizer as RoformerV2Tokenizer,
 )
+from keras_hub.src.models.rwkv7.rwkv7_tokenizer import (
+    RWKVTokenizer as RWKVTokenizer,
+)
 from keras_hub.src.models.siglip.siglip_tokenizer import (
     SigLIPTokenizer as SigLIPTokenizer,
 )
