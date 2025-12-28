@@ -467,7 +467,7 @@ def load_image_converter_config(preset, transformers_config):
     try:
         preprocessor_config = load_json(preset, "preprocessor_config.json")
     except (FileNotFoundError, ValueError):
-        # Fallback to default values when file doesn't exist 
+        # Fallback to default values when file doesn't exist
         # or preset is invalid
         return {
             "image_size": transformers_config["vision_config"].get(
