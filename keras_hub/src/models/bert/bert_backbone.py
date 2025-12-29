@@ -2,6 +2,9 @@ import keras
 from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.modeling.dora_dense import DoRADense
+from keras_hub.src.layers.modeling.dora_embeddings import DoRAEmbedding
+from keras_hub.src.layers.modeling.dora_embeddings import DoRAPositionEmbedding
 from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
 from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_hub.src.models.backbone import Backbone
@@ -34,7 +37,8 @@ class BertBackbone(Backbone):
         num_layers: int. The number of transformer layers.
         num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        hidden_dim: int. The size of the transformer encoding and pooler layers.
+        hidden_dim: int.
+            The size of the transformer encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
         dropout: float. Dropout probability for the Transformer encoder.
@@ -81,26 +85,55 @@ class BertBackbone(Backbone):
         num_heads,
         hidden_dim,
         intermediate_dim,
+        enable_dora=False,
+        dora_rank=8,
+        dora_alpha=16.0,
         dropout=0.1,
         max_sequence_length=512,
         num_segments=2,
         dtype=None,
         **kwargs,
     ):
+        self.enable_dora = enable_dora
+        self.dora_rank = dora_rank
+        self.dora_alpha = dora_alpha
         # === Layers ===
-        self.token_embedding = ReversibleEmbedding(
-            input_dim=vocabulary_size,
-            output_dim=hidden_dim,
-            embeddings_initializer=bert_kernel_initializer(),
-            dtype=dtype,
-            name="token_embedding",
-        )
-        self.position_embedding = PositionEmbedding(
-            initializer=bert_kernel_initializer(),
-            sequence_length=max_sequence_length,
-            dtype=dtype,
-            name="position_embedding",
-        )
+        if enable_dora:
+            self.token_embedding = DoRAEmbedding(
+                input_dim=vocabulary_size,
+                output_dim=hidden_dim,
+                rank=dora_rank,
+                alpha=dora_alpha,
+                embeddings_initializer=bert_kernel_initializer(),
+                dtype=dtype,
+                name="token_embedding",
+            )
+        else:
+            self.token_embedding = ReversibleEmbedding(
+                input_dim=vocabulary_size,
+                output_dim=hidden_dim,
+                embeddings_initializer=bert_kernel_initializer(),
+                dtype=dtype,
+                name="token_embedding",
+            )
+
+        if enable_dora:
+            self.position_embedding = DoRAPositionEmbedding(
+                sequence_length=max_sequence_length,
+                output_dim=hidden_dim,
+                rank=dora_rank,
+                alpha=dora_alpha,
+                initializer=bert_kernel_initializer(),
+                dtype=dtype,
+                name="position_embedding",
+            )
+        else:
+            self.position_embedding = PositionEmbedding(
+                initializer=bert_kernel_initializer(),
+                sequence_length=max_sequence_length,
+                dtype=dtype,
+                name="position_embedding",
+            )
         self.segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=hidden_dim,
@@ -136,13 +169,25 @@ class BertBackbone(Backbone):
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        self.pooled_dense = keras.layers.Dense(
-            hidden_dim,
-            kernel_initializer=bert_kernel_initializer(),
-            activation="tanh",
-            dtype=dtype,
-            name="pooled_dense",
-        )
+
+        if enable_dora:
+            self.pooled_dense = DoRADense(
+                units=hidden_dim,
+                rank=dora_rank,
+                alpha=dora_alpha,
+                kernel_initializer=bert_kernel_initializer(),
+                activation="tanh",
+                dtype=dtype,
+                name="pooled_dense",
+            )
+        else:
+            self.pooled_dense = keras.layers.Dense(
+                hidden_dim,
+                kernel_initializer=bert_kernel_initializer(),
+                activation="tanh",
+                dtype=dtype,
+                name="pooled_dense",
+            )
 
         # === Functional Model ===
         token_id_input = keras.Input(
@@ -203,6 +248,9 @@ class BertBackbone(Backbone):
                 "num_heads": self.num_heads,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
+                "enable_dora": self.enable_dora,
+                "dora_rank": self.dora_rank,
+                "dora_alpha": self.dora_alpha,
                 "dropout": self.dropout,
                 "max_sequence_length": self.max_sequence_length,
                 "num_segments": self.num_segments,

@@ -12,6 +12,19 @@ from keras_hub.src.layers.modeling.box_matcher import BoxMatcher as BoxMatcher
 from keras_hub.src.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention as CachedMultiHeadAttention,
 )
+from keras_hub.src.layers.modeling.dora_dense import DoRADense as DoRADense
+from keras_hub.src.layers.modeling.dora_dense import (
+    convert_dense_to_dora as convert_dense_to_dora,
+)
+from keras_hub.src.layers.modeling.dora_embeddings import (
+    DoRAEmbedding as DoRAEmbedding,
+)
+from keras_hub.src.layers.modeling.dora_embeddings import (
+    DoRAPositionEmbedding as DoRAPositionEmbedding,
+)
+from keras_hub.src.layers.modeling.dora_embeddings import (
+    convert_embedding_to_dora as convert_embedding_to_dora,
+)
 from keras_hub.src.layers.modeling.f_net_encoder import (
     FNetEncoder as FNetEncoder,
 )
