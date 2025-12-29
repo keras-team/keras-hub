@@ -364,7 +364,7 @@ class DoRAEmbedding(layers.Layer):
         # Compute column norms using backend-agnostic operations
         squared_embeddings = ops.square(pretrained_embeddings)
         sum_squares = ops.sum(squared_embeddings, axis=0)
-        column_norms = ops.sqrt(sum_squares)
+        column_norms = ops.maximum(ops.sqrt(sum_squares), 1e-8)
 
         self._safe_assign_weight(self.magnitude, column_norms)
 

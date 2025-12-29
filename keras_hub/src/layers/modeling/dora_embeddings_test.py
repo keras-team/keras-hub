@@ -286,6 +286,11 @@ class TestDoRAEmbedding:
         embeddings_np = safe_convert_to_numpy(dora_embedding.embeddings)
         assert safe_allclose(embeddings_np, pretrained_embeddings)
 
+        # Check magnitude is initialized to column norms
+        expected_magnitude = np.linalg.norm(pretrained_embeddings, axis=0)
+        magnitude_np = safe_convert_to_numpy(dora_embedding.magnitude)
+        assert safe_allclose(magnitude_np, expected_magnitude, rtol=1e-5)
+
     def test_load_pretrained_embeddings_shape_mismatch(self, dora_embedding):
         """Test loading pretrained embeddings with wrong shapes."""
         dora_embedding.build(None)
