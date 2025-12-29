@@ -27,7 +27,7 @@ class DoRADense(layers.Layer):
     parameter-efficient fine-tuning of pretrained dense layers.
 
     DoRA decomposes the weight matrix W as:
-    W = m * (W_0 + BA) / ||W_0 + BA||_c
+    W = m * (W_0 + AB) / ||W_0 + AB||_c
 
     Where:
     - m: magnitude vector (learnable, shape: units)
