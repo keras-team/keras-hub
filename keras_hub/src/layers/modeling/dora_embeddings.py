@@ -1,10 +1,8 @@
-"""DoRA (Weight-Decomposed Low-Rank Adaptation)
-Embedding Layer Implementation.
+"""DoRA (Weight-Decomposed Low-Rank Adaptation) Embedding Layer.
 
-This module implements the DoRA embedding
-layer that applies weight decomposition
-and low-rank adaptation to token
-embeddings for efficient fine-tuning.
+This module implements the DoRA embedding layer that applies weight
+decomposition and low-rank adaptation to token embeddings for efficient
+fine-tuning.
 
 Backend-compatible with TensorFlow, PyTorch, and JAX.
 
@@ -57,10 +55,10 @@ class DoRAEmbedding(layers.Layer):
         embeddings_initializer: str or initializer instance, optional.
             Initializer for the frozen embeddings matrix.
             Defaults to `"uniform"`.
-        lora_a_initializer: str or initializer instance, optional.
-            Initializer for the low-rank matrix A. Defaults to `"he_uniform"`.
-        lora_b_initializer: str or initializer instance, optional.
-            Initializer for the low-rank matrix B. Defaults to `"zeros"`.
+        lora_a_initializer: str or initializer instance, optional. Initializer
+            for the low-rank matrix A. Defaults to `"he_uniform"`.
+        lora_b_initializer: str or initializer instance, optional. Initializer
+            for the low-rank matrix B. Defaults to `"zeros"`.
         magnitude_initializer: str or initializer instance, optional.
             Initializer for the magnitude vector. Defaults to `"ones"`.
         embeddings_regularizer: str or regularizer instance, optional.
@@ -69,18 +67,14 @@ class DoRAEmbedding(layers.Layer):
         activity_regularizer: str or regularizer instance, optional.
             Regularizer function applied to the layer output.
             Defaults to `None`.
-        embeddings_constraint: str or constraint instance, optional.
-            Constraint function applied to the embeddings matrix.
-            Defaults to `None`.
+        embeddings_constraint: str or constraint instance, optional. Constraint
+            function applied to the embeddings matrix. Defaults to `None`.
         mask_zero: bool, optional. Whether input value 0 should be treated as
             a special "padding" value that should be masked out.
             Defaults to `False`.
-        input_length: int, optional.
-            Length of input sequences when it is constant.
-            This argument is for compatibility with certain layer types.
-            Defaults to `None`.
-        sparse: bool, optional. Whether to use sparse embedding lookup.
-            Defaults to `False`.
+        input_length: int, optional. Length of input sequences when it is
+            constant. This argument is for compatibility with certain layer
+            types. Defaults to `None`.
 
     Example:
     ```python
@@ -145,7 +139,6 @@ class DoRAEmbedding(layers.Layer):
         embeddings_constraint=None,
         mask_zero=False,
         input_length=None,
-        sparse=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -166,7 +159,6 @@ class DoRAEmbedding(layers.Layer):
         self.alpha = alpha
         self.mask_zero = mask_zero
         self.input_length = input_length
-        self.sparse = sparse
 
         # Initializers
         self.embeddings_initializer = keras.initializers.get(
@@ -246,7 +238,6 @@ class DoRAEmbedding(layers.Layer):
 
         Args:
             inputs: Input tensor containing token indices.
-            training: Boolean indicating whether in training mode.
 
         Returns:
             Output tensor after DoRA embedding lookup.
@@ -429,7 +420,6 @@ class DoRAEmbedding(layers.Layer):
             embeddings_constraint=self.embeddings_constraint,
             mask_zero=self.mask_zero,
             input_length=self.input_length,
-            sparse=self.sparse,
             name=self.name + "_expanded",
         )
 
@@ -519,7 +509,6 @@ class DoRAEmbedding(layers.Layer):
                 ),
                 "mask_zero": self.mask_zero,
                 "input_length": self.input_length,
-                "sparse": self.sparse,
             }
         )
         return config
@@ -569,7 +558,7 @@ class DoRAPositionEmbedding(layers.Layer):
         lora_b_initializer: str or initializer instance, optional. Initializer
             for the low-rank matrix B. Defaults to `"zeros"`.
         magnitude_initializer: str or initializer instance, optional.
-        Initializer for the magnitude vector. Defaults to `"ones"`.
+            Initializer for the magnitude vector. Defaults to `"ones"`.
 
     Example:
     ```python
@@ -771,7 +760,7 @@ def convert_embedding_to_dora(
     embedding_layer,
     rank=4,
     alpha=1.0,
-) -> DoRAEmbedding:
+):
     """Convert a standard Embedding layer to DoRAEmbedding layer.
 
     Args:

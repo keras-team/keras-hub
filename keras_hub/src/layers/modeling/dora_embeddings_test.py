@@ -98,7 +98,6 @@ class TestDoRAEmbedding:
             alpha=0.5,
             mask_zero=True,
             input_length=128,
-            sparse=True,
         )
         assert layer.input_dim == 5000
         assert layer.output_dim == 256
@@ -106,7 +105,6 @@ class TestDoRAEmbedding:
         assert layer.alpha == 0.5
         assert layer.mask_zero is True
         assert layer.input_length == 128
-        assert layer.sparse is True
 
     def test_parameter_validation(self):
         """Test parameter validation."""
@@ -218,16 +216,6 @@ class TestDoRAEmbedding:
 
         no_mask_result = layer_unmasked.compute_mask(test_input)
         assert no_mask_result is None
-
-    def test_sparse_embedding(self):
-        """Test sparse embedding functionality."""
-        layer = DoRAEmbedding(input_dim=100, output_dim=32, sparse=True)
-
-        test_input = ops.convert_to_tensor([[1, 2, 3]], dtype="int32")
-        output = layer(test_input)
-
-        # Should work and produce correct shape
-        assert output.shape == (1, 3, 32)
 
     def test_get_effective_embeddings(self, dora_embedding):
         """Test effective embeddings computation."""

@@ -21,10 +21,10 @@ class DoRADense(layers.Layer):
     """DoRA (Weight-Decomposed Low-Rank Adaptation) Dense layer.
 
     This layer implements a fully connected (dense) layer using DoRA, which
-    decomposes the weight matrix into magnitude and direction components while
-    applying low-rank adaptation. The base weights are frozen, and only the
-    low-rank matrices and magnitude vector are trainable, enabling parameter-
-    efficient fine-tuning of pretrained dense layers.
+    decomposes the weight matrix into magnitude and direction components
+    while applying low-rank adaptation. The base weights are frozen, and
+    only the low-rank matrices and magnitude vector are trainable, enabling
+    parameter-efficient fine-tuning of pretrained dense layers.
 
     DoRA decomposes the weight matrix W as:
     W = m * (W_0 + BA) / ||W_0 + BA||_c
@@ -57,7 +57,7 @@ class DoRADense(layers.Layer):
             to use. If `None`, no activation is applied. Defaults to `None`.
         kernel_initializer: str or initializer instance, optional. Initializer
             for the frozen kernel weight matrix. Defaults to
-           `"glorot_uniform"`.
+            `"glorot_uniform"`.
         bias_initializer: str or initializer instance, optional. Initializer
             for the bias vector. Defaults to `"zeros"`.
         lora_a_initializer: str or initializer instance, optional. Initializer
@@ -65,13 +65,14 @@ class DoRADense(layers.Layer):
         lora_b_initializer: str or initializer instance, optional. Initializer
             for the low-rank matrix B. Defaults to `"zeros"`.
         magnitude_initializer: str or initializer instance, optional.
-        Initializer for the magnitude vector. Defaults to `"ones"`.
+            Initializer for the magnitude vector. Defaults to `"ones"`.
         kernel_regularizer: str or regularizer instance, optional. Regularizer
             function applied to the kernel weight matrix. Defaults to `None`.
         bias_regularizer: str or regularizer instance, optional. Regularizer
             function applied to the bias vector. Defaults to `None`.
         activity_regularizer: str or regularizer instance, optional.
-        Regularizer function applied to the layer output. Defaults to `None`.
+            Regularizer function applied to the layer output. Defaults to
+            `None`.
         kernel_constraint: str or constraint instance, optional. Constraint
             function applied to the kernel weight matrix. Defaults to `None`.
         bias_constraint: str or constraint instance, optional. Constraint
@@ -213,9 +214,10 @@ class DoRADense(layers.Layer):
         self.bias_constraint = keras.constraints.get(bias_constraint)
 
         # Dropout layer
-        self.dropout_layer = (
-            layers.Dropout(self.dropout_rate) if self.dropout_rate > 0 else None
-        )
+        if self.dropout_rate > 0:
+            self.dropout_layer = layers.Dropout(self.dropout_rate)
+        else:
+            self.dropout_layer = None
 
         # Scaling factor
         self.scaling = self.alpha / self.rank
@@ -482,7 +484,7 @@ def convert_dense_to_dora(
     rank=4,
     alpha=1.0,
     dropout=0.0,
-) -> DoRADense:
+):
     """Convert a standard Dense layer to DoRADense layer.
 
     Args:
