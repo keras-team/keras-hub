@@ -72,3 +72,12 @@ class SegFormerTest(TestCase):
             init_kwargs={**self.init_kwargs},
             input_data=self.input_data,
         )
+
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=SegFormerImageSegmenter,
+            init_kwargs={**self.init_kwargs},
+            input_data=self.input_data,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 10.0, "mean": 2.0}},
+        )
