@@ -73,8 +73,14 @@ def export_backbone(backbone, path, include_lm_head=False):
     # Save config
     os.makedirs(path, exist_ok=True)
     config_path = os.path.join(path, "config.json")
+
+    # Handle Config Objects (Qwen/QwenMoE) vs Dicts (Gemma)
+    config_to_save = hf_config
+    if hasattr(hf_config, "to_dict"):
+        config_to_save = hf_config.to_dict()
+
     with open(config_path, "w") as f:
-        json.dump(hf_config, f)
+        json.dump(config_to_save, f, indent=2)
     # Save weights based on backend
     weights_path = os.path.join(path, "model.safetensors")
     if backend == "torch":
