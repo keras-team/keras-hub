@@ -376,7 +376,7 @@ def get_gemma3_tokenizer_config(tokenizer):
         tokenizer_config["boi_token"] = "<start_of_image>"
         tokenizer_config["eoi_token"] = "<end_of_image>"
         tokenizer_config["image_token"] = "<image_soft_token>"
-        # extra_special_tokens is required for HF to recognize these as special tokens
+        # extra_special_tokens is for model-specific access
         tokenizer_config["extra_special_tokens"] = {
             "boi_token": "<start_of_image>",
             "eoi_token": "<end_of_image>",

@@ -190,11 +190,9 @@ def export_tokenizer(tokenizer, path):
             warnings.warn(f"{vocab_json_path} not found.")
 
     # Generate tokenizer.json for models that need it
-    # GemmaTokenizerFast will generate it properly from tokenizer.model + tokenizer_config.json
     if tokenizer_type == "Gemma3Tokenizer":
         try:
             from transformers import GemmaTokenizerFast
-
             hf_tokenizer = GemmaTokenizerFast.from_pretrained(path)
             hf_tokenizer.save_pretrained(path)
         except Exception as e:
