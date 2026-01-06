@@ -326,12 +326,18 @@ def get_gemma3_processor_config(backbone):
     if backbone.vision_encoder is None:
         return None
     
-    # Calculate image sequence length based on image size and patch size
+    # Calculate image sequence length accounting for pooling
+    # The vision encoder applies spatial pooling after patch extraction
     vision_encoder = backbone.vision_encoder
     image_encoder = vision_encoder.get_layer("image_encoder")
+    pooling_layer = vision_encoder.get_layer("pooling")
+    
     img_size = image_encoder.image_size
     patch_size = image_encoder.patch_size
-    image_seq_length = (img_size // patch_size) ** 2
+    pool_size = pooling_layer.pool_size
+    
+    # Number of patches after pooling: ((img_size / patch_size) / pool_size)^2
+    image_seq_length = ((img_size // patch_size) // pool_size) ** 2
     
     processor_config = {
         "processor_class": "Gemma3Processor",

@@ -173,7 +173,12 @@ def export_tokenizer(tokenizer, path):
         if os.path.exists(vocab_spm_path):
             shutil.move(vocab_spm_path, tokenizer_model_path)
         else:
-            warnings.warn(f"{vocab_spm_path} not found.")
+            warnings.warn(
+                f"{vocab_spm_path} not found. Tokenizer may not load "
+                "correctly. Ensure that the tokenizer configuration "
+                "is correct and that the vocabulary file is present "
+                "in the original model."
+            )
 
     # 2. BPE Models (Qwen)
     elif tokenizer_type == "QwenTokenizer":
@@ -183,6 +188,20 @@ def export_tokenizer(tokenizer, path):
             shutil.move(vocab_json_path, vocab_hf_path)
         else:
             warnings.warn(f"{vocab_json_path} not found.")
+
+    # Generate tokenizer.json for models that need it
+    if tokenizer_type == "Gemma3Tokenizer":
+        try:
+            from transformers import GemmaTokenizerFast
+
+            hf_tokenizer = GemmaTokenizerFast.from_pretrained(path)
+            hf_tokenizer.save_pretrained(path)
+        except Exception as e:
+            warnings.warn(
+                f"Failed to generate tokenizer.json: {e}. "
+                "Tokenizer may not handle special tokens correctly. "
+                "Ensure 'transformers' is installed with sentencepiece support."
+            )
 
 
 def export_image_converter(backbone, path):
@@ -202,6 +221,7 @@ def export_image_converter(backbone, path):
             preprocessor_config_path = os.path.join(path, "preprocessor_config.json")
             with open(preprocessor_config_path, "w") as f:
                 json.dump(preprocessor_config, f, indent=2)
+
     # Add future vision models here
     # elif model_type == "PaliGemmaBackbone":
     #     preprocessor_config = get_paligemma_image_converter_config(backbone)
