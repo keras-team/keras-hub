@@ -356,6 +356,7 @@ def get_gemma3_tokenizer_config(tokenizer):
         "unk_token": "<unk>",
         "add_bos_token": True,
         "add_eos_token": False,
+        "chat_template": "{{ bos_token }}{% if messages[0]['role'] == 'system' %}{{ raise_exception('System role not supported') }}{% endif %}{% for message in messages %}{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception('Conversation roles must alternate user/assistant/user/assistant/...') }}{% endif %}{% if (message['role'] == 'assistant') %}{% set role = 'model' %}{% else %}{% set role = message['role'] %}{% endif %}{{ '<start_of_turn>' + role + '\n' + message['content'] | trim + '<end_of_turn>\n' }}{% endfor %}{% if add_generation_prompt %}{{'<start_of_turn>model\n'}}{% endif %}",
         "model_max_length": 1000000000000000019884624838656,
         "spaces_between_special_tokens": False,
         "use_default_system_prompt": False,
@@ -382,25 +383,40 @@ def get_gemma3_tokenizer_config(tokenizer):
             "image_token": "<image_soft_token>",
         }
     
-    # Add added_tokens_decoder
+    # Build added_tokens_decoder with ALL tokens in the vocabulary
+    # This is required for proper special token handling
     added_tokens_decoder = {}
-    special_tokens = [
-        "<pad>",
-        "<bos>",
-        "<eos>",
-        "<unk>",
-        "<mask>",
-        "[multimodal]",
-        "<img>",
-    ]
+    vocab_size = tokenizer.vocabulary_size()
     
-    # Add vision tokens if present
+    for token_id in range(vocab_size):
+        token = tokenizer.id_to_token(token_id)
+        if token is not None:
+            # Determine if this is a special token
+            is_special = (
+                token in ["<pad>", "<bos>", "<eos>", "<unk>", "<mask>", "[multimodal]", "<img>",
+                          "<start_of_image>", "<end_of_image>", "<image_soft_token>"]
+                or token.startswith("<unused")
+            )
+            added_tokens_decoder[str(token_id)] = {
+                "content": token,
+                "special": is_special,
+                "single_word": False,
+                "lstrip": False,
+                "rstrip": False,
+                "normalized": False,
+            }
+    
+    # Add vision tokens with their correct IDs (beyond base vocabulary)
+    # These tokens exist in the SentencePiece model file but KerasHub's
+    # tokenizer doesn't expose them via id_to_token() since they're outside
+    # the normal vocabulary range (0 to vocabulary_size-1)
     if has_vision_tokens:
-        special_tokens.extend(["<start_of_image>", "<end_of_image>", "<image_soft_token>"])
-    
-    for token in special_tokens:
-        token_id = tokenizer.token_to_id(token)
-        if token_id is not None:
+        vision_token_mapping = {
+            255999: "<start_of_image>",
+            256000: "<end_of_image>",
+            262144: "<image_soft_token>",
+        }
+        for token_id, token in vision_token_mapping.items():
             added_tokens_decoder[str(token_id)] = {
                 "content": token,
                 "special": True,
@@ -409,5 +425,6 @@ def get_gemma3_tokenizer_config(tokenizer):
                 "rstrip": False,
                 "normalized": False,
             }
+    
     tokenizer_config["added_tokens_decoder"] = added_tokens_decoder
     return tokenizer_config
