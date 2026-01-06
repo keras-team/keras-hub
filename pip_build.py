@@ -30,6 +30,7 @@ import os
 import pathlib
 import re
 import shutil
+import subprocess
 
 from keras_hub.src.version import __version__
 
@@ -172,7 +173,16 @@ def build(root_path, is_nightly=False, keras_nlp=True):
 def install_whl(whls):
     for path in whls:
         print(f"Installing wheel file: {path}")
-        os.system(f"pip3 install {path} --force-reinstall --no-dependencies")
+        subprocess.run(
+            [
+                "pip3",
+                "install",
+                path,
+                "--force-reinstall",
+                "--no-dependencies",
+            ],
+            check=True,
+        )
 
 
 if __name__ == "__main__":
