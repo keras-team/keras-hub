@@ -383,28 +383,28 @@ def get_gemma3_tokenizer_config(tokenizer):
             "image_token": "<image_soft_token>",
         }
     
-    # Build added_tokens_decoder with ALL tokens in the vocabulary
-    # This is required for proper special token handling
+    # Build added_tokens_decoder with special tokens only
+    # We don't need all 262K tokens - just special tokens that need custom handling
+    # The SentencePiece tokenizer.model already handles regular vocabulary
     added_tokens_decoder = {}
     vocab_size = tokenizer.vocabulary_size()
     
+    # Add only special tokens from the base vocabulary
+    # These are tokens that start/end with < > or have special meaning
     for token_id in range(vocab_size):
         token = tokenizer.id_to_token(token_id)
         if token is not None:
-            # Determine if this is a special token
-            is_special = (
-                token in ["<pad>", "<bos>", "<eos>", "<unk>", "<mask>", "[multimodal]", "<img>",
-                          "<start_of_image>", "<end_of_image>", "<image_soft_token>"]
-                or token.startswith("<unused")
-            )
-            added_tokens_decoder[str(token_id)] = {
-                "content": token,
-                "special": is_special,
-                "single_word": False,
-                "lstrip": False,
-                "rstrip": False,
-                "normalized": False,
-            }
+            # Only add special tokens (those with < >)
+            is_special = token.startswith("<") and token.endswith(">")
+            if is_special or token.startswith("<unused"):
+                added_tokens_decoder[str(token_id)] = {
+                    "content": token,
+                    "special": True,
+                    "single_word": False,
+                    "lstrip": False,
+                    "rstrip": False,
+                    "normalized": False,
+                }
     
     # Add vision tokens with their correct IDs (beyond base vocabulary)
     # These tokens exist in the SentencePiece model file but KerasHub's
