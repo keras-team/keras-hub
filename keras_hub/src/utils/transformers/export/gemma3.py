@@ -318,6 +318,28 @@ def get_gemma3_image_converter_config(backbone):
     return preprocessor_config
 
 
+def get_gemma3_processor_config(backbone):
+    """Generate processor config for vision models.
+    
+    Returns None for text-only models.
+    """
+    if backbone.vision_encoder is None:
+        return None
+    
+    # Calculate image sequence length based on image size and patch size
+    vision_encoder = backbone.vision_encoder
+    image_encoder = vision_encoder.get_layer("image_encoder")
+    img_size = image_encoder.image_size
+    patch_size = image_encoder.patch_size
+    image_seq_length = (img_size // patch_size) ** 2
+    
+    processor_config = {
+        "processor_class": "Gemma3Processor",
+        "image_seq_length": image_seq_length,
+    }
+    return processor_config
+
+
 def get_gemma3_tokenizer_config(tokenizer):
     tokenizer_config = {
         "tokenizer_class": "GemmaTokenizer",
@@ -329,7 +351,29 @@ def get_gemma3_tokenizer_config(tokenizer):
         "add_bos_token": True,
         "add_eos_token": False,
         "model_max_length": 1000000000000000019884624838656,
+        "spaces_between_special_tokens": False,
+        "use_default_system_prompt": False,
     }
+    
+    # Check if this is a vision-enabled tokenizer
+    has_vision_tokens = (
+        tokenizer.token_to_id("<start_of_image>") is not None
+        and tokenizer.token_to_id("<end_of_image>") is not None
+        and tokenizer.token_to_id("<image_soft_token>") is not None
+    )
+    
+    # Add vision-specific fields if present
+    if has_vision_tokens:
+        tokenizer_config["processor_class"] = "Gemma3Processor"
+        tokenizer_config["boi_token"] = "<start_of_image>"
+        tokenizer_config["eoi_token"] = "<end_of_image>"
+        tokenizer_config["image_token"] = "<image_soft_token>"
+        # Note: *_token_id fields are derived from added_tokens_decoder by HF
+        # but some versions expect them explicitly in the config
+        tokenizer_config["boi_token_id"] = tokenizer.token_to_id("<start_of_image>")
+        tokenizer_config["eoi_token_id"] = tokenizer.token_to_id("<end_of_image>")
+        tokenizer_config["image_token_id"] = tokenizer.token_to_id("<image_soft_token>")
+    
     # Add added_tokens_decoder
     added_tokens_decoder = {}
     special_tokens = [
@@ -341,6 +385,11 @@ def get_gemma3_tokenizer_config(tokenizer):
         "[multimodal]",
         "<img>",
     ]
+    
+    # Add vision tokens if present
+    if has_vision_tokens:
+        special_tokens.extend(["<start_of_image>", "<end_of_image>", "<image_soft_token>"])
+    
     for token in special_tokens:
         token_id = tokenizer.token_to_id(token)
         if token_id is not None:
