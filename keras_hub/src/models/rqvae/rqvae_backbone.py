@@ -73,7 +73,7 @@ class RQVAEBackbone(Backbone):
                 input_dtype = dtype.default_policy.compute_dtype
             elif getattr(dtype, "compute_dtype", None):
                 input_dtype = dtype.compute_dtype
-        
+
         inputs = keras.Input(shape=(input_dim,), dtype=input_dtype)
 
         # Layers
