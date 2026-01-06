@@ -109,7 +109,7 @@ class Backbone(keras.Model):
         # vanilla `keras.Model`. We override it to get a subclass instance back.
         config = config.copy()
         if "dtype" in config and isinstance(config["dtype"], dict):
-            config["dtype"] = keras.dtype_policies.get(config["dtype"]).name
+            config["dtype"] = keras.dtype_policies.get(config["dtype"])
         return cls(**config)
 
     @classproperty
