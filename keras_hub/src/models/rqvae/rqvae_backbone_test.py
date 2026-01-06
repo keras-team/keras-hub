@@ -44,7 +44,7 @@ class RQVAEBackboneTest(TestCase):
                 ),
                 # Usage ratios stacked on axis 0: (num_quantizers,)
                 "usage_ratios": (self.num_quantizers,),
-                "quantization_loss": (),  # scalar
+                "quantization_loss": (1,),  # scalar (reshaped for predict)
             },
             run_mixed_precision_check=False,
             run_quantization_check=False,  # Skip for now

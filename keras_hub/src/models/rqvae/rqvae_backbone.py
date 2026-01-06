@@ -67,7 +67,14 @@ class RQVAEBackbone(Backbone):
         **kwargs,
     ):
         # inputs
-        inputs = keras.Input(shape=(input_dim,), dtype=dtype)
+        input_dtype = dtype
+        if dtype is not None:
+            if isinstance(dtype, keras.dtype_policies.DTypePolicyMap):
+                input_dtype = dtype.default_policy.compute_dtype
+            elif getattr(dtype, "compute_dtype", None):
+                input_dtype = dtype.compute_dtype
+        
+        inputs = keras.Input(shape=(input_dim,), dtype=input_dtype)
 
         # Layers
         encoder = rqvae_layers.Encoder(

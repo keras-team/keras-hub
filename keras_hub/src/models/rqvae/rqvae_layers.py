@@ -216,6 +216,7 @@ class VectorQuantizerEMA(layers.Layer):
             quantization_loss = ops.mean(
                 (flattened_inputs - quantized_flat) ** 2
             )
+            quantization_loss = ops.reshape(quantization_loss, (1,))
 
             # STE
             quantized = ops.reshape(quantized_flat, input_shape)
@@ -228,6 +229,7 @@ class VectorQuantizerEMA(layers.Layer):
             quantized = ops.reshape(quantized_flat, input_shape)
             usage_ratio = self._codebook_usage(encodings)
             quantization_loss = ops.convert_to_tensor(0.0, dtype=inputs.dtype)
+            quantization_loss = ops.reshape(quantization_loss, (1,))
             return quantized, encodings, usage_ratio, quantization_loss
 
     def get_config(self):
