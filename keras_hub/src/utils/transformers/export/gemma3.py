@@ -365,14 +365,16 @@ def get_gemma3_tokenizer_config(tokenizer):
     # Add vision-specific fields if present
     if has_vision_tokens:
         tokenizer_config["processor_class"] = "Gemma3Processor"
+        # Vision tokens as simple strings - HF auto-creates *_token_id attributes
         tokenizer_config["boi_token"] = "<start_of_image>"
         tokenizer_config["eoi_token"] = "<end_of_image>"
         tokenizer_config["image_token"] = "<image_soft_token>"
-        # Note: *_token_id fields are derived from added_tokens_decoder by HF
-        # but some versions expect them explicitly in the config
-        tokenizer_config["boi_token_id"] = tokenizer.token_to_id("<start_of_image>")
-        tokenizer_config["eoi_token_id"] = tokenizer.token_to_id("<end_of_image>")
-        tokenizer_config["image_token_id"] = tokenizer.token_to_id("<image_soft_token>")
+        # extra_special_tokens is required for HF to recognize these as special tokens
+        tokenizer_config["extra_special_tokens"] = {
+            "boi_token": "<start_of_image>",
+            "eoi_token": "<end_of_image>",
+            "image_token": "<image_soft_token>",
+        }
     
     # Add added_tokens_decoder
     added_tokens_decoder = {}
