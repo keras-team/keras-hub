@@ -11,9 +11,11 @@ def get_gemma3_config(backbone):
         else:
             layer_types.append("full_attention")
 
-    hf_config = {
-        "architectures": ["Gemma3ForCausalLM"],
-        "model_type": "gemma3_text",
+    # Check if this is a vision model
+    has_vision = backbone.vision_encoder is not None
+
+    # Base text config
+    text_config = {
         "vocab_size": backbone.vocabulary_size,
         "num_hidden_layers": backbone.num_layers,
         "num_attention_heads": backbone.num_query_heads,
@@ -26,7 +28,6 @@ def get_gemma3_config(backbone):
         "attention_bias": False,
         "attention_dropout": backbone.dropout,
         "hidden_activation": "gelu_pytorch_tanh",
-        # Added missing keys to match official config
         "sliding_window": backbone.sliding_window_size,
         "_sliding_window_pattern": 6,
         "use_cache": True,
@@ -36,6 +37,38 @@ def get_gemma3_config(backbone):
         if backbone.query_head_dim_normalize
         else backbone.hidden_dim // backbone.num_query_heads,
     }
+
+    if has_vision:
+        # Vision + Text model
+        vision_encoder = backbone.vision_encoder
+        image_encoder = vision_encoder.get_layer("image_encoder")
+        
+        vision_config = {
+            "image_size": image_encoder.image_size,
+            "patch_size": image_encoder.patch_size,
+            "num_attention_heads": image_encoder.num_heads,
+            "hidden_size": image_encoder.hidden_dim,
+            "num_hidden_layers": image_encoder.num_layers,
+            "intermediate_size": image_encoder.intermediate_dim,
+            "layer_norm_eps": image_encoder.layer_norm_epsilon,
+            "model_type": "siglip_vision_model",
+            "vision_use_head": False,
+        }
+        
+        hf_config = {
+            "architectures": ["Gemma3ForConditionalGeneration"],
+            "model_type": "gemma3",
+            "text_config": text_config,
+            "vision_config": vision_config,
+            "torch_dtype": backbone.dtype_policy.name,
+        }
+    else:
+        # Text-only model
+        hf_config = {
+            "architectures": ["Gemma3ForCausalLM"],
+            "model_type": "gemma3_text",
+        }
+        hf_config.update(text_config)
 
     return hf_config
 
@@ -63,10 +96,107 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
         return kernel
 
     weights_dict = {}
+    has_vision = backbone.vision_encoder is not None
 
-    # For CausalLM export, use "model." prefix
-    # For backbone export, use no prefix
-    prefix = "model." if include_lm_head else ""
+    # For vision models: use "model.language_model." prefix
+    # For text-only CausalLM: use "model." prefix
+    # For backbone export: use no prefix
+    if has_vision:
+        prefix = "model.language_model."
+    else:
+        prefix = "model." if include_lm_head else ""
+
+    # === Vision Encoder Weights (if present) ===
+    if has_vision:
+        vision_encoder = backbone.vision_encoder
+        image_encoder = vision_encoder.get_layer("image_encoder")
+        vision_output_encoder = vision_encoder.get_layer("vision_output_encoder")
+        
+        # Patch embedding
+        patch_embedding = image_encoder.vision_embeddings.patch_embedding
+        weights_dict["model.vision_tower.vision_model.embeddings.patch_embedding.weight"] = ops.transpose(
+            patch_embedding.weights[0], axes=(3, 2, 0, 1)
+        )  # (H, W, C, out) -> (out, C, H, W)
+        weights_dict["model.vision_tower.vision_model.embeddings.patch_embedding.bias"] = patch_embedding.weights[1]
+        
+        # Position embedding
+        weights_dict["model.vision_tower.vision_model.embeddings.position_embedding.weight"] = (
+            image_encoder.vision_embeddings.position_embedding.weights[0]
+        )
+        
+        # Vision transformer layers
+        for i in range(image_encoder.num_layers):
+            resblock = image_encoder.resblocks[i]
+            
+            # Layer norms
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.layer_norm1.weight"] = (
+                resblock.layer_norm_1.weights[0]  # gamma
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.layer_norm1.bias"] = (
+                resblock.layer_norm_1.weights[1]  # beta
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.layer_norm2.weight"] = (
+                resblock.layer_norm_2.weights[0]
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.layer_norm2.bias"] = (
+                resblock.layer_norm_2.weights[1]
+            )
+            
+            # Attention projections
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.q_proj.weight"] = (
+                ops.transpose(resblock.attn.query_proj.weights[0])
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.q_proj.bias"] = (
+                resblock.attn.query_proj.weights[1]
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.k_proj.weight"] = (
+                ops.transpose(resblock.attn.key_proj.weights[0])
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.k_proj.bias"] = (
+                resblock.attn.key_proj.weights[1]
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.v_proj.weight"] = (
+                ops.transpose(resblock.attn.value_proj.weights[0])
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.v_proj.bias"] = (
+                resblock.attn.value_proj.weights[1]
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.out_proj.weight"] = (
+                ops.transpose(resblock.attn.out_proj.weights[0])
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.out_proj.bias"] = (
+                resblock.attn.out_proj.weights[1]
+            )
+            
+            # MLP layers
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.mlp.fc1.weight"] = (
+                ops.transpose(resblock.mlp_dense_1.weights[0])
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.mlp.fc1.bias"] = (
+                resblock.mlp_dense_1.weights[1]
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.mlp.fc2.weight"] = (
+                ops.transpose(resblock.mlp_dense_2.weights[0])
+            )
+            weights_dict[f"model.vision_tower.vision_model.encoder.layers.{i}.mlp.fc2.bias"] = (
+                resblock.mlp_dense_2.weights[1]
+            )
+        
+        # Post-encoder layer norm
+        weights_dict["model.vision_tower.vision_model.post_layernorm.weight"] = (
+            image_encoder.encoder_layer_norm.weights[0]  # gamma
+        )
+        weights_dict["model.vision_tower.vision_model.post_layernorm.bias"] = (
+            image_encoder.encoder_layer_norm.weights[1]  # beta
+        )
+        
+        # Multi-modal projector
+        weights_dict["model.multi_modal_projector.mm_soft_emb_norm.weight"] = (
+            vision_output_encoder.vision_soft_embedding_norm.weights[0]  # scale
+        )
+        weights_dict["model.multi_modal_projector.mm_input_projection_weight"] = (
+            vision_output_encoder.vision_input_projection.weights[0]  # kernel
+        )
 
     # Token embeddings - use .weights[0] to get backend tensor
     token_embedding_layer = backbone.get_layer("token_embedding")
@@ -156,6 +286,36 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
         )
 
     return weights_dict
+
+
+def get_gemma3_image_converter_config(backbone):
+    """Generate preprocessor config for vision models.
+    
+    Returns None for text-only models.
+    """
+    if backbone.vision_encoder is None:
+        return None
+    
+    vision_encoder = backbone.vision_encoder
+    image_encoder = vision_encoder.get_layer("image_encoder")
+    img_size = image_encoder.image_size
+    
+    preprocessor_config = {
+        "image_processor_type": "Gemma3ImageProcessor",
+        "do_resize": True,
+        "size": {"height": img_size, "width": img_size},
+        "do_rescale": True,
+        "rescale_factor": 1 / 255,  # 0.00392156862745098
+        "do_normalize": True,
+        "image_mean": [0.5, 0.5, 0.5],
+        "image_std": [0.5, 0.5, 0.5],
+        # Pan-and-scan disabled (single crop)
+        "do_pan_and_scan": None,
+        "pan_and_scan_min_crop_size": None,
+        "pan_and_scan_max_num_crops": None,
+        "pan_and_scan_min_ratio_to_activate": None,
+    }
+    return preprocessor_config
 
 
 def get_gemma3_tokenizer_config(tokenizer):
