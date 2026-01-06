@@ -33,5 +33,5 @@ class TokenAndPositionEmbeddingTest(TestCase):
         )
         input_data = np.array([[1, 0], [1, 0]])
         mask = input_data != 0
-        outputs = test_layer(input_data)
-        self.assertAllEqual(outputs._keras_mask, mask)
+        computed_mask = test_layer.compute_mask(input_data)
+        self.assertAllEqual(computed_mask, mask)
