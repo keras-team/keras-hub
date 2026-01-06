@@ -52,6 +52,14 @@ class VGGImageClassifierTest(TestCase):
             input_data=self.images,
         )
 
+    @pytest.mark.skip(reason="TODO: Bug with VGGImageClassifier liteRT export")
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=VGGImageClassifier,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         # we need at least 32x32 image resolution here to satisfy the presets'
