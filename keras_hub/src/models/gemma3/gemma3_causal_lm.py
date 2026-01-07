@@ -249,6 +249,7 @@ class Gemma3CausalLM(CausalLM):
             inputs.get("vision_mask", None),
             inputs.get("vision_indices", None),
         )
+
         if (
             not self.backbone.text_only_model
             and images is not None
