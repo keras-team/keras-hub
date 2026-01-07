@@ -83,18 +83,21 @@ class EdRecGatedFeedForward(keras.layers.Layer):
             self.intermediate_dim,
             use_bias=False,
             kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
             name="up_proj",
         )
         self.gate_proj = keras.layers.Dense(
             self.intermediate_dim,
             use_bias=False,
             kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
             name="gate_proj",
         )
         self.down_proj = keras.layers.Dense(
             self.hidden_dim,
             use_bias=False,
             kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
             name="down_proj",
         )
         self.dropout = keras.layers.Dropout(self.dropout_rate)
@@ -162,21 +165,29 @@ class EdRecEncoderBlock(keras.layers.Layer):
         self.head_dim = hidden_dim // num_heads
 
     def build(self, input_shape):
-        self.pre_attention_norm = EdRecRMSNormalization(epsilon=self.epsilon)
+        self.pre_attention_norm = EdRecRMSNormalization(
+            epsilon=self.epsilon, dtype=self.dtype_policy
+        )
         self.attention = keras.layers.MultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=self.head_dim,
             use_bias=False,
             output_shape=self.hidden_dim,
+            dtype=self.dtype_policy,
             name="attention",
         )
-        self.dropout1 = keras.layers.Dropout(self.dropout_rate)
+        self.dropout1 = keras.layers.Dropout(
+            self.dropout_rate, dtype=self.dtype_policy
+        )
 
-        self.pre_ffw_norm = EdRecRMSNormalization(epsilon=self.epsilon)
+        self.pre_ffw_norm = EdRecRMSNormalization(
+            epsilon=self.epsilon, dtype=self.dtype_policy
+        )
         self.mlp = EdRecGatedFeedForward(
             intermediate_dim=self.intermediate_dim,
             hidden_dim=self.hidden_dim,
             dropout_rate=self.dropout_rate,
+            dtype=self.dtype_policy,
         )
 
     def call(self, x, padding_mask=None, training=False):
@@ -249,31 +260,44 @@ class EdRecDecoderBlock(keras.layers.Layer):
         self.head_dim = hidden_dim // num_heads
 
     def build(self, input_shape):
-        self.pre_self_attn_norm = EdRecRMSNormalization(epsilon=self.epsilon)
+        self.pre_self_attn_norm = EdRecRMSNormalization(
+            epsilon=self.epsilon, dtype=self.dtype_policy
+        )
         self.self_attention = CachedMultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=self.head_dim,
             use_bias=False,
             output_shape=self.hidden_dim,
+            dtype=self.dtype_policy,
             name="self_attention",
         )
-        self.dropout1 = keras.layers.Dropout(self.dropout_rate)
+        self.dropout1 = keras.layers.Dropout(
+            self.dropout_rate, dtype=self.dtype_policy
+        )
 
-        self.pre_cross_attn_norm = EdRecRMSNormalization(epsilon=self.epsilon)
+        self.pre_cross_attn_norm = EdRecRMSNormalization(
+            epsilon=self.epsilon, dtype=self.dtype_policy
+        )
         self.cross_attention = CachedMultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=self.head_dim,
             use_bias=False,
             output_shape=self.hidden_dim,
+            dtype=self.dtype_policy,
             name="cross_attention",
         )
-        self.dropout2 = keras.layers.Dropout(self.dropout_rate)
+        self.dropout2 = keras.layers.Dropout(
+            self.dropout_rate, dtype=self.dtype_policy
+        )
 
-        self.pre_ffw_norm = EdRecRMSNormalization(epsilon=self.epsilon)
+        self.pre_ffw_norm = EdRecRMSNormalization(
+            epsilon=self.epsilon, dtype=self.dtype_policy
+        )
         self.mlp = EdRecGatedFeedForward(
             intermediate_dim=self.intermediate_dim,
             hidden_dim=self.hidden_dim,
             dropout_rate=self.dropout_rate,
+            dtype=self.dtype_policy,
         )
 
     def call(
