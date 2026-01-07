@@ -422,7 +422,7 @@ class GPT2CausalLM(CausalLM):
         return per_token_loss
 
     def get_quantization_layer_structure(self, mode):
-        if mode != "gptq":
+        if mode not in ["gptq", "awq"]:
             return None
 
         backbone = self.backbone
