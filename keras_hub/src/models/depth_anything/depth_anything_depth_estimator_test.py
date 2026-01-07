@@ -85,6 +85,15 @@ class DepthAnythingDepthEstimatorTest(TestCase):
             input_data=self.images,
         )
 
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=DepthAnythingDepthEstimator,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+            comparison_mode="statistical",
+            output_thresholds={"depths": {"max": 2e-4, "mean": 1e-5}},
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         images = np.ones((2, 518, 518, 3), dtype="float32")
