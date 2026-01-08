@@ -19,7 +19,7 @@ class Encoder(layers.Layer):
     >>> encoder = Encoder(layer_dims=[64, 32], output_dim=16)
     >>> x = keras.random.uniform(shape=(1, 10))
     >>> output = encoder(x)
-    >>> output.shape
+    >>> tuple(output.shape)
     (1, 16)
     """
 
@@ -65,7 +65,7 @@ class Decoder(layers.Layer):
     >>> decoder = Decoder(layer_dims=[32, 64], output_dim=10)
     >>> x = keras.random.uniform(shape=(1, 16))
     >>> output = decoder(x)
-    >>> output.shape
+    >>> tuple(output.shape)
     (1, 10)
     """
 
@@ -118,7 +118,7 @@ class VectorQuantizerEMA(layers.Layer):
     >>> vq = VectorQuantizerEMA(num_embeddings=10, embedding_dim=16)
     >>> x = keras.random.uniform(shape=(1, 5, 16))
     >>> quantized, encodings, usage_ratio, loss = vq(x)
-    >>> quantized.shape
+    >>> tuple(quantized.shape)
     (1, 5, 16)
     """
 
@@ -266,7 +266,7 @@ class ResidualVectorQuantizer(layers.Layer):
     >>> rvq = ResidualVectorQuantizer(quantizers=[vq1, vq2])
     >>> x = keras.random.uniform(shape=(1, 5, 16))
     >>> quantized_sum, encodings, usage_ratios, loss = rvq(x)
-    >>> quantized_sum.shape
+    >>> tuple(quantized_sum.shape)
     (1, 5, 16)
     """
 

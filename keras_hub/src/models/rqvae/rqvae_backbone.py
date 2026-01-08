@@ -48,7 +48,7 @@ class RQVAEBackbone(Backbone):
     ... )
     >>> x = keras.random.uniform(shape=(1, 10))
     >>> outputs = model(x)
-    >>> outputs["reconstructions"].shape
+    >>> tuple(outputs["reconstructions"].shape)
     (1, 10)
     """
 
