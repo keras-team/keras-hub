@@ -26,9 +26,9 @@ PRESET_MAP = {
     "RWKV7_G1a_0.1B": "rwkv7-g1a-0.1b-20250728-ctx4096.pth",
     "RWKV7_G1a_0.3B": "rwkv7-g1a-0.4b-20250905-ctx4096.pth",
     "RWKV7_G1b_1.5B": "rwkv7-g1b-1.5b-20251202-ctx8192.pth",
-    "RWKV7_G1a_2.9B": "rwkv7-g1a-2.9b-20250924-ctx4096.pth",
-    "RWKV7_G0a4_7.2B": "rwkv7-g0a4-7.2b-20251208-ctx8192.pth",
-    "RWKV7_G0b_13B": "rwkv7-g0b-13.3b-20251130-ctx8192.pth",
+    "RWKV7_G1c_2.9B": "rwkv7-g1c-2.9b-20251231-ctx8192.pth",
+    "RWKV7_G1c_7.2B": "rwkv7-g1c-7.2b-20251231-ctx8192.pth",
+    "RWKV7_G1c_13B": "rwkv7-g1c-13.3b-20251231-ctx8192.pth",
 }
 
 

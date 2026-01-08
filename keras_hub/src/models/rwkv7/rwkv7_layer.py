@@ -97,7 +97,7 @@ class TimeShift(Layer):
         return input_shape
 
 
-class RWKV7_ChannelMix(Layer):
+class RWKV7ChannelMix(Layer):
     """RWKV-7 channel mixing layer."""
 
     def __init__(self, dim_ffn, kernel_initializer="glorot_uniform", **kwargs):
@@ -112,24 +112,24 @@ class RWKV7_ChannelMix(Layer):
         self.dim_ffn = dim_ffn
         self.kernel_initializer = initializers.get(kernel_initializer)
 
-    def call(self, x, last_cache_x=None, train_mode=True):
+    def call(self, x, last_cache_x=None, not_generation_mode=True):
         """Process input through channel mixer.
 
         Args:
             x: Input tensor.
             last_cache_x: Cached previous values.
-            train_mode: Whether in training mode.
+            not_generation_mode: Whether in generate mode.
 
         Returns:
             Mixed output tensor.
         """
         xx = self.time_shift(x, last_cache_x) - x
-        if last_cache_x is not None or not train_mode:
+        if last_cache_x is not None or not not_generation_mode:
             last_cache_x = x[:, -1:]
         k = x + xx * self.x_k
         k = ops.relu(self.key(k)) ** 2
         output = self.value(k)
-        if train_mode:
+        if not_generation_mode:
             return output
         return output, last_cache_x
 
@@ -169,33 +169,19 @@ class RWKV7_ChannelMix(Layer):
         self.value.build([None, None, self.dim_ffn])
 
     def get_config(self):
-        config = {
-            "dim_ffn": self.dim_ffn,
-            "kernel_initializer": initializers.serialize(
-                self.kernel_initializer
-            ),
-        }
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update(
+            {
+                "dim_ffn": self.dim_ffn,
+                "kernel_initializer": initializers.serialize(
+                    self.kernel_initializer
+                ),
+            }
+        )
+        return config
 
 
-class GroupNorm(keras.layers.GroupNormalization):
-    """Group normalization with backend-specific handling.
-
-    Extends Keras GroupNormalization with PyTorch backend support.
-    """
-
-    def call(self, inputs):
-        if keras.config.backend() == "torch":
-            import torch.nn.functional as F
-
-            return F.group_norm(
-                inputs, self.groups, self.gamma, self.beta, self.epsilon
-            )
-        return super().call(inputs)
-
-
-class RWKV7_TimeMix(Layer):
+class RWKV7TimeMix(Layer):
     """RWKV-7 time mixing layer."""
 
     def __init__(
@@ -381,7 +367,7 @@ class RWKV7_TimeMix(Layer):
             name="output_layer",
             dtype=self.dtype_policy,
         )
-        self.ln_x = GroupNorm(
+        self.ln_x = keras.layers.GroupNormalization(
             groups=H,
             epsilon=64e-5,
             dtype=self.dtype_policy,
@@ -401,7 +387,7 @@ class RWKV7_TimeMix(Layer):
         last_cache_x=None,
         cache_state=None,
         rnn_mode=False,
-        train_mode=True,
+        not_generation_mode=True,
         training=None,
     ):
         """Process input through time mixer.
@@ -413,7 +399,7 @@ class RWKV7_TimeMix(Layer):
             last_cache_x: Cached previous values.
             cache_state: Cached recurrent state.
             rnn_mode: Whether to use RNN mode.
-            train_mode: Whether in training mode.
+            not_generation_mode: Whether in generate mode.
 
         Returns:
             Mixed output tensor and state information.
@@ -430,7 +416,7 @@ class RWKV7_TimeMix(Layer):
         B, T, C = ops.shape(x)
         H = self.n_head
         xx = self.time_shift(x, last_cache_x) - x
-        if last_cache_x is not None or not train_mode:
+        if last_cache_x is not None or not not_generation_mode:
             last_cache_x = x[:, -1:]
         if padding_mask is not None:
             xx *= padding_mask
@@ -508,15 +494,15 @@ class RWKV7_TimeMix(Layer):
 
         x = x + ops.reshape(rwkv, (B, T, C))
         x = self.output_layer(x * g)
-        if train_mode:
+        if not_generation_mode:
             return x, v_first, final_state
         return x, v_first, last_cache_x, final_state
 
     def compute_output_shape(self, input_shape):
         output_shapes = [
-            [None, None, self.hidden_size],
-            [None, None, self.hidden_size],
-            [None, self.n_head, self.head_size, self.head_size],
+            input_shape,
+            input_shape,
+            [input_shape[0], self.n_head, self.head_size, self.head_size],
         ]
         return output_shapes
 
@@ -525,31 +511,28 @@ class RWKV7_TimeMix(Layer):
         x,
         eps: float = 1e-12,
     ):
-        # F.normalize like api
-        if keras.config.backend() == "torch":
-            import torch.nn.functional as F
-
-            return F.normalize(x, dim=-1, p=2.0)
         square_sum = ops.sum(ops.square(x), axis=-1, keepdims=True)
         inv_norm = ops.rsqrt(square_sum + eps)
         inv_norm = ops.maximum(inv_norm, eps)
         return x * inv_norm
 
     def get_config(self):
-        config = {
-            "hidden_size": self.hidden_size,
-            "head_size": self.head_size,
-            "gate_lora": self.gate_lora,
-            "mv_lora": self.mv_lora,
-            "aaa_lora": self.aaa_lora,
-            "decay_lora": self.decay_lora,
-            "add_v_first": self.add_v_first,
-            "kernel_initializer": initializers.serialize(
-                self.kernel_initializer
-            ),
-        }
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_size": self.hidden_size,
+                "head_size": self.head_size,
+                "gate_lora": self.gate_lora,
+                "mv_lora": self.mv_lora,
+                "aaa_lora": self.aaa_lora,
+                "decay_lora": self.decay_lora,
+                "add_v_first": self.add_v_first,
+                "kernel_initializer": initializers.serialize(
+                    self.kernel_initializer
+                ),
+            }
+        )
+        return config
 
 
 class RWKV7_Block(Layer):
@@ -609,7 +592,7 @@ class RWKV7_Block(Layer):
         )
         self.ln2.build(input_shape)
 
-        self.att = RWKV7_TimeMix(
+        self.att = RWKV7TimeMix(
             self.hidden_size,
             self.head_size,
             self.gate_lora,
@@ -623,7 +606,7 @@ class RWKV7_Block(Layer):
         )
         self.att.build(input_shape)
 
-        self.ffn = RWKV7_ChannelMix(
+        self.ffn = RWKV7ChannelMix(
             self.intermediate_dim,
             name="RWKV_CMIX",
             kernel_initializer=self.kernel_initializer,
@@ -658,7 +641,7 @@ class RWKV7_Block(Layer):
             Processed output tensor and cache information.
         """
 
-        train_mode = False
+        not_generation_mode = False
         if padding_mask is not None:
             padding_mask = ops.cast(padding_mask, x.dtype)
             padding_mask = ops.expand_dims(padding_mask, axis=-1)
@@ -671,7 +654,7 @@ class RWKV7_Block(Layer):
             last_cache_x=cache_tmix_x,
             cache_state=cache_state,
             rnn_mode=rnn_mode,
-            train_mode=train_mode,
+            not_generation_mode=not_generation_mode,
             training=False,
         )
         x = ops.cast(x, xx.dtype) + xx
@@ -679,7 +662,9 @@ class RWKV7_Block(Layer):
         if padding_mask is not None:
             padding_mask = ops.cast(padding_mask, x.dtype)
             xx = xx * padding_mask
-        xx, cache_cmix_x = self.ffn(xx, cache_cmix_x, train_mode=train_mode)
+        xx, cache_cmix_x = self.ffn(
+            xx, cache_cmix_x, not_generation_mode=not_generation_mode
+        )
         x = x + xx
         return x, v_first, cache_state, cache_tmix_x, cache_cmix_x
 
@@ -689,7 +674,7 @@ class RWKV7_Block(Layer):
         v_first=None,
         padding_mask=None,
     ):
-        train_mode = True
+        not_generation_mode = True
         if padding_mask is not None:
             padding_mask = ops.cast(padding_mask, x.dtype)
             padding_mask = ops.expand_dims(padding_mask, axis=-1)
@@ -703,36 +688,34 @@ class RWKV7_Block(Layer):
             xx,
             v_first=v_first,
             padding_mask=padding_mask,
-            train_mode=train_mode,
+            not_generation_mode=not_generation_mode,
         )
         x = ops.cast(x, xx.dtype) + xx
         xx = self.ln2(x)
         if padding_mask is not None:
             padding_mask = ops.cast(padding_mask, x.dtype)
             xx = xx * padding_mask
-        x = x + self.ffn(xx, train_mode=train_mode)
+        x = x + self.ffn(xx, not_generation_mode=not_generation_mode)
         return x, v_first
 
     def compute_output_shape(self, input_shape):
-        output_shapes = [
-            [None, None, self.hidden_size],
-            [None, None, self.hidden_size],
-        ]
-        return output_shapes
+        return [input_shape, input_shape]
 
     def get_config(self):
-        config = {
-            "hidden_size": self.hidden_size,
-            "head_size": self.head_size,
-            "gate_lora": self.gate_lora,
-            "mv_lora": self.mv_lora,
-            "aaa_lora": self.aaa_lora,
-            "decay_lora": self.decay_lora,
-            "intermediate_dim": self.intermediate_dim,
-            "use_initial_norm": self.use_initial_norm,
-            "kernel_initializer": initializers.serialize(
-                self.kernel_initializer
-            ),
-        }
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_size": self.hidden_size,
+                "head_size": self.head_size,
+                "gate_lora": self.gate_lora,
+                "mv_lora": self.mv_lora,
+                "aaa_lora": self.aaa_lora,
+                "decay_lora": self.decay_lora,
+                "intermediate_dim": self.intermediate_dim,
+                "use_initial_norm": self.use_initial_norm,
+                "kernel_initializer": initializers.serialize(
+                    self.kernel_initializer
+                ),
+            }
+        )
+        return config

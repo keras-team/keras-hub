@@ -44,7 +44,7 @@ class RWKV7CausalLM(CausalLM):
     causal_lm = RWKV7CausalLM(backbone, preprocessor)
 
     # you also can load model by from_preset
-    rwkv_path = "./RWKV7_G1a_0.1B"
+    rwkv_path = "RWKV7_G1a_0.1B"
     tokenizer = RWKVTokenizer.from_preset(rwkv_path)
     causal_lm = RWKV7CausalLM.from_preset(rwkv_path)
 

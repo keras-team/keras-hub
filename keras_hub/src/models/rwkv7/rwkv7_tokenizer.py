@@ -24,8 +24,6 @@ class TRIE:
     """
 
     __slots__ = tuple("ch,children,values,parent".split(","))
-    children: list
-    values: set
 
     def __init__(self, parent=None, ch=None):
         """Initialize a TRIE node.

@@ -35,10 +35,10 @@ class RWKV7Backbone(Backbone):
         vocabulary_size: int. The size of the token vocabulary.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
-        gate_lora: int. LoRA dimension for gating.Defaults to 128.
-        mv_lora: int. LoRA dimension for value mixing.Defaults to 32.
-        aaa_lora: int. LoRA dimension for alpha parameters.Defaults to 64.
-        decay_lora: int. LoRA dimension for decay parameters.Defaults to 64.
+        gate_lora: int. LoRA dimension for gating. Defaults to `128`.
+        mv_lora: int. LoRA dimension for value mixing. Defaults to `32`.
+        aaa_lora: int. LoRA dimension for alpha parameters.Defaults to `64`.
+        decay_lora: int. LoRA dimension for decay parameters.Defaults to `64`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -162,17 +162,19 @@ class RWKV7Backbone(Backbone):
         self.intermediate_dim = intermediate_dim
 
     def get_config(self):
-        config = {
-            "hidden_size": self.hidden_size,
-            "head_size": self.head_size,
-            "gate_lora": self.gate_lora,
-            "mv_lora": self.mv_lora,
-            "aaa_lora": self.aaa_lora,
-            "decay_lora": self.decay_lora,
-            "vocabulary_size": self.vocabulary_size,
-            "dropout_rate": self.dropout_rate,
-            "intermediate_dim": self.intermediate_dim,
-            "num_layers": self.num_layers,
-        }
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_size": self.hidden_size,
+                "head_size": self.head_size,
+                "gate_lora": self.gate_lora,
+                "mv_lora": self.mv_lora,
+                "aaa_lora": self.aaa_lora,
+                "decay_lora": self.decay_lora,
+                "vocabulary_size": self.vocabulary_size,
+                "dropout_rate": self.dropout_rate,
+                "intermediate_dim": self.intermediate_dim,
+                "num_layers": self.num_layers,
+            }
+        )
+        return config
