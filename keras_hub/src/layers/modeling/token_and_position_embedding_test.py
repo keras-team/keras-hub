@@ -1,6 +1,7 @@
 import numpy as np
 from keras import ops
 from keras import random
+from keras.src.backend import get_keras_mask
 
 from keras_hub.src.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
@@ -34,4 +35,4 @@ class TokenAndPositionEmbeddingTest(TestCase):
         input_data = np.array([[1, 0], [1, 0]])
         mask = input_data != 0
         outputs = test_layer(input_data)
-        self.assertAllEqual(outputs._keras_mask, mask)
+        self.assertAllEqual(get_keras_mask(outputs), mask)
