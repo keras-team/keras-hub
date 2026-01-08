@@ -653,6 +653,15 @@ from keras_hub.src.models.roformer_v2.roformer_v2_text_classifier_preprocessor i
 from keras_hub.src.models.roformer_v2.roformer_v2_tokenizer import (
     RoformerV2Tokenizer as RoformerV2Tokenizer,
 )
+from keras_hub.src.models.rwkv7.rwkv7_backbone import (
+    RWKV7Backbone as RWKV7Backbone,
+)
+from keras_hub.src.models.rwkv7.rwkv7_causal_lm import (
+    RWKV7CausalLM as RWKV7CausalLM,
+)
+from keras_hub.src.models.rwkv7.rwkv7_causal_lm_preprocessor import (
+    RWKV7CausalLMPreprocessor as RWKV7CausalLMPreprocessor,
+)
 from keras_hub.src.models.sam.sam_backbone import SAMBackbone as SAMBackbone
 from keras_hub.src.models.sam.sam_image_segmenter import (
     SAMImageSegmenter as SAMImageSegmenter,
