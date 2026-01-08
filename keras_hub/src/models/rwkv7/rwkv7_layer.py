@@ -71,11 +71,14 @@ def rnn_generalized_delta_rule(
         import tensorflow as tf
 
         out = tf.TensorArray(DTYPE, size=T)
+        for t in range(T):
+            state, out = step(t, [state, out])
+        out = ops.transpose(out.stack(), [1, 0, 2, 3])
+
     else:
         out = ops.zeros((B, T, H, N), DTYPE)
-    state, out = ops.fori_loop(0, T, step, [state, out])
-    if keras_backend == "tensorflow":
-        out = ops.transpose(out.stack(), [1, 0, 2, 3])
+        state, out = ops.fori_loop(0, T, step, [state, out])
+
     if output_final_state:
         return ops.cast(out, DTYPE), state
     return ops.cast(out, DTYPE)
