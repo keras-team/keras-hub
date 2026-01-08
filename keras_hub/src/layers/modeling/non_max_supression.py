@@ -290,16 +290,19 @@ def non_max_suppression(
         "int32",
     )
     idx = ops.minimum(idx, num_boxes - 1)
+    idx = ops.cast(idx, "int32")
 
     index_offsets = ops.cast(ops.arange(batch_size) * num_boxes, "int32")
     take_along_axis_idx = ops.reshape(
         idx + ops.expand_dims(index_offsets, 1), [-1]
     )
+    take_along_axis_idx = ops.cast(take_along_axis_idx, "int32")
 
     if keras.backend.backend() != "tensorflow":
-        idx = ops.take_along_axis(
-            ops.reshape(sorted_indices, [-1]), take_along_axis_idx
+        sorted_indices_int = ops.cast(
+            ops.reshape(sorted_indices, [-1]), "int32"
         )
+        idx = ops.take_along_axis(sorted_indices_int, take_along_axis_idx)
     else:
         import tensorflow as tf
 
