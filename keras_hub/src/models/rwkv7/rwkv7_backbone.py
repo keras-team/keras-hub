@@ -35,10 +35,10 @@ class RWKV7Backbone(Backbone):
         vocabulary_size: int. The size of the token vocabulary.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
-        gate_lora: int. LoRA dimension for gating. Defaults to `128`.
-        mv_lora: int. LoRA dimension for value mixing. Defaults to `32`.
-        aaa_lora: int. LoRA dimension for alpha parameters.Defaults to `64`.
-        decay_lora: int. LoRA dimension for decay parameters.Defaults to `64`.
+        gate_lora: int. LoRA dimension for gating. Defaults to `128` .
+        mv_lora: int. LoRA dimension for value mixing. Defaults to `32` .
+        aaa_lora: int. LoRA dimension for alpha parameters.Defaults to `64` .
+        decay_lora: int. LoRA dimension for decay parameters.Defaults to `64` .
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
