@@ -38,7 +38,7 @@ class EmbedND(keras.Model):
 
         Returns:
             KerasTensor: Positional embeddings of shape
-            (..., concatenated_dim, 2).
+            (..., sum(axes_dim) // 2, 2).
         """
         n_axes = ids.shape[-1]
         emb = ops.concatenate(

@@ -68,7 +68,7 @@ class ApplyRoPE(keras.layers.Layer):
         xq: KerasTensor. The query tensor of shape (..., L, D).
         xk: KerasTensor. The key tensor of shape (..., L, D).
         freqs_cis: KerasTensor. The frequency complex numbers tensor with shape
-            `(..., 2)`.
+            `(..., D//2, 2)`.
 
     Returns:
         tuple[KerasTensor, KerasTensor]: The transformed query and key tensors.
@@ -76,7 +76,7 @@ class ApplyRoPE(keras.layers.Layer):
 
     def call(self, xq, xk, freqs_cis):
         # xq, xk shape (..., D)
-        # freqs_cis shape (..., 2)
+        # freqs_cis shape (..., D//2, 2)
         xq_ = ops.reshape(xq, (*ops.shape(xq)[:-1], -1, 2))
         xk_ = ops.reshape(xk, (*ops.shape(xk)[:-1], -1, 2))
 
