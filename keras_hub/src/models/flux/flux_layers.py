@@ -38,7 +38,7 @@ class EmbedND(keras.Model):
 
         Returns:
             KerasTensor: Positional embeddings of shape
-            (..., concatenated_dim, 1, ...).
+            (..., sum(axes_dim) // 2, 2).
         """
         n_axes = ids.shape[-1]
         emb = ops.concatenate(
@@ -46,10 +46,10 @@ class EmbedND(keras.Model):
                 self.rope(ids[..., i], dim=self.axes_dim[i], theta=self.theta)
                 for i in range(n_axes)
             ],
-            axis=-3,
+            axis=-2,
         )
 
-        return ops.expand_dims(emb, axis=1)
+        return emb
 
 
 class MLPEmbedder(keras.Model):
