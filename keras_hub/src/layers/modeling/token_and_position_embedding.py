@@ -1,5 +1,7 @@
 import keras
 from keras.layers import ReversibleEmbedding
+from keras.src.backend import get_keras_mask
+from keras.src.backend import set_keras_mask
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding
@@ -126,10 +128,10 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
             positions=positions,
         )
         outputs = embedded_tokens + embedded_positions
+        mask = get_keras_mask(embedded_tokens)
+        if mask is not None:
+            set_keras_mask(outputs, mask)
         return outputs
-
-    def compute_mask(self, inputs, mask=None):
-        return self.token_embedding.compute_mask(inputs, mask=mask)
 
     def compute_output_shape(self, input_shape):
         return tuple(input_shape) + (self.embedding_dim,)
