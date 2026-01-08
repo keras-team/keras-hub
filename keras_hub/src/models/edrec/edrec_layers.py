@@ -100,7 +100,9 @@ class EdRecGatedFeedForward(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="down_proj",
         )
-        self.dropout = keras.layers.Dropout(self.dropout_rate)
+        self.dropout = keras.layers.Dropout(
+            self.dropout_rate, dtype=self.dtype_policy
+        )
 
     def call(self, x, training=False):
         # Up projection + activation (GELU)

@@ -44,7 +44,7 @@ class EdRecSeq2SeqLMTest(TestCase):
         "encoder_token_ids": ops.ones((2, 5), dtype="int32"),
         "encoder_padding_mask": ops.ones((2, 5), dtype="int32"),
     }
-    output = seq_2_seq_lm.generate(inputs, max_length=10)
+    output = seq_2_seq_lm.generate(inputs, max_length=10, stop_token_ids=None)
     # Check shape (B, 10) likely if just IDs, or maybe dict
     # Default generate returns just token IDs if preprocessor is None?
     # BartSeq2SeqLMTest passed string.
@@ -60,7 +60,7 @@ class EdRecSeq2SeqLMTest(TestCase):
         "encoder_token_ids": ops.ones((2, 5), dtype="int32"),
         "encoder_padding_mask": ops.ones((2, 5), dtype="int32"),
     }
-    seq_2_seq_lm.generate(inputs, max_length=10)
+    seq_2_seq_lm.generate(inputs, max_length=10, stop_token_ids=None)
 
   @pytest.mark.large
   def test_saved_model(self):
