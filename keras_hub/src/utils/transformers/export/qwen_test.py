@@ -143,7 +143,7 @@ class TestQwenExport(TestCase):
         # 8. Compare Outputs (Generation via IDs)
 
         # ID 1="The", ID 2="quick" (based on your dummy vocab)
-        input_ids = np.array([[1, 2]])
+        input_ids = np.array([[1, 2]],dtype=np.int64)
 
         keras_inputs = {
             "token_ids": input_ids,
@@ -162,3 +162,4 @@ class TestQwenExport(TestCase):
         hf_logits_np = hf_logits.detach().cpu().numpy()
 
         self.assertAllClose(keras_logits_np, hf_logits_np, atol=1e-3, rtol=1e-3)
+        

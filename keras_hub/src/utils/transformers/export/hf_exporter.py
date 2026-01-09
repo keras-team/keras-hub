@@ -5,12 +5,6 @@ import warnings
 
 import keras
 
-# --- Tokenizer Imports ---
-try:
-    from keras_hub.src.models.qwen.qwen_tokenizer import QwenTokenizer
-except ImportError:
-    QwenTokenizer = None
-
 # --- Gemma Utils ---
 from keras_hub.src.utils.transformers.export.gemma import get_gemma_config
 from keras_hub.src.utils.transformers.export.gemma import (
@@ -116,7 +110,7 @@ def export_backbone(backbone, path, include_lm_head=False):
 
             weights_dict_torch[k] = t
 
-        # Handle Tied Weights (Qwen / Llama naming convention)
+        # Handle Tied Weights
         if (
             "lm_head.weight" in weights_dict_torch
             and "model.embed_tokens.weight" in weights_dict_torch
