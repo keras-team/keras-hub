@@ -605,8 +605,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         try:
             from ai_edge_litert.interpreter import Interpreter
         except ImportError:
-            import tensorflow as tf
-
             Interpreter = tf.lite.Interpreter
 
         if output_thresholds is None:
