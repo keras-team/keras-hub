@@ -11,6 +11,7 @@ from typing import Iterable
 
 import keras
 import regex as re
+from keras.src.saving import serialization_lib
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
@@ -331,6 +332,12 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             return
 
         if isinstance(vocabulary, str):
+            if serialization_lib.in_safe_mode():
+                raise ValueError(
+                    "Loading vocabulary files outside of the model archive "
+                    "is not allowed in safe mode. Disable with "
+                    "`safe_mode=False` in `keras.saving.load_model()`."
+                )
             with open(vocabulary, "r", encoding="utf-8") as f:
                 self.vocabulary = json.load(f)
         elif isinstance(vocabulary, dict):
@@ -342,6 +349,12 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 f"`type(vocabulary)={type(vocabulary)}`."
             )
         if isinstance(merges, str):
+            if serialization_lib.in_safe_mode():
+                raise ValueError(
+                    "Loading vocabulary files outside of the model archive "
+                    "is not allowed in safe mode. Disable with "
+                    "`safe_mode=False` in `keras.saving.load_model()`."
+                )
             with open(merges, encoding="utf-8") as f:
                 self.merges = [bp.rstrip() for bp in f]
         elif isinstance(merges, Iterable):

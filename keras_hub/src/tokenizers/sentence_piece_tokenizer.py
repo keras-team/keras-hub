@@ -3,6 +3,7 @@ import binascii
 import os
 
 import keras
+from keras.src.saving import serialization_lib
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
@@ -145,6 +146,12 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 except binascii.Error:
                     pass
             if not is_base64:
+                if serialization_lib.in_safe_mode():
+                    raise ValueError(
+                        "Loading vocabulary files outside of the model archive "
+                        "is not allowed in safe mode. Disable with "
+                        "`safe_mode=False` in `keras.saving.load_model()`."
+                    )
                 proto_bytes = open(proto, "rb").read()
         elif isinstance(proto, bytes):
             proto_bytes = proto

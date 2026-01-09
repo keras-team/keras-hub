@@ -20,4 +20,7 @@ build/
 .idea/
 
 venv/
+.venv/
+my-env/
+keras-hub-env/
 .DS_Store
