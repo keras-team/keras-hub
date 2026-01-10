@@ -3,6 +3,7 @@ import binascii
 import os
 
 import keras
+from keras.src.saving import serialization_lib
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
@@ -145,6 +146,17 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 except binascii.Error:
                     pass
             if not is_base64:
+                if serialization_lib.in_safe_mode():
+                    raise ValueError(
+                        "Requested the loading of a proto file outside of "
+                        "the model archive. This carries a potential risk of "
+                        "loading arbitrary and sensitive files and thus it is "
+                        "disallowed by default. If you trust the source of the "
+                        "artifact, you can override this error by passing "
+                        "`safe_mode=False` to the loading function, or calling "
+                        "`keras.config.enable_unsafe_deserialization()`. "
+                        f"Proto file: '{proto}'"
+                    )
                 proto_bytes = open(proto, "rb").read()
         elif isinstance(proto, bytes):
             proto_bytes = proto

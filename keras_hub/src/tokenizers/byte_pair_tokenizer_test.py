@@ -1,5 +1,6 @@
 import keras
 import tensorflow as tf
+from keras.src.saving import serialization_lib
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
@@ -173,3 +174,24 @@ class BytePairTokenizerTest(TestCase):
             self.tokenizer(input_data),
             cloned_tokenizer(input_data),
         )
+
+    def test_safe_mode_vocabulary_file_disallowed(self):
+        import os
+
+        temp_dir = self.get_temp_dir()
+        vocab_path = os.path.join(temp_dir, "vocab.json")
+        merges_path = os.path.join(temp_dir, "merges.txt")
+
+        with open(vocab_path, "w") as file:
+            file.write('{"<|endoftext|>": 0, "the": 1, "quick": 2}')
+        with open(merges_path, "w") as file:
+            file.write("t h\nthe quick")
+
+        tokenizer = BytePairTokenizer()
+        with serialization_lib.SafeModeScope(True):
+            with self.assertRaisesRegex(
+                ValueError,
+                r"Requested the loading of a vocabulary file outside of the "
+                r"model archive.*Vocabulary file: .*vocab\.json",
+            ):
+                tokenizer.set_vocabulary_and_merges(vocab_path, merges_path)

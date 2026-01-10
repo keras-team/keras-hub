@@ -11,6 +11,7 @@ from typing import Iterable
 
 import keras
 import regex as re
+from keras.src.saving import serialization_lib
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
@@ -331,6 +332,17 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             return
 
         if isinstance(vocabulary, str):
+            if serialization_lib.in_safe_mode():
+                raise ValueError(
+                    "Requested the loading of a vocabulary file outside of the "
+                    "model archive. This carries a potential risk of loading "
+                    "arbitrary and sensitive files and thus it is disallowed "
+                    "by default. If you trust the source of the artifact, you "
+                    "can override this error by passing `safe_mode=False` to "
+                    "the loading function, or calling "
+                    "`keras.config.enable_unsafe_deserialization()`. "
+                    f"Vocabulary file: '{vocabulary}'"
+                )
             with open(vocabulary, "r", encoding="utf-8") as f:
                 self.vocabulary = json.load(f)
         elif isinstance(vocabulary, dict):
@@ -342,6 +354,17 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 f"`type(vocabulary)={type(vocabulary)}`."
             )
         if isinstance(merges, str):
+            if serialization_lib.in_safe_mode():
+                raise ValueError(
+                    "Requested the loading of a merges file outside of the "
+                    "model archive. This carries a potential risk of loading "
+                    "arbitrary and sensitive files and thus it is disallowed "
+                    "by default. If you trust the source of the artifact, you "
+                    "can override this error by passing `safe_mode=False` to "
+                    "the loading function, or calling "
+                    "`keras.config.enable_unsafe_deserialization()`. "
+                    f"Merges file: '{merges}'"
+                )
             with open(merges, encoding="utf-8") as f:
                 self.merges = [bp.rstrip() for bp in f]
         elif isinstance(merges, Iterable):
