@@ -377,9 +377,14 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         if isinstance(vocabulary, str):
             if serialization_lib.in_safe_mode():
                 raise ValueError(
-                    "Loading vocabulary files outside of the model archive "
-                    "is not allowed in safe mode. Disable with "
-                    "`safe_mode=False` in `keras.saving.load_model()`."
+                    "Requested the loading of a vocabulary file outside of the "
+                    "model archive. This carries a potential risk of loading "
+                    "arbitrary and sensitive files and thus it is disallowed "
+                    "by default. If you trust the source of the artifact, you "
+                    "can override this error by passing `safe_mode=False` to "
+                    "the loading function, or calling "
+                    "`keras.config.enable_unsafe_deserialization()`. "
+                    f"Vocabulary file: '{vocabulary}'"
                 )
             with open(vocabulary, "r", encoding="utf-8") as file:
                 self.vocabulary = [line.rstrip() for line in file]

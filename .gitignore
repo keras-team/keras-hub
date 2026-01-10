@@ -21,6 +21,4 @@ build/
 
 venv/
 .venv/
-my-env/
-keras-hub-env/
 .DS_Store

@@ -189,7 +189,7 @@ class SentencePieceTokenizerTest(TestCase):
         with serialization_lib.SafeModeScope(True):
             with self.assertRaisesRegex(
                 ValueError,
-                "Loading vocabulary files outside of the model archive "
-                "is not allowed in safe mode",
+                r"Requested the loading of a proto file outside of the "
+                r"model archive.*Proto file: .*model\.spm",
             ):
                 tokenizer.set_proto(proto_path)

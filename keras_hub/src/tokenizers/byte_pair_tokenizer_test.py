@@ -191,7 +191,7 @@ class BytePairTokenizerTest(TestCase):
         with serialization_lib.SafeModeScope(True):
             with self.assertRaisesRegex(
                 ValueError,
-                "Loading vocabulary files outside of the model archive "
-                "is not allowed in safe mode",
+                r"Requested the loading of a vocabulary file outside of the "
+                r"model archive.*Vocabulary file: .*vocab\.json",
             ):
                 tokenizer.set_vocabulary_and_merges(vocab_path, merges_path)
