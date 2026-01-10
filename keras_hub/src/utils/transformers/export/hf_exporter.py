@@ -20,6 +20,11 @@ from keras_hub.src.utils.transformers.export.gemma3 import (
 from keras_hub.src.utils.transformers.export.gemma3 import (
     get_gemma3_weights_map,
 )
+from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_config
+from keras_hub.src.utils.transformers.export.gpt2 import (
+    get_gpt2_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_weights_map
 
 # --- Qwen Utils ---
 from keras_hub.src.utils.transformers.export.qwen import get_qwen_config
@@ -32,18 +37,25 @@ MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
     "Gemma3Backbone": get_gemma3_config,
     "QwenBackbone": get_qwen_config,
+    "GPT2Backbone": get_gpt2_config,
+    # Add for future models, e.g., "MistralBackbone": get_mistral_config
 }
 
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
     "Gemma3Backbone": get_gemma3_weights_map,
     "QwenBackbone": get_qwen_weights_map,
+    "GPT2Backbone": get_gpt2_weights_map,
+    # Add for future models, e.g., "MistralBackbone": get_mistral_weights_map
 }
 
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
     "Gemma3Tokenizer": get_gemma3_tokenizer_config,
     "QwenTokenizer": get_qwen_tokenizer_config,
+    "GPT2Tokenizer": get_gpt2_tokenizer_config,
+    # Add for future models, e.g., "MistralTokenizer":
+    # get_mistral_tokenizer_config
 }
 
 
@@ -84,6 +96,7 @@ def export_backbone(backbone, path, include_lm_head=False):
 
     with open(config_path, "w") as f:
         json.dump(config_to_save, f, indent=2)
+        json.dump(hf_config, f, indent=2)
 
     # Save weights based on backend
     weights_path = os.path.join(path, "model.safetensors")
@@ -119,6 +132,38 @@ def export_backbone(backbone, path, include_lm_head=False):
             lm = weights_dict_torch["lm_head.weight"]
             if wte.data_ptr() == lm.data_ptr():
                 weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
+
+        for k, v in weights_dict.items():
+            tensor = v.value if hasattr(v, "value") else v
+
+            # Torch tensor -> move to CPU
+            if isinstance(tensor, torch.Tensor):
+                t = tensor.detach().to("cpu")
+
+            # TensorFlow / JAX -> convert via numpy()
+            elif hasattr(tensor, "numpy"):
+                t = torch.tensor(tensor.numpy())
+
+            # numpy array
+            elif hasattr(tensor, "__array__"):
+                t = torch.tensor(tensor)
+
+            else:
+                raise TypeError(f"Unsupported tensor type: {type(tensor)}")
+
+            weights_dict_torch[k] = t.contiguous()
+
+        # ----  GPT-2 tied weights ----
+        if (
+            "lm_head.weight" in weights_dict_torch
+            and "transformer.wte.weight" in weights_dict_torch
+        ):
+            wte = weights_dict_torch["transformer.wte.weight"]
+            lm = weights_dict_torch["lm_head.weight"]
+
+        if wte.data_ptr() == lm.data_ptr():
+            weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
+        # --------------------------------
 
         save_file(weights_dict_torch, weights_path, metadata={"format": "pt"})
 
@@ -170,13 +215,19 @@ def export_tokenizer(tokenizer, path):
             warnings.warn(f"{vocab_spm_path} not found.")
 
     # 2. BPE Models (Qwen)
-    elif tokenizer_type == "QwenTokenizer":
+    elif tokenizer_type in ["QwenTokenizer", "GPT2Tokenizer"]:
         vocab_json_path = os.path.join(path, "vocabulary.json")
         vocab_hf_path = os.path.join(path, "vocab.json")
         if os.path.exists(vocab_json_path):
             shutil.move(vocab_json_path, vocab_hf_path)
         else:
             warnings.warn(f"{vocab_json_path} not found.")
+            warnings.warn(
+                f"{vocab_spm_path} not found. Tokenizer may not load "
+                "correctly. Ensure that the tokenizer configuration "
+                "is correct and that the vocabulary file is present "
+                "in the original model."
+            )
 
 
 def export_to_safetensors(keras_model, path):
