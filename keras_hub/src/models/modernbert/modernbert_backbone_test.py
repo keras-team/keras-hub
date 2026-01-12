@@ -31,8 +31,23 @@ class ModernBertBackboneTest(TestCase):
 
     @pytest.mark.large
     def test_saved_model(self):
+        """
+        Verify the model can be saved & loaded accurately.
+        """
         self.run_model_saving_test(
             cls=ModernBertBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
+        )
+    
+    def test_mixed_precision(self):
+        """
+        Verify the backbone works correctly with mixed precision policies.
+        """
+        self.run_backbone_test(
+            cls=ModernBertBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(2, 5, 8),
+            run_mixed_precision_check=True,
         )
