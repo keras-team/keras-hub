@@ -20,6 +20,8 @@ from keras_hub.src.utils.transformers.export.gemma3 import (
 from keras_hub.src.utils.transformers.export.gemma3 import (
     get_gemma3_weights_map,
 )
+
+# --- GPT2 Utils ---
 from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_config
 from keras_hub.src.utils.transformers.export.gpt2 import (
     get_gpt2_tokenizer_config,
@@ -96,7 +98,6 @@ def export_backbone(backbone, path, include_lm_head=False):
 
     with open(config_path, "w") as f:
         json.dump(config_to_save, f, indent=2)
-        json.dump(hf_config, f, indent=2)
 
     # Save weights based on backend
     weights_path = os.path.join(path, "model.safetensors")
@@ -156,14 +157,13 @@ def export_backbone(backbone, path, include_lm_head=False):
         # ----  GPT-2 tied weights ----
         if (
             "lm_head.weight" in weights_dict_torch
-            and "transformer.wte.weight" in weights_dict_torch
+            and "model.embed_tokensweight" in weights_dict_torch
         ):
-            wte = weights_dict_torch["transformer.wte.weight"]
+            wte = weights_dict_torch["model.embed_tokens.weight"]
             lm = weights_dict_torch["lm_head.weight"]
 
-        if wte.data_ptr() == lm.data_ptr():
-            weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
-        # --------------------------------
+            if wte.data_ptr() == lm.data_ptr():
+                weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
 
         save_file(weights_dict_torch, weights_path, metadata={"format": "pt"})
 
@@ -214,7 +214,7 @@ def export_tokenizer(tokenizer, path):
         else:
             warnings.warn(f"{vocab_spm_path} not found.")
 
-    # 2. BPE Models (Qwen)
+    # 2. BPE Models (Qwen / GPT-2)
     elif tokenizer_type in ["QwenTokenizer", "GPT2Tokenizer"]:
         vocab_json_path = os.path.join(path, "vocabulary.json")
         vocab_hf_path = os.path.join(path, "vocab.json")
