@@ -120,44 +120,24 @@ def export_backbone(backbone, path, include_lm_head=False):
 
             weights_dict_torch[k] = t
 
-        # Handle Tied Weights
-        if (
-            "lm_head.weight" in weights_dict_torch
-            and "transformer.wte..weight" in weights_dict_torch
-        ):
-            wte = weights_dict_torch["transformer.wte.weight"]
-            lm = weights_dict_torch["lm_head.weight"]
-            if wte.data_ptr() == lm.data_ptr():
-                weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
-
-        for k, v in weights_dict.items():
-            tensor = v.value if hasattr(v, "value") else v
-
-            # Torch tensor -> move to CPU
-            if isinstance(tensor, torch.Tensor):
-                t = tensor.detach().to("cpu")
-
-            # TensorFlow / JAX -> convert via numpy()
-            elif hasattr(tensor, "numpy"):
-                t = torch.tensor(tensor.numpy())
-
-            # numpy array
-            elif hasattr(tensor, "__array__"):
-                t = torch.tensor(tensor)
-
-            else:
-                raise TypeError(f"Unsupported tensor type: {type(tensor)}")
-
-            weights_dict_torch[k] = t.contiguous()
-
-        # ----  GPT-2 tied weights ----
+        # --- Handle Tied Weights ---
+        # Case 1: GPT-2 naming convention
         if (
             "lm_head.weight" in weights_dict_torch
             and "transformer.wte.weight" in weights_dict_torch
         ):
             wte = weights_dict_torch["transformer.wte.weight"]
             lm = weights_dict_torch["lm_head.weight"]
+            if wte.data_ptr() == lm.data_ptr():
+                weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
 
+        # Case 2: Qwen naming convention
+        elif (
+            "lm_head.weight" in weights_dict_torch
+            and "model.embed_tokens.weight" in weights_dict_torch
+        ):
+            wte = weights_dict_torch["model.embed_tokens.weight"]
+            lm = weights_dict_torch["lm_head.weight"]
             if wte.data_ptr() == lm.data_ptr():
                 weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
 
