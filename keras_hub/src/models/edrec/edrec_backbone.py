@@ -1,5 +1,4 @@
 import keras
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
@@ -85,29 +84,13 @@ class EdRecBackbone(Backbone):
 
         # Encoder
         x_enc = self.embedding(encoder_token_ids)
-        
-        # Use provided mask or compute from tokens (if 0 is padding)
-        # Note: Functional API inputs are symbolic. We can default to masking 0s if mask is not passed?
-        # In Functional API, we have to wire all inputs.
-        # But we can make flexible inputs via `inputs` dict in `super().__init__`.
-        # However, for a rigid Functional model, we usually define one path.
-        # Let's support both explicit mask and implicit mask logic if possible?
-        # Actually, standard KerasHub backbones usually take explicit masks in `inputs`.
-        # The computation of default mask usually happens OUTSIDE or we assume it's passed.
-        # Let's look at `BartBackbone`. It takes `encoder_padding_mask` as input.
-        # If the user doesn't pass it, it might fail or we need to handle it.
-        # But `BartBackbone` defines explicit Input for it.
-        # Let's assume explicit masks for now as per `edrec_backbone_test.py`.
-        
-        # Helper to compute mask if needed (though difficult in pure Functional construction if conditional)
-        # We will assume masks are passed for the functional trace.
-        
+
         for layer in self.encoder_layers:
             x_enc = layer(
                 x_enc,
                 padding_mask=encoder_padding_mask,
             )
-            
+
         # Decoder
         x_dec = self.embedding(decoder_token_ids)
         for layer in self.decoder_layers:

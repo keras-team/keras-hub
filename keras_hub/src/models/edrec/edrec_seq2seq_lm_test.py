@@ -8,7 +8,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class EdRecSeq2SeqLMTest(TestCase):
-
     def setUp(self):
         super().setUp()
         self.backbone = EdRecBackbone(
@@ -53,7 +52,9 @@ class EdRecSeq2SeqLMTest(TestCase):
             "decoder_token_ids": ops.zeros((2, 10), dtype="int32"),
             "decoder_padding_mask": decoder_padding_mask,
         }
-        output = seq_2_seq_lm.generate(inputs, max_length=10, stop_token_ids=None)
+        output = seq_2_seq_lm.generate(
+            inputs, max_length=10, stop_token_ids=None
+        )
         # Check shape (B, 10) likely if just IDs, or maybe dict
         # Default generate returns just token IDs if preprocessor is None?
         # BartSeq2SeqLMTest passed string.

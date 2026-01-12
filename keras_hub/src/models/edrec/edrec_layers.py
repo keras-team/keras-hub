@@ -168,7 +168,9 @@ class EdRecEncoderBlock(keras.layers.Layer):
 
     def build(self, input_shape):
         self.pre_attention_norm = EdRecRMSNormalization(
-            epsilon=self.epsilon, dtype=self.dtype_policy, name="pre_attention_norm"
+            epsilon=self.epsilon,
+            dtype=self.dtype_policy,
+            name="pre_attention_norm",
         )
         self.attention = keras.layers.MultiHeadAttention(
             num_heads=self.num_heads,
@@ -264,7 +266,9 @@ class EdRecDecoderBlock(keras.layers.Layer):
 
     def build(self, input_shape):
         self.pre_self_attn_norm = EdRecRMSNormalization(
-            epsilon=self.epsilon, dtype=self.dtype_policy, name="pre_self_attn_norm"
+            epsilon=self.epsilon,
+            dtype=self.dtype_policy,
+            name="pre_self_attn_norm",
         )
         self.self_attention = CachedMultiHeadAttention(
             num_heads=self.num_heads,
@@ -279,7 +283,9 @@ class EdRecDecoderBlock(keras.layers.Layer):
         )
 
         self.pre_cross_attn_norm = EdRecRMSNormalization(
-            epsilon=self.epsilon, dtype=self.dtype_policy, name="pre_cross_attn_norm"
+            epsilon=self.epsilon,
+            dtype=self.dtype_policy,
+            name="pre_cross_attn_norm",
         )
         self.cross_attention = CachedMultiHeadAttention(
             num_heads=self.num_heads,
@@ -323,7 +329,10 @@ class EdRecDecoderBlock(keras.layers.Layer):
 
         batch_size = ops.shape(x)[0]
         input_length = ops.shape(x)[1]
-        print(f"DEBUG: EdRecDecoderBlock input_length={input_length}, x_shape={ops.shape(x)}")
+        print(
+            f"DEBUG: EdRecDecoderBlock input_length={input_length}, "
+            f"x_shape={ops.shape(x)}"
+        )
 
         total_length = input_length
         if self_attention_cache is not None:
@@ -366,12 +375,15 @@ class EdRecDecoderBlock(keras.layers.Layer):
 
         if self_attention_cache is not None:
             self_attn_out, self_attention_cache = self_attn_out
-        
-        print(f"DEBUG: EdRecDecoderBlock self_attn_out shape={ops.shape(self_attn_out)}")
+
+        print(
+            f"DEBUG: EdRecDecoderBlock self_attn_out shape="
+            f"{ops.shape(self_attn_out)}"
+        )
 
         self_attn_out = self.dropout1(self_attn_out, training=training)
         x = residual + self_attn_out
-        
+
         # Cross Attention
         residual = x
         x_norm = self.pre_cross_attn_norm(x)
