@@ -92,12 +92,8 @@ def export_backbone(backbone, path, include_lm_head=False):
     os.makedirs(path, exist_ok=True)
     config_path = os.path.join(path, "config.json")
 
-    config_to_save = hf_config
-    if hasattr(hf_config, "to_dict"):
-        config_to_save = hf_config.to_dict()
-
     with open(config_path, "w") as f:
-        json.dump(config_to_save, f, indent=2)
+        json.dump(hf_config, f, indent=2)
 
     # Save weights based on backend
     weights_path = os.path.join(path, "model.safetensors")
@@ -127,9 +123,9 @@ def export_backbone(backbone, path, include_lm_head=False):
         # Handle Tied Weights
         if (
             "lm_head.weight" in weights_dict_torch
-            and "model.embed_tokens.weight" in weights_dict_torch
+            and "transformer.wte..weight" in weights_dict_torch
         ):
-            wte = weights_dict_torch["model.embed_tokens.weight"]
+            wte = weights_dict_torch["transformer.wte.weight"]
             lm = weights_dict_torch["lm_head.weight"]
             if wte.data_ptr() == lm.data_ptr():
                 weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
@@ -157,9 +153,9 @@ def export_backbone(backbone, path, include_lm_head=False):
         # ----  GPT-2 tied weights ----
         if (
             "lm_head.weight" in weights_dict_torch
-            and "model.embed_tokensweight" in weights_dict_torch
+            and "transformer.wte.weight" in weights_dict_torch
         ):
-            wte = weights_dict_torch["model.embed_tokens.weight"]
+            wte = weights_dict_torch["transformer.wte.weight"]
             lm = weights_dict_torch["lm_head.weight"]
 
             if wte.data_ptr() == lm.data_ptr():
