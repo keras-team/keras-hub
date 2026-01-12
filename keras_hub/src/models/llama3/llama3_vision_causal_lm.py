@@ -10,28 +10,37 @@ from keras_hub.src.models.llama3.llama3_vision_preprocessor import (
 
 @keras_hub_export("keras_hub.models.Llama3VisionCausalLM")
 class Llama3VisionCausalLM(CausalLM):
-    """Llama 3 Vision Causal LM model.
-
-    This model combines the Llama 3 Vision Backbone with a causal language
-    modeling head. It is capable of generating text based on input images
-    and text prompts.
+    """End-to-end Llama 3.2 Vision model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous
-    tokens. This task setup can be used to train the model unsupervised on
-    plain text input, or to autoregressively generate plain text similar to
-    the data used for training.
+    tokens. This model combines vision and language understanding to generate
+    text based on image and text inputs.
 
-    This model has a `generate()` method, which generates text based on a
-    prompt. The generation strategy used is controlled by an additional
-    `sampler` argument on `compile()`. You can recompile the model with
-    different `keras_hub.samplers` objects to control the generation. By
-    default, `"top_k"` sampling will be used.
+    This model has a `generate()` method for text generation. The generation
+    strategy is controlled by the `sampler` argument on `compile()`.
+
+    This model can optionally be configured with a `preprocessor` layer, in
+    which case it will automatically apply preprocessing to inputs during
+    `fit()`, `predict()`, `evaluate()` and `generate()`.
 
     Args:
-        backbone: A `Llama3VisionBackbone` instance.
-        preprocessor: A `Llama3VisionPreprocessor` instance or `None`.
-            If `None`, this model will not apply preprocessing, and inputs
-            should be preprocessed before calling the model.
+        backbone: A `keras_hub.models.Llama3VisionBackbone` instance.
+        preprocessor: A `keras_hub.models.Llama3VisionPreprocessor` or `None`.
+            If `None`, inputs should be preprocessed before calling the model.
+
+    Example:
+    ```python
+    # Load from preset.
+    causal_lm = keras_hub.models.Llama3VisionCausalLM.from_preset(
+        "llama3_2_vision_11b"
+    )
+
+    # Generate with image and text.
+    output = causal_lm.generate({
+        "images": image,
+        "prompts": "Describe this image:",
+    })
+    ```
     """
 
     backbone_cls = Llama3VisionBackbone

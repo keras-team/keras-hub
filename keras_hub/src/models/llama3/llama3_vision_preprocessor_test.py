@@ -82,10 +82,6 @@ class Llama3VisionPreprocessorTest(TestCase):
         self.assertEqual(config["add_start_token"], True)
         self.assertEqual(config["add_end_token"], True)
 
-    # ============================================================
-    # New tests for missing coverage
-    # ============================================================
-
     def test_image_only_preprocessing(self):
         """Test preprocessing with only images (no text)."""
         preprocessor = Llama3VisionPreprocessor(**self.init_kwargs)

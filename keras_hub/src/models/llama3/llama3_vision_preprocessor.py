@@ -12,19 +12,18 @@ from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 @keras_hub_export("keras_hub.models.Llama3VisionPreprocessor")
 class Llama3VisionPreprocessor(Preprocessor):
-    """Llama 3 Vision Preprocessor.
+    """Preprocessor for the Llama 3.2 Vision model.
 
-    This layer handles the preprocessing of both text and image inputs.
-    It combines a `Llama3Tokenizer` for text and a `Llama3VisionImageConverter`
-    for images.
+    This layer handles preprocessing of text and image inputs, combining
+    a tokenizer for text and an image converter for images.
 
     Args:
-        tokenizer: A `Llama3Tokenizer` instance.
-        image_converter: A `Llama3VisionImageConverter` instance.
-        sequence_length: int. The fixed length of the tokenized text output.
-        add_start_token: bool. Whether to add the start token to the text.
-        add_end_token: bool. Whether to add the end token to the text.
-        **kwargs: Arguments passed to the parent class.
+        tokenizer: A `keras_hub.models.Llama3Tokenizer` instance.
+        image_converter: A `keras_hub.models.Llama3VisionImageConverter`
+            instance. Defaults to `None`.
+        sequence_length: int. The maximum sequence length. Defaults to `1024`.
+        add_start_token: bool. Whether to add start token. Defaults to `True`.
+        add_end_token: bool. Whether to add end token. Defaults to `True`.
     """
 
     tokenizer_cls = Llama3Tokenizer
@@ -48,7 +47,6 @@ class Llama3VisionPreprocessor(Preprocessor):
         self.add_end_token = add_end_token
 
     def build(self, input_shape):
-        # Create packer for text tokenization
         self.packer = StartEndPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
@@ -60,26 +58,17 @@ class Llama3VisionPreprocessor(Preprocessor):
 
     @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
-        """Process inputs.
-
-        x: Can be a dict {"images": ..., "text": ...} or just "text".
-        """
-        # 1. Normalize Input (handle dict inputs)
         if isinstance(x, dict):
             text = x.get("text", None)
             images = x.get("images", None)
         else:
-            # Assume x is text if not dict (simplification)
             text = x
             images = None
 
         output = {}
 
-        # 2. Process Text
         if text is not None:
-            # Tokenize (without sequence_length parameter)
             token_ids = self.tokenizer(text)
-            # Pack and pad tokens
             token_ids, padding_mask = self.packer(
                 token_ids,
                 add_start_value=self.add_start_token,
@@ -88,14 +77,11 @@ class Llama3VisionPreprocessor(Preprocessor):
             output["token_ids"] = token_ids
             output["padding_mask"] = padding_mask
 
-        # 3. Process Images
         if images is not None and self.image_converter is not None:
             images = self.image_converter(images)
             output["images"] = images
 
-        # 4. Handle Labels (y) if training
         if y is not None:
-            # Tokenize labels
             tokenized_y = self.tokenizer(y)
             tokenized_y, _ = self.packer(
                 tokenized_y,
