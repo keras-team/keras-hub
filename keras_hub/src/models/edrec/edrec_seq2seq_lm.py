@@ -145,8 +145,15 @@ class EdRecSeq2SeqLM(Seq2SeqLM):
   def generate_step(self, inputs, stop_token_ids=None):
     encoder_token_ids = inputs["encoder_token_ids"]
     encoder_padding_mask = inputs["encoder_padding_mask"]
-    decoder_token_ids = inputs["decoder_token_ids"]
-    decoder_padding_mask = inputs["decoder_padding_mask"]
+    decoder_token_ids = inputs.get("decoder_token_ids")
+    if decoder_token_ids is None:
+      batch_size = ops.shape(encoder_token_ids)[0]
+      decoder_token_ids = ops.zeros((batch_size, 1), dtype="int32")
+
+    decoder_padding_mask = inputs.get("decoder_padding_mask")
+    if decoder_padding_mask is None:
+      decoder_padding_mask = ops.ones_like(decoder_token_ids, dtype="bool")
+
 
     batch_size = ops.shape(encoder_token_ids)[0]
 
@@ -191,16 +198,30 @@ class EdRecSeq2SeqLM(Seq2SeqLM):
         enc_states = ops.repeat(enc_states, repeats, axis=0)
         enc_mask = ops.repeat(enc_mask, repeats, axis=0)
 
+      cache_index = index - 1
+      num_samples = ops.shape(prompt)[0]
+      prompt_slice = ops.slice(prompt, [0, cache_index], [num_samples, 1])
+
       logits, h_states, next_s, next_c = self.call_decoder_with_cache(
           enc_states,
           enc_mask,
-          prompt,
+          prompt_slice,
           s_c,
           index - 1,
           c_c,
           None,  # Cross cache re-use
       )
-      return logits, h_states, (next_s, next_c)
+
+      # If the backbone returns the full sequence, we only need the last token.
+      if ops.shape(logits)[1] != 1:
+          logits = ops.take(logits, [cache_index], axis=1)
+          h_states = ops.take(h_states, [cache_index], axis=1)
+
+      return (
+          ops.squeeze(logits, axis=1),
+          ops.squeeze(h_states, axis=1),
+          (next_s, next_c),
+      )
 
     new_tokens = self.sampler(
         next=next,

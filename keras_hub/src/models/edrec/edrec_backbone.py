@@ -35,25 +35,13 @@ class EdRecBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
-        super().__init__(dtype=dtype, **kwargs)
-        self.vocab_size = vocab_size
-        self.num_layers_enc = num_layers_enc
-        self.num_layers_dec = num_layers_dec
-        self.hidden_dim = hidden_dim
-        self.intermediate_dim = intermediate_dim
-        self.num_heads = num_heads
-        self.dropout = dropout
-        self.epsilon = epsilon
-
-        # Embeddings
+        # === Layers ===
         self.embedding = keras.layers.Embedding(
             input_dim=vocab_size,
             output_dim=hidden_dim,
             dtype=dtype,
             name="embedding",
         )
-
-        # Encoder
         self.encoder_layers = []
         for i in range(num_layers_enc):
             self.encoder_layers.append(
@@ -67,8 +55,6 @@ class EdRecBackbone(Backbone):
                     name=f"encoder_layer_{i}",
                 )
             )
-
-        # Decoder
         self.decoder_layers = []
         for i in range(num_layers_dec):
             self.decoder_layers.append(
@@ -82,6 +68,80 @@ class EdRecBackbone(Backbone):
                     name=f"decoder_layer_{i}",
                 )
             )
+
+        # === Functional Model ===
+        encoder_token_ids = keras.Input(
+            shape=(None,), dtype="int32", name="encoder_token_ids"
+        )
+        decoder_token_ids = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_token_ids"
+        )
+        encoder_padding_mask = keras.Input(
+            shape=(None,), dtype="bool", name="encoder_padding_mask"
+        )
+        decoder_padding_mask = keras.Input(
+            shape=(None,), dtype="bool", name="decoder_padding_mask"
+        )
+
+        # Encoder
+        x_enc = self.embedding(encoder_token_ids)
+        
+        # Use provided mask or compute from tokens (if 0 is padding)
+        # Note: Functional API inputs are symbolic. We can default to masking 0s if mask is not passed?
+        # In Functional API, we have to wire all inputs.
+        # But we can make flexible inputs via `inputs` dict in `super().__init__`.
+        # However, for a rigid Functional model, we usually define one path.
+        # Let's support both explicit mask and implicit mask logic if possible?
+        # Actually, standard KerasHub backbones usually take explicit masks in `inputs`.
+        # The computation of default mask usually happens OUTSIDE or we assume it's passed.
+        # Let's look at `BartBackbone`. It takes `encoder_padding_mask` as input.
+        # If the user doesn't pass it, it might fail or we need to handle it.
+        # But `BartBackbone` defines explicit Input for it.
+        # Let's assume explicit masks for now as per `edrec_backbone_test.py`.
+        
+        # Helper to compute mask if needed (though difficult in pure Functional construction if conditional)
+        # We will assume masks are passed for the functional trace.
+        
+        for layer in self.encoder_layers:
+            x_enc = layer(
+                x_enc,
+                padding_mask=encoder_padding_mask,
+            )
+            
+        # Decoder
+        x_dec = self.embedding(decoder_token_ids)
+        for layer in self.decoder_layers:
+            x_dec = layer(
+                x_dec,
+                encoder_outputs=x_enc,
+                decoder_padding_mask=decoder_padding_mask,
+                encoder_padding_mask=encoder_padding_mask,
+            )
+
+        super().__init__(
+            inputs={
+                "encoder_token_ids": encoder_token_ids,
+                "decoder_token_ids": decoder_token_ids,
+                "encoder_padding_mask": encoder_padding_mask,
+                "decoder_padding_mask": decoder_padding_mask,
+            },
+            outputs={
+                "encoder_sequence_output": x_enc,
+                "decoder_sequence_output": x_dec,
+            },
+            dtype=dtype,
+            **kwargs,
+        )
+
+        # === Config ===
+        self.vocab_size = vocab_size
+        self.num_layers_enc = num_layers_enc
+        self.num_layers_dec = num_layers_dec
+        self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
+        self.num_heads = num_heads
+        self.dropout = dropout
+        self.epsilon = epsilon
 
     def get_config(self):
         config = super().get_config()
@@ -98,59 +158,6 @@ class EdRecBackbone(Backbone):
             }
         )
         return config
-
-    def call(
-        self,
-        inputs,
-        training=False,
-    ):
-        # inputs can be a dict or tuple.
-        # Expected keys: encoder_token_ids, decoder_token_ids
-        # Optional: encoder_padding_mask, decoder_padding_mask
-
-        encoder_token_ids = inputs["encoder_token_ids"]
-        decoder_token_ids = inputs.get("decoder_token_ids")
-        encoder_padding_mask = inputs.get("encoder_padding_mask")
-        decoder_padding_mask = inputs.get("decoder_padding_mask")
-
-        # Embed encoder
-        x_enc = self.embedding(encoder_token_ids)
-
-        if encoder_padding_mask is None:
-            encoder_padding_mask = ops.not_equal(encoder_token_ids, 0)
-
-        # Run Encoder
-        for layer in self.encoder_layers:
-            x_enc = layer(
-                x_enc,
-                padding_mask=encoder_padding_mask,
-                training=training,
-            )
-
-        # If decoder is present
-        x_dec = None
-        if decoder_token_ids is not None:
-            x_dec = self.embedding(decoder_token_ids)
-
-            if decoder_padding_mask is None:
-                decoder_padding_mask = ops.not_equal(decoder_token_ids, 0)
-
-            for layer in self.decoder_layers:
-                x_dec = layer(
-                    x_dec,
-                    encoder_outputs=x_enc,
-                    decoder_padding_mask=decoder_padding_mask,
-                    encoder_padding_mask=encoder_padding_mask,
-                    training=training,
-                )
-            return {
-                "encoder_sequence_output": x_enc,
-                "decoder_sequence_output": x_dec,
-            }
-
-        return {
-            "encoder_sequence_output": x_enc,
-        }
 
     @property
     def token_embedding(self):
