@@ -7,24 +7,19 @@ from keras_hub.src.models.llama3.llama3_vision_backbone import (
 
 @keras_hub_export("keras_hub.models.Llama3VisionImageConverter")
 class Llama3VisionImageConverter(ImageConverter):
-    """Llama 3 Vision Image Converter.
+    """Image converter for the Llama 3.2 Vision model.
 
-    This layer preprocesses image inputs for the Llama 3 Vision model.
-    It handles resizing and rescaling of images to match the model's
-    expected input format (SigLIP style).
+    This layer preprocesses images for the Llama 3.2 Vision model, handling
+    resizing and rescaling to match the expected input format.
 
     Args:
-        image_size: int or tuple (height, width). The target size for
-            the images. If None, defaults to the config of the associated
-            model.
-        scale: float. The scale factor for pixel values.
-            Defaults to 1/255 (rescaling [0, 255] to [0, 1]).
-        offset: float. The offset for pixel values. Defaults to 0.0.
-        interpolation: str. The interpolation method for resizing.
-            Defaults to "bicubic".
-        crop_to_aspect_ratio: bool. Whether to resize images while preserving
-            aspect ratio. Defaults to True.
-        **kwargs: Arguments passed to the parent `ImageConverter`.
+        image_size: int or tuple. The target image size. Defaults to `None`.
+        scale: float. The pixel value scale factor. Defaults to `1/255`.
+        offset: float. The pixel value offset. Defaults to `0.0`.
+        interpolation: str. The resize interpolation method.
+            Defaults to `"bicubic"`.
+        crop_to_aspect_ratio: bool. Whether to preserve aspect ratio.
+            Defaults to `True`.
     """
 
     backbone_cls = Llama3VisionBackbone

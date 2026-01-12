@@ -27,64 +27,37 @@ def convert_backbone_config(transformers_config):
         transformers_config: Dict from HuggingFace config.json.
 
     Returns:
-        Dict that can be passed to Llama3VisionConfig.
+        Dict that can be passed to Llama3VisionBackbone.
     """
-    # Extract vision config
     vision_config = transformers_config.get("vision_config", {})
     text_config = transformers_config.get("text_config", {})
 
-    # Vision encoder configuration
-    vision_encoder_config = {
-        "hidden_dim": vision_config.get("hidden_size", 1280),
-        "num_layers": vision_config.get("num_hidden_layers", 32),
-        "num_heads": vision_config.get("num_attention_heads", 16),
-        "intermediate_dim": vision_config.get("intermediate_size", 5120),
-        "patch_size": vision_config.get("patch_size", 14),
-        "image_size": vision_config.get("image_size", 560),
-        "num_channels": vision_config.get("num_channels", 3),
-        "layer_norm_epsilon": vision_config.get("layer_norm_eps", 1e-6),
-    }
-
-    # Text backbone configuration
-    text_backbone_config = {
-        "vocabulary_size": text_config.get("vocab_size", 128256),
-        "num_layers": text_config.get("num_hidden_layers", 40),
-        "num_query_heads": text_config.get("num_attention_heads", 32),
-        "hidden_dim": text_config.get("hidden_size", 4096),
-        "intermediate_dim": text_config.get("intermediate_size", 14336),
-        "num_key_value_heads": text_config.get("num_key_value_heads", 8),
-        "rope_max_wavelength": text_config.get("rope_theta", 500000),
-        "layer_norm_epsilon": text_config.get("rms_norm_eps", 1e-5),
-        "tie_word_embeddings": text_config.get("tie_word_embeddings", False),
-    }
-
-    # Handle RoPE scaling for Llama 3.1+
-    rope_scaling = text_config.get("rope_scaling", None)
-    if rope_scaling is not None:
-        text_backbone_config["rope_frequency_adjustment_factor"] = (
-            rope_scaling.get("factor", 1.0)
-        )
-        text_backbone_config["rope_low_freq_factor"] = rope_scaling.get(
-            "low_freq_factor", 1.0
-        )
-        text_backbone_config["rope_high_freq_factor"] = rope_scaling.get(
-            "high_freq_factor", 4.0
-        )
-        text_backbone_config["rope_pretraining_sequence_length"] = (
-            rope_scaling.get("original_max_position_embeddings", 8192)
-        )
-
-    # Cross-attention layers (every 5th layer starting from layer 3)
-    # This varies depending on the model size
+    # Cross-attention layers
     num_text_layers = text_config.get("num_hidden_layers", 40)
     cross_attention_layers = transformers_config.get(
         "cross_attention_layers",
-        [i for i in range(3, num_text_layers, 5)],  # Default: every 5th layer
+        [i for i in range(3, num_text_layers, 5)],
     )
 
     return {
-        "vision_encoder_config": vision_encoder_config,
-        "text_config": text_backbone_config,
+        # Text backbone config
+        "vocabulary_size": text_config.get("vocab_size", 128256),
+        "num_layers": text_config.get("num_hidden_layers", 40),
+        "hidden_dim": text_config.get("hidden_size", 4096),
+        "num_query_heads": text_config.get("num_attention_heads", 32),
+        "num_key_value_heads": text_config.get("num_key_value_heads", 8),
+        "intermediate_dim": text_config.get("intermediate_size", 14336),
+        "rope_max_wavelength": text_config.get("rope_theta", 500000),
+        "layer_norm_epsilon": text_config.get("rms_norm_eps", 1e-5),
+        # Vision encoder config
+        "vision_hidden_dim": vision_config.get("hidden_size", 1280),
+        "vision_num_layers": vision_config.get("num_hidden_layers", 32),
+        "vision_num_heads": vision_config.get("num_attention_heads", 16),
+        "vision_intermediate_dim": vision_config.get("intermediate_size", 5120),
+        "vision_patch_size": vision_config.get("patch_size", 14),
+        "vision_image_size": vision_config.get("image_size", 560),
+        "vision_num_channels": vision_config.get("num_channels", 3),
+        # Cross-attention
         "cross_attention_layers": cross_attention_layers,
     }
 

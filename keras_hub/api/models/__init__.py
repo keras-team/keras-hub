@@ -396,12 +396,6 @@ from keras_hub.src.models.llama3.llama3_vision_backbone import (
 from keras_hub.src.models.llama3.llama3_vision_causal_lm import (
     Llama3VisionCausalLM as Llama3VisionCausalLM,
 )
-from keras_hub.src.models.llama3.llama3_vision_config import (
-    Llama3VisionConfig as Llama3VisionConfig,
-)
-from keras_hub.src.models.llama3.llama3_vision_config import (
-    Llama3VisionEncoderConfig as Llama3VisionEncoderConfig,
-)
 from keras_hub.src.models.llama3.llama3_vision_cross_attention import (
     Llama3VisionCrossAttention as Llama3VisionCrossAttention,
 )
