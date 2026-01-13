@@ -329,10 +329,6 @@ class EdRecDecoderBlock(keras.layers.Layer):
 
         batch_size = ops.shape(x)[0]
         input_length = ops.shape(x)[1]
-        print(
-            f"DEBUG: EdRecDecoderBlock input_length={input_length}, "
-            f"x_shape={ops.shape(x)}"
-        )
 
         total_length = input_length
         if self_attention_cache is not None:
@@ -376,10 +372,6 @@ class EdRecDecoderBlock(keras.layers.Layer):
         if self_attention_cache is not None:
             self_attn_out, self_attention_cache = self_attn_out
 
-        print(
-            f"DEBUG: EdRecDecoderBlock self_attn_out shape="
-            f"{ops.shape(self_attn_out)}"
-        )
 
         self_attn_out = self.dropout1(self_attn_out, training=training)
         x = residual + self_attn_out
