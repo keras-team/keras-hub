@@ -94,7 +94,7 @@ class EdRecBackbone(Backbone):
         # Decoder
         x_dec = self.embedding(decoder_token_ids)
         for layer in self.decoder_layers:
-            x_dec = layer(
+            x_dec, _, _ = layer(
                 x_dec,
                 encoder_outputs=x_enc,
                 decoder_padding_mask=decoder_padding_mask,

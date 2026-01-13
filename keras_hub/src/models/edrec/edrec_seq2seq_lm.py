@@ -72,13 +72,15 @@ class EdRecSeq2SeqLM(Seq2SeqLM):
         encoder_hidden_states,
         encoder_padding_mask,
         decoder_token_ids,
+        decoder_padding_mask=None,
         self_attention_cache=None,
         self_attention_cache_update_index=None,
         cross_attention_cache=None,
         cross_attention_cache_update_index=None,
     ):
         x = self.backbone.embedding(decoder_token_ids)
-        decoder_padding_mask = ops.not_equal(decoder_token_ids, 0)
+        if decoder_padding_mask is None:
+            decoder_padding_mask = ops.not_equal(decoder_token_ids, 0)
 
         self_attention_caches = []
         cross_attention_caches = []
@@ -183,10 +185,12 @@ class EdRecSeq2SeqLM(Seq2SeqLM):
 
         # Init cache logic for step 0
         token_0 = ops.slice(decoder_token_ids, [0, 0], [batch_size, 1])
+        mask_0 = ops.slice(decoder_padding_mask, [0, 0], [batch_size, 1])
         _, _, s_cache, c_cache = self.call_decoder_with_cache(
             encoder_hidden_states,
             encoder_padding_mask,
             token_0,
+            mask_0,
             self_attention_cache,
             0,
             cross_attention_cache,
@@ -220,6 +224,7 @@ class EdRecSeq2SeqLM(Seq2SeqLM):
                 enc_states,
                 enc_mask,
                 prompt_slice,
+                None,
                 s_c,
                 index - 1,
                 c_c,
