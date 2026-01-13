@@ -45,7 +45,7 @@ class EdRecRMSNormalization(keras.layers.Layer):
         mean_square = ops.mean(ops.square(x), axis=-1, keepdims=True)
         rms = ops.sqrt(mean_square + self.epsilon)
         normed = x / rms
-        return normed * (1.0 + self.scale)
+        return normed * (1.0 + ops.cast(self.scale, x.dtype))
 
     def get_config(self):
         config = super().get_config()
