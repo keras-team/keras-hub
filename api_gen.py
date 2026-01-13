@@ -9,6 +9,13 @@ It generates API and formats user and generated APIs.
 import os
 import shutil
 
+import numpy as np
+
+try:
+    np.object = object
+except Exception:
+    pass
+
 import namex
 
 PACKAGE = "keras_hub"
