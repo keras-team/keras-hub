@@ -2,7 +2,9 @@ import numpy as np
 import pytest
 from keras import ops
 from keras_hub.src.tests.test_case import TestCase
-from modernbert_layers import ModernBertMLP, ModernBertAttention, ModernBertEncoderLayer
+from keras_hub.src.models.modernbert.modernbert_layers import (
+    ModernBertMLP, ModernBertAttention, ModernBertEncoderLayer,
+)
 
 class ModernBertLayersTest(TestCase):
     """Tests for ModernBERT specific layers.
