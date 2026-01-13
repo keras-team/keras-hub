@@ -251,6 +251,11 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         cache_update_mask=None,
     ):
         # Note: `vision_mask` is used only for Gemma3.
+        # If float16, we clamp the input to avoid overflow.
+        is_float16 = "float16" in str(x.dtype)
+        if is_float16:
+            x = ops.clip(x, -65504, 65504)
+
         normalized_x = self.pre_attention_norm(x)
         attention_mask = self._compute_attention_mask(
             normalized_x, padding_mask, vision_mask, cache, cache_update_index
@@ -275,7 +280,15 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         if self.dropout:
             attention = self.attention_dropout(attention)
 
-        attention_x = x + attention
+        if is_float16:
+            attention_x = ops.add(
+                ops.cast(x, "float32"), ops.cast(attention, "float32")
+            )
+            attention_x = ops.clip(attention_x, -65504, 65504)
+            attention_x = ops.cast(attention_x, "float16")
+        else:
+            attention_x = x + attention
+
         normalized_x = self.pre_ffw_norm(attention_x)
 
         x1 = self.gating_ffw(normalized_x)
@@ -286,7 +299,12 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         if self.use_post_ffw_norm:
             x = self.post_ffw_norm(x)
 
-        x = x + attention_x
+        if is_float16:
+            x = ops.add(ops.cast(x, "float32"), ops.cast(attention_x, "float32"))
+            x = ops.clip(x, -65504, 65504)
+            x = ops.cast(x, "float16")
+        else:
+            x = x + attention_x
 
         if cache is not None:
             return x, new_cache
