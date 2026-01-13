@@ -300,7 +300,9 @@ class Gemma3DecoderBlock(keras.layers.Layer):
             x = self.post_ffw_norm(x)
 
         if is_float16:
-            x = ops.add(ops.cast(x, "float32"), ops.cast(attention_x, "float32"))
+            x = ops.add(
+                ops.cast(x, "float32"), ops.cast(attention_x, "float32")
+            )
             x = ops.clip(x, -65504, 65504)
             x = ops.cast(x, "float16")
         else:
