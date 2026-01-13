@@ -372,7 +372,6 @@ class EdRecDecoderBlock(keras.layers.Layer):
         if self_attention_cache is not None:
             self_attn_out, self_attention_cache = self_attn_out
 
-
         self_attn_out = self.dropout1(self_attn_out, training=training)
         x = residual + self_attn_out
 
@@ -410,8 +409,16 @@ class EdRecDecoderBlock(keras.layers.Layer):
         if self_attention_cache is not None:
             if cross_attention_cache is not None:
                 return x, self_attention_cache, cross_attention_cache
-            return x, self_attention_cache, ops.zeros((0,), dtype=self.compute_dtype)
-        return x, ops.zeros((0,), dtype=self.compute_dtype), ops.zeros((0,), dtype=self.compute_dtype)
+            return (
+                x,
+                self_attention_cache,
+                ops.zeros((0,), dtype=self.compute_dtype),
+            )
+        return (
+            x,
+            ops.zeros((0,), dtype=self.compute_dtype),
+            ops.zeros((0,), dtype=self.compute_dtype),
+        )
 
     def get_config(self):
         config = super().get_config()

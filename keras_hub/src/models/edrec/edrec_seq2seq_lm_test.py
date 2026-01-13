@@ -55,12 +55,6 @@ class EdRecSeq2SeqLMTest(TestCase):
         output = seq_2_seq_lm.generate(
             inputs, max_length=10, stop_token_ids=None
         )
-        # Check shape (B, 10) likely if just IDs, or maybe dict
-        # Default generate returns just token IDs if preprocessor is None?
-        # BartSeq2SeqLMTest passed string.
-        # Here we pass dict.
-        # It should return dict or just IDs?
-        # Without preprocessor, it usually returns token IDs.
         if isinstance(output, dict):
             output = output["decoder_token_ids"]
         self.assertEqual(output.shape, (2, 10))
