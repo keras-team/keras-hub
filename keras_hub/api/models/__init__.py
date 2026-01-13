@@ -211,6 +211,12 @@ from keras_hub.src.models.distil_bert.distil_bert_text_classifier_preprocessor i
 from keras_hub.src.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer as DistilBertTokenizer,
 )
+from keras_hub.src.models.edrec.edrec_backbone import (
+    EdRecBackbone as EdRecBackbone,
+)
+from keras_hub.src.models.edrec.edrec_seq2seq_lm import (
+    EdRecSeq2SeqLM as EdRecSeq2SeqLM,
+)
 from keras_hub.src.models.efficientnet.efficientnet_backbone import (
     EfficientNetBackbone as EfficientNetBackbone,
 )
