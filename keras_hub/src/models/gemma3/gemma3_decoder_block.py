@@ -252,7 +252,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
     ):
         # Note: `vision_mask` is used only for Gemma3.
         # If float16, we clamp the input to avoid overflow.
-        is_float16 = "float16" in str(x.dtype)
+        is_float16 = keras.backend.standardize_dtype(x.dtype) == "float16"
         if is_float16:
             x = ops.clip(x, -65504, 65504)
 
