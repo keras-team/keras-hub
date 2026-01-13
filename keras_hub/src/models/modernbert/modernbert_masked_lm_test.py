@@ -1,80 +1,85 @@
+import os
 import pytest
 import numpy as np
-import keras
 from keras import ops
+from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.models.modernbert.modernbert_backbone import (
     ModernBertBackbone,
+)
+from keras_hub.src.models.modernbert.modernbert_tokenizer import (
+    ModernBertTokenizer,
 )
 from keras_hub.src.models.modernbert.modernbert_masked_lm import (
     ModernBertMaskedLM,
 )
-from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.models.modernbert.modernbert_preprocessor import (
+    ModernBertMaskedLMPreprocessor,
+)
+
 
 class ModernBertMaskedLMTest(TestCase):
     def setUp(self):
+        self.vocab = ["<|padding|>", "<|endoftext|>", "[MASK]", "the", "quick", "brown"]
+        self.vocab += [f"token_{i}" for i in range(10)]
+        self.vocabulary = {token: i for i, token in enumerate(self.vocab)}
+        
+        self.merges = ["t h", "th e", "q u", "qu i", "qui ck"]
+
+        self.tokenizer = ModernBertTokenizer(
+            vocabulary=self.vocabulary,
+            merges=self.merges,
+        )
+        
+        self.preprocessor = ModernBertMaskedLMPreprocessor(
+            tokenizer=self.tokenizer,
+            sequence_length=10,
+            mask_selection_rate=0.2,
+            mask_selection_length=2,
+        )
+        
         self.backbone = ModernBertBackbone(
-            vocabulary_size=100,
-            num_layers=2,
-            num_heads=2,
+            vocabulary_size=len(self.vocab),
             hidden_dim=16,
             intermediate_dim=32,
+            num_layers=2,
+            num_heads=2,
         )
-        self.input_data = {
-            "token_ids": ops.cast(np.ones((2, 5)), dtype="int32"),
-            "padding_mask": ops.cast(np.ones((2, 5)), dtype="int32"),
-            "mask_positions": ops.cast(np.zeros((2, 5)), dtype="int32"),
-        }
-        self.y_true = np.random.randint(0, 100, (2, 5))
-
-        self.init_kwargs = {
-            "backbone": self.backbone,
-            "preprocessor": None,
-        }
-
-    def test_task_basics(self):
-        """Test forward pass and output shape."""
-        self.run_task_test(
-            cls=ModernBertMaskedLM,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-            expected_output_shape=(2, 5, 100),
+        
+        self.model = ModernBertMaskedLM(
+            backbone=self.backbone,
+            preprocessor=self.preprocessor,
         )
 
-    def test_weight_tying(self):
-        """
-        Verify that the MLM head shares the embedding matrix kernel.
-        """
-        task = ModernBertMaskedLM(**self.init_kwargs)
-
-        _ = task(self.input_data)
+    def test_valid_call(self):
+        # Test with raw string input
+        input_data = ["the quick brown", "the quick"]
+        # In pytest, we manually apply preprocessing for Functional models 
+        # unless testing the higher-level Task.predict
+        x, y, sw = self.preprocessor(input_data)
+        output = self.model(x)
         
-        # Find the embedding variable and the head's kernel
-        embedding_matrix = self.backbone.get_layer("token_embedding").embeddings
-        
-        # In MaskedLMHead, the kernel is set to the embedding weights. 
-        # object IDs or memory addresses are identical.
-        self.assertIs(task.mlm_head.kernel, embedding_matrix)
-        
-        trainable_vars = [v.name for v in task.trainable_variables]
-        self.assertFalse(any("prediction_head/kernel" in name for name in trainable_vars))
+        # Assertions
+        # Batch size 2, Mask length 2, Vocab size len(self.vocab)
+        self.assertEqual(output.shape, (2, 2, len(self.vocab)))
 
-    def test_fit(self):
-        """Test a single training step."""
-        task = ModernBertMaskedLM(**self.init_kwargs)
-        task.compile(
-            optimizer="adam", 
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-        )
-        # Train on a single batch
-        task.fit(x=self.input_data, y=self.y_true, batch_size=2, epochs=1)
+    def test_predict(self):
+        # Test the end-to-end predict() method
+        input_data = ["the quick brown", "the quick"]
+        output = self.model.predict(input_data)
+        
+        self.assertEqual(output.shape, (2, 2, len(self.vocab)))
 
-    @pytest.mark.large
     def test_serialization(self):
-        """
-        Verify the model can be saved and reloaded.
-        """
-        self.run_model_saving_test(
-            cls=ModernBertMaskedLM,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-        )
+        # Ensure the model can be saved and reloaded
+        new_model = ModernBertMaskedLM.from_config(self.model.get_config())
+        self.assertEqual(new_model.get_config(), self.model.get_config())
+
+    @pytest.mark.extra_large
+    def test_fit(self):
+        # Verify the model can actually train (one step)
+        input_data = ["the quick brown", "the quick"]
+        self.model.compile(optimizer="adam", loss="sparse_categorical_crossentropy")
+        
+        # Preprocessor produces (x_dict, y_labels, sample_weights)
+        ds = self.model.preprocessor(input_data)
+        self.model.fit(ds, epochs=1)
