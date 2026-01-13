@@ -339,8 +339,8 @@ class EdRecDecoderBlock(keras.layers.Layer):
         if use_causal_mask:
             causal_mask = compute_causal_mask(
                 batch_size,
-                input_length,
                 total_length,
+                input_length,
                 0
                 if self_attention_cache_update_index is None
                 else self_attention_cache_update_index,
