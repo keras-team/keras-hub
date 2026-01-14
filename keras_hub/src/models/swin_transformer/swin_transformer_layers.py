@@ -537,7 +537,7 @@ class PatchMerging(layers.Layer):
 
         x = ops.reshape(x, (B, H, W, C))
         pad_values = ((0, 0), (0, H % 2), (0, W % 2), (0, 0))
-        x = ops.pad(x, pad_values)
+        x = ops.pad(x, pad_values, mode='constant')
 
         # Reshape to group patches
         x0 = x[:, 0::2, 0::2, :]
