@@ -20,7 +20,7 @@ def get_relative_position_index(win_h, win_w):
         A tensor of shape (win_h*win_w, win_h*win_w) containing the relative
         position indices for each pair of tokens in the window.
     """
-    xx, yy = ops.meshgrid(ops.arange(win_h), ops.arange(win_w), indexing="ij")
+    xx, yy = ops.meshgrid(ops.arange(win_h), ops.arange(win_w))
     coords = ops.stack([yy, xx], axis=0)
     coords_flatten = ops.reshape(coords, (2, -1))
     relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
@@ -297,7 +297,7 @@ class WindowAttention(keras.layers.Layer):
         qkv = ops.reshape(qkv, (B_, N, 3, self.num_heads, -1))
         qkv = ops.transpose(qkv, (2, 0, 3, 1, 4))
 
-        q, k, v = ops.unstack(qkv, 3)
+        q, k, v = ops.unstack(qkv, axis=0)
 
         scale = ops.cast(self.scale, dtype=qkv.dtype)
         q = q * scale
