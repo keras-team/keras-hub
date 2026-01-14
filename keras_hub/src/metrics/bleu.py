@@ -35,7 +35,7 @@ REGEX_PATTERNS = [
     # tokenize dash when preceded by a digit
     (r"([0-9])(-)", r"\1 \2 "),
     # If last character is "." or ",", add space.
-    (r"[\.,]$", r" \0 \1"),
+    (r"([.,])$", r" \1 "),
     # one space only between words
     (r"\s+", r" "),
 ]
