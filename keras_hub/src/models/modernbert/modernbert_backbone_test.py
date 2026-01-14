@@ -15,6 +15,7 @@ class ModernBertBackboneTest(TestCase):
             "num_heads": 4,
             "hidden_dim": 8,
             "intermediate_dim": 32,
+            "local_attention_window": 128,
         }
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),

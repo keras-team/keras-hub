@@ -3,8 +3,19 @@ from keras import layers
 from keras import ops
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.masked_lm import MaskedLM
-from modernbert_backbone import ModernBertBackbone
-from modernbert_preprocessor import ModernBertMaskedLMPreprocessor
+# from keras_hub.src.models.modernbert.modernbert_backbone import (
+#     ModernBertBackbone,
+# )
+# from keras_hub.src.models.modernbert.modernbert_preprocessor import(
+#      ModernBertMaskedLMPreprocessor,
+# )
+
+from modernbert_backbone import (
+    ModernBertBackbone,
+)
+from modernbert_preprocessor import(
+     ModernBertMaskedLMPreprocessor,
+)
 
 @keras_hub_export("keras_hub.models.ModernBertMaskedLM")
 class ModernBertMaskedLM(MaskedLM):

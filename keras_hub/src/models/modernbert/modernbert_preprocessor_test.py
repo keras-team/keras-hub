@@ -25,7 +25,6 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
         input_data = ["hello world"]
         x, y, sw = self.preprocessor(input_data)
 
-        # ===== shapes =====
         self.assertAllEqual(x["token_ids"].shape, (1, 8))
         self.assertAllEqual(x["padding_mask"].shape, (1, 8))
         

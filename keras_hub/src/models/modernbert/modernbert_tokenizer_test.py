@@ -6,8 +6,8 @@ from keras_hub.src.tests.test_case import TestCase
 
 class ModernBertTokenizerTest(TestCase):
     def setUp(self):
-        self.vocab = ["[CLS]", "[PAD]", "[SEP]", "air", "Ġair", "plane", "Ġat"]
-        self.vocab += ["port", "[MASK]", "[UNK]"]
+        self.vocab = ["<|endoftext|>", "<|padding|>", "<mask>", "air", "Ġair", "plane", "Ġat"]
+        self.vocab += ["port", "[UNK]"]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
