@@ -182,7 +182,7 @@ class BleuTest(TestCase):
         }
         self.assertEqual(config, {**config, **expected_config_subset})
 
-    def test_final_punctuation_and_regex(self):
+    def test_internal_tokenizer(self):
         inputs = tf.constant(
             [
                 "Hello,world.",
