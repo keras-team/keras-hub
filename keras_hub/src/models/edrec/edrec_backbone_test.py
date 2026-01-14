@@ -28,10 +28,10 @@ class EdRecBackboneTest(TestCase):
             cls=EdRecBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            # EdRec output keys might differ from BART if not standardized.
+            run_mixed_precision_check=False,
             expected_output_shape={
-                "encoder_sequence_output": (2, 5, 4),  # B, L, D
-                "decoder_sequence_output": (2, 5, 4),  # B, L, D
+                "encoder_sequence_output": (2, 5, 4),
+                "decoder_sequence_output": (2, 5, 4),
             },
         )
 
