@@ -181,3 +181,38 @@ class BleuTest(TestCase):
             "smooth": True,
         }
         self.assertEqual(config, {**config, **expected_config_subset})
+
+    def test_final_punctuation_and_regex(self):
+        inputs = tf.constant(
+            [
+                "Hello,world.",
+                "Price: $3.14, date: 2021-01-01.",
+                "No punctuation here",
+                "<skipped> &amp; &lt;Test&gt;",
+            ]
+        )
+
+        expected_tokens = [
+            [b"Hello", b",", b"world", b"."],
+            [
+                b"Price",
+                b":",
+                b"$",
+                b"3.14",
+                b",",
+                b"date",
+                b":",
+                b"2021",
+                b"-",
+                b"01",
+                b"-",
+                b"01",
+                b".",
+            ],
+            [b"No", b"punctuation", b"here"],
+            [b"&", b"<", b"Test", b">"],
+        ]
+
+        bleu = Bleu()
+        outputs = bleu._tokenizer(inputs)
+        self.assertEqual(outputs.to_list(), expected_tokens)
