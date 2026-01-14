@@ -54,6 +54,9 @@ class Llama3VisionBackbone(Backbone):
             architecture. Defaults to `None` (single-stage).
         vision_global_layers: int. Number of global encoder layers for
             two-stage architecture. Defaults to `None` (single-stage).
+        vision_output_dim: int. The output dimension of the vision encoder
+            after processing (input to projector). Defaults to `None`, which
+            uses `vision_hidden_dim`.
         cross_attention_layers: list of int. Layer indices where cross-attention
             is applied. Defaults to `[3, 8, 13, 18, 23, 28, 33, 38]`.
         rope_max_wavelength: int. The maximum angular wavelength of the
@@ -114,6 +117,7 @@ class Llama3VisionBackbone(Backbone):
         vision_num_channels=3,
         vision_local_layers=None,
         vision_global_layers=None,
+        vision_output_dim=None,
         cross_attention_layers=None,
         rope_max_wavelength=500000,
         layer_norm_epsilon=1e-5,
@@ -123,6 +127,8 @@ class Llama3VisionBackbone(Backbone):
     ):
         if cross_attention_layers is None:
             cross_attention_layers = [3, 8, 13, 18, 23, 28, 33, 38]
+        if vision_output_dim is None:
+            vision_output_dim = vision_hidden_dim
 
         # === Layers ===
         self._vision_encoder = Llama3VisionEncoder(
@@ -141,7 +147,7 @@ class Llama3VisionBackbone(Backbone):
             name="vision_encoder",
         )
         self._vision_projector = Llama3VisionProjector(
-            hidden_dim=vision_hidden_dim,
+            input_dim=vision_output_dim,
             output_dim=hidden_dim,
             dtype=dtype,
             name="vision_projector",
@@ -241,6 +247,7 @@ class Llama3VisionBackbone(Backbone):
         self.vision_num_channels = vision_num_channels
         self.vision_local_layers = vision_local_layers
         self.vision_global_layers = vision_global_layers
+        self.vision_output_dim = vision_output_dim
         self.cross_attention_layers = cross_attention_layers
         self.rope_max_wavelength = rope_max_wavelength
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -281,6 +288,7 @@ class Llama3VisionBackbone(Backbone):
                 "vision_num_channels": self.vision_num_channels,
                 "vision_local_layers": self.vision_local_layers,
                 "vision_global_layers": self.vision_global_layers,
+                "vision_output_dim": self.vision_output_dim,
                 "cross_attention_layers": self.cross_attention_layers,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
