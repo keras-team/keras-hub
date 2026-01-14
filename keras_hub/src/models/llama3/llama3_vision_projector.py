@@ -9,11 +9,11 @@ class Llama3VisionProjector(keras.layers.Layer):
     """Vision projector for the Llama 3.2 Vision model.
 
     This layer projects vision encoder features into the text embedding space
-    using a single linear projection, enabling vision-language fusion.
+    using a single linear projection, matching the HuggingFace architecture.
 
     Args:
         input_dim: int. The dimension of the vision encoder output
-            (vision_output_dim from HuggingFace config).
+            (vision_output_dim from HuggingFace config, typically 7680).
         output_dim: int. The dimension of the text decoder embeddings.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights.
@@ -33,7 +33,7 @@ class Llama3VisionProjector(keras.layers.Layer):
         self.output_dim = output_dim
 
         # === Layers ===
-        # Single linear projection matching HuggingFace architecture
+        # Single linear projection matching HuggingFace nn.Linear
         self.projection = layers.Dense(
             self.output_dim,
             use_bias=True,

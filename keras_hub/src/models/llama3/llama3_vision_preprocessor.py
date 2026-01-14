@@ -79,7 +79,7 @@ class Llama3VisionPreprocessor(Preprocessor):
 
         if images is not None and self.image_converter is not None:
             images = self.image_converter(images)
-            output["images"] = images
+            output["pixel_values"] = images
 
         if y is not None:
             tokenized_y = self.tokenizer(y)

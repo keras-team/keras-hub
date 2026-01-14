@@ -27,9 +27,9 @@ class Llama3VisionBackboneTest(TestCase):
         batch_size = 2
         seq_len = 10
         self.input_data = {
-            "images": np.random.uniform(size=(batch_size, 16, 16, 3)).astype(
-                "float32"
-            ),
+            "pixel_values": np.random.uniform(
+                size=(batch_size, 16, 16, 3)
+            ).astype("float32"),
             "token_ids": np.ones((batch_size, seq_len), dtype="int32"),
             "padding_mask": np.ones((batch_size, seq_len), dtype="int32"),
         }

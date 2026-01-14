@@ -90,6 +90,13 @@ class Llama3VisionCrossAttention(layers.Layer):
             trainable=True,
             dtype=self.dtype,
         )
+        self.mlp_gate = self.add_weight(
+            name="mlp_gate",
+            shape=(1,),
+            initializer="zeros",
+            trainable=True,
+            dtype=self.dtype,
+        )
         super().build(input_shape)
 
     def _compute_attention(self, query, key, value, attention_mask=None):

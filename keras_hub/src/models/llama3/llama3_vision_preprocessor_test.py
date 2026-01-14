@@ -69,8 +69,8 @@ class Llama3VisionPreprocessorTest(TestCase):
         self.assertEqual(output["token_ids"].shape, (1, 10))
 
         # Verify Image Output
-        self.assertIn("images", output)
-        self.assertEqual(output["images"].shape, (1, 16, 16, 3))
+        self.assertIn("pixel_values", output)
+        self.assertEqual(output["pixel_values"].shape, (1, 16, 16, 3))
 
     def test_serialization(self):
         """Test get_config/from_config."""
@@ -95,11 +95,11 @@ class Llama3VisionPreprocessorTest(TestCase):
 
         output = preprocessor(input_data)
 
-        # Should only have images, no text outputs
-        self.assertIn("images", output)
+        # Should only have pixel_values, no text outputs
+        self.assertIn("pixel_values", output)
         self.assertNotIn("token_ids", output)
         self.assertNotIn("padding_mask", output)
-        self.assertEqual(output["images"].shape, (1, 16, 16, 3))
+        self.assertEqual(output["pixel_values"].shape, (1, 16, 16, 3))
 
     def test_preprocessing_with_labels(self):
         """Test preprocessing with labels (y parameter)."""

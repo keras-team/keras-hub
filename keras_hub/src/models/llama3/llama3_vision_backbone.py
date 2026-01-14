@@ -71,7 +71,7 @@ class Llama3VisionBackbone(Backbone):
     ```python
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
-        "images": np.random.uniform(size=(1, 560, 560, 3)),
+        "pixel_values": np.random.uniform(size=(1, 560, 560, 3)),
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
 
@@ -139,8 +139,7 @@ class Llama3VisionBackbone(Backbone):
             patch_size=vision_patch_size,
             image_size=vision_image_size,
             num_channels=vision_num_channels,
-            local_layers=vision_local_layers,
-            global_layers=vision_global_layers,
+            global_layers=vision_global_layers if vision_global_layers else 8,
             layer_norm_epsilon=layer_norm_epsilon,
             dropout=dropout,
             dtype=dtype,
@@ -182,7 +181,7 @@ class Llama3VisionBackbone(Backbone):
         # === Functional Model ===
         image_input = keras.Input(
             shape=(vision_image_size, vision_image_size, vision_num_channels),
-            name="images",
+            name="pixel_values",
         )
         token_id_input = keras.Input(
             shape=(None,),
@@ -222,7 +221,7 @@ class Llama3VisionBackbone(Backbone):
 
         super().__init__(
             inputs={
-                "images": image_input,
+                "pixel_values": image_input,
                 "token_ids": token_id_input,
                 "padding_mask": padding_mask_input,
             },
