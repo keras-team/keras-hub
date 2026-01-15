@@ -198,8 +198,8 @@ backbone_presets = {
         "metadata": {
             "description": (
                 "A 4 billion parameter model based on Gemma 3. "
-                "This model is instruction-tuned for performance on medical text "
-                "and image comprehension and is optimized for medical "
+                "This model is instruction-tuned for performance on medical "
+                "text and image comprehension and is optimized for medical "
                 "applications that involve a text generation component."
             ),
             "params": 4300079472,
@@ -211,8 +211,8 @@ backbone_presets = {
         "metadata": {
             "description": (
                 "A 27 billion parameter model based on Gemma 3. "
-                "This model is instruction-tuned for performance on medical text "
-                "and image comprehension and is optimized for medical "
+                "This model is instruction-tuned for performance on medical "
+                " text and image comprehension and is optimized for medical "
                 "applications that involve a text generation component."
             ),
             "params": 27432406640,
