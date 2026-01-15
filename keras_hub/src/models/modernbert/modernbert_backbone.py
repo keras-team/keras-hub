@@ -4,11 +4,7 @@ from keras import ops
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
-# from keras_hub.src.models.modernbert.modernbert_layers import (
-#     ModernBertEncoderLayer,
-# )
-
-from modernbert_layers import (
+from keras_hub.src.models.modernbert.modernbert_layers import (
     ModernBertEncoderLayer,
 )
 from keras_hub.src.models.backbone import Backbone
