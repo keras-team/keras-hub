@@ -224,9 +224,9 @@ backbone_presets = {
         "metadata": {
             "description": (
                 "A 27 billion parameter text-only model based on Gemma 3. "
-                "This model is instruct tuned(no images) for performance on medical text "
-                "comprehension and is optimized for medical applications "
-                "that involve a text generation component."
+                "This model is instruct tuned(no images) for performance "
+                "on medical text comprehension and is optimized for medical "
+                "applications that involve a text generation component."
             ),
             "params": 27009002240,
             "path": "gemma3",
@@ -236,8 +236,8 @@ backbone_presets = {
     "medgemma_1.5_instruct_4b": {
         "metadata": {
             "description": (
-                "A 4 billion parameter,Instruct tuned MedGemma 1.5 4B is an updated version of "
-                "the Instruction-tuned MedGemma 4B model."
+                "A 4 billion parameter,Instruct tuned MedGemma 1.5 4B is an "
+                "updated version of the Instruction-tuned MedGemma 4B model."
             ),
             "params": 4300079472,
             "path": "gemma3",
