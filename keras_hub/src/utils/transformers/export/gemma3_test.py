@@ -171,7 +171,6 @@ class TestGemma3Export(TestCase):
         proto = os.path.join(self.get_test_data_dir(), "gemma3_test_vocab.spm")
         tokenizer = Gemma3Tokenizer(proto=proto)
 
-        # Create a small vision encoder (following gemma3_causal_lm_test.py pattern)
         vision_encoder = Gemma3VisionEncoder(
             image_size=16,
             patch_size=4,

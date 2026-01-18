@@ -377,7 +377,6 @@ def get_gemma3_tokenizer_config(tokenizer):
     # Add vision-specific fields if present
     if has_vision_tokens:
         tokenizer_config["processor_class"] = "Gemma3Processor"
-        # Vision tokens as simple strings - HF auto-creates *_token_id attributes
         tokenizer_config["boi_token"] = "<start_of_image>"
         tokenizer_config["eoi_token"] = "<end_of_image>"
         tokenizer_config["image_token"] = "<image_soft_token>"
@@ -388,9 +387,6 @@ def get_gemma3_tokenizer_config(tokenizer):
             "image_token": "<image_soft_token>",
         }
 
-    # Build added_tokens_decoder with special tokens only
-    # We don't need all 262K tokens - just special tokens that need custom handling
-    # The SentencePiece tokenizer.model already handles regular vocabulary
     added_tokens_decoder = {}
     vocab_size = tokenizer.vocabulary_size()
 
