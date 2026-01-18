@@ -105,6 +105,9 @@ from keras_hub.src.models.gemma3.gemma3_image_converter import (
 from keras_hub.src.models.hgnetv2.hgnetv2_image_converter import (
     HGNetV2ImageConverter as HGNetV2ImageConverter,
 )
+from keras_hub.src.models.metaclip_2.metaclip_2_image_converter import (
+    MetaCLIP2ImageConverter as MetaCLIP2ImageConverter,
+)
 from keras_hub.src.models.mit.mit_image_converter import (
     MiTImageConverter as MiTImageConverter,
 )
