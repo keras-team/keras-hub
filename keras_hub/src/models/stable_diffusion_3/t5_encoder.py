@@ -1,8 +1,6 @@
 import keras
+from keras.layers import ReversibleEmbedding
 
-from keras_hub.src.layers.modeling.reversible_embedding import (
-    ReversibleEmbedding,
-)
 from keras_hub.src.models.t5.t5_layer_norm import T5LayerNorm
 from keras_hub.src.models.t5.t5_transformer_layer import T5TransformerLayer
 

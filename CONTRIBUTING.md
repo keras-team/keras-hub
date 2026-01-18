@@ -81,7 +81,7 @@ Once the pull request is approved, a team member will take care of merging.
 
 ## Setting up an Environment
 
-Python 3.10 or later is required.
+Python 3.11 or later is required.
 
 Setting up your KerasHub development environment requires you to fork the
 KerasHub repository and clone it locally. With the
@@ -114,13 +114,13 @@ environement supports all backends without cuda, and each backend environement
 has cuda support.
 
 ```shell
-conda create -y -n keras-hub-cpu python=3.10
+conda create -y -n keras-hub-cpu python=3.11
 conda activate keras-hub-cpu
 pip install -r requirements.txt  # install deps
 pip install -e .  # install keras-hub
 
 for backend in "jax" "torch" "tensorflow"; do
-    conda create -y -n keras-hub-${backend} python=3.10
+    conda create -y -n keras-hub-${backend} python=3.11
     conda activate keras-hub-${backend}
     pip install -r requirements-${backend}-cuda.txt  # install deps
     pip install -e .  # install keras-hub
@@ -296,3 +296,25 @@ Create unit tests for `DINOV3Backbone` at @keras_hub/src/models/dinov3. Refer to
 ```
 
 If you successfully run through all these steps, congratulations! You have now successfully added a new model to KerasHub through effective co-working with the Gemini CLI.
+
+## Using the Model Porter Tool
+
+The Model Porter tool automates the process of porting models from Hugging Face to KerasHub. It analyzes the KerasHub structure, understands file dependencies, and generates files in the correct order using an LLM (Gemini, Claude, or OpenAI).
+
+### Usage
+
+To use the tool, run the [`tools/model_porter.py`](tools/model_porter.py) script. You need to provide the target model name, a reference model name (an existing KerasHub model), your API key, and an output directory.
+
+```shell
+# Use Gemini (default)
+python tools/model_porter.py --model_name <target_model> --reference_model <reference_model> --api_key <YOUR_API_KEY> --output_dir <output_dir>
+
+# Use Claude
+python tools/model_porter.py --model_name <target_model> --reference_model <reference_model> --api_key <YOUR_API_KEY> --api_provider claude --output_dir <output_dir>
+```
+
+For example, to port `qwen3` using `mixtral` as a reference:
+
+```shell
+python tools/model_porter.py --model_name qwen3 --reference_model mixtral --api_key $GEMINI_API_KEY --output_dir qwen3
+```

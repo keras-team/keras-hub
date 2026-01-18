@@ -106,6 +106,34 @@ class PaliGemmaCausalLMTest(TestCase):
             input_data=input_data,
         )
 
+    def test_litert_export(self):
+        input_data = {
+            "token_ids": np.random.randint(
+                0,
+                self.vocabulary_size,
+                size=(self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+            "images": np.ones(
+                (self.batch_size, self.image_size, self.image_size, 3)
+            ),
+            "padding_mask": np.ones(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+            "response_mask": np.zeros(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+        }
+        self.run_litert_export_test(
+            cls=PaliGemmaCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=input_data,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 2e-6, "mean": 1e-6}},
+        )
+
     def test_pali_gemma_causal_model(self):
         preprocessed, _, _ = self.preprocessor(
             {

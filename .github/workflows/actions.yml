@@ -20,7 +20,7 @@ jobs:
         version: [keras-stable]
         include:
           - backend: jax
-            version: keras-3.9
+            version: keras-3.13
           - backend: jax
             version: keras-nightly
           - backend: openvino
@@ -30,10 +30,10 @@ jobs:
       KERAS_BACKEND: ${{ matrix.backend }}
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.10
+    - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.11'
     - name: Get pip cache dir
       id: pip-cache
       run: |
@@ -43,24 +43,22 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ${{ steps.pip-cache.outputs.dir }}
-        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements-common.txt') }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('pyproject.toml') }}
     - name: Install dependencies
       run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
-    - name: Pin Keras 3.9
-      if: ${{ matrix.version == 'keras-3.9'}}
+    - name: Pin Keras 3.13
+      if: ${{ matrix.version == 'keras-3.13'}}
       run: |
         pip uninstall -y keras jaxlib jax
-        pip install keras==3.9.0 --progress-bar off
+        pip install keras==3.13.0 --progress-bar off
         pip install jax==0.6.0 --progress-bar off
     - name: Pin Keras Nightly
       if: ${{ matrix.version == 'keras-nightly'}}
       run: |
         pip uninstall -y keras
-        pip install keras-nightly --progress-bar off
+        pip install keras-nightly --no-cache-dir --progress-bar off
     - name: Test with pytest
       run: |
         pytest keras_hub/
@@ -78,10 +76,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.10
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
       - name: Get pip cache dir
         id: pip-cache
         run: |
@@ -91,9 +89,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ steps.pip-cache.outputs.dir }}
-          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-common.txt') }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('pyproject.toml') }}
       - name: Install dependencies
         run: |
           pip install -r requirements.txt --progress-bar off

@@ -1,6 +1,7 @@
 import os
 
 import tensorflow as tf
+from keras.src.saving import serialization_lib
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
@@ -177,3 +178,18 @@ class SentencePieceTokenizerTest(TestCase):
             original_tokenizer(input_data),
             cloned_tokenizer(input_data),
         )
+
+    def test_safe_mode_proto_file_disallowed(self):
+        temp_dir = self.get_temp_dir()
+        proto_path = os.path.join(temp_dir, "model.spm")
+        with open(proto_path, "wb") as file:
+            file.write(b"dummy proto data")
+
+        tokenizer = SentencePieceTokenizer()
+        with serialization_lib.SafeModeScope(True):
+            with self.assertRaisesRegex(
+                ValueError,
+                r"Requested the loading of a proto file outside of the "
+                r"model archive.*Proto file: .*model\.spm",
+            ):
+                tokenizer.set_proto(proto_path)
