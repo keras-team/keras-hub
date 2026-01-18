@@ -121,8 +121,10 @@ class MetaCLIP2TextEncoder(Backbone):
             ops.equal(token_id_input, eos_token_id), dtype="int32"
         )
         eos_positions = ops.argmax(eos_mask, axis=-1)
-        batch_indices = ops.arange(ops.shape(token_id_input)[0])
-        pooled_output = sequence_output[batch_indices, eos_positions]
+        eos_positions = ops.expand_dims(eos_positions, axis=-1)
+        eos_positions = ops.expand_dims(eos_positions, axis=-1)
+        pooled_output = ops.take_along_axis(sequence_output, eos_positions, axis=1)
+        pooled_output = ops.squeeze(pooled_output, axis=1)
 
         outputs = {
             "sequence_output": sequence_output,
