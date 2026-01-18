@@ -193,6 +193,10 @@ def export_tokenizer(tokenizer, path):
     if tokenizer_type == "Gemma3Tokenizer":
         try:
             from transformers import GemmaTokenizerFast
+
+            # GemmaTokenizerFast will read tokenizer_config.json and tokenizer.model
+            # The added_tokens_decoder in tokenizer_config.json defines the token IDs
+            # This should properly generate tokenizer.json with vision tokens
             hf_tokenizer = GemmaTokenizerFast.from_pretrained(path)
             hf_tokenizer.save_pretrained(path)
         except Exception as e:
@@ -205,19 +209,21 @@ def export_tokenizer(tokenizer, path):
 
 def export_image_converter(backbone, path):
     """Export image converter config for vision models.
-    
+
     Args:
         backbone: The Keras backbone model.
         path: str. Path to save the exported config.
     """
     model_type = backbone.__class__.__name__
-    
+
     # Handle image converter config based on model type
     if model_type == "Gemma3Backbone":
         preprocessor_config = get_gemma3_image_converter_config(backbone)
         if preprocessor_config is not None:
             os.makedirs(path, exist_ok=True)
-            preprocessor_config_path = os.path.join(path, "preprocessor_config.json")
+            preprocessor_config_path = os.path.join(
+                path, "preprocessor_config.json"
+            )
             with open(preprocessor_config_path, "w") as f:
                 json.dump(preprocessor_config, f, indent=2)
 
@@ -227,16 +233,15 @@ def export_image_converter(backbone, path):
     #     ...
 
 
-
 def export_processor_config(backbone, path):
     """Export processor config for vision models.
-    
+
     Args:
         backbone: The Keras backbone model.
         path: str. Path to save the exported config.
     """
     model_type = backbone.__class__.__name__
-    
+
     # Handle processor config based on model type
     if model_type == "Gemma3Backbone":
         processor_config = get_gemma3_processor_config(backbone)
@@ -262,11 +267,11 @@ def export_to_safetensors(keras_model, path):
     """
     backbone = keras_model.backbone
     export_backbone(backbone, path, include_lm_head=True)
-    
+
     # Export image converter and processor configs for vision models
     export_image_converter(backbone, path)
     export_processor_config(backbone, path)
-    
+
     if (
         keras_model.preprocessor is not None
         and keras_model.preprocessor.tokenizer is None
