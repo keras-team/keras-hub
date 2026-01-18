@@ -255,7 +255,8 @@ def convert_weights(keras_hub_model, hf_model):
         port_dense(encoder_layers[i].dense_1, f"{prefix}.{i}.mlp.fc1")
         port_dense(encoder_layers[i].dense_2, f"{prefix}.{i}.mlp.fc2")
     port_ln(
-        keras_hub_model.vision_encoder.layer_norm, "vision_model.post_layernorm"
+        keras_hub_model.vision_encoder.post_layer_norm,
+        "vision_model.post_layernorm",
     )
     port_dense(keras_hub_model.vision_projection, "visual_projection")
 

@@ -1,6 +1,7 @@
 """MetaCLIP 2 vision encoder implementation."""
 
 from keras import layers
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
@@ -29,8 +30,8 @@ class MetaCLIP2VisionEncoder(Backbone):
             is used for the first Dense layer in a two-layer feedforward network
             for each transformer. Defaults to "quick_gelu".
         intermediate_output_index: optional int. The index of the intermediate
-            output. If specified, the output will become a dictionary with two
-            keys `"sequence_output"` and `"intermediate_output"`.
+            output. If specified, the output will include an additional
+            `"intermediate_output"` key.
         image_shape: tuple. The input shape without the batch size. Defaults to
             `(224, 224, 3)`.
         data_format: `None` or str. If specified, either `"channels_last"` or
@@ -46,6 +47,15 @@ class MetaCLIP2VisionEncoder(Backbone):
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
             be done at float32 precision regardless of dtype.
+
+    Output:
+        A dictionary with keys:
+        - `"sequence_output"`: The full sequence output of shape
+            `(batch_size, sequence_length, hidden_dim)`.
+        - `"pooled_output"`: The pooled CLS token output with post_layer_norm
+            applied, of shape `(batch_size, hidden_dim)`.
+        - `"intermediate_output"` (optional): If `intermediate_output_index`
+            is specified, the output at that layer.
     """
 
     def __init__(
@@ -108,8 +118,8 @@ class MetaCLIP2VisionEncoder(Backbone):
             )
             for i in range(num_layers)
         ]
-        self.layer_norm = layers.LayerNormalization(
-            epsilon=1e-5, dtype=dtype, name=f"{prefix}layer_norm"
+        self.post_layer_norm = layers.LayerNormalization(
+            epsilon=1e-5, dtype=dtype, name=f"{prefix}post_layer_norm"
         )
 
         # === Functional Model ===
@@ -121,15 +131,19 @@ class MetaCLIP2VisionEncoder(Backbone):
             x = block(x)
             if i == intermediate_output_index:
                 intermediate_output = x
-        sequence_output = self.layer_norm(x)
+        sequence_output = x
 
+        # Pool: extract CLS token (first token)
+        pooled_output = sequence_output[:, 0, :]
+        pooled_output = self.post_layer_norm(pooled_output)
+
+        outputs = {
+            "sequence_output": sequence_output,
+            "pooled_output": pooled_output,
+        }
         if intermediate_output_index is not None:
-            outputs = {
-                "sequence_output": sequence_output,
-                "intermediate_output": intermediate_output,
-            }
-        else:
-            outputs = sequence_output
+            outputs["intermediate_output"] = intermediate_output
+
         super().__init__(
             inputs={"images": image_input},
             outputs=outputs,

@@ -5,12 +5,6 @@ from keras import layers
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.metaclip_2.metaclip_2_layers import MetaCLIP2Head
-from keras_hub.src.models.metaclip_2.metaclip_2_layers import (
-    MetaCLIP2TextPooler,
-)
-from keras_hub.src.models.metaclip_2.metaclip_2_layers import (
-    MetaCLIP2VisionPooler,
-)
 
 
 @keras_hub_export("keras_hub.models.MetaCLIP2Backbone")
@@ -92,10 +86,6 @@ class MetaCLIP2Backbone(Backbone):
         # === Layers ===
         self.vision_encoder = vision_encoder
         self.text_encoder = text_encoder
-        self.vision_pooler = MetaCLIP2VisionPooler(
-            dtype=dtype, name="vision_pooler"
-        )
-        self.text_pooler = MetaCLIP2TextPooler(dtype=dtype, name="text_pooler")
         self.vision_projection = layers.Dense(
             projection_dim,
             use_bias=False,
@@ -153,8 +143,8 @@ class MetaCLIP2Backbone(Backbone):
             pooled output of the vision encoder.
         """
         vision_outputs = self.vision_encoder({"images": images})
-        vision_outputs = self.vision_pooler(vision_outputs)
-        return self.vision_projection(vision_outputs)
+        pooled_output = vision_outputs["pooled_output"]
+        return self.vision_projection(pooled_output)
 
     def get_text_embeddings(self, token_ids):
         """Get the embeddings from the text encoder.
@@ -167,8 +157,8 @@ class MetaCLIP2Backbone(Backbone):
             pooled output of the text encoder.
         """
         text_outputs = self.text_encoder({"token_ids": token_ids})
-        text_outputs = self.text_pooler(text_outputs, token_ids)
-        return self.text_projection(text_outputs)
+        pooled_output = text_outputs["pooled_output"]
+        return self.text_projection(pooled_output)
 
     def get_config(self):
         config = super().get_config()

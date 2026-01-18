@@ -1,6 +1,7 @@
 """MetaCLIP 2 text encoder implementation."""
 
 from keras import layers
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.token_and_position_embedding import (
@@ -29,14 +30,25 @@ class MetaCLIP2TextEncoder(Backbone):
             is used for the first Dense layer in a two-layer feedforward network
             for each transformer. Defaults to "quick_gelu".
         intermediate_output_index: optional int. The index of the intermediate
-            output. If specified, the output will become a dictionary with two
-            keys `"sequence_output"` and `"intermediate_output"`.
+            output. If specified, the output will include an additional
+            `"intermediate_output"` key.
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. Defaults to 77.
+        eos_token_id: int. The token ID for the EOS (end of sequence) token.
+            Used for pooling. Defaults to 2.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
             be done at float32 precision regardless of dtype.
+
+    Output:
+        A dictionary with keys:
+        - `"sequence_output"`: The full sequence output with layer_norm applied,
+            of shape `(batch_size, sequence_length, hidden_dim)`.
+        - `"pooled_output"`: The pooled EOS token output of shape
+            `(batch_size, hidden_dim)`.
+        - `"intermediate_output"` (optional): If `intermediate_output_index`
+            is specified, the output at that layer.
     """
 
     def __init__(
@@ -50,6 +62,7 @@ class MetaCLIP2TextEncoder(Backbone):
         intermediate_activation="quick_gelu",
         intermediate_output_index=None,
         max_sequence_length=77,
+        eos_token_id=2,
         dtype=None,
         name=None,
         **kwargs,
@@ -98,16 +111,26 @@ class MetaCLIP2TextEncoder(Backbone):
             x = block(x)
             if i == intermediate_output_index:
                 intermediate_output = x
+        # Apply layer_norm to full sequence (before pooling)
         x = self.layer_norm(x)
         sequence_output = x
 
+        # Pool: extract at EOS token position
+        # Find the position of EOS token (highest token ID position as fallback)
+        eos_mask = ops.cast(
+            ops.equal(token_id_input, eos_token_id), dtype="int32"
+        )
+        eos_positions = ops.argmax(eos_mask, axis=-1)
+        batch_indices = ops.arange(ops.shape(token_id_input)[0])
+        pooled_output = sequence_output[batch_indices, eos_positions]
+
+        outputs = {
+            "sequence_output": sequence_output,
+            "pooled_output": pooled_output,
+        }
         if intermediate_output_index is not None:
-            outputs = {
-                "sequence_output": sequence_output,
-                "intermediate_output": intermediate_output,
-            }
-        else:
-            outputs = sequence_output
+            outputs["intermediate_output"] = intermediate_output
+
         super().__init__(
             inputs={"token_ids": token_id_input},
             outputs=outputs,
@@ -126,6 +149,7 @@ class MetaCLIP2TextEncoder(Backbone):
         self.intermediate_dim = intermediate_dim
         self.intermediate_activation = intermediate_activation
         self.intermediate_output_index = intermediate_output_index
+        self.eos_token_id = eos_token_id
 
     def get_config(self):
         config = super().get_config()
@@ -140,6 +164,7 @@ class MetaCLIP2TextEncoder(Backbone):
                 "intermediate_activation": self.intermediate_activation,
                 "intermediate_output_index": self.intermediate_output_index,
                 "max_sequence_length": self.max_sequence_length,
+                "eos_token_id": self.eos_token_id,
             }
         )
         return config

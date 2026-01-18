@@ -220,48 +220,6 @@ class MetaCLIP2EncoderLayer(layers.Layer):
         return config
 
 
-class MetaCLIP2VisionPooler(layers.Layer):
-    """Vision pooler layer for MetaCLIP 2.
-
-    Extracts the first token (CLS token) from the sequence of vision embeddings
-    as the pooled output.
-
-    Call arguments:
-        vision_embeddings: A tensor of shape
-            `(batch_size, sequence_length, hidden_dim)`.
-    """
-
-    def call(self, vision_embeddings):
-        return vision_embeddings[:, 0, :]
-
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0], input_shape[-1])
-
-
-class MetaCLIP2TextPooler(layers.Layer):
-    """Text pooler layer for MetaCLIP 2.
-
-    Extracts the text embeddings at the positions of EOS tokens as the pooled
-    outputs.
-
-    Call arguments:
-        text_embeddings: A tensor of shape
-            `(batch_size, sequence_length, hidden_dim)`.
-        token_ids: A tensor of shape `(batch_size, max_tokens)`, used to
-            identify the positions of EOS tokens.
-    """
-
-    def call(self, text_embeddings, token_ids):
-        eos_index = ops.argmax(token_ids, axis=-1)
-        eos_index = ops.expand_dims(eos_index, axis=-1)
-        eos_index = ops.expand_dims(eos_index, axis=-1)
-        pooled_outputs = ops.take_along_axis(text_embeddings, eos_index, axis=1)
-        return ops.squeeze(pooled_outputs, axis=1)
-
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0], input_shape[-1])
-
-
 class MetaCLIP2Head(layers.Layer):
     """Head layer for MetaCLIP 2.
 
