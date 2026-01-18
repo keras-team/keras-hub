@@ -1,11 +1,5 @@
 """Convert MetaCLIP 2 checkpoints.
 
-MetaCLIP 2 Worldwide models (non-distilled):
-- ViT-H-14-quickgelu-worldwide: 224 resolution, ~986M params
-- ViT-H-14-378-worldwide: 378 resolution, ~986M params
-- ViT-bigG-14-worldwide: 224 resolution, ~1.4B params
-- ViT-bigG-14-378-worldwide: 378 resolution, ~1.4B params
-
 export KAGGLE_USERNAME=XXX
 export KAGGLE_KEY=XXX
 
