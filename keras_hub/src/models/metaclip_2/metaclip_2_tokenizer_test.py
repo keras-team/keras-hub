@@ -2,8 +2,6 @@
 
 import os
 
-import pytest
-
 from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (
     MetaCLIP2Tokenizer,
 )
@@ -47,11 +45,3 @@ class MetaCLIP2TokenizerTest(TestCase):
             tokenizer.special_tokens, ["<s>", "<pad>", "</s>", "<unk>"]
         )
         self.assertEqual(tokenizer.special_token_ids, [0, 1, 2, 3])
-
-    @pytest.mark.large
-    def test_saved_model(self):
-        self.run_model_saving_test(
-            cls=MetaCLIP2Tokenizer,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-        )

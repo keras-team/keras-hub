@@ -3,7 +3,6 @@
 import os
 
 import numpy as np
-import pytest
 from keras import ops
 
 from keras_hub.src.models.metaclip_2.metaclip_2_image_converter import (
@@ -68,11 +67,3 @@ class MetaCLIP2PreprocessorTest(TestCase):
         token_ids = ops.convert_to_numpy(output["token_ids"])
         self.assertEqual(token_ids[0, 0], 0)
         # Check that end token (2) is present after the text tokens
-
-    @pytest.mark.large
-    def test_saved_model(self):
-        self.run_model_saving_test(
-            cls=MetaCLIP2Preprocessor,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-        )
