@@ -103,15 +103,15 @@ class MetaCLIP2VisionEmbedding(layers.Layer):
         )
         return config
 
-    def compute_output_shape(self, input_shape):
-        output_shape = [input_shape[0], None, self.hidden_dim]
+    def compute_output_shape(self, inputs_shape):
+        output_shape = [inputs_shape[0], None, self.hidden_dim]
         if self.data_format == "channels_last":
-            if input_shape[1] is not None and input_shape[2] is not None:
-                patch_num = input_shape[1] // self.patch_size
+            if inputs_shape[1] is not None and inputs_shape[2] is not None:
+                patch_num = inputs_shape[1] // self.patch_size
                 output_shape[1] = patch_num**2 + 1
         else:
-            if input_shape[2] is not None and input_shape[3] is not None:
-                patch_num = input_shape[2] // self.patch_size
+            if inputs_shape[2] is not None and inputs_shape[3] is not None:
+                patch_num = inputs_shape[2] // self.patch_size
                 output_shape[1] = patch_num**2 + 1
         return output_shape
 
@@ -182,8 +182,8 @@ class MetaCLIP2EncoderLayer(layers.Layer):
         input_shape = self.dense_1.compute_output_shape(input_shape)
         self.dense_2.build(input_shape)
 
-    def compute_output_shape(self, inputs_shape):
-        outputs_shape = list(inputs_shape)
+    def compute_output_shape(self, x_shape):
+        outputs_shape = list(x_shape)
         outputs_shape[-1] = self.hidden_dim
         return outputs_shape
 
@@ -230,8 +230,8 @@ class MetaCLIP2VisionPooler(layers.Layer):
     def call(self, vision_embeddings):
         return vision_embeddings[:, 0, :]
 
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0], input_shape[-1])
+    def compute_output_shape(self, vision_embeddings_shape):
+        return (vision_embeddings_shape[0], vision_embeddings_shape[-1])
 
 
 class MetaCLIP2TextPooler(layers.Layer):
