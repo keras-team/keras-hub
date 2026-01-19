@@ -65,15 +65,11 @@ class MetaCLIP2VisionEmbedding(layers.Layer):
             dtype=self.variable_dtype,
             name="class_embedding",
         )
-        self.position_ids = self.add_weight(
-            shape=(1, self.num_positions),
-            initializer="zeros",
-            dtype=int,
-            trainable=False,
-            name="position_ids",
-        )
         self.patch_embedding.build(input_shape)
-        self.position_embedding.build(self.position_ids.shape)
+        self.position_embedding.build((1, self.num_positions))
+        self.position_ids = ops.expand_dims(
+            ops.arange(self.num_positions), axis=0
+        )
 
     def call(self, inputs, training=None):
         x = inputs

@@ -179,12 +179,6 @@ def convert_weights(backbone, loader, transformers_config):
         backbone.vision_encoder.embedding.class_embedding,
         "vision_model.embeddings.class_embedding",
     )
-    # Position IDs (buffer)
-    loader.port_weight(
-        backbone.vision_encoder.embedding.position_ids,
-        "vision_model.embeddings.position_ids",
-    )
-    # Pre layer norm
     port_ln(
         backbone.vision_encoder.pre_layer_norm,
         "vision_model.pre_layrnorm",

@@ -219,10 +219,6 @@ def convert_weights(keras_hub_model, hf_model):
         keras_hub_model.vision_encoder.embedding.class_embedding,
         "vision_model.embeddings.class_embedding",
     )
-    port_weights(
-        keras_hub_model.vision_encoder.embedding.position_ids,
-        "vision_model.embeddings.position_ids",
-    )
     port_ln(
         keras_hub_model.vision_encoder.pre_layer_norm,
         "vision_model.pre_layrnorm",
