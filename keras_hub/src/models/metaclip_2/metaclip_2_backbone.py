@@ -5,11 +5,12 @@ from keras import layers
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.metaclip_2.metaclip_2_layers import MetaCLIP2Head
-from keras_hub.src.models.metaclip_2.metaclip_2_layers import MetaCLIP2VisionPooler
-from keras_hub.src.models.metaclip_2.metaclip_2_layers import MetaCLIP2TextPooler
-
-
-
+from keras_hub.src.models.metaclip_2.metaclip_2_layers import (
+    MetaCLIP2TextPooler,
+)
+from keras_hub.src.models.metaclip_2.metaclip_2_layers import (
+    MetaCLIP2VisionPooler,
+)
 
 
 @keras_hub_export("keras_hub.models.MetaCLIP2Backbone")
@@ -98,7 +99,7 @@ class MetaCLIP2Backbone(Backbone):
             dtype=dtype, name="vision_pooler"
         )
         self.text_pooler = MetaCLIP2TextPooler(dtype=dtype, name="text_pooler")
-        
+
         self.vision_projection = layers.Dense(
             projection_dim,
             use_bias=False,

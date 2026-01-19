@@ -11,6 +11,7 @@ from keras_hub.src.models.metaclip_2.metaclip_2_layers import (
     MetaCLIP2EncoderLayer,
 )
 
+
 @keras_hub_export("keras_hub.models.MetaCLIP2TextEncoder")
 class MetaCLIP2TextEncoder(Backbone):
     """MetaCLIP 2 text encoder.
@@ -101,7 +102,7 @@ class MetaCLIP2TextEncoder(Backbone):
         # Apply layer_norm to full sequence (before pooling)
         x = self.layer_norm(x)
         sequence_output = x
-        
+
         if intermediate_output_index is not None:
             outputs = {
                 "sequence_output": sequence_output,

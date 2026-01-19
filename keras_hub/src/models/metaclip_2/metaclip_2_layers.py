@@ -65,11 +65,18 @@ class MetaCLIP2VisionEmbedding(layers.Layer):
             dtype=self.variable_dtype,
             name="class_embedding",
         )
-        self.patch_embedding.build(input_shape)
-        self.position_embedding.build((1, self.num_positions))
-        self.position_ids = ops.expand_dims(
-            ops.arange(self.num_positions), axis=0
+        self.position_ids = self.add_weight(
+            shape=(1, self.num_positions),
+            initializer="zeros",
+            # Let the backend determine the int dtype. For example, tf
+            # requires int64 for correct device placement, whereas jax and torch
+            # don't.
+            dtype=int,
+            trainable=False,
+            name="position_ids",
         )
+        self.patch_embedding.build(input_shape)
+        self.position_embedding.build(self.position_ids.shape)
 
     def call(self, inputs, training=None):
         x = inputs
@@ -230,8 +237,8 @@ class MetaCLIP2VisionPooler(layers.Layer):
     def call(self, vision_embeddings):
         return vision_embeddings[:, 0, :]
 
-    def compute_output_shape(self, vision_embeddings_shape):
-        return (vision_embeddings_shape[0], vision_embeddings_shape[-1])
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[-1])
 
 
 class MetaCLIP2TextPooler(layers.Layer):
@@ -266,8 +273,8 @@ class MetaCLIP2TextPooler(layers.Layer):
         )
         return ops.squeeze(pooled_output, axis=1)
 
-    def compute_output_shape(self, text_embeddings_shape, token_ids_shape):
-        return (text_embeddings_shape[0], text_embeddings_shape[-1])
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[-1])
 
     def get_config(self):
         config = super().get_config()
