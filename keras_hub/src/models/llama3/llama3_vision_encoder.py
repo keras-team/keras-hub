@@ -36,6 +36,10 @@ class GatedPositionalEmbedding(layers.Layer):
             name="tile_embedding",
         )
 
+    def build(self, input_shape):
+        self.tile_embedding.build((None,))
+        super().build(input_shape)
+
     def call(self, x, tile_ids=None):
         pos_embed = self.embedding
         if tile_ids is not None:
@@ -76,6 +80,10 @@ class AspectRatioEmbedding(layers.Layer):
             initializer="zeros",
             trainable=True,
         )
+
+    def build(self, input_shape):
+        self.embedding.build((None,))
+        super().build(input_shape)
 
     def call(self, x, aspect_ratio_ids=None):
         if aspect_ratio_ids is None:

@@ -78,6 +78,98 @@ def convert_backbone_config(hf_config):
     }
 
 
+def _convert_vision_transformer_layer(keras_layer, hf_layer, is_gated=False):
+    """Convert a single vision transformer layer (local or global).
+
+    Args:
+        keras_layer: The Keras TransformerEncoder layer.
+        hf_layer: The HuggingFace MllamaVisionEncoderLayer.
+        is_gated: Whether this is a gated (global) layer with
+            gate_attn/gate_ffn.
+    """
+    # Get attention config
+    attn = keras_layer._self_attention_layer
+    num_heads = attn._num_heads
+    head_dim = attn._key_dim
+    hidden_dim = num_heads * head_dim
+
+    # Layer norms
+    keras_layer._self_attention_layer_norm.gamma.assign(
+        hf_layer.input_layernorm.weight.detach().cpu().numpy()
+    )
+    keras_layer._self_attention_layer_norm.beta.assign(
+        hf_layer.input_layernorm.bias.detach().cpu().numpy()
+    )
+
+    # Self-attention QKV
+    attn._query_dense.kernel.assign(
+        hf_layer.self_attn.q_proj.weight.T.reshape(
+            hidden_dim, num_heads, head_dim
+        )
+        .detach()
+        .cpu()
+        .numpy()
+    )
+    attn._key_dense.kernel.assign(
+        hf_layer.self_attn.k_proj.weight.T.reshape(
+            hidden_dim, num_heads, head_dim
+        )
+        .detach()
+        .cpu()
+        .numpy()
+    )
+    attn._value_dense.kernel.assign(
+        hf_layer.self_attn.v_proj.weight.T.reshape(
+            hidden_dim, num_heads, head_dim
+        )
+        .detach()
+        .cpu()
+        .numpy()
+    )
+    attn._output_dense.kernel.assign(
+        hf_layer.self_attn.o_proj.weight.T.reshape(
+            num_heads, head_dim, hidden_dim
+        )
+        .detach()
+        .cpu()
+        .numpy()
+    )
+
+    # Vision Gating (Only present in Global/Gated Layers)
+    if is_gated and hasattr(hf_layer, "gate_attn"):
+        # Note: Keras TransformerEncoder doesn't have gate_attn/gate_ffn
+        # by default. This would require a custom layer.
+        if hasattr(keras_layer, "gate_attn"):
+            keras_layer.gate_attn.assign(
+                hf_layer.gate_attn.detach().cpu().numpy()
+            )
+            keras_layer.gate_ffn.assign(
+                hf_layer.gate_ffn.detach().cpu().numpy()
+            )
+
+    # FFN layer norm
+    keras_layer._feedforward_layer_norm.gamma.assign(
+        hf_layer.post_attention_layernorm.weight.detach().cpu().numpy()
+    )
+    keras_layer._feedforward_layer_norm.beta.assign(
+        hf_layer.post_attention_layernorm.bias.detach().cpu().numpy()
+    )
+
+    # FFN (MLP)
+    keras_layer._feedforward_intermediate_dense.kernel.assign(
+        hf_layer.mlp.fc1.weight.T.detach().cpu().numpy()
+    )
+    keras_layer._feedforward_intermediate_dense.bias.assign(
+        hf_layer.mlp.fc1.bias.detach().cpu().numpy()
+    )
+    keras_layer._feedforward_output_dense.kernel.assign(
+        hf_layer.mlp.fc2.weight.T.detach().cpu().numpy()
+    )
+    keras_layer._feedforward_output_dense.bias.assign(
+        hf_layer.mlp.fc2.bias.detach().cpu().numpy()
+    )
+
+
 def convert_vision_encoder_weights(keras_encoder, hf_model):
     """Convert vision encoder weights from HuggingFace to Keras."""
     hf_vision = hf_model.model.vision_model
@@ -104,132 +196,73 @@ def convert_vision_encoder_weights(keras_encoder, hf_model):
         hf_vision.gated_positional_embedding.gate.detach().cpu().numpy()
     )
     # Tile embedding inside gated pos embedding
-    keras_encoder.gated_positional_embedding.tile_embedding.embeddings.assign(
-        hf_vision.gated_positional_embedding.tile_embedding.weight.detach()
-        .cpu()
-        .numpy()
+    keras_encoder.gated_positional_embedding.tile_embedding.set_weights(
+        [
+            hf_vision.gated_positional_embedding.tile_embedding.weight.detach()
+            .cpu()
+            .numpy()
+        ]
     )
 
     # 4. Pre/Post Tile Embeddings (MllamaPrecomputedAspectRatioEmbedding)
-    keras_encoder.pre_tile_positional_embedding.embedding.embeddings.assign(
-        hf_vision.pre_tile_positional_embedding.embedding.weight.detach()
-        .cpu()
-        .numpy()
+    keras_encoder.pre_tile_positional_embedding.embedding.set_weights(
+        [
+            hf_vision.pre_tile_positional_embedding.embedding.weight.detach()
+            .cpu()
+            .numpy()
+        ]
     )
     keras_encoder.pre_tile_positional_embedding.gate.assign(
         hf_vision.pre_tile_positional_embedding.gate.detach().cpu().numpy()
     )
 
-    keras_encoder.post_tile_positional_embedding.embedding.embeddings.assign(
-        hf_vision.post_tile_positional_embedding.embedding.weight.detach()
-        .cpu()
-        .numpy()
+    keras_encoder.post_tile_positional_embedding.embedding.set_weights(
+        [
+            hf_vision.post_tile_positional_embedding.embedding.weight.detach()
+            .cpu()
+            .numpy()
+        ]
     )
     keras_encoder.post_tile_positional_embedding.gate.assign(
         hf_vision.post_tile_positional_embedding.gate.detach().cpu().numpy()
     )
 
-    print("   Converting Transformer Layers (Local + Global)...")
+    print("   Converting Transformer Layers (Local)...")
 
-    # 5. Transformer Layers
-    # HF uses 'transformer' (local) and 'global_transformer' (global)
+    # 5. LOCAL Transformer Layers
+    # HF: transformer.layers -> Keras: transformer_layers
     hf_local_layers = hf_vision.transformer.layers
-    hf_global_layers = hf_vision.global_transformer.layers
-    all_hf_layers = list(hf_local_layers) + list(hf_global_layers)
+    keras_local_layers = keras_encoder.transformer_layers
 
-    # Verify we have the right number of layers in Keras
-    # Assuming Keras stores them in a single list or you combine them here
-    keras_layers = keras_encoder.transformer_layers
-
-    if len(keras_layers) != len(all_hf_layers):
+    if len(keras_local_layers) != len(hf_local_layers):
         print(
-            f"WARNING: Layer mismatch! Keras: {len(keras_layers)}, "
-            f"HF: {len(all_hf_layers)}"
+            f"WARNING: Local layer mismatch! Keras: {len(keras_local_layers)}, "
+            f"HF: {len(hf_local_layers)}"
         )
 
     for i, (keras_layer, hf_layer) in enumerate(
-        zip(keras_layers, all_hf_layers)
+        zip(keras_local_layers, hf_local_layers)
     ):
-        # Get attention config
-        attn = keras_layer._self_attention_layer
-        num_heads = attn._num_heads
-        head_dim = attn._key_dim
-        hidden_dim = num_heads * head_dim
+        _convert_vision_transformer_layer(keras_layer, hf_layer, is_gated=False)
 
-        # Layer norms
-        keras_layer._self_attention_layer_norm.gamma.assign(
-            hf_layer.input_layernorm.weight.detach().cpu().numpy()
-        )
-        keras_layer._self_attention_layer_norm.beta.assign(
-            hf_layer.input_layernorm.bias.detach().cpu().numpy()
-        )
+    print("   Converting Transformer Layers (Global)...")
 
-        # Self-attention QKV
-        attn._query_dense.kernel.assign(
-            hf_layer.self_attn.q_proj.weight.T.reshape(
-                hidden_dim, num_heads, head_dim
-            )
-            .detach()
-            .cpu()
-            .numpy()
-        )
-        attn._key_dense.kernel.assign(
-            hf_layer.self_attn.k_proj.weight.T.reshape(
-                hidden_dim, num_heads, head_dim
-            )
-            .detach()
-            .cpu()
-            .numpy()
-        )
-        attn._value_dense.kernel.assign(
-            hf_layer.self_attn.v_proj.weight.T.reshape(
-                hidden_dim, num_heads, head_dim
-            )
-            .detach()
-            .cpu()
-            .numpy()
-        )
-        attn._output_dense.kernel.assign(
-            hf_layer.self_attn.o_proj.weight.T.reshape(
-                num_heads, head_dim, hidden_dim
-            )
-            .detach()
-            .cpu()
-            .numpy()
+    # 6. GLOBAL Transformer Layers
+    # HF: global_transformer.layers -> Keras: global_transformer_layers
+    hf_global_layers = hf_vision.global_transformer.layers
+    keras_global_layers = keras_encoder.global_transformer_layers
+
+    if len(keras_global_layers) != len(hf_global_layers):
+        print(
+            f"WARNING: Global layer mismatch! "
+            f"Keras: {len(keras_global_layers)}, "
+            f"HF: {len(hf_global_layers)}"
         )
 
-        # Vision Gating (Only present in Global Layers)
-        # Check if HF layer has gate_attn (MllamaVisionEncoderLayer)
-        if hasattr(hf_layer, "gate_attn"):
-            # Keras layer should also have this if configured correctly
-            keras_layer.gate_attn.assign(
-                hf_layer.gate_attn.detach().cpu().numpy()
-            )
-            keras_layer.gate_ffn.assign(
-                hf_layer.gate_ffn.detach().cpu().numpy()
-            )
-
-        # FFN layer norm
-        keras_layer._feedforward_layer_norm.gamma.assign(
-            hf_layer.post_attention_layernorm.weight.detach().cpu().numpy()
-        )
-        keras_layer._feedforward_layer_norm.beta.assign(
-            hf_layer.post_attention_layernorm.bias.detach().cpu().numpy()
-        )
-
-        # FFN (MLP)
-        keras_layer._feedforward_intermediate_dense.kernel.assign(
-            hf_layer.mlp.fc1.weight.T.detach().cpu().numpy()
-        )
-        keras_layer._feedforward_intermediate_dense.bias.assign(
-            hf_layer.mlp.fc1.bias.detach().cpu().numpy()
-        )
-        keras_layer._feedforward_output_dense.kernel.assign(
-            hf_layer.mlp.fc2.weight.T.detach().cpu().numpy()
-        )
-        keras_layer._feedforward_output_dense.bias.assign(
-            hf_layer.mlp.fc2.bias.detach().cpu().numpy()
-        )
+    for i, (keras_layer, hf_layer) in enumerate(
+        zip(keras_global_layers, hf_global_layers)
+    ):
+        _convert_vision_transformer_layer(keras_layer, hf_layer, is_gated=True)
 
     # 6. Global Layer Norms (Pre/Post)
     print("   Converting Global Layer Norms...")
