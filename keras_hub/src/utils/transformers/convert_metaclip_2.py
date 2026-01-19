@@ -11,11 +11,41 @@ from keras_hub.src.models.metaclip_2.metaclip_2_text_encoder import (
 from keras_hub.src.models.metaclip_2.metaclip_2_vision_encoder import (
     MetaCLIP2VisionEncoder,
 )
-from keras_hub.src.utils.preset_utils import HF_TOKENIZER_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = MetaCLIP2Backbone
+
+
+def load_image_converter_config(preset, transformers_config):
+    """Load image converter config from HuggingFace preprocessor config."""
+    preprocessor_config = load_json(preset, "preprocessor_config.json")
+    if preprocessor_config is None:
+        return None
+
+    mean = preprocessor_config.get("image_mean", [0.48145466, 0.4578275, 0.40821073])
+    std = preprocessor_config.get("image_std", [0.26862954, 0.26130258, 0.27577711])
+    rescale_factor = preprocessor_config.get("rescale_factor", 1.0 / 255.0)
+
+    # Calculate scale and offset for normalization
+    # The formula is: (pixel * rescale_factor - mean) / std
+    # Which can be rewritten as: pixel * (rescale_factor / std) + (-mean / std)
+    scale = [rescale_factor / s for s in std]
+    offset = [-m / s for m, s in zip(mean, std)]
+
+    # Get image size from vision config or preprocessor config
+    if "vision_config" in transformers_config:
+        image_size = transformers_config["vision_config"].get("image_size", 224)
+    else:
+        crop_size = preprocessor_config.get("crop_size", {})
+        image_size = crop_size.get("height", 224)
+
+    return {
+        "image_size": (image_size, image_size),
+        "scale": scale,
+        "offset": offset,
+        "interpolation": "bicubic",
+    }
 
 
 def convert_backbone_config(transformers_config):
@@ -182,7 +212,9 @@ def convert_weights(backbone, loader, transformers_config):
         port_dense(encoder_layers[i].dense_1, f"{prefix}.{i}.mlp.fc1")
         port_dense(encoder_layers[i].dense_2, f"{prefix}.{i}.mlp.fc2")
     # Post layer norm
-    port_ln(backbone.vision_encoder.layer_norm, "vision_model.post_layernorm")
+    port_ln(
+        backbone.vision_encoder.post_layer_norm, "vision_model.post_layernorm"
+    )
     # Vision projection
     port_dense(backbone.vision_projection, "visual_projection")
 
@@ -234,9 +266,6 @@ def convert_tokenizer(cls, preset, **kwargs):
     MetaCLIP 2 uses the XLM-V tokenizer (facebook/xlm-v-base) which is a
     SentencePiece-based multilingual tokenizer.
     """
-    # Check if tokenizer config exists to get the tokenizer path
-    tokenizer_config = load_json(preset, HF_TOKENIZER_CONFIG_FILE)
-
     # Get the SentencePiece model file
     spm_path = get_file(preset, "sentencepiece.bpe.model")
 

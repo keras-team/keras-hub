@@ -13,7 +13,7 @@ backbone_presets = {
                 "worldwide huge model (ViT-H-14-quickgelu-worldwide) trained on "
                 "29B seen pairs with QuickGELU activation."
             ),
-            "params": 986109698,
+            "params": 1858784002,
             "path": "metaclip_2",
         },
         "kaggle_handle": "kaggle://keras/metaclip_2/keras/metaclip_2_vit_huge_patch14_224/1",
@@ -27,7 +27,7 @@ backbone_presets = {
                 "worldwide huge model (ViT-H-14-378-worldwide) trained on "
                 "29B seen pairs."
             ),
-            "params": 986109698,
+            "params": 1859389185,
             "path": "metaclip_2",
         },
         "kaggle_handle": "kaggle://keras/metaclip_2/keras/metaclip_2_vit_huge_patch14_378/1",
@@ -41,7 +41,7 @@ backbone_presets = {
                 "worldwide giant model (ViT-bigG-14-worldwide) trained on "
                 "29B seen pairs."
             ),
-            "params": 1366678530,
+            "params": 3630409985,
             "path": "metaclip_2",
         },
         "kaggle_handle": "kaggle://keras/metaclip_2/keras/metaclip_2_vit_giant_patch14_224/1",
@@ -55,7 +55,7 @@ backbone_presets = {
                 "worldwide giant model (ViT-bigG-14-378-worldwide) trained on "
                 "29B seen pairs."
             ),
-            "params": 1366678530,
+            "params": 3631197057,
             "path": "metaclip_2",
         },
         "kaggle_handle": "kaggle://keras/metaclip_2/keras/metaclip_2_vit_giant_patch14_378/1",
