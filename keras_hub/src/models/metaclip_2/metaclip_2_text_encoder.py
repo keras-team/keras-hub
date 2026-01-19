@@ -1,7 +1,6 @@
 """MetaCLIP 2 text encoder implementation."""
 
 from keras import layers
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.token_and_position_embedding import (
@@ -10,6 +9,9 @@ from keras_hub.src.layers.modeling.token_and_position_embedding import (
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.metaclip_2.metaclip_2_layers import (
     MetaCLIP2EncoderLayer,
+)
+from keras_hub.src.models.metaclip_2.metaclip_2_layers import (
+    MetaCLIP2TextPooler,
 )
 
 
@@ -100,6 +102,11 @@ class MetaCLIP2TextEncoder(Backbone):
         self.layer_norm = layers.LayerNormalization(
             epsilon=1e-5, dtype=dtype, name=f"{prefix}layer_norm"
         )
+        self.pooler = MetaCLIP2TextPooler(
+            eos_token_id=eos_token_id,
+            dtype=dtype,
+            name=f"{prefix}pooler",
+        )
 
         # === Functional Model ===
         token_id_input = layers.Input(
@@ -115,18 +122,8 @@ class MetaCLIP2TextEncoder(Backbone):
         x = self.layer_norm(x)
         sequence_output = x
 
-        # Pool: extract at EOS token position
-        # Find the position of EOS token (highest token ID position as fallback)
-        eos_mask = ops.cast(
-            ops.equal(token_id_input, eos_token_id), dtype="int32"
-        )
-        eos_positions = ops.argmax(eos_mask, axis=-1)
-        eos_positions = ops.expand_dims(eos_positions, axis=-1)
-        eos_positions = ops.expand_dims(eos_positions, axis=-1)
-        pooled_output = ops.take_along_axis(
-            sequence_output, eos_positions, axis=1
-        )
-        pooled_output = ops.squeeze(pooled_output, axis=1)
+        # Pool: extract at EOS token position using pooler layer
+        pooled_output = self.pooler(sequence_output, token_id_input)
 
         outputs = {
             "sequence_output": sequence_output,

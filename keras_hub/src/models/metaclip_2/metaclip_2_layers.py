@@ -216,6 +216,65 @@ class MetaCLIP2EncoderLayer(layers.Layer):
         return config
 
 
+class MetaCLIP2VisionPooler(layers.Layer):
+    """Vision pooler layer for MetaCLIP 2.
+
+    Extracts the first token (CLS token at index `0`) from the sequence of
+    the vision embeddings as the pooled output.
+
+    Call arguments:
+        vision_embeddings: A tensor of shape
+            `(batch_size, sequence_length, hidden_dim)`.
+    """
+
+    def call(self, vision_embeddings):
+        return vision_embeddings[:, 0, :]
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[-1])
+
+
+class MetaCLIP2TextPooler(layers.Layer):
+    """Text pooler layer for MetaCLIP 2.
+
+    Extracts the text embeddings at the positions of EOS tokens as the pooled
+    outputs.
+
+    Args:
+        eos_token_id: int. The token ID for the EOS token. Defaults to 2.
+
+    Call arguments:
+        text_embeddings: A tensor of shape
+            `(batch_size, sequence_length, hidden_dim)`.
+        token_ids: A tensor of shape `(batch_size, sequence_length)`, used to
+            identify the positions of EOS tokens.
+    """
+
+    def __init__(self, eos_token_id=2, **kwargs):
+        super().__init__(**kwargs)
+        self.eos_token_id = eos_token_id
+
+    def call(self, text_embeddings, token_ids):
+        eos_mask = ops.cast(
+            ops.equal(token_ids, self.eos_token_id), dtype="int32"
+        )
+        eos_positions = ops.argmax(eos_mask, axis=-1)
+        eos_positions = ops.expand_dims(eos_positions, axis=-1)
+        eos_positions = ops.expand_dims(eos_positions, axis=-1)
+        pooled_output = ops.take_along_axis(
+            text_embeddings, eos_positions, axis=1
+        )
+        return ops.squeeze(pooled_output, axis=1)
+
+    def compute_output_shape(self, text_embeddings_shape, token_ids_shape):
+        return (text_embeddings_shape[0], text_embeddings_shape[-1])
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"eos_token_id": self.eos_token_id})
+        return config
+
+
 class MetaCLIP2Head(layers.Layer):
     """Head layer for MetaCLIP 2.
 

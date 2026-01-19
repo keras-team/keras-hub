@@ -66,12 +66,14 @@ class MetaCLIP2BackboneTest(TestCase):
     def test_vision_encoder(self):
         output = self.vision_encoder({"images": self.input_data["images"]})
         self.assertEqual(
-            output.shape, (2, 5, 32)
+            output["sequence_output"].shape, (2, 5, 32)
         )  # 5 = (32/16)^2 + 1 cls token
+        self.assertEqual(output["pooled_output"].shape, (2, 32))
 
     def test_text_encoder(self):
         output = self.text_encoder({"token_ids": self.input_data["token_ids"]})
-        self.assertEqual(output.shape, (2, 16, 32))
+        self.assertEqual(output["sequence_output"].shape, (2, 16, 32))
+        self.assertEqual(output["pooled_output"].shape, (2, 32))
 
     def test_get_vision_embeddings(self):
         model = MetaCLIP2Backbone(**self.init_kwargs)
