@@ -231,6 +231,7 @@ def tensor_to_list(inputs):
     Args:
         inputs: Input tensor, or dict/list/tuple of input tensors.
     """
+    assert_tf_installed("tensor_to_list")
     if not isinstance(inputs, (tf.RaggedTensor, tf.Tensor)):
         inputs = tf.convert_to_tensor(inputs)
     if isinstance(inputs, tf.RaggedTensor):
@@ -246,6 +247,7 @@ def tensor_to_list(inputs):
 
 def convert_to_ragged_batch(inputs):
     """Ensure a tf.Tensor is a ragged rank 2 tensor."""
+    assert_tf_installed("convert_to_ragged_batch")
     if not isinstance(inputs, (tf.RaggedTensor, tf.Tensor)):
         inputs = tf.convert_to_tensor(inputs)
     unbatched = inputs.shape.rank == 1
@@ -259,6 +261,7 @@ def convert_to_ragged_batch(inputs):
 
 def truncate_at_token(inputs, token, mask):
     """Truncate at first instance of `token`, ignoring `mask`."""
+    assert_tf_installed("truncate_at_token")
     matches = (inputs == token) & (~mask)
     end_indices = tf.cast(tf.math.argmax(matches, -1), "int32")
     end_indices = tf.where(end_indices == 0, tf.shape(inputs)[-1], end_indices)
@@ -267,10 +270,19 @@ def truncate_at_token(inputs, token, mask):
 
 def strip_to_ragged(token_ids, mask, ids_to_strip):
     """Remove masked and special tokens from a sequence before detokenizing."""
+    assert_tf_installed("strip_to_ragged")
     mask = tf.cast(mask, "bool")
     for id in ids_to_strip:
         mask = mask & (token_ids != id)
     return tf.ragged.boolean_mask(token_ids, mask)
+
+
+def assert_tf_installed(symbol_name):
+    if tf is None:
+        raise ImportError(
+            f"{symbol_name} requires `tensorflow`. "
+            "Run `pip install tensorflow` to install it."
+        )
 
 
 def assert_tf_libs_installed(symbol_name):
