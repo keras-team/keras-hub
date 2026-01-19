@@ -123,7 +123,9 @@ class MetaCLIP2TextEncoder(Backbone):
         eos_positions = ops.argmax(eos_mask, axis=-1)
         eos_positions = ops.expand_dims(eos_positions, axis=-1)
         eos_positions = ops.expand_dims(eos_positions, axis=-1)
-        pooled_output = ops.take_along_axis(sequence_output, eos_positions, axis=1)
+        pooled_output = ops.take_along_axis(
+            sequence_output, eos_positions, axis=1
+        )
         pooled_output = ops.squeeze(pooled_output, axis=1)
 
         outputs = {

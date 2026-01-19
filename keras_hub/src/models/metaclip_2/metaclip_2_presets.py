@@ -10,7 +10,7 @@ backbone_presets = {
             "description": (
                 "986 million parameter, 32-layer for vision and 24-layer for "
                 "text, patch size of 14, image resolution 224x224. MetaCLIP 2 "
-                "worldwide huge model (ViT-H-14-quickgelu-worldwide) trained on "
+                "worldwide huge model (ViT-H-14-quickgelu-worldwide) trained on "  # noqa
                 "29B seen pairs with QuickGELU activation."
             ),
             "params": 1858784002,

@@ -23,8 +23,12 @@ def load_image_converter_config(preset, transformers_config):
     if preprocessor_config is None:
         return None
 
-    mean = preprocessor_config.get("image_mean", [0.48145466, 0.4578275, 0.40821073])
-    std = preprocessor_config.get("image_std", [0.26862954, 0.26130258, 0.27577711])
+    mean = preprocessor_config.get(
+        "image_mean", [0.48145466, 0.4578275, 0.40821073]
+    )
+    std = preprocessor_config.get(
+        "image_std", [0.26862954, 0.26130258, 0.27577711]
+    )
     rescale_factor = preprocessor_config.get("rescale_factor", 1.0 / 255.0)
 
     # Calculate scale and offset for normalization

@@ -80,7 +80,7 @@ class MetaCLIP2Tokenizer(SentencePieceTokenizer):
 
     def __init__(self, proto, **kwargs):
         # Handle special tokens manually, as the tokenizer maps these tokens in
-        # a way that is not reflected in the vocabulary (similar to XLM-RoBERTa).
+        # a way that is not reflected in the vocabulary (similar to XLM-RoBERTa). # noqa
         self.start_token, self.start_token_id = "<s>", 0
         self.pad_token, self.pad_token_id = "<pad>", 1
         self.end_token, self.end_token_id = "</s>", 2

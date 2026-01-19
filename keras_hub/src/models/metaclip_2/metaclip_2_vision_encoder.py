@@ -1,7 +1,6 @@
 """MetaCLIP 2 vision encoder implementation."""
 
 from keras import layers
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
@@ -81,7 +80,8 @@ class MetaCLIP2VisionEncoder(Backbone):
         if height != width:
             raise ValueError(
                 "`MetaCLIP2VisionEncoder` expects the height and width to be "
-                f"the same in `image_shape`. Received: image_shape={image_shape}"
+                f"the same in `image_shape`. "
+                f"Received: image_shape={image_shape}"
             )
 
         if (

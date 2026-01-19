@@ -53,13 +53,13 @@ FLAGS = flags.FLAGS
 # https://huggingface.co/collections/facebook/meta-clip-2
 PRESET_MAP = {
     # ViT-H-14-quickgelu-worldwide (224 resolution)
-    "metaclip_2_vit_huge_patch14_224": "facebook/metaclip-2-worldwide-huge-quickgelu",
+    "metaclip_2_vit_huge_patch14_224": "facebook/metaclip-2-worldwide-huge-quickgelu",  # noqa
     # ViT-H-14-378-worldwide (378 resolution)
     "metaclip_2_vit_huge_patch14_378": "facebook/metaclip-2-worldwide-huge-378",
     # ViT-bigG-14-worldwide (224 resolution)
     "metaclip_2_vit_giant_patch14_224": "facebook/metaclip-2-worldwide-giant",
     # ViT-bigG-14-378-worldwide (378 resolution)
-    "metaclip_2_vit_giant_patch14_378": "facebook/metaclip-2-worldwide-giant-378",
+    "metaclip_2_vit_giant_patch14_378": "facebook/metaclip-2-worldwide-giant-378",  # noqa
 }
 
 # XLM-V tokenizer used by MetaCLIP 2 for multilingual support
