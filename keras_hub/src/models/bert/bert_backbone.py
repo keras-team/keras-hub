@@ -145,12 +145,8 @@ class BertBackbone(Backbone):
         )
 
         # === Functional Model ===
-        token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
-        )
-        segment_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="segment_ids"
-        )
+        token_id_input = keras.Input(shape=(None,), dtype="int32", name="token_ids")
+        segment_id_input = keras.Input(shape=(None,), dtype="int32", name="segment_ids")
         padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
