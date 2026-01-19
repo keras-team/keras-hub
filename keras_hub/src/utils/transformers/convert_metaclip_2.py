@@ -211,7 +211,7 @@ def convert_weights(backbone, loader, transformers_config):
         port_dense(encoder_layers[i].dense_2, f"{prefix}.{i}.mlp.fc2")
     # Post layer norm
     port_ln(
-        backbone.vision_encoder.post_layer_norm, "vision_model.post_layernorm"
+        backbone.vision_post_layer_norm, "vision_model.post_layernorm"
     )
     # Vision projection
     port_dense(backbone.vision_projection, "visual_projection")

@@ -10,9 +10,6 @@ from keras_hub.src.models.metaclip_2.metaclip_2_layers import (
 from keras_hub.src.models.metaclip_2.metaclip_2_layers import (
     MetaCLIP2VisionEmbedding,
 )
-from keras_hub.src.models.metaclip_2.metaclip_2_layers import (
-    MetaCLIP2VisionPooler,
-)
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
@@ -124,9 +121,6 @@ class MetaCLIP2VisionEncoder(Backbone):
         self.post_layer_norm = layers.LayerNormalization(
             epsilon=1e-5, dtype=dtype, name=f"{prefix}post_layer_norm"
         )
-        self.pooler = MetaCLIP2VisionPooler(
-            dtype=dtype, name=f"{prefix}pooler"
-        )
 
         # === Functional Model ===
         image_input = layers.Input(shape=image_shape, name="images")
@@ -139,16 +133,13 @@ class MetaCLIP2VisionEncoder(Backbone):
                 intermediate_output = x
         sequence_output = x
 
-        # Pool: extract CLS token (first token) using pooler layer
-        pooled_output = self.pooler(sequence_output)
-        pooled_output = self.post_layer_norm(pooled_output)
-
-        outputs = {
-            "sequence_output": sequence_output,
-            "pooled_output": pooled_output,
-        }
         if intermediate_output_index is not None:
-            outputs["intermediate_output"] = intermediate_output
+            outputs = {
+                "sequence_output": sequence_output,
+                "intermediate_output": intermediate_output,
+            }
+        else:
+            outputs = sequence_output
 
         super().__init__(
             inputs={"images": image_input},

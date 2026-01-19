@@ -10,10 +10,6 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.metaclip_2.metaclip_2_layers import (
     MetaCLIP2EncoderLayer,
 )
-from keras_hub.src.models.metaclip_2.metaclip_2_layers import (
-    MetaCLIP2TextPooler,
-)
-
 
 @keras_hub_export("keras_hub.models.MetaCLIP2TextEncoder")
 class MetaCLIP2TextEncoder(Backbone):
@@ -36,21 +32,11 @@ class MetaCLIP2TextEncoder(Backbone):
             `"intermediate_output"` key.
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. Defaults to 77.
-        eos_token_id: int. The token ID for the EOS (end of sequence) token.
             Used for pooling. Defaults to 2.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
             be done at float32 precision regardless of dtype.
-
-    Output:
-        A dictionary with keys:
-        - `"sequence_output"`: The full sequence output with layer_norm applied,
-            of shape `(batch_size, sequence_length, hidden_dim)`.
-        - `"pooled_output"`: The pooled EOS token output of shape
-            `(batch_size, hidden_dim)`.
-        - `"intermediate_output"` (optional): If `intermediate_output_index`
-            is specified, the output at that layer.
     """
 
     def __init__(
@@ -64,7 +50,6 @@ class MetaCLIP2TextEncoder(Backbone):
         intermediate_activation="quick_gelu",
         intermediate_output_index=None,
         max_sequence_length=77,
-        eos_token_id=2,
         dtype=None,
         name=None,
         **kwargs,
@@ -102,11 +87,6 @@ class MetaCLIP2TextEncoder(Backbone):
         self.layer_norm = layers.LayerNormalization(
             epsilon=1e-5, dtype=dtype, name=f"{prefix}layer_norm"
         )
-        self.pooler = MetaCLIP2TextPooler(
-            eos_token_id=eos_token_id,
-            dtype=dtype,
-            name=f"{prefix}pooler",
-        )
 
         # === Functional Model ===
         token_id_input = layers.Input(
@@ -121,16 +101,14 @@ class MetaCLIP2TextEncoder(Backbone):
         # Apply layer_norm to full sequence (before pooling)
         x = self.layer_norm(x)
         sequence_output = x
-
-        # Pool: extract at EOS token position using pooler layer
-        pooled_output = self.pooler(sequence_output, token_id_input)
-
-        outputs = {
-            "sequence_output": sequence_output,
-            "pooled_output": pooled_output,
-        }
+        
         if intermediate_output_index is not None:
-            outputs["intermediate_output"] = intermediate_output
+            outputs = {
+                "sequence_output": sequence_output,
+                "intermediate_output": intermediate_output,
+            }
+        else:
+            outputs = sequence_output
 
         super().__init__(
             inputs={"token_ids": token_id_input},
@@ -150,7 +128,6 @@ class MetaCLIP2TextEncoder(Backbone):
         self.intermediate_dim = intermediate_dim
         self.intermediate_activation = intermediate_activation
         self.intermediate_output_index = intermediate_output_index
-        self.eos_token_id = eos_token_id
 
     def get_config(self):
         config = super().get_config()
@@ -165,7 +142,6 @@ class MetaCLIP2TextEncoder(Backbone):
                 "intermediate_activation": self.intermediate_activation,
                 "intermediate_output_index": self.intermediate_output_index,
                 "max_sequence_length": self.max_sequence_length,
-                "eos_token_id": self.eos_token_id,
             }
         )
         return config
