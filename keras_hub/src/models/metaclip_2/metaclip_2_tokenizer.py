@@ -57,7 +57,7 @@ class MetaCLIP2Tokenizer(SentencePieceTokenizer):
     ```python
     # Unbatched input.
     tokenizer = keras_hub.models.MetaCLIP2Tokenizer.from_preset(
-        "metaclip_2_vit_huge_patch14"
+        "metaclip_2_vit_huge_patch14_224"
     )
     tokenizer("The quick brown fox jumped.")
 

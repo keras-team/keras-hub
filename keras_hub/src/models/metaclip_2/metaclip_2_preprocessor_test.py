@@ -67,3 +67,4 @@ class MetaCLIP2PreprocessorTest(TestCase):
         token_ids = ops.convert_to_numpy(output["token_ids"])
         self.assertEqual(token_ids[0, 0], 0)
         # Check that end token (2) is present after the text tokens
+        self.assertIn(2, token_ids[0])

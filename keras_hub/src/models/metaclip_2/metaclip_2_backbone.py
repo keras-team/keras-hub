@@ -50,7 +50,7 @@ class MetaCLIP2Backbone(Backbone):
 
     # Pretrained MetaCLIP 2 model.
     model = keras_hub.models.MetaCLIP2Backbone.from_preset(
-        "metaclip_2_vit_huge_patch14"
+        "metaclip_2_vit_huge_patch14_224"
     )
     model(input_data)
 

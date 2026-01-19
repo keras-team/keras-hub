@@ -46,15 +46,6 @@ class MetaCLIP2VisionEncoder(Backbone):
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
             be done at float32 precision regardless of dtype.
-
-    Output:
-        A dictionary with keys:
-        - `"sequence_output"`: The full sequence output of shape
-            `(batch_size, sequence_length, hidden_dim)`.
-        - `"pooled_output"`: The pooled CLS token output with post_layer_norm
-            applied, of shape `(batch_size, hidden_dim)`.
-        - `"intermediate_output"` (optional): If `intermediate_output_index`
-            is specified, the output at that layer.
     """
 
     def __init__(

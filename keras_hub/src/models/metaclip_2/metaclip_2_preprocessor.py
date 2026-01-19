@@ -54,7 +54,7 @@ class MetaCLIP2Preprocessor(CausalLMPreprocessor):
     ```python
     # Load the preprocessor from a preset.
     preprocessor = keras_hub.models.MetaCLIP2Preprocessor.from_preset(
-        "metaclip_2_vit_huge_patch14"
+        "metaclip_2_vit_huge_patch14_224"
     )
 
     # Tokenize the sentence and preprocess the image.
