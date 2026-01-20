@@ -4,7 +4,6 @@ from keras_hub.src.models.modernbert.modernbert_backbone import (
 )
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
-
 @keras_hub_export(
     [
         "keras_hub.tokenizers.ModernBertTokenizer",
