@@ -79,23 +79,55 @@ def export_backbone(backbone, path, include_lm_head=False):
     weights_dict = get_weights_fn(backbone, include_lm_head=include_lm_head)
     if not weights_dict:
         raise ValueError("No weights to save.")
+
     # Save config
     os.makedirs(path, exist_ok=True)
     config_path = os.path.join(path, "config.json")
+
+    config_to_save = hf_config
+    if hasattr(hf_config, "to_dict"):
+        config_to_save = hf_config.to_dict()
+
     with open(config_path, "w") as f:
-        json.dump(hf_config, f)
+        json.dump(config_to_save, f, indent=2)
+
     # Save weights based on backend
     weights_path = os.path.join(path, "model.safetensors")
     if backend == "torch":
+        # Lazy import to prevent crash on TF-only environments
+        import torch
         from safetensors.torch import save_file
 
-        weights_dict_contiguous = {
-            k: v.value.contiguous() if hasattr(v, "value") else v.contiguous()
-            for k, v in weights_dict.items()
-        }
-        save_file(
-            weights_dict_contiguous, weights_path, metadata={"format": "pt"}
-        )
+        weights_dict_torch = {}
+        for k, v in weights_dict.items():
+            tensor = v.value if hasattr(v, "value") else v
+
+            if isinstance(tensor, torch.Tensor):
+                t = tensor.detach().to("cpu")
+            elif hasattr(tensor, "numpy"):
+                t = torch.tensor(tensor.numpy())
+            elif hasattr(tensor, "__array__"):
+                t = torch.tensor(tensor)
+            else:
+                t = tensor
+
+            if hasattr(t, "contiguous"):
+                t = t.contiguous()
+
+            weights_dict_torch[k] = t
+
+        # Handle Tied Weights
+        if (
+            "lm_head.weight" in weights_dict_torch
+            and "model.embed_tokens.weight" in weights_dict_torch
+        ):
+            wte = weights_dict_torch["model.embed_tokens.weight"]
+            lm = weights_dict_torch["lm_head.weight"]
+            if wte.data_ptr() == lm.data_ptr():
+                weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
+
+        save_file(weights_dict_torch, weights_path, metadata={"format": "pt"})
+
     elif backend == "tensorflow":
         from safetensors.tensorflow import save_file
 
