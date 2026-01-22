@@ -21,10 +21,12 @@ from transformers.models.sam3 import Sam3Processor
 from transformers.models.sam3.modeling_sam3 import Sam3ImageSegmentationOutput
 
 import keras_hub
-from keras_hub.src.models.sam3.sam3_backbone import SAM3Backbone
 from keras_hub.src.models.sam3.sam3_image_converter import SAM3ImageConverter
 from keras_hub.src.models.sam3.sam3_image_segmenter_preprocessor import (
     SAM3ImageSegmenterPreprocessor,
+)
+from keras_hub.src.models.sam3.sam3_pc_backbone import (
+    SAM3PromptableConceptBackbone,
 )
 from keras_hub.src.models.sam3.sam3_tokenizer import SAM3Tokenizer
 
@@ -197,9 +199,13 @@ def main(_):
     hf_preprocessor = Sam3Processor.from_pretrained(hf_preset)
     hf_model.eval()
 
-    keras_hub_backbone: SAM3Backbone = SAM3Backbone.from_preset(
-        f"hf://{hf_preset}"
-    )
+    if "pcs" in preset:
+        keras_hub_backbone: SAM3PromptableConceptBackbone = (
+            SAM3PromptableConceptBackbone.from_preset(f"hf://{hf_preset}")
+        )
+    else:
+        # TODO: Add PVS.
+        raise ValueError(f"Unsupported preset {hf_preset}")
     keras_hub_backbone.summary()
     keras_hub_image_converter = convert_image_converter(
         hf_preprocessor.image_processor

@@ -10,8 +10,8 @@ from keras_hub.src.models.sam3.sam3_dot_product_scoring import (
 from keras_hub.src.models.sam3.sam3_layers import SAM3BoxDecoder
 
 
-@keras_hub_export("keras_hub.models.SAM3Backbone")
-class SAM3Backbone(Backbone):
+@keras_hub_export("keras_hub.models.SAM3PromptableConceptBackbone")
+class SAM3PromptableConceptBackbone(Backbone):
     """A backbone for the Segment Anything Model 3 (SAM3).
 
     SAM3 is a multi-modal model that supports text and geometry prompts (boxes)
@@ -89,7 +89,7 @@ class SAM3Backbone(Backbone):
         hidden_dim=32,
         num_heads=2,
     )
-    backbone = keras_hub.models.SAM3Backbone(
+    backbone = keras_hub.models.SAM3PromptableConceptBackbone(
         vision_encoder=vision_encoder,
         text_encoder=text_encoder,
         geometry_encoder=geometry_encoder,

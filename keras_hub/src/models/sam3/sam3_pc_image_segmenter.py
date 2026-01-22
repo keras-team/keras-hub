@@ -1,23 +1,24 @@
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.image_segmenter import ImageSegmenter
-from keras_hub.src.models.sam3.sam3_backbone import SAM3Backbone
 from keras_hub.src.models.sam3.sam3_image_segmenter_preprocessor import (
     SAM3ImageSegmenterPreprocessor,
 )
+from keras_hub.src.models.sam3.sam3_pc_backbone import (
+    SAM3PromptableConceptBackbone,
+)
 
 
-@keras_hub_export("keras_hub.models.SAM3ImageSegmenter")
-class SAM3ImageSegmenter(ImageSegmenter):
-    """The Segment Anything 3 (SAM3) image segmenter Model.
-
+@keras_hub_export("keras_hub.models.SAM3PromptableConceptImageSegmenter")
+class SAM3PromptableConceptImageSegmenter(ImageSegmenter):
+    """The Segment Anything 3 (SAM3) promptable concept image segmenter Model.
 
     Args:
-      backbone: A `keras_hub.models.SAM3Backbone` instance.
+      backbone: A `keras_hub.models.SAM3PromptableConceptBackbone` instance.
 
     Example:
-    Load pretrained model using `from_preset`.
 
     ```python
+    # Load pretrained model using `from_preset`.
     image_size=128
     batch_size=2
     input_data = {
@@ -32,12 +33,14 @@ class SAM3ImageSegmenter(ImageSegmenter):
             (batch_size, 0, image_size, image_size, 1)
         ),
     }
-    sam = keras_hub.models.SAMImageSegmenter.from_preset('sam_base_sa1b')
-    outputs = sam.predict(input_data)
-    masks, iou_pred = outputs["masks"], outputs["iou_pred"]
+    sam3_pcs = keras_hub.models.SAM3PromptableConceptImageSegmenter.from_preset(
+        "sam3_pcs"
+    )
+    outputs = sam3_pcs.predict(input_data)
+    pred_masks, pred_boxes = outputs["pred_masks"], outputs["pred_boxes"]
     ```
 
-    Load segment anything image segmenter with custom backbone
+    Load SAM3PromptableConceptImageSegmenter with custom backbone
 
     ```python
     image_size = 128
@@ -147,7 +150,7 @@ class SAM3ImageSegmenter(ImageSegmenter):
     ```
     """
 
-    backbone_cls = SAM3Backbone
+    backbone_cls = SAM3PromptableConceptBackbone
     preprocessor_cls = SAM3ImageSegmenterPreprocessor
 
     def __init__(self, backbone, preprocessor=None, **kwargs):
@@ -162,6 +165,6 @@ class SAM3ImageSegmenter(ImageSegmenter):
 
     def fit(self, *args, **kwargs):
         raise NotImplementedError(
-            "SAM3ImageSegmenter only supports inference for now. Training"
-            " the model isn't supported yet."
+            "SAM3PromptableConceptImageSegmenter only supports inference for "
+            "now. Training the model isn't supported yet."
         )

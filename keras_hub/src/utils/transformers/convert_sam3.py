@@ -3,22 +3,24 @@ import warnings
 import numpy as np
 from keras import layers
 
-from keras_hub.src.models.sam3.sam3_backbone import SAM3Backbone
 from keras_hub.src.models.sam3.sam3_detr_decoder import SAM3DetrDecoder
 from keras_hub.src.models.sam3.sam3_detr_encoder import SAM3DetrEncoder
 from keras_hub.src.models.sam3.sam3_geometry_encoder import SAM3GeometryEncoder
 from keras_hub.src.models.sam3.sam3_mask_decoder import SAM3MaskDecoder
+from keras_hub.src.models.sam3.sam3_pc_backbone import (
+    SAM3PromptableConceptBackbone,
+)
 from keras_hub.src.models.sam3.sam3_text_encoder import SAM3TextEncoder
 from keras_hub.src.models.sam3.sam3_vision_encoder import SAM3VisionEncoder
 from keras_hub.src.utils.preset_utils import load_json
 
-backbone_cls = SAM3Backbone
+backbone_cls = SAM3PromptableConceptBackbone
 
 
 def convert_backbone_config(transformers_config, cls, **kwargs):
     # detector_config: Promptable Concept Segmentation (PCS)
     # tracker_config: Promptable Visual Segmentation (PVS)
-    if issubclass(cls, SAM3Backbone):
+    if issubclass(cls, SAM3PromptableConceptBackbone):
         # Extract sub-configurations.
         transformers_config = transformers_config["detector_config"]
 
@@ -144,16 +146,16 @@ def convert_backbone_config(transformers_config, cls, **kwargs):
     else:
         # TODO: Add SAM3Tracker support.
         raise ValueError(
-            "The provided class is not a subclass of SAM3Backbone. "
-            f"Received: {cls}"
+            "The provided class is not a subclass of "
+            f"SAM3PromptableConceptBackbone. Received: {cls}"
         )
 
 
 def convert_weights(backbone, loader, transformers_config):
-    if not isinstance(backbone, SAM3Backbone):
+    if not isinstance(backbone, SAM3PromptableConceptBackbone):
         raise ValueError(
-            "The provided backbone must be an instance of SAM3Backbone. "
-            f"Received: {type(backbone)}"
+            "The provided backbone must be an instance of "
+            f"SAM3PromptableConceptBackbone. Received: {type(backbone)}"
         )
 
     def port_dense(keras_dense, hf_name):

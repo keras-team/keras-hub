@@ -3,8 +3,10 @@ import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.preprocessor import Preprocessor
-from keras_hub.src.models.sam3.sam3_backbone import SAM3Backbone
 from keras_hub.src.models.sam3.sam3_image_converter import SAM3ImageConverter
+from keras_hub.src.models.sam3.sam3_pc_backbone import (
+    SAM3PromptableConceptBackbone,
+)
 from keras_hub.src.models.sam3.sam3_tokenizer import SAM3Tokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -19,7 +21,7 @@ class SAM3ImageSegmenterPreprocessor(Preprocessor):
     """SAM3 Image Segmenter preprocessor.
 
     This preprocessing layer is meant for use with
-    `keras_hub.models.SAM3ImageSegmenter`.
+    `keras_hub.models.SAM3PromptableConceptImageSegmenter`.
 
     Args:
         tokenizer: A `keras_hub.models.SAM3Tokenizer` instance.
@@ -135,7 +137,7 @@ class SAM3ImageSegmenterPreprocessor(Preprocessor):
     ```
     """
 
-    backbone_cls = SAM3Backbone
+    backbone_cls = SAM3PromptableConceptBackbone
     tokenizer_cls = SAM3Tokenizer
     image_converter_cls = SAM3ImageConverter
 
@@ -181,12 +183,13 @@ class SAM3ImageSegmenterPreprocessor(Preprocessor):
                 shape=[None, max_num_boxes],
                 default_value=self.point_pad_value,
             )
+        box_dtype = keras.backend.standardize_dtype(boxes.dtype)
         normalized_boxes = tf.stack(
             [
-                boxes[..., 0] / tf.cast(width, boxes.dtype),
-                boxes[..., 1] / tf.cast(height, boxes.dtype),
-                boxes[..., 2] / tf.cast(width, boxes.dtype),
-                boxes[..., 3] / tf.cast(height, boxes.dtype),
+                boxes[..., 0] / tf.cast(width, box_dtype),
+                boxes[..., 1] / tf.cast(height, box_dtype),
+                boxes[..., 2] / tf.cast(width, box_dtype),
+                boxes[..., 3] / tf.cast(height, box_dtype),
             ],
             axis=-1,
         )
@@ -265,6 +268,10 @@ class SAM3ImageSegmenterPreprocessor(Preprocessor):
 
         # Resize and normalize the images.
         pixel_values = self.image_converter(images)
+        if keras.config.backend() == "torch" and not isinstance(
+            images, tf.Tensor
+        ):
+            images = images.cpu()
 
         # Normalize the boxes.
         boxes, box_labels = self._preprocess_boxes(

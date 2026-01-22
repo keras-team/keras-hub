@@ -1,6 +1,8 @@
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
-from keras_hub.src.models.sam3.sam3_backbone import SAM3Backbone
+from keras_hub.src.models.sam3.sam3_pc_backbone import (
+    SAM3PromptableConceptBackbone,
+)
 
 
 @keras_hub_export(
@@ -47,7 +49,7 @@ class SAM3Tokenizer(CLIPTokenizer):
     ```
     """
 
-    backbone_cls = SAM3Backbone
+    backbone_cls = SAM3PromptableConceptBackbone
 
     def __init__(self, vocabulary=None, merges=None, **kwargs):
         super().__init__(

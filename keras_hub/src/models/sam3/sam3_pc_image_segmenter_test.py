@@ -2,23 +2,27 @@ import numpy as np
 import pytest
 from keras import ops
 
-from keras_hub.src.models.sam3.sam3_backbone import SAM3Backbone
 from keras_hub.src.models.sam3.sam3_detr_decoder import SAM3DetrDecoder
 from keras_hub.src.models.sam3.sam3_detr_encoder import SAM3DetrEncoder
 from keras_hub.src.models.sam3.sam3_geometry_encoder import SAM3GeometryEncoder
 from keras_hub.src.models.sam3.sam3_image_converter import SAM3ImageConverter
-from keras_hub.src.models.sam3.sam3_image_segmenter import SAM3ImageSegmenter
 from keras_hub.src.models.sam3.sam3_image_segmenter_preprocessor import (
     SAM3ImageSegmenterPreprocessor,
 )
 from keras_hub.src.models.sam3.sam3_mask_decoder import SAM3MaskDecoder
+from keras_hub.src.models.sam3.sam3_pc_backbone import (
+    SAM3PromptableConceptBackbone,
+)
+from keras_hub.src.models.sam3.sam3_pc_image_segmenter import (
+    SAM3PromptableConceptImageSegmenter,
+)
 from keras_hub.src.models.sam3.sam3_text_encoder import SAM3TextEncoder
 from keras_hub.src.models.sam3.sam3_tokenizer import SAM3Tokenizer
 from keras_hub.src.models.sam3.sam3_vision_encoder import SAM3VisionEncoder
 from keras_hub.src.tests.test_case import TestCase
 
 
-class SAMImageSegmenterTest(TestCase):
+class SAM3PromptableConceptImageSegmenterTest(TestCase):
     def setUp(self):
         self.batch_size = 2
         self.image_size = 224
@@ -70,7 +74,7 @@ class SAMImageSegmenterTest(TestCase):
             hidden_dim=32,
             num_heads=2,
         )
-        self.backbone = SAM3Backbone(
+        self.backbone = SAM3PromptableConceptBackbone(
             vision_encoder=self.vision_encoder,
             text_encoder=self.text_encoder,
             geometry_encoder=self.geometry_encoder,
@@ -121,7 +125,7 @@ class SAMImageSegmenterTest(TestCase):
             reason="TODO: enable after preprocessor flow is figured out"
         )
         self.run_task_test(
-            cls=SAM3ImageSegmenter,
+            cls=SAM3PromptableConceptImageSegmenter,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=None,
@@ -130,13 +134,13 @@ class SAMImageSegmenterTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=SAM3ImageSegmenter,
+            cls=SAM3PromptableConceptImageSegmenter,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
 
     def test_end_to_end_model_predict(self):
-        model = SAM3ImageSegmenter(**self.init_kwargs)
+        model = SAM3PromptableConceptImageSegmenter(**self.init_kwargs)
         outputs = model.predict(self.train_data)
         pred_masks = outputs["pred_masks"]
         pred_boxes = outputs["pred_boxes"]
@@ -159,9 +163,9 @@ class SAMImageSegmenterTest(TestCase):
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in SAM3ImageSegmenter.presets:
+        for preset in SAM3PromptableConceptImageSegmenter.presets:
             self.run_preset_test(
-                cls=SAM3ImageSegmenter,
+                cls=SAM3PromptableConceptImageSegmenter,
                 preset=preset,
                 input_data=self.input_data,
                 expected_output_shape={
@@ -183,7 +187,7 @@ class SAMImageSegmenterTest(TestCase):
             )
 
         self.run_litert_export_test(
-            cls=SAM3ImageSegmenter,
+            cls=SAM3PromptableConceptImageSegmenter,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             comparison_mode="statistical",

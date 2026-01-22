@@ -1,16 +1,18 @@
 import numpy as np
 
-from keras_hub.src.models.sam3.sam3_backbone import SAM3Backbone
 from keras_hub.src.models.sam3.sam3_detr_decoder import SAM3DetrDecoder
 from keras_hub.src.models.sam3.sam3_detr_encoder import SAM3DetrEncoder
 from keras_hub.src.models.sam3.sam3_geometry_encoder import SAM3GeometryEncoder
 from keras_hub.src.models.sam3.sam3_mask_decoder import SAM3MaskDecoder
+from keras_hub.src.models.sam3.sam3_pc_backbone import (
+    SAM3PromptableConceptBackbone,
+)
 from keras_hub.src.models.sam3.sam3_text_encoder import SAM3TextEncoder
 from keras_hub.src.models.sam3.sam3_vision_encoder import SAM3VisionEncoder
 from keras_hub.src.tests.test_case import TestCase
 
 
-class SAM3BackboneTest(TestCase):
+class SAM3PromptableConceptBackboneTest(TestCase):
     def setUp(self):
         self.batch_size = 2
         self.image_size = 224
@@ -86,7 +88,7 @@ class SAM3BackboneTest(TestCase):
         output_size = self.image_size // self.vision_encoder.patch_size * 4
         num_queries = self.detr_decoder.num_queries
         self.run_backbone_test(
-            cls=SAM3Backbone,
+            cls=SAM3PromptableConceptBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape={
