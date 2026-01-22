@@ -42,6 +42,13 @@ def get_gemma3_config(backbone):
         # Vision + Text model
         vision_encoder = backbone.vision_encoder
         image_encoder = vision_encoder.get_layer("image_encoder")
+        pooling_layer = vision_encoder.get_layer("pooling")
+
+        # Calculate image sequence length (mm_tokens_per_image)
+        img_size = image_encoder.image_size
+        patch_size = image_encoder.patch_size
+        pool_size = pooling_layer.pool_size
+        mm_tokens_per_image = ((img_size // patch_size) // pool_size) ** 2
 
         vision_config = {
             "image_size": image_encoder.image_size,
@@ -53,6 +60,10 @@ def get_gemma3_config(backbone):
             "layer_norm_eps": image_encoder.layer_norm_epsilon,
             "model_type": "siglip_vision_model",
             "vision_use_head": False,
+            "boi_token_index": 255999,
+            "eoi_token_index": 256000,
+            "image_token_index": 262144,
+            "mm_tokens_per_image": mm_tokens_per_image,
         }
 
         hf_config = {

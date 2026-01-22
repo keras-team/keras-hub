@@ -154,7 +154,7 @@ def export_tokenizer(tokenizer, path):
     tokenizer_type = tokenizer.__class__.__name__
     if tokenizer_type not in MODEL_TOKENIZER_CONFIGS:
         raise ValueError(
-            "Export to Transformers format not implemented for {tokenizer_type}"
+            f"Export to Transformers format not implemented for {tokenizer_type}"
         )
     get_tokenizer_config_fn = MODEL_TOKENIZER_CONFIGS[tokenizer_type]
     tokenizer_config = get_tokenizer_config_fn(tokenizer)
