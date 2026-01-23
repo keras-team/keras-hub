@@ -693,7 +693,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # the following logic (indices, etc.) uses tensors with a batch dim.
         # We will squeeze these back at the end.
         batched = True
-        
+
         batched = True
         if isinstance(prompts, str):
             batched = False
