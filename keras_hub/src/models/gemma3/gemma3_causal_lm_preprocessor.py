@@ -614,18 +614,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             # To handle the text-only input case, we need to pass an empty
             # tensor so as to skip the vision layers of the model.
 
-            # TODO: Once functional models accept `None` inputs, consider
-            # passing this as `None` directly.
-            images = tf.ones(
-                shape=[
-                    batch_size,
-                    0,
-                    desired_height,
-                    desired_width,
-                    3,
-                ],
-                dtype="float32",
-            )
+            images = None
 
             vision_mask = tf.zeros_like(token_ids, dtype=bool)
 
@@ -700,6 +689,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             prompts = [prompts]
         if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
             batched = False
+
             prompts = tf.expand_dims(prompts, axis=0)
 
         # We have the same 8 cases here, as in `call()`.
@@ -759,18 +749,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
             # To handle the text-only input case, we need to pass an empty
             # tensor so as to skip the vision layers of the model.
 
-            # TODO: Once functional models accept `None` inputs, consider
-            # passing this as `None` directly.
-            images = tf.ones(
-                shape=[
-                    batch_size,
-                    0,
-                    desired_height,
-                    desired_width,
-                    3,
-                ],
-                dtype="float32",
-            )
+            images = None
 
             vision_mask = tf.zeros_like(token_ids, dtype=bool)
 
