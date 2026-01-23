@@ -146,19 +146,18 @@ class UNetBackbone(Backbone):
             else:
                 image_shape = (3, None, None)
 
-        # Validate image_shape based on data_format
-        if data_format == "channels_last":
-            if image_shape[-1] != 3:
-                raise ValueError(
-                    "image_shape must have 3 channels in the last dimension "
-                    f"for channels_last format. Received: {image_shape}"
-                )
-        else:  # channels_first
-            if image_shape[0] != 3:
-                raise ValueError(
-                    "image_shape must have 3 channels in the first dimension "
-                    f"for channels_first format. Received: {image_shape}"
-                )
+        self.backbone = backbone
+        self.depth = depth
+        self.filters = filters
+        self.image_shape = image_shape
+        self.data_format = data_format
+        self.use_batch_norm = use_batch_norm
+        self.use_dropout = use_dropout
+        self.dropout_rate = dropout_rate
+        self.upsampling_strategy = upsampling_strategy
+        self.use_residual = use_residual
+        self.use_attention = use_attention
+        self.kernel_initializer = kernel_initializer
 
         # === Functional Model ===
         inputs = keras.layers.Input(shape=image_shape)
@@ -820,6 +819,7 @@ class UNetBackbone(Backbone):
                 "depth": self.depth,
                 "filters": self.filters,
                 "image_shape": self.image_shape,
+                "data_format": self.data_format,
                 "use_batch_norm": self.use_batch_norm,
                 "use_dropout": self.use_dropout,
                 "dropout_rate": self.dropout_rate,

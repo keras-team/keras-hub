@@ -86,7 +86,7 @@ class UNetImageSegmenter(ImageSegmenter):
                 f"Received: backbone={backbone} (of type {type(backbone)})."
             )
 
-        data_format = keras.config.image_data_format()
+        data_format = backbone.data_format
 
         # === Layers ===
         self.output_conv = keras.layers.Conv2D(

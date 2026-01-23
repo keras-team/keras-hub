@@ -181,6 +181,7 @@ class UNetEncoder(Backbone):
         self.depth = depth
         self.filters = filters
         self.image_shape = image_shape
+        self.data_format = data_format
         self.use_batch_norm = use_batch_norm
         self.use_residual = use_residual
         self.kernel_initializer = kernel_initializer
@@ -386,6 +387,7 @@ class UNetEncoder(Backbone):
                 "depth": self.depth,
                 "filters": self.filters,
                 "image_shape": self.image_shape,
+                "data_format": self.data_format,
                 "use_batch_norm": self.use_batch_norm,
                 "use_residual": self.use_residual,
                 "kernel_initializer": self.kernel_initializer,

@@ -12,13 +12,16 @@ class UNetEncoderTest(TestCase):
     def setUp(self):
         self.input_size = 128
         self.batch_size = 2
-        self.input_data = np.random.uniform(
-            0, 1, size=(self.batch_size, self.input_size, self.input_size, 3)
-        ).astype(np.float32)
+        shape = (self.batch_size, self.input_size, self.input_size, 3)
+        self.input_data = np.random.uniform(0, 1, size=shape).astype(np.float32)
+        # Ensure tests use channels_last format
+        keras.config.set_image_data_format("channels_last")
+        # Ensure tests use channels_last format
+        keras.config.set_image_data_format("channels_last")
 
     def test_encoder_from_scratch_basics(self):
         """Test basic encoder functionality when built from scratch."""
-        encoder = UNetEncoder(depth=3, filters=32)
+        encoder = UNetEncoder(depth=3, filters=32, data_format="channels_last")
         output = encoder(self.input_data)
 
         # Output should be a dict
@@ -39,7 +42,9 @@ class UNetEncoderTest(TestCase):
         """Test encoder with different depth configurations."""
         for depth in [2, 3, 4, 5]:
             with self.subTest(depth=depth):
-                encoder = UNetEncoder(depth=depth, filters=32)
+                encoder = UNetEncoder(
+                    depth=depth, filters=32, data_format="channels_last"
+                )
                 output = encoder(self.input_data)
 
                 # Skip connections should be depth - 1
@@ -47,7 +52,12 @@ class UNetEncoderTest(TestCase):
 
     def test_encoder_with_batch_norm(self):
         """Test encoder with batch normalization enabled."""
-        encoder = UNetEncoder(depth=3, filters=32, use_batch_norm=True)
+        encoder = UNetEncoder(
+            depth=3,
+            filters=32,
+            use_batch_norm=True,
+            data_format="channels_last",
+        )
         output = encoder(self.input_data)
 
         self.assertIsInstance(output, dict)
@@ -56,7 +66,11 @@ class UNetEncoderTest(TestCase):
     def test_encoder_with_residual_connections(self):
         """Test encoder with residual connections (ResNet-style)."""
         encoder = UNetEncoder(
-            depth=3, filters=32, use_residual=True, use_batch_norm=True
+            depth=3,
+            filters=32,
+            use_residual=True,
+            use_batch_norm=True,
+            data_format="channels_last",
         )
         output = encoder(self.input_data)
 
@@ -65,13 +79,16 @@ class UNetEncoderTest(TestCase):
 
     def test_encoder_with_pretrained_resnet(self):
         """Test encoder using pretrained ResNet50 backbone."""
+        # Ensure channels_last format for backbone creation
+        keras.config.set_image_data_format("channels_last")
+
         backbone = keras.applications.ResNet50(
             include_top=False,
             weights=None,
             input_shape=(None, None, 3),
         )
 
-        encoder = UNetEncoder(backbone=backbone)
+        encoder = UNetEncoder(backbone=backbone, data_format="channels_last")
         output = encoder(self.input_data)
 
         self.assertIsInstance(output, dict)
@@ -82,13 +99,16 @@ class UNetEncoderTest(TestCase):
 
     def test_encoder_with_pretrained_mobilenet(self):
         """Test encoder using pretrained MobileNetV2 backbone."""
+        # Ensure channels_last format for backbone creation
+        keras.config.set_image_data_format("channels_last")
+
         backbone = keras.applications.MobileNetV2(
             include_top=False,
             weights=None,
             input_shape=(None, None, 3),
         )
 
-        encoder = UNetEncoder(backbone=backbone)
+        encoder = UNetEncoder(backbone=backbone, data_format="channels_last")
         output = encoder(self.input_data)
 
         self.assertIsInstance(output, dict)
@@ -96,7 +116,7 @@ class UNetEncoderTest(TestCase):
 
     def test_encoder_dynamic_input_shapes(self):
         """Test encoder with dynamic input shapes."""
-        encoder = UNetEncoder(depth=3, filters=32)
+        encoder = UNetEncoder(depth=3, filters=32, data_format="channels_last")
 
         # Test with different input sizes
         for size in [64, 128, 256]:
@@ -136,13 +156,16 @@ class UNetEncoderTest(TestCase):
 
     def test_encoder_with_pretrained_config(self):
         """Test encoder config with pretrained backbone."""
+        # Ensure channels_last format for backbone creation
+        keras.config.set_image_data_format("channels_last")
+
         backbone = keras.applications.MobileNetV2(
             include_top=False,
             weights=None,
-            input_shape=(128, 128, 3),
+            input_shape=(224, 224, 3),
         )
 
-        encoder = UNetEncoder(backbone=backbone, use_batch_norm=True)
+        encoder = UNetEncoder(backbone=backbone, data_format="channels_last")
         config = encoder.get_config()
 
         self.assertIn("backbone", config)
@@ -150,12 +173,16 @@ class UNetEncoderTest(TestCase):
 
         # Test from_config
         restored_encoder = UNetEncoder.from_config(config)
-        output = restored_encoder(self.input_data)
+        # Create input data that matches the backbone's expected input size
+        pretrained_input_data = np.random.uniform(
+            0, 1, size=(2, 224, 224, 3)
+        ).astype(np.float32)
+        output = restored_encoder(pretrained_input_data)
         self.assertIsInstance(output, dict)
 
     def test_encoder_parameter_count(self):
         """Test that encoder has reasonable parameter count."""
-        encoder = UNetEncoder(depth=3, filters=32)
+        encoder = UNetEncoder(depth=3, filters=32, data_format="channels_last")
         param_count = encoder.count_params()
 
         # Should have some parameters but not excessive
@@ -166,7 +193,9 @@ class UNetEncoderTest(TestCase):
         """Test that filters double at each encoder level."""
         depth = 4
         filters = 64
-        encoder = UNetEncoder(depth=depth, filters=filters)
+        encoder = UNetEncoder(
+            depth=depth, filters=filters, data_format="channels_last"
+        )
 
         # The encoder should progressively reduce spatial dimensions
         # and increase channels
@@ -199,7 +228,9 @@ class UNetEncoderTest(TestCase):
 
     def test_encoder_dtype(self):
         """Test encoder with different dtype."""
-        encoder = UNetEncoder(depth=3, filters=32, dtype="float16")
+        encoder = UNetEncoder(
+            depth=3, filters=32, dtype="float32", data_format="channels_last"
+        )
         output = encoder(self.input_data)
 
         # Check output dtype (may be float32 due to Keras internal handling)
@@ -210,7 +241,7 @@ class UNetEncoderTest(TestCase):
         """Test encoder model export."""
         import tempfile
 
-        encoder = UNetEncoder(depth=3, filters=32)
+        encoder = UNetEncoder(depth=3, filters=32, data_format="channels_last")
         output = encoder(self.input_data)
 
         with tempfile.TemporaryDirectory() as temp_dir:

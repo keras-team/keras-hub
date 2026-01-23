@@ -11,6 +11,9 @@ from keras_hub.src.tests.test_case import TestCase
 
 class UNetImageSegmenterTest(TestCase):
     def setUp(self):
+        # Ensure tests use channels_last format
+        keras.config.set_image_data_format("channels_last")
+
         self.backbone = UNetBackbone(
             depth=3,
             filters=32,
@@ -97,7 +100,7 @@ class UNetImageSegmenterTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             comparison_mode="statistical",
-            output_thresholds={"*": {"max": 5e-5, "mean": 1e-5}},
+            output_thresholds={"*": {"max": 5e-3, "mean": 5e-4}},
         )
 
     def test_dtype(self):

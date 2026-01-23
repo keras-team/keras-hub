@@ -13,12 +13,15 @@ class UNetDecoderTest(TestCase):
     def setUp(self):
         self.input_size = 128
         self.batch_size = 2
-        self.input_data = np.random.uniform(
-            0, 1, size=(self.batch_size, self.input_size, self.input_size, 3)
-        ).astype(np.float32)
+        shape = (self.batch_size, self.input_size, self.input_size, 3)
+        self.input_data = np.random.uniform(0, 1, size=shape).astype(np.float32)
+        # Ensure tests use channels_last format
+        keras.config.set_image_data_format("channels_last")
 
         # Create encoder to generate features for decoder
-        self.encoder = UNetEncoder(depth=3, filters=32)
+        self.encoder = UNetEncoder(
+            depth=3, filters=32, data_format="channels_last"
+        )
         self.encoder_output = self.encoder(self.input_data)
 
     def test_decoder_basics(self):
@@ -99,7 +102,7 @@ class UNetDecoderTest(TestCase):
             weights=None,
             input_shape=(None, None, 3),
         )
-        encoder = UNetEncoder(backbone=backbone)
+        encoder = UNetEncoder(backbone=backbone, data_format="channels_last")
         encoder_output = encoder(self.input_data)
 
         # Create decoder (filters=None to infer from encoder)
@@ -152,7 +155,9 @@ class UNetDecoderTest(TestCase):
         """Test decoder with encoders of different depths."""
         for depth in [2, 3, 4]:
             with self.subTest(depth=depth):
-                encoder = UNetEncoder(depth=depth, filters=32)
+                encoder = UNetEncoder(
+                    depth=depth, filters=32, data_format="channels_last"
+                )
                 encoder_output = encoder(self.input_data)
 
                 decoder = UNetDecoder(filters=32)
@@ -215,6 +220,7 @@ class UNetDecoderTest(TestCase):
             filters=64,
             use_batch_norm=True,
             use_residual=True,
+            data_format="channels_last",
         )
 
         # Create matching decoder

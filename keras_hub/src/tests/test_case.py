@@ -991,6 +991,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 init_kwargs["image_shape"] = tuple(
                     reversed(init_kwargs["image_shape"])
                 )
+            if "data_format" in init_kwargs:
+                init_kwargs = init_kwargs.copy()
+                init_kwargs["data_format"] = "channels_first"
             self.run_backbone_test(
                 cls=cls,
                 init_kwargs=init_kwargs,
