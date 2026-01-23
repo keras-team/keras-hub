@@ -110,7 +110,9 @@ def concatenate_padded_sequences(
     flat_concatenated_sequence = ops.scatter_update(
         ops.reshape(concatenated_sequence, (-1, hidden_dim)),
         ops.reshape(indices, (-1, 1)),
-        ops.reshape(sequence2, (-1, hidden_dim)),
+        ops.reshape(
+            ops.cast(sequence2, concatenated_sequence.dtype), (-1, hidden_dim)
+        ),
     )
 
     concatenated_sequence = ops.reshape(
@@ -130,36 +132,3 @@ def inverse_sigmoid(x, eps=1e-3):
     x1 = ops.maximum(x, eps)
     x2 = ops.maximum(ops.subtract(1.0, x), eps)
     return ops.log(ops.divide(x1, x2))
-
-
-if __name__ == "__main__":
-    # simple test
-    a = ops.array(
-        [
-            [[1.0, 1.0], [2.0, 2.0], [3.0, 3.0], [4.0, 4.0]],
-            [[5.0, 5.0], [6.0, 6.0], [7.0, 7.0], [8.0, 8.0]],
-        ]
-    )
-    mask = ops.array(
-        [
-            [True, True, False, False],
-            [True, True, True, False],
-        ]
-    )
-    b = ops.array(
-        [
-            [[10.0, 10.0], [20.0, 20.0]],
-            [[30.0, 30.0], [40.0, 40.0]],
-        ]
-    )
-    mask_b = ops.array(
-        [
-            [True, False],
-            [True, True],
-        ]
-    )
-    concatenated_sequence, concatenated_mask = concatenate_padded_sequences(
-        a, mask, 4, b, mask_b, 2, 2
-    )
-    print(concatenated_sequence)
-    print(concatenated_mask)

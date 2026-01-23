@@ -6,15 +6,15 @@ from keras_hub.src.models.sam3.sam3_detr_decoder import SAM3DetrDecoder
 from keras_hub.src.models.sam3.sam3_detr_encoder import SAM3DetrEncoder
 from keras_hub.src.models.sam3.sam3_geometry_encoder import SAM3GeometryEncoder
 from keras_hub.src.models.sam3.sam3_image_converter import SAM3ImageConverter
-from keras_hub.src.models.sam3.sam3_image_segmenter_preprocessor import (
-    SAM3ImageSegmenterPreprocessor,
-)
 from keras_hub.src.models.sam3.sam3_mask_decoder import SAM3MaskDecoder
 from keras_hub.src.models.sam3.sam3_pc_backbone import (
     SAM3PromptableConceptBackbone,
 )
 from keras_hub.src.models.sam3.sam3_pc_image_segmenter import (
     SAM3PromptableConceptImageSegmenter,
+)
+from keras_hub.src.models.sam3.sam3_pc_image_segmenter_preprocessor import (
+    SAM3PromptableConceptImageSegmenterPreprocessor,
 )
 from keras_hub.src.models.sam3.sam3_text_encoder import SAM3TextEncoder
 from keras_hub.src.models.sam3.sam3_tokenizer import SAM3Tokenizer
@@ -101,7 +101,7 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
             },
             ["i n", "t h", "a n"],
         )
-        self.preprocessor = SAM3ImageSegmenterPreprocessor(
+        self.preprocessor = SAM3PromptableConceptImageSegmenterPreprocessor(
             self.tokenizer, self.image_converter
         )
         self.init_kwargs = {
@@ -118,7 +118,7 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
             "boxes": np.ones((self.batch_size, 1, 5), dtype="float32"),
             "box_labels": np.ones((self.batch_size, 1), dtype="int32"),
         }
-        self.input_data = self.preprocessor(self.train_data)[0]
+        self.input_data = self.preprocessor(self.train_data)
 
     def test_sam3_basics(self):
         pytest.skip(

@@ -16,9 +16,11 @@ except ImportError:
     tf = None
 
 
-@keras_hub_export("keras_hub.models.SAM3ImageSegmenterPreprocessor")
-class SAM3ImageSegmenterPreprocessor(Preprocessor):
-    """SAM3 Image Segmenter preprocessor.
+@keras_hub_export(
+    "keras_hub.models.SAM3PromptableConceptImageSegmenterPreprocessor"
+)
+class SAM3PromptableConceptImageSegmenterPreprocessor(Preprocessor):
+    """SAM3 Promptable Concept Image Segmenter preprocessor.
 
     This preprocessing layer is meant for use with
     `keras_hub.models.SAM3PromptableConceptImageSegmenter`.
@@ -53,7 +55,7 @@ class SAM3ImageSegmenterPreprocessor(Preprocessor):
 
     ```python
     # Load the preprocessor from a preset.
-    preprocessor = keras_hub.models.SAM3ImageSegmenterPreprocessor.from_preset(
+    preprocessor = keras_hub.models.SAM3PromptableConceptImageSegmenterPreprocessor.from_preset(
         "sam3_pcs"
     )
 
@@ -135,7 +137,7 @@ class SAM3ImageSegmenterPreprocessor(Preprocessor):
     ds = tf.data.Dataset.from_tensor_slices(inputs)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     ```
-    """
+    """  # noqa: E501
 
     backbone_cls = SAM3PromptableConceptBackbone
     tokenizer_cls = SAM3Tokenizer
@@ -292,8 +294,6 @@ class SAM3ImageSegmenterPreprocessor(Preprocessor):
             "boxes": boxes,
             "box_labels": box_labels,
         }
-        # TODO: Figure out how to handle y and sample_weight.
-        y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def get_config(self):

@@ -118,6 +118,7 @@ class SAM3Attention(layers.Layer):
         ):
             # TODO: Torch backend doesn't support attention_bias in
             # ops.dot_product_attention yet.
+            # Fixed by https://github.com/keras-team/keras/pull/22045
             import torch
 
             query = torch.transpose(query, 1, 2).contiguous()

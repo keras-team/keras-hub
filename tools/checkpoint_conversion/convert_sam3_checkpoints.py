@@ -22,11 +22,11 @@ from transformers.models.sam3.modeling_sam3 import Sam3ImageSegmentationOutput
 
 import keras_hub
 from keras_hub.src.models.sam3.sam3_image_converter import SAM3ImageConverter
-from keras_hub.src.models.sam3.sam3_image_segmenter_preprocessor import (
-    SAM3ImageSegmenterPreprocessor,
-)
 from keras_hub.src.models.sam3.sam3_pc_backbone import (
     SAM3PromptableConceptBackbone,
+)
+from keras_hub.src.models.sam3.sam3_pc_image_segmenter_preprocessor import (
+    SAM3PromptableConceptImageSegmenterPreprocessor,
 )
 from keras_hub.src.models.sam3.sam3_tokenizer import SAM3Tokenizer
 
@@ -92,7 +92,7 @@ def validate_output(
     )
 
     # Preprocess with keras.
-    keras_inputs, _, _ = keras_hub_preprocessor(
+    keras_inputs = keras_hub_preprocessor(
         {
             "images": np.expand_dims(np.array(image), axis=0),
             "boxes": input_boxes,
@@ -211,7 +211,7 @@ def main(_):
         hf_preprocessor.image_processor
     )
     keras_hub_tokenizer = convert_tokenizer(hf_preprocessor.tokenizer)
-    keras_hub_preprocessor = SAM3ImageSegmenterPreprocessor(
+    keras_hub_preprocessor = SAM3PromptableConceptImageSegmenterPreprocessor(
         keras_hub_tokenizer, keras_hub_image_converter
     )
     print("✅ KerasHub model loaded.")

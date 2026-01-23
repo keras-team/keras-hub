@@ -651,14 +651,14 @@ from keras_hub.src.models.sam.sam_image_segmenter import (
 from keras_hub.src.models.sam.sam_image_segmenter_preprocessor import (
     SAMImageSegmenterPreprocessor as SAMImageSegmenterPreprocessor,
 )
-from keras_hub.src.models.sam3.sam3_image_segmenter_preprocessor import (
-    SAM3ImageSegmenterPreprocessor as SAM3ImageSegmenterPreprocessor,
-)
 from keras_hub.src.models.sam3.sam3_pc_backbone import (
     SAM3PromptableConceptBackbone as SAM3PromptableConceptBackbone,
 )
 from keras_hub.src.models.sam3.sam3_pc_image_segmenter import (
     SAM3PromptableConceptImageSegmenter as SAM3PromptableConceptImageSegmenter,
+)
+from keras_hub.src.models.sam3.sam3_pc_image_segmenter_preprocessor import (
+    SAM3PromptableConceptImageSegmenterPreprocessor as SAM3PromptableConceptImageSegmenterPreprocessor,
 )
 from keras_hub.src.models.sam3.sam3_tokenizer import (
     SAM3Tokenizer as SAM3Tokenizer,

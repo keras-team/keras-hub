@@ -74,7 +74,6 @@ class CLIPEncoderLayer(layers.Layer):
             x,
             attention_mask=ops.cast(attention_mask, dtype="bool"),
             training=training,
-            use_causal_mask=True,
         )
         x = ops.add(residual, x)
 

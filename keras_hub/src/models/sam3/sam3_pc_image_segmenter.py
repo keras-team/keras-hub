@@ -2,11 +2,11 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.image_segmenter import ImageSegmenter
-from keras_hub.src.models.sam3.sam3_image_segmenter_preprocessor import (
-    SAM3ImageSegmenterPreprocessor,
-)
 from keras_hub.src.models.sam3.sam3_pc_backbone import (
     SAM3PromptableConceptBackbone,
+)
+from keras_hub.src.models.sam3.sam3_pc_image_segmenter_preprocessor import (
+    SAM3PromptableConceptImageSegmenterPreprocessor,
 )
 
 
@@ -31,8 +31,9 @@ class SAM3PromptableConceptImageSegmenter(ImageSegmenter):
 
     Args:
         backbone: A `keras_hub.models.SAM3PromptableConceptBackbone` instance.
-        preprocessor: Optional. An instance of `SAM3ImageSegmenterPreprocessor`
-            for input data preprocessing.
+        preprocessor: Optional. An instance of
+            `SAM3PromptableConceptImageSegmenterPreprocessor` for input data
+            preprocessing.
 
     Example:
 
@@ -117,7 +118,7 @@ class SAM3PromptableConceptImageSegmenter(ImageSegmenter):
         detr_decoder=detr_decoder,
         mask_decoder=mask_decoder,
     )
-    preprocessor = keras_hub.models.SAM3ImageSegmenterPreprocessor.from_preset(
+    preprocessor = keras_hub.models.SAM3PromptableConceptImageSegmenterPreprocessor.from_preset(
         "sam3_pcs"
     )
     sam3_pcs = keras_hub.models.SAM3PromptableConceptImageSegmenter(
@@ -167,10 +168,10 @@ class SAM3PromptableConceptImageSegmenter(ImageSegmenter):
     boxes = outputs["boxes"]  # [B, num_queries, 4]
     masks = outputs["masks"]  # [B, num_queries, H, W]
     ```
-    """
+    """  # noqa: E501
 
     backbone_cls = SAM3PromptableConceptBackbone
-    preprocessor_cls = SAM3ImageSegmenterPreprocessor
+    preprocessor_cls = SAM3PromptableConceptImageSegmenterPreprocessor
 
     def __init__(
         self,

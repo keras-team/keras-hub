@@ -503,15 +503,18 @@ class SAM3DetrDecoder(layers.Layer):
             ops.expand_dims(self.query_embed.embeddings, axis=0),
             [batch_size, 1, 1],
         )
+        query_embeds = ops.cast(query_embeds, vision_features.dtype)
         reference_boxes = ops.tile(
             ops.expand_dims(self.reference_points.embeddings, axis=0),
             [batch_size, 1, 1],
         )
+        reference_boxes = ops.cast(reference_boxes, vision_features.dtype)
         reference_boxes = ops.sigmoid(reference_boxes)
         presence_token = ops.tile(
             ops.expand_dims(self.presence_token.embeddings, axis=0),
             [batch_size, 1, 1],
         )
+        presence_token = ops.cast(presence_token, vision_features.dtype)
 
         # Concatenate presence token with query embeddings
         hidden_states = ops.concatenate([presence_token, query_embeds], axis=1)
