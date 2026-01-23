@@ -747,6 +747,10 @@ from keras_hub.src.models.text_to_image import TextToImage as TextToImage
 from keras_hub.src.models.text_to_image_preprocessor import (
     TextToImagePreprocessor as TextToImagePreprocessor,
 )
+from keras_hub.src.models.unet.unet_backbone import UNetBackbone as UNetBackbone
+from keras_hub.src.models.unet.unet_image_segmenter import (
+    UNetImageSegmenter as UNetImageSegmenter,
+)
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone as VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import (
     VGGImageClassifier as VGGImageClassifier,
