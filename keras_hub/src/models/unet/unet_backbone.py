@@ -158,6 +158,7 @@ class UNetBackbone(Backbone):
         self.use_residual = use_residual
         self.use_attention = use_attention
         self.kernel_initializer = kernel_initializer
+        self._backbone_feature_names = None
 
         # === Functional Model ===
         inputs = keras.layers.Input(shape=image_shape)
@@ -177,6 +178,7 @@ class UNetBackbone(Backbone):
 
         # Build decoder
         x = self._build_decoder(
+            inputs=inputs,
             bottleneck=bottleneck,
             encoder_outputs=encoder_outputs,
             backbone=backbone,
@@ -200,19 +202,6 @@ class UNetBackbone(Backbone):
             dtype=dtype,
             **kwargs,
         )
-
-        # === Config ===
-        self.backbone = backbone
-        self.depth = depth
-        self.filters = filters
-        self.image_shape = image_shape
-        self.use_batch_norm = use_batch_norm
-        self.use_dropout = use_dropout
-        self.dropout_rate = dropout_rate
-        self.upsampling_strategy = upsampling_strategy
-        self.use_residual = use_residual
-        self.use_attention = use_attention
-        self.kernel_initializer = kernel_initializer
 
     def _build_encoder(
         self,
@@ -243,8 +232,6 @@ class UNetBackbone(Backbone):
         Returns:
             Tuple of (bottleneck_tensor, list_of_skip_connection_tensors).
         """
-        self._backbone_feature_names = None  # Store for later reference
-
         if backbone is not None:
             # Use pretrained backbone as encoder
             # Extract pyramid outputs from backbone
@@ -304,6 +291,7 @@ class UNetBackbone(Backbone):
 
     def _build_decoder(
         self,
+        inputs,
         bottleneck,
         encoder_outputs,
         backbone=None,
@@ -321,6 +309,7 @@ class UNetBackbone(Backbone):
         """Build the decoder (upsampling path) of the U-Net.
 
         Args:
+            inputs: Input tensor (needed for spatial dimension comparison).
             bottleneck: Bottleneck tensor from encoder.
             encoder_outputs: List of skip connection tensors from encoder.
             backbone: Optional pretrained backbone (affects filter calculation).
@@ -438,16 +427,37 @@ class UNetBackbone(Backbone):
             # Final is 64x64, but input was 128x128, so need 1 more 2x upsample
 
             # Determine if first skip connection is at full resolution or
-            # downsampled by checking if it's from conv1 or block_1 layer
-            # (which typically have stride 2)
+            # downsampled by comparing its spatial dimensions to the input
+            input_spatial_shape = (
+                inputs.shape[1:-1]
+                if data_format == "channels_last"
+                else inputs.shape[2:]
+            )
+            first_skip_spatial_shape = (
+                encoder_outputs[0].shape[1:-1]
+                if data_format == "channels_last"
+                else encoder_outputs[0].shape[2:]
+            )
+
             first_skip_downsampled = False
             if (
+                input_spatial_shape[0] is not None
+                and first_skip_spatial_shape[0] is not None
+            ):
+                # Static shapes available - compare directly
+                if first_skip_spatial_shape[0] < input_spatial_shape[0]:
+                    first_skip_downsampled = True
+            elif (
                 self._backbone_feature_names
                 and len(self._backbone_feature_names) > 0
             ):
+                # Dynamic shapes - fallback to layer name heuristic
+                # This is imperfect but works for common architectures
                 first_layer_name = self._backbone_feature_names[0].lower()
-                first_skip_downsampled = (
-                    "conv1" in first_layer_name or "block_1" in first_layer_name
+                # Common patterns: conv1, block_1, stem have stride > 1
+                first_skip_downsampled = any(
+                    pattern in first_layer_name
+                    for pattern in ["conv1", "block_1", "stem", "pool"]
                 )
 
             # If first skip is downsampled, we need one extra upsampling stage

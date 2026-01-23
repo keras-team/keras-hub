@@ -16,8 +16,6 @@ class UNetEncoderTest(TestCase):
         self.input_data = np.random.uniform(0, 1, size=shape).astype(np.float32)
         # Ensure tests use channels_last format
         keras.config.set_image_data_format("channels_last")
-        # Ensure tests use channels_last format
-        keras.config.set_image_data_format("channels_last")
 
     def test_encoder_from_scratch_basics(self):
         """Test basic encoder functionality when built from scratch."""

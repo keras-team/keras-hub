@@ -262,8 +262,36 @@ class UNetDecoder(keras.layers.Layer):
             if dropout is not None:
                 x = dropout(x, training=training)
 
-            # Convolutional block
+            # Convolutional block with optional residual connection
+            x_pre_conv = x
             x = conv_block(x)
+
+            # Add residual connection if enabled
+            if self.use_residual:
+                shortcut_channels = (
+                    x_pre_conv.shape[-1]
+                    if self.data_format == "channels_last"
+                    else x_pre_conv.shape[1]
+                )
+                # Get target filters from conv block output
+                target_filters = (
+                    x.shape[-1]
+                    if self.data_format == "channels_last"
+                    else x.shape[1]
+                )
+                if shortcut_channels != target_filters:
+                    x_pre_conv = keras.layers.Conv2D(
+                        target_filters,
+                        kernel_size=(1, 1),
+                        padding="same",
+                        kernel_initializer=self.kernel_initializer,
+                        data_format=self.data_format,
+                        dtype=self.dtype,
+                        name=f"{conv_block.name}_residual_proj",
+                    )(x_pre_conv)
+                x = keras.layers.Add(
+                    dtype=self.dtype, name=f"{conv_block.name}_residual_add"
+                )([x, x_pre_conv])
 
         return x
 
@@ -317,9 +345,6 @@ class UNetDecoder(keras.layers.Layer):
                     name=f"{name}_bn2",
                 )
             )
-
-        # For residual connections, we'll handle in call method
-        # since we need access to the input
 
         layers_list.append(
             keras.layers.Activation(

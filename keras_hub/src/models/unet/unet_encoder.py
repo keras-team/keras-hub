@@ -110,10 +110,10 @@ class UNetEncoder(Backbone):
                     f"for channels_first format. Received: {image_shape}"
                 )
 
+        self._backbone_feature_names = None
+
         # Build functional model
         inputs = keras.layers.Input(shape=image_shape)
-
-        self._backbone_feature_names = None
 
         if backbone is not None:
             # Use pretrained backbone as encoder
