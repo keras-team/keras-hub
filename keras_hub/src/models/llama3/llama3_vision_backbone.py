@@ -117,6 +117,8 @@ class Llama3VisionBackbone(Backbone):
         vision_num_channels=3,
         vision_local_layers=None,
         vision_global_layers=None,
+        vision_max_num_tiles=4,
+        vision_max_aspect_ratio_id=8,
         vision_output_dim=None,
         cross_attention_layers=None,
         rope_max_wavelength=500000,
@@ -140,6 +142,8 @@ class Llama3VisionBackbone(Backbone):
             image_size=vision_image_size,
             num_channels=vision_num_channels,
             global_layers=vision_global_layers if vision_global_layers else 8,
+            max_num_tiles=vision_max_num_tiles,
+            max_aspect_ratio_id=vision_max_aspect_ratio_id,
             layer_norm_epsilon=layer_norm_epsilon,
             dropout=dropout,
             dtype=dtype,
@@ -246,6 +250,8 @@ class Llama3VisionBackbone(Backbone):
         self.vision_num_channels = vision_num_channels
         self.vision_local_layers = vision_local_layers
         self.vision_global_layers = vision_global_layers
+        self.vision_max_num_tiles = vision_max_num_tiles
+        self.vision_max_aspect_ratio_id = vision_max_aspect_ratio_id
         self.vision_output_dim = vision_output_dim
         self.cross_attention_layers = cross_attention_layers
         self.rope_max_wavelength = rope_max_wavelength
@@ -287,6 +293,8 @@ class Llama3VisionBackbone(Backbone):
                 "vision_num_channels": self.vision_num_channels,
                 "vision_local_layers": self.vision_local_layers,
                 "vision_global_layers": self.vision_global_layers,
+                "vision_max_num_tiles": self.vision_max_num_tiles,
+                "vision_max_aspect_ratio_id": self.vision_max_aspect_ratio_id,
                 "vision_output_dim": self.vision_output_dim,
                 "cross_attention_layers": self.cross_attention_layers,
                 "rope_max_wavelength": self.rope_max_wavelength,

@@ -68,11 +68,15 @@ def convert_backbone_config(hf_config):
         "vision_global_layers": vision_config.get(
             "num_global_layers", 8
         ),  # Global layers
-        "vision_num_heads": vision_config.get("num_attention_heads", 16),
+        "vision_num_heads": vision_config.get("attention_heads", 16),
         "vision_intermediate_dim": vision_config.get("intermediate_size", 5120),
         "vision_patch_size": vision_config.get("patch_size", 14),
         "vision_image_size": vision_config.get("image_size", 560),
         "vision_num_channels": vision_config.get("num_channels", 3),
+        "vision_max_num_tiles": vision_config.get("max_num_tiles", 4),
+        "vision_max_aspect_ratio_id": vision_config.get(
+            "max_aspect_ratio_id", 8
+        ),
         "vision_output_dim": vision_config.get("vision_output_dim", 7680),
         "cross_attention_layers": cross_attention_layers,
     }
