@@ -605,9 +605,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # === Vision processing ===
 
-        batch_size = tf.shape(prompts)[0]
-        desired_height = self.image_converter.image_size[0]
-        desired_width = self.image_converter.image_size[1]
         if images is None:
             # == Branch: vision model, with `None` value for `images` ==
 
@@ -740,9 +737,6 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # === Vision processing ===
 
-        batch_size = tf.shape(prompts)[0]
-        desired_height = self.image_converter.image_size[0]
-        desired_width = self.image_converter.image_size[1]
         if images is None:
             # == Branch: vision model, with `None` value for `images` ==
 
