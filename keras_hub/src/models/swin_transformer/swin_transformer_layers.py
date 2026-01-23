@@ -439,18 +439,23 @@ class SwinTransformerBlock(keras.layers.Layer):
             img_mask = ops.zeros((1, H, W, 1), dtype="int32")
             cnt = 0
             h_slices = [
-                (0, ops.cast(H / 2, 'int32')),
-                (ops.cast(H / 2, 'int32'), H - self.shift_size),
-                (H - self.shift_size, H),
+                (0, int(H // 2)),
+                (int(H // 2), int(H - self.shift_size)),
+                (int(H - self.shift_size), int(H)),
             ]
             w_slices = [
-                (0, ops.cast(W / 2, 'int32')),
-                (ops.cast(W / 2, 'int32'), W - self.shift_size),
-                (W - self.shift_size, W),
+                (0, int(W // 2)),
+                (int(W // 2), int(W - self.shift_size)),
+                (int(W - self.shift_size), int(W)),
             ]
             for h in h_slices:
                 for w in w_slices:
-                    img_mask = ops.slice_update(img_mask, [0, h[0], w[0], 0], ops.ones((1, h[1] - h[0], w[1] - w[0], 1), dtype='int32') * cnt)
+                    h_start, h_end = h
+                    w_start, w_end = w
+                    h_size = int(h_end - h_start)
+                    w_size = int(w_end - w_start)
+                    mask_slice = ops.ones((1, h_size, w_size, 1), dtype='int32') * cnt
+                    img_mask = ops.slice_update(img_mask, [0, h_start, w_start, 0], mask_slice)
                     cnt += 1
 
             mask_windows = window_partition(img_mask, self.window_size)[0]
@@ -605,7 +610,6 @@ class PatchEmbedding(layers.Layer):
         x = self.proj(x)  # shape: (B, H//P, W//P, C)
         if self.data_format == "channels_first":
             x = ops.transpose(x, [0, 2, 3, 1])
-        h, w = ops.shape(x)[1], ops.shape(x)[2]
         x = ops.reshape(x, [ops.shape(x)[0], -1, self.embed_dim])
         if self.norm:
             x = self.norm(x)
