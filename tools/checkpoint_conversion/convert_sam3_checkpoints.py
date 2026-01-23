@@ -228,6 +228,7 @@ def main(_):
     keras_hub_backbone.save_to_preset(f"./{preset}")
     keras_hub_image_converter.save_to_preset(f"./{preset}")
     keras_hub_tokenizer.save_to_preset(f"./{preset}")
+    keras_hub_preprocessor.save_to_preset(f"./{preset}")
     print(f"🏁 Preset saved to ./{preset}.")
 
     upload_uri = FLAGS.upload_uri

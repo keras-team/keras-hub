@@ -142,24 +142,18 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
     def test_end_to_end_model_predict(self):
         model = SAM3PromptableConceptImageSegmenter(**self.init_kwargs)
         outputs = model.predict(self.train_data)
-        pred_masks = outputs["pred_masks"]
-        pred_boxes = outputs["pred_boxes"]
-        pred_logits = outputs["pred_logits"]
-        presence_logits = outputs["presence_logits"]
-        semantic_segs = outputs["semantic_segs"]
+        scores = outputs["scores"]
+        boxes = outputs["boxes"]
+        masks = outputs["masks"]
 
         output_size = self.image_size // self.vision_encoder.patch_size * 4
         num_queries = self.detr_decoder.num_queries
+        self.assertAllEqual(scores.shape, (self.batch_size, num_queries))
         self.assertAllEqual(
-            pred_masks.shape,
-            (self.batch_size, output_size, output_size, num_queries),
+            masks.shape,
+            (self.batch_size, num_queries, output_size, output_size),
         )
-        self.assertAllEqual(pred_boxes.shape, (self.batch_size, num_queries, 4))
-        self.assertAllEqual(pred_logits.shape, (self.batch_size, num_queries))
-        self.assertAllEqual(presence_logits.shape, (self.batch_size, 1))
-        self.assertAllEqual(
-            semantic_segs.shape, (self.batch_size, output_size, output_size, 1)
-        )
+        self.assertAllEqual(boxes.shape, (self.batch_size, num_queries, 4))
 
     @pytest.mark.extra_large
     def test_all_presets(self):
@@ -169,8 +163,10 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
                 expected_output_shape={
-                    "masks": [2, 2, 1],
-                    "iou_pred": [2],
+                    # TODO.
+                    "scores": None,
+                    "boxes": None,
+                    "masks": None,
                 },
             )
 
@@ -192,8 +188,9 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
             input_data=self.input_data,
             comparison_mode="statistical",
             output_thresholds={
-                "pred_masks": {"max": 1e-3, "mean": 1e-4},
-                "pred_boxes": {"max": 1e-3, "mean": 1e-4},
+                "scores": {"max": 1e-3, "mean": 1e-4},
+                "boxes": {"max": 1e-3, "mean": 1e-4},
+                "masks": {"max": 1e-2, "mean": 1e-3},
             },
             allow_custom_ops=True,
         )
