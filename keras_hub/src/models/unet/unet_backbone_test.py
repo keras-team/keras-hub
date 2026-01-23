@@ -14,6 +14,7 @@ class UNetBackboneTest(TestCase):
         self.init_kwargs = {
             "depth": 3,
             "filters": 32,
+            "data_format": "channels_last",
         }
         self.input_size = 128
         self.input_data = ops.ones((2, self.input_size, self.input_size, 3))
@@ -38,6 +39,7 @@ class UNetBackboneTest(TestCase):
             "depth": depth,
             "filters": filters,
             "image_shape": (None, None, 3),
+            "data_format": "channels_last",
         }
         model = UNetBackbone(**init_kwargs)
         output = model(self.input_data)

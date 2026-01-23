@@ -2,7 +2,26 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.image_segmenter import ImageSegmenter
+from keras_hub.src.models.image_segmenter_preprocessor import (
+    ImageSegmenterPreprocessor,
+)
 from keras_hub.src.models.unet.unet_backbone import UNetBackbone
+
+
+@keras_hub_export("keras_hub.models.UNetImageSegmenterPreprocessor")
+class UNetImageSegmenterPreprocessor(ImageSegmenterPreprocessor):
+    """Preprocessor for UNet image segmentation.
+
+    This preprocessor simply passes through the input images and labels
+    without any modification, since UNet can handle variable input sizes.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(image_converter=None, **kwargs)
+
+    def call(self, x, y=None, sample_weight=None):
+        # For UNet, we don't need any preprocessing - just pass through
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
 
 @keras_hub_export("keras_hub.models.UNetImageSegmenter")
@@ -84,17 +103,21 @@ class UNetImageSegmenter(ImageSegmenter):
         x = backbone(inputs)
         outputs = self.output_conv(x)
 
-        super().__init__(
-            inputs=inputs,
-            outputs=outputs,
-            **kwargs,
-        )
+        if preprocessor is None:
+            preprocessor = UNetImageSegmenterPreprocessor()
 
-        # === Config ===
+        # Set attributes
         self.backbone = backbone
         self.num_classes = num_classes
         self.activation = activation
         self.preprocessor = preprocessor
+
+        super().__init__(
+            inputs=inputs,
+            outputs=outputs,
+            preprocessor=preprocessor,
+            **kwargs,
+        )
 
     def get_config(self):
         # Backbone serialized in `super`

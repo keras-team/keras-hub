@@ -752,6 +752,9 @@ from keras_hub.src.models.unet.unet_encoder import UNetEncoder as UNetEncoder
 from keras_hub.src.models.unet.unet_image_segmenter import (
     UNetImageSegmenter as UNetImageSegmenter,
 )
+from keras_hub.src.models.unet.unet_image_segmenter import (
+    UNetImageSegmenterPreprocessor as UNetImageSegmenterPreprocessor,
+)
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone as VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import (
     VGGImageClassifier as VGGImageClassifier,

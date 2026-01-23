@@ -15,6 +15,7 @@ class UNetImageSegmenterTest(TestCase):
             depth=3,
             filters=32,
             image_shape=(None, None, 3),
+            data_format="channels_last",
         )
         self.init_kwargs = {
             "backbone": self.backbone,
@@ -105,6 +106,7 @@ class UNetImageSegmenterTest(TestCase):
             depth=3,
             filters=32,
             dtype="bfloat16",
+            data_format="channels_last",
         )
         init_kwargs = {
             "backbone": backbone,
