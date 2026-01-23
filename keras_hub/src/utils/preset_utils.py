@@ -896,8 +896,6 @@ class KerasPresetSaver:
             self.save_preprocessor(task.preprocessor)
 
     def save_preprocessor(self, preprocessor):
-        if preprocessor is None:
-            return
         config_file = PREPROCESSOR_CONFIG_FILE
         if hasattr(preprocessor, "config_file"):
             config_file = preprocessor.config_file

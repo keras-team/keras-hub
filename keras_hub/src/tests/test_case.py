@@ -1022,13 +1022,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         # Test: the tree struct output by the
         # preprocessor must match what model expects.
-        if preprocessor is not None:
-            preprocessed_data = preprocessor(*train_data)[0]
-            tree.assert_same_structure(
-                preprocessed_data,
-                task._inputs_struct,
-                check_types=False,
-            )
+        preprocessed_data = preprocessor(*train_data)[0]
+        tree.assert_same_structure(
+            preprocessed_data,
+            task._inputs_struct,
+            check_types=False,
+        )
 
         # Test predict.
         output = task.predict(x)
@@ -1039,21 +1038,19 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         output_ds = task.predict(ds)
         self.assertAllClose(output, output_ds)
         # With split preprocessing.
-        if preprocessor is not None:
-            task.preprocessor = None
-            output_split = task.predict(ds.map(preprocessor))
-            task.preprocessor = preprocessor
-            self.assertAllClose(output, output_split)
+        task.preprocessor = None
+        output_split = task.predict(ds.map(preprocessor))
+        task.preprocessor = preprocessor
+        self.assertAllClose(output, output_split)
 
         # Test fit.
         task.fit(x, y, sample_weight=sw)
         # With a dataset.
         task.fit(ds)
         # With split preprocessing.
-        if preprocessor is not None:
-            task.preprocessor = None
-            task.fit(ds.map(preprocessor))
-            task.preprocessor = preprocessor
+        task.preprocessor = None
+        task.fit(ds.map(preprocessor))
+        task.preprocessor = preprocessor
         # Turn off default compilation, should error during `fit()`.
         task = cls(**init_kwargs, compile=False)
         with self.assertRaisesRegex(ValueError, "You must call `compile"):
