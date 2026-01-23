@@ -748,6 +748,7 @@ from keras_hub.src.models.text_to_image_preprocessor import (
     TextToImagePreprocessor as TextToImagePreprocessor,
 )
 from keras_hub.src.models.unet.unet_backbone import UNetBackbone as UNetBackbone
+from keras_hub.src.models.unet.unet_encoder import UNetEncoder as UNetEncoder
 from keras_hub.src.models.unet.unet_image_segmenter import (
     UNetImageSegmenter as UNetImageSegmenter,
 )

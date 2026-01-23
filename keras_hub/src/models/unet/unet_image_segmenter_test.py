@@ -1,3 +1,6 @@
+import os
+
+import keras
 import pytest
 from keras import ops
 
@@ -19,12 +22,22 @@ class UNetImageSegmenterTest(TestCase):
         }
         self.input_size = 128
         self.input_data = ops.ones((2, self.input_size, self.input_size, 3))
+        # Create dummy segmentation labels (one-hot encoded)
+        self.labels = ops.one_hot(
+            ops.zeros((2, self.input_size, self.input_size), dtype="int32"),
+            num_classes=2,
+        )
+        self.train_data = (self.input_data, self.labels)
 
+    @pytest.mark.skipif(
+        keras.backend.backend() != "tensorflow",
+        reason="run_task_test uses TensorFlow-specific tf.data.Dataset",
+    )
     def test_segmenter_basics(self):
         self.run_task_test(
             cls=UNetImageSegmenter,
             init_kwargs=self.init_kwargs,
-            train_data=self.input_data,
+            train_data=self.train_data,
             expected_output_shape=(2, self.input_size, self.input_size, 2),
         )
 
@@ -76,3 +89,50 @@ class UNetImageSegmenterTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=UNetImageSegmenter,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 5e-5, "mean": 1e-5}},
+        )
+
+    def test_dtype(self):
+        """Test segmenter with different dtypes."""
+        backbone = UNetBackbone(
+            depth=3,
+            filters=32,
+            dtype="bfloat16",
+        )
+        init_kwargs = {
+            "backbone": backbone,
+            "num_classes": 2,
+        }
+        model = UNetImageSegmenter(**init_kwargs)
+        output = model(self.input_data)
+        self.assertEqual(output.shape, (2, self.input_size, self.input_size, 2))
+        # Check that the backbone uses the correct dtype
+        self.assertEqual(model.backbone.dtype_policy.name, "bfloat16")
+
+    @pytest.mark.large
+    def test_save_to_preset(self):
+        save_dir = self.get_temp_dir()
+        segmenter = UNetImageSegmenter(**self.init_kwargs)
+        segmenter.save_to_preset(save_dir)
+
+        # Check existence of files.
+        self.assertTrue(os.path.exists(os.path.join(save_dir, "config.json")))
+        self.assertTrue(
+            os.path.exists(os.path.join(save_dir, "model.weights.h5"))
+        )
+        self.assertTrue(os.path.exists(os.path.join(save_dir, "metadata.json")))
+
+        # Try loading the model from preset directory.
+        restored_segmenter = UNetImageSegmenter.from_preset(save_dir)
+
+        # Check the model output.
+        ref_out = segmenter(self.input_data)
+        new_out = restored_segmenter(self.input_data)
+        self.assertAllClose(ref_out, new_out)
