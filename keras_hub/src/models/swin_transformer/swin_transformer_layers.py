@@ -4,7 +4,6 @@ from typing import Tuple
 from typing import Union
 
 import keras
-import numpy as np
 from keras import layers
 from keras import ops
 
@@ -454,15 +453,26 @@ class SwinTransformerBlock(keras.layers.Layer):
                     w_start, w_end = w
                     h_size = int(h_end - h_start)
                     w_size = int(w_end - w_start)
-                    mask_slice = ops.ones((1, h_size, w_size, 1), dtype='int32') * cnt
-                    img_mask = ops.slice_update(img_mask, [0, h_start, w_start, 0], mask_slice)
+                    mask_slice = (
+                        ops.ones((1, h_size, w_size, 1), dtype="int32") * cnt
+                    )
+                    img_mask = ops.slice_update(
+                        img_mask, [0, h_start, w_start, 0], mask_slice
+                    )
                     cnt += 1
 
             mask_windows = window_partition(img_mask, self.window_size)[0]
             mask_windows = ops.reshape(
                 mask_windows, (-1, self.window_size * self.window_size)
             )
-            attn_mask = ops.cast(ops.expand_dims(mask_windows, 1) != ops.expand_dims(mask_windows, 2), dtype='float32') * -100.0
+            attn_mask = (
+                ops.cast(
+                    ops.expand_dims(mask_windows, 1)
+                    != ops.expand_dims(mask_windows, 2),
+                    dtype="float32",
+                )
+                * -100.0
+            )
         else:
             shifted_x = x
 
@@ -542,7 +552,7 @@ class PatchMerging(layers.Layer):
 
         x = ops.reshape(x, (B, H, W, C))
         pad_values = ((0, 0), (0, H % 2), (0, W % 2), (0, 0))
-        x = ops.pad(x, pad_values, mode='constant')
+        x = ops.pad(x, pad_values, mode="constant")
 
         # Reshape to group patches
         x0 = x[:, 0::2, 0::2, :]
@@ -614,7 +624,6 @@ class PatchEmbedding(layers.Layer):
         if self.norm:
             x = self.norm(x)
         return x
-
 
     def get_config(self):
         config = super().get_config()

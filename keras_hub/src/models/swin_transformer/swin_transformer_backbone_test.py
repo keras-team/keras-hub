@@ -41,8 +41,18 @@ class SwinTransformerBackboneTest(TestCase):
 
     @pytest.mark.large
     def test_smallest_preset(self):
-        pass  # Will be added in a future PR when presets are implemented
+        self.run_preset_test(
+            cls=SwinTransformerBackbone,
+            preset="swin_tiny_patch4_window7_224",
+            input_data=ops.ones((1, 224, 224, 3)),
+        )
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        pass  # Will be added in a future PR when presets are implemented
+        for preset in SwinTransformerBackbone.presets:
+            image_size = 384 if "384" in preset else 224
+            self.run_preset_test(
+                cls=SwinTransformerBackbone,
+                preset=preset,
+                input_data=ops.ones((1, image_size, image_size, 3)),
+            )

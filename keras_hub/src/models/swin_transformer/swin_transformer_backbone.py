@@ -155,9 +155,7 @@ class SwinTransformerBackbone(Backbone):
 
         x = self.norm(x)
 
-        super().__init__(
-            inputs=inputs, outputs=x, dtype=dtype, **kwargs
-        )
+        super().__init__(inputs=inputs, outputs=x, dtype=dtype, **kwargs)
 
         # === Config ===
         self.image_shape = image_shape
