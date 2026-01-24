@@ -83,6 +83,11 @@ class Llama3VisionCrossAttention(layers.Layer):
         self.dropout = layers.Dropout(dropout)
 
     def build(self, input_shape):
+        # Pre-build norms with head_dim to match HF's per-head normalization
+        # HF: q_norm and k_norm have shape (head_dim,) = (128,)
+        self.query_norm.build((None, None, self.head_dim))
+        self.kv_norm.build((None, None, self.head_dim))
+
         self.gate = self.add_weight(
             name="gate",
             shape=(1,),

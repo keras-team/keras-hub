@@ -62,9 +62,16 @@ def convert_backbone_config(hf_config):
     # 6 * 1280 = 7680
     vision_output_dim = (len(intermediate_layers) + 1) * vision_hidden
 
+    # HF MllamaTextModel uses vocab_size + 8 for special tokens
+    vocab_size = text_config.get("vocab_size", 128256) + 8
+
+    # Keras text backbone only has self-attention layers
+    # Cross-attention layers are handled separately
+    num_self_attention_layers = num_text_layers - len(cross_attention_layers)
+
     return {
-        "vocabulary_size": text_config.get("vocab_size", 128256),
-        "num_layers": num_text_layers,
+        "vocabulary_size": vocab_size,
+        "num_layers": num_self_attention_layers,
         "hidden_dim": text_config.get("hidden_size", 4096),
         "num_query_heads": text_config.get("num_attention_heads", 32),
         "num_key_value_heads": text_config.get("num_key_value_heads", 8),
