@@ -16,6 +16,9 @@ fi
 set -x
 cd "${KOKORO_ROOT}/"
 
+export DEBIAN_FRONTEND=noninteractive
+cd "${KOKORO_ROOT}/"
+
 PYTHON_BINARY="/usr/bin/python3.10"
 
 "${PYTHON_BINARY}" -m venv venv
@@ -50,6 +53,10 @@ then
    pip install -r requirements-torch-cuda.txt --progress-bar off --timeout 1000
 fi
 
+
+# Temporarily relax Config to allow 3.10 for GPU tests.
+sed -i 's/requires-python = ">=3.11"/requires-python = ">=3.10"/' pyproject.toml
+
 pip install --no-deps -e "." --progress-bar off
 pip install huggingface_hub
 
@@ -57,8 +64,8 @@ pip install huggingface_hub
 if [ "${RUN_XLARGE:-0}" == "1" ]
 then
    pytest keras_hub --check_gpu --run_large --run_extra_large \
-      --cov=keras-hub
+      --cov=keras_hub
 else
    pytest keras_hub --check_gpu --run_large \
-      --cov=keras-hub
+      --cov=keras_hub
 fi

@@ -45,6 +45,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         layer_norm_epsilon=1e-6,
         rope_wavelength=10_000.0,
         rope_scaling_factor=1.0,
+        use_bidirectional_attention=False,
         dropout=0,
         **kwargs,
     ):
@@ -66,6 +67,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.rope_wavelength = rope_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.use_bidirectional_attention = use_bidirectional_attention
         self.dropout = dropout
 
         self.pre_attention_norm = RMSNormalization(
@@ -93,6 +95,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
             rope_wavelength=rope_wavelength,
             rope_scaling_factor=rope_scaling_factor,
             dropout=dropout,
+            use_bidirectional_attention=use_bidirectional_attention,
             dtype=self.dtype_policy,
             name="attention",
         )
@@ -209,6 +212,14 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         if cache is not None:
             input_length = ops.shape(cache)[2]
 
+        if self.use_bidirectional_attention:
+            # `output_length` and `input_length` will be the same in this case
+            # because we use bidirectional attention for models like
+            # `EmbeddingGemma` which aren't used for text generation.
+            mask_1 = decoder_mask
+            mask_2 = ops.transpose(mask_1, (0, 2, 1))
+            return mask_1 * mask_2
+
         causal_mask = compute_causal_mask(
             batch_size=batch_size,
             input_length=input_length,
@@ -240,6 +251,11 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         cache_update_mask=None,
     ):
         # Note: `vision_mask` is used only for Gemma3.
+        # If float16, we clamp the input to avoid overflow.
+        is_float16 = keras.backend.standardize_dtype(x.dtype) == "float16"
+        if is_float16:
+            x = ops.clip(x, -65504, 65504)
+
         normalized_x = self.pre_attention_norm(x)
         attention_mask = self._compute_attention_mask(
             normalized_x, padding_mask, vision_mask, cache, cache_update_index
@@ -264,7 +280,15 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         if self.dropout:
             attention = self.attention_dropout(attention)
 
-        attention_x = x + attention
+        if is_float16:
+            attention_x = ops.add(
+                ops.cast(x, "float32"), ops.cast(attention, "float32")
+            )
+            attention_x = ops.clip(attention_x, -65504, 65504)
+            attention_x = ops.cast(attention_x, "float16")
+        else:
+            attention_x = x + attention
+
         normalized_x = self.pre_ffw_norm(attention_x)
 
         x1 = self.gating_ffw(normalized_x)
@@ -275,7 +299,14 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         if self.use_post_ffw_norm:
             x = self.post_ffw_norm(x)
 
-        x = x + attention_x
+        if is_float16:
+            x = ops.add(
+                ops.cast(x, "float32"), ops.cast(attention_x, "float32")
+            )
+            x = ops.clip(x, -65504, 65504)
+            x = ops.cast(x, "float16")
+        else:
+            x = x + attention_x
 
         if cache is not None:
             return x, new_cache
@@ -304,6 +335,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
                 "dropout": self.dropout,
                 "rope_wavelength": self.rope_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "use_bidirectional_attention": self.use_bidirectional_attention,
             }
         )
         return config

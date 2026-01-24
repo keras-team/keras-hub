@@ -18,12 +18,8 @@ from keras_hub.src.utils.preset_utils import upload_preset
 
 
 class PresetUtilsTest(TestCase):
-    @pytest.mark.large
-    def test_sharded_weights(self):
-        if not sharded_weights_available():
-            self.skipTest("Sharded weights are not available.")
-
-        init_kwargs = {
+    def setUp(self):
+        self.init_kwargs = {
             "vocabulary_size": 1024,
             "num_layers": 12,
             "num_query_heads": 8,
@@ -40,7 +36,14 @@ class PresetUtilsTest(TestCase):
             "use_post_attention_norm": True,
             "use_sliding_window_attention": True,
         }
-        backbone = GemmaBackbone(**init_kwargs)  # ~422KB
+
+    @pytest.mark.large
+    def test_sharded_weights(self):
+        if not sharded_weights_available():
+            self.skipTest("Sharded weights are not available.")
+
+        # Create a GemmaBackbone instance with the specified init kwargs
+        backbone = GemmaBackbone(**self.init_kwargs)  # ~422KB
 
         # Save the sharded weights.
         preset_dir = self.get_temp_dir()
@@ -53,6 +56,55 @@ class PresetUtilsTest(TestCase):
         )
 
         # Load the sharded weights.
+        revived_backbone = GemmaBackbone.from_preset(preset_dir)
+        for v1, v2 in zip(
+            backbone.trainable_variables, revived_backbone.trainable_variables
+        ):
+            self.assertAllClose(v1, v2)
+
+    @pytest.mark.large
+    def test_sharded_weights_config(self):
+        if not sharded_weights_available():
+            self.skipTest("Sharded weights are not available.")
+
+        # Create a GemmaBackbone instance with the specified init kwargs
+        backbone = GemmaBackbone(**self.init_kwargs)  # ~422KB
+
+        # Save the sharded weights.
+        preset_dir = self.get_temp_dir()
+        backbone.save_to_preset(preset_dir, max_shard_size=0.0002)
+        config_file = os.path.join(preset_dir, "model.weights.json")
+        self.assertTrue(os.path.exists(config_file))
+        config = json.load(open(config_file, "r"))
+        weight_map = config["weight_map"]
+        # check the format of `weight_map`
+        self.assertIsInstance(weight_map, dict)
+        for key, value in weight_map.items():
+            self.assertIsInstance(key, str)
+            if isinstance(value, list):
+                self.assertTrue(all(isinstance(item, str) for item in value))
+            else:
+                self.assertIsInstance(value, str)
+
+    @pytest.mark.large
+    def test_disabled_sharding(self):
+        # Create a GemmaBackbone instance with the specified init kwargs
+        backbone = GemmaBackbone(**self.init_kwargs)
+
+        # Save the weights with `max_shard_size=None`
+        preset_dir = self.get_temp_dir()
+        backbone.save_to_preset(preset_dir, max_shard_size=None)
+        self.assertTrue(
+            os.path.exists(os.path.join(preset_dir, "model.weights.h5"))
+        )
+        self.assertFalse(
+            os.path.exists(os.path.join(preset_dir, "model.weights.json"))
+        )
+        self.assertFalse(
+            os.path.exists(os.path.join(preset_dir, "model_00000.weights.h5"))
+        )
+
+        # Load the weights.
         revived_backbone = GemmaBackbone.from_preset(preset_dir)
         for v1, v2 in zip(
             backbone.trainable_variables, revived_backbone.trainable_variables

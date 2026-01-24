@@ -53,7 +53,7 @@ class XceptionImageClassifierTest(TestCase):
         )
         self.assertEqual(model.output_dense.compute_dtype, "bfloat16")
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         # Test that our forward pass is stable!
         image_batch = self.load_test_image()[None, ...].astype("float32")
@@ -69,6 +69,13 @@ class XceptionImageClassifierTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
+            cls=XceptionImageClassifier,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+        )
+
+    def test_litert_export(self):
+        self.run_litert_export_test(
             cls=XceptionImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,

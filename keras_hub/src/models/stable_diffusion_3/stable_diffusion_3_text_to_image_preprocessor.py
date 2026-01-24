@@ -50,8 +50,12 @@ class StableDiffusion3TextToImagePreprocessor(TextToImagePreprocessor):
 
     def generate_preprocess(self, x):
         token_ids = {}
-        token_ids["clip_l"] = self.clip_l_preprocessor(x)["token_ids"]
-        token_ids["clip_g"] = self.clip_g_preprocessor(x)["token_ids"]
+        token_ids["clip_l"] = self.clip_l_preprocessor(
+            {"prompts": x, "images": None}
+        )["token_ids"]
+        token_ids["clip_g"] = self.clip_g_preprocessor(
+            {"prompts": x, "images": None}
+        )["token_ids"]
         if self.t5_preprocessor is not None:
             token_ids["t5"] = self.t5_preprocessor(x)["token_ids"]
         return token_ids

@@ -1,6 +1,6 @@
 # KerasHub: Multi-framework Pretrained Models
 [![](https://github.com/keras-team/keras-hub/workflows/Tests/badge.svg?branch=master)](https://github.com/keras-team/keras-hub/actions?query=workflow%3ATests+branch%3Amaster)
-![Python](https://img.shields.io/badge/python-v3.9.0+-success.svg)
+![Python](https://img.shields.io/badge/python-v3.11.0+-success.svg)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-hub/issues)
 
 > [!IMPORTANT]
@@ -100,13 +100,6 @@ To install the latest KerasHub release with Keras 3, simply run:
 
 ```
 pip install --upgrade keras-hub
-```
-
-Our text tokenizers are based on TensorFlow Text. Hence, if you are using any
-model which has language as a modality, you will have to run:
-
-```
-pip install --upgrade keras-hub[nlp]
 ```
 
 To install the latest nightly changes for both KerasHub and Keras, you can use

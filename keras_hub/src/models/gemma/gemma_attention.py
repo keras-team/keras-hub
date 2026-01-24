@@ -152,7 +152,7 @@ class CachedGemmaAttention(keras.layers.Layer):
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
                 attention_mask = ops.cast(attention_mask, dtype="bool")
             # Only pass soft cap if needed as not all keras versions support.
-            if self.logit_soft_cap:
+            if self.logit_soft_cap is not None:
                 kwargs = {"attn_logits_soft_cap": self.logit_soft_cap}
             else:
                 kwargs = {}

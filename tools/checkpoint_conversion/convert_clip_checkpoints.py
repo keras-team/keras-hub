@@ -347,7 +347,9 @@ def validate_output(
 
     # Call with keras.
     keras_preprocessor = CLIPPreprocessor(keras_tokenizer)
-    token_ids = keras_preprocessor(text)["token_ids"]
+    token_ids = keras_preprocessor(
+        {"images": keras_preprocessed, "prompts": text}
+    )["token_ids"]
     keras_outputs = keras_model.predict(
         {"images": images, "token_ids": token_ids}, verbose=0
     )

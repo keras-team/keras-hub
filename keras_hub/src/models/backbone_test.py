@@ -5,6 +5,7 @@ import pytest
 
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.bert.bert_backbone import BertBackbone
+from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
@@ -105,3 +106,40 @@ class TestBackbone(TestCase):
         ref_out = backbone(data)
         new_out = restored_backbone(data)
         self.assertAllClose(ref_out, new_out)
+
+    def test_export_supported_model(self):
+        backbone_config = {
+            "vocabulary_size": 1000,
+            "num_layers": 2,
+            "num_query_heads": 4,
+            "num_key_value_heads": 1,
+            "hidden_dim": 512,
+            "intermediate_dim": 1024,
+            "head_dim": 128,
+        }
+        backbone = GemmaBackbone(**backbone_config)
+        export_path = os.path.join(self.get_temp_dir(), "export_backbone")
+        backbone.export_to_transformers(export_path)
+        # Basic check: config file exists
+        self.assertTrue(
+            os.path.exists(os.path.join(export_path, "config.json"))
+        )
+
+    def test_export_unsupported_model(self):
+        backbone_config = {
+            "vocabulary_size": 1000,
+            "num_layers": 2,
+            "num_query_heads": 4,
+            "num_key_value_heads": 1,
+            "hidden_dim": 512,
+            "intermediate_dim": 1024,
+            "head_dim": 128,
+        }
+
+        class UnsupportedBackbone(GemmaBackbone):
+            pass
+
+        backbone = UnsupportedBackbone(**backbone_config)
+        export_path = os.path.join(self.get_temp_dir(), "unsupported")
+        with self.assertRaises(ValueError):
+            backbone.export_to_transformers(export_path)

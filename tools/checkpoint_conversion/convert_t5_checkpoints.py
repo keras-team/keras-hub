@@ -11,9 +11,9 @@ from checkpoint_conversion_utils import get_md5_checksum
 import keras_hub
 
 PRESET_MAP = {
-    "t5_small_multi": "t5-small",
-    "t5_base_multi": "t5-base",
-    "t5_large_multi": "t5-large",
+    "t5_small_multi": "google-t5/t5-small",
+    "t5_base_multi": "google-t5/t5-base",
+    "t5_large_multi": "google-t5/t5-large",
     "t5_1.1_small": "google/t5-v1_1-small",
     "t5_1.1_base": "google/t5-v1_1-base",
     "t5_1.1_large": "google/t5-v1_1-large",

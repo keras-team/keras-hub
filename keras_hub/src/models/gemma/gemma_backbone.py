@@ -1,10 +1,8 @@
 import keras
 from keras import ops
+from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.reversible_embedding import (
-    ReversibleEmbedding,
-)
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.gemma.gemma_decoder_block import GemmaDecoderBlock
 from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
@@ -114,7 +112,6 @@ class GemmaBackbone(Backbone):
                 scale=1.0,
                 mode="fan_in",
                 distribution="untruncated_normal",
-                seed=None,
             ),
             dtype=dtype,
             logit_soft_cap=final_logit_soft_cap,

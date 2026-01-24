@@ -45,7 +45,7 @@ class ResNetImageClassifierTest(TestCase):
         model = ResNetImageClassifier(**self.init_kwargs, head_dtype="bfloat16")
         self.assertEqual(model.output_dense.compute_dtype, "bfloat16")
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         # Test that our forward pass is stable!
         image_batch = self.load_test_image()[None, ...] / 255.0
@@ -63,6 +63,20 @@ class ResNetImageClassifierTest(TestCase):
             cls=ResNetImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
+        )
+
+    def test_litert_export(self):
+        """Test LiteRT export for ResNetImageClassifier with small test
+        model."""
+        model = ResNetImageClassifier(**self.init_kwargs)
+        expected_output_shape = (2, 2)  # 2 images, 2 classes
+
+        self.run_litert_export_test(
+            model=model,
+            input_data=self.images,
+            expected_output_shape=expected_output_shape,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 5e-5, "mean": 1e-5}},
         )
 
     @pytest.mark.extra_large
