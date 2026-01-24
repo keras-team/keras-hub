@@ -198,6 +198,7 @@ class Llama3VisionEncoder(keras.layers.Layer):
         global_layers=8,
         max_num_tiles=4,
         max_aspect_ratio_id=8,
+        intermediate_layers_indices=None,
         activation="gelu",
         dropout=0.0,
         layer_norm_epsilon=1e-6,
@@ -217,6 +218,10 @@ class Llama3VisionEncoder(keras.layers.Layer):
         self.global_layers_count = global_layers
         self.max_num_tiles = max_num_tiles
         self.max_aspect_ratio_id = max_aspect_ratio_id
+        # HF default: [3, 7, 15, 23, 30] for 11B model
+        if intermediate_layers_indices is None:
+            intermediate_layers_indices = [3, 7, 15, 23, 30]
+        self.intermediate_layers_indices = intermediate_layers_indices
         self.activation = activation
         self.dropout_rate = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -353,9 +358,13 @@ class Llama3VisionEncoder(keras.layers.Layer):
         # Gated positional embedding
         embeddings = self.gated_positional_embedding(embeddings, tile_ids)
 
-        # Local transformer layers
-        for layer in self.transformer_layers:
+        # Local transformer layers + collect intermediate outputs
+        intermediate_outputs = []
+        for i, layer in enumerate(self.transformer_layers):
             embeddings = layer(embeddings)
+            # Collect outputs at specified indices
+            if i in self.intermediate_layers_indices:
+                intermediate_outputs.append(embeddings)
 
         # Post-tile positional embedding
         embeddings = self.post_tile_positional_embedding(
@@ -371,6 +380,13 @@ class Llama3VisionEncoder(keras.layers.Layer):
 
         # Post layer norm
         embeddings = self.layernorm_post(embeddings)
+
+        # Concatenate intermediate outputs + final output
+        # HF: [layer_3, layer_7, layer_15, layer_23, layer_30, final]
+        if intermediate_outputs:
+            intermediate_outputs.append(embeddings)
+            # Concat along feature dim: (batch, seq, 6 * hidden_dim)
+            embeddings = ops.concatenate(intermediate_outputs, axis=-1)
 
         return embeddings
 
@@ -388,6 +404,7 @@ class Llama3VisionEncoder(keras.layers.Layer):
                 "global_layers": self.global_layers_count,
                 "max_num_tiles": self.max_num_tiles,
                 "max_aspect_ratio_id": self.max_aspect_ratio_id,
+                "intermediate_layers_indices": self.intermediate_layers_indices,
                 "activation": self.activation,
                 "dropout": self.dropout_rate,
                 "layer_norm_epsilon": self.layer_norm_epsilon,

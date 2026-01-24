@@ -52,6 +52,16 @@ def convert_backbone_config(hf_config):
         [i for i in range(3, num_text_layers, 5)],
     )
 
+    # HF calculates vision_output_dim as:
+    # (num_intermediate_layers + 1) * hidden_size
+    # intermediate_layers_indices defaults to [3, 7, 15, 23, 30] + final
+    intermediate_layers = vision_config.get(
+        "intermediate_layers_indices", [3, 7, 15, 23, 30]
+    )
+    vision_hidden = vision_config.get("hidden_size", 1280)
+    # 6 * 1280 = 7680
+    vision_output_dim = (len(intermediate_layers) + 1) * vision_hidden
+
     return {
         "vocabulary_size": text_config.get("vocab_size", 128256),
         "num_layers": num_text_layers,
@@ -61,7 +71,7 @@ def convert_backbone_config(hf_config):
         "intermediate_dim": text_config.get("intermediate_size", 14336),
         "rope_max_wavelength": text_config.get("rope_theta", 500000),
         "layer_norm_epsilon": text_config.get("rms_norm_eps", 1e-5),
-        "vision_hidden_dim": vision_config.get("hidden_size", 1280),
+        "vision_hidden_dim": vision_hidden,
         "vision_num_layers": vision_config.get(
             "num_hidden_layers", 32
         ),  # Local layers
@@ -77,7 +87,8 @@ def convert_backbone_config(hf_config):
         "vision_max_aspect_ratio_id": vision_config.get(
             "max_aspect_ratio_id", 8
         ),
-        "vision_output_dim": vision_config.get("vision_output_dim", 7680),
+        "vision_intermediate_layers_indices": intermediate_layers,
+        "vision_output_dim": vision_output_dim,
         "cross_attention_layers": cross_attention_layers,
     }
 
@@ -548,6 +559,9 @@ def main(_):
     # Note: We usually instantiate the CausalLM, which contains the Backbone
     print("-> Creating Keras model...")
     keras_config = convert_backbone_config(hf_config)
+
+    # Debug: Print vision_output_dim to verify
+    print(f"   DEBUG: vision_output_dim = {keras_config['vision_output_dim']}")
 
     # Instantiate the backbone first
     backbone = Llama3VisionBackbone(**keras_config)
