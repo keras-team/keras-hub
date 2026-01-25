@@ -99,6 +99,11 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
             )
         
         self.mrope_section = tuple(mrope_section)
+        
+        # Validate that mrope_section dimensions are consistent
+        # Note: Each section uses pairs (cos/sin), so total = sum * 2
+        total_dim = sum(mrope_section) * 2
+        # This will be validated against head_dim when build() is called in parent attention layer
         self.total_rope_dim = sum(mrope_section)
     
     def apply_multimodal_rotary_embedding(
