@@ -223,16 +223,23 @@ class Qwen3OmniAttention(keras.layers.Layer):
             key_cache = cache[:, 0, ...]
             value_cache = cache[:, 1, ...]
             if cache_update_index is None:
+                # Use cached keys/values (already have M-RoPE applied)
                 key = key_cache
                 value = value_cache
-            else:
-                key_update, value_update = _compute_key_value(hidden_states)
-                # Apply M-RoPE to new keys
-                _, key_update = self.multimodal_rotary_embedding.apply_multimodal_rotary_embedding(
-                    query[:, :1, :, :],  # dummy query for shape
-                    key_update,
-                    position_ids[:, cache_update_index:cache_update_index+1, :]
+                # Still need to apply M-RoPE to query
+                query, _ = self.multimodal_rotary_embedding.apply_multimodal_rotary_embedding(
+                    query, key[:, :1, :, :], position_ids  # Use key slice as dummy for API
                 )
+            else:
+                # Generate new keys/values for the new token
+                key_update, value_update = _compute_key_value(hidden_states)
+                
+                # Apply M-RoPE to query and new key
+                query, key_update = self.multimodal_rotary_embedding.apply_multimodal_rotary_embedding(
+                    query, key_update, position_ids
+                )
+                
+                # Update cache with new key/value (already has M-RoPE applied)
                 start = [0, cache_update_index, 0, 0]
                 key = ops.slice_update(key_cache, start, key_update)
                 value = ops.slice_update(value_cache, start, value_update)
@@ -243,11 +250,11 @@ class Qwen3OmniAttention(keras.layers.Layer):
                     "`cache_update_index` should not be set if `cache` is `None`."
                 )
             key, value = _compute_key_value(hidden_states)
-        
-        # Apply M-RoPE to Q and K
-        query, key = self.multimodal_rotary_embedding.apply_multimodal_rotary_embedding(
-            query, key, position_ids
-        )
+            
+            # Apply M-RoPE to Q and K (no caching scenario)
+            query, key = self.multimodal_rotary_embedding.apply_multimodal_rotary_embedding(
+                query, key, position_ids
+            )
         
         # Repeat K, V for GQA: (batch, seq_len, num_kv_heads, head_dim)
         # -> (batch, seq_len, num_query_heads, head_dim)
@@ -297,6 +304,14 @@ class Qwen3OmniAttention(keras.layers.Layer):
         )
         
         if self.sliding_window_size:
+            if attention_mask is None:
+                # Create a causal mask if none provided
+                query_len = ops.shape(query)[1]
+                key_len = ops.shape(key)[1]
+                attention_mask = ops.tril(
+                    ops.ones((query_len, key_len), dtype="bool")
+                )
+                attention_mask = ops.expand_dims(attention_mask, 0)
             attention_mask = self._mask_sliding_window(
                 attention_mask,
                 cache_update_index=cache_update_index if cache_update_index is not None else 0,
@@ -317,6 +332,8 @@ class Qwen3OmniAttention(keras.layers.Layer):
         
         if keras.config.backend() == "tensorflow":
             import tensorflow as tf
+            # band_size - 1 because band_part uses 0-indexed offsets
+            # e.g., window_size=512 means each token can attend to 511 before and after
             band_size = ops.minimum(key_len, self.sliding_window_size - 1)
             band_size = ops.cast(band_size, "int32")
             sliding_mask = tf.linalg.band_part(all_ones, band_size, band_size)

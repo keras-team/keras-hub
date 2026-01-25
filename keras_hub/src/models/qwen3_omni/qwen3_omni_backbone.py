@@ -8,9 +8,9 @@ Reference implementations:
 
 import keras
 from keras import ops
-from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
 from keras_hub.src.models.qwen3_omni.qwen3_omni_decoder import (
@@ -207,7 +207,6 @@ class Qwen3OmniBackbone(Backbone):
         )
         
         # === Functional Model ===
-        # === Functional Model ===
         
         # Model inputs (text + optional multimodal)
         token_id_input = keras.Input(
@@ -336,6 +335,8 @@ class Qwen3OmniBackbone(Backbone):
                 "dropout": self.dropout,
                 "tie_word_embeddings": self.tie_word_embeddings,
                 "sliding_window_size": self.sliding_window_size,
+                "audio_encoder": keras.layers.serialize(self.audio_encoder) if self.audio_encoder else None,
+                "vision_encoder": keras.layers.serialize(self.vision_encoder) if self.vision_encoder else None,
             }
         )
         return config
