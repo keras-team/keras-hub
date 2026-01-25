@@ -62,6 +62,8 @@ class Llama3VisionCausalLMTest(TestCase):
 
     def test_causal_lm_call(self):
         """Test forward pass."""
+        from keras import ops
+
         inputs = {
             "text": ["airplane"],
             "images": np.random.randint(0, 255, (1, 32, 32, 3)).astype(
@@ -69,9 +71,25 @@ class Llama3VisionCausalLMTest(TestCase):
             ),
         }
         preprocessed = self.preprocessor(inputs)
+        # Add aspect_ratio_ids since preprocessor doesn't produce it yet
+        # Image converter produces multi-tile images (batch, num_tiles, H, W, C)
+        # So aspect_ratio_ids/mask must match num_tiles dimension
+        batch_size = preprocessed["token_ids"].shape[0]
+        # Assuming num_tiles=1 for this test since image size is small
+        num_tiles = preprocessed["pixel_values"].shape[1]
+
+        preprocessed["aspect_ratio_ids"] = ops.ones(
+            (batch_size, num_tiles), dtype="int32"
+        )
+        preprocessed["aspect_ratio_mask"] = ops.ones(
+            (batch_size, num_tiles), dtype="int32"
+        )
+        # Convert pixel_values to multi-tile format (batch, num_tiles, H, W, C)
+        # Preprocessor outputs (batch, H, W, C), add tile dimension
+        pixel_values = ops.expand_dims(preprocessed["pixel_values"], axis=1)
+        preprocessed["pixel_values"] = pixel_values
         outputs = self.model(preprocessed)
 
-        batch_size = preprocessed["token_ids"].shape[0]
         text_seq_len = preprocessed["token_ids"].shape[1]
         vocab_size = self.backbone_kwargs["vocabulary_size"]
         self.assertEqual(outputs.shape, (batch_size, text_seq_len, vocab_size))

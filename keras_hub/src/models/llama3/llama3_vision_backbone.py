@@ -124,6 +124,7 @@ class Llama3VisionBackbone(Backbone):
         cross_attention_layers=None,
         rope_max_wavelength=500000,
         layer_norm_epsilon=1e-5,
+        vision_layer_norm_epsilon=1e-6,
         dropout=0.0,
         dtype=None,
         **kwargs,
@@ -146,7 +147,7 @@ class Llama3VisionBackbone(Backbone):
             max_num_tiles=vision_max_num_tiles,
             max_aspect_ratio_id=vision_max_aspect_ratio_id,
             intermediate_layers_indices=vision_intermediate_layers_indices,
-            layer_norm_epsilon=layer_norm_epsilon,
+            layer_norm_epsilon=vision_layer_norm_epsilon,
             dropout=dropout,
             dtype=dtype,
             name="vision_encoder",
@@ -170,23 +171,33 @@ class Llama3VisionBackbone(Backbone):
             dtype=dtype,
             name="text_backbone",
         )
+        # Cross-attention layers at HF position indices
+        # Note: cross_attention_layers are indices in the full 40-layer HF
+        # space, where positions are either SelfAttn or CrossAttn
+        # (mutually exclusive)
         self._cross_attention_blocks = {}
         for layer_idx in cross_attention_layers:
-            if layer_idx < num_layers:
-                self._cross_attention_blocks[layer_idx] = (
-                    Llama3VisionCrossAttention(
-                        hidden_dim=hidden_dim,
-                        num_heads=num_query_heads,
-                        num_key_value_heads=num_key_value_heads,
-                        layer_norm_epsilon=layer_norm_epsilon,
-                        dtype=dtype,
-                        name=f"cross_attention_{layer_idx}",
-                    )
+            self._cross_attention_blocks[layer_idx] = (
+                Llama3VisionCrossAttention(
+                    hidden_dim=hidden_dim,
+                    num_heads=num_query_heads,
+                    intermediate_dim=intermediate_dim,
+                    num_key_value_heads=num_key_value_heads,
+                    layer_norm_epsilon=layer_norm_epsilon,
+                    dtype=dtype,
+                    name=f"cross_attention_{layer_idx}",
                 )
+            )
 
         # === Functional Model ===
+        # Multi-tile input: (batch, num_tiles, H, W, C)
         image_input = keras.Input(
-            shape=(vision_image_size, vision_image_size, vision_num_channels),
+            shape=(
+                None,
+                vision_image_size,
+                vision_image_size,
+                vision_num_channels,
+            ),
             name="pixel_values",
         )
         token_id_input = keras.Input(
@@ -199,30 +210,80 @@ class Llama3VisionBackbone(Backbone):
             name="padding_mask",
             dtype="int32",
         )
+        # Aspect ratio IDs for gated positional embeddings
+        aspect_ratio_ids_input = keras.Input(
+            shape=(None,), dtype="int32", name="aspect_ratio_ids"
+        )
+        aspect_ratio_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="aspect_ratio_mask"
+        )
 
-        vision_features = self._vision_encoder(image_input)
+        # === Vision Encoder ===
+        # Encoder handles 5D input (batch, tiles, H, W, C) internally
+        # and returns (batch, tiles*patches, dim)
+        vision_features = self._vision_encoder(
+            image_input,
+            aspect_ratio_ids=aspect_ratio_ids_input,
+            aspect_ratio_mask=aspect_ratio_mask_input,
+        )
+
         vision_features = self._vision_projector(vision_features)
 
-        def create_vision_mask(vision_feats):
+        # Create vision mask (default to ones if not provided but images exist)
+        # This Lambda layer is defined here to be part of the functional model.
+        # It will be called later in the `call` method.
+        def create_vision_mask(inputs):
+            vision_feats, mask = inputs
             batch_size = ops.shape(vision_feats)[0]
-            num_patches = ops.shape(vision_feats)[1]
-            return ops.ones((batch_size, num_patches), dtype="bool")
+            total_patches = ops.shape(vision_feats)[1]
+
+            # If no mask provided, assume all tiles are valid (ones)
+            if mask is None:
+                return ops.ones((batch_size, total_patches), dtype="bool")
+
+            num_tiles = ops.shape(mask)[1]
+            patches_per_tile = total_patches // num_tiles
+
+            # mask: (batch, num_tiles) -> (batch, num_tiles, 1)
+            mask = ops.expand_dims(mask, axis=-1)
+            # tile: (batch, num_tiles, patches_per_tile)
+            mask = ops.tile(mask, [1, 1, patches_per_tile])
+            # reshape: (batch, num_tiles * patches_per_tile)
+            mask = ops.reshape(mask, (batch_size, total_patches))
+            return ops.cast(mask, "bool")
 
         vision_mask = layers.Lambda(
             create_vision_mask, name="create_vision_mask"
-        )(vision_features)
+        )([vision_features, aspect_ratio_mask_input])
 
         x = self._text_backbone.token_embedding(token_id_input)
-        for i, transformer_layer in enumerate(
-            self._text_backbone.transformer_layers
-        ):
-            x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
-            if i in self._cross_attention_blocks:
-                x = self._cross_attention_blocks[i](
+
+        # HuggingFace has 40 "positions" total:
+        # - 32 positions are SelfAttention layers (with self_attn + mlp)
+        # - 8 positions are CrossAttention layers (with cross_attn + mlp,
+        #   NO self_attn)
+        # The layer types are mutually exclusive at each position.
+        total_hf_positions = num_layers + len(cross_attention_layers)
+        self_attn_layer_idx = 0  # Index into self-attention layers (0-31)
+
+        for hf_position in range(total_hf_positions):
+            if hf_position in self._cross_attention_blocks:
+                # CrossAttention position: apply cross-attention layer only
+                x = self._cross_attention_blocks[hf_position](
                     hidden_states=x,
                     vision_features=vision_features,
                     vision_mask=vision_mask,
                 )
+            else:
+                # SelfAttention position: apply self-attention transformer layer
+                transformer_layer = self._text_backbone.transformer_layers[
+                    self_attn_layer_idx
+                ]
+                x = transformer_layer(
+                    x, decoder_padding_mask=padding_mask_input
+                )
+                self_attn_layer_idx += 1
+
         x = self._text_backbone.layer_norm(x)
 
         super().__init__(
@@ -230,6 +291,8 @@ class Llama3VisionBackbone(Backbone):
                 "pixel_values": image_input,
                 "token_ids": token_id_input,
                 "padding_mask": padding_mask_input,
+                "aspect_ratio_ids": aspect_ratio_ids_input,
+                "aspect_ratio_mask": aspect_ratio_mask_input,
             },
             outputs=x,
             dtype=dtype,

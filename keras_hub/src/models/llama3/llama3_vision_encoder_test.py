@@ -17,7 +17,7 @@ class Llama3VisionEncoderTest(TestCase):
             "image_size": 28,
             "global_layers": 1,
         }
-        self.input_data = np.random.uniform(size=(2, 28, 28, 3)).astype(
+        self.input_data = np.random.uniform(size=(2, 1, 28, 28, 3)).astype(
             "float32"
         )
 

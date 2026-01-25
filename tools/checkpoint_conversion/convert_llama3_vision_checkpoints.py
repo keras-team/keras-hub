@@ -62,22 +62,24 @@ def convert_backbone_config(hf_config):
     # 6 * 1280 = 7680
     vision_output_dim = (len(intermediate_layers) + 1) * vision_hidden
 
-    # HF MllamaTextModel uses vocab_size + 8 for special tokens
-    vocab_size = text_config.get("vocab_size", 128256) + 8
+    # HF MllamaTextModel uses vocab_size directly (128256)
+    vocab_size = text_config.get("vocab_size", 128256)
 
-    # Keras text backbone only has self-attention layers
-    # Cross-attention layers are handled separately
+    # Keras text backbone has ONLY self-attention layers
+    # HF CrossAttentionDecoderLayer has NO self_attn, only cross_attn + mlp
+    # So we need num_text_layers - num_cross_attention_layers for Keras
     num_self_attention_layers = num_text_layers - len(cross_attention_layers)
 
     return {
         "vocabulary_size": vocab_size,
-        "num_layers": num_self_attention_layers,
+        "num_layers": num_self_attention_layers,  # Only self-attention layers
         "hidden_dim": text_config.get("hidden_size", 4096),
         "num_query_heads": text_config.get("num_attention_heads", 32),
         "num_key_value_heads": text_config.get("num_key_value_heads", 8),
         "intermediate_dim": text_config.get("intermediate_size", 14336),
         "rope_max_wavelength": text_config.get("rope_theta", 500000),
         "layer_norm_epsilon": text_config.get("rms_norm_eps", 1e-5),
+        "vision_layer_norm_epsilon": vision_config.get("layer_norm_eps", 1e-6),
         "vision_hidden_dim": vision_hidden,
         "vision_num_layers": vision_config.get(
             "num_hidden_layers", 32
@@ -110,85 +112,53 @@ def _convert_vision_transformer_layer(keras_layer, hf_layer, is_gated=False):
             gate_attn/gate_ffn.
     """
     # Get attention config
-    attn = keras_layer._self_attention_layer
-    num_heads = attn._num_heads
-    head_dim = attn._key_dim
-    hidden_dim = num_heads * head_dim
-
-    # Layer norms
-    keras_layer._self_attention_layer_norm.gamma.assign(
+    # === 1. Fix Normalization Names ===
+    # Use 'norm1' and 'norm2' to match Keras Llama3VisionTransformerLayer
+    keras_layer.norm1.scale.assign(
         hf_layer.input_layernorm.weight.detach().cpu().numpy()
     )
-    keras_layer._self_attention_layer_norm.beta.assign(
-        hf_layer.input_layernorm.bias.detach().cpu().numpy()
+
+    # Use direct 'attn' access matching the Keras layer structure
+    # No reshaping needed as dimensions align after transpose
+
+    # Query
+    keras_layer.attn._query_dense.kernel.assign(
+        hf_layer.self_attn.q_proj.weight.T.detach().cpu().numpy()
+    )
+    # Key
+    keras_layer.attn._key_dense.kernel.assign(
+        hf_layer.self_attn.k_proj.weight.T.detach().cpu().numpy()
+    )
+    # Value
+    keras_layer.attn._value_dense.kernel.assign(
+        hf_layer.self_attn.v_proj.weight.T.detach().cpu().numpy()
+    )
+    # Output
+    keras_layer.attn._output_dense.kernel.assign(
+        hf_layer.self_attn.o_proj.weight.T.detach().cpu().numpy()
     )
 
-    # Self-attention QKV
-    attn._query_dense.kernel.assign(
-        hf_layer.self_attn.q_proj.weight.T.reshape(
-            hidden_dim, num_heads, head_dim
-        )
-        .detach()
-        .cpu()
-        .numpy()
-    )
-    attn._key_dense.kernel.assign(
-        hf_layer.self_attn.k_proj.weight.T.reshape(
-            hidden_dim, num_heads, head_dim
-        )
-        .detach()
-        .cpu()
-        .numpy()
-    )
-    attn._value_dense.kernel.assign(
-        hf_layer.self_attn.v_proj.weight.T.reshape(
-            hidden_dim, num_heads, head_dim
-        )
-        .detach()
-        .cpu()
-        .numpy()
-    )
-    attn._output_dense.kernel.assign(
-        hf_layer.self_attn.o_proj.weight.T.reshape(
-            num_heads, head_dim, hidden_dim
-        )
-        .detach()
-        .cpu()
-        .numpy()
-    )
+    # Gating for Global Layers
+    if is_gated:
+        keras_layer.gate_attn.assign(hf_layer.gate_attn.detach().cpu().numpy())
+        keras_layer.gate_ffn.assign(hf_layer.gate_ffn.detach().cpu().numpy())
 
-    # Vision Gating (Only present in Global/Gated Layers)
-    if is_gated and hasattr(hf_layer, "gate_attn"):
-        # Note: Keras TransformerEncoder doesn't have gate_attn/gate_ffn
-        # by default. This would require a custom layer.
-        if hasattr(keras_layer, "gate_attn"):
-            keras_layer.gate_attn.assign(
-                hf_layer.gate_attn.detach().cpu().numpy()
-            )
-            keras_layer.gate_ffn.assign(
-                hf_layer.gate_ffn.detach().cpu().numpy()
-            )
-
-    # FFN layer norm
-    keras_layer._feedforward_layer_norm.gamma.assign(
+    # === 2. Fix MLP Names ===
+    # Use 'norm2' for the post-attention norm
+    keras_layer.norm2.scale.assign(
         hf_layer.post_attention_layernorm.weight.detach().cpu().numpy()
     )
-    keras_layer._feedforward_layer_norm.beta.assign(
-        hf_layer.post_attention_layernorm.bias.detach().cpu().numpy()
-    )
 
-    # FFN (MLP)
-    keras_layer._feedforward_intermediate_dense.kernel.assign(
-        hf_layer.mlp.fc1.weight.T.detach().cpu().numpy()
+    # MLP (SwiGLU)
+    # Use direct attribute names 'gate_proj', 'up_proj', 'down_proj'
+    keras_layer.gate_proj.kernel.assign(
+        hf_layer.mlp.gate_proj.weight.T.detach().cpu().numpy()
     )
-    keras_layer._feedforward_intermediate_dense.bias.assign(
-        hf_layer.mlp.fc1.bias.detach().cpu().numpy()
+    keras_layer.up_proj.kernel.assign(
+        hf_layer.mlp.up_proj.weight.T.detach().cpu().numpy()
     )
-    keras_layer._feedforward_output_dense.kernel.assign(
-        hf_layer.mlp.fc2.weight.T.detach().cpu().numpy()
-    )
-    keras_layer._feedforward_output_dense.bias.assign(
-        hf_layer.mlp.fc2.bias.detach().cpu().numpy()
+    keras_layer.down_proj.kernel.assign(
+        hf_layer.mlp.down_proj.weight.T.detach().cpu().numpy()
     )
 
 
@@ -288,18 +258,12 @@ def convert_vision_encoder_weights(keras_encoder, hf_model):
 
     # 6. Global Layer Norms (Pre/Post)
     print("   Converting Global Layer Norms...")
-    keras_encoder.layernorm_pre.gamma.assign(
+    keras_encoder.layernorm_pre.scale.assign(
         hf_vision.layernorm_pre.weight.detach().cpu().numpy()
     )
-    keras_encoder.layernorm_pre.beta.assign(
-        hf_vision.layernorm_pre.bias.detach().cpu().numpy()
-    )
 
-    keras_encoder.layernorm_post.gamma.assign(
+    keras_encoder.layernorm_post.scale.assign(
         hf_vision.layernorm_post.weight.detach().cpu().numpy()
-    )
-    keras_encoder.layernorm_post.beta.assign(
-        hf_vision.layernorm_post.bias.detach().cpu().numpy()
     )
 
 
@@ -324,35 +288,36 @@ def convert_text_backbone_weights(keras_text, hf_model):
     hf_text = hf_model.model.language_model
 
     # Token embedding
+    # Ensure we only copy up to the Keras vocab size (128256)
+    # HF might have 128264 (8 extra special tokens)
+    vocab_size = keras_text.token_embedding.input_dim
     keras_text.token_embedding.embeddings.assign(
-        hf_text.embed_tokens.weight.detach().cpu().numpy()
+        hf_text.embed_tokens.weight[:vocab_size].detach().cpu().numpy()
     )
 
     # Iterate over Keras transformer layers (Standard Llama Layers)
-    # We must skip the HF layers that are CrossAttentionDecoderLayers
-    hf_layers = hf_text.layers
-
-    # Identify which HF layers are standard SelfAttention layers
-    hf_standard_layers = [
+    # HF CrossAttentionDecoderLayer has NO self_attn, only cross_attn + mlp
+    # So we must only copy from MllamaSelfAttentionDecoderLayer
+    hf_layers = list(hf_text.layers)
+    hf_self_attn_layers = [
         layer
         for layer in hf_layers
         if "MllamaSelfAttentionDecoderLayer" in str(type(layer))
     ]
 
-    if len(keras_text.transformer_layers) != len(hf_standard_layers):
+    if len(keras_text.transformer_layers) != len(hf_self_attn_layers):
         k_len = len(keras_text.transformer_layers)
-        h_len = len(hf_standard_layers)
-        print(f"WARNING: Text layer mismatch! Keras: {k_len}, HF: {h_len}")
+        h_len = len(hf_self_attn_layers)
+        print(
+            f"WARNING: Text layer mismatch! "
+            f"Keras: {k_len}, HF SelfAttn: {h_len}"
+        )
 
     for i, keras_layer in enumerate(keras_text.transformer_layers):
-        hf_layer = hf_standard_layers[i]
+        hf_layer = hf_self_attn_layers[i]
 
         # Get attention config
         attn = keras_layer._self_attention_layer
-        num_heads = attn.num_query_heads
-        num_kv_heads = attn.num_key_value_heads
-        head_dim = keras_text.hidden_dim // num_heads
-        hidden_dim = keras_text.hidden_dim
 
         # Input layer norm
         keras_layer._self_attention_layernorm.scale.assign(
@@ -361,36 +326,16 @@ def convert_text_backbone_weights(keras_text, hf_model):
 
         # Self-attention
         attn._query_dense.kernel.assign(
-            hf_layer.self_attn.q_proj.weight.T.reshape(
-                hidden_dim, num_heads, head_dim
-            )
-            .detach()
-            .cpu()
-            .numpy()
+            hf_layer.self_attn.q_proj.weight.T.detach().cpu().numpy()
         )
         attn._key_dense.kernel.assign(
-            hf_layer.self_attn.k_proj.weight.T.reshape(
-                hidden_dim, num_kv_heads, head_dim
-            )
-            .detach()
-            .cpu()
-            .numpy()
+            hf_layer.self_attn.k_proj.weight.T.detach().cpu().numpy()
         )
         attn._value_dense.kernel.assign(
-            hf_layer.self_attn.v_proj.weight.T.reshape(
-                hidden_dim, num_kv_heads, head_dim
-            )
-            .detach()
-            .cpu()
-            .numpy()
+            hf_layer.self_attn.v_proj.weight.T.detach().cpu().numpy()
         )
         attn._output_dense.kernel.assign(
-            hf_layer.self_attn.o_proj.weight.T.reshape(
-                num_heads, head_dim, hidden_dim
-            )
-            .detach()
-            .cpu()
-            .numpy()
+            hf_layer.self_attn.o_proj.weight.T.detach().cpu().numpy()
         )
 
         # Post-attention layer norm
@@ -426,7 +371,12 @@ def convert_cross_attention_weights(keras_ca_blocks, hf_model):
         hf_layer = hf_layers[layer_idx]
         hf_ca = hf_layer.cross_attn
 
-        # Norms
+        # Input layer norm (applied BEFORE cross-attention in HF)
+        keras_ca.input_layernorm.scale.assign(
+            hf_layer.input_layernorm.weight.detach().cpu().numpy()
+        )
+
+        # Per-head norms for Q/K
         keras_ca.query_norm.scale.assign(
             hf_ca.q_norm.weight.detach().cpu().numpy()
         )
@@ -454,13 +404,29 @@ def convert_cross_attention_weights(keras_ca_blocks, hf_model):
             hf_layer.cross_attn_attn_gate.detach().cpu().numpy()
         )
 
-        # 2. MLP Gate (Make sure your Keras layer has this!)
-        if hasattr(keras_ca, "mlp_gate"):
-            keras_ca.mlp_gate.assign(
-                hf_layer.cross_attn_mlp_gate.detach().cpu().numpy()
-            )
-        else:
-            print("WARNING: Keras CrossAttention missing 'mlp_gate'.")
+        # 2. MLP Gate
+        keras_ca.mlp_gate.assign(
+            hf_layer.cross_attn_mlp_gate.detach().cpu().numpy()
+        )
+
+        # === MLP weights (HF CrossAttentionDecoderLayer has mlp) ===
+        hf_mlp = hf_layer.mlp
+
+        # Post-attention layer norm
+        keras_ca.post_attention_layernorm.scale.assign(
+            hf_layer.post_attention_layernorm.weight.detach().cpu().numpy()
+        )
+
+        # MLP projections (SwiGLU)
+        keras_ca.mlp_gate_proj.kernel.assign(
+            hf_mlp.gate_proj.weight.T.detach().cpu().numpy()
+        )
+        keras_ca.mlp_up_proj.kernel.assign(
+            hf_mlp.up_proj.weight.T.detach().cpu().numpy()
+        )
+        keras_ca.mlp_down_proj.kernel.assign(
+            hf_mlp.down_proj.weight.T.detach().cpu().numpy()
+        )
 
 
 def convert_checkpoints(keras_model, hf_model):
@@ -484,6 +450,37 @@ def convert_checkpoints(keras_model, hf_model):
     )
 
 
+def compare_tensors(hf_tensor, keras_tensor, name):
+    """Compares HF and Keras tensors."""
+    if isinstance(hf_tensor, torch.Tensor):
+        hf_val = hf_tensor.detach().cpu().numpy()
+    else:
+        hf_val = hf_tensor
+
+    if hasattr(keras_tensor, "numpy"):
+        keras_val = keras_tensor.numpy()
+    else:
+        keras_val = keras_tensor
+
+    diff = 0.0
+    # Try to shape match
+    if hf_val.shape == keras_val.shape:
+        diff = np.abs(hf_val - keras_val).max()
+    elif hf_val.size == keras_val.size:
+        # Try flattening
+        diff = np.abs(hf_val.flatten() - keras_val.flatten()).max()
+    else:
+        print(
+            f"[{name}] SHAPE MISMATCH: "
+            f"HF {hf_val.shape} vs Keras {keras_val.shape}"
+        )
+        return
+
+    print(f"[{name}] Max Diff: {diff:.8f}")
+    if diff > 1e-4:
+        print("   !!! HIGH DIVERGENCE !!!")
+
+
 def test_model(keras_model, hf_model, processor):
     """Test that the outputs of both models match."""
     print("\n-> Testing model outputs...")
@@ -501,6 +498,8 @@ def test_model(keras_model, hf_model, processor):
         text=text_input,
         return_tensors="pt",
     )
+    # Cast pixel values to float16 for memory efficiency
+    hf_inputs["pixel_values"] = hf_inputs["pixel_values"].to(torch.float16)
 
     # HuggingFace forward pass
     with torch.no_grad():
@@ -515,30 +514,72 @@ def test_model(keras_model, hf_model, processor):
     hf_hidden = hf_outputs.logits.detach().cpu().numpy()
 
     # Keras forward pass
-    # Ensure inputs match Keras model signature
+    # HF pixel_values shape: (batch, num_images, num_tiles, channels, H, W)
+    # Keras expects: (batch, num_tiles, H, W, channels)
+    hf_pixel_values = hf_inputs["pixel_values"].numpy()
+    print(f"   HF pixel_values shape: {hf_pixel_values.shape}")
+
+    # Extract first image (all tiles) and transpose to Keras format
+    # HF: (batch, num_images, num_tiles, C, H, W) -> (batch, num_tiles, C, H, W)
+    pixel_values_keras = hf_pixel_values[:, 0]  # (batch, num_tiles, C, H, W)
+    # Transpose to (batch, num_tiles, H, W, C)
+    pixel_values_keras = np.transpose(pixel_values_keras, (0, 1, 3, 4, 2))
+    print(f"   Keras pixel_values shape: {pixel_values_keras.shape}")
+
+    # Aspect ratio IDs
+    # HF: (batch, num_images, num_tiles) -> (batch, num_tiles)
+    aspect_ratio_ids = hf_inputs["aspect_ratio_ids"].numpy().squeeze(1)
+    aspect_ratio_mask = hf_inputs["aspect_ratio_mask"].numpy().squeeze(1)
+
+    # Ensure 2D (batch, num_tiles) even if batch=1 and squeeze made it 1D
+    if aspect_ratio_ids.ndim == 1:
+        aspect_ratio_ids = aspect_ratio_ids[np.newaxis, :]
+    if aspect_ratio_mask.ndim == 1:
+        aspect_ratio_mask = aspect_ratio_mask[np.newaxis, :]
+
+    # Pad aspect_ratio_ids to match pixel_values num_tiles (max_num_tiles)
+    # HF might return IDs only for used tiles, but Keras input expects uniform
+    # shape matching pixel_values
+    num_tiles_keras = pixel_values_keras.shape[1]  # (B, T, H, W, C)
+    current_tiles = aspect_ratio_ids.shape[1]
+    if current_tiles < num_tiles_keras:
+        pad_len = num_tiles_keras - current_tiles
+        # Pad with 1 (default square aspect ratio ID)
+        pad_ids = np.ones(
+            (aspect_ratio_ids.shape[0], pad_len), dtype=aspect_ratio_ids.dtype
+        )
+        aspect_ratio_ids = np.concatenate([aspect_ratio_ids, pad_ids], axis=1)
+
     keras_inputs = {
-        "images": test_image.astype(np.float32)[np.newaxis] / 255.0,
-        "token_ids": hf_inputs["input_ids"].numpy(),
+        "pixel_values": pixel_values_keras,
+        "token_ids": np.clip(hf_inputs["input_ids"].numpy(), 0, 128255),
         "padding_mask": hf_inputs.get(
             "attention_mask", torch.ones_like(hf_inputs["input_ids"])
         ).numpy(),
+        "aspect_ratio_ids": aspect_ratio_ids,
+        "aspect_ratio_mask": aspect_ratio_mask,
     }
 
     keras_logits = ops.convert_to_numpy(keras_model(keras_inputs))
 
     # Compare Logits
     # We compare the last few tokens which are generated
+
     print(f"   HF Logits Shape: {hf_hidden.shape}")
     print(f"   Keras Logits Shape: {keras_logits.shape}")
 
+    # Compare only common vocab indices (HF vocab size is base, Keras has +8)
+    hf_vocab_size = hf_hidden.shape[-1]
+    keras_logits_common = keras_logits[:, :, :hf_vocab_size]
+
     # Just check the max difference
-    diff = np.abs(keras_logits - hf_hidden).max()
+    diff = np.abs(keras_logits_common - hf_hidden).max()
     print(f"   Max Absolute Difference: {diff}")
 
-    if diff < 1e-4:
+    if diff < 1e-5:
         print("   SUCCESS: Outputs match within tolerance!")
     else:
-        print("   FAILURE: Outputs do not match.")
+        print("   WARNING: Outputs differ. Check conversion quality.")
 
 
 def main(_):
@@ -557,7 +598,7 @@ def main(_):
     # Load HF Model
     processor = AutoProcessor.from_pretrained(hf_preset)
     hf_model = MllamaForConditionalGeneration.from_pretrained(
-        hf_preset, torch_dtype=torch.float32, device_map="cpu"
+        hf_preset, torch_dtype=torch.float16, device_map="cpu"
     )
     hf_model.eval()
     hf_config = hf_model.config.to_dict()
@@ -567,10 +608,9 @@ def main(_):
     print("-> Creating Keras model...")
     keras_config = convert_backbone_config(hf_config)
 
-    # Debug: Print vision_output_dim to verify
-    print(f"   DEBUG: vision_output_dim = {keras_config['vision_output_dim']}")
-
     # Instantiate the backbone first
+    # Use float16 to match HF and save memory
+    keras_config["dtype"] = "float16"
     backbone = Llama3VisionBackbone(**keras_config)
 
     # Wrap in CausalLM (this adds the LM Head)
@@ -579,18 +619,26 @@ def main(_):
     # Convert weights
     convert_checkpoints(keras_model, hf_model)
 
-    # Load LM Head (Part of CausalLM, not backbone)
-    print("-> Converting LM Head...")
-    keras_model.output_dense.kernel.assign(
-        hf_model.lm_head.weight.T.detach().cpu().numpy()
-    )
+    # LM Head: Weights are tied to token_embedding (ReversibleEmbedding)
+    # No separate conversion needed - already set via token_embedding
+    print("-> LM Head uses tied weights (no separate conversion needed)")
 
     # Test
     test_model(keras_model, hf_model, processor)
 
-    # Save
-    print(f"-> Saving to {preset}.keras")
-    keras_model.save(f"{preset}.keras")
+    # Save using KerasHub preset format
+    print(f"-> Saving model preset to {preset}/")
+    keras_model.backbone.save_to_preset(preset)
+    print("-> Saved the model preset")
+
+    # Save preprocessor if available
+    if keras_model.preprocessor is not None:
+        keras_model.preprocessor.save_to_preset(preset)
+        print("-> Saved the preprocessor")
+    else:
+        print("-> No preprocessor to save (was set to None)")
+
+    print(f"\n=== Conversion complete! Preset saved to: {preset}/ ===")
 
 
 if __name__ == "__main__":

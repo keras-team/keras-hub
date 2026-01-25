@@ -12,6 +12,7 @@ class Llama3VisionCrossAttentionTest(TestCase):
         self.init_kwargs = {
             "hidden_dim": 256,
             "num_heads": 8,
+            "intermediate_dim": 1024,
             "num_key_value_heads": 4,
         }
         self.batch_size = 2

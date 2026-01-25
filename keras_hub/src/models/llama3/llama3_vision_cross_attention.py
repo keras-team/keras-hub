@@ -29,6 +29,7 @@ class Llama3VisionCrossAttention(layers.Layer):
         self,
         hidden_dim,
         num_heads,
+        intermediate_dim,
         num_key_value_heads=None,
         layer_norm_epsilon=1e-6,
         dropout=0.0,
@@ -41,11 +42,18 @@ class Llama3VisionCrossAttention(layers.Layer):
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.num_key_value_heads = num_key_value_heads or num_heads
+        self.intermediate_dim = intermediate_dim
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout_rate = dropout
         self.head_dim = hidden_dim // num_heads
 
         # === Layers ===
+        # Input layer norm applied BEFORE cross-attention (HF has this)
+        self.input_layernorm = LlamaLayerNorm(
+            epsilon=layer_norm_epsilon,
+            dtype=dtype,
+            name="input_layernorm",
+        )
         self.query_norm = LlamaLayerNorm(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
@@ -82,6 +90,31 @@ class Llama3VisionCrossAttention(layers.Layer):
         )
         self.dropout = layers.Dropout(dropout)
 
+        # === MLP layers (same as in HF CrossAttentionDecoderLayer) ===
+        self.post_attention_layernorm = LlamaLayerNorm(
+            epsilon=layer_norm_epsilon,
+            dtype=dtype,
+            name="post_attention_layernorm",
+        )
+        self.mlp_gate_proj = layers.Dense(
+            intermediate_dim,
+            use_bias=False,
+            dtype=dtype,
+            name="mlp_gate",
+        )
+        self.mlp_up_proj = layers.Dense(
+            intermediate_dim,
+            use_bias=False,
+            dtype=dtype,
+            name="mlp_up",
+        )
+        self.mlp_down_proj = layers.Dense(
+            hidden_dim,
+            use_bias=False,
+            dtype=dtype,
+            name="mlp_down",
+        )
+
     def build(self, input_shape):
         # Pre-build norms with head_dim to match HF's per-head normalization
         # HF: q_norm and k_norm have shape (head_dim,) = (128,)
@@ -93,14 +126,12 @@ class Llama3VisionCrossAttention(layers.Layer):
             shape=(1,),
             initializer="zeros",
             trainable=True,
-            dtype=self.dtype,
         )
         self.mlp_gate = self.add_weight(
             name="mlp_gate",
             shape=(1,),
             initializer="zeros",
             trainable=True,
-            dtype=self.dtype,
         )
         super().build(input_shape)
 
@@ -174,20 +205,91 @@ class Llama3VisionCrossAttention(layers.Layer):
         Returns:
             Tensor of shape `(batch, seq_len, hidden_dim)`.
         """
-        normed_hidden = self.query_norm(hidden_states)
-        normed_vision = self.kv_norm(vision_features)
+        batch_size = ops.shape(hidden_states)[0]
+        seq_len = ops.shape(hidden_states)[1]
+        kv_seq_len = ops.shape(vision_features)[1]
 
-        query = self.query_dense(normed_hidden)
-        key = self.key_dense(normed_vision)
-        value = self.value_dense(normed_vision)
+        # Apply input layer norm BEFORE cross-attention (HF architecture)
+        residual = hidden_states
+        hidden_states = self.input_layernorm(hidden_states)
 
-        attention_output = self._compute_attention(
-            query, key, value, attention_mask=vision_mask
+        # Project
+        query = self.query_dense(hidden_states)
+        key = self.key_dense(vision_features)
+        value = self.value_dense(vision_features)
+
+        # Reshape to (batch, seq, num_heads, head_dim)
+        query = ops.reshape(
+            query, (batch_size, seq_len, self.num_heads, self.head_dim)
+        )
+        key = ops.reshape(
+            key,
+            (batch_size, kv_seq_len, self.num_key_value_heads, self.head_dim),
+        )
+        value = ops.reshape(
+            value,
+            (batch_size, kv_seq_len, self.num_key_value_heads, self.head_dim),
+        )
+
+        # Apply per-head normalization (HF: q_norm and k_norm on head_dim)
+        query = self.query_norm(query)
+        key = self.kv_norm(key)
+
+        # Transpose for attention: (batch, heads, seq, head_dim)
+        query = ops.transpose(query, (0, 2, 1, 3))
+        key = ops.transpose(key, (0, 2, 1, 3))
+        value = ops.transpose(value, (0, 2, 1, 3))
+
+        # Handle GQA
+        if self.num_key_value_heads != self.num_heads:
+            num_groups = self.num_heads // self.num_key_value_heads
+            key = ops.repeat(key, num_groups, axis=1)
+            value = ops.repeat(value, num_groups, axis=1)
+
+        # Compute attention
+        scale = ops.cast(self.head_dim ** (-0.5), query.dtype)
+        attention_scores = ops.matmul(query, ops.transpose(key, (0, 1, 3, 2)))
+        attention_scores = attention_scores * scale
+
+        if vision_mask is not None:
+            vision_mask = ops.expand_dims(ops.expand_dims(vision_mask, 1), 1)
+            attention_scores = attention_scores + ops.where(
+                ops.cast(vision_mask, "bool"),
+                ops.zeros_like(attention_scores),
+                ops.cast(-1e9, attention_scores.dtype)
+                * ops.ones_like(attention_scores),
+            )
+
+        attention_weights = ops.softmax(attention_scores, axis=-1)
+        attention_weights = self.dropout(attention_weights)
+        attention_output = ops.matmul(attention_weights, value)
+
+        # Reshape back
+        attention_output = ops.transpose(attention_output, (0, 2, 1, 3))
+        attention_output = ops.reshape(
+            attention_output, (batch_size, seq_len, self.hidden_dim)
         )
         attention_output = self.output_dense(attention_output)
 
-        gate_value = ops.tanh(self.gate)
-        output = hidden_states + gate_value * attention_output
+        # Apply gated attention residual
+        # (use residual from before input_layernorm)
+        attn_gate_value = ops.tanh(self.gate)
+        hidden_states = residual + attn_gate_value * attention_output
+
+        # === MLP block (matches HF MllamaCrossAttentionDecoderLayer) ===
+        mlp_residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+
+        # SwiGLU activation: gate * silu(gate) * up
+        gate_output = self.mlp_gate_proj(hidden_states)
+        up_output = self.mlp_up_proj(hidden_states)
+        hidden_states = ops.silu(gate_output) * up_output
+        hidden_states = self.mlp_down_proj(hidden_states)
+
+        # Apply gated MLP residual
+        mlp_gate_value = ops.tanh(self.mlp_gate)
+        output = mlp_residual + mlp_gate_value * hidden_states
+
         return output
 
     def get_config(self):
@@ -196,6 +298,7 @@ class Llama3VisionCrossAttention(layers.Layer):
             {
                 "hidden_dim": self.hidden_dim,
                 "num_heads": self.num_heads,
+                "intermediate_dim": self.intermediate_dim,
                 "num_key_value_heads": self.num_key_value_heads,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout_rate,

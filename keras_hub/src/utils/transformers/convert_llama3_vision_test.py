@@ -1,13 +1,10 @@
 """Tests for Llama 3.2 Vision weight conversion."""
 
-import pytest
-
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.transformers import convert_llama3_vision
 
 
 class ConvertLlama3VisionTest(TestCase):
-    @pytest.mark.large
     def test_convert_backbone_config(self):
         """Test config conversion from HuggingFace format."""
         hf_config = {
@@ -15,11 +12,15 @@ class ConvertLlama3VisionTest(TestCase):
             "vision_config": {
                 "hidden_size": 1280,
                 "num_hidden_layers": 32,
+                "num_global_layers": 8,
                 "num_attention_heads": 16,
                 "intermediate_size": 5120,
                 "patch_size": 14,
                 "image_size": 560,
                 "num_channels": 3,
+                "max_num_tiles": 4,
+                "max_aspect_ratio_id": 8,
+                "intermediate_layers_indices": [3, 7, 15, 23, 30],
             },
             "text_config": {
                 "vocab_size": 128256,
@@ -37,12 +38,16 @@ class ConvertLlama3VisionTest(TestCase):
         config = convert_llama3_vision.convert_backbone_config(hf_config)
 
         # Verify flattened config
-        self.assertEqual(config["vocabulary_size"], 128256)
-        self.assertEqual(config["num_layers"], 40)
+        self.assertEqual(config["vocabulary_size"], 128264)  # +8 special tokens
+        self.assertEqual(config["num_layers"], 32)  # 40 - 8 cross attn layers
         self.assertEqual(config["hidden_dim"], 4096)
         self.assertEqual(config["vision_hidden_dim"], 1280)
         self.assertEqual(config["vision_num_layers"], 32)
+        self.assertEqual(config["vision_global_layers"], 8)
         self.assertEqual(config["vision_patch_size"], 14)
+        self.assertEqual(config["vision_max_num_tiles"], 4)
+        self.assertEqual(config["vision_max_aspect_ratio_id"], 8)
+        self.assertEqual(config["vision_output_dim"], 7680)  # (5+1)*1280
         self.assertEqual(
             config["cross_attention_layers"], [3, 8, 13, 18, 23, 28, 33, 38]
         )

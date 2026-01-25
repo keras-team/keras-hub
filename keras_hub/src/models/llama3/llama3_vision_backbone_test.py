@@ -26,12 +26,17 @@ class Llama3VisionBackboneTest(TestCase):
         }
         batch_size = 2
         seq_len = 10
+        num_tiles = 2  # Multi-tile input
         self.input_data = {
             "pixel_values": np.random.uniform(
-                size=(batch_size, 16, 16, 3)
+                size=(batch_size, num_tiles, 16, 16, 3)
             ).astype("float32"),
             "token_ids": np.ones((batch_size, seq_len), dtype="int32"),
             "padding_mask": np.ones((batch_size, seq_len), dtype="int32"),
+            "aspect_ratio_ids": np.ones((batch_size, num_tiles), dtype="int32"),
+            "aspect_ratio_mask": np.ones(
+                (batch_size, num_tiles), dtype="int32"
+            ),
         }
 
     def test_backbone_basics(self):

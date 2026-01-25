@@ -39,10 +39,26 @@ def convert_backbone_config(transformers_config):
         [i for i in range(3, num_text_layers, 5)],
     )
 
+    # HF calculates vision_output_dim as:
+    # (num_intermediate_layers + 1) * hidden_size
+    intermediate_layers = vision_config.get(
+        "intermediate_layers_indices", [3, 7, 15, 23, 30]
+    )
+    vision_hidden = vision_config.get("hidden_size", 1280)
+    # 6 * 1280 = 7680
+    vision_output_dim = (len(intermediate_layers) + 1) * vision_hidden
+
+    # HF MllamaTextModel uses vocab_size + 8 for special tokens
+    vocab_size = text_config.get("vocab_size", 128256) + 8
+
+    # Keras text backbone only has self-attention layers
+    # Cross-attention layers are handled separately
+    num_self_attention_layers = num_text_layers - len(cross_attention_layers)
+
     return {
         # Text backbone config
-        "vocabulary_size": text_config.get("vocab_size", 128256),
-        "num_layers": text_config.get("num_hidden_layers", 40),
+        "vocabulary_size": vocab_size,
+        "num_layers": num_self_attention_layers,
         "hidden_dim": text_config.get("hidden_size", 4096),
         "num_query_heads": text_config.get("num_attention_heads", 32),
         "num_key_value_heads": text_config.get("num_key_value_heads", 8),
@@ -50,13 +66,20 @@ def convert_backbone_config(transformers_config):
         "rope_max_wavelength": text_config.get("rope_theta", 500000),
         "layer_norm_epsilon": text_config.get("rms_norm_eps", 1e-5),
         # Vision encoder config
-        "vision_hidden_dim": vision_config.get("hidden_size", 1280),
+        "vision_hidden_dim": vision_hidden,
         "vision_num_layers": vision_config.get("num_hidden_layers", 32),
-        "vision_num_heads": vision_config.get("num_attention_heads", 16),
+        "vision_global_layers": vision_config.get("num_global_layers", 8),
+        "vision_num_heads": vision_config.get("attention_heads", 16),
         "vision_intermediate_dim": vision_config.get("intermediate_size", 5120),
         "vision_patch_size": vision_config.get("patch_size", 14),
         "vision_image_size": vision_config.get("image_size", 560),
         "vision_num_channels": vision_config.get("num_channels", 3),
+        "vision_max_num_tiles": vision_config.get("max_num_tiles", 4),
+        "vision_max_aspect_ratio_id": vision_config.get(
+            "max_aspect_ratio_id", 8
+        ),
+        "vision_intermediate_layers_indices": intermediate_layers,
+        "vision_output_dim": vision_output_dim,
         # Cross-attention
         "cross_attention_layers": cross_attention_layers,
     }
@@ -94,48 +117,89 @@ def _convert_vision_encoder_weights(backbone, loader):
         hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
     )
 
-    # Position embedding
+    # Class embedding
     loader.port_weight(
-        keras_variable=encoder.position_embedding.embeddings,
-        hf_weight_key="vision_model.position_embedding.weight",
+        keras_variable=encoder.class_embedding,
+        hf_weight_key="vision_model.class_embedding",
     )
 
-    # Transformer layers
-    if encoder.is_two_stage:
-        # Two-stage encoder: local + global
-        _convert_vision_transformer_layers(
-            encoder.local_transformer_layers,
-            loader,
-            prefix="vision_model.encoder.layers",
-            start_idx=0,
-        )
-        _convert_vision_transformer_layers(
-            encoder.global_transformer_layers,
-            loader,
-            prefix="vision_model.global_encoder.layers",
-            start_idx=0,
-        )
-    else:
-        # Single-stage encoder
-        _convert_vision_transformer_layers(
-            encoder.transformer_layers,
-            loader,
-            prefix="vision_model.encoder.layers",
-            start_idx=0,
-        )
-
-    # Final layer norm
+    # Gated positional embedding
+    gated_pos = encoder.gated_positional_embedding
     loader.port_weight(
-        keras_variable=encoder.layer_norm.gamma,
-        hf_weight_key="vision_model.post_layernorm.weight",
+        keras_variable=gated_pos.embedding,
+        hf_weight_key="vision_model.gated_positional_embedding.embedding",
     )
     loader.port_weight(
-        keras_variable=encoder.layer_norm.beta,
-        hf_weight_key="vision_model.post_layernorm.bias",
+        keras_variable=gated_pos.gate,
+        hf_weight_key="vision_model.gated_positional_embedding.gate",
+    )
+    loader.port_weight(
+        keras_variable=gated_pos.tile_embedding.embeddings,
+        hf_weight_key="vision_model.gated_positional_embedding.tile_embedding.weight",
+    )
+
+    # Pre-tile positional embedding
+    pre_tile = encoder.pre_tile_positional_embedding
+    loader.port_weight(
+        keras_variable=pre_tile.embedding.embeddings,
+        hf_weight_key="vision_model.pre_tile_positional_embedding.embedding.weight",
+    )
+    loader.port_weight(
+        keras_variable=pre_tile.gate,
+        hf_weight_key="vision_model.pre_tile_positional_embedding.gate",
+    )
+
+    # Post-tile positional embedding
+    post_tile = encoder.post_tile_positional_embedding
+    loader.port_weight(
+        keras_variable=post_tile.embedding.embeddings,
+        hf_weight_key="vision_model.post_tile_positional_embedding.embedding.weight",
+    )
+    loader.port_weight(
+        keras_variable=post_tile.gate,
+        hf_weight_key="vision_model.post_tile_positional_embedding.gate",
+    )
+
+    # Local transformer layers
+    _convert_vision_transformer_layers(
+        encoder.transformer_layers,
+        loader,
+        prefix="vision_model.transformer.layers",
+        start_idx=0,
+        is_gated=False,
+    )
+
+    # Global transformer layers (gated)
+    _convert_vision_transformer_layers(
+        encoder.global_transformer_layers,
+        loader,
+        prefix="vision_model.global_transformer.layers",
+        start_idx=0,
+        is_gated=True,
+    )
+
+    # Layer norms
+    loader.port_weight(
+        keras_variable=encoder.layernorm_pre.gamma,
+        hf_weight_key="vision_model.layernorm_pre.weight",
+    )
+    loader.port_weight(
+        keras_variable=encoder.layernorm_pre.beta,
+        hf_weight_key="vision_model.layernorm_pre.bias",
+    )
+    loader.port_weight(
+        keras_variable=encoder.layernorm_post.gamma,
+        hf_weight_key="vision_model.layernorm_post.weight",
+    )
+    loader.port_weight(
+        keras_variable=encoder.layernorm_post.beta,
+        hf_weight_key="vision_model.layernorm_post.bias",
     )
 
 
-def _convert_vision_transformer_layers(layers, loader, prefix, start_idx):
+def _convert_vision_transformer_layers(
+    layers, loader, prefix, start_idx, is_gated=False
+):
     """Convert vision transformer layer weights."""
 
     def transpose(x, _):
@@ -145,14 +209,14 @@ def _convert_vision_transformer_layers(layers, loader, prefix, start_idx):
         idx = start_idx + i
         layer_prefix = f"{prefix}.{idx}"
 
-        # Pre-norm (layer_norm_1)
+        # Pre-norm (input_layernorm)
         loader.port_weight(
             keras_variable=layer._self_attention_layernorm.gamma,
-            hf_weight_key=f"{layer_prefix}.layer_norm1.weight",
+            hf_weight_key=f"{layer_prefix}.input_layernorm.weight",
         )
         loader.port_weight(
             keras_variable=layer._self_attention_layernorm.beta,
-            hf_weight_key=f"{layer_prefix}.layer_norm1.bias",
+            hf_weight_key=f"{layer_prefix}.input_layernorm.bias",
         )
 
         # Self-attention
@@ -173,21 +237,21 @@ def _convert_vision_transformer_layers(layers, loader, prefix, start_idx):
         )
         loader.port_weight(
             keras_variable=layer._self_attention_layer.output_dense.kernel,
-            hf_weight_key=f"{layer_prefix}.self_attn.out_proj.weight",
+            hf_weight_key=f"{layer_prefix}.self_attn.o_proj.weight",
             hook_fn=transpose,
         )
 
-        # FFN norm (layer_norm_2)
+        # FFN norm (post_attention_layernorm)
         loader.port_weight(
             keras_variable=layer._feedforward_layernorm.gamma,
-            hf_weight_key=f"{layer_prefix}.layer_norm2.weight",
+            hf_weight_key=f"{layer_prefix}.post_attention_layernorm.weight",
         )
         loader.port_weight(
             keras_variable=layer._feedforward_layernorm.beta,
-            hf_weight_key=f"{layer_prefix}.layer_norm2.bias",
+            hf_weight_key=f"{layer_prefix}.post_attention_layernorm.bias",
         )
 
-        # FFN
+        # FFN (MLP)
         loader.port_weight(
             keras_variable=layer._feedforward_intermediate_dense.kernel,
             hf_weight_key=f"{layer_prefix}.mlp.fc1.weight",
@@ -207,6 +271,17 @@ def _convert_vision_transformer_layers(layers, loader, prefix, start_idx):
             hf_weight_key=f"{layer_prefix}.mlp.fc2.bias",
         )
 
+        # Gated layers have gate_attn and gate_ffn
+        if is_gated:
+            loader.port_weight(
+                keras_variable=layer.gate_attn,
+                hf_weight_key=f"{layer_prefix}.gate_attn",
+            )
+            loader.port_weight(
+                keras_variable=layer.gate_ffn,
+                hf_weight_key=f"{layer_prefix}.gate_ffn",
+            )
+
 
 def _convert_vision_projector_weights(backbone, loader):
     """Convert vision projector (multi-modal projector) weights."""
@@ -215,26 +290,15 @@ def _convert_vision_projector_weights(backbone, loader):
     def transpose(x, _):
         return np.transpose(x)
 
-    # Dense 1 (input projection)
+    # Projection layer (single Dense)
     loader.port_weight(
-        keras_variable=projector.dense_1.kernel,
-        hf_weight_key="multi_modal_projector.linear_1.weight",
+        keras_variable=projector.projection.kernel,
+        hf_weight_key="vision_model.multi_modal_projector.weight",
         hook_fn=transpose,
     )
     loader.port_weight(
-        keras_variable=projector.dense_1.bias,
-        hf_weight_key="multi_modal_projector.linear_1.bias",
-    )
-
-    # Dense 2 (output projection)
-    loader.port_weight(
-        keras_variable=projector.dense_2.kernel,
-        hf_weight_key="multi_modal_projector.linear_2.weight",
-        hook_fn=transpose,
-    )
-    loader.port_weight(
-        keras_variable=projector.dense_2.bias,
-        hf_weight_key="multi_modal_projector.linear_2.bias",
+        keras_variable=projector.projection.bias,
+        hf_weight_key="vision_model.multi_modal_projector.bias",
     )
 
 
@@ -292,6 +356,13 @@ def _convert_cross_attention_weights(backbone, loader):
             keras_variable=cross_attn.gate,
             hf_weight_key=f"{prefix}.gate",
         )
+
+        # MLP Gate parameter
+        if hasattr(cross_attn, "mlp_gate"):
+            loader.port_weight(
+                keras_variable=cross_attn.mlp_gate,
+                hf_weight_key=f"language_model.model.layers.{layer_idx}.mlp.gate",
+            )
 
 
 def _convert_text_backbone_weights(backbone, loader):
