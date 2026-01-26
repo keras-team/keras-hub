@@ -249,6 +249,24 @@ class SAM3PromptableConceptBackbone(Backbone):
 
     @classmethod
     def from_config(cls, config):
+        config = config.copy()
+
+        # Propagate `dtype` to submodels if needed.
+        if "dtype" in config and config["dtype"] is not None:
+            dtype_config = config["dtype"]
+            if "dtype" not in config["vision_encoder"]["config"]:
+                config["vision_encoder"]["config"]["dtype"] = dtype_config
+            if "dtype" not in config["text_encoder"]["config"]:
+                config["text_encoder"]["config"]["dtype"] = dtype_config
+            if "dtype" not in config["geometry_encoder"]["config"]:
+                config["geometry_encoder"]["config"]["dtype"] = dtype_config
+            if "dtype" not in config["detr_encoder"]["config"]:
+                config["detr_encoder"]["config"]["dtype"] = dtype_config
+            if "dtype" not in config["detr_decoder"]["config"]:
+                config["detr_decoder"]["config"]["dtype"] = dtype_config
+            if "dtype" not in config["mask_decoder"]["config"]:
+                config["mask_decoder"]["config"]["dtype"] = dtype_config
+
         config.update(
             {
                 "vision_encoder": keras.layers.deserialize(

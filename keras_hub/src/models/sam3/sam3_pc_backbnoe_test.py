@@ -103,5 +103,4 @@ class SAM3PromptableConceptBackboneTest(TestCase):
                 "presence_logits": (self.batch_size, 1),
                 "semantic_segs": (self.batch_size, output_size, output_size, 1),
             },
-            run_quantization_check=False,
         )
