@@ -291,9 +291,20 @@ class Qwen3OmniAttention(keras.layers.Layer):
                 # Create a causal mask if none provided
                 query_len = ops.shape(query)[1]
                 key_len = ops.shape(key)[1]
-                attention_mask = ops.tril(
-                    ops.ones((query_len, key_len), dtype="bool")
-                )
+                
+                # For cached generation (query_len=1, key_len=full_seq),
+                # new token should attend to all previous positions
+                if cache_update_index is not None:
+                    # Causal mask: attend to positions [0:cache_update_index+query_len]
+                    causal_mask = ops.arange(key_len) <= (cache_update_index + query_len - 1)
+                    causal_mask = ops.cast(causal_mask, dtype="bool")
+                    attention_mask = ops.reshape(causal_mask, (1, key_len))
+                    attention_mask = ops.broadcast_to(attention_mask, (query_len, key_len))
+                else:
+                    # Standard causal mask for non-cached scenario
+                    attention_mask = ops.tril(
+                        ops.ones((query_len, key_len), dtype="bool")
+                    )
                 attention_mask = ops.expand_dims(attention_mask, 0)
             attention_mask = self._mask_sliding_window(
                 attention_mask,
