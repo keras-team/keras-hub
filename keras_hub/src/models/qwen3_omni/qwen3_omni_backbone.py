@@ -61,12 +61,14 @@ class Qwen3OmniBackbone(Backbone):
         num_experts: int. Number of experts in MoE layers. Defaults to 128.
         num_experts_per_tok: int. Number of experts activated per token (top-k).
             Defaults to 8.
+        mrope_section: tuple. M-RoPE section dimensions (text, temporal, spatial).
+            Must sum to head_dim // 2. Defaults to (24, 20, 20) for head_dim=128.
         rope_max_wavelength: int. Max wavelength for RoPE. Defaults to 10000.
         rope_scaling_factor: float. Scaling factor for RoPE. Defaults to 1.0.
         layer_norm_epsilon: float. Epsilon for layer norm. Defaults to 1e-6.
         dropout: float. Dropout rate. Defaults to 0.0.
         tie_word_embeddings: bool. Whether to tie input/output embeddings.
-            Defaults to True.
+            Defaults to False.
         sliding_window_size: int or None. Size of sliding attention window.
             Defaults to None (no sliding window).
         norm_topk_prob: bool. Whether to normalize top-k probabilities in routing.
@@ -123,6 +125,7 @@ class Qwen3OmniBackbone(Backbone):
         moe_intermediate_dim,
         num_experts,
         num_experts_per_tok,
+        mrope_section=(24, 20, 20),
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
@@ -184,7 +187,7 @@ class Qwen3OmniBackbone(Backbone):
                 num_experts=num_experts,
                 top_k=num_experts_per_tok,
                 norm_top_k_prob=norm_topk_prob,
-                mrope_section=[24, 20, 20],  # M-RoPE sections for text/temporal/spatial
+                mrope_section=mrope_section,
                 rope_max_wavelength=rope_max_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
                 layer_norm_epsilon=layer_norm_epsilon,
@@ -304,6 +307,7 @@ class Qwen3OmniBackbone(Backbone):
         self.decoder_sparse_step = decoder_sparse_step
         self.router_aux_loss_coefficient = router_aux_loss_coefficient
         self.mlp_only_layers = mlp_only_layers or []
+        self.mrope_section = mrope_section
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -329,6 +333,7 @@ class Qwen3OmniBackbone(Backbone):
                 "decoder_sparse_step": self.decoder_sparse_step,
                 "router_aux_loss_coefficient": self.router_aux_loss_coefficient,
                 "mlp_only_layers": self.mlp_only_layers,
+                "mrope_section": self.mrope_section,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
