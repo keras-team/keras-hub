@@ -182,9 +182,9 @@ class Qwen3OmniAttention(keras.layers.Layer):
 
         Args:
             hidden_states: Input tensor of shape (batch, seq_len, hidden_dim).
-            position_ids: Position IDs of shape (batch, seq_len, 3) for M-RoPE,
-                where last dim is [text_pos, temporal_pos, spatial_pos].
-                If None, creates default sequential positions.
+            position_ids: Position IDs of shape (3, batch, seq_len) for M-RoPE,
+                where position_ids[0] = text positions, position_ids[1] = temporal positions,
+                position_ids[2] = spatial positions. If None, creates default sequential positions.
             attention_mask: Attention mask of shape (batch, seq_len, seq_len).
             cache: Optional cached key and value tensors.
             cache_update_index: Index for cache update.
@@ -199,13 +199,15 @@ class Qwen3OmniAttention(keras.layers.Layer):
         
         # Create default position IDs if not provided (for text-only mode)
         if position_ids is None:
-            # Shape: (batch, seq_len, 3) with identical positions for all 3 sections
+            # Shape: (3, batch, seq_len)
+            # For text-only: all 3 dimensions use same sequential positions
             text_positions = ops.arange(seq_len, dtype="int32")
             text_positions = ops.expand_dims(text_positions, axis=0)
             text_positions = ops.repeat(text_positions, batch_size, axis=0)
+            # Stack 3 copies along first dimension for (text, temporal, spatial)
             position_ids = ops.stack(
                 [text_positions, text_positions, text_positions],
-                axis=-1
+                axis=0
             )
         
         # Project to Q, K, V
