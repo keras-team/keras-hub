@@ -285,6 +285,22 @@ class Qwen3OmniAttention(keras.layers.Layer):
         self, query, key, value, attention_mask=None, cache_update_index=None
     ):
         """Computes attention using query, key, and value tensors."""
+        # Apply sliding window mask if configured (before fused/manual path split)
+        if self.sliding_window_size:
+            if attention_mask is None:
+                # Create a causal mask if none provided
+                query_len = ops.shape(query)[1]
+                key_len = ops.shape(key)[1]
+                attention_mask = ops.tril(
+                    ops.ones((query_len, key_len), dtype="bool")
+                )
+                attention_mask = ops.expand_dims(attention_mask, 0)
+            attention_mask = self._mask_sliding_window(
+                attention_mask,
+                cache_update_index=cache_update_index if cache_update_index is not None else 0,
+            )
+        
+        # Fused attention path (uses sliding window mask if applied above)
         if fused_attention_op_available():
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
@@ -302,20 +318,6 @@ class Qwen3OmniAttention(keras.layers.Layer):
             attention_scores,
             ops.cast(self._inv_norm_factor, self.compute_dtype),
         )
-        
-        if self.sliding_window_size:
-            if attention_mask is None:
-                # Create a causal mask if none provided
-                query_len = ops.shape(query)[1]
-                key_len = ops.shape(key)[1]
-                attention_mask = ops.tril(
-                    ops.ones((query_len, key_len), dtype="bool")
-                )
-                attention_mask = ops.expand_dims(attention_mask, 0)
-            attention_mask = self._mask_sliding_window(
-                attention_mask,
-                cache_update_index=cache_update_index if cache_update_index is not None else 0,
-            )
         
         attention_scores = self._masked_softmax(attention_scores, attention_mask)
         attention_scores = ops.cast(attention_scores, self.compute_dtype)

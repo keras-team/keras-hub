@@ -18,8 +18,8 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
 from keras_hub.src.models.qwen3_moe.qwen3_moe_decoder import (
-    Qwen3MoeExperts,
-    Qwen3MoeSparseMLP,
+    Qwen3MoeMLP,
+    Qwen3SparseMoeBlock,
     compute_load_balancing_loss,
 )
 from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
@@ -143,13 +143,12 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
         # MoE or dense FFN
         if self.is_sparse_mlp:
             # Sparse MoE feedforward (reuse from Qwen3MoE)
-            self.sparse_moe = Qwen3MoeSparseMLP(
-                num_experts=self.num_experts,
+            self.sparse_moe = Qwen3SparseMoeBlock(
                 hidden_dim=hidden_dim,
-                intermediate_dim=self.moe_intermediate_dim,
+                moe_intermediate_dim=self.moe_intermediate_dim,
+                num_experts=self.num_experts,
                 top_k=self.top_k,
                 norm_top_k_prob=self.norm_top_k_prob,
-                activation_fn="silu",
                 kernel_initializer=clone_initializer(self.kernel_initializer),
                 dtype=self.dtype_policy,
                 name="sparse_moe",
@@ -157,7 +156,6 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
             self.sparse_moe.build(input_shape)
         else:
             # Dense FFN (for non-MoE layers)
-            from keras_hub.src.models.qwen3_moe.qwen3_moe_decoder import Qwen3MoeMLP
             self.dense_mlp = Qwen3MoeMLP(
                 intermediate_dim=self.intermediate_dim,
                 hidden_dim=hidden_dim,
@@ -205,10 +203,12 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
         # Create attention mask from padding mask
         attention_mask = None
         if decoder_padding_mask is not None:
+            batch_size = ops.shape(inputs)[0]
+            input_length = ops.shape(inputs)[1]
             attention_mask = merge_padding_and_attention_mask(
                 inputs,
                 decoder_padding_mask,
-                compute_causal_mask(inputs),
+                compute_causal_mask(batch_size, input_length, input_length, cache_update_index or 0),
             )
         
         # Self-attention block with residual
