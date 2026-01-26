@@ -341,5 +341,22 @@ class Qwen3OmniBackbone(Backbone):
         )
         return config
 
+    @classmethod
+    def from_config(cls, config):
+        """Deserialize model config, including audio and vision encoders."""
+        audio_encoder = config.pop("audio_encoder", None)
+        vision_encoder = config.pop("vision_encoder", None)
+        
+        if audio_encoder is not None:
+            audio_encoder = keras.layers.deserialize(audio_encoder)
+        if vision_encoder is not None:
+            vision_encoder = keras.layers.deserialize(vision_encoder)
+        
+        return cls(
+            **config,
+            audio_encoder=audio_encoder,
+            vision_encoder=vision_encoder,
+        )
+
     # TODO: Implement from_preset() classmethod in PR #3 (Presets)
     # This will load pre-trained weights from Kaggle/HuggingFace
