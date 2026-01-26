@@ -57,14 +57,15 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
     q = keras.random.normal((2, 10, 32, 128))
     k = keras.random.normal((2, 10, 32, 128))
     
-    # Position IDs shape: (batch, seq_len, 3)
-    # For text: [[0, 0, 0], [1, 1, 1], [2, 2, 2], ...]
+    # Position IDs shape: (3, batch, seq_len)
+    # For text: all 3 dimensions use same sequential positions
+    text_pos = np.arange(10)
     position_ids = np.stack([
-        np.arange(10),  # text positions
-        np.arange(10),  # temporal positions (same for text)
-        np.arange(10),  # spatial positions (same for text)
-    ], axis=-1)
-    position_ids = np.expand_dims(position_ids, 0).repeat(2, axis=0)
+        text_pos,  # text positions [0,1,2,...,9]
+        text_pos,  # temporal positions (same for text)
+        text_pos,  # spatial positions (same for text)
+    ], axis=0)  # Stack along dimension axis
+    position_ids = np.expand_dims(position_ids, 1).repeat(2, axis=1)  # Add batch dim
     
     q_embed, k_embed = mrope.apply_multimodal_rotary_embedding(
         q, k, position_ids
@@ -114,14 +115,16 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
         Args:
             query: Query tensor of shape (batch, seq_len, num_heads, head_dim)
             key: Key tensor of shape (batch, seq_len, num_heads, head_dim)
-            position_ids: Position IDs of shape (batch, seq_len, 3) where the last
-                dimension contains [text_pos, temporal_pos, spatial_pos]
+            position_ids: Position IDs of shape (3, batch, seq_len) where:
+                position_ids[0] = text positions
+                position_ids[1] = temporal positions
+                position_ids[2] = spatial positions
         
         Returns:
             Tuple of (query_embed, key_embed) with M-RoPE applied.
         """
         # Compute cos/sin embeddings for each modality section
-        # position_ids shape: (batch, seq_len, 3)
+        # position_ids shape: (3, batch, seq_len)
         batch_size = ops.shape(query)[0]
         seq_len = ops.shape(query)[1]
         num_heads = ops.shape(query)[2]
@@ -129,9 +132,9 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
         
         # Split position IDs into three modalities
         # Each has shape (batch, seq_len)
-        text_pos = position_ids[:, :, 0]
-        temporal_pos = position_ids[:, :, 1]
-        spatial_pos = position_ids[:, :, 2]
+        text_pos = position_ids[0, :, :]  # First dimension: text
+        temporal_pos = position_ids[1, :, :]  # Second dimension: temporal
+        spatial_pos = position_ids[2, :, :]  # Third dimension: spatial
         
         # Compute embeddings for each section
         # mrope_section = [text_dim, temporal_dim, spatial_dim]
