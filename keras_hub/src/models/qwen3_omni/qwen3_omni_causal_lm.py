@@ -310,10 +310,16 @@ class Qwen3OmniCausalLM(CausalLM):
             )
 
         batch_shape = ops.shape(token_ids)[:2]
-        assert len(batch_shape) == 2
+        
+        # Validate token_ids has at least 2 dimensions
+        if len(ops.shape(token_ids).shape) < 2:
+            raise ValueError(
+                f"token_ids must have at least 2 dimensions (batch, sequence). "
+                f"Received shape: {ops.shape(token_ids)}"
+            )
 
         if padding_mask is None:
-            padding_mask = ops.ones(shape=batch_shape)
+            padding_mask = ops.ones(shape=batch_shape, dtype="bool")
 
         if layer_intercept_fn is None:
 
