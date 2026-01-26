@@ -25,7 +25,7 @@ class Qwen3OmniTokenizer(BytePairTokenizer):
 
     ```python
     # Load a preset tokenizer
-    tokenizer = keras_hub.models.Qwen3OmniTokenizer.from_preset(
+    tokenizer = keras_hub.tokenizers.Qwen3OmniTokenizer.from_preset(
         "qwen3_omni_0.5b_en"
     )
 
@@ -45,7 +45,7 @@ class Qwen3OmniTokenizer(BytePairTokenizer):
         eos_token = "<|im_end|>"
         self._add_special_token(eos_token, "end_token")
 
-        pad_token = "</endoftext|>"
+        pad_token = "<|endoftext|>"
         self._add_special_token(pad_token, "pad_token")
 
         self.start_token_id = None
