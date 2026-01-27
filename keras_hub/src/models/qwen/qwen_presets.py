@@ -25,7 +25,6 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/qwen/keras/qwen2.5_7b_en/3",
     },
-    
     "qwen2.5_coder_0.5b_en": {
         "metadata": {
             "description": (
@@ -37,7 +36,6 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/qwen/keras/qwen2.5_coder_0.5b_en/1",
     },
-    
     "qwen2.5_instruct_0.5b_en": {
         "metadata": {
             "description": (
