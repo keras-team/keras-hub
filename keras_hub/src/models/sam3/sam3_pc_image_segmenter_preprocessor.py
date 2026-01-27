@@ -317,3 +317,20 @@ class SAM3PromptableConceptImageSegmenterPreprocessor(Preprocessor):
         self._sequence_length = value
         if self.packer is not None:
             self.packer.sequence_length = value
+
+    @property
+    def image_size(self):
+        """Settable tuple of `(height, width)` ints. The output image shape."""
+        if self.image_converter.resizing.height is None:
+            return None
+        return (
+            self.image_converter.resizing.height,
+            self.image_converter.resizing.width,
+        )
+
+    @image_size.setter
+    def image_size(self, value):
+        if value is None:
+            value = (None, None)
+        self.image_converter.resizing.height = value[0]
+        self.image_converter.resizing.width = value[1]

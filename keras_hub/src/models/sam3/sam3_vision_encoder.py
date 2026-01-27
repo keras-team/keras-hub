@@ -78,6 +78,14 @@ class SAM3ViTRotaryEmbedding(layers.Layer):
         embedding_shape = (self.end_x * self.end_y, self.head_dim)
         return (embedding_shape, embedding_shape)
 
+    def load_own_variables(self, store):
+        try:
+            return super().load_own_variables(store)
+        except ValueError:
+            # `SAM3ViTRotaryEmbedding` has precomputed weights only. The issue
+            # of the loading logic could be ignored.
+            pass
+
 
 class SAM3ViTLayer(layers.Layer):
     def __init__(
@@ -118,6 +126,16 @@ class SAM3ViTLayer(layers.Layer):
             self.image_shape[0] // self.patch_size,
             self.image_shape[1] // self.patch_size,
         )
+        if self.window_size > 0 and (
+            input_size[0] % self.window_size != 0
+            or input_size[1] % self.window_size != 0
+        ):
+            raise ValueError(
+                "Image size must be divisible by `patch_size` and "
+                "`window_size` for windowed attention. "
+                f"Received image size: {image_shape}, "
+                f"patch_size: {patch_size}, window_size: {window_size}"
+            )
         rotary_input_size = (
             input_size if window_size == 0 else (window_size, window_size)
         )

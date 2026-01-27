@@ -271,6 +271,14 @@ class SAM3PromptableConceptBackbone(Backbone):
             if "dtype" not in config["mask_decoder"]["config"]:
                 config["mask_decoder"]["config"]["dtype"] = dtype_config
 
+        # Propagate `image_shape` to submodels if needed.
+        if "image_shape" in config and config["image_shape"] is not None:
+            image_shape = config.pop("image_shape")
+            if "image_shape" in config["vision_encoder"]["config"]:
+                config["vision_encoder"]["config"]["image_shape"] = image_shape
+            if "image_shape" in config["detr_decoder"]["config"]:
+                config["detr_decoder"]["config"]["image_shape"] = image_shape
+
         config.update(
             {
                 "vision_encoder": keras.layers.deserialize(

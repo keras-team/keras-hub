@@ -40,8 +40,8 @@ class SAM3PromptableConceptImageSegmenter(ImageSegmenter):
     Load pretrained model using `from_preset`.
 
     ```python
-    image_size=128
-    batch_size=2
+    image_size = 128
+    batch_size = 2
     input_data = {
         "images": np.ones(
             (batch_size, image_size, image_size, 3), dtype="float32",
@@ -52,6 +52,37 @@ class SAM3PromptableConceptImageSegmenter(ImageSegmenter):
     }
     sam3_pcs = keras_hub.models.SAM3PromptableConceptImageSegmenter.from_preset(
         "sam3_pcs"
+    )
+    outputs = sam3_pcs.predict(input_data)
+    scores = outputs["scores"]  # [B, num_queries]
+    boxes = outputs["boxes"]  # [B, num_queries, 4]
+    masks = outputs["masks"]  # [B, num_queries, H, W]
+    ```
+
+    Load pretrained model with custom image shape.
+
+    ```python
+    input_image_size = 128
+    batch_size = 1
+    model_image_size = 336
+    input_data = {
+        "images": np.ones(
+            (batch_size, input_image_size, input_image_size, 3),
+            dtype="float32",
+        ),
+        "prompts": ["ear", "head"],
+        "boxes": np.ones((batch_size, 1, 4), dtype="float32"),  # XYXY format.
+        "box_labels": np.ones((batch_size, 1), dtype="float32"),
+    }
+    sam3_backbone = keras_hub.models.SAM3PromptableConceptBackbone.from_preset(
+        "sam3_pcs", image_shape=(model_image_size, model_image_size, 3)
+    )
+    sam3_preprocessor = keras_hub.models.SAM3PromptableConceptImageSegmenterPreprocessor.from_preset(
+        "sam3_pcs"
+    )
+    sam3_preprocessor.image_size = (model_image_size, model_image_size)
+    sam3_pcs = keras_hub.models.SAM3PromptableConceptImageSegmenter(
+        backbone=sam3_backbone, preprocessor=sam3_preprocessor
     )
     outputs = sam3_pcs.predict(input_data)
     scores = outputs["scores"]  # [B, num_queries]
