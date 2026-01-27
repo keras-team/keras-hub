@@ -10,9 +10,9 @@ from keras_hub.src.tests.test_case import TestCase
 class FluxBackboneTest(TestCase):
     def setUp(self):
         vae = VAEBackbone(
-            [32, 32, 32, 32],  # Keep original size for compatibility
+            [32, 32, 32, 32],
             [1, 1, 1, 1],
-            [32, 32, 32, 32],  # Keep original size for compatibility
+            [32, 32, 32, 32],
             [1, 1, 1, 1],
             # Use `mode` generate a deterministic output.
             sampler_method="mode",
@@ -27,24 +27,24 @@ class FluxBackboneTest(TestCase):
             32,
             "quick_gelu",
             -2,
-            name="clip_l",  # Reduced parameters
+            name="clip_l",
         )
         self.init_kwargs = {
-            "input_channels": 64,  # Reduced from 256
-            "hidden_size": 256,  # Reduced from 1024
+            "input_channels": 64,
+            "hidden_size": 256,
             "mlp_ratio": 2.0,
-            "num_heads": 4,  # Reduced from 8
-            "depth": 2,  # Reduced from 4
-            "depth_single_blocks": 4,  # Reduced from 8
-            "axes_dim": [8, 28, 28],  # Reduced from [16, 56, 56]
+            "num_heads": 4,
+            "depth": 2,
+            "depth_single_blocks": 4,
+            "axes_dim": [8, 28, 28],
             "theta": 10_000,
             "use_bias": True,
             "guidance_embed": True,
-            "image_shape": (16, 64),  # Reduced from (32, 256)
-            "text_shape": (16, 64),  # Reduced from (32, 256)
-            "image_ids_shape": (16, 3),  # Reduced from (32, 3)
-            "text_ids_shape": (16, 3),  # Reduced from (32, 3)
-            "y_shape": (64,),  # Reduced from (256,)
+            "image_shape": (16, 64),
+            "text_shape": (16, 64),
+            "image_ids_shape": (16, 3),
+            "text_ids_shape": (16, 3),
+            "y_shape": (64,),
         }
 
         self.pipeline_models = {
@@ -53,11 +53,11 @@ class FluxBackboneTest(TestCase):
         }
 
         self.input_data = {
-            "image": ops.ones((1, 16, 64)),  # Reduced from (1, 32, 256)
-            "image_ids": ops.ones((1, 16, 3)),  # Reduced from (1, 32, 3)
-            "text": ops.ones((1, 16, 64)),  # Reduced from (1, 32, 256)
-            "text_ids": ops.ones((1, 16, 3)),  # Reduced from (1, 32, 3)
-            "y": ops.ones((1, 64)),  # Reduced from (1, 256)
+            "image": ops.ones((1, 16, 64)),
+            "image_ids": ops.ones((1, 16, 3)),
+            "text": ops.ones((1, 16, 64)),
+            "text_ids": ops.ones((1, 16, 3)),
+            "y": ops.ones((1, 64)),
             "timesteps": ops.ones((1)),
             "guidance": ops.ones((1)),
         }
@@ -71,7 +71,7 @@ class FluxBackboneTest(TestCase):
                 1,
                 16,
                 64,
-            ),  # Updated to match new smaller model
+            ),
             run_mixed_precision_check=False,
             run_quantization_check=False,
         )
