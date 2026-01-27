@@ -21,6 +21,8 @@ import keras_hub  # noqa: E402
 
 PRESET_MAP = {
     "qwen3_omni_30b_a3b_en": "Qwen/Qwen3-Omni-30B-A3B-Instruct",
+    "qwen3_omni_30b_a3b_captioner_en": "Qwen/Qwen3-Omni-30B-A3B-Captioner",
+    "qwen3_omni_30b_a3b_thinking_en": "Qwen/Qwen3-Omni-30B-A3B-Thinking",
 }
 
 FLAGS = flags.FLAGS
@@ -58,7 +60,7 @@ def test_model(
     )
     keras_hub_logits = ops.convert_to_numpy(keras_hub_logits)
 
-    # High tolerence since bfloat16 is used as the default dtype for Qwen
+    # High tolerance since bfloat16 is used as the default dtype for Qwen
 
     try:
         np.testing.assert_allclose(
@@ -69,6 +71,7 @@ def test_model(
         print(traceback.format_exc())
         print(err.args[0])
         print("\n")
+        raise
 
 
 def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
@@ -84,7 +87,6 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
 
     np.testing.assert_equal(keras_hub_output, hf_output)
 
-
 def validate_output(qwen3_omni_lm, hf_model, hf_tokenizer):
     input_str = "What is Keras?"
     length = 32
@@ -98,7 +100,7 @@ def validate_output(qwen3_omni_lm, hf_model, hf_tokenizer):
     outputs = hf_model.generate(
         **hf_inputs,
         max_length=length,  # Match KerasHub's max_length
-        do_sample=True,  # Enable sampling (default in KerasHub for generate)
+        do_sample=False,  # Use greedy decoding to match KerasHub's sampler="greedy"
         pad_token_id=hf_tokenizer.pad_token_id,
     )
     print("HF Token outputs = ", outputs)
