@@ -25,53 +25,53 @@ from keras_hub.src.tests.test_case import TestCase
 class SAM3PromptableConceptImageSegmenterTest(TestCase):
     def setUp(self):
         self.batch_size = 2
-        self.image_size = 224
+        self.image_size = 28
         self.vision_encoder = SAM3VisionEncoder(
             image_shape=(self.image_size, self.image_size, 3),
             patch_size=14,
             num_layers=2,
-            hidden_dim=32,
-            intermediate_dim=128,
+            hidden_dim=16,
+            intermediate_dim=32,
             num_heads=2,
-            fpn_hidden_dim=32,
+            fpn_hidden_dim=16,
             fpn_scale_factors=[4.0, 2.0, 1.0, 0.5],
-            pretrain_image_shape=(112, 112, 3),
+            pretrain_image_shape=(42, 42, 3),
             window_size=2,
             global_attn_indexes=[1, 2],
         )
         self.text_encoder = SAM3TextEncoder(
-            vocabulary_size=1024,
-            embedding_dim=32,
-            hidden_dim=32,
+            vocabulary_size=32,
+            embedding_dim=16,
+            hidden_dim=16,
             num_layers=2,
             num_heads=2,
-            intermediate_dim=128,
+            intermediate_dim=32,
         )
         self.geometry_encoder = SAM3GeometryEncoder(
-            num_layers=3,
-            hidden_dim=32,
-            intermediate_dim=128,
+            num_layers=2,
+            hidden_dim=16,
+            intermediate_dim=32,
             num_heads=2,
             roi_size=7,
         )
         self.detr_encoder = SAM3DetrEncoder(
-            num_layers=3,
-            hidden_dim=32,
-            intermediate_dim=128,
+            num_layers=2,
+            hidden_dim=16,
+            intermediate_dim=32,
             num_heads=2,
         )
         self.detr_decoder = SAM3DetrDecoder(
             image_shape=(self.image_size, self.image_size, 3),
             patch_size=14,
             num_layers=2,
-            hidden_dim=32,
-            intermediate_dim=128,
+            hidden_dim=16,
+            intermediate_dim=32,
             num_heads=2,
-            num_queries=100,
+            num_queries=8,
         )
         self.mask_decoder = SAM3MaskDecoder(
             num_upsampling_stages=3,
-            hidden_dim=32,
+            hidden_dim=16,
             num_heads=2,
         )
         self.backbone = SAM3PromptableConceptBackbone(
@@ -120,10 +120,8 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
         }
         self.input_data = self.preprocessor(self.train_data)
 
-    def test_sam3_basics(self):
-        pytest.skip(
-            reason="TODO: enable after preprocessor flow is figured out"
-        )
+    def test_sam3_pc_basics(self):
+        pytest.skip(reason="TODO: enable after fit flow is figured out.")
         self.run_task_test(
             cls=SAM3PromptableConceptImageSegmenter,
             init_kwargs=self.init_kwargs,
@@ -137,6 +135,7 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
             cls=SAM3PromptableConceptImageSegmenter,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
+            atol=1e-4,  # Numerical discrepancies when running on the JAX GPU.
         )
 
     def test_end_to_end_model_predict(self):
