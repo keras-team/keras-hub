@@ -1,6 +1,7 @@
 import os
 
 import tensorflow as tf
+from keras.src.saving import serialization_lib
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
@@ -272,3 +273,18 @@ class WordPieceTokenizerTest(TestCase):
             original_tokenizer(input_data),
             cloned_tokenizer(input_data),
         )
+
+    def test_safe_mode_vocabulary_file_disallowed(self):
+        temp_dir = self.get_temp_dir()
+        vocab_path = os.path.join(temp_dir, "vocab.txt")
+        with open(vocab_path, "w") as file:
+            file.write("[UNK]\nthe\nquick\nbrown\nfox\n")
+
+        tokenizer = WordPieceTokenizer()
+        with serialization_lib.SafeModeScope(True):
+            with self.assertRaisesRegex(
+                ValueError,
+                r"Requested the loading of a vocabulary file outside of the "
+                r"model archive.*Vocabulary file: .*vocab\.txt",
+            ):
+                tokenizer.set_vocabulary(vocab_path)
