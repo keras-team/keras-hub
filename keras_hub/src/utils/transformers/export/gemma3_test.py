@@ -16,9 +16,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 class TestGemma3Export(TestCase):
     def test_export_to_hf(self):
-        self.skipTest(
-            "TODO: Fix generated output matching between Keras and HF export."
-        )
         proto = os.path.join(self.get_test_data_dir(), "gemma3_test_vocab.spm")
         tokenizer = Gemma3Tokenizer(proto=proto)
 
