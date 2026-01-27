@@ -17,10 +17,11 @@ from keras_hub.src.tests.test_case import TestCase
 )
 class TestTask(TestCase):
     @pytest.mark.extra_large
-    def test_convert_tiny_preset(self):
+    def test_convert_preset(self):
         model = Qwen3OmniCausalLM.from_preset("hf://Qwen/Qwen3-Omni-30B-A3B-Instruct")
         prompt = "What is Keras?"
-        model.generate([prompt], max_length=15)
+        output = model.generate([prompt], max_length=15)
+        self.assertIsNotNone(output)
 
     @pytest.mark.extra_large
     def test_class_detection(self):
