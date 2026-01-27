@@ -1,5 +1,3 @@
-"""Tests for UNet Decoder."""
-
 import keras
 import numpy as np
 import pytest

@@ -1,5 +1,3 @@
-"""UNet Decoder implementation."""
-
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
@@ -119,9 +117,23 @@ class UNetDecoder(keras.layers.Layer):
                 "'bottleneck' and 'skip_connections'"
             )
 
-        skip_shapes = input_shape["skip_connections"]
+        # Store input shape for serialization
+        # Extract tuples/TensorShapes from Tensors if needed
+        def get_shape(x):
+            return x.shape if hasattr(x, "shape") else x
+
+        self.build_input_shape = {
+            "bottleneck": get_shape(input_shape["bottleneck"]),
+            "skip_connections": [
+                get_shape(s) for s in input_shape["skip_connections"]
+            ],
+        }
+
+        bottleneck_shape = self.build_input_shape["bottleneck"]
+        skip_shapes = self.build_input_shape["skip_connections"]
 
         num_skip_connections = len(skip_shapes)
+        x_shape = bottleneck_shape
 
         # Build decoder layers for each upsampling stage
         for i in range(num_skip_connections - 1, -1, -1):
@@ -150,6 +162,8 @@ class UNetDecoder(keras.layers.Layer):
                     dtype=self.dtype,
                     name=f"decoder_upsample_{i}",
                 )
+                upsample.build(x_shape)
+                x_shape = upsample.compute_output_shape(x_shape)
             else:
                 upsample = [
                     keras.layers.UpSampling2D(
@@ -169,6 +183,10 @@ class UNetDecoder(keras.layers.Layer):
                         name=f"decoder_upsample_conv_{i}",
                     ),
                 ]
+                for layer in upsample:
+                    layer.build(x_shape)
+                    x_shape = layer.compute_output_shape(x_shape)
+
             self._upsample_layers.append(upsample)
 
             # Attention gate
@@ -176,6 +194,10 @@ class UNetDecoder(keras.layers.Layer):
                 attention_gate = self._build_attention_gate(
                     num_filters, name=f"attention_gate_{i}"
                 )
+                # Note: Attention gate implementation as closure is
+                # problematic for tracking sublayers. It essentially bypasses
+                # Keras tracking. Since use_attention=False is common, we
+                # leave this for further refactoring.
                 self._attention_gates.append(attention_gate)
             else:
                 self._attention_gates.append(None)
@@ -186,6 +208,8 @@ class UNetDecoder(keras.layers.Layer):
                 dtype=self.dtype,
                 name=f"decoder_concat_{i}",
             )
+            concat.build([x_shape, skip_shape])
+            x_shape = concat.compute_output_shape([x_shape, skip_shape])
             self._concat_layers.append(concat)
 
             # Dropout layer
@@ -195,6 +219,8 @@ class UNetDecoder(keras.layers.Layer):
                     dtype=self.dtype,
                     name=f"decoder_dropout_{i}",
                 )
+                dropout.build(x_shape)
+                # Dropout doesn't change shape
                 self._dropout_layers.append(dropout)
             else:
                 self._dropout_layers.append(None)
@@ -203,9 +229,17 @@ class UNetDecoder(keras.layers.Layer):
             conv_block = self._build_conv_block(
                 num_filters, name=f"decoder_block_{i}"
             )
+            conv_block.build(x_shape)
+            x_shape = conv_block.compute_output_shape(x_shape)
             self._decoder_blocks.append(conv_block)
 
         super().build(input_shape)
+
+    def get_build_config(self):
+        return {"input_shape": self.build_input_shape}
+
+    def build_from_config(self, config):
+        self.build(config["input_shape"])
 
     def call(self, inputs, training=None):
         """Forward pass of the decoder.
@@ -294,6 +328,55 @@ class UNetDecoder(keras.layers.Layer):
                 )([x, x_pre_conv])
 
         return x
+
+    def compute_output_spec(self, inputs):
+        """Compute output spec for JAX compatibility.
+
+        The decoder output has the same spatial dimensions as the first
+        (shallowest) skip connection and the number of filters from the first
+        decoder block.
+        """
+        skip_connections = inputs["skip_connections"]
+
+        if not skip_connections:
+            # If no skip connections, return bottleneck shape with filters
+            bottleneck = inputs["bottleneck"]
+            return keras.KerasTensor(
+                shape=bottleneck.shape, dtype=bottleneck.dtype
+            )
+
+        # Output shape matches the first (shallowest) skip connection's spatial
+        # dimensions.
+        first_skip = skip_connections[0]
+
+        # Determine output filters
+        if self.filters is not None:
+            # First decoder block processes deepest skip, so it uses filters
+            output_filters = self.filters
+        else:
+            # Infer from first skip connection
+            if self.data_format == "channels_last":
+                output_filters = first_skip.shape[-1]
+            else:
+                output_filters = first_skip.shape[1]
+
+        # Build output shape based on first skip connection spatial dims
+        if self.data_format == "channels_last":
+            output_shape = (
+                first_skip.shape[0],  # batch
+                first_skip.shape[1],  # height
+                first_skip.shape[2],  # width
+                output_filters,  # channels
+            )
+        else:
+            output_shape = (
+                first_skip.shape[0],  # batch
+                output_filters,  # channels
+                first_skip.shape[2],  # height
+                first_skip.shape[3],  # width
+            )
+
+        return keras.KerasTensor(shape=output_shape, dtype=first_skip.dtype)
 
     def _build_conv_block(self, filters, name="conv_block"):
         """Build a double convolution block."""

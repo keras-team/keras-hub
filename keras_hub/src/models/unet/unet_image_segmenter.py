@@ -2,26 +2,10 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.image_segmenter import ImageSegmenter
-from keras_hub.src.models.image_segmenter_preprocessor import (
-    ImageSegmenterPreprocessor,
-)
 from keras_hub.src.models.unet.unet_backbone import UNetBackbone
-
-
-@keras_hub_export("keras_hub.models.UNetImageSegmenterPreprocessor")
-class UNetImageSegmenterPreprocessor(ImageSegmenterPreprocessor):
-    """Preprocessor for UNet image segmentation.
-
-    This preprocessor simply passes through the input images and labels
-    without any modification, since UNet can handle variable input sizes.
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(image_converter=None, **kwargs)
-
-    def call(self, x, y=None, sample_weight=None):
-        # For UNet, we don't need any preprocessing - just pass through
-        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+from keras_hub.src.models.unet.unet_image_segmenter_preprocessor import (
+    UNetImageSegmenterPreprocessor,
+)
 
 
 @keras_hub_export("keras_hub.models.UNetImageSegmenter")
@@ -38,8 +22,8 @@ class UNetImageSegmenter(ImageSegmenter):
             output layer. Set `activation=None` to return the output logits.
             Defaults to `"softmax"`.
         preprocessor: A preprocessor instance or `None`. If `None`, this model
-            will not apply preprocessing, and inputs should be preprocessed
-            before calling the model.
+            will apply the default `UNetImageSegmenterPreprocessor` which
+            passes through input data without modification.
 
     Example:
     ```python
@@ -71,6 +55,7 @@ class UNetImageSegmenter(ImageSegmenter):
     """
 
     backbone_cls = UNetBackbone
+    preprocessor_cls = UNetImageSegmenterPreprocessor
 
     def __init__(
         self,
@@ -106,7 +91,7 @@ class UNetImageSegmenter(ImageSegmenter):
         if preprocessor is None:
             preprocessor = UNetImageSegmenterPreprocessor()
 
-        # Set attributes
+        # Set attributes before calling super().__init__
         self.backbone = backbone
         self.num_classes = num_classes
         self.activation = activation

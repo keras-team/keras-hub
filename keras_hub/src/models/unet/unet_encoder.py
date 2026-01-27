@@ -1,5 +1,3 @@
-"""UNet Encoder implementation."""
-
 import keras
 
 from keras_hub.src.api_export import keras_hub_export

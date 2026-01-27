@@ -1,5 +1,3 @@
-"""Tests for UNet Encoder."""
-
 import keras
 import numpy as np
 import pytest
@@ -243,7 +241,7 @@ class UNetEncoderTest(TestCase):
         output = encoder(self.input_data)
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            save_path = f"{temp_dir}/encoder_model"
+            save_path = f"{temp_dir}/encoder_model.keras"
             encoder.save(save_path)
 
             loaded_encoder = keras.models.load_model(save_path)
