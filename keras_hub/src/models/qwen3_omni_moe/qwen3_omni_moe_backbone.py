@@ -168,10 +168,6 @@ class Qwen3OmniMoeBackbone(Backbone):
         decoder_outputs = self.transformer_decoder(
             hidden_states=x,
             attention_mask=attention_mask,
-            position_ids=None,
-            cache=None,
-            cache_update_index=None,
-            training=None,
         )
         
         sequence_output = self.layer_norm(decoder_outputs["hidden_states"])
@@ -186,9 +182,6 @@ class Qwen3OmniMoeBackbone(Backbone):
     def call(
         self,
         inputs,
-        position_ids=None,
-        cache=None,
-        cache_update_index=None,
         training=None,
     ):
         # Handle both dictionary and list inputs (for functional model compatibility)
@@ -217,17 +210,12 @@ class Qwen3OmniMoeBackbone(Backbone):
         decoder_outputs = self.transformer_decoder(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
-            position_ids=position_ids,
-            cache=cache,
-            cache_update_index=cache_update_index,
             training=training,
         )
 
         # Final layer norm
         hidden_states = self.layer_norm(decoder_outputs["hidden_states"])
 
-        if cache_update_index is not None:
-            return hidden_states, decoder_outputs["cache"]
         return hidden_states
 
     def get_config(self):

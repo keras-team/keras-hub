@@ -200,12 +200,13 @@ class Qwen3OmniMoeCausalLM(CausalLM):
         updated_cache = []
         for i in range(self.backbone.num_layers):
             layer = self.backbone.transformer_decoder.layers[i]
-            x, cache = layer(
+            layer_outputs = layer(
                 x,
                 cache=cache[i],
                 cache_update_index=cache_update_index,
             )
-            updated_cache.append(cache)
+            x = layer_outputs["hidden_states"]
+            updated_cache.append(layer_outputs.get("cache"))
         x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, x, updated_cache

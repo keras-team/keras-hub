@@ -14,6 +14,8 @@ class Qwen3OmniMoeLayerNorm(keras.layers.Layer):
     architectures like Qwen models.
 
     Args:
+        head_dim: int. The dimension of each attention head, used for per-head
+            normalization. Defaults to `None`.
         epsilon: float, default 1e-6. A small value added to the denominator
             for numerical stability.
         dtype: str or `keras.mixed_precision.DTypePolicy`. The dtype to use for
@@ -27,41 +29,49 @@ class Qwen3OmniMoeLayerNorm(keras.layers.Layer):
     # Apply to input tensor
     inputs = keras.random.normal((2, 10, 128))
     outputs = layer(inputs)  # Shape: (2, 10, 128)
+    
+    # For per-head normalization in attention
+    layer = Qwen3OmniMoeLayerNorm(head_dim=64, epsilon=1e-6)
     ```
     """
 
     def __init__(
         self,
+        head_dim=None,
         epsilon=1e-6,
-        dtype=None,
         **kwargs,
     ):
-        super().__init__(dtype=dtype, **kwargs)
+        super().__init__(**kwargs)
+        self.head_dim = head_dim
         self.epsilon = epsilon
 
     def build(self, input_shape):
-        self.gamma = self.add_weight(
-            name="gamma",
-            shape=(input_shape[-1],),
+        if self.head_dim:
+            dim = self.head_dim
+        else:
+            dim = input_shape[-1]
+
+        self.scale = self.add_weight(
+            name="scale",
+            trainable=True,
+            shape=(dim,),
             initializer="ones",
-            dtype=self.dtype,
+            dtype=self.variable_dtype,
         )
-        super().build(input_shape)
+        self.built = True
 
     def call(self, inputs):
-        # Compute mean of squares
-        variance = ops.mean(ops.square(inputs), axis=-1, keepdims=True)
-
-        # Normalize
-        normalized = inputs / ops.sqrt(variance + self.epsilon)
-
-        # Scale
-        return self.gamma * normalized
+        input_dtype = inputs.dtype
+        x = ops.cast(inputs, "float32")
+        var = ops.mean(ops.power(x, 2), axis=-1, keepdims=True)
+        x = x * ops.rsqrt(var + self.epsilon)
+        return ops.cast(x * self.scale, input_dtype)
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
+                "head_dim": self.head_dim,
                 "epsilon": self.epsilon,
             }
         )

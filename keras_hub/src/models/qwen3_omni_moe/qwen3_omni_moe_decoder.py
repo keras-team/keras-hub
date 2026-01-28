@@ -143,12 +143,12 @@ class Qwen3OmniMoeTransformerDecoderLayer(keras.layers.Layer):
         self.attention = Qwen3OmniMoeAttention(
             num_query_heads=num_query_heads,
             num_key_value_heads=num_key_value_heads,
-            hidden_dim=hidden_dim,
             head_dim=head_dim,
-            layer_norm_epsilon=layer_norm_epsilon,
+            rope_max_wavelength=10000,
+            rope_scaling_factor=1.0,
             dropout=dropout,
+            layer_norm_epsilon=layer_norm_epsilon,
             sliding_window_size=sliding_window_size,
-            max_sequence_length=max_sequence_length,
             dtype=dtype,
             name="attention",
         )
@@ -159,6 +159,8 @@ class Qwen3OmniMoeTransformerDecoderLayer(keras.layers.Layer):
             intermediate_dim=intermediate_dim,
             num_experts=num_experts,
             num_experts_per_tok=num_experts_per_tok,
+            norm_topk_prob=True,
+            router_aux_loss_coef=0.001,
             dtype=dtype,
             name="moe_feedforward",
         )
@@ -179,7 +181,6 @@ class Qwen3OmniMoeTransformerDecoderLayer(keras.layers.Layer):
         self,
         hidden_states,
         attention_mask=None,
-        position_ids=None,
         cache=None,
         cache_update_index=None,
         training=None,
@@ -188,16 +189,20 @@ class Qwen3OmniMoeTransformerDecoderLayer(keras.layers.Layer):
         hidden_states = self.attention_layer_norm(hidden_states)
 
         # Self-attention
-        attention_outputs = self.attention(
-            hidden_states=hidden_states,
+        attention_result = self.attention(
+            hidden_states,
             attention_mask=attention_mask,
-            position_ids=position_ids,
             cache=cache,
             cache_update_index=cache_update_index,
             training=training,
         )
-        attention_output = attention_outputs["hidden_states"]
-        attention_cache = attention_outputs.get("cache")
+        
+        # Handle return value - can be tensor or (tensor, cache) tuple
+        if isinstance(attention_result, tuple):
+            attention_output, attention_cache = attention_result
+        else:
+            attention_output = attention_result
+            attention_cache = None
 
         # Residual connection
         hidden_states = residual + attention_output
@@ -220,11 +225,9 @@ class Qwen3OmniMoeTransformerDecoderLayer(keras.layers.Layer):
         if auxiliary_loss is not None:
             self.add_loss(auxiliary_loss)
 
-        return {
-            "hidden_states": hidden_states,
-            "cache": attention_cache,
-            "router_logits": feedforward_outputs.get("router_logits"),
-        }
+        # Return just hidden_states for functional model compatibility
+        # When cache is needed, the CausalLM will access the layer directly
+        return hidden_states
 
     def get_config(self):
         config = super().get_config()
@@ -246,21 +249,124 @@ class Qwen3OmniMoeTransformerDecoderLayer(keras.layers.Layer):
         return config
 
 
+class Qwen3OmniMoeExperts(keras.layers.Layer):
+    """Batched MoE experts layer using gate-up-down pattern.
+
+    This layer implements multiple experts as batched weight tensors for
+    efficient computation. Uses the SiLU-gated linear unit (GLU) pattern:
+    output = down(silu(gate) * up)
+
+    Args:
+        num_experts: int. The number of experts.
+        hidden_dim: int. The input/output dimension.
+        intermediate_dim: int. The intermediate dimension for each expert.
+        kernel_initializer: Initializer for kernel weights.
+    """
+
+    def __init__(
+        self,
+        num_experts,
+        hidden_dim,
+        intermediate_dim,
+        kernel_initializer="glorot_uniform",
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.num_experts = num_experts
+        self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
+        self.kernel_initializer = keras.initializers.get(
+            clone_initializer(kernel_initializer)
+        )
+
+    def build(self, input_shape):
+        # Match HuggingFace weight shapes exactly for weight loading compatibility
+        # gate_up_proj: (num_experts, 2 * intermediate_dim, hidden_dim)
+        self.gate_up_proj = self.add_weight(
+            name="gate_up_proj",
+            shape=(self.num_experts, 2 * self.intermediate_dim, self.hidden_dim),
+            initializer=self.kernel_initializer,
+            trainable=True,
+            dtype=self.variable_dtype,
+        )
+
+        # down_proj: (num_experts, hidden_dim, intermediate_dim)
+        self.down_proj = self.add_weight(
+            name="down_proj",
+            shape=(self.num_experts, self.hidden_dim, self.intermediate_dim),
+            initializer=self.kernel_initializer,
+            trainable=True,
+            dtype=self.variable_dtype,
+        )
+        self.built = True
+
+    def call(self, hidden_states, selected_experts):
+        """Forward pass through selected experts.
+
+        Args:
+            hidden_states: Input tensor of shape (batch_size * seq_len, hidden_dim).
+            selected_experts: Selected expert indices of shape 
+                (batch_size * seq_len, num_experts_per_tok).
+
+        Returns:
+            Expert outputs of shape (batch_size * seq_len, num_experts_per_tok, hidden_dim).
+        """
+        # hidden_states: (num_tokens, hidden_dim)
+        # selected_experts: (num_tokens, num_experts_per_tok)
+
+        # Gather weights for selected experts
+        # gate_up_proj: (num_experts, 2 * intermediate_dim, hidden_dim)
+        # After gather: (num_tokens, num_experts_per_tok, 2 * intermediate_dim, hidden_dim)
+        selected_gate_up = ops.take(self.gate_up_proj, selected_experts, axis=0)
+        
+        # down_proj: (num_experts, hidden_dim, intermediate_dim)
+        # After gather: (num_tokens, num_experts_per_tok, hidden_dim, intermediate_dim)
+        selected_down = ops.take(self.down_proj, selected_experts, axis=0)
+
+        # Gate-up projection: hidden_states @ selected_gate_up.T
+        # hidden_states: (t, h), selected_gate_up: (t, e, m, h) where m = 2*intermediate
+        # Einsum: sum over h -> result (t, e, m)
+        gate_up_output = ops.einsum("th,temh->tem", hidden_states, selected_gate_up)
+
+        # Split into gate and up: each (t, e, intermediate_dim)
+        gate, up = ops.split(gate_up_output, 2, axis=-1)
+
+        # Apply SiLU gating: silu(gate) * up
+        intermediate = ops.silu(gate) * up
+
+        # Down projection: intermediate @ selected_down.T
+        # intermediate: (t, e, m) where m = intermediate_dim
+        # selected_down: (t, e, h, m) -> need einsum over m to get (t, e, h)
+        expert_outputs = ops.einsum("tem,tehm->teh", intermediate, selected_down)
+
+        return expert_outputs
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "num_experts": self.num_experts,
+            "hidden_dim": self.hidden_dim,
+            "intermediate_dim": self.intermediate_dim,
+            "kernel_initializer": keras.initializers.serialize(self.kernel_initializer),
+        })
+        return config
+
+
 class Qwen3OmniMoeSparseMoeBlock(keras.layers.Layer):
     """A sparse mixture-of-experts (MoE) block for Qwen3-Omni MoE model.
 
     This layer implements a sparse MoE feedforward network that routes tokens
-    to a subset of experts based on learned routing probabilities. It uses
-    top-k expert selection with weighted combination for efficient computation.
+    to a subset of experts based on learned routing probabilities. Uses the
+    gate_up_proj/down_proj expert pattern with SiLU gating.
 
     Args:
         hidden_dim: int. The size of the transformer hidden state.
-        intermediate_dim: int. The output dimension of the first Dense layer
-            in each expert.
+        intermediate_dim: int. The intermediate dimension for each expert.
         num_experts: int. The number of experts in the MoE layer.
-        num_experts_per_tok: int. The number of experts to select for each token.
-        dtype: str or `keras.mixed_precision.DTypePolicy`, optional. The dtype
-            to use for the layer's computations and weights.
+        num_experts_per_tok: int. The number of experts to select per token.
+        norm_topk_prob: bool. Whether to normalize top-k probabilities.
+        router_aux_loss_coef: float. Coefficient for auxiliary load balancing loss.
+        kernel_initializer: Initializer for kernel weights.
 
     Example:
     ```python
@@ -274,9 +380,7 @@ class Qwen3OmniMoeSparseMoeBlock(keras.layers.Layer):
     
     # Apply to input
     hidden_states = keras.random.normal((2, 10, 4096))
-    outputs = moe_block(hidden_states)
-    # outputs["hidden_states"] shape: (2, 10, 4096)
-    # outputs["router_logits"] shape: (20, 8) - routing logits for each token
+    outputs = moe_block(hidden_states=hidden_states)
     ```
     """
 
@@ -286,82 +390,104 @@ class Qwen3OmniMoeSparseMoeBlock(keras.layers.Layer):
         intermediate_dim,
         num_experts,
         num_experts_per_tok,
-        dtype=None,
+        norm_topk_prob=True,
+        router_aux_loss_coef=0.001,
+        kernel_initializer="glorot_uniform",
         **kwargs,
     ):
-        super().__init__(dtype=dtype, **kwargs)
+        super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.num_experts = num_experts
         self.num_experts_per_tok = num_experts_per_tok
-
-        # Router
-        self.router = keras.layers.Dense(
-            num_experts,
-            use_bias=False,
-            dtype=dtype,
-            name="router",
+        self.norm_topk_prob = norm_topk_prob
+        self.router_aux_loss_coef = router_aux_loss_coef
+        self.kernel_initializer = keras.initializers.get(
+            clone_initializer(kernel_initializer)
         )
 
-        # Experts
-        self.experts = []
-        for i in range(num_experts):
-            expert = keras.Sequential([
-                keras.layers.Dense(
-                    intermediate_dim,
-                    activation="silu",
-                    dtype=dtype,
-                    name=f"expert_{i}_up",
-                ),
-                keras.layers.Dense(
-                    hidden_dim,
-                    dtype=dtype,
-                    name=f"expert_{i}_down",
-                ),
-            ], name=f"expert_{i}")
-            self.experts.append(expert)
+        # Router (gate)
+        self.gate = keras.layers.Dense(
+            num_experts,
+            use_bias=False,
+            kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
+            name="gate",
+        )
+
+        # Batched experts
+        self.experts = Qwen3OmniMoeExperts(
+            num_experts=num_experts,
+            hidden_dim=hidden_dim,
+            intermediate_dim=intermediate_dim,
+            kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
+            name="experts",
+        )
 
     def call(self, hidden_states, training=None):
         batch_size, seq_len, hidden_dim = ops.shape(hidden_states)
-        
-        # Flatten for routing
+
+        # Flatten for routing: (batch_size * seq_len, hidden_dim)
         hidden_states_flat = ops.reshape(hidden_states, (-1, hidden_dim))
-        
-        # Get router logits
-        router_logits = self.router(hidden_states_flat)
-        
-        # Get top-k experts and their weights
+
+        # Get router logits: (batch_size * seq_len, num_experts)
+        router_logits = self.gate(hidden_states_flat)
+
+        # Compute routing probabilities
         routing_weights = ops.softmax(router_logits, axis=-1)
-        gating_weights, selected_experts = ops.top_k(routing_weights, k=self.num_experts_per_tok)
-        gating_weights /= ops.sum(gating_weights, axis=-1, keepdims=True)
-        
-        # Create a mask for the selected experts
-        expert_mask = ops.one_hot(selected_experts, self.num_experts, dtype=gating_weights.dtype)
-        
-        # Compute expert outputs
-        expert_outputs_list = []
-        for expert in self.experts:
-            expert_outputs_list.append(expert(hidden_states_flat))
-        expert_outputs = ops.stack(expert_outputs_list, axis=1)
-        
-        # Weight expert outputs by gating probabilities
-        weighted_expert_output = ops.einsum("...SE,...ED->...SD", expert_mask, expert_outputs)
-        gating_weights = ops.expand_dims(gating_weights, axis=-1)
-        final_output = ops.sum(weighted_expert_output * gating_weights, axis=1)
-        
-        # Reshape back
-        final_output = ops.reshape(final_output, (batch_size, seq_len, hidden_dim))
-        
-        # Compute auxiliary loss for load balancing
-        auxiliary_loss = compute_load_balancing_loss(
-            router_logits, self.num_experts, self.num_experts_per_tok
+
+        # Get top-k experts and their weights
+        topk_weights, selected_experts = ops.top_k(
+            routing_weights, k=self.num_experts_per_tok
         )
-        
+
+        # Normalize top-k probabilities if enabled
+        if self.norm_topk_prob:
+            topk_weights = topk_weights / ops.sum(topk_weights, axis=-1, keepdims=True)
+
+        # Get expert outputs: (num_tokens, num_experts_per_tok, hidden_dim)
+        expert_outputs = self.experts(hidden_states_flat, selected_experts)
+
+        # Weight and combine expert outputs
+        # topk_weights: (num_tokens, num_experts_per_tok)
+        # expert_outputs: (num_tokens, num_experts_per_tok, hidden_dim)
+        topk_weights_expanded = ops.expand_dims(topk_weights, axis=-1)
+        final_output = ops.sum(expert_outputs * topk_weights_expanded, axis=1)
+
+        # Reshape back: (batch_size, seq_len, hidden_dim)
+        final_output = ops.reshape(final_output, (batch_size, seq_len, hidden_dim))
+
+        # Compute auxiliary loss for load balancing
+        auxiliary_loss = self._compute_load_balancing_loss(router_logits, selected_experts)
+        auxiliary_loss = auxiliary_loss * self.router_aux_loss_coef
+
         return {
             "hidden_states": final_output,
             "router_logits": router_logits,
             "auxiliary_loss": auxiliary_loss,
         }
+
+    def _compute_load_balancing_loss(self, router_logits, selected_experts):
+        """Compute auxiliary load balancing loss."""
+        # router_logits: (num_tokens, num_experts)
+        # selected_experts: (num_tokens, num_experts_per_tok)
+        num_tokens = ops.shape(router_logits)[0]
+
+        # Compute routing probabilities
+        routing_probs = ops.softmax(router_logits, axis=-1)
+
+        # Mean routing probability per expert
+        expert_probs = ops.mean(routing_probs, axis=0)  # (num_experts,)
+
+        # Expert frequency (fraction of tokens routed to each expert)
+        expert_mask = ops.one_hot(selected_experts, self.num_experts)
+        expert_freq = ops.mean(ops.sum(expert_mask, axis=1), axis=0)  # (num_experts,)
+
+        # Load balancing loss: encourages uniform distribution
+        aux_loss = ops.sum(expert_probs * expert_freq) * self.num_experts
+
+        return aux_loss
 
     def get_config(self):
         config = super().get_config()
@@ -371,6 +497,9 @@ class Qwen3OmniMoeSparseMoeBlock(keras.layers.Layer):
                 "intermediate_dim": self.intermediate_dim,
                 "num_experts": self.num_experts,
                 "num_experts_per_tok": self.num_experts_per_tok,
+                "norm_topk_prob": self.norm_topk_prob,
+                "router_aux_loss_coef": self.router_aux_loss_coef,
+                "kernel_initializer": keras.initializers.serialize(self.kernel_initializer),
             }
         )
         return config
@@ -481,41 +610,17 @@ class Qwen3OmniMoeTransformerDecoder(keras.layers.Layer):
         self,
         hidden_states,
         attention_mask=None,
-        position_ids=None,
-        cache=None,
-        cache_update_index=None,
         training=None,
     ):
-        # Initialize cache if not provided
-        if cache is None:
-            cache = [None] * self.num_layers
-
         # Process through layers
-        all_hidden_states = []
-        all_router_logits = []
-        current_cache = []
-
-        for i, layer in enumerate(self.layers):
-            layer_outputs = layer(
-                hidden_states=hidden_states,
+        for layer in self.layers:
+            hidden_states = layer(
+                hidden_states,
                 attention_mask=attention_mask,
-                position_ids=position_ids,
-                cache=cache[i],
-                cache_update_index=cache_update_index,
                 training=training,
             )
-            
-            hidden_states = layer_outputs["hidden_states"]
-            current_cache.append(layer_outputs.get("cache"))
-            
-            if "router_logits" in layer_outputs:
-                all_router_logits.append(layer_outputs["router_logits"])
 
-        return {
-            "hidden_states": hidden_states,
-            "cache": current_cache,
-            "all_router_logits": all_router_logits,
-        }
+        return {"hidden_states": hidden_states}
 
     def get_config(self):
         config = super().get_config()

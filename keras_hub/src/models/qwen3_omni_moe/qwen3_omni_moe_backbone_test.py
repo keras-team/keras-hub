@@ -51,28 +51,18 @@ class Qwen3OmniMoeBackboneTest(TestCase):
                 input_data=self.input_data,
             )
 
-    def test_cache_functionality(self):
-        """Test that cache is properly handled and returned."""
+    def test_output_shapes(self):
+        """Test that output shapes are correct."""
         model = Qwen3OmniMoeBackbone(**self.init_kwargs)
         
-        # First forward pass without cache
-        outputs1 = model(self.input_data)
-        self.assertEqual(outputs1.shape, (2, 16, 128))
-        
-        # Second forward pass with cache
-        cache_input = {
-            "token_ids": ops.ones((2, 1), dtype="int32"),
-            "padding_mask": ops.ones((2, 1), dtype="int32"),
-        }
-        
-        outputs2, cache = model(cache_input, cache=None, cache_update_index=0)
-        self.assertEqual(outputs2.shape, (2, 1, 128))
-        self.assertIsNotNone(cache)
-        
-        # Third forward pass using cache
-        outputs3, updated_cache = model(cache_input, cache=cache, cache_update_index=1)
-        self.assertEqual(outputs3.shape, (2, 1, 128))
-        self.assertIsNotNone(updated_cache)
+        # Test with different sequence lengths
+        for seq_len in [16, 32]:
+            test_input = {
+                "token_ids": ops.ones((2, seq_len), dtype="int32"),
+                "padding_mask": ops.ones((2, seq_len), dtype="int32"),
+            }
+            outputs = model(test_input)
+            self.assertEqual(outputs.shape, (2, seq_len, 128))
 
     def test_auxiliary_loss(self):
         """Test that auxiliary losses are properly computed during training."""

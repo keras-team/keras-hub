@@ -1,34 +1,33 @@
+import math
+
 import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.models.qwen3_omni_moe.qwen3_omni_moe_layernorm import Qwen3OmniMoeLayerNorm
+from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 @keras_hub_export("keras_hub.models.Qwen3OmniMoeAttention")
 class Qwen3OmniMoeAttention(keras.layers.Layer):
     """Multi-head attention for Qwen3-Omni MoE model.
 
-    This layer implements multi-head attention with grouped query attention (GQA)
-    and rotary positional embeddings for the Qwen3-Omni MoE model. It supports
-    efficient key-value caching for autoregressive generation.
+    This layer implements multi-head attention with grouped query attention (GQA),
+    rotary positional embeddings, and Q-Norm/K-Norm for the Qwen3-Omni MoE model.
+    It supports efficient key-value caching for autoregressive generation.
 
     Args:
         num_query_heads: int. The number of heads for the query projections.
         num_key_value_heads: int. The number of heads for the key and value
             projections (must be <= num_query_heads).
-        hidden_dim: int. The size of the transformer hidden state.
-        head_dim: int, optional. The size of each attention head. If None,
-            defaults to hidden_dim // num_query_heads.
-        layer_norm_epsilon: float, default 1e-6. The epsilon value used for
-            layer normalization.
+        head_dim: int, optional. The size of each attention head.
+        rope_max_wavelength: int. Maximum wavelength for RoPE embeddings.
+        rope_scaling_factor: float. Scaling factor for RoPE.
+        kernel_initializer: Initializer for kernel weights.
         dropout: float, default 0.0. Dropout probability for attention weights.
-        sliding_window_size: int, default 4096. Size of the sliding local window.
-        max_sequence_length: int, default 32768. The maximum sequence length
-            supported by the model.
-        dtype: str or `keras.mixed_precision.DTypePolicy`, optional. The dtype
-            to use for the layer's computations and weights.
+        layer_norm_epsilon: float, default 1e-6. The epsilon value for layer norm.
+        sliding_window_size: int, optional. Size of the sliding local window.
 
     Example:
     ```python
@@ -36,15 +35,12 @@ class Qwen3OmniMoeAttention(keras.layers.Layer):
     attention = Qwen3OmniMoeAttention(
         num_query_heads=32,
         num_key_value_heads=4,
-        hidden_dim=4096,
         head_dim=128
     )
     
     # Apply to input
     hidden_states = keras.random.normal((2, 10, 4096))
     outputs = attention(hidden_states)
-    # outputs["hidden_states"] shape: (2, 10, 4096)
-    # outputs["cache"] contains key-value cache for generation
     ```
     """
 
@@ -52,154 +48,247 @@ class Qwen3OmniMoeAttention(keras.layers.Layer):
         self,
         num_query_heads,
         num_key_value_heads,
-        hidden_dim,
-        head_dim,
-        layer_norm_epsilon=1e-6,
+        head_dim=None,
+        rope_max_wavelength=10000,
+        rope_scaling_factor=1.0,
+        kernel_initializer="glorot_uniform",
         dropout=0.0,
-        sliding_window_size=4096,
-        max_sequence_length=32768,
-        dtype=None,
+        layer_norm_epsilon=1e-6,
+        sliding_window_size=None,
         **kwargs,
     ):
-        super().__init__(dtype=dtype, **kwargs)
+        super().__init__(**kwargs)
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
-        self.hidden_dim = hidden_dim
-        self.head_dim = head_dim if head_dim is not None else hidden_dim // num_query_heads
-        self.layer_norm_epsilon = layer_norm_epsilon
+        self.head_dim = head_dim
         self.dropout = dropout
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.num_key_value_groups = num_query_heads // num_key_value_heads
+        self.rope_max_wavelength = rope_max_wavelength
+        self.rope_scaling_factor = rope_scaling_factor
         self.sliding_window_size = sliding_window_size
-        self.max_sequence_length = max_sequence_length
-
-        # Query projection
-        self.query_projection = keras.layers.Dense(
-            num_query_heads * self.head_dim,
-            use_bias=False,
-            dtype=dtype,
-            name="query_projection",
+        self.kernel_initializer = keras.initializers.get(
+            clone_initializer(kernel_initializer)
         )
+
+    def build(self, inputs_shape):
+        hidden_dim = inputs_shape[-1]
+        if not self.head_dim:
+            self.head_dim = hidden_dim // self.num_query_heads
+
+        self._inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
+
+        # Query projection using EinsumDense for efficient multi-head projection
+        self._query_dense = keras.layers.EinsumDense(
+            equation="bqm,muh->bquh",
+            output_shape=(None, self.num_query_heads, self.head_dim),
+            kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
+            name="query",
+        )
+        self._query_dense.build(inputs_shape)
+
+        # Q-Norm: Query normalization (per-head)
+        self._query_norm = Qwen3OmniMoeLayerNorm(
+            epsilon=self.layer_norm_epsilon,
+            head_dim=self.head_dim,
+            dtype=self.dtype_policy,
+            name="query_norm",
+        )
+        self._query_norm.build(inputs_shape)
 
         # Key projection
-        self.key_projection = keras.layers.Dense(
-            num_key_value_heads * self.head_dim,
-            use_bias=False,
-            dtype=dtype,
-            name="key_projection",
+        self._key_dense = keras.layers.EinsumDense(
+            equation="bkm,mvh->bkvh",
+            output_shape=(None, self.num_key_value_heads, self.head_dim),
+            kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
+            name="key",
         )
+        self._key_dense.build(inputs_shape)
+
+        # K-Norm: Key normalization (per-head)
+        self._key_norm = Qwen3OmniMoeLayerNorm(
+            epsilon=self.layer_norm_epsilon,
+            head_dim=self.head_dim,
+            dtype=self.dtype_policy,
+            name="key_norm",
+        )
+        self._key_norm.build(inputs_shape)
 
         # Value projection
-        self.value_projection = keras.layers.Dense(
-            num_key_value_heads * self.head_dim,
-            use_bias=False,
-            dtype=dtype,
-            name="value_projection",
+        self._value_dense = keras.layers.EinsumDense(
+            equation="bkm,mvh->bkvh",
+            output_shape=(None, self.num_key_value_heads, self.head_dim),
+            kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
+            name="value",
+        )
+        self._value_dense.build(inputs_shape)
+
+        # Softmax for attention
+        self._softmax = keras.layers.Softmax(
+            axis=-1,
+            dtype="float32",
+            name="attention_softmax",
+        )
+
+        # Dropout
+        self._dropout_layer = keras.layers.Dropout(
+            rate=self.dropout,
+            dtype=self.dtype_policy,
         )
 
         # Output projection
-        self.output_projection = keras.layers.Dense(
-            hidden_dim,
-            use_bias=False,
-            dtype=dtype,
-            name="output_projection",
+        self._output_dense = keras.layers.EinsumDense(
+            equation="bquh,uhm->bqm",
+            output_shape=(None, hidden_dim),
+            kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
+            name="attention_output",
+        )
+        self._output_dense.build(
+            (None, None, self.num_query_heads, self.head_dim)
         )
 
         # Rotary embedding
-        self.rotary_embedding = RotaryEmbedding(
-            max_wavelength=10000,
-            scaling_factor=1.0,
-            dtype=dtype,
-            name="rotary_embedding",
+        self.rotary_embedding_layer = RotaryEmbedding(
+            max_wavelength=self.rope_max_wavelength,
+            scaling_factor=self.rope_scaling_factor,
+            dtype=self.dtype_policy,
         )
+
+        self._dot_product_equation = "bquh,bkuh->buqk"
+        self._combine_equation = "buqk,bkuh->bquh"
+
+        self.built = True
 
     def call(
         self,
         hidden_states,
         attention_mask=None,
-        position_ids=None,
         cache=None,
         cache_update_index=None,
         training=None,
     ):
-        batch_size, seq_len, hidden_dim = ops.shape(hidden_states)
+        """Applies attention mechanism to the input hidden states.
 
-        # Project to query, key, value
-        query = self.query_projection(hidden_states)
-        key = self.key_projection(hidden_states)
-        value = self.value_projection(hidden_states)
+        Args:
+            hidden_states: Input tensor of shape [batch_size, seq_length, hidden_size].
+            attention_mask: Mask tensor of shape [batch_size, seq_length, seq_length].
+            cache: Optional cached key and value tensors.
+            cache_update_index: Index at which to update the cache.
+            training: Boolean indicating whether in training mode.
 
-        # Reshape for multi-head attention
-        query = ops.reshape(
-            query, (batch_size, seq_len, self.num_query_heads, self.head_dim)
+        Returns:
+            attention_output: Output tensor after applying attention.
+            cache: Updated cache tensors (if cache is provided).
+        """
+        start_index = cache_update_index if cache_update_index is not None else 0
+
+        # Query projection with Q-Norm
+        query = self._query_dense(hidden_states)
+        query = self._query_norm(query)
+
+        # Apply RoPE to queries
+        query = self.rotary_embedding_layer(query, start_index=start_index)
+
+        def _compute_key_value(x):
+            # Key projection with K-Norm
+            key = self._key_dense(x)
+            key = self._key_norm(key)
+            key = self.rotary_embedding_layer(key, start_index=start_index)
+            
+            # Value projection (no normalization)
+            value = self._value_dense(x)
+            return key, value
+
+        if cache is not None:
+            key_cache = cache[:, 0, ...]
+            value_cache = cache[:, 1, ...]
+            if cache_update_index is None:
+                key = key_cache
+                value = value_cache
+            else:
+                key_update, value_update = _compute_key_value(hidden_states)
+                start = [0, cache_update_index, 0, 0]
+                key = ops.slice_update(key_cache, start, key_update)
+                value = ops.slice_update(value_cache, start, value_update)
+                cache = ops.stack((key, value), axis=1)
+        else:
+            if cache_update_index is not None:
+                raise ValueError(
+                    "`cache_update_index` should not be set if `cache` is "
+                    f"`None`. Received: cache={cache}, "
+                    f"cache_update_index={cache_update_index}"
+                )
+            key, value = _compute_key_value(hidden_states)
+
+        # Repeat key/value for grouped query attention
+        # [batch, seq_len, num_kv_heads, head_dim] -> [batch, seq_len, num_heads, head_dim]
+        key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
+        value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
+
+        # Compute attention
+        attention_output = self._compute_attention(
+            query, key, value, attention_mask
         )
-        key = ops.reshape(
-            key, (batch_size, seq_len, self.num_key_value_heads, self.head_dim)
-        )
-        value = ops.reshape(
-            value, (batch_size, seq_len, self.num_key_value_heads, self.head_dim)
-        )
 
-        # Apply rotary embedding
-        if position_ids is not None:
-            query = self.rotary_embedding(query, position_ids)
-            key = self.rotary_embedding(key, position_ids)
+        # Apply dropout
+        attention_output = self._dropout_layer(attention_output, training=training)
 
-        # Handle cache
-        if cache is not None and cache_update_index is not None:
-            # Update cache
-            key = ops.concatenate([cache["key"], key], axis=1)
-            value = ops.concatenate([cache["value"], value], axis=1)
+        # Output projection
+        attention_output = self._output_dense(attention_output)
 
-        # Update cache
-        new_cache = {
-            "key": key,
-            "value": value,
-        }
+        if cache is not None:
+            return attention_output, cache
+        return attention_output
 
-        # Transpose for attention
-        query = ops.transpose(query, (0, 2, 1, 3))  # (batch_size, num_heads, seq_len, head_dim)
-        key = ops.transpose(key, (0, 2, 1, 3))
-        value = ops.transpose(value, (0, 2, 1, 3))
-
-        # Handle grouped query attention (GQA)
-        # Repeat key and value for grouped query attention
-        if self.num_key_value_heads < self.num_query_heads:
-            num_groups = self.num_query_heads // self.num_key_value_heads
-            key = ops.repeat(key, num_groups, axis=1)
-            value = ops.repeat(value, num_groups, axis=1)
-
-        # Compute attention scores
-        attention_scores = ops.matmul(query, ops.transpose(key, (0, 1, 3, 2)))
-        attention_scores = attention_scores / ops.sqrt(self.head_dim)
-
-        # Apply attention mask
+    def _masked_softmax(self, attention_scores, attention_mask=None):
+        """Applies softmax with optional masking.
+        
+        Args:
+            attention_scores: Tensor of shape [batch, heads, query_len, key_len].
+            attention_mask: Optional mask tensor. Can be:
+                - 2D: [batch, key_len] - simple padding mask
+                - 3D: [batch, query_len, key_len] - causal/attention mask
+        """
         if attention_mask is not None:
-            if len(attention_mask.shape) == 2:
-                # Convert 2D mask to 4D for broadcasting
-                attention_mask = ops.expand_dims(attention_mask, axis=1)
-                attention_mask = ops.expand_dims(attention_mask, axis=1)
-            attention_scores = ops.where(
-                attention_mask, attention_scores, ops.full_like(attention_scores, -1e9)
-            )
+            # attention_scores shape: [batch, heads, query_len, key_len]
+            # We need mask shape: [batch, 1, query_len or 1, key_len]
+            mask_ndim = ops.ndim(attention_mask)
+            
+            if mask_ndim == 2:
+                # [batch, key_len] -> [batch, 1, 1, key_len]
+                mask = ops.expand_dims(ops.expand_dims(attention_mask, axis=1), axis=1)
+            elif mask_ndim == 3:
+                # [batch, query_len, key_len] -> [batch, 1, query_len, key_len]
+                mask = ops.expand_dims(attention_mask, axis=1)
+            else:
+                mask = attention_mask
+            
+            return self._softmax(attention_scores, mask)
+        return self._softmax(attention_scores)
 
-        # Apply softmax
-        attention_weights = ops.softmax(attention_scores, axis=-1)
-
-        # Apply attention to values
-        attention_output = ops.matmul(attention_weights, value)
-
-        # Transpose back
-        attention_output = ops.transpose(attention_output, (0, 2, 1, 3))
-
-        # Reshape and project
-        attention_output = ops.reshape(
-            attention_output, (batch_size, seq_len, self.num_query_heads * self.head_dim)
+    def _compute_attention(self, query, key, value, attention_mask=None):
+        """Computes attention using query, key, and value tensors."""
+        # Compute attention scores: bquh,bkuh->buqk
+        attention_scores = ops.einsum(self._dot_product_equation, query, key)
+        
+        # Scale by inverse sqrt of head_dim
+        attention_scores = ops.multiply(
+            attention_scores,
+            ops.cast(self._inv_norm_factor, self.compute_dtype),
         )
-        attention_output = self.output_projection(attention_output)
 
-        return {
-            "hidden_states": attention_output,
-            "cache": new_cache,
-        }
+        # Apply mask and softmax
+        attention_scores = self._masked_softmax(attention_scores, attention_mask)
+        attention_scores = ops.cast(attention_scores, self.compute_dtype)
+
+        # Apply attention to values: buqk,bkuh->bquh
+        attention_output = ops.einsum(self._combine_equation, attention_scores, value)
+
+        return attention_output
 
     def get_config(self):
         config = super().get_config()
@@ -207,12 +296,15 @@ class Qwen3OmniMoeAttention(keras.layers.Layer):
             {
                 "num_query_heads": self.num_query_heads,
                 "num_key_value_heads": self.num_key_value_heads,
-                "hidden_dim": self.hidden_dim,
                 "head_dim": self.head_dim,
-                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "rope_max_wavelength": self.rope_max_wavelength,
+                "rope_scaling_factor": self.rope_scaling_factor,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
                 "dropout": self.dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
                 "sliding_window_size": self.sliding_window_size,
-                "max_sequence_length": self.max_sequence_length,
             }
         )
         return config
