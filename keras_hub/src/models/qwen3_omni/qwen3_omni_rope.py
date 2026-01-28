@@ -208,7 +208,7 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
         
         # Build list of slices to reconstruct the tensor with interleaving
         # This avoids repeated concatenations in a loop
-        head_dim_half = ops.shape(freqs_t)[-1]
+        head_dim_half = sum(mrope_section)
         
         # For each position, determine which source (text/temporal/spatial) to use
         # Pattern: pos%3==0 -> text, pos%3==1 -> temporal, pos%3==2 -> spatial
@@ -218,10 +218,8 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
         # Process the interleaved section (where all 3 modalities contribute)
         max_interleaved = min(mrope_section[1], mrope_section[2]) * 3
         while pos < max_interleaved:
-            for dim_idx, offset in [(0, 0), (1, 1), (2, 2)]:
-                if pos % 3 == offset:
-                    result_slices.append(freqs[dim_idx][..., pos:pos+1])
-                    break
+            dim_idx = pos % 3
+            result_slices.append(freqs[dim_idx][..., pos:pos+1])
             pos += 1
         
         # Add remaining text frequencies (if any)
