@@ -1,15 +1,3 @@
-"""Qwen3-Omni Multi-Head Attention with Multimodal RoPE.
-
-This module implements the attention mechanism for Qwen3-Omni with:
-- Grouped Query Attention (GQA)
-- Multimodal Rotary Position Embedding (M-RoPE)
-- Query-Key normalization
-
-Reference implementations:
-- Qwen3MoE attention: keras_hub/src/models/qwen3_moe/qwen3_moe_attention.py
-- M-RoPE: keras_hub/src/models/qwen3_omni/qwen3_omni_rope.py
-"""
-
 import math
 
 import keras
@@ -57,6 +45,7 @@ class Qwen3OmniAttention(keras.layers.Layer):
         mrope_section=(24, 20, 20),
         rope_max_wavelength=1000000,
         rope_scaling_factor=1.0,
+        rope_attention_scaling=1.0,
         kernel_initializer="glorot_uniform",
         dropout=0.0,
         layer_norm_epsilon=1e-6,
@@ -74,6 +63,7 @@ class Qwen3OmniAttention(keras.layers.Layer):
         self.num_key_value_groups = num_query_heads // num_key_value_heads
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.rope_attention_scaling = rope_attention_scaling
         self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
@@ -161,6 +151,7 @@ class Qwen3OmniAttention(keras.layers.Layer):
             mrope_section=self.mrope_section,
             max_wavelength=self.rope_max_wavelength,
             scaling_factor=self.rope_scaling_factor,
+            attention_scaling=self.rope_attention_scaling,
             dtype=self.dtype_policy,
         )
         
@@ -372,6 +363,7 @@ class Qwen3OmniAttention(keras.layers.Layer):
                 "mrope_section": self.mrope_section,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_attention_scaling": self.rope_attention_scaling,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),

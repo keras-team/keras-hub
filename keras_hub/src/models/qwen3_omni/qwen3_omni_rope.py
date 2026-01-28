@@ -1,15 +1,3 @@
-"""Multimodal Rotary Position Embedding (M-RoPE) for Qwen3-Omni.
-
-This implements the M-RoPE mechanism used in Qwen3-Omni for multimodal inputs.
-M-RoPE divides the head dimension into three sections for text, temporal, and spatial
-position encodings, enabling effective multimodal position representation.
-
-Reference:
-- Qwen2-VL: https://qwenlm.github.io/blog/qwen2-vl/
-- HuggingFace implementation: transformers/models/qwen2_vl/modeling_qwen2_vl.py
-"""
-
-import keras
 from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
@@ -81,6 +69,7 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
         mrope_section,
         max_wavelength=10000,
         scaling_factor=1.0,
+        attention_scaling=1.0,
         sequence_axis=1,
         feature_axis=-1,
         **kwargs,
@@ -100,6 +89,7 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
             )
         
         self.mrope_section = tuple(mrope_section)
+        self.attention_scaling = attention_scaling
         
         # Validate that mrope_section dimensions are consistent
         # Note: Each section uses pairs (cos/sin), so total = sum * 2
@@ -123,40 +113,57 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
         Returns:
             Tuple of (query_embed, key_embed) with M-RoPE applied.
         """
-        # Compute cos/sin embeddings for each modality section
+        # Compute frequency matrices for each modality section
         # position_ids shape: (3, batch, seq_len)
         batch_size = ops.shape(query)[0]
         seq_len = ops.shape(query)[1]
-        num_heads = ops.shape(query)[2]
-        head_dim = ops.shape(query)[3]
         
-        # Split position IDs into three modalities
-        # Each has shape (batch, seq_len)
-        text_pos = position_ids[0, :, :]  # First dimension: text
-        temporal_pos = position_ids[1, :, :]  # Second dimension: temporal
-        spatial_pos = position_ids[2, :, :]  # Third dimension: spatial
+        # Compute inverse frequencies for the full head dimension
+        # This is used for all 3 modalities with different position IDs
+        head_dim_half = sum(self.mrope_section)
+        idx = ops.arange(0, head_dim_half * 2, 2, dtype="float32")
+        denom = ops.cast(head_dim_half * 2, "float32")
+        freq_range = idx / denom
+        inverse_freq = ops.power(
+            ops.cast(self.max_wavelength, "float32"),
+            -freq_range
+        )
+        inverse_freq = inverse_freq / ops.cast(self.scaling_factor, "float32")
         
-        # Compute embeddings for each section
-        # mrope_section = [text_dim, temporal_dim, spatial_dim]
-        mrope_section_doubled = [s * 2 for s in self.mrope_section]
+        # Compute frequency matrices for all 3 dimensions using same inverse_freq
+        # but different position IDs. Shape: (3, batch, seq_len, head_dim_half)
+        position_ids_float = ops.cast(position_ids, "float32")
         
-        cos_embeds = []
-        sin_embeds = []
+        # Expand for broadcasting: position_ids (3, batch, seq_len) -> (3, batch, seq_len, 1)
+        # inverse_freq (head_dim_half,) -> (1, 1, 1, head_dim_half)
+        position_ids_expanded = ops.expand_dims(position_ids_float, axis=-1)
+        inverse_freq_expanded = ops.reshape(
+            inverse_freq, 
+            (1, 1, 1, head_dim_half)
+        )
         
-        for pos, dim in zip(
-            [text_pos, temporal_pos, spatial_pos],
-            self.mrope_section
-        ):
-            # Compute cos/sin for this section's dimension
-            cos_emb, sin_emb = self._compute_cos_sin_for_section(
-                pos, dim, batch_size, seq_len
-            )
-            cos_embeds.append(cos_emb)
-            sin_embeds.append(sin_emb)
+        # Compute frequencies: (3, batch, seq_len, head_dim_half)
+        freqs_stacked = position_ids_expanded * inverse_freq_expanded
         
-        # Concatenate embeddings: (batch, seq_len, head_dim)
-        cos_full = ops.concatenate(cos_embeds, axis=-1)
-        sin_full = ops.concatenate(sin_embeds, axis=-1)
+        # Apply interleaved M-RoPE to reorganize frequency layout
+        # from [TTT...HHH...WWW] to [THWTHWTHW...]
+        freqs_interleaved = self._apply_interleaved_mrope(
+            freqs_stacked, self.mrope_section
+        )
+        
+        # Duplicate frequencies for cos/sin pairs and compute embeddings
+        # Shape: (batch, seq_len, head_dim)
+        embedding = ops.stack([freqs_interleaved, freqs_interleaved], axis=-1)
+        embedding = ops.reshape(
+            embedding,
+            (batch_size, seq_len, sum(self.mrope_section) * 2)
+        )
+        
+        # Apply attention scaling to cos/sin embeddings (matches HuggingFace)
+        cos_full = ops.cos(embedding) * self.attention_scaling
+        sin_full = ops.sin(embedding) * self.attention_scaling
+        cos_full = ops.cast(cos_full, self.compute_dtype)
+        sin_full = ops.cast(sin_full, self.compute_dtype)
         
         # Expand for broadcasting with (batch, seq_len, num_heads, head_dim)
         cos_full = ops.expand_dims(cos_full, axis=2)  # (batch, seq_len, 1, head_dim)
@@ -168,52 +175,61 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
         
         return query_embed, key_embed
     
-    def _compute_cos_sin_for_section(self, positions, section_dim, batch_size, seq_len):
-        """Compute cos/sin embeddings for one section of M-RoPE.
+    def _apply_interleaved_mrope(self, freqs, mrope_section):
+        """Apply interleaved M-RoPE to reorganize frequency layout.
+        
+        Reorganizes frequency layout from chunked [TTT...HHH...WWW] to
+        interleaved [THWTHWTHW...TT], preserving frequency continuity.
+        Equivalent to HuggingFace's implementation:
+        ```python
+        freqs_t = freqs[0]
+        for dim, offset in enumerate((1, 2), start=1):
+            length = mrope_section[dim] * 3
+            idx = slice(offset, length, 3)
+            freqs_t[..., idx] = freqs[dim, ..., idx]
+        ```
         
         Args:
-            positions: Position IDs of shape (batch, seq_len)
-            section_dim: Dimension allocated to this section (e.g., 24 for text)
-            batch_size: Batch size
-            seq_len: Sequence length
+            freqs: Frequency matrices of shape (3, batch, seq_len, head_dim_half)
+                where dim 0 corresponds to [text, temporal, spatial]
+                All 3 matrices have the same dimension but were computed with
+                different position IDs.
+            mrope_section: Tuple of (text_dim, temporal_dim, spatial_dim)
         
         Returns:
-            Tuple of (cos_emb, sin_emb) each with shape (batch, seq_len, section_dim*2)
+            Interleaved frequencies of shape (batch, seq_len, sum(mrope_section))
+        
+        Reference:
+            HuggingFace Transformers Qwen3OmniMoeThinkerTextRotaryEmbedding.apply_interleaved_mrope
         """
-        # Create inverse frequencies for this section dimension
-        # section_dim corresponds to half the actual dimension (pairs)
-        rotary_dim = section_dim * 2
+        # Start with text dimension frequencies as base
+        # Shape: (batch, seq_len, head_dim_half)
+        freqs_t = freqs[0]
         
-        # Compute inverse frequencies
-        idx = ops.arange(0, rotary_dim, 2, dtype="float32")
-        denom = ops.cast(rotary_dim, "float32")
-        freq_range = idx / denom
-        inverse_freq = ops.power(
-            ops.cast(self.max_wavelength, "float32"),
-            -freq_range
-        )
-        inverse_freq = inverse_freq / ops.cast(self.scaling_factor, "float32")
+        # Build list of slices to reconstruct the tensor with interleaving
+        # This avoids repeated concatenations in a loop
+        head_dim_half = ops.shape(freqs_t)[-1]
         
-        # positions shape: (batch, seq_len)
-        # inverse_freq shape: (section_dim,)
-        positions_float = ops.cast(positions, "float32")
+        # For each position, determine which source (text/temporal/spatial) to use
+        # Pattern: pos%3==0 -> text, pos%3==1 -> temporal, pos%3==2 -> spatial
+        result_slices = []
+        pos = 0
         
-        # Compute frequencies: (batch, seq_len, section_dim)
-        # Using einsum for batched outer product
-        freq = ops.einsum("bs,d->bsd", positions_float, inverse_freq)
+        # Process the interleaved section (where all 3 modalities contribute)
+        max_interleaved = min(mrope_section[1], mrope_section[2]) * 3
+        while pos < max_interleaved:
+            for dim_idx, offset in [(0, 0), (1, 1), (2, 2)]:
+                if pos % 3 == offset:
+                    result_slices.append(freqs[dim_idx][..., pos:pos+1])
+                    break
+            pos += 1
         
-        # Create cos/sin embeddings by repeating each frequency
-        # Stack and reshape to get (batch, seq_len, section_dim*2)
-        embedding = ops.stack([freq, freq], axis=-1)
-        embedding = ops.reshape(
-            embedding,
-            (batch_size, seq_len, rotary_dim)
-        )
+        # Add remaining text frequencies (if any)
+        if pos < head_dim_half:
+            result_slices.append(freqs_t[..., pos:])
         
-        cos_emb = ops.cast(ops.cos(embedding), self.compute_dtype)
-        sin_emb = ops.cast(ops.sin(embedding), self.compute_dtype)
-        
-        return cos_emb, sin_emb
+        # Concatenate all slices to build final interleaved result
+        return ops.concatenate(result_slices, axis=-1)
     
     def _apply_rotary_pos_emb_single(self, tensor, cos_emb, sin_emb):
         """Apply rotary position embedding to a single tensor.
@@ -242,6 +258,7 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
         config = super().get_config()
         config.update({
             "mrope_section": self.mrope_section,
+            "attention_scaling": self.attention_scaling,
         })
         return config
     
