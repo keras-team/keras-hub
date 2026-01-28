@@ -4,6 +4,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.image_segmenter_preprocessor import (
     ImageSegmenterPreprocessor,
 )
+from keras_hub.src.models.unet.unet_backbone import UNetBackbone
 
 
 @keras_hub_export("keras_hub.models.UNetImageSegmenterPreprocessor")
@@ -33,7 +34,7 @@ class UNetImageSegmenterPreprocessor(ImageSegmenterPreprocessor):
     ```
     """
 
-    backbone_cls = None  # Set in __init__ to avoid circular import
+    backbone_cls = UNetBackbone
 
     def __init__(self, **kwargs):
         # UNet doesn't require a specific image converter

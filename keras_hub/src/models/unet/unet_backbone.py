@@ -211,7 +211,9 @@ class UNetBackbone(Backbone):
                 dtype,
             )
 
-        outputs = x
+        outputs = keras.layers.Activation("linear", dtype=dtype, name="output")(
+            x
+        )
 
         super().__init__(
             inputs=inputs,
@@ -276,7 +278,7 @@ class UNetBackbone(Backbone):
                         x = keras.layers.Conv2DTranspose(
                             x.shape[-1]
                             if data_format == "channels_last"
-                            else x.shape[0],
+                            else x.shape[1],
                             kernel_size=factor,
                             strides=factor,
                             padding="same",
@@ -296,7 +298,7 @@ class UNetBackbone(Backbone):
                         x = keras.layers.Conv2D(
                             x.shape[-1]
                             if data_format == "channels_last"
-                            else x.shape[0],
+                            else x.shape[1],
                             kernel_size=(3, 3),
                             padding="same",
                             kernel_initializer=kernel_initializer,
@@ -316,7 +318,7 @@ class UNetBackbone(Backbone):
             return x
 
         # Final upsampling block
-        filters = x.shape[-1] if data_format == "channels_last" else x.shape[0]
+        filters = x.shape[-1] if data_format == "channels_last" else x.shape[1]
 
         if upsampling_strategy == "transpose":
             x = keras.layers.Conv2DTranspose(
