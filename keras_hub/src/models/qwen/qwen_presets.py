@@ -25,16 +25,16 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/qwen/keras/qwen2.5_7b_en/3",
     },
-    "qwen2.5_coder_0.5b_en": {
+    "qwen2.5_coder_1.5b_en": {
         "metadata": {
             "description": (
-                "Code-focused fine-tuned 24-layer Qwen-2.5 model with 0.5 "
+                "Code-focused fine-tuned 28-layer Qwen-2.5 model with 1.5 "
                 "billion parameters."
             ),
-            "params": 494032768,
+            "params": 1520484352,
             "path": "qwen",
         },
-        "kaggle_handle": "kaggle://keras/qwen/keras/qwen2.5_coder_0.5b_en/1",
+        "kaggle_handle": "kaggle://keras/qwen/keras/qwen2.5_coder_1.5b_en/1",
     },
     "qwen2.5_instruct_0.5b_en": {
         "metadata": {
