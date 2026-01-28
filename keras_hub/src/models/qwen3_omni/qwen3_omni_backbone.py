@@ -1,11 +1,3 @@
-"""Qwen3-Omni backbone implementation.
-
-Reference implementations:
-- Gemma3Backbone: keras_hub/src/models/gemma3/gemma3_backbone.py (multimodal structure)
-- Qwen3Backbone: keras_hub/src/models/qwen3/qwen3_backbone.py (base architecture)
-- Qwen3MoEBackbone: keras_hub/src/models/qwen3_moe/ (MoE components)
-"""
-
 import keras
 from keras import ops
 
@@ -63,8 +55,9 @@ class Qwen3OmniBackbone(Backbone):
             Defaults to 8.
         mrope_section: tuple. M-RoPE section dimensions (text, temporal, spatial).
             Must sum to head_dim // 2. Defaults to (24, 20, 20) for head_dim=128.
-        rope_max_wavelength: int. Max wavelength for RoPE. Defaults to 10000.
+        rope_max_wavelength: int. Max wavelength for RoPE. Defaults to 1000000.
         rope_scaling_factor: float. Scaling factor for RoPE. Defaults to 1.0.
+        rope_attention_scaling: float. Attention scaling for RoPE. Defaults to 1.0.
         layer_norm_epsilon: float. Epsilon for layer norm. Defaults to 1e-6.
         dropout: float. Dropout rate. Defaults to 0.0.
         tie_word_embeddings: bool. Whether to tie input/output embeddings.
@@ -85,12 +78,15 @@ class Qwen3OmniBackbone(Backbone):
     Examples:
 
     ```python
+    import numpy as np
+    import keras_hub
+
     # Text-only mode
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
-    
+
     # Randomly initialized Qwen3-Omni Thinker (30B-A3B config)
     model = keras_hub.models.Qwen3OmniBackbone(
         vocabulary_size=152064,
@@ -106,10 +102,7 @@ class Qwen3OmniBackbone(Backbone):
         rope_max_wavelength=1000000,
         dtype="bfloat16",
     )
-    model(input_data)
-    
-    # Multimodal mode (with audio/vision encoders)
-    # TODO: Add multimodal example once encoders are implemented
+    output = model(input_data)
     ```
     """
 
@@ -126,8 +119,9 @@ class Qwen3OmniBackbone(Backbone):
         num_experts,
         num_experts_per_tok,
         mrope_section=(24, 20, 20),
-        rope_max_wavelength=10000,
+        rope_max_wavelength=1000000,
         rope_scaling_factor=1.0,
+        rope_attention_scaling=1.0,
         layer_norm_epsilon=1e-6,
         dropout=0.0,
         tie_word_embeddings=False,
@@ -155,15 +149,9 @@ class Qwen3OmniBackbone(Backbone):
         self.audio_encoder = audio_encoder
         self.vision_encoder = vision_encoder
         
-        # TODO: Add embedding interleaving layer once implemented
-        # Reference: gemma3_backbone.py lines 220-224
-        text_only_model = (audio_encoder is None and vision_encoder is None)
-        if not text_only_model:
-            # self.interleave_embeddings = Qwen3OmniInterleaveEmbeddings(
-            #     dtype=dtype,
-            #     name="interleave_embeddings",
-            # )
-            pass
+        # TODO: Implement multimodal embedding interleaving
+        # When audio/vision encoders are provided, embeddings need to be interleaved
+        # with text embeddings based on special tokens and masks.
         
         # === MoE Transformer Decoder Layers ===
         if not mlp_only_layers:
@@ -190,6 +178,7 @@ class Qwen3OmniBackbone(Backbone):
                 mrope_section=mrope_section,
                 rope_max_wavelength=rope_max_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
+                rope_attention_scaling=rope_attention_scaling,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
                 kernel_initializer=_qwen3_omni_kernel_initializer(stddev=0.02),
@@ -224,57 +213,19 @@ class Qwen3OmniBackbone(Backbone):
             "padding_mask": padding_mask_input,
         }
         
-        # TODO: Add multimodal inputs once encoders are implemented
-        # if not text_only_model:
-        #     if audio_encoder is not None:
-        #         audio_input = keras.Input(
-        #             shape=(None, num_mel_bins), name="audio"
-        #         )
-        #         audio_mask_input = keras.Input(
-        #             shape=(None,), dtype="int32", name="audio_mask"
-        #         )
-        #         inputs["audio"] = audio_input
-        #         inputs["audio_mask"] = audio_mask_input
-        #     
-        #     if vision_encoder is not None:
-        #         image_input = keras.Input(
-        #             shape=(None, image_size, image_size, 3), name="images"
-        #         )
-        #         vision_mask_input = keras.Input(
-        #             shape=(None,), dtype="int32", name="vision_mask"
-        #         )
-        #         inputs["images"] = image_input
-        #         inputs["vision_mask"] = vision_mask_input
+        # TODO: Add multimodal inputs (audio, vision) to input spec
+        # Will need audio features, vision features, and corresponding masks
         
-        # Forward pass: Text embeddings
+        # Embed tokens
         x = self.token_embedding(token_id_input)
         
-        # TODO: Multimodal fusion once encoders and interleaving are implemented
-        # if not text_only_model:
-        #     # Encode audio
-        #     if audio_encoder is not None:
-        #         audio_embeddings = self.audio_encoder(audio_input)
-        #     else:
-        #         audio_embeddings = None
-        #     
-        #     # Encode vision
-        #     if vision_encoder is not None:
-        #         vision_embeddings = self.vision_encoder(image_input)
-        #     else:
-        #         vision_embeddings = None
-        #     
-        #     # Interleave text + audio + vision embeddings
-        #     x = self.interleave_embeddings(
-        #         text_embeddings=x,
-        #         audio_embeddings=audio_embeddings,
-        #         vision_embeddings=vision_embeddings,
-        #         audio_mask=audio_mask_input if audio_encoder else None,
-        #         vision_mask=vision_mask_input if vision_encoder else None,
-        #     )
+        # TODO: Implement multimodal fusion
+        # When audio/vision encoders are present:
+        # 1. Encode audio/vision inputs
+        # 2. Interleave embeddings based on special tokens
+        # 3. Generate appropriate M-RoPE position IDs for multimodal sequence
         
         # Pass through MoE transformer decoder layers
-        # Note: position_ids=None will auto-generate sequential positions for text-only mode
-        # For multimodal inputs, position_ids should be explicitly provided
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(
                 x,
@@ -310,6 +261,7 @@ class Qwen3OmniBackbone(Backbone):
         self.mrope_section = mrope_section
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.rope_attention_scaling = rope_attention_scaling
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings
@@ -336,6 +288,7 @@ class Qwen3OmniBackbone(Backbone):
                 "mrope_section": self.mrope_section,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_attention_scaling": self.rope_attention_scaling,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
                 "tie_word_embeddings": self.tie_word_embeddings,
@@ -362,6 +315,4 @@ class Qwen3OmniBackbone(Backbone):
             audio_encoder=audio_encoder,
             vision_encoder=vision_encoder,
         )
-
-    # TODO: Implement from_preset() classmethod in PR #3 (Presets)
-    # This will load pre-trained weights from Kaggle/HuggingFace
+    
