@@ -502,10 +502,17 @@ def jax_memory_cleanup(layer):
     # For jax, delete all previous allocated memory to avoid temporarily
     # duplicating variable allocations. torch and tensorflow have stateful
     # variable types and do not need this fix.
+    # Skip deletion for sharded arrays to avoid breaking references in
+    # distributed setups.
     if keras.config.backend() == "jax":
         for weight in layer.weights:
-            if getattr(weight, "_value", None) is not None:
-                weight._value.delete()
+            if weight._value is not None:
+                # Do not delete sharded arrays, as they may be referenced in
+                # JAX's distributed computation graph and deletion can cause
+                # errors.
+                sharding = getattr(weight._value, "sharding", None)
+                if sharding is None:
+                    weight._value.delete()
 
 
 def set_dtype_in_config(config, dtype=None):

@@ -19,24 +19,32 @@ class FluxBackboneTest(TestCase):
             name="vae",
         )
         clip_l = CLIPTextEncoder(
-            20, 32, 32, 2, 2, 64, "quick_gelu", -2, name="clip_l"
+            10,
+            16,
+            16,
+            2,
+            2,
+            32,
+            "quick_gelu",
+            -2,
+            name="clip_l",
         )
         self.init_kwargs = {
-            "input_channels": 256,
-            "hidden_size": 1024,
+            "input_channels": 64,
+            "hidden_size": 256,
             "mlp_ratio": 2.0,
-            "num_heads": 8,
-            "depth": 4,
-            "depth_single_blocks": 8,
-            "axes_dim": [16, 56, 56],
+            "num_heads": 4,
+            "depth": 2,
+            "depth_single_blocks": 4,
+            "axes_dim": [8, 28, 28],
             "theta": 10_000,
             "use_bias": True,
             "guidance_embed": True,
-            "image_shape": (32, 256),
-            "text_shape": (32, 256),
-            "image_ids_shape": (32, 3),
-            "text_ids_shape": (32, 3),
-            "y_shape": (256,),
+            "image_shape": (16, 64),
+            "text_shape": (16, 64),
+            "image_ids_shape": (16, 3),
+            "text_ids_shape": (16, 3),
+            "y_shape": (64,),
         }
 
         self.pipeline_models = {
@@ -45,11 +53,11 @@ class FluxBackboneTest(TestCase):
         }
 
         self.input_data = {
-            "image": ops.ones((1, 32, 256)),
-            "image_ids": ops.ones((1, 32, 3)),
-            "text": ops.ones((1, 32, 256)),
-            "text_ids": ops.ones((1, 32, 3)),
-            "y": ops.ones((1, 256)),
+            "image": ops.ones((1, 16, 64)),
+            "image_ids": ops.ones((1, 16, 3)),
+            "text": ops.ones((1, 16, 64)),
+            "text_ids": ops.ones((1, 16, 3)),
+            "y": ops.ones((1, 64)),
             "timesteps": ops.ones((1)),
             "guidance": ops.ones((1)),
         }
@@ -59,7 +67,11 @@ class FluxBackboneTest(TestCase):
             cls=FluxBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(1, 32, 256),
+            expected_output_shape=(
+                1,
+                16,
+                64,
+            ),
             run_mixed_precision_check=False,
             run_quantization_check=False,
         )
@@ -70,4 +82,13 @@ class FluxBackboneTest(TestCase):
             cls=FluxBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
+        )
+
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=FluxBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-4, "mean": 1e-5}},
         )

@@ -196,3 +196,14 @@ class StableDiffusion3TextToImageTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    @pytest.mark.skip(
+        reason="TODO: Bug with StableDiffusion3TextToImage export"
+    )
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=StableDiffusion3TextToImage,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            allow_custom_ops=True,  # Allow custom ops like GatherV2, Erfc
+        )

@@ -321,4 +321,19 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/siglip/keras/siglip2_so400m_patch16_512/1",
     },
+    "medsiglip_900m_448": {
+        "metadata": {
+            "description": (
+                "A 900 million parameter variant of SigLIP trained to encode "
+                "medical images and text into a common embedding space. "
+                "MedSigLIP contains a vision encoder and a text encoder, and "
+                "supports 448x448 image resolution with up to 64 text tokens."
+            ),
+            "params": 878301426,
+            "official_name": "SigLIP2",
+            "path": "siglip",
+            "model_card": "https://huggingface.co/google/medsiglip-448#medsiglip-model-card",
+        },
+        "kaggle_handle": "kaggle://keras/medsiglip/keras/medsiglip_900m_448/1",
+    },
 }

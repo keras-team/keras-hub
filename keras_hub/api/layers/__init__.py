@@ -93,6 +93,9 @@ from keras_hub.src.models.depth_anything.depth_anything_image_converter import (
 from keras_hub.src.models.dinov2.dinov2_image_converter import (
     DINOV2ImageConverter as DINOV2ImageConverter,
 )
+from keras_hub.src.models.dinov3.dinov3_image_converter import (
+    DINOV3ImageConverter as DINOV3ImageConverter,
+)
 from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
     EfficientNetImageConverter as EfficientNetImageConverter,
 )
@@ -107,6 +110,9 @@ from keras_hub.src.models.mit.mit_image_converter import (
 )
 from keras_hub.src.models.mobilenet.mobilenet_image_converter import (
     MobileNetImageConverter as MobileNetImageConverter,
+)
+from keras_hub.src.models.mobilenetv5.mobilenetv5_image_converter import (
+    MobileNetV5ImageConverter as MobileNetV5ImageConverter,
 )
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter as MoonshineAudioConverter,
