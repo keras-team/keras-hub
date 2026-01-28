@@ -1,13 +1,3 @@
-"""Qwen3-Omni MoE Transformer Decoder Block.
-
-This module implements the decoder block with Mixture-of-Experts (MoE) for Qwen3-Omni.
-
-Reference implementations:
-- Qwen3MoE decoder: keras_hub/src/models/qwen3_moe/
-- Qwen3 decoder: keras_hub/src/models/qwen3/qwen3_decoder.py
-- Gemma3 decoder: keras_hub/src/models/gemma3/gemma3_decoder_block.py
-"""
-
 import keras
 from keras import ops
 
@@ -49,6 +39,7 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
         mrope_section: tuple. M-RoPE section dimensions [text, temporal, spatial].
         rope_max_wavelength: int. Maximum wavelength for M-RoPE.
         rope_scaling_factor: float. Scaling factor for M-RoPE.
+        rope_attention_scaling: float. Attention scaling for M-RoPE (default 1.0).
         layer_norm_epsilon: float. Epsilon for layer normalization.
         activation: callable. Activation function (typically SiLU).
         kernel_initializer: initializer. Kernel initializer.
@@ -73,6 +64,7 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
         mrope_section=(24, 20, 20),
         rope_max_wavelength=1000000,
         rope_scaling_factor=1.0,
+        rope_attention_scaling=1.0,
         layer_norm_epsilon=1e-6,
         activation=None,
         kernel_initializer="glorot_uniform",
@@ -96,6 +88,7 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
         self.mrope_section = mrope_section
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.rope_attention_scaling = rope_attention_scaling
         self.layer_norm_epsilon = layer_norm_epsilon
         self.activation = activation or ops.silu
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
@@ -123,6 +116,7 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
             mrope_section=self.mrope_section,
             rope_max_wavelength=self.rope_max_wavelength,
             rope_scaling_factor=self.rope_scaling_factor,
+            rope_attention_scaling=self.rope_attention_scaling,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout_rate,
             layer_norm_epsilon=self.layer_norm_epsilon,
@@ -189,7 +183,7 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
 
         Args:
             inputs: Input tensor of shape (batch, seq_len, hidden_dim).
-            position_ids: Position IDs for M-RoPE, shape (batch, seq_len, 3).
+            position_ids: Position IDs for M-RoPE, shape (3, batch, seq_len).
             decoder_padding_mask: Padding mask for attention.
             cache: KV cache for generation (optional).
             cache_update_index: Index for cache update.
@@ -282,6 +276,7 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
                 "is_sparse_mlp": self.is_sparse_mlp,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_attention_scaling": self.rope_attention_scaling,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "activation": keras.activations.serialize(self.activation),
                 "kernel_initializer": keras.initializers.serialize(
