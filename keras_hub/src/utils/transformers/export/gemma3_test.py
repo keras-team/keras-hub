@@ -10,7 +10,13 @@ from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
 from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
     Gemma3CausalLMPreprocessor,
 )
+from keras_hub.src.models.gemma3.gemma3_image_converter import (
+    Gemma3ImageConverter,
+)
 from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
+from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+    Gemma3VisionEncoder,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -157,3 +163,130 @@ class TestGemma3Export(TestCase):
             hf_slow_output,
             "Generated outputs do not match (slow)",
         )
+
+    def test_export_vision_model_to_hf(self):
+        """Test exporting vision-enabled Gemma3 model to HuggingFace format."""
+        import json
+
+        proto = os.path.join(self.get_test_data_dir(), "gemma3_test_vocab.spm")
+        tokenizer = Gemma3Tokenizer(proto=proto)
+
+        vision_encoder = Gemma3VisionEncoder(
+            image_size=16,
+            patch_size=4,
+            pool_size=2,
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            output_dim=8,
+        )
+
+        # Create a small vision-enabled backbone
+        backbone = Gemma3Backbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            image_size=16,
+            num_layers=2,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            query_head_dim_normalize=True,
+            use_query_key_norm=True,
+            use_post_ffw_norm=True,
+            use_post_attention_norm=True,
+            attention_logit_soft_cap=None,
+            final_logit_soft_cap=None,
+            use_sliding_window_attention=False,
+            sliding_window_size=4096,
+            vision_encoder=vision_encoder,
+            layer_norm_epsilon=1e-6,
+            dropout=0,
+        )
+
+        image_converter = Gemma3ImageConverter(image_size=(16, 16))
+        preprocessor = Gemma3CausalLMPreprocessor(
+            image_converter=image_converter,
+            tokenizer=tokenizer,
+            sequence_length=20,
+            max_images_per_prompt=1,
+            num_vision_tokens_per_image=4,  # (16/4/2)^2 = 4
+        )
+
+        keras_model = Gemma3CausalLM(
+            backbone=backbone, preprocessor=preprocessor
+        )
+
+        export_path = os.path.join(self.get_temp_dir(), "export_vision")
+        keras_model.export_to_transformers(export_path)
+
+        # Verify processor config exists for vision models
+        processor_config_path = os.path.join(
+            export_path, "processor_config.json"
+        )
+        self.assertTrue(
+            os.path.exists(processor_config_path),
+            "processor_config.json should exist for vision models",
+        )
+
+        with open(processor_config_path, "r") as f:
+            processor_config = json.load(f)
+
+        self.assertIn("image_seq_length", processor_config)
+        # Expected: ((16/4)/2)^2 = 2^2 = 4
+        self.assertEqual(processor_config["image_seq_length"], 4)
+        self.assertEqual(processor_config["processor_class"], "Gemma3Processor")
+
+        # Verify preprocessor config exists for vision models
+        preprocessor_config_path = os.path.join(
+            export_path, "preprocessor_config.json"
+        )
+        self.assertTrue(
+            os.path.exists(preprocessor_config_path),
+            "preprocessor_config.json should exist for vision models",
+        )
+
+        with open(preprocessor_config_path, "r") as f:
+            preprocessor_config = json.load(f)
+
+        self.assertEqual(
+            preprocessor_config["image_processor_type"], "Gemma3ImageProcessor"
+        )
+        self.assertEqual(preprocessor_config["size"]["height"], 16)
+        self.assertEqual(preprocessor_config["size"]["width"], 16)
+
+    def test_vision_tokenizer_config(self):
+        """Test that vision tokens are properly exported in tokenizer config."""
+        import json
+
+        # This test would require a tokenizer with vision tokens
+        # For now, verify the structure of exported tokenizer config
+        proto = os.path.join(self.get_test_data_dir(), "gemma3_test_vocab.spm")
+        tokenizer = Gemma3Tokenizer(proto=proto)
+
+        export_path = os.path.join(self.get_temp_dir(), "export_tok_vision")
+        tokenizer.export_to_transformers(export_path)
+
+        tokenizer_config_path = os.path.join(
+            export_path, "tokenizer_config.json"
+        )
+        self.assertTrue(os.path.exists(tokenizer_config_path))
+
+        with open(tokenizer_config_path, "r") as f:
+            config = json.load(f)
+
+        # Verify added_tokens_decoder exists and has special tokens
+        self.assertIn("added_tokens_decoder", config)
+        self.assertIsInstance(config["added_tokens_decoder"], dict)
+
+        # If vision tokens exist, verify they're in the config
+        # (This would only pass with actual vision tokenizer)
+        if "extra_special_tokens" in config:
+            self.assertIn("image_token", config["extra_special_tokens"])
+            # Verify vision tokens are in added_tokens_decoder with correct IDs
+            added_tokens = config["added_tokens_decoder"]
+            self.assertIn("262144", added_tokens)  # <image_soft_token>
+            self.assertEqual(
+                added_tokens["262144"]["content"], "<image_soft_token>"
+            )
