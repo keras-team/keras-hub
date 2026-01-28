@@ -34,6 +34,11 @@ PRESET_MAP = {
     "gemma3_27b": "google/gemma-3-27b-pt",
     "gemma3_instruct_27b": "google/gemma-3-27b-it",
     "function_gemma_instruct_270m": "google/functiongemma-270m-it",
+    "medgemma_1.5_instruct_4b": "google/medgemma-1.5-4b-it",
+    "medgemma_4b": "google/medgemma-4b-pt",
+    "medgemma_instruct_4b": "google/medgemma-4b-it",
+    "medgemma_instruct_27b": "google/medgemma-27b-it",
+    "medgemma_instruct_27b_text": "google/medgemma-27b-text-it",
 }
 
 FLAGS = flags.FLAGS
