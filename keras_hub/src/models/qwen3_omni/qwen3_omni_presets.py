@@ -4,7 +4,7 @@
 # Qwen3-Omni models are available on HuggingFace (Qwen/Qwen3-Omni-30B-A3B-Instruct)
 # but not yet converted and uploaded to Kaggle Models.
 # 
-# Once weights are converted and uploaded, add entries like:
+# Once weights are converted and uploaded, please add entries like:
 # "qwen3_omni_30b_a3b_en": {
 #     "metadata": {
 #         "description": (
