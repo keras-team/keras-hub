@@ -34,6 +34,10 @@ dependencies = [
     "regex",
     "rich",
     "kagglehub",
+]
+
+[project.optional-dependencies]
+    tensorflow-text = [
     "tensorflow-text;platform_system != 'Windows'",
 ]
 
