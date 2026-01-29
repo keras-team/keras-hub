@@ -86,7 +86,7 @@ class PositionEmbedding(keras.layers.Layer):
             }
         )
         return config
-    
+
     def compute_mask(self, inputs, mask=None):
         return mask
 
