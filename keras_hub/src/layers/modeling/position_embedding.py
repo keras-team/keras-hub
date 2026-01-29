@@ -75,6 +75,7 @@ class PositionEmbedding(keras.layers.Layer):
             )
         self.sequence_length = int(sequence_length)
         self.initializer = keras.initializers.get(initializer)
+        self.supports_masking = True
 
     def get_config(self):
         config = super().get_config()
@@ -85,6 +86,9 @@ class PositionEmbedding(keras.layers.Layer):
             }
         )
         return config
+    
+    def compute_mask(self, inputs, mask=None):
+        return mask
 
     def build(self, inputs_shape):
         feature_size = inputs_shape[-1]
