@@ -112,7 +112,7 @@ class CausalLM(Task):
             loss = keras.losses.SparseCategoricalCrossentropy(
                 from_logits=True,
                 ignore_class=-1,
-                )
+            )
         if weighted_metrics == "auto":
             weighted_metrics = [keras.metrics.SparseCategoricalAccuracy()]
         super().compile(
