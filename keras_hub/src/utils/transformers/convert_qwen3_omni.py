@@ -1,6 +1,8 @@
 import numpy as np
 
-from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import Qwen3OmniBackbone
+from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import (
+    Qwen3OmniBackbone,
+)
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import load_json
 
@@ -8,13 +10,16 @@ backbone_cls = Qwen3OmniBackbone
 
 
 def convert_backbone_config(transformers_config):
-    # Qwen3-Omni has nested config: thinker_config.text_config contains the model params
-    text_config = transformers_config.get("thinker_config", {}).get("text_config", transformers_config)
-    
+    # Qwen3-Omni has nested config:
+    # thinker_config.text_config contains the model params
+    text_config = transformers_config.get("thinker_config", {}).get(
+        "text_config", transformers_config
+    )
+
     # Extract mrope_section from rope_scaling dict (not top-level)
     rope_scaling = text_config.get("rope_scaling", {})
     mrope_section = rope_scaling.get("mrope_section", [24, 20, 20])
-    
+
     return {
         "vocabulary_size": text_config["vocab_size"],
         "hidden_dim": text_config["hidden_size"],
@@ -196,22 +201,24 @@ def convert_weights(backbone, loader, transformers_config):
 def convert_tokenizer(cls, preset, **kwargs):
     # Qwen3-Omni uses separate vocab.json and merges.txt files
     # (unlike Qwen3-MoE which has tokenizer.json)
-    
+
     # Load vocab from vocab.json (flat dict: {token: id})
     vocab = load_json(preset, "vocab.json")
-    
+
     # Load merges from merges.txt (text file with merge rules)
     merges_file = get_file(preset, "merges.txt")
-    with open(merges_file, 'r') as f:
+    with open(merges_file, "r") as f:
         merges = [line.strip() for line in f if line.strip()]
-    
+
     # Load special tokens from tokenizer_config.json
     tokenizer_config = load_json(preset, "tokenizer_config.json")
-    
+
     # Extract special tokens from added_tokens_decoder
     special_tokens = []
     if "added_tokens_decoder" in tokenizer_config:
-        for token_id, token_info in tokenizer_config["added_tokens_decoder"].items():
+        for token_id, token_info in tokenizer_config[
+            "added_tokens_decoder"
+        ].items():
             content = token_info.get("content", "")
             # Skip reserved placeholder tokens
             if not content.startswith("<|reserved_special_token_"):
@@ -219,11 +226,11 @@ def convert_tokenizer(cls, preset, **kwargs):
                 # Add to vocab if not already present
                 if content not in vocab:
                     vocab[content] = int(token_id)
-    
+
     kwargs.update(
         {
             "unsplittable_tokens": special_tokens,
         }
     )
-    
+
     return cls(vocabulary=vocab, merges=merges, **kwargs)

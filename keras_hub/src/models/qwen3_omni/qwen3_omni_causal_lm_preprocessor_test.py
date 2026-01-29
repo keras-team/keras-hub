@@ -1,7 +1,9 @@
 from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm_preprocessor import (
     Qwen3OmniCausalLMPreprocessor,
 )
-from keras_hub.src.models.qwen3_omni.qwen3_omni_tokenizer import Qwen3OmniTokenizer
+from keras_hub.src.models.qwen3_omni.qwen3_omni_tokenizer import (
+    Qwen3OmniTokenizer,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 

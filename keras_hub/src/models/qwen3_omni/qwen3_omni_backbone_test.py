@@ -102,14 +102,14 @@ class Qwen3OmniBackboneTest(TestCase):
         """Test model config can be serialized and deserialized."""
         model = Qwen3OmniBackbone(**self.init_kwargs)
         config = model.get_config()
-        
+
         # Verify all important config keys are present
         self.assertIn("vocabulary_size", config)
         self.assertIn("num_layers", config)
         self.assertIn("num_experts", config)
         self.assertIn("num_experts_per_tok", config)
         self.assertIn("rope_max_wavelength", config)
-        
+
         # Test config values match
         self.assertEqual(config["vocabulary_size"], 100)
         self.assertEqual(config["num_layers"], 2)
@@ -120,10 +120,10 @@ class Qwen3OmniBackboneTest(TestCase):
         """Test model can be reconstructed from config."""
         model = Qwen3OmniBackbone(**self.init_kwargs)
         config = model.get_config()
-        
+
         # Reconstruct model from config
         new_model = Qwen3OmniBackbone.from_config(config)
-        
+
         # Verify same architecture
         self.assertEqual(model.count_params(), new_model.count_params())
         self.assertEqual(len(model.layers), len(new_model.layers))
@@ -133,7 +133,7 @@ class Qwen3OmniBackboneTest(TestCase):
         init_kwargs = self.init_kwargs.copy()
         init_kwargs["sliding_window_size"] = 4
         model = Qwen3OmniBackbone(**init_kwargs)
-        
+
         # Should work with sliding window
         output = model(self.input_data)
         self.assertEqual(ops.shape(output), (2, 8, 64))
@@ -153,7 +153,7 @@ class Qwen3OmniBackboneTest(TestCase):
         init_kwargs["audio_encoder"] = None
         init_kwargs["vision_encoder"] = None
         model = Qwen3OmniBackbone(**init_kwargs)
-        
+
         # Text-only forward pass should work
         output = model(self.input_data)
         self.assertEqual(ops.shape(output), (2, 8, 64))
@@ -161,7 +161,7 @@ class Qwen3OmniBackboneTest(TestCase):
     def test_different_batch_sizes(self):
         """Test model works with different batch sizes."""
         model = Qwen3OmniBackbone(**self.init_kwargs)
-        
+
         # Test batch size 1
         input_data_batch1 = {
             "token_ids": ops.ones((1, 8), dtype="int32"),
@@ -169,7 +169,7 @@ class Qwen3OmniBackboneTest(TestCase):
         }
         output1 = model(input_data_batch1)
         self.assertEqual(ops.shape(output1), (1, 8, 64))
-        
+
         # Test batch size 4
         input_data_batch4 = {
             "token_ids": ops.ones((4, 8), dtype="int32"),
@@ -181,7 +181,7 @@ class Qwen3OmniBackboneTest(TestCase):
     def test_different_sequence_lengths(self):
         """Test model works with different sequence lengths."""
         model = Qwen3OmniBackbone(**self.init_kwargs)
-        
+
         # Test shorter sequence
         input_data_short = {
             "token_ids": ops.ones((2, 4), dtype="int32"),
@@ -189,7 +189,7 @@ class Qwen3OmniBackboneTest(TestCase):
         }
         output_short = model(input_data_short)
         self.assertEqual(ops.shape(output_short), (2, 4, 64))
-        
+
         # Test longer sequence
         input_data_long = {
             "token_ids": ops.ones((2, 16), dtype="int32"),

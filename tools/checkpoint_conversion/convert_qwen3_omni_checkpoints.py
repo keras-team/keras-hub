@@ -87,6 +87,7 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
 
     np.testing.assert_equal(keras_hub_output, hf_output)
 
+
 def validate_output(qwen3_omni_lm, hf_model, hf_tokenizer):
     input_str = "What is Keras?"
     length = 32
@@ -100,7 +101,7 @@ def validate_output(qwen3_omni_lm, hf_model, hf_tokenizer):
     outputs = hf_model.generate(
         **hf_inputs,
         max_length=length,  # Match KerasHub's max_length
-        do_sample=False,  # Use greedy decoding to match KerasHub's sampler="greedy"
+        do_sample=False,  # Greedy decoding (matches KerasHub)
         pad_token_id=hf_tokenizer.pad_token_id,
     )
     print("HF Token outputs = ", outputs)
