@@ -1,6 +1,6 @@
 # Tensorflow with cuda support.
-tensorflow[and-cuda]~=2.20
-tensorflow-text~=2.20
+tensorflow[and-cuda]~=2.20.0
+tensorflow-text~=2.20.0
 
 # Torch cpu-only version.
 --extra-index-url https://download.pytorch.org/whl/cpu

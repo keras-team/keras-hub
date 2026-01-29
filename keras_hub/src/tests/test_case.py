@@ -624,6 +624,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 export_path = os.path.join(temp_dir, "model.tflite")
 
                 # Step 1: Export model and get Keras output
+                # Enable Flex delegate to support resource operations
+                # and complex ops (required for TensorFlow 2.20+ which
+                # uses Flex ops for tokenizers)
+                if "enable_select_tf_ops" not in export_kwargs:
+                    export_kwargs["enable_select_tf_ops"] = True
+
                 model.export(export_path, format="litert", **export_kwargs)
                 self.assertTrue(os.path.exists(export_path))
                 self.assertGreater(os.path.getsize(export_path), 0)
@@ -631,6 +637,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 keras_output = model(input_data) if verify_numerics else None
 
                 # Step 2: Load interpreter and verify SignatureDef
+                # The interpreter will automatically handle Flex ops
+                # when enable_select_tf_ops was set during export.
+                # For tf.lite.Interpreter, it loads Flex delegate
+                # automatically when needed.
                 interpreter = Interpreter(model_path=export_path)
                 signature_defs = interpreter.get_signature_list()
                 self.assertIn(
