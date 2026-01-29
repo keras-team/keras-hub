@@ -7,13 +7,15 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
+from keras_hub.src.models.qwen3_moe.qwen3_moe_decoder import Qwen3MoeMLP
+from keras_hub.src.models.qwen3_moe.qwen3_moe_decoder import Qwen3SparseMoeBlock
 from keras_hub.src.models.qwen3_moe.qwen3_moe_decoder import (
-    Qwen3MoeMLP,
-    Qwen3SparseMoeBlock,
     compute_load_balancing_loss,
 )
 from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
-from keras_hub.src.models.qwen3_omni.qwen3_omni_attention import Qwen3OmniAttention
+from keras_hub.src.models.qwen3_omni.qwen3_omni_attention import (
+    Qwen3OmniAttention,
+)
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -28,7 +30,8 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
     - Residual connections
 
     Args:
-        intermediate_dim: int. Dimension of dense FFN (used when MoE is disabled).
+        intermediate_dim: int. Dimension of dense FFN
+            (used when MoE is disabled).
         num_query_heads: int. Number of query attention heads.
         num_key_value_heads: int. Number of key/value attention heads (for GQA).
         moe_intermediate_dim: int. Intermediate dimension for each MoE expert.
@@ -36,10 +39,12 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
         num_experts: int. Total number of experts in the MoE layer.
         top_k: int. Number of experts to activate per token.
         norm_top_k_prob: bool. Whether to normalize top-k probabilities.
-        mrope_section: tuple. M-RoPE section dimensions [text, temporal, spatial].
+        mrope_section: tuple. M-RoPE section dimensions
+            [text, temporal, spatial].
         rope_max_wavelength: int. Maximum wavelength for M-RoPE.
         rope_scaling_factor: float. Scaling factor for M-RoPE.
-        rope_attention_scaling: float. Attention scaling for M-RoPE (default 1.0).
+        rope_attention_scaling: float. Attention scaling for M-RoPE
+            (default 1.0).
         layer_norm_epsilon: float. Epsilon for layer normalization.
         activation: callable. Activation function (typically SiLU).
         kernel_initializer: initializer. Kernel initializer.
@@ -76,7 +81,7 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        
+
         self.intermediate_dim = intermediate_dim
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
@@ -96,10 +101,10 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
         self.sliding_window_size = sliding_window_size
         self.router_aux_loss_coefficient = router_aux_loss_coefficient
         self.is_sparse_mlp = is_sparse_mlp
-        
+
     def build(self, input_shape):
         hidden_dim = input_shape[-1]
-        
+
         # Pre-attention layer norm
         self.pre_attention_norm = Qwen3MoeLayerNorm(
             epsilon=self.layer_norm_epsilon,
@@ -107,7 +112,7 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
             name="pre_attention_norm",
         )
         self.pre_attention_norm.build(input_shape)
-        
+
         # Multi-head attention with M-RoPE
         self.attention = Qwen3OmniAttention(
             num_query_heads=self.num_query_heads,
@@ -125,7 +130,7 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
             name="attention",
         )
         self.attention.build(input_shape)
-        
+
         # Pre-FFN layer norm
         self.pre_ffw_norm = Qwen3MoeLayerNorm(
             epsilon=self.layer_norm_epsilon,
@@ -133,7 +138,7 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
             name="pre_ffw_norm",
         )
         self.pre_ffw_norm.build(input_shape)
-        
+
         # MoE or dense FFN
         if self.is_sparse_mlp:
             # Sparse MoE feedforward (reuse from Qwen3MoE)
@@ -160,14 +165,14 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
                 name="dense_mlp",
             )
             self.dense_mlp.build(input_shape)
-        
+
         # Dropout
         if self.dropout_rate > 0:
             self.dropout_layer = keras.layers.Dropout(
                 rate=self.dropout_rate,
                 dtype=self.dtype_policy,
             )
-        
+
         self.built = True
 
     def call(
@@ -193,7 +198,7 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
             Output tensor of shape (batch, seq_len, hidden_dim).
         """
         x = inputs
-        
+
         # Create attention mask from padding mask
         attention_mask = None
         if decoder_padding_mask is not None:
@@ -202,13 +207,18 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
             attention_mask = merge_padding_and_attention_mask(
                 inputs,
                 decoder_padding_mask,
-                compute_causal_mask(batch_size, input_length, input_length, cache_update_index or 0),
+                compute_causal_mask(
+                    batch_size,
+                    input_length,
+                    input_length,
+                    cache_update_index or 0,
+                ),
             )
-        
+
         # Self-attention block with residual
         residual = x
         x = self.pre_attention_norm(x)
-        
+
         attention_output = self.attention(
             x,
             position_ids=position_ids,
@@ -217,26 +227,26 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
             cache_update_index=cache_update_index,
             training=training,
         )
-        
+
         # Handle cache return
         if cache is not None:
             attention_output, cache = attention_output
-        
+
         if self.dropout_rate > 0:
             attention_output = self.dropout_layer(
                 attention_output, training=training
             )
-        
+
         x = residual + attention_output
-        
+
         # Feedforward block with residual
         residual = x
         x = self.pre_ffw_norm(x)
-        
+
         if self.is_sparse_mlp:
             # MoE feedforward
             x, router_logits = self.sparse_moe(x)
-            
+
             # Compute auxiliary loss for load balancing
             if training:
                 aux_loss = compute_load_balancing_loss(
@@ -249,12 +259,12 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
         else:
             # Dense feedforward
             x = self.dense_mlp(x)
-        
+
         if self.dropout_rate > 0:
             x = self.dropout_layer(x, training=training)
-        
+
         x = residual + x
-        
+
         if cache is not None:
             return x, cache
         return x

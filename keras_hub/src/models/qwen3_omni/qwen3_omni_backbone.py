@@ -2,7 +2,9 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.reversible_embedding import ReversibleEmbedding
+from keras_hub.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding,
+)
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
 from keras_hub.src.models.qwen3_omni.qwen3_omni_decoder import (
@@ -11,8 +13,7 @@ from keras_hub.src.models.qwen3_omni.qwen3_omni_decoder import (
 
 
 def _qwen3_omni_kernel_initializer(stddev=0.02):
-    """Kernel initializer for Qwen3-Omni.
-    """
+    """Kernel initializer for Qwen3-Omni."""
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
@@ -53,18 +54,21 @@ class Qwen3OmniBackbone(Backbone):
         num_experts: int. Number of experts in MoE layers. Defaults to 128.
         num_experts_per_tok: int. Number of experts activated per token (top-k).
             Defaults to 8.
-        mrope_section: tuple. M-RoPE section dimensions (text, temporal, spatial).
-            Must sum to head_dim // 2. Defaults to (24, 20, 20) for head_dim=128.
+        mrope_section: tuple. M-RoPE section dimensions
+            (text, temporal, spatial). Must sum to head_dim // 2.
+            Defaults to (24, 20, 20) for head_dim=128.
         rope_max_wavelength: int. Max wavelength for RoPE. Defaults to 1000000.
         rope_scaling_factor: float. Scaling factor for RoPE. Defaults to 1.0.
-        rope_attention_scaling: float. Attention scaling for RoPE. Defaults to 1.0.
+        rope_attention_scaling: float. Attention scaling for RoPE.
+            Defaults to 1.0.
         layer_norm_epsilon: float. Epsilon for layer norm. Defaults to 1e-6.
         dropout: float. Dropout rate. Defaults to 0.0.
         tie_word_embeddings: bool. Whether to tie input/output embeddings.
             Defaults to False.
         sliding_window_size: int or None. Size of sliding attention window.
             Defaults to None (no sliding window).
-        norm_topk_prob: bool. Whether to normalize top-k probabilities in routing.
+        norm_topk_prob: bool. Whether to normalize top-k probabilities
+            in routing.
             Defaults to True.
         decoder_sparse_step: int. Sparse step for MoE layers. Defaults to 1.
         router_aux_loss_coefficient: float. Auxiliary loss coefficient for load
@@ -144,19 +148,20 @@ class Qwen3OmniBackbone(Backbone):
             dtype=dtype,
             name="token_embedding",
         )
-        
+
         # === Multimodal Encoders (Optional) ===
         self.audio_encoder = audio_encoder
         self.vision_encoder = vision_encoder
-        
+
         # TODO: Implement multimodal embedding interleaving
-        # When audio/vision encoders are provided, embeddings need to be interleaved
+        # When audio/vision encoders are provided, embeddings need
+        # to be interleaved
         # with text embeddings based on special tokens and masks.
-        
+
         # === MoE Transformer Decoder Layers ===
         if not mlp_only_layers:
             mlp_only_layers = []
-        
+
         self.transformer_layers = []
         for i in range(num_layers):
             # Determine if this layer uses MoE (sparse) or dense FFN
@@ -165,7 +170,7 @@ class Qwen3OmniBackbone(Backbone):
                 and num_experts > 0
                 and (i + 1) % decoder_sparse_step == 0
             )
-            
+
             layer = Qwen3OmniTransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
@@ -190,16 +195,16 @@ class Qwen3OmniBackbone(Backbone):
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        
+
         # === Output Layer Norm ===
         self.layer_norm = Qwen3MoeLayerNorm(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="sequence_output_layernorm",
         )
-        
+
         # === Functional Model ===
-        
+
         # Model inputs (text + optional multimodal)
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
@@ -207,24 +212,24 @@ class Qwen3OmniBackbone(Backbone):
         padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
-        
+
         inputs = {
             "token_ids": token_id_input,
             "padding_mask": padding_mask_input,
         }
-        
+
         # TODO: Add multimodal inputs (audio, vision) to input spec
         # Will need audio features, vision features, and corresponding masks
-        
+
         # Embed tokens
         x = self.token_embedding(token_id_input)
-        
+
         # TODO: Implement multimodal fusion
         # When audio/vision encoders are present:
         # 1. Encode audio/vision inputs
         # 2. Interleave embeddings based on special tokens
         # 3. Generate appropriate M-RoPE position IDs for multimodal sequence
-        
+
         # Pass through MoE transformer decoder layers
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(
@@ -232,10 +237,10 @@ class Qwen3OmniBackbone(Backbone):
                 position_ids=None,  # Auto-generated in attention layer
                 decoder_padding_mask=padding_mask_input,
             )
-        
+
         # Final layer norm
         sequence_output = self.layer_norm(x)
-        
+
         super().__init__(
             inputs=inputs,
             outputs=sequence_output,
@@ -293,8 +298,12 @@ class Qwen3OmniBackbone(Backbone):
                 "dropout": self.dropout,
                 "tie_word_embeddings": self.tie_word_embeddings,
                 "sliding_window_size": self.sliding_window_size,
-                "audio_encoder": keras.layers.serialize(self.audio_encoder) if self.audio_encoder else None,
-                "vision_encoder": keras.layers.serialize(self.vision_encoder) if self.vision_encoder else None,
+                "audio_encoder": keras.layers.serialize(self.audio_encoder)
+                if self.audio_encoder
+                else None,
+                "vision_encoder": keras.layers.serialize(self.vision_encoder)
+                if self.vision_encoder
+                else None,
             }
         )
         return config
@@ -304,15 +313,14 @@ class Qwen3OmniBackbone(Backbone):
         """Deserialize model config, including audio and vision encoders."""
         audio_encoder = config.pop("audio_encoder", None)
         vision_encoder = config.pop("vision_encoder", None)
-        
+
         if audio_encoder is not None:
             audio_encoder = keras.layers.deserialize(audio_encoder)
         if vision_encoder is not None:
             vision_encoder = keras.layers.deserialize(vision_encoder)
-        
+
         return cls(
             **config,
             audio_encoder=audio_encoder,
             vision_encoder=vision_encoder,
         )
-    

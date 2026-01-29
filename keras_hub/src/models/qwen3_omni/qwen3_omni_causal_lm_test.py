@@ -6,12 +6,18 @@ os.environ["KERAS_BACKEND"] = "jax"
 import pytest
 from keras import ops
 
-from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import Qwen3OmniBackbone
-from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm import Qwen3OmniCausalLM
+from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import (
+    Qwen3OmniBackbone,
+)
+from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm import (
+    Qwen3OmniCausalLM,
+)
 from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm_preprocessor import (
     Qwen3OmniCausalLMPreprocessor,
 )
-from keras_hub.src.models.qwen3_omni.qwen3_omni_tokenizer import Qwen3OmniTokenizer
+from keras_hub.src.models.qwen3_omni.qwen3_omni_tokenizer import (
+    Qwen3OmniTokenizer,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 

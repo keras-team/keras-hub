@@ -1,5 +1,7 @@
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import Qwen3OmniBackbone
+from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import (
+    Qwen3OmniBackbone,
+)
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 

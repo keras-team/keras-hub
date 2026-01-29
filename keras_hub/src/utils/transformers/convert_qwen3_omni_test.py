@@ -3,8 +3,12 @@ import pytest
 
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.causal_lm import CausalLM
-from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import Qwen3OmniBackbone
-from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm import Qwen3OmniCausalLM
+from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import (
+    Qwen3OmniBackbone,
+)
+from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm import (
+    Qwen3OmniCausalLM,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -18,7 +22,9 @@ from keras_hub.src.tests.test_case import TestCase
 class TestTask(TestCase):
     @pytest.mark.extra_large
     def test_convert_preset(self):
-        model = Qwen3OmniCausalLM.from_preset("hf://Qwen/Qwen3-Omni-30B-A3B-Instruct")
+        model = Qwen3OmniCausalLM.from_preset(
+            "hf://Qwen/Qwen3-Omni-30B-A3B-Instruct"
+        )
         prompt = "What is Keras?"
         output = model.generate([prompt], max_length=15)
         self.assertIsNotNone(output)

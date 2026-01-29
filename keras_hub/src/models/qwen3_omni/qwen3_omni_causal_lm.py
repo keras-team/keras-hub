@@ -3,7 +3,9 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
-from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import Qwen3OmniBackbone
+from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import (
+    Qwen3OmniBackbone,
+)
 from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm_preprocessor import (
     Qwen3OmniCausalLMPreprocessor,
 )
@@ -36,7 +38,8 @@ class Qwen3OmniCausalLM(CausalLM):
     Qwen3-Omni extends Qwen3 with multimodal capabilities (audio, vision, text)
     and uses a Thinker-Talker architecture. This implementation focuses
     on the Thinker (comprehension) component, which processes inputs using
-    Multimodal Rotary Position Embedding (M-RoPE) for efficient multimodal fusion.
+    Multimodal Rotary Position Embedding (M-RoPE) for efficient
+    multimodal fusion.
     The architecture supports 128 experts with 8 active per token.
 
     Args:
@@ -106,28 +109,34 @@ class Qwen3OmniCausalLM(CausalLM):
     ):
         """Forward pass with KV cache for efficient autoregressive generation.
 
-        This method enables efficient text generation by caching key/value tensors
-        from previous tokens, avoiding redundant computation during autoregressive
-        decoding. Essential for the `generate()` method.
+        This method enables efficient text generation by caching
+        key/value tensors from previous tokens, avoiding redundant
+        computation during autoregressive decoding. Essential for the
+        `generate()` method.
 
         Args:
-            token_ids: Token IDs tensor with shape `(batch_size, sequence_length)`.
-                For generation, typically `sequence_length=1` for new tokens.
+            token_ids: Token IDs tensor with shape
+                `(batch_size, sequence_length)`. For generation,
+                typically `sequence_length=1` for new tokens.
             cache: KV cache tensor with shape `(batch_size, num_layers, 2,
                 max_length, num_key_value_heads, head_dim)`. Contains cached
                 keys and values from previous forward passes.
-            cache_update_index: Integer index indicating where to write the new
-                KV values in the cache (typically current sequence position - 1).
+            cache_update_index: Integer index indicating where to
+                write the new KV values in the cache (typically current
+                sequence position - 1).
 
         Returns:
             Tuple of (logits, hidden_states, updated_cache):
-            - logits: Vocabulary logits, shape `(batch_size, sequence_length, vocab_size)`
-            - hidden_states: Final layer outputs, shape `(batch_size, sequence_length, hidden_dim)`
-            - updated_cache: Updated KV cache with same shape as input cache
+            - logits: Vocabulary logits, shape
+              `(batch_size, sequence_length, vocab_size)`
+            - hidden_states: Final layer outputs, shape
+              `(batch_size, sequence_length, hidden_dim)`
+            - updated_cache: Updated KV cache with same shape as
+              input cache
         """
         # Embed input tokens
         x = self.backbone.token_embedding(token_ids)
-        
+
         # Pass through decoder layers with caching
         updated_cache = []
         for i in range(self.backbone.num_layers):
@@ -138,10 +147,10 @@ class Qwen3OmniCausalLM(CausalLM):
                 cache_update_index=cache_update_index,
             )
             updated_cache.append(next_cache)
-        
+
         # Stack updated caches back into single tensor
         cache = ops.stack(updated_cache, axis=1)
-        
+
         # Final layer norm and projection to vocabulary
         hidden_states = x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
@@ -149,13 +158,14 @@ class Qwen3OmniCausalLM(CausalLM):
 
     def _build_cache(self, token_ids):
         """Initialize KV cache and perform initial forward pass.
-        
+
         Creates a zero-initialized cache tensor and seeds it with the initial
         prompt tokens. This is called once at the start of generation.
-        
+
         Args:
-            token_ids: Initial prompt tokens, shape `(batch_size, prompt_length)`.
-        
+            token_ids: Initial prompt tokens, shape
+                `(batch_size, prompt_length)`.
+
         Returns:
             Tuple of (hidden_states, cache) from the initial forward pass.
         """
@@ -165,8 +175,9 @@ class Qwen3OmniCausalLM(CausalLM):
         num_layers = self.backbone.num_layers
         num_key_value_heads = self.backbone.num_key_value_heads
         head_dim = self.backbone.head_dim
-        
-        # Cache shape: [batch, layers, 2 (key/value), seq_len, kv_heads, head_dim]
+
+        # Cache shape: [batch, layers, 2 (key/value), seq_len,
+        # kv_heads, head_dim]
         shape = [
             batch_size,
             num_layers,
@@ -176,7 +187,7 @@ class Qwen3OmniCausalLM(CausalLM):
             head_dim,
         ]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
-        
+
         # Seed cache with initial forward pass
         _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
         return hidden_states, cache
@@ -194,11 +205,13 @@ class Qwen3OmniCausalLM(CausalLM):
 
         Args:
             inputs: Dictionary with keys `"token_ids"` and `"padding_mask"`.
-                - token_ids: Initial prompt tokens, shape `(batch_size, prompt_length)`
-                - padding_mask: Binary mask indicating valid tokens (1) vs padding (0)
-            stop_token_ids: Optional tuple of token IDs that trigger early stopping
-                (e.g., EOS token). Generation stops when all sequences produce one
-                of these tokens.
+                - token_ids: Initial prompt tokens, shape
+                  `(batch_size, prompt_length)`
+                - padding_mask: Binary mask indicating valid tokens (1)
+                  vs padding (0)
+            stop_token_ids: Optional tuple of token IDs that trigger
+                early stopping (e.g., EOS token). Generation stops when
+                all sequences produce one of these tokens.
         """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
         hidden_states, cache = self._build_cache(token_ids)
@@ -272,7 +285,7 @@ class Qwen3OmniCausalLM(CausalLM):
                 f"token_ids must have at least 2 dimensions (batch, sequence). "
                 f"Received shape: {token_ids_shape}"
             )
-        
+
         batch_shape = token_ids_shape[:2]
 
         if padding_mask is None:
