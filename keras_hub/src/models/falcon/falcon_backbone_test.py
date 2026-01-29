@@ -12,6 +12,7 @@ class FalconBackboneTest(TestCase):
             "num_layers": 2,
             "num_attention_heads": 8,
             "hidden_dim": 16,
+            "num_kv_heads": 1,
             "intermediate_dim": 32,
         }
         self.input_data = {

@@ -11,6 +11,7 @@ from keras_hub.src.utils.transformers import convert_dinov2
 from keras_hub.src.utils.transformers import convert_dinov3
 from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_esm
+from keras_hub.src.utils.transformers import convert_falcon
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gemma3
 from keras_hub.src.utils.transformers import convert_gpt2
@@ -66,6 +67,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_pali_gemma
         elif model_type == "vit":
             self.converter = convert_vit
+        elif model_type == "falcon":
+            self.converter = convert_falcon
         elif model_type == "qwen2":
             self.converter = convert_qwen
         elif model_type == "mixtral":
@@ -91,6 +94,8 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_backbone(self, cls, load_weights, **kwargs):
         keras_config = self.converter.convert_backbone_config(self.config)
+        if "num_kv_heads" in keras_config:
+            kwargs["num_kv_heads"] = keras_config.pop("num_kv_heads")
         backbone = cls(**{**keras_config, **kwargs})
         if load_weights:
             jax_memory_cleanup(backbone)
