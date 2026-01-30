@@ -340,7 +340,9 @@ class Gemma3Backbone(Backbone):
 
         if is_embedding_model:
             if embedding_dim is None or pooling_intermediate_dim is None:
-                raise ValueError("Must specify embedding_dim and pooling_intermediate_dim.")
+                raise ValueError(
+                    "Must specify embedding_dim and pooling_intermediate_dim."
+                )
 
             # 1. Mask-aware Mean Pooling
             pooled_output = MeanPooling(dtype=dtype, name="mean_pooling")(
@@ -364,9 +366,14 @@ class Gemma3Backbone(Backbone):
             )(pooled_output)
 
             # 4. L2 Normalization (Crucial for Retrieval)
-            pooled_output = layers.UnitNormalization(axis=-1, name="unit_normalization")(pooled_output)
+            pooled_output = layers.UnitNormalization(
+                axis=-1, name="unit_normalization"
+            )(pooled_output)
 
-            outputs = {"sequence_output": sequence_output, "pooled_output": pooled_output}
+            outputs = {
+                "sequence_output": sequence_output,
+                "pooled_output": pooled_output,
+            }
         else:
             outputs = sequence_output
 

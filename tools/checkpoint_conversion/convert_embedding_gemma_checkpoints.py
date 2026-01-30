@@ -29,8 +29,8 @@ import os
 os.environ["KERAS_BACKEND"] = "jax"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-import numpy as np
 import keras
+import numpy as np
 from keras import ops
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
@@ -59,6 +59,11 @@ def validate_output(
 
     # Instantiate validation model from config
     validation_model = Gemma3Backbone.from_config(config)
+
+    # First, test that the number of parameters match
+    source_params = source_model.count_params()
+    validation_params = validation_model.count_params()
+    assert source_params == validation_params
 
     # Transfer weights from embedding_model to validation_model
     source_layer_names = {layer.name for layer in embedding_model.layers}
