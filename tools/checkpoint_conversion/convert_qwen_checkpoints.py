@@ -18,6 +18,7 @@ from transformers import AutoModelForCausalLM  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
 
 import keras_hub  # noqa: E402
+
 PRESET_MAP = {
     "qwen2.5_0.5b_en": "Qwen/Qwen2.5-0.5B",
     "qwen2.5_3b_en": "Qwen/Qwen2.5-3B",
