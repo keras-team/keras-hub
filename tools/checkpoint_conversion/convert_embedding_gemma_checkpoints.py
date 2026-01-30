@@ -29,7 +29,9 @@ import os
 os.environ["KERAS_BACKEND"] = "jax"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
+import numpy as np
 import keras
+from keras import ops
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
 from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
@@ -39,6 +41,57 @@ PRESET_MAP = {
     "embedding_gemma3_1b_en": "gemma3_instruct_1b",
     "embedding_gemma3_4b_en": "gemma3_instruct_4b_text",
 }
+
+
+def validate_output(
+    source_model,
+    embedding_model,
+):
+    """
+    Validates the output of the converted model against the source model.
+    """
+    print("Validating the converted model...")
+    # Create a temporary validation model with the same weights as the
+    # embedding model, but with causal attention and no pooling head.
+    config = embedding_model.get_config()
+    config["is_embedding_model"] = False
+    config["use_bidirectional_attention"] = False
+
+    # Instantiate validation model from config
+    validation_model = Gemma3Backbone.from_config(config)
+
+    # Transfer weights from embedding_model to validation_model
+    source_layer_names = {layer.name for layer in embedding_model.layers}
+    transferred_layers = 0
+    for target_layer in validation_model.layers:
+        if target_layer.name in source_layer_names:
+            source_layer = embedding_model.get_layer(name=target_layer.name)
+            if source_layer.get_weights():
+                target_layer.set_weights(source_layer.get_weights())
+                transferred_layers += 1
+
+    # Simple numerical verification
+    inputs = {
+        "token_ids": np.random.randint(0, 1000, (1, 16)),
+        "padding_mask": np.ones((1, 16)),
+    }
+
+    print("Comparing outputs...")
+    # Run forward pass
+    # Source model (causal)
+    output_source = ops.convert_to_numpy(source_model(inputs))
+    # Validation model (converted, but running in causal mode)
+    output_target = ops.convert_to_numpy(validation_model(inputs))
+
+    # Compare
+    diff = np.max(np.abs(output_source - output_target))
+    print(f"Max Difference: {diff}")
+
+    if diff < 1e-5:
+        print("✅ VERIFICATION PASSED")
+    else:
+        print("❌ VERIFICATION FAILED")
+        raise ValueError("Model verification failed! Outputs do not match.")
 
 
 def convert_to_embedding_preset(
@@ -61,6 +114,7 @@ def convert_to_embedding_preset(
             pooling head's dense layer.
         embedding_dim: The final output dimension of sentence embedding.
     """
+    print(f"Loading source model: {source_preset}...")
     source_model = Gemma3Backbone.from_preset(source_preset)
     source_tokenizer = Gemma3Tokenizer.from_preset(source_preset)
 
@@ -76,11 +130,13 @@ def convert_to_embedding_preset(
             config["vision_encoder"]
         )
 
+    print("Creating embedding model...")
     embedding_model = Gemma3Backbone.from_config(config)
 
     transferred_layers = 0
     source_layer_names = {layer.name for layer in source_model.layers}
 
+    print("Transferring weights...")
     for target_layer in embedding_model.layers:
         if target_layer.name in source_layer_names:
             source_layer = source_model.get_layer(name=target_layer.name)
@@ -88,6 +144,10 @@ def convert_to_embedding_preset(
                 target_layer.set_weights(source_layer.get_weights())
                 transferred_layers += 1
 
+    # Validate output
+    validate_output(source_model, embedding_model)
+
+    print(f"Saving to preset: {output_preset}...")
     os.makedirs(output_preset, exist_ok=True)
     embedding_model.save_to_preset(output_preset)
     source_tokenizer.save_to_preset(output_preset)
