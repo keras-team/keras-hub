@@ -58,4 +58,160 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/qwen/keras/qwen2.5_instruct_72b_en/2",
     },
+    "qwen2.5_coder_0.5b": {
+        "metadata": {
+            "description": (
+                "Code-focused fine-tuned Qwen-2.5 model with 0.5 "
+                "billion parameters."
+            ),
+            "params": 494032768,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_0.5b/1"
+        ),
+    },
+    "qwen2.5_coder_1.5b": {
+        "metadata": {
+            "description": (
+                "Code-focused fine-tuned 28-layer Qwen-2.5 model with 1.5 "
+                "billion parameters."
+            ),
+            "params": 1543434240,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_1.5b/1"
+        ),
+    },
+    "qwen2.5_coder_3b": {
+        "metadata": {
+            "description": (
+                "Code-focused fine-tuned Qwen-2.5 model with 3 "
+                "billion parameters."
+            ),
+            "params": 3085938688,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_3b/1"
+        ),
+    },
+    "qwen2.5_coder_7b": {
+        "metadata": {
+            "description": (
+                "Code-focused fine-tuned Qwen-2.5 model with 7 "
+                "billion parameters."
+            ),
+            "params": 6993420288,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_7b/1"
+        ),
+    },
+    "qwen2.5_coder_14b": {
+        "metadata": {
+            "description": (
+                "Code-focused fine-tuned Qwen-2.5 model with 14 "
+                "billion parameters."
+            ),
+            "params": 14000000000,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_14b/1"
+        ),
+    },
+    "qwen2.5_coder_32b": {
+        "metadata": {
+            "description": (
+                "Code-focused fine-tuned Qwen-2.5 model with 32 "
+                "billion parameters."
+            ),
+            "params": 32763876352,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_32b/1"
+        ),
+    },
+    "qwen2.5_coder_instruct_0.5b": {
+        "metadata": {
+            "description": (
+                "Instruction-tuned code-focused Qwen-2.5 model with "
+                "0.5 billion parameters."
+            ),
+            "params": 494032768,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_instruct_0.5b/1"
+        ),
+    },
+    "qwen2.5_coder_instruct_1.5b": {
+        "metadata": {
+            "description": (
+                "Instruction-tuned code-focused Qwen-2.5 model with "
+                "1.5 billion parameters."
+            ),
+            "params": 1543434240,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_instruct_1.5b/1"
+        ),
+    },
+    "qwen2.5_coder_instruct_3b": {
+        "metadata": {
+            "description": (
+                "Instruction-tuned code-focused Qwen-2.5 model with "
+                "3 billion parameters."
+            ),
+            "params": 3085938688,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_instruct_3b/1"
+        ),
+    },
+    "qwen2.5_coder_instruct_7b": {
+        "metadata": {
+            "description": (
+                "Instruction-tuned code-focused Qwen-2.5 model with "
+                "7 billion parameters."
+            ),
+            "params": 6993420288,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_instruct_7b/1"
+        ),
+    },
+    "qwen2.5_coder_instruct_14b": {
+        "metadata": {
+            "description": (
+                "Instruction-tuned code-focused Qwen-2.5 model with "
+                "14 billion parameters."
+            ),
+            "params": 14000000000,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_instruct_14b/1"
+        ),
+    },
+    "qwen2.5_coder_instruct_32b": {
+        "metadata": {
+            "description": (
+                "Instruction-tuned code-focused Qwen-2.5 model with "
+                "32 billion parameters."
+            ),
+            "params": 32763876352,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_instruct_32b/1"
+        ),
+    },
 }

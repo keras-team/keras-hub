@@ -3,6 +3,9 @@ import pytest
 
 from keras_hub.src.models.basnet.basnet import BASNetImageSegmenter
 from keras_hub.src.models.basnet.basnet_backbone import BASNetBackbone
+from keras_hub.src.models.basnet.basnet_image_converter import (
+    BASNetImageConverter,
+)
 from keras_hub.src.models.basnet.basnet_preprocessor import BASNetPreprocessor
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_hub.src.tests.test_case import TestCase
@@ -26,7 +29,9 @@ class BASNetTest(TestCase):
             image_encoder=self.image_encoder,
             num_classes=1,
         )
-        self.preprocessor = BASNetPreprocessor()
+        self.preprocessor = BASNetPreprocessor(
+            image_converter=BASNetImageConverter(height=64, width=64)
+        )
         self.init_kwargs = {
             "backbone": self.backbone,
             "preprocessor": self.preprocessor,
@@ -44,6 +49,13 @@ class BASNetTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
+            cls=BASNetImageSegmenter,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+        )
+
+    def test_litert_export(self):
+        self.run_litert_export_test(
             cls=BASNetImageSegmenter,
             init_kwargs=self.init_kwargs,
             input_data=self.images,

@@ -196,7 +196,7 @@ class CausalLM(Task):
 
                 # Create an explicit tuple of all variable state.
                 state = (
-                    self.sampler.variables,
+                    [v.value for v in self.sampler.variables],
                     # Use the explicit variable.value to preserve the
                     # sharding spec of distribution.
                     [v.value for v in self.trainable_variables],
@@ -424,3 +424,30 @@ class CausalLM(Task):
         )
 
         export_to_safetensors(self, path)
+
+    def _post_quantize(self, mode, **kwargs):
+        super()._post_quantize(mode, **kwargs)
+        # Reset the compiled generate function.
+        self.generate_function = None
+
+    def get_quantization_layer_structure(self, mode):
+        if mode not in ["gptq", "awq"]:
+            return None
+
+        backbone = self.backbone
+        # Check for standard backbone structure.
+        if not hasattr(backbone, "transformer_layers"):
+            return None
+
+        # Check for embedding.
+        embedding = getattr(backbone, "token_embedding", None)
+        if embedding is None:
+            embedding = getattr(backbone, "embedding", None)
+
+        if embedding is None:
+            return None
+
+        return {
+            "pre_block_layers": [embedding],
+            "sequential_blocks": backbone.transformer_layers,
+        }

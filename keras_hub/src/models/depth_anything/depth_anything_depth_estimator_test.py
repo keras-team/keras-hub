@@ -61,14 +61,19 @@ class DepthAnythingDepthEstimatorTest(TestCase):
             expected_output_shape={"depths": (2, 70, 70, 1)},
         )
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
-        self.skipTest("Presets are not uploaded yet.")
-        image_batch = self.load_test_image(target_size=518)[None, ...] / 255.0
+        image_batch = (
+            self.load_test_image(target_size=(518, 518))[None, ...] / 255.0
+        )
         self.run_preset_test(
             cls=DepthAnythingDepthEstimator,
             preset="depth_anything_v2_small",
             input_data=image_batch,
+            init_kwargs={
+                "depth_estimation_type": "relative",
+                "max_depth": None,
+            },
             expected_output_shape={"depths": (1, 518, 518, 1)},
         )
 
@@ -78,6 +83,15 @@ class DepthAnythingDepthEstimatorTest(TestCase):
             cls=DepthAnythingDepthEstimator,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
+        )
+
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=DepthAnythingDepthEstimator,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+            comparison_mode="statistical",
+            output_thresholds={"depths": {"max": 2e-4, "mean": 1e-5}},
         )
 
     @pytest.mark.extra_large

@@ -23,7 +23,7 @@ backbone_presets = {
             "params": 3371793763,
             "path": "stable_diffusion_3",
         },
-        "kaggle_handle": "kaggle://keras/stablediffusion3/keras/stable_diffusion_3.5_medium/1",
+        "kaggle_handle": "kaggle://keras/stablediffusion-3.5/keras/stable_diffusion_3.5_medium/1",
     },
     "stable_diffusion_3.5_large": {
         "metadata": {

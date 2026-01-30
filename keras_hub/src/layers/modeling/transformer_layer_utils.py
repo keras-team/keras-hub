@@ -1,11 +1,12 @@
 from absl import logging
 from keras import ops
+from keras.src.backend import get_keras_mask
 
 
 def _check_masks_shapes(inputs, padding_mask, attention_mask):
     mask = padding_mask
-    if hasattr(inputs, "_keras_mask") and mask is None:
-        mask = inputs._keras_mask
+    if mask is None:
+        mask = get_keras_mask(inputs)
     if mask is not None:
         if len(mask.shape) != 2:
             raise ValueError(
@@ -68,17 +69,16 @@ def merge_padding_and_attention_mask(
         returned mask is padding_mask with one additional axis.
     """
     _check_masks_shapes(inputs, padding_mask, attention_mask)
-    mask = padding_mask
-    if hasattr(inputs, "_keras_mask"):
-        if mask is None:
-            # If no padding mask is explicitly provided, we look for padding
-            # mask from the input data.
-            mask = inputs._keras_mask
-        else:
+    # We look for a padding mask from the input data.
+    mask = get_keras_mask(inputs)
+    # But if padding mask is explicitly provided, we use it.
+    if padding_mask is not None:
+        if mask is not None:
             logging.warning(
                 "You are explicitly setting `padding_mask` while the `inputs` "
                 "have built-in mask, so the built-in mask is ignored."
             )
+        mask = padding_mask
     if mask is not None:
         # Add an axis for broadcasting, the attention mask should be 2D
         # (not including the batch axis).

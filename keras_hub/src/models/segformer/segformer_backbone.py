@@ -40,15 +40,15 @@ class SegFormerBackbone(Backbone):
     import keras_hub
 
     backbone = keras_hub.models.MiTBackbone(
-        depths=[2, 2, 2, 2],
         image_shape=(224, 224, 3),
-        hidden_dims=[32, 64, 160, 256],
         num_layers=4,
-        blockwise_num_heads=[1, 2, 5, 8],
-        blockwise_sr_ratios=[8, 4, 2, 1],
+        hidden_dims=[32, 64, 160, 256],
+        layerwise_depths=[2, 2, 2, 2],
+        layerwise_num_heads=[1, 2, 5, 8],
+        layerwise_sr_ratios=[8, 4, 2, 1],
+        layerwise_patch_sizes=[7, 3, 3, 3],
+        layerwise_strides=[4, 2, 2, 2],
         max_drop_path_rate=0.1,
-        patch_sizes=[7, 3, 3, 3],
-        strides=[4, 2, 2, 2],
     )
 
     segformer_backbone = keras_hub.models.SegFormerBackbone(

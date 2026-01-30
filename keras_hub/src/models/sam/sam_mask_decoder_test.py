@@ -10,26 +10,26 @@ class SAMMaskDecoderTest(TestCase):
         self.image_size = 128
         self.init_kwargs = {
             "num_layers": 2,
-            "hidden_size": 8,
+            "hidden_size": 16,
             "intermediate_dim": 32,
             "num_heads": 8,
-            "embedding_dim": 8,
+            "embedding_dim": 16,
             "num_multimask_outputs": 3,
             "iou_head_depth": 3,
             "iou_head_hidden_dim": 8,
         }
         self.inputs = {
             "image_embeddings": random.uniform(
-                minval=0, maxval=1, shape=(1, 8, 8, 8)
+                minval=0, maxval=1, shape=(1, 8, 8, 16)
             ),
             "prompt_sparse_embeddings": random.uniform(
-                minval=0, maxval=1, shape=(1, 12, 8)
+                minval=0, maxval=1, shape=(1, 12, 16)
             ),
             "prompt_dense_embeddings": random.uniform(
-                minval=0, maxval=1, shape=(1, 8, 8, 8)
+                minval=0, maxval=1, shape=(1, 8, 8, 16)
             ),
             "prompt_dense_positional_embeddings": random.uniform(
-                minval=0, maxval=1, shape=(1, 8, 8, 8)
+                minval=0, maxval=1, shape=(1, 8, 8, 16)
             ),
         }
 

@@ -1,10 +1,8 @@
 import keras
 from keras import activations
+from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.reversible_embedding import (
-    ReversibleEmbedding,
-)
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.roformer_v2.roformer_v2_attention import RoformerNorm
 from keras_hub.src.models.roformer_v2.roformer_v2_encoder import (

@@ -201,6 +201,31 @@ class GemmaCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    def test_litert_export(self):
+        """Test LiteRT export for GemmaCausalLM with small test model."""
+        model = GemmaCausalLM(**self.init_kwargs)
+
+        # Convert boolean padding_mask to int32 for LiteRT compatibility
+        input_data = self.input_data.copy()
+        if "padding_mask" in input_data:
+            input_data["padding_mask"] = ops.cast(
+                input_data["padding_mask"], "int32"
+            )
+
+        expected_output_shape = (
+            2,
+            8,
+            self.preprocessor.tokenizer.vocabulary_size(),
+        )
+
+        self.run_litert_export_test(
+            model=model,
+            input_data=input_data,
+            expected_output_shape=expected_output_shape,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-3, "mean": 1e-5}},
+        )
+
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
@@ -295,3 +320,17 @@ class GemmaCausalLMTest(TestCase):
         # Assert shapes for info exfiltrated into the parent context.
         self.assertEqual(ops.shape(embedded_prompts), expected_embedded_shape)
         self.assertEqual(ops.shape(scores), expected_score_shape)
+
+    def test_get_quantization_layer_structure(self):
+        causal_lm = GemmaCausalLM(**self.init_kwargs)
+        structure = causal_lm.get_quantization_layer_structure("gptq")
+        self.assertIsInstance(structure, dict)
+        self.assertIn("pre_block_layers", structure)
+        self.assertIn("sequential_blocks", structure)
+        self.assertLen(structure["pre_block_layers"], 1)
+        self.assertIsInstance(structure["pre_block_layers"][0], keras.Model)
+        self.assertEqual(
+            structure["sequential_blocks"], self.backbone.transformer_layers
+        )
+
+        self.assertIsNone(causal_lm.get_quantization_layer_structure("int8"))
