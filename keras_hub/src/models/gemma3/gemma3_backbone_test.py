@@ -142,7 +142,7 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
         self.assertEqual(outputs["pooled_output"].shape, expected_pooled_shape)
 
         self.assertEqual(model.count_params(), 6520)
-        self.assertEqual(len(model.layers), 13)
+        self.assertEqual(len(model.layers), 14)
 
         self.run_model_saving_test(
             cls=Gemma3Backbone,
