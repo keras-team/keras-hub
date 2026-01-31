@@ -44,7 +44,9 @@ backbone_presets = {
             "params": 3880099328,
             "path": "gemma3",
         },
-        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_instruct_4b_text/3",
+        "kaggle_handle": (
+            "kaggle://keras/gemma3/keras/gemma3_instruct_4b_text/3"
+        ),
     },
     "gemma3_12b_text": {
         "metadata": {
@@ -66,7 +68,9 @@ backbone_presets = {
             "params": 11765788416,
             "path": "gemma3",
         },
-        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_instruct_12b_text/3",
+        "kaggle_handle": (
+            "kaggle://keras/gemma3/keras/gemma3_instruct_12b_text/3"
+        ),
     },
     "gemma3_27b_text": {
         "metadata": {
@@ -88,7 +92,9 @@ backbone_presets = {
             "params": 27009002240,
             "path": "gemma3",
         },
-        "kaggle_handle": "kaggle://keras/gemma3/keras/gemma3_instruct_27b_text/3",
+        "kaggle_handle": (
+            "kaggle://keras/gemma3/keras/gemma3_instruct_27b_text/3"
+        ),
     },
     "gemma3_4b": {
         "metadata": {
@@ -218,7 +224,9 @@ backbone_presets = {
             "params": 27432406640,
             "path": "gemma3",
         },
-        "kaggle_handle": "kaggle://keras/medgemma/keras/medgemma_instruct_27b/1",
+        "kaggle_handle": (
+            "kaggle://keras/medgemma/keras/medgemma_instruct_27b/1"
+        ),
     },
     "medgemma_instruct_27b_text": {
         "metadata": {
@@ -231,7 +239,9 @@ backbone_presets = {
             "params": 27009002240,
             "path": "gemma3",
         },
-        "kaggle_handle": "kaggle://keras/medgemma/keras/medgemma_instruct_27b_text/1",
+        "kaggle_handle": (
+            "kaggle://keras/medgemma/keras/medgemma_instruct_27b_text/1"
+        ),
     },
     "medgemma_1.5_instruct_4b": {
         "metadata": {
@@ -242,7 +252,9 @@ backbone_presets = {
             "params": 4300079472,
             "path": "gemma3",
         },
-        "kaggle_handle": "kaggle://keras/medgemma/keras/medgemma_1.5_instruct_4b/1",
+        "kaggle_handle": (
+            "kaggle://keras/medgemma/keras/medgemma_1.5_instruct_4b/1"
+        ),
     },
     "function_gemma_instruct_270m": {
         "metadata": {
@@ -254,6 +266,143 @@ backbone_presets = {
             "params": 268098176,
             "path": "gemma3",
         },
-        "kaggle_handle": "kaggle://keras/function-gemma/keras/function_gemma_instruct_270m/1",
+        "kaggle_handle": (
+            "kaggle://keras/function-gemma/keras/function_gemma_instruct_270m/1"
+        ),
+    },
+    "gemma3_embedding_270m_en": {
+        "metadata": {
+            "description": (
+                "270-million parameter Embedding Gemma 3 model, 18-layer, "
+                "text-only."
+            ),
+            "params": 273865344,
+            "path": "gemma3",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/embeddinggemma/keras/gemma3_embedding_270m_en/1"
+        ),
+    },
+    "gemma3_embedding_instruct_270m_en": {
+        "metadata": {
+            "description": (
+                "270-million parameter Embedding Gemma 3 model, 18-layer, "
+                "text-only, instruction-tuned."
+            ),
+            "params": 273865344,
+            "path": "gemma3",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/embeddinggemma/keras/"
+            "gemma3_embedding_instruct_270m_en/1"
+        ),
+    },
+    "gemma3_embedding_1b_en": {
+        "metadata": {
+            "description": (
+                "1 billion parameter Embedding Gemma 3 model, 26-layer, "
+                "text-only."
+            ),
+            "params": 1007750272,
+            "path": "gemma3",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/embeddinggemma/keras/gemma3_embedding_1b_en/1"
+        ),
+    },
+    "gemma3_embedding_instruct_1b_en": {
+        "metadata": {
+            "description": (
+                "1 billion parameter Embedding Gemma 3 model, 26-layer, "
+                "text-only, instruction-tuned."
+            ),
+            "params": 1007750272,
+            "path": "gemma3",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/embeddinggemma/keras/"
+            "gemma3_embedding_instruct_1b_en/1"
+        ),
+    },
+    "gemma3_embedding_4b_text_en": {
+        "metadata": {
+            "description": (
+                "4 billion parameter Embedding Gemma 3 model, 34-layer, "
+                "text-only."
+            ),
+            "params": 3893730816,
+            "path": "gemma3",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/embeddinggemma/keras/gemma3_embedding_4b_text_en/1"
+        ),
+    },
+    "gemma3_embedding_instruct_4b_text_en": {
+        "metadata": {
+            "description": (
+                "4 billion parameter Embedding Gemma 3 model, 34-layer, "
+                "text-only, instruction-tuned."
+            ),
+            "params": 3893730816,
+            "path": "gemma3",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/embeddinggemma/keras/"
+            "gemma3_embedding_instruct_4b_text_en/1"
+        ),
+    },
+    "gemma3_embedding_12b_text_en": {
+        "metadata": {
+            "description": (
+                "12 billion parameter Embedding Gemma 3 model, 48-layer, "
+                "text-only."
+            ),
+            "params": 11784662784,
+            "path": "gemma3",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/embeddinggemma/keras/gemma3_embedding_12b_text_en/1"
+        ),
+    },
+    "gemma3_embedding_instruct_12b_text_en": {
+        "metadata": {
+            "description": (
+                "12 billion parameter Embedding Gemma 3 model, 48-layer, "
+                "text-only, instruction-tuned."
+            ),
+            "params": 11784662784,
+            "path": "gemma3",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/embeddinggemma/keras/"
+            "gemma3_embedding_instruct_12b_text_en/1"
+        ),
+    },
+    "gemma3_embedding_27b_text_en": {
+        "metadata": {
+            "description": (
+                "27 billion parameter Embedding Gemma 3 model, 62-layer, "
+                "text-only."
+            ),
+            "params": 27034168064,
+            "path": "gemma3",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/embeddinggemma/keras/gemma3_embedding_27b_text_en/1"
+        ),
+    },
+    "gemma3_embedding_instruct_27b_text_en": {
+        "metadata": {
+            "description": (
+                "27 billion parameter Embedding Gemma 3 model, 62-layer, "
+                "text-only, instruction-tuned."
+            ),
+            "params": 27034168064,
+            "path": "gemma3",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/embeddinggemma/keras/"
+            "gemma3_embedding_instruct_27b_text_en/1"
+        ),
     },
 }
