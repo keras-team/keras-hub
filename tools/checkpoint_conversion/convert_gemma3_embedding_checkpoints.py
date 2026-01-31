@@ -29,11 +29,10 @@ import os
 os.environ["KERAS_BACKEND"] = "jax"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-import numpy as np
-import keras
-from keras import ops
 import kagglehub
-
+import keras
+import numpy as np
+from keras import ops
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
 from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
@@ -75,9 +74,9 @@ def validate_output(
     print(f"Source model parameters: {source_params}")
     print(f"Validation model parameters: {validation_params}")
     if source_params == validation_params:
-         print("✅ Parameter count match.")
+        print("✅ Parameter count match.")
     else:
-         print("❌ Parameter count mismatch.")
+        print("❌ Parameter count mismatch.")
     assert source_params == validation_params
 
     # Transfer weights from embedding_model to validation_model
@@ -184,7 +183,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--preset",
         type=str,
-        help=f"Name of the preset to convert. Must be one of {list(PRESET_MAP.keys())}.",
+        help="Name of the preset to convert. Must be one of "
+        f"{list(PRESET_MAP.keys())}.",
     )
     parser.add_argument(
         "--source_preset",
@@ -215,12 +215,18 @@ if __name__ == "__main__":
 
     if args.preset:
         if args.preset not in PRESET_MAP:
-             raise ValueError(f"Invalid preset {args.preset}. Must be one of {list(PRESET_MAP.keys())}.")
+            raise ValueError(
+                f"Invalid preset {args.preset}. Must be one of "
+                f"{list(PRESET_MAP.keys())}."
+            )
         source_preset = PRESET_MAP[args.preset]
         output_preset = args.preset
     else:
         if not args.source_preset or not args.output_preset:
-            parser.error("Both --source_preset and --output_preset are required if --preset is not provided.")
+            parser.error(
+                "Both --source_preset and --output_preset are required if "
+                "--preset is not provided."
+            )
         source_preset = args.source_preset
         output_preset = args.output_preset
 
