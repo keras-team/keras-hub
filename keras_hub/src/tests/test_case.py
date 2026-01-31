@@ -705,14 +705,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     if hasattr(x, "dtype"):
                         if isinstance(x, np.ndarray):
                             if x.dtype == bool:
-                                return x.astype(np.int32)
+                                return x  # Keep as boolean!
                             elif x.dtype == np.float64:
                                 return x.astype(np.float32)
                             elif x.dtype == np.int64:
                                 return x.astype(np.int32)
                         else:  # TensorFlow tensor
                             if x.dtype == tf.bool:
-                                return ops.cast(x, "int32").numpy()
+                                return x.numpy()
                             elif x.dtype == tf.float64:
                                 return ops.cast(x, "float32").numpy()
                             elif x.dtype == tf.int64:
