@@ -12,7 +12,7 @@ class PositionEmbedding(keras.layers.Layer):
     to the features, and the dimension before the last corresponds to the
     sequence.
 
-    This layer does not supporting masking, but can be combined with a
+    This layer supports masking, and can be combined with a
     `keras.layers.Embedding` for padding mask support.
 
     Args:
