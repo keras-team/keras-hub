@@ -8,7 +8,7 @@ from keras_hub.src.layers.preprocessing.v2.start_end_packer import (
 from keras_hub.src.models.preprocessor import Preprocessor
 
 
-@keras_hub_export("keras_hub.models.CausalLMPreprocessor")
+@keras_hub_export("keras_hub.models.v2.CausalLMPreprocessor")
 class CausalLMPreprocessor(Preprocessor):
     """Base class for causal language modeling preprocessing layers.
 

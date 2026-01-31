@@ -218,8 +218,8 @@ class StartEndPacker(PreprocessingLayer):
             padding_side=self.padding_side,
             sequence_length=sequence_length,
         )
-        outputs = outputs[0] if not batched else outputs
         outputs = self._canonicalize_outputs(outputs)
+        outputs = outputs[0] if not batched else outputs
 
         if self.return_padding_mask:
             masks = keras.tree.map_structure(lambda _: True, x)
