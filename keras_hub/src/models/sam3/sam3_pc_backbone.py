@@ -152,12 +152,14 @@ class SAM3PromptableConceptBackbone(Backbone):
             shape=(None,), dtype="int32", name="token_ids"
         )
         padding_mask_input = keras.Input(
-            shape=(None,), dtype="bool", name="padding_mask"
+            shape=(None,), dtype="int32", name="padding_mask"
         )
         box_input = keras.Input(shape=(None, 5), dtype="float32", name="boxes")
         box_label_input = keras.Input(
             shape=(None,), dtype="int32", name="box_labels"
         )
+
+        padding_mask = ops.cast(padding_mask_input, dtype="bool")
         box_masks = ops.cast(
             ops.where(ops.not_equal(box_label_input, -10), 1, 0), dtype="bool"
         )
@@ -167,7 +169,7 @@ class SAM3PromptableConceptBackbone(Backbone):
         )
         fpn_hidden_states = fpn_hidden_states[:-1]
         fpn_position_encodings = fpn_position_encodings[:-1]
-        text_features = self.text_encoder(token_id_input, padding_mask_input)
+        text_features = self.text_encoder(token_id_input, padding_mask)
         text_features = self.text_projection(text_features)
         geometry_prompt_features, geometry_prompt_mask = self.geometry_encoder(
             box_input,
@@ -180,7 +182,7 @@ class SAM3PromptableConceptBackbone(Backbone):
             [text_features, geometry_prompt_features], axis=1
         )
         combined_prompt_masks = ops.concatenate(
-            [padding_mask_input, geometry_prompt_mask], axis=1
+            [padding_mask, geometry_prompt_mask], axis=1
         )
         encoder_outputs = self.detr_encoder(
             vision_features=fpn_hidden_states[-1],
@@ -190,7 +192,7 @@ class SAM3PromptableConceptBackbone(Backbone):
         )
         decoder_outputs = self.detr_decoder(
             vision_features=encoder_outputs[0],
-            text_features=encoder_outputs[2],
+            text_features=combined_prompt_features,
             vision_pos_encodings=encoder_outputs[1],
             text_masks=combined_prompt_masks,
         )
@@ -199,7 +201,7 @@ class SAM3PromptableConceptBackbone(Backbone):
         all_box_offsets = self.detr_decoder.box_head(decoder_hidden_states)
         all_pred_logits = self.dot_product_scoring(
             decoder_hidden_states=decoder_hidden_states,
-            text_features=encoder_outputs[2],
+            text_features=combined_prompt_features,
             text_masks=combined_prompt_masks,
         )
         pred_boxes, pred_logits, presence_logits = self.box_decoder(

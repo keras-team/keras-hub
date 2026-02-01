@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-from keras import ops
 
 from keras_hub.src.models.sam3.sam3_detr_decoder import SAM3DetrDecoder
 from keras_hub.src.models.sam3.sam3_detr_encoder import SAM3DetrEncoder
@@ -170,17 +169,6 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
             )
 
     def test_litert_export(self):
-        pytest.skip(
-            reason="TODO: Need to fix the bug in TFLite export for SAM3 model"
-        )
-
-        # Convert boolean padding_mask to int32 for LiteRT compatibility
-        input_data = self.input_data.copy()
-        if "padding_mask" in input_data:
-            input_data["padding_mask"] = ops.cast(
-                input_data["padding_mask"], "int32"
-            )
-
         self.run_litert_export_test(
             cls=SAM3PromptableConceptImageSegmenter,
             init_kwargs=self.init_kwargs,
@@ -191,5 +179,4 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
                 "boxes": {"max": 1e-3, "mean": 1e-4},
                 "masks": {"max": 1e-2, "mean": 1e-3},
             },
-            allow_custom_ops=True,
         )
