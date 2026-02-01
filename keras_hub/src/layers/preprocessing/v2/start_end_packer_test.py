@@ -282,7 +282,6 @@ class StartEndPackerTest(TestCase):
             [True, True, True, True, True, False],
             [True, True, True, True, True, True],
         ]
-        print(padding_mask)
         self.assertAllEqual(output, expected_output)
         self.assertAllEqual(padding_mask, expected_padding_mask)
 
@@ -302,3 +301,19 @@ class StartEndPackerTest(TestCase):
         ]
         self.assertAllEqual(output, expected_output)
         self.assertAllEqual(padding_mask, expected_padding_mask)
+
+    def test_compute_output_shape(self):
+        input_shape = (None, 4)
+
+        # return_padding_mask = False
+        packer = StartEndPacker(sequence_length=6)
+        output_shape = packer.compute_output_shape(input_shape)
+        self.assertEqual(output_shape, (None, 6))
+
+        # return_padding_mask = True
+        packer = StartEndPacker(sequence_length=6, return_padding_mask=True)
+        output_shape, padding_mask_shape = packer.compute_output_shape(
+            input_shape
+        )
+        self.assertEqual(output_shape, (None, 6))
+        self.assertEqual(padding_mask_shape, (None, 6))

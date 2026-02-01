@@ -137,7 +137,7 @@ class StartEndPacker(PreprocessingLayer):
         self.start_value = start_value
         self.end_value = end_value
 
-        self.pad_value = pad_value if pad_value is not None else 0
+        self.pad_value = pad_value
         self.return_padding_mask = return_padding_mask
         self.padding_side = padding_side
 
@@ -152,22 +152,25 @@ class StartEndPacker(PreprocessingLayer):
                 f"Input should be a list or a list of lists. Received: {inputs}"
             )
 
-    def _canonicalize_value(self, inputs, values):
-        if len(inputs[0]) > 0:
-            first_element = inputs[0][0]
-        else:
-            first_element = keras.tree.flatten(inputs)[0]
-        if isinstance(first_element, str):
+    def _get_type(self, inputs):
+        return type(inputs[0][0])
+
+    def _canonicalize_value(self, values, input_type):
+        if input_type is str:
             return [str(v) for v in values]
         else:
             return [int(v) for v in values]
 
-    def _pad(self, x, pad_value, padding_side, sequence_length):
+    def _pad(
+        self, x, pad_value, padding_side, sequence_length, input_type=None
+    ):
         if padding_side not in ("left", "right"):
             raise ValueError(
                 "padding_side must be 'left' or 'right'. "
                 f"Received: {padding_side}"
             )
+        if pad_value is None:
+            pad_value = "" if input_type is str else 0
         if padding_side == "right":
             x = [seq + [pad_value] * (sequence_length - len(seq)) for seq in x]
         else:
@@ -192,6 +195,7 @@ class StartEndPacker(PreprocessingLayer):
         add_end_value=True,
     ):
         inputs, batched = self._canonicalize_inputs(inputs)
+        input_type = self._get_type(inputs)
         sequence_length = sequence_length or self.sequence_length
         x = inputs
 
@@ -205,10 +209,10 @@ class StartEndPacker(PreprocessingLayer):
 
         # Concatenate start and end tokens.
         if add_start_value and self.start_value is not None:
-            start_value = self._canonicalize_value(inputs, self.start_value)
+            start_value = self._canonicalize_value(self.start_value, input_type)
             x = [start_value + seq for seq in x]
         if add_end_value and self.end_value is not None:
-            end_value = self._canonicalize_value(inputs, self.end_value)
+            end_value = self._canonicalize_value(self.end_value, input_type)
             x = [seq + end_value for seq in x]
 
         # Pad to desired length.
@@ -217,6 +221,7 @@ class StartEndPacker(PreprocessingLayer):
             pad_value=self.pad_value,
             padding_side=self.padding_side,
             sequence_length=sequence_length,
+            input_type=input_type,
         )
         outputs = self._canonicalize_outputs(outputs)
         outputs = outputs[0] if not batched else outputs
@@ -251,4 +256,6 @@ class StartEndPacker(PreprocessingLayer):
     def compute_output_shape(self, inputs_shape):
         inputs_shape = list(inputs_shape)
         inputs_shape[-1] = self.sequence_length
+        if self.return_padding_mask:
+            return tuple(inputs_shape), tuple(inputs_shape)
         return tuple(inputs_shape)

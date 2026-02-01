@@ -158,7 +158,7 @@ class MultiSegmentPacker(PreprocessingLayer):
         self.sep_value = sep_value
         self.end_value = end_value
 
-        self.pad_value = pad_value if pad_value is not None else 0
+        self.pad_value = pad_value
         self.padding_side = padding_side
 
     def get_config(self):
@@ -209,6 +209,9 @@ class MultiSegmentPacker(PreprocessingLayer):
                 f"Received: `inputs={inputs}`."
             )
         return x, batched[0]
+
+    def _get_type(self, inputs):
+        return type(inputs[0][0])
 
     def _trim_inputs_round_robin(self, max_seq_length, segments):
         # segments: list of lists of lists
@@ -330,12 +333,16 @@ class MultiSegmentPacker(PreprocessingLayer):
 
         return token_ids, segment_ids
 
-    def _pad(self, x, pad_value, padding_side, sequence_length):
+    def _pad(
+        self, x, pad_value, padding_side, sequence_length, input_type=None
+    ):
         if padding_side not in ("left", "right"):
             raise ValueError(
                 "padding_side must be 'left' or 'right'. "
                 f"Received: {padding_side}"
             )
+        if pad_value is None:
+            pad_value = "" if input_type is str else 0
         if padding_side == "right":
             x = [seq + [pad_value] * (sequence_length - len(seq)) for seq in x]
         else:
@@ -350,6 +357,7 @@ class MultiSegmentPacker(PreprocessingLayer):
         add_end_value=True,
     ):
         inputs, batched = self._canonicalize_inputs(inputs)
+        input_type = self._get_type(inputs)
 
         segments = self._trim_inputs(inputs)
         token_ids, segment_ids = self._combine_inputs(
@@ -364,6 +372,7 @@ class MultiSegmentPacker(PreprocessingLayer):
             pad_value=self.pad_value,
             padding_side=self.padding_side,
             sequence_length=sequence_length,
+            input_type=input_type,
         )
         segment_ids = self._pad(
             segment_ids,
@@ -378,8 +387,14 @@ class MultiSegmentPacker(PreprocessingLayer):
         return (token_ids, segment_ids)
 
     def compute_output_shape(self, inputs_shape):
-        if isinstance(inputs_shape[0], tuple):
-            inputs_shape = inputs_shape[0]
+        if not isinstance(inputs_shape, tuple):
+            inputs_shape = (inputs_shape,)
+        if isinstance(inputs_shape[0], (tuple, list)):
+            inputs_shape = inputs_shape
+        else:
+            inputs_shape = [inputs_shape]
+        # Get single input shape.
+        inputs_shape = inputs_shape[0]
         inputs_shape = list(inputs_shape)
         inputs_shape[-1] = self.sequence_length
-        return tuple(inputs_shape)
+        return tuple(inputs_shape), tuple(inputs_shape)
