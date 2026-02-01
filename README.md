@@ -10,7 +10,7 @@
 **KerasHub** is a pretrained modeling library that aims to be simple, flexible,
 and fast. The library provides [Keras 3](https://keras.io/keras_3/)
 implementations of popular model architectures, paired with a collection of
-pretrained checkpoints available on [Kaggle Models](https://kaggle.com/models/).
+pretrained checkpoints available on [Kaggle Models](https://www.kaggle.com/organizations/keras/models).
 Models can be used with text, image, and audio data for generation, classification,
 and many other built in tasks.
 
