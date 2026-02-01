@@ -311,8 +311,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 tokens[: self.sequence_length] for tokens in batched_tokens
             ]
             # Pad sequences to `sequence_length`.
+            pad_token_id = getattr(self, "pad_token_id", 0)
             batched_tokens = [
-                tokens + [0] * (self.sequence_length - len(tokens))
+                tokens + [pad_token_id] * (self.sequence_length - len(tokens))
                 for tokens in batched_tokens
             ]
 

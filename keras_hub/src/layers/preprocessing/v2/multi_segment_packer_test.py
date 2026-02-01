@@ -359,3 +359,18 @@ class MultiSegmentPackerTest(TestCase):
         cloned_token_ids, cloned_segment_ids = cloned_packer((seq1, seq2))
         self.assertAllEqual(token_ids, cloned_token_ids)
         self.assertAllEqual(segment_ids, cloned_segment_ids)
+
+    def test_compute_output_shape(self):
+        input_data = np.arange(3, 10)
+        packer = MultiSegmentPacker(
+            sequence_length=8, start_value=1, end_value=2
+        )
+        output_shape = packer.compute_output_shape(input_data.shape)
+        self.assertEqual(output_shape[0], (8,))
+        self.assertEqual(output_shape[1], (8,))
+
+        output_shape = packer.compute_output_shape(
+            (input_data.shape, input_data.shape)
+        )
+        self.assertEqual(output_shape[0], (8,))
+        self.assertEqual(output_shape[1], (8,))
