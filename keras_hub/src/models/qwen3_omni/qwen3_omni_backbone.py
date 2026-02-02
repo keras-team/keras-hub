@@ -19,18 +19,27 @@ def _qwen3_omni_kernel_initializer(stddev=0.02):
 
 @keras_hub_export("keras_hub.models.Qwen3OmniBackbone")
 class Qwen3OmniBackbone(Backbone):
-    """Qwen3-Omni Thinker backbone with MoE architecture.
+    """Qwen3-Omni text backbone (Thinker text model component).
 
-    This backbone implements the Qwen3-Omni Thinker (comprehension) model,
-    which is a Mixture-of-Experts (MoE) based multimodal model supporting
-    text, audio, image, and video inputs.
+    This implements the core text transformer component from HuggingFace's
+    Qwen3-Omni architecture. In the full HuggingFace model hierarchy:
+
+    ```
+    Qwen3OmniMoeForConditionalGeneration (full multimodal model)
+    └── thinker: Qwen3OmniMoeThinkerForConditionalGeneration
+        ├── audio_tower: Audio encoder
+        ├── visual: Vision encoder
+        └── model: Qwen3OmniMoeThinkerTextModel ← This backbone
+    ```
+
+    **Important:** HuggingFace does not expose the text model as a standalone
+    class. This backbone corresponds to the `thinker.model` component of the
+    full `Qwen3OmniMoeForConditionalGeneration` model.
 
     The architecture consists of:
-    - Text embedding layer
-    - Optional audio encoder (Whisper-style for speech/sound processing)
-    - Optional vision encoder (ViT-style for image/video processing)
-    - Embedding interleaving for multimodal fusion
+    - Text embedding layer (152064 vocab, 2048 dim)
     - 48 MoE-based transformer decoder blocks
+    - Multimodal Rotary Position Embedding (M-RoPE)
     - RMSNorm output layer
 
     Model configuration (30B-A3B variant):
@@ -39,9 +48,10 @@ class Qwen3OmniBackbone(Backbone):
     - 2048 hidden dimension
     - 32 query heads, 4 key-value heads (GQA)
     - 128 head dimension
+    - M-RoPE section: [24, 20, 20] (text, temporal, spatial)
 
-    Note: This implements the Thinker component. The Talker (speech generation)
-    and Code2Wav components are separate models.
+    Note: Audio/vision encoders and the Talker component
+    are NOT included in this backbone.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.

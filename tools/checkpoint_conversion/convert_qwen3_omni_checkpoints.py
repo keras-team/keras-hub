@@ -122,29 +122,24 @@ def main(_):
     hf_preset = PRESET_MAP[preset]
 
     # === Load the Huggingface model ===
-    # Qwen3-Omni uses custom model class not in Auto classes
-    # TODO: update when transformers supports in Auto
-    # For now, bypass
-    from transformers import AutoConfig
+    # Qwen3-Omni architecture:
+    #   Qwen3OmniMoeForConditionalGeneration (full model)
+    #   └── thinker: Qwen3OmniMoeThinkerForConditionalGeneration
+    #       ├── audio_tower: Audio encoder
+    #       ├── visual: Vision encoder
+    #       └── model: Qwen3OmniMoeThinkerTextModel
+    # KerasHub Qwen3OmniBackbone corresponds to HF's thinker.model
+    # (text component only)
+    from transformers import AutoModelForMultimodalLM
 
-    # First load config to trigger download of custom modeling code
-    hf_config = AutoConfig.from_pretrained(
+    hf_full_model = AutoModelForMultimodalLM.from_pretrained(
         hf_preset,
-        trust_remote_code=True,
-    )
-
-    # Import the custom model class that was downloaded
-    from transformers.models.qwen3_omni_moe.modeling_qwen3_omni_moe import (
-        Qwen3OmniMoeForConditionalGeneration,
-    )
-
-    # Load model using the specific class
-    hf_model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(
-        hf_preset,
-        config=hf_config,
         device_map=device,
         trust_remote_code=True,
     )
+
+    # Extract the text model component
+    hf_model = hf_full_model.thinker.model
     hf_tokenizer = AutoTokenizer.from_pretrained(
         hf_preset,
         return_tensors="pt",
