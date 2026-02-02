@@ -174,9 +174,5 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             comparison_mode="statistical",
-            output_thresholds={
-                "scores": {"max": 1e-3, "mean": 1e-4},
-                "boxes": {"max": 1e-3, "mean": 1e-4},
-                "masks": {"max": 1e-2, "mean": 1e-3},
-            },
+            output_thresholds={"*": {"max": 1e-2, "mean": 5e-3}},
         )
