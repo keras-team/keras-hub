@@ -14,7 +14,6 @@ device = torch.device("cpu")
 torch.set_default_device(device)
 
 from keras import ops  # noqa: E402
-from transformers import AutoModelForCausalLM  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
 
 import keras_hub  # noqa: E402
@@ -123,7 +122,9 @@ def main(_):
     hf_preset = PRESET_MAP[preset]
 
     # === Load the Huggingface model ===
-    hf_model = AutoModelForCausalLM.from_pretrained(
+    from transformers import AutoModel
+
+    hf_model = AutoModel.from_pretrained(
         hf_preset,
         device_map=device,
         trust_remote_code=True,
