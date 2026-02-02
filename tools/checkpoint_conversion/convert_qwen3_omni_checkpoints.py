@@ -126,8 +126,13 @@ def main(_):
     hf_model = AutoModelForCausalLM.from_pretrained(
         hf_preset,
         device_map=device,
+        trust_remote_code=True,
     )
-    hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
+    hf_tokenizer = AutoTokenizer.from_pretrained(
+        hf_preset,
+        return_tensors="pt",
+        trust_remote_code=True,
+    )
     hf_model.eval()
 
     keras_hub_model = keras_hub.models.Qwen3OmniBackbone.from_preset(
