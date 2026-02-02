@@ -1,6 +1,7 @@
 """Qwen preset configurations."""
 
 backbone_presets = {
+    # Qwen 2.5 Models
     "qwen2.5_0.5b_en": {
         "metadata": {
             "description": ("24-layer Qwen model with 0.5 billion parameters."),
@@ -58,6 +59,7 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/qwen/keras/qwen2.5_instruct_72b_en/2",
     },
+    # Qwen 2.5 Coder Models
     "qwen2.5_coder_0.5b": {
         "metadata": {
             "description": (
@@ -212,6 +214,59 @@ backbone_presets = {
         },
         "kaggle_handle": (
             "kaggle://keras/qwen2-5-coder/keras/qwen2.5_coder_instruct_32b/1"
+        ),
+    },
+    # Qwen 2.5 Math Models
+    "qwen2.5_math_1.5b_en": {
+        "metadata": {
+            "description": (
+                " Math-focused Qwen-2.5 model with "
+                "1.5 billion parameters."
+            ),
+            "params": 1543714304,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-math/keras/qwen2.5_math_1.5b_en/1"
+        ),
+    },
+    "qwen2.5_math_instruct_1.5b_en": {
+        "metadata": {
+            "description": (
+                "Instruction-tuned math-focused Qwen-2.5 model with "
+                "1.5 billion parameters."
+            ),
+            "params": 1543714304,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-math/keras/qwen2.5_math_instruct_1.5b_en/1"
+        ),
+    },
+    "qwen2.5_math_7b_en": {
+        "metadata": {
+            "description": (
+                " Math-focused Qwen-2.5 model with "
+                "7 billion parameters."
+            ),
+            "params": 7615616512,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-math/keras/qwen2.5_math_7b_en/1"
+        ),
+    },
+    "qwen2.5_math_instruct_7b_en": {
+        "metadata": {
+            "description": (
+                "Instruction-tuned math-focused Qwen-2.5 model with "
+                "7 billion parameters."
+            ),
+            "params": 7615616512,
+            "path": "qwen",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/qwen2-5-math/keras/qwen2.5_math_instruct_7b_en/1"
         ),
     },
 }
