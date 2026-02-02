@@ -122,10 +122,26 @@ def main(_):
     hf_preset = PRESET_MAP[preset]
 
     # === Load the Huggingface model ===
-    from transformers import AutoModel
+    # Qwen3-Omni uses custom model class not in Auto classes
+    # TODO: update when transformers supports in Auto
+    # For now, bypass
+    from transformers import AutoConfig
 
-    hf_model = AutoModel.from_pretrained(
+    # First load config to trigger download of custom modeling code
+    hf_config = AutoConfig.from_pretrained(
         hf_preset,
+        trust_remote_code=True,
+    )
+
+    # Import the custom model class that was downloaded
+    from transformers.models.qwen3_omni_moe.modeling_qwen3_omni_moe import (
+        Qwen3OmniMoeForConditionalGeneration,
+    )
+
+    # Load model using the specific class
+    hf_model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(
+        hf_preset,
+        config=hf_config,
         device_map=device,
         trust_remote_code=True,
     )
