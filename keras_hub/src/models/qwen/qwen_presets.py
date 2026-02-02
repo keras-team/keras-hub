@@ -220,8 +220,7 @@ backbone_presets = {
     "qwen2.5_math_1.5b_en": {
         "metadata": {
             "description": (
-                " Math-focused Qwen-2.5 model with "
-                "1.5 billion parameters."
+                " Math-focused Qwen-2.5 model with 1.5 billion parameters."
             ),
             "params": 1543714304,
             "path": "qwen",
@@ -246,8 +245,7 @@ backbone_presets = {
     "qwen2.5_math_7b_en": {
         "metadata": {
             "description": (
-                " Math-focused Qwen-2.5 model with "
-                "7 billion parameters."
+                " Math-focused Qwen-2.5 model with 7 billion parameters."
             ),
             "params": 7615616512,
             "path": "qwen",

@@ -41,7 +41,7 @@ PRESET_MAP = {
     "qwen2.5_coder_instruct_14b": "Qwen/Qwen2.5-Coder-14B-Instruct",
     "qwen2.5_coder_instruct_32b": "Qwen/Qwen2.5-Coder-32B-Instruct",
     # Qwen 2.5 Math Models
-    "qwen2.5_math_1.5b_en":"Qwen/Qwen2.5-Math-1.5B",
+    "qwen2.5_math_1.5b_en": "Qwen/Qwen2.5-Math-1.5B",
     "qwen2.5_math_instruct_1.5b_en": "Qwen/Qwen2.5-Math-1.5B-Instruct",
     "qwen2.5_math_7b_en": "Qwen/Qwen2.5-Math-7B",
     "qwen2.5_math_instruct_7b_en": "Qwen/Qwen2.5-Math-7B-Instruct",
