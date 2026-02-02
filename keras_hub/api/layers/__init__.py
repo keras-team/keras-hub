@@ -138,6 +138,27 @@ from keras_hub.src.models.sam.sam_mask_decoder import (
 from keras_hub.src.models.sam.sam_prompt_encoder import (
     SAMPromptEncoder as SAMPromptEncoder,
 )
+from keras_hub.src.models.sam3.sam3_detr_decoder import (
+    SAM3DetrDecoder as SAM3DetrDecoder,
+)
+from keras_hub.src.models.sam3.sam3_detr_encoder import (
+    SAM3DetrEncoder as SAM3DetrEncoder,
+)
+from keras_hub.src.models.sam3.sam3_geometry_encoder import (
+    SAM3GeometryEncoder as SAM3GeometryEncoder,
+)
+from keras_hub.src.models.sam3.sam3_image_converter import (
+    SAM3ImageConverter as SAM3ImageConverter,
+)
+from keras_hub.src.models.sam3.sam3_mask_decoder import (
+    SAM3MaskDecoder as SAM3MaskDecoder,
+)
+from keras_hub.src.models.sam3.sam3_text_encoder import (
+    SAM3TextEncoder as SAM3TextEncoder,
+)
+from keras_hub.src.models.sam3.sam3_vision_encoder import (
+    SAM3VisionEncoder as SAM3VisionEncoder,
+)
 from keras_hub.src.models.segformer.segformer_image_converter import (
     SegFormerImageConverter as SegFormerImageConverter,
 )
