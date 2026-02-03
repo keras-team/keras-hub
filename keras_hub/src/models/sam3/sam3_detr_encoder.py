@@ -239,13 +239,15 @@ class SAM3DetrEncoder(layers.Layer):
     ):
         # Flatten multi-level features for encoder processing.
         batch_size = ops.shape(vision_features)[0]
+        hidden_dim = ops.shape(vision_features)[-1]
         features_flattened = ops.reshape(
-            vision_features, (batch_size, self.height * self.width, -1)
+            vision_features,
+            (batch_size, self.height * self.width, hidden_dim),
         )
         pos_embeds_flattened = ops.reshape(
-            vision_pos_embeds, (batch_size, self.height * self.width, -1)
+            vision_pos_embeds,
+            (batch_size, self.height * self.width, hidden_dim),
         )
-        spatial_shapes = ops.array([[self.height, self.width]], dtype="int32")
 
         prompt_cross_attn_masks = create_bidirectional_mask(
             features_flattened, text_masks
@@ -259,12 +261,7 @@ class SAM3DetrEncoder(layers.Layer):
                 prompt_cross_attn_masks=prompt_cross_attn_masks,
                 training=training,
             )
-        return (
-            hidden_states,
-            pos_embeds_flattened,
-            text_features,
-            spatial_shapes,
-        )
+        return hidden_states, pos_embeds_flattened
 
     def get_config(self):
         config = super().get_config()
@@ -293,10 +290,4 @@ class SAM3DetrEncoder(layers.Layer):
             vision_features_shape[1] * vision_features_shape[2],
             vision_features_shape[-1],
         ]
-        spatial_shape = [1, 2]
-        return (
-            features_flattened_shape,
-            features_flattened_shape,
-            text_features_shape,
-            spatial_shape,
-        )
+        return features_flattened_shape, features_flattened_shape
