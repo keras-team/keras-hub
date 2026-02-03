@@ -5,7 +5,7 @@ import numpy as np
 from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
-from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
+from keras_hub.src.models.gemma3.gemma3_layers import Gemma3RMSNormalization
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
@@ -102,7 +102,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         self.value_dense.build(inputs_shape)
 
         if self.use_query_key_norm:
-            self.query_norm = RMSNormalization(
+            self.query_norm = Gemma3RMSNormalization(
                 epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
                 name="query_norm",
@@ -111,7 +111,7 @@ class CachedGemma3Attention(keras.layers.Layer):
                 self.query_dense.compute_output_shape(inputs_shape)
             )
 
-            self.key_norm = RMSNormalization(
+            self.key_norm = Gemma3RMSNormalization(
                 epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
                 name="key_norm",
