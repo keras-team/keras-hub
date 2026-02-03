@@ -48,21 +48,23 @@ class Gemma3MeanPooling(keras.layers.Layer):
         super().__init__(**kwargs)
         self.supports_masking = True
 
-    def call(self, inputs):
+    def call(self, inputs, padding_mask=None):
         """Performs masked mean pooling on the token embeddings.
 
         Args:
-            inputs: A list or tuple of two tensors:
-                - sequence_output: The sequence of embeddings to pool, with a
-                  shape of `(batch_size, seq_len, hidden_dim)`.
-                - padding_mask: The mask indicating valid tokens, with a shape
-                  of `(batch_size, seq_len)`.
+            inputs: The sequence of embeddings to pool, with a shape of
+                `(batch_size, seq_len, hidden_dim)`.
+            padding_mask: The mask indicating valid tokens, with a shape of
+                `(batch_size, seq_len)`.
 
         Returns:
             A tensor representing the pooled embeddings, with a shape of
             `(batch_size, hidden_dim)`.
         """
-        sequence_output, padding_mask = inputs
+        if padding_mask is None:
+            inputs, padding_mask = inputs
+
+        sequence_output = inputs
         mask = ops.expand_dims(
             ops.cast(padding_mask, sequence_output.dtype), axis=-1
         )

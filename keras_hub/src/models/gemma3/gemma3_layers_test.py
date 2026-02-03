@@ -42,11 +42,9 @@ class Gemma3MeanPoolingTest(TestCase, parameterized.TestCase):
         )
 
         layer = Gemma3MeanPooling()
-        inputs = [
-            ops.convert_to_tensor(sequence_output),
-            ops.convert_to_tensor(padding_mask),
-        ]
-        actual_output = layer(inputs)
+        inputs = ops.convert_to_tensor(sequence_output)
+        padding_mask_tensor = ops.convert_to_tensor(padding_mask)
+        actual_output = layer(inputs, padding_mask=padding_mask_tensor)
 
         self.assertAllClose(actual_output, expected_output)
 
@@ -63,11 +61,9 @@ class Gemma3MeanPoolingTest(TestCase, parameterized.TestCase):
         expected_output_for_padded_seq = np.zeros(4, dtype="float32")
 
         layer = Gemma3MeanPooling()
-        inputs = [
-            ops.convert_to_tensor(sequence_output),
-            ops.convert_to_tensor(padding_mask),
-        ]
-        actual_output = layer(inputs)
+        inputs = ops.convert_to_tensor(sequence_output)
+        padding_mask_tensor = ops.convert_to_tensor(padding_mask)
+        actual_output = layer(inputs, padding_mask=padding_mask_tensor)
 
         self.assertAllClose(actual_output[1], expected_output_for_padded_seq)
 
@@ -82,11 +78,9 @@ class Gemma3MeanPoolingTest(TestCase, parameterized.TestCase):
         expected_output = np.array([[1.0, 2.0]], dtype=dtype)
 
         layer = Gemma3MeanPooling(dtype=dtype)
-        inputs = [
-            ops.convert_to_tensor(sequence_output),
-            ops.convert_to_tensor(padding_mask),
-        ]
-        actual_output = layer(inputs)
+        inputs = ops.convert_to_tensor(sequence_output)
+        padding_mask_tensor = ops.convert_to_tensor(padding_mask)
+        actual_output = layer(inputs, padding_mask=padding_mask_tensor)
 
         self.assertAllClose(actual_output, expected_output)
 

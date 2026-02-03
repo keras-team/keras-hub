@@ -344,7 +344,7 @@ class Gemma3Backbone(Backbone):
 
             # 1. Mask-aware Mean Pooling
             pooled_output = Gemma3MeanPooling(dtype=dtype, name="mean_pooling")(
-                [sequence_output, padding_mask_input]
+                sequence_output, padding_mask=padding_mask_input
             )
 
             # 2. First Projection (Non-linear or Linear depending on preset)
