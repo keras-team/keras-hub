@@ -31,7 +31,6 @@ PRESET_MAP = {
     "RWKV7_G1c_13B": "rwkv7-g1c-13.3b-20251231-ctx8192.pth",
 }
 
-
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
@@ -41,10 +40,6 @@ flags.DEFINE_string(
 # RWKV-v7 official PyTorch implementation
 # From https://github.com/BlinkDL/RWKV-LM/blob/main/RWKV-v7/rwkv_v7_demo.py
 HEAD_SIZE = 64
-D_DECAY_LORA = 64
-D_AAA_LORA = 64
-D_MV_LORA = 32
-D_GATE_LORA = 128
 
 
 def RWKV7_OP(r, w, k, v, a, b):
@@ -351,6 +346,11 @@ def convert_rwkv7_checkpoints(weights_path):
     weights = torch.load(weights_path, map_location="cpu")
     weights = {k: v.float().numpy() for k, v in weights.items()}
     w = weights
+    global D_DECAY_LORA, D_AAA_LORA, D_MV_LORA, D_GATE_LORA
+    D_DECAY_LORA = weights["blocks.0.att.w1"].shape[1]
+    D_AAA_LORA = weights["blocks.0.att.a1"].shape[1]
+    D_MV_LORA = weights["blocks.1.att.v1"].shape[1]
+    D_GATE_LORA = weights["blocks.1.att.g1"].shape[1]
     n_layer = 0
     for k in w.keys():
         layer_id = int(k.split(".")[1]) if ("blocks." in k) else 0
@@ -362,6 +362,10 @@ def convert_rwkv7_checkpoints(weights_path):
         "intermediate_dim": w["blocks.0.ffn.key.weight"].shape[0],
         "vocabulary_size": 65536,
         "head_size": 64,
+        "gate_lora": D_GATE_LORA,
+        "mv_lora": D_MV_LORA,
+        "aaa_lora": D_AAA_LORA,
+        "decay_lora": D_DECAY_LORA,
     }
     my_backbone = RWKV7Backbone(**config)
 
@@ -411,6 +415,7 @@ def main(_):
         repo_id="RWKV/rwkv7-g1",
         allow_patterns=source_model_name,
     )
+
     weights_path = os.path.join(download_path, source_model_name)
 
     # Convert to Keras format
