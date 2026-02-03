@@ -32,11 +32,10 @@ backbone_presets = {
     "qwen3_coder_instruct_30b_a3b_en": {
         "metadata": {
             "description": (
-                " Code-Specific Model,Mixture-of-Experts (MoE) "
-                "model has 30.5 billion total"
-                " parameters with 3.3 billion activated, built on 48 layers"
-                " and utilizes 32 query and 4 key/value attention heads"
-                " with 128 experts (8 active)."
+                "A Code-Specific Model,Mixture-of-Experts (MoE) model "
+                "has 30.5 billion total parameters with 3.3 billion "
+                "activated, built on 48 layers and utilizes 32 query "
+                "and 4 key/value attention heads with 128 experts (8 active)."
             ),
             "params": 30532122624,
             "path": "qwen3_moe",

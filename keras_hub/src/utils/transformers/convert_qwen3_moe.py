@@ -200,7 +200,7 @@ def convert_tokenizer(cls, preset, **kwargs):
     merges = tokenizer_config["model"]["merges"]
     # Check if merges are already strings or lists
     # If they are lists, join them into strings.
-    if isinstance(merges[0], list):
+    if merges and isinstance(merges[0], list):
         merges = [" ".join(item) for item in merges]
 
     # Load all special tokens with the exception of "reserved" ones.
