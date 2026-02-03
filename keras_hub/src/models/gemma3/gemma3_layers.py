@@ -87,13 +87,16 @@ class Gemma3MeanPooling(keras.layers.Layer):
         """Computes the output shape of the layer.
 
         Args:
-            input_shape: A tuple of input shapes.
+            input_shape: A tuple or list of tuples representing input shapes.
 
         Returns:
             A tuple representing the output shape.
         """
-        sequence_output_shape, _ = input_shape
-        return (sequence_output_shape[0], sequence_output_shape[2])
+        if isinstance(input_shape, list):
+            sequence_output_shape = input_shape[0]
+        else:
+            sequence_output_shape = input_shape
+        return sequence_output_shape[:-2] + (sequence_output_shape[-1],)
 
     def get_config(self):
         """Returns the config of the layer."""
