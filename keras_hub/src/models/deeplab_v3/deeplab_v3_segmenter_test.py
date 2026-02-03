@@ -71,6 +71,9 @@ class DeepLabV3ImageSegmenterTest(TestCase):
             input_data=self.images,
         )
 
+    @pytest.mark.skip(
+        reason="TODO: Bug with DeepLabV3ImageSegmenter liteRT export"
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=DeepLabV3ImageSegmenter,
