@@ -5,12 +5,10 @@ from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.models.gemma3.gemma3_decoder_block import Gemma3DecoderBlock
-from keras_hub.src.models.gemma3.gemma3_interleave_embeddings import (
-    Gemma3InterleaveEmbeddings,
-)
-from keras_hub.src.models.gemma3.gemma3_mean_pooling import MeanPooling
+from keras_hub.src.models.gemma3.gemma3_layers import Gemma3InterleaveEmbeddings
+from keras_hub.src.models.gemma3.gemma3_layers import Gemma3MeanPooling
+from keras_hub.src.models.gemma3.gemma3_layers import Gemma3RMSNormalization
 
 
 @keras_hub_export("keras_hub.models.Gemma3Backbone")
@@ -276,7 +274,7 @@ class Gemma3Backbone(Backbone):
                 name=f"decoder_block_{i}",
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = RMSNormalization(
+        self.layer_norm = Gemma3RMSNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="final_normalization",
@@ -345,7 +343,7 @@ class Gemma3Backbone(Backbone):
                 )
 
             # 1. Mask-aware Mean Pooling
-            pooled_output = MeanPooling(dtype=dtype, name="mean_pooling")(
+            pooled_output = Gemma3MeanPooling(dtype=dtype, name="mean_pooling")(
                 [sequence_output, padding_mask_input]
             )
 

@@ -1,12 +1,13 @@
 import numpy as np
 from absl.testing import parameterized
 from keras import ops
-from keras.src import testing
 
-from keras_hub.src.models.gemma3.gemma3_mean_pooling import MeanPooling
+from keras_hub.src.models.gemma3.gemma3_layers import Gemma3InterleaveEmbeddings
+from keras_hub.src.models.gemma3.gemma3_layers import Gemma3MeanPooling
+from keras_hub.src.tests.test_case import TestCase
 
 
-class MeanPoolingTest(testing.TestCase, parameterized.TestCase):
+class Gemma3MeanPoolingTest(TestCase, parameterized.TestCase):
     def test_basic_pooling_with_padding(self):
         """Tests if the pooling correctly averages non-padded tokens."""
         sequence_output = np.array(
@@ -40,7 +41,7 @@ class MeanPoolingTest(testing.TestCase, parameterized.TestCase):
             dtype="float32",
         )
 
-        layer = MeanPooling()
+        layer = Gemma3MeanPooling()
         inputs = [
             ops.convert_to_tensor(sequence_output),
             ops.convert_to_tensor(padding_mask),
@@ -61,7 +62,7 @@ class MeanPoolingTest(testing.TestCase, parameterized.TestCase):
         )
         expected_output_for_padded_seq = np.zeros(4, dtype="float32")
 
-        layer = MeanPooling()
+        layer = Gemma3MeanPooling()
         inputs = [
             ops.convert_to_tensor(sequence_output),
             ops.convert_to_tensor(padding_mask),
@@ -80,7 +81,7 @@ class MeanPoolingTest(testing.TestCase, parameterized.TestCase):
         padding_mask = np.array([[1, 0]], dtype="int32")
         expected_output = np.array([[1.0, 2.0]], dtype=dtype)
 
-        layer = MeanPooling(dtype=dtype)
+        layer = Gemma3MeanPooling(dtype=dtype)
         inputs = [
             ops.convert_to_tensor(sequence_output),
             ops.convert_to_tensor(padding_mask),
@@ -91,7 +92,7 @@ class MeanPoolingTest(testing.TestCase, parameterized.TestCase):
 
     def test_shape_computation(self):
         """Validates the compute_output_shape method."""
-        layer = MeanPooling()
+        layer = Gemma3MeanPooling()
         input_shape = [(2, 10, 16), (2, 10)]
         output_shape = layer.compute_output_shape(input_shape)
         expected_shape = (2, 16)
@@ -99,8 +100,73 @@ class MeanPoolingTest(testing.TestCase, parameterized.TestCase):
 
     def test_config_serialization(self):
         """Tests that the layer can be successfully saved and loaded."""
-        layer = MeanPooling(name="mean_pooling_test")
+        layer = Gemma3MeanPooling(name="mean_pooling_test")
         config = layer.get_config()
-        new_layer = MeanPooling.from_config(config)
+        new_layer = Gemma3MeanPooling.from_config(config)
         self.assertEqual(new_layer.name, layer.name)
-        self.assertIsInstance(new_layer, MeanPooling)
+        self.assertIsInstance(new_layer, Gemma3MeanPooling)
+
+
+class Gemma3InterleaveEmbeddingsTest(TestCase):
+    def setUp(self):
+        self.batch_size = 2
+        self.max_images_per_prompt = 3
+        self.num_vision_tokens_per_image = 2
+        self.embedding_dim = 4
+        self.seq_length = 10
+
+        self.image_embeddings = np.random.randn(
+            self.batch_size * self.max_images_per_prompt,
+            self.num_vision_tokens_per_image,
+            self.embedding_dim,
+        ).astype("float32")
+
+        self.text_embeddings = np.random.randn(
+            self.batch_size, self.seq_length, self.embedding_dim
+        ).astype("float32")
+
+        self.vision_indices = np.array(
+            [
+                [1, 2, 0, 0, 0, 0],  # just one image
+                [3, 4, 7, 8, 0, 0],  # two images
+            ]
+        )
+
+    def test_call(self):
+        reconstructed = Gemma3InterleaveEmbeddings(
+            num_vision_tokens_per_image=self.num_vision_tokens_per_image,
+        )(
+            self.image_embeddings,
+            self.text_embeddings,
+            self.vision_indices,
+        )
+
+        self.assertEqual(
+            ops.shape(reconstructed),
+            (self.batch_size, self.seq_length, self.embedding_dim),
+        )
+
+        # First, verify `index = 0` is not touched.
+        self.assertAllEqual(
+            reconstructed[:, 0, :], self.text_embeddings[:, 0, :]
+        )
+
+        # Verify interleaving.
+        self.assertAllEqual(
+            reconstructed[0, 1:3],
+            np.reshape(self.image_embeddings[0], (2, self.embedding_dim)),
+        )
+        self.assertAllEqual(
+            reconstructed[1, 3:5],
+            np.reshape(self.image_embeddings[3], (2, self.embedding_dim)),
+        )
+        self.assertAllEqual(
+            reconstructed[1, 7:9],
+            np.reshape(self.image_embeddings[4], (2, self.embedding_dim)),
+        )
+
+        # Verify everything else is unchanged.
+        self.assertAllEqual(reconstructed[0, 3:], self.text_embeddings[0, 3:])
+        self.assertAllEqual(reconstructed[1, 1:3], self.text_embeddings[1, 1:3])
+        self.assertAllEqual(reconstructed[1, 5:7], self.text_embeddings[1, 5:7])
+        self.assertAllEqual(reconstructed[1, 9:], self.text_embeddings[1, 9:])

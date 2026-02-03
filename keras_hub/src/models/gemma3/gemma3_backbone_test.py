@@ -121,7 +121,7 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
             run_quantization_check=False,
         )
 
-    def test_embedding_mode(self):
+    def test_embedding_model(self):
         embedding_dim = 16
         pooling_intermediate_dim = 32
         init_kwargs = self.text_init_kwargs.copy()
@@ -131,23 +131,18 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
         init_kwargs["embedding_dim"] = embedding_dim
         init_kwargs["pooling_intermediate_dim"] = pooling_intermediate_dim
 
-        model = Gemma3Backbone(**init_kwargs)
-        outputs = model(input_data)
-
-        self.assertIsInstance(outputs, dict)
-        self.assertIn("sequence_output", outputs)
-        self.assertIn("pooled_output", outputs)
-
-        expected_pooled_shape = (self.batch_size, embedding_dim)
-        self.assertEqual(outputs["pooled_output"].shape, expected_pooled_shape)
-
-        self.assertEqual(model.count_params(), 6520)
-        self.assertEqual(len(model.layers), 14)
-
-        self.run_model_saving_test(
+        self.run_backbone_test(
             cls=Gemma3Backbone,
             init_kwargs=init_kwargs,
             input_data=input_data,
+            expected_output_shape={
+                "sequence_output": (
+                    self.batch_size,
+                    self.text_sequence_length,
+                    8,
+                ),
+                "pooled_output": (self.batch_size, embedding_dim),
+            },
         )
 
     @parameterized.named_parameters(
