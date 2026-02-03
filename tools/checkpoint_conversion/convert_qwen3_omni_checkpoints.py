@@ -128,8 +128,7 @@ def main(_):
     #       ├── audio_tower: Audio encoder
     #       ├── visual: Vision encoder
     #       └── model: Qwen3OmniMoeThinkerTextModel
-    # KerasHub Qwen3OmniBackbone corresponds to HF's thinker.model
-    # (text component only)
+
     from transformers import AutoModelForMultimodalLM
 
     hf_full_model = AutoModelForMultimodalLM.from_pretrained(
@@ -138,8 +137,8 @@ def main(_):
         trust_remote_code=True,
     )
 
-    # Extract the text model component
-    hf_model = hf_full_model.thinker.model
+    # Use full Thinker model (includes audio/vision encoders)
+    hf_model = hf_full_model.thinker
     hf_tokenizer = AutoTokenizer.from_pretrained(
         hf_preset,
         return_tensors="pt",

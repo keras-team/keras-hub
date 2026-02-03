@@ -10,17 +10,24 @@ backbone_cls = Qwen3OmniBackbone
 
 
 def convert_backbone_config(transformers_config):
+    """Convert HuggingFace Qwen3-Omni config to KerasHub config.
+
+    Extracts nested configs from thinker_config:
+    - text_config: Text transformer params
+    - audio_config: Audio encoder params (optional)
+    - vision_config: Vision encoder params (optional)
+    """
     # Qwen3-Omni has nested config:
     # thinker_config.text_config contains the model params
-    text_config = transformers_config.get("thinker_config", {}).get(
-        "text_config", transformers_config
-    )
+    thinker_config = transformers_config.get("thinker_config", {})
+    text_config = thinker_config.get("text_config", transformers_config)
 
     # Extract mrope_section from rope_scaling dict (not top-level)
     rope_scaling = text_config.get("rope_scaling", {})
     mrope_section = rope_scaling.get("mrope_section", [24, 20, 20])
 
-    return {
+    backbone_config = {
+        # Text transformer params
         "vocabulary_size": text_config["vocab_size"],
         "hidden_dim": text_config["hidden_size"],
         "head_dim": text_config["head_dim"],
@@ -42,8 +49,278 @@ def convert_backbone_config(transformers_config):
         "tie_word_embeddings": text_config.get("tie_word_embeddings", False),
     }
 
+    # Audio encoder config (optional)
+    audio_config = thinker_config.get("audio_config")
+    if audio_config:
+        backbone_config["audio_config"] = {
+            "num_mel_bins": audio_config["num_mel_bins"],
+            "d_model": audio_config["d_model"],
+            "encoder_layers": audio_config["encoder_layers"],
+            "encoder_attention_heads": audio_config["encoder_attention_heads"],
+            "encoder_ffn_dim": audio_config["encoder_ffn_dim"],
+            "output_dim": audio_config["output_dim"],
+            "downsample_hidden_size": audio_config.get(
+                "downsample_hidden_size", 1536
+            ),
+            "max_source_positions": audio_config["max_source_positions"],
+            "scale_embedding": audio_config["scale_embedding"],
+            "activation_function": audio_config.get(
+                "activation_function", "gelu"
+            ),
+            "dropout": audio_config.get("dropout", 0.0),
+        }
+    else:
+        backbone_config["audio_config"] = None
+
+    # Vision encoder config (optional)
+    vision_config = thinker_config.get("vision_config")
+    if vision_config:
+        backbone_config["vision_config"] = {
+            "image_size": vision_config.get("image_size", 448),
+            "patch_size": vision_config["patch_size"],
+            "temporal_patch_size": vision_config["temporal_patch_size"],
+            "in_channels": vision_config["in_channels"],
+            "hidden_size": vision_config["hidden_size"],
+            "depth": vision_config["depth"],
+            "num_heads": vision_config["num_heads"],
+            "intermediate_size": vision_config["intermediate_size"],
+            "spatial_merge_size": vision_config["spatial_merge_size"],
+            "hidden_act": vision_config.get("hidden_act", "gelu_pytorch_tanh"),
+        }
+    else:
+        backbone_config["vision_config"] = None
+
+    return backbone_config
+
 
 def convert_weights(backbone, loader, transformers_config):
+    """Convert HF Thinker weights to KerasHub backbone.
+
+    HF structure:
+      thinker.audio_tower.* (audio encoder)
+      thinker.visual.* (vision encoder)
+      thinker.model.* (text transformer)
+    """
+
+    # === Audio Encoder Weights ===
+    if backbone.audio_encoder is not None:
+        audio_enc = backbone.audio_encoder
+
+        # Conv downsampling layers
+        def conv2d_transpose(x, _):
+            # PyTorch Conv2D: (out_channels, in_channels, H, W)
+            # Keras Conv2D: (H, W, in_channels, out_channels)
+            return np.transpose(x, (2, 3, 1, 0))
+
+        loader.port_weight(
+            keras_variable=audio_enc.conv1.kernel,
+            hf_weight_key="audio_tower.conv1.weight",
+            hook_fn=conv2d_transpose,
+        )
+        loader.port_weight(
+            keras_variable=audio_enc.conv1.bias,
+            hf_weight_key="audio_tower.conv1.bias",
+        )
+        loader.port_weight(
+            keras_variable=audio_enc.conv2.kernel,
+            hf_weight_key="audio_tower.conv2.weight",
+            hook_fn=conv2d_transpose,
+        )
+        loader.port_weight(
+            keras_variable=audio_enc.conv2.bias,
+            hf_weight_key="audio_tower.conv2.bias",
+        )
+
+        # Transformer encoder layers
+        for i in range(audio_enc.encoder_layers):
+            layer = audio_enc.layers[i]
+
+            # Self-attention
+            loader.port_weight(
+                keras_variable=layer.self_attn_layer_norm.scale,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.self_attn_layer_norm.weight",
+            )
+            loader.port_weight(
+                keras_variable=layer.self_attn_layer_norm.bias,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.self_attn_layer_norm.bias",
+            )
+
+            # Attention QKV projections
+            loader.port_weight(
+                keras_variable=layer.self_attn._query_dense.kernel,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.self_attn.q_proj.weight",
+                hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=layer.self_attn._query_dense.bias,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.self_attn.q_proj.bias",
+            )
+            loader.port_weight(
+                keras_variable=layer.self_attn._key_dense.kernel,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.self_attn.k_proj.weight",
+                hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=layer.self_attn._key_dense.bias,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.self_attn.k_proj.bias",
+            )
+            loader.port_weight(
+                keras_variable=layer.self_attn._value_dense.kernel,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.self_attn.v_proj.weight",
+                hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=layer.self_attn._value_dense.bias,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.self_attn.v_proj.bias",
+            )
+            loader.port_weight(
+                keras_variable=layer.self_attn._output_dense.kernel,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.self_attn.out_proj.weight",
+                hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=layer.self_attn._output_dense.bias,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.self_attn.out_proj.bias",
+            )
+
+            # Feed-forward
+            loader.port_weight(
+                keras_variable=layer.final_layer_norm.scale,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.final_layer_norm.weight",
+            )
+            loader.port_weight(
+                keras_variable=layer.final_layer_norm.bias,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.final_layer_norm.bias",
+            )
+            loader.port_weight(
+                keras_variable=layer.fc1.kernel,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.fc1.weight",
+                hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=layer.fc1.bias,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.fc1.bias",
+            )
+            loader.port_weight(
+                keras_variable=layer.fc2.kernel,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.fc2.weight",
+                hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=layer.fc2.bias,
+                hf_weight_key=f"audio_tower.encoder.layers.{i}.fc2.bias",
+            )
+
+        # Output projection
+        loader.port_weight(
+            keras_variable=audio_enc.output_proj.kernel,
+            hf_weight_key="audio_tower.proj.weight",
+            hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+        )
+
+    # === Vision Encoder Weights ===
+    if backbone.vision_encoder is not None:
+        vision_enc = backbone.vision_encoder
+
+        # Patch embedding (Conv3D)
+        def conv3d_transpose(x, _):
+            # PyTorch Conv3D: (out_channels, in_channels, D, H, W)
+            # Keras Conv3D: (D, H, W, in_channels, out_channels)
+            return np.transpose(x, (2, 3, 4, 1, 0))
+
+        loader.port_weight(
+            keras_variable=vision_enc.patch_embed.proj.kernel,
+            hf_weight_key="visual.patch_embed.proj.weight",
+            hook_fn=conv3d_transpose,
+        )
+
+        # Position embeddings
+        loader.port_weight(
+            keras_variable=vision_enc.position_embeddings,
+            hf_weight_key="visual.position_embeddings",
+        )
+
+        # Vision transformer blocks
+        for i in range(vision_enc.depth):
+            block = vision_enc.blocks[i]
+
+            # Layer norms
+            loader.port_weight(
+                keras_variable=block.norm1.scale,
+                hf_weight_key=f"visual.blocks.{i}.norm1.weight",
+            )
+            loader.port_weight(
+                keras_variable=block.norm1.bias,
+                hf_weight_key=f"visual.blocks.{i}.norm1.bias",
+            )
+            loader.port_weight(
+                keras_variable=block.norm2.scale,
+                hf_weight_key=f"visual.blocks.{i}.norm2.weight",
+            )
+            loader.port_weight(
+                keras_variable=block.norm2.bias,
+                hf_weight_key=f"visual.blocks.{i}.norm2.bias",
+            )
+
+            # Attention QKV
+            loader.port_weight(
+                keras_variable=block.attn._query_dense.kernel,
+                hf_weight_key=f"visual.blocks.{i}.attn.q_proj.weight",
+                hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=block.attn._query_dense.bias,
+                hf_weight_key=f"visual.blocks.{i}.attn.q_proj.bias",
+            )
+            loader.port_weight(
+                keras_variable=block.attn._key_dense.kernel,
+                hf_weight_key=f"visual.blocks.{i}.attn.k_proj.weight",
+                hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=block.attn._key_dense.bias,
+                hf_weight_key=f"visual.blocks.{i}.attn.k_proj.bias",
+            )
+            loader.port_weight(
+                keras_variable=block.attn._value_dense.kernel,
+                hf_weight_key=f"visual.blocks.{i}.attn.v_proj.weight",
+                hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=block.attn._value_dense.bias,
+                hf_weight_key=f"visual.blocks.{i}.attn.v_proj.bias",
+            )
+            loader.port_weight(
+                keras_variable=block.attn._output_dense.kernel,
+                hf_weight_key=f"visual.blocks.{i}.attn.out_proj.weight",
+                hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=block.attn._output_dense.bias,
+                hf_weight_key=f"visual.blocks.{i}.attn.out_proj.bias",
+            )
+
+            # MLP
+            loader.port_weight(
+                keras_variable=block.mlp.get_layer("mlp_fc1").kernel,
+                hf_weight_key=f"visual.blocks.{i}.mlp.fc1.weight",
+                hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=block.mlp.get_layer("mlp_fc1").bias,
+                hf_weight_key=f"visual.blocks.{i}.mlp.fc1.bias",
+            )
+            loader.port_weight(
+                keras_variable=block.mlp.get_layer("mlp_fc2").kernel,
+                hf_weight_key=f"visual.blocks.{i}.mlp.fc2.weight",
+                hook_fn=lambda x, _: np.transpose(x, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=block.mlp.get_layer("mlp_fc2").bias,
+                hf_weight_key=f"visual.blocks.{i}.mlp.fc2.bias",
+            )
+
+    # === Text Transformer Weights ===
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
         hf_weight_key="embed_tokens.weight",
