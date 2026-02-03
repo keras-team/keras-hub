@@ -81,7 +81,7 @@ class Gemma3MeanPooling(keras.layers.Layer):
         num_tokens = ops.maximum(num_tokens, 1e-9)
 
         mean_embeddings = sum_embeddings / num_tokens
-        return mean_embeddings
+        return ops.cast(mean_embeddings, sequence_output.dtype)
 
     def compute_output_shape(self, input_shape):
         """Computes the output shape of the layer.
