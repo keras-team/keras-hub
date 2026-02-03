@@ -365,7 +365,7 @@ class Gemma3Backbone(Backbone):
 
             # 4. L2 Normalization (Crucial for Retrieval)
             pooled_output = layers.UnitNormalization(
-                axis=-1, name="unit_normalization"
+                axis=-1, dtype=dtype, name="unit_normalization"
             )(pooled_output)
 
             outputs = {
