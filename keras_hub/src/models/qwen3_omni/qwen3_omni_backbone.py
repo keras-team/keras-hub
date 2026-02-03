@@ -7,8 +7,14 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
 )
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
+from keras_hub.src.models.qwen3_omni.qwen3_omni_audio_encoder import (
+    Qwen3OmniAudioEncoder,
+)
 from keras_hub.src.models.qwen3_omni.qwen3_omni_decoder import (
     Qwen3OmniTransformerDecoder,
+)
+from keras_hub.src.models.qwen3_omni.qwen3_omni_vision_encoder import (
+    Qwen3OmniVisionEncoder,
 )
 
 
@@ -85,8 +91,12 @@ class Qwen3OmniBackbone(Backbone):
             balancing. Defaults to 0.001.
         mlp_only_layers: list or None. Layer indices with dense FFN only.
             Defaults to None.
-        audio_encoder: Optional audio encoder instance. Defaults to None.
-        vision_encoder: Optional vision encoder instance. Defaults to None.
+        audio_config: dict or None. Audio encoder config dict matching
+            Qwen3OmniAudioEncoder params. If provided, audio encoder will be
+            instantiated. Defaults to None.
+        vision_config: dict or None. Vision encoder config dict matching
+            Qwen3OmniVisionEncoder params. If provided, vision encoder will be
+            instantiated. Defaults to None.
         dtype: string or DTypePolicy. Model dtype. Defaults to None.
 
     Examples:
@@ -144,8 +154,8 @@ class Qwen3OmniBackbone(Backbone):
         sliding_window_size=None,
         router_aux_loss_coefficient=0.001,
         mlp_only_layers=None,
-        audio_encoder=None,
-        vision_encoder=None,
+        audio_config=None,
+        vision_config=None,
         dtype=None,
         **kwargs,
     ):
@@ -160,13 +170,30 @@ class Qwen3OmniBackbone(Backbone):
         )
 
         # === Multimodal Encoders (Optional) ===
-        self.audio_encoder = audio_encoder
-        self.vision_encoder = vision_encoder
+        self.audio_config = audio_config
+        self.vision_config = vision_config
+
+        if audio_config:
+            self.audio_encoder = Qwen3OmniAudioEncoder(
+                dtype=dtype,
+                name="audio_encoder",
+                **audio_config,
+            )
+        else:
+            self.audio_encoder = None
+
+        if vision_config:
+            self.vision_encoder = Qwen3OmniVisionEncoder(
+                dtype=dtype,
+                name="vision_encoder",
+                **vision_config,
+            )
+        else:
+            self.vision_encoder = None
 
         # TODO: Implement multimodal embedding interleaving
-        # When audio/vision encoders are provided, embeddings need
-        # to be interleaved
-        # with text embeddings based on special tokens and masks.
+        # When audio/vision encoders are provided, embeddings need to be
+        # interleaved with text embeddings based on special tokens/masks.
 
         # === MoE Transformer Decoder Layers ===
         if not mlp_only_layers:
@@ -308,29 +335,8 @@ class Qwen3OmniBackbone(Backbone):
                 "dropout": self.dropout,
                 "tie_word_embeddings": self.tie_word_embeddings,
                 "sliding_window_size": self.sliding_window_size,
-                "audio_encoder": keras.layers.serialize(self.audio_encoder)
-                if self.audio_encoder
-                else None,
-                "vision_encoder": keras.layers.serialize(self.vision_encoder)
-                if self.vision_encoder
-                else None,
+                "audio_config": self.audio_config,
+                "vision_config": self.vision_config,
             }
         )
         return config
-
-    @classmethod
-    def from_config(cls, config):
-        """Deserialize model config, including audio and vision encoders."""
-        audio_encoder = config.pop("audio_encoder", None)
-        vision_encoder = config.pop("vision_encoder", None)
-
-        if audio_encoder is not None:
-            audio_encoder = keras.layers.deserialize(audio_encoder)
-        if vision_encoder is not None:
-            vision_encoder = keras.layers.deserialize(vision_encoder)
-
-        return cls(
-            **config,
-            audio_encoder=audio_encoder,
-            vision_encoder=vision_encoder,
-        )

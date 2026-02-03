@@ -150,13 +150,91 @@ class Qwen3OmniBackboneTest(TestCase):
     def test_multimodal_encoders_none(self):
         """Test model works without multimodal encoders (text-only mode)."""
         init_kwargs = self.init_kwargs.copy()
-        init_kwargs["audio_encoder"] = None
-        init_kwargs["vision_encoder"] = None
+        init_kwargs["audio_config"] = None
+        init_kwargs["vision_config"] = None
         model = Qwen3OmniBackbone(**init_kwargs)
 
         # Text-only forward pass should work
         output = model(self.input_data)
         self.assertEqual(ops.shape(output), (2, 8, 64))
+
+        # Verify encoders are None
+        self.assertIsNone(model.audio_encoder)
+        self.assertIsNone(model.vision_encoder)
+
+    def test_audio_encoder_integration(self):
+        """Test backbone instantiates audio encoder from config."""
+        init_kwargs = self.init_kwargs.copy()
+        init_kwargs["audio_config"] = {
+            "num_mel_bins": 128,
+            "d_model": 256,
+            "encoder_layers": 2,
+            "encoder_attention_heads": 4,
+            "encoder_ffn_dim": 512,
+            "output_dim": 64,
+            "max_source_positions": 1500,
+            "scale_embedding": False,
+            "activation_function": "gelu",
+            "dropout": 0.0,
+        }
+        model = Qwen3OmniBackbone(**init_kwargs)
+
+        # Verify audio encoder was created
+        self.assertIsNotNone(model.audio_encoder)
+        self.assertEqual(model.audio_encoder.d_model, 256)
+        self.assertEqual(model.audio_encoder.encoder_layers, 2)
+
+    def test_vision_encoder_integration(self):
+        """Test backbone instantiates vision encoder from config."""
+        init_kwargs = self.init_kwargs.copy()
+        init_kwargs["vision_config"] = {
+            "image_size": 224,
+            "patch_size": 14,
+            "temporal_patch_size": 2,
+            "in_channels": 3,
+            "hidden_size": 256,
+            "depth": 2,
+            "num_heads": 4,
+            "intermediate_size": 512,
+            "spatial_merge_size": 2,
+            "hidden_act": "gelu_pytorch_tanh",
+        }
+        model = Qwen3OmniBackbone(**init_kwargs)
+
+        # Verify vision encoder was created
+        self.assertIsNotNone(model.vision_encoder)
+        self.assertEqual(model.vision_encoder.hidden_size, 256)
+        self.assertEqual(model.vision_encoder.depth, 2)
+
+    def test_multimodal_config_serialization(self):
+        """Test encoder configs are serialized in backbone config."""
+        init_kwargs = self.init_kwargs.copy()
+        init_kwargs["audio_config"] = {
+            "num_mel_bins": 128,
+            "d_model": 256,
+            "encoder_layers": 2,
+            "encoder_attention_heads": 4,
+            "encoder_ffn_dim": 512,
+            "output_dim": 64,
+            "max_source_positions": 1500,
+            "scale_embedding": False,
+        }
+        init_kwargs["vision_config"] = {
+            "image_size": 224,
+            "patch_size": 14,
+            "hidden_size": 256,
+            "depth": 2,
+        }
+        model = Qwen3OmniBackbone(**init_kwargs)
+        config = model.get_config()
+
+        # Verify encoder configs are in serialized config
+        self.assertIn("audio_config", config)
+        self.assertIn("vision_config", config)
+        self.assertIsNotNone(config["audio_config"])
+        self.assertIsNotNone(config["vision_config"])
+        self.assertEqual(config["audio_config"]["d_model"], 256)
+        self.assertEqual(config["vision_config"]["hidden_size"], 256)
 
     def test_different_batch_sizes(self):
         """Test model works with different batch sizes."""
