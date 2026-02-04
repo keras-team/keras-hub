@@ -597,6 +597,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         ) < packaging.version.Version("3.13.0"):
             self.skipTest("LiteRT export requires Keras >= 3.13")
 
+        self.skipTest(
+            "#TODO: Re-enable LiteRT tests after a new tensorflow release. "
+            "Can't test with tf 2.20 due to tf.lite module deprecation."
+        )
+
         # Extract comparison_mode from export_kwargs if provided
         comparison_mode = export_kwargs.pop("comparison_mode", "strict")
         if keras.backend.backend() != "tensorflow":
