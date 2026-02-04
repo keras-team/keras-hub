@@ -20,8 +20,11 @@ from transformers import AutoTokenizer  # noqa: E402
 import keras_hub  # noqa: E402
 
 PRESET_MAP = {
+    # Qwen-3 MoE Models
     "qwen3_moe_30b_a3b_en": "Qwen/Qwen3-30B-A3B",
     "qwen3_moe_235b_a22b_en": "Qwen/Qwen3-235B-A22B",
+    # Qwen-3 Coder MoE Models
+    "qwen3_coder_instruct_30b_a3b_en": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
 }
 
 FLAGS = flags.FLAGS
