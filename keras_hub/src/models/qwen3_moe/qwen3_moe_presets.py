@@ -1,6 +1,7 @@
 """Qwen3 MoE model preset configurations."""
 
 backbone_presets = {
+    #  Qwen-3 MoE Models
     "qwen3_moe_30b_a3b_en": {
         "metadata": {
             "description": (
@@ -26,5 +27,19 @@ backbone_presets = {
             "path": "qwen3_moe",
         },
         "kaggle_handle": "kaggle://keras/qwen-3-moe/keras/qwen3_moe_235b_a22b_en/1",
+    },
+    # Qwen-3 Coder MoE Models
+    "qwen3_coder_instruct_30b_a3b_en": {
+        "metadata": {
+            "description": (
+                "A Code-Specific Model,Mixture-of-Experts (MoE) model "
+                "has 30.5 billion total parameters with 3.3 billion "
+                "activated, built on 48 layers and utilizes 32 query "
+                "and 4 key/value attention heads with 128 experts (8 active)."
+            ),
+            "params": 30532122624,
+            "path": "qwen3_moe",
+        },
+        "kaggle_handle": "kaggle://keras/qwen3-coder/keras/qwen3_coder_instruct_30b_a3b_en/1",
     },
 }
