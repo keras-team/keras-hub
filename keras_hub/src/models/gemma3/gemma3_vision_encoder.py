@@ -2,7 +2,7 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.gemma3.gemma3_layers import Gemma3RMSNormalization
+from keras_hub.src.models.gemma3.gemma3_layers import RMSNormalization
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -582,7 +582,7 @@ class Gemma3VisionOutput(keras.layers.Layer):
         )
 
     def build(self, input_shape):
-        self.vision_soft_embedding_norm = Gemma3RMSNormalization(
+        self.vision_soft_embedding_norm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="vision_soft_embedding_norm",

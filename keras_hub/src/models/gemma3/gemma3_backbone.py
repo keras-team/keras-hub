@@ -8,7 +8,7 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.gemma3.gemma3_decoder_block import Gemma3DecoderBlock
 from keras_hub.src.models.gemma3.gemma3_layers import Gemma3InterleaveEmbeddings
 from keras_hub.src.models.gemma3.gemma3_layers import Gemma3MeanPooling
-from keras_hub.src.models.gemma3.gemma3_layers import Gemma3RMSNormalization
+from keras_hub.src.models.gemma3.gemma3_layers import RMSNormalization
 
 
 @keras_hub_export("keras_hub.models.Gemma3Backbone")
@@ -274,7 +274,7 @@ class Gemma3Backbone(Backbone):
                 name=f"decoder_block_{i}",
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = Gemma3RMSNormalization(
+        self.layer_norm = RMSNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="final_normalization",

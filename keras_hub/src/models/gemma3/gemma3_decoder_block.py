@@ -8,7 +8,7 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
 from keras_hub.src.models.gemma3.gemma3_attention import CachedGemma3Attention
-from keras_hub.src.models.gemma3.gemma3_layers import Gemma3RMSNormalization
+from keras_hub.src.models.gemma3.gemma3_layers import RMSNormalization
 
 
 class Gemma3DecoderBlock(keras.layers.Layer):
@@ -70,14 +70,14 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         self.use_bidirectional_attention = use_bidirectional_attention
         self.dropout = dropout
 
-        self.pre_attention_norm = Gemma3RMSNormalization(
+        self.pre_attention_norm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="pre_attention_norm",
         )
 
         if use_post_attention_norm:
-            self.post_attention_norm = Gemma3RMSNormalization(
+            self.post_attention_norm = RMSNormalization(
                 epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
                 name="post_attention_norm",
@@ -104,14 +104,14 @@ class Gemma3DecoderBlock(keras.layers.Layer):
             self.attention_dropout = keras.layers.Dropout(rate=dropout)
             self.feedforward_dropout = keras.layers.Dropout(rate=dropout)
 
-        self.pre_ffw_norm = Gemma3RMSNormalization(
+        self.pre_ffw_norm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="pre_ffw_norm",
         )
 
         if use_post_ffw_norm:
-            self.post_ffw_norm = Gemma3RMSNormalization(
+            self.post_ffw_norm = RMSNormalization(
                 epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
                 name="post_ffw_norm",

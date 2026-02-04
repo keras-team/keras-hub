@@ -2,7 +2,7 @@ import keras
 from keras import ops
 
 
-class Gemma3RMSNormalization(keras.layers.Layer):
+class RMSNormalization(keras.layers.Layer):
     def __init__(self, epsilon=1e-6, **kwargs):
         super().__init__(**kwargs)
         self.epsilon = epsilon
