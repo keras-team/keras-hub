@@ -598,8 +598,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             self.skipTest("LiteRT export requires Keras >= 3.13")
 
         self.skipTest(
-            "#TODO: Re-enable LiteRT tests after a new tensorflow release. "
-            "Can't test with tf 2.20 due to tf.lite module deprecation."
+            "#TODO: [issue #2572] Re-enable LiteRT tests after a new tf release."
+            " Can't test with tf 2.20 due to tf.lite module deprecation."
         )
 
         # Extract comparison_mode from export_kwargs if provided
