@@ -22,9 +22,11 @@ from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
-    import tensorflow_text as tf_text
 except ImportError:
     tf = None
+try:
+    import tensorflow_text as tf_text
+except ImportError:
     tf_text = None
 
 VOCAB_FILENAME = "vocabulary.json"
@@ -136,7 +138,13 @@ def split_strings_for_bpe(inputs, unsplittable_tokens=None):
     return remove_strings_from_inputs(raw_tokens, "६")
 
 
-class BytePairTokenizerCache(tf.Module if tf is not None else object):
+try:
+    _base_class = tf.Module
+except (AttributeError, TypeError):
+    _base_class = object
+
+
+class BytePairTokenizerCache(_base_class):
     """Cache that stores the encoded result of seen tokens.
 
     The cache key is string tensor or python strings, and the value is split
