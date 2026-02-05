@@ -37,6 +37,7 @@ def convert_backbone_config(transformers_config):
     else:
         vision_config = transformers_config["vision_config"]
         image_size = vision_config["image_size"]
+        transformer_config = transformers_config["text_config"]
         vision_encoder_config = {
             "image_size": image_size,
             "patch_size": vision_config["patch_size"],
@@ -44,12 +45,11 @@ def convert_backbone_config(transformers_config):
             "hidden_dim": vision_config["hidden_size"],
             "num_layers": vision_config["num_hidden_layers"],
             "intermediate_dim": vision_config["intermediate_size"],
-            "output_dim": 2560,
+            "output_dim": transformer_config["hidden_size"],
             "pool_size": 4,
             "layer_norm_epsilon": vision_config.get("layer_norm_eps", 1e-6),
         }
         vision_encoder = Gemma3VisionEncoder(**vision_encoder_config)
-        transformer_config = transformers_config["text_config"]
 
     # Extract rope parameters. HuggingFace uses `rope_scaling` for the
     # global rotary embedding. `rope_parameters` is optional and not used
