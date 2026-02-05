@@ -78,7 +78,10 @@ def test_model(
     hf_outputs = hf_model(**hf_inputs)
     hf_output_logits = hf_outputs.logits.detach().cpu().float().numpy()
 
-    keras_hub_output = keras_hub_model(keras_hub_inputs)
+    keras_hub_output = keras_hub_model(
+        keras_hub_inputs["token_ids"],
+        padding_mask=keras_hub_inputs["padding_mask"],
+    )
     keras_hub_logits = keras_hub_model.token_embedding(
         keras_hub_output, reverse=True
     )
