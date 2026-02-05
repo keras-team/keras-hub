@@ -250,11 +250,21 @@ class Gemma3CausalLM(CausalLM):
             inputs.get("vision_indices", None),
         )
 
+        # Determine if we have actual images to process.
+        # After preprocessing, images shape is (batch, num_images, h, w, 3).
+        # For text-only input, num_images=0 (static shape).
+        # We use static shape check which returns a Python int, not a tensor.
+        num_images = 0
         if (
-            not self.backbone.text_only_model
-            and images is not None
-            and ops.size(images) > 0
+            images is not None
+            and hasattr(images, "shape")
+            and len(images.shape) > 1
         ):
+            num_images = images.shape[
+                1
+            ]  # Static shape, returns Python int or None
+
+        if not self.backbone.text_only_model and num_images:
             # Handle an unbatched image. Unlike `token_ids` and
             # `padding_mask`, this will not automatically be upranked.
             if len(ops.shape(images)) == 4:
