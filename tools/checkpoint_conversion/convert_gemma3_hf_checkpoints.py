@@ -215,6 +215,8 @@ def main(_):
     if hasattr(hf_config, "text_config"):
         text_config = hf_config.text_config
         print(f"  Model type: {hf_config.model_type}")
+        vocab_size = getattr(text_config, "vocab_size", None)
+        print(f"  text_config.vocab_size: {vocab_size}")
         print(f"  text_config.hidden_size: {text_config.hidden_size}")
         nh_layers = text_config.num_hidden_layers
         print(f"  text_config.num_hidden_layers: {nh_layers}")
@@ -226,6 +228,18 @@ def main(_):
         print(
             f"  text_config.intermediate_size: {text_config.intermediate_size}"
         )
+        use_qk_norm = getattr(text_config, "use_query_key_norm", None)
+        print(f"  text_config.use_query_key_norm: {use_qk_norm}")
+        use_post_ffw = getattr(text_config, "use_post_ffw_norm", None)
+        print(f"  text_config.use_post_ffw_norm: {use_post_ffw}")
+        use_post_attn = getattr(text_config, "use_post_attention_norm", None)
+        print(f"  text_config.use_post_attention_norm: {use_post_attn}")
+        use_bi = getattr(text_config, "use_bidirectional_attention", None)
+        print(f"  text_config.use_bidirectional_attention: {use_bi}")
+        attn_cap = getattr(text_config, "attn_logit_softcapping", None)
+        print(f"  text_config.attn_logit_softcapping: {attn_cap}")
+        final_cap = getattr(text_config, "final_logit_softcapping", None)
+        print(f"  text_config.final_logit_softcapping: {final_cap}")
         sliding_w = getattr(text_config, "sliding_window", None)
         print(f"  text_config.sliding_window: {sliding_w}")
         q_scalar = getattr(text_config, "query_pre_attn_scalar", None)
@@ -238,6 +252,8 @@ def main(_):
         print(f"  text_config.rope_theta: {r_theta}")
         r_local = getattr(text_config, "rope_local_base_freq", None)
         print(f"  text_config.rope_local_base_freq: {r_local}")
+        layer_types = getattr(text_config, "layer_types", None)
+        print(f"  text_config.layer_types: {layer_types}")
     if hasattr(hf_config, "vision_config") and hf_config.vision_config:
         vision_config = hf_config.vision_config
         vh_size = vision_config.hidden_size
