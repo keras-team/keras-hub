@@ -250,9 +250,21 @@ class Gemma3CausalLM(CausalLM):
             inputs.get("vision_indices", None),
         )
 
-        # Only process images for vision models when vision_mask indicates
-        # actual image tokens exist
-        if not self.backbone.text_only_model and vision_mask is not None:
+        # Determine if we have actual images to process.
+        # After preprocessing, images shape is (batch, num_images, h, w, 3).
+        # For text-only input, num_images=0 (static shape).
+        # We use static shape check which returns a Python int, not a tensor.
+        num_images = 0
+        if (
+            images is not None
+            and hasattr(images, "shape")
+            and len(images.shape) > 1
+        ):
+            num_images = images.shape[
+                1
+            ]  # Static shape, returns Python int or None
+
+        if not self.backbone.text_only_model and num_images:
             # Handle an unbatched image. Unlike `token_ids` and
             # `padding_mask`, this will not automatically be upranked.
             if len(ops.shape(images)) == 4:
@@ -261,23 +273,7 @@ class Gemma3CausalLM(CausalLM):
                 vision_mask = ops.expand_dims(vision_mask, axis=0)
             if len(ops.shape(vision_indices)) == 1:
                 vision_indices = ops.expand_dims(vision_indices, axis=0)
-
-            # Check number of images (second dimension after preprocessing)
-            num_images = ops.shape(images)[1]
-
-            def _encode_images():
-                return self.backbone.vision_encoder(images)
-
-            def _no_images():
-                batch_size = ops.shape(token_ids)[0]
-                return ops.zeros(
-                    (batch_size, 0, self.backbone.hidden_dim),
-                    dtype=self.compute_dtype,
-                )
-
-            img_embeddings = ops.cond(
-                num_images > 0, _encode_images, _no_images
-            )
+            img_embeddings = self.backbone.vision_encoder(images)
         else:
             img_embeddings = None
             vision_mask = None
