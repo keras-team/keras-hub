@@ -8,7 +8,7 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
 from keras_hub.src.models.gemma3.gemma3_attention import CachedGemma3Attention
-from keras_hub.src.models.gemma3.rms_normalization import RMSNormalization
+from keras_hub.src.models.gemma3.gemma3_layers import RMSNormalization
 
 
 class Gemma3DecoderBlock(keras.layers.Layer):

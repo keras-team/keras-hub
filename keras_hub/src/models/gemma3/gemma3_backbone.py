@@ -1,14 +1,14 @@
 import keras
+from keras import layers
 from keras import ops
 from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
 from keras_hub.src.models.gemma3.gemma3_decoder_block import Gemma3DecoderBlock
-from keras_hub.src.models.gemma3.gemma3_interleave_embeddings import (
-    Gemma3InterleaveEmbeddings,
-)
+from keras_hub.src.models.gemma3.gemma3_layers import Gemma3InterleaveEmbeddings
+from keras_hub.src.models.gemma3.gemma3_layers import Gemma3MeanPooling
+from keras_hub.src.models.gemma3.gemma3_layers import RMSNormalization
 
 
 @keras_hub_export("keras_hub.models.Gemma3Backbone")
@@ -24,6 +24,11 @@ class Gemma3Backbone(Backbone):
 
     For a higher-level object for text-generation, see
     `keras_hub.models.Gemma3CausalLM`.
+
+    This backbone can also function as an end-to-end embedding model by
+    setting the `is_embedding_model` argument to `True`. When configured as an
+    embedding model with bi-directional attention, it matches the
+    `EmbeddingGemma` architecture.
 
     The default constructor gives a fully customizable, randomly initialized
     Gemma3 model with any vision encoder, number of heads, embedding dimensions,
@@ -68,6 +73,17 @@ class Gemma3Backbone(Backbone):
             in all transformer blocks. Defaults to `1e-6`.
         dropout: float. Dropout probability for the Transformer decoder blocks.
             Defaults to `0`.
+        is_embedding_model (bool, optional): If `True`, the model will function
+            as an embedding model. This adds mean pooling layer and a two-layer
+            dense projection head to the final sequence output. The model output
+            will be a dictionary containing `'sequence_output'` and
+            `'pooled_output'`. Defaults to `False`.
+        pooling_intermediate_dim (int, optional): The intermediate dimension of
+            the first dense layer in the two-layer pooling projection head.
+            Required if `is_embedding_model` is `True`. Defaults to `None`.
+        embedding_dim (int, optional): The dimension of the final projected
+            embedding. Required if `is_embedding_model` is `True`. Defaults to
+            `None`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
@@ -196,6 +212,9 @@ class Gemma3Backbone(Backbone):
         layer_norm_epsilon=1e-6,
         use_bidirectional_attention=False,
         dropout=0,
+        is_embedding_model=False,
+        pooling_intermediate_dim=None,
+        embedding_dim=None,
         dtype=None,
         **kwargs,
     ):
@@ -317,6 +336,45 @@ class Gemma3Backbone(Backbone):
             )
         sequence_output = self.layer_norm(x)
 
+        if is_embedding_model:
+            if embedding_dim is None or pooling_intermediate_dim is None:
+                raise ValueError(
+                    "Must specify embedding_dim and pooling_intermediate_dim."
+                )
+
+            # 1. Mask-aware Mean Pooling
+            pooled_output = Gemma3MeanPooling(dtype=dtype, name="mean_pooling")(
+                sequence_output, padding_mask=padding_mask_input
+            )
+
+            # 2. First Projection (Non-linear or Linear depending on preset)
+            pooled_output = layers.Dense(
+                pooling_intermediate_dim,
+                dtype=dtype,
+                name="pooling_dense_1",
+                use_bias=False,
+            )(pooled_output)
+
+            # 3. Final Projection
+            pooled_output = layers.Dense(
+                embedding_dim,
+                dtype=dtype,
+                name="embedding_projection",
+                use_bias=False,
+            )(pooled_output)
+
+            # 4. L2 Normalization (Crucial for Retrieval)
+            pooled_output = layers.UnitNormalization(
+                axis=-1, dtype=dtype, name="unit_normalization"
+            )(pooled_output)
+
+            outputs = {
+                "sequence_output": sequence_output,
+                "pooled_output": pooled_output,
+            }
+        else:
+            outputs = sequence_output
+
         inputs = {
             "token_ids": token_id_input,
             "padding_mask": padding_mask_input,
@@ -332,7 +390,7 @@ class Gemma3Backbone(Backbone):
 
         super().__init__(
             inputs=inputs,
-            outputs=sequence_output,
+            outputs=outputs,
             dtype=dtype,
             **kwargs,
         )
@@ -359,6 +417,9 @@ class Gemma3Backbone(Backbone):
         self.use_bidirectional_attention = use_bidirectional_attention
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
+        self.is_embedding_model = is_embedding_model
+        self.pooling_intermediate_dim = pooling_intermediate_dim
+        self.embedding_dim = embedding_dim
 
         # Keep `num_vision_tokens_per_image` as a backbone property for easy
         # access.
@@ -399,6 +460,9 @@ class Gemma3Backbone(Backbone):
                 "use_bidirectional_attention": self.use_bidirectional_attention,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
+                "is_embedding_model": self.is_embedding_model,
+                "pooling_intermediate_dim": self.pooling_intermediate_dim,
+                "embedding_dim": self.embedding_dim,
             }
         )
         return config
