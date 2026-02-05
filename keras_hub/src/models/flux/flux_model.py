@@ -35,7 +35,16 @@ class FluxBackbone(Backbone):
         use_bias: bool. Whether to apply bias to the query, key, and value
             projections.
         guidance_embed: bool. If True, applies guidance embedding in the model.
-
+        image_shape: tuple[int]. Shape of the image input tensor. Defaults to
+            [(None, 768, 3072)].
+        text_shape: tuple[int]. Shape of the text input tensor. Defaults to
+            [(None, 768, 3072)].
+        image_ids_shape: tuple[int]. Shape of the image IDs input tensor.
+            Defaults to [(None, 768, 3072)].
+        text_ids_shape: tuple[int]. Shape of the text IDs input tensor.
+            Defaults to [(None, 768, 3072)].
+        y_shape: tuple[int]. Shape of the additional vector input tensor.
+            Defaults to `(None, 128)`.
     Call arguments:
         image: KerasTensor. Image input tensor of shape (N, L, D) where N is the
             batch size, L is the sequence length, and D is the feature

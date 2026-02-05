@@ -55,7 +55,7 @@ class PaliGemmaBackbone(Backbone):
             in a two-layer feedforward network for vision transformer. Defaults
             to `4304`.
         vit_pooling: `None` or string. The encoded vision embeddings are pooled
-            using the specified polling setting. The accepted values are
+            using the specified pooling setting. The accepted values are
             `"map"`, `"gap"`, `"0"` or `None`. Defaults to `None`.
         vit_classifier_activation: activation function. The activation that
             is used for final output classification in the vision transformer.
@@ -76,14 +76,14 @@ class PaliGemmaBackbone(Backbone):
           window attention. Defaults to `False`.
         sliding_window_size: int. Size of the sliding local window. Defaults to
             `4096`.
-        layer_norm_epsilon: float. The epsilon value user for every layer norm
+        layer_norm_epsilon: float. The epsilon value used for every layer norm
             in all transformer blocks. Defaults to `1e-6`.
         dropout: float. Dropout probability for the Transformer decoder blocks.
             Defaults to `0`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
-            be done a float32 precision regardless of dtype.
+            be done in float32 precision regardless of dtype.
 
     Example:
     ```python
@@ -100,7 +100,7 @@ class PaliGemmaBackbone(Backbone):
     # Randomly initialized PaliGemma decoder with custom config.
     model = keras_hub.models.PaliGemmaBackbone(
         vocabulary_size=50257,
-        images_size=224,
+        image_size=224,
         num_layers=12,
         num_query_heads=12,
         num_key_value_heads=1,

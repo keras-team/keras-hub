@@ -41,7 +41,7 @@ class SigLIPVisionEncoder(Backbone):
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
-            be done a float32 precision regardless of dtype.
+            be done in float32 precision regardless of dtype.
     """
 
     def __init__(
