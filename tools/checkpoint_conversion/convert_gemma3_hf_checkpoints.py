@@ -1,3 +1,4 @@
+import gc
 import os
 import random
 import traceback
@@ -283,7 +284,6 @@ def main(_):
         del gemma3_lm
         del keras_hub_backbone
         del hf_model
-        import gc
 
         gc.collect()
         if torch.cuda.is_available():
