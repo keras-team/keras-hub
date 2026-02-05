@@ -44,6 +44,11 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
+flags.DEFINE_string(
+    "save_dtype",
+    "bfloat16",
+    "Dtype to save the model in. Defaults to bfloat16.",
+)
 
 
 # Tolerance for logit comparison (float32 only validation).
@@ -266,9 +271,35 @@ def main(_):
     )
 
     validate_output(gemma3_lm, hf_model, hf_tokenizer)
-    gemma3_lm.save_to_preset(f"./{preset}")
 
-    print(f"\n-> Saved converted model to ./{preset}")
+    save_dtype = FLAGS.save_dtype
+    if save_dtype == "float32":
+        # Already in float32, save directly
+        print(f"\n-> Saving model in {save_dtype}...")
+        gemma3_lm.save_to_preset(f"./{preset}")
+    else:
+        # Free up memory before reloading in save dtype
+        del gemma3_lm
+        del keras_hub_backbone
+        del hf_model
+        import gc
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        # Reload the model in target dtype for saving
+        print(f"\n-> Reloading model in {save_dtype} for saving...")
+        keras_hub_backbone_save = keras_hub.models.Gemma3Backbone.from_preset(
+            f"hf://{hf_preset}", dtype=save_dtype
+        )
+        gemma3_lm_save = keras_hub.models.Gemma3CausalLM(
+            backbone=keras_hub_backbone_save,
+            preprocessor=keras_hub_preprocessor,
+        )
+        gemma3_lm_save.save_to_preset(f"./{preset}")
+
+    print(f"\n-> Saved converted model ({save_dtype}) to ./{preset}")
 
 
 if __name__ == "__main__":
