@@ -250,14 +250,9 @@ class Gemma3CausalLM(CausalLM):
             inputs.get("vision_indices", None),
         )
 
-        # Check if we actually have images to process by looking at vision_mask
-        has_images = (
-            not self.backbone.text_only_model
-            and vision_mask is not None
-            and ops.any(vision_mask)
-        )
-
-        if has_images:
+        # Only process images for vision models when vision_mask indicates
+        # actual image tokens exist
+        if not self.backbone.text_only_model and vision_mask is not None:
             # Handle an unbatched image. Unlike `token_ids` and
             # `padding_mask`, this will not automatically be upranked.
             if len(ops.shape(images)) == 4:
@@ -266,7 +261,23 @@ class Gemma3CausalLM(CausalLM):
                 vision_mask = ops.expand_dims(vision_mask, axis=0)
             if len(ops.shape(vision_indices)) == 1:
                 vision_indices = ops.expand_dims(vision_indices, axis=0)
-            img_embeddings = self.backbone.vision_encoder(images)
+
+            # Check number of images (second dimension after preprocessing)
+            num_images = ops.shape(images)[1]
+
+            def _encode_images():
+                return self.backbone.vision_encoder(images)
+
+            def _no_images():
+                batch_size = ops.shape(token_ids)[0]
+                return ops.zeros(
+                    (batch_size, 0, self.backbone.hidden_dim),
+                    dtype=self.compute_dtype,
+                )
+
+            img_embeddings = ops.cond(
+                num_images > 0, _encode_images, _no_images
+            )
         else:
             img_embeddings = None
             vision_mask = None
