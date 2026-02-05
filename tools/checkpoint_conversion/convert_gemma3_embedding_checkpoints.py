@@ -23,19 +23,50 @@ python3 convert_embedding_gemma_checkpoints.py \
     --embedding_dim 768
 """
 
-import argparse
 import os
 
 os.environ["KERAS_BACKEND"] = "jax"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-import kagglehub
 import keras
 import numpy as np
+from absl import app
+from absl import flags
 from keras import ops
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
 from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
+
+FLAGS = flags.FLAGS
+
+flags.DEFINE_string(
+    "preset",
+    None,
+    "Name of the preset to convert. If provided, both source and output "
+    "presets are derived from this name.",
+)
+flags.DEFINE_string(
+    "source_preset",
+    None,
+    "Path or name of the source causal Gemma3 preset. "
+    "Required if --preset is not set.",
+)
+flags.DEFINE_string(
+    "output_preset",
+    None,
+    "Path to save the new Embedding Gemma preset. "
+    "Required if --preset is not set.",
+)
+flags.DEFINE_integer(
+    "pooling_intermediate_dim",
+    4096,
+    "Intermediate dimension for the pooling head's first dense layer.",
+)
+flags.DEFINE_integer(
+    "embedding_dim",
+    768,
+    "The final output dimension of the embedding projection.",
+)
 
 PRESET_MAP = {
     "gemma3_embedding_270m_en": "gemma3_270m",
@@ -173,66 +204,31 @@ def convert_to_embedding_preset(
     print(f"Embedding Gemma preset successfully saved to: '{output_preset}'")
 
 
-if __name__ == "__main__":
-    kagglehub.login()
-    parser = argparse.ArgumentParser(
-        description="Convert a pre-trained causal Gemma3 model to "
-        "Embedding Gemma model.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser.add_argument(
-        "--preset",
-        type=str,
-        help="Name of the preset to convert. Must be one of "
-        f"{list(PRESET_MAP.keys())}.",
-    )
-    parser.add_argument(
-        "--source_preset",
-        type=str,
-        help="Path or name of the source causal Gemma3 preset "
-        "(e.g., 'gemma3_instruct_4b_text'). Required if --preset is not set.",
-    )
-    parser.add_argument(
-        "--output_preset",
-        type=str,
-        help="Path to save the new Embedding Gemma preset "
-        "(e.g., 'embedding_gemma3_4b_en'). Required if --preset is not set.",
-    )
-    parser.add_argument(
-        "--pooling_intermediate_dim",
-        type=int,
-        default=4096,
-        help="Intermediate dimension for the pooling head's first dense layer.",
-    )
-    parser.add_argument(
-        "--embedding_dim",
-        type=int,
-        default=768,
-        help="The final output dimension of the embedding projection.",
-    )
-
-    args = parser.parse_args()
-
-    if args.preset:
-        if args.preset not in PRESET_MAP:
+def main(_):
+    if FLAGS.preset:
+        if FLAGS.preset not in PRESET_MAP:
             raise ValueError(
-                f"Invalid preset {args.preset}. Must be one of "
+                f"Invalid preset {FLAGS.preset}. Must be one of "
                 f"{list(PRESET_MAP.keys())}."
             )
-        source_preset = PRESET_MAP[args.preset]
-        output_preset = args.preset
+        source_preset = PRESET_MAP[FLAGS.preset]
+        output_preset = FLAGS.preset
     else:
-        if not args.source_preset or not args.output_preset:
-            parser.error(
+        if not FLAGS.source_preset or not FLAGS.output_preset:
+            raise ValueError(
                 "Both --source_preset and --output_preset are required if "
                 "--preset is not provided."
             )
-        source_preset = args.source_preset
-        output_preset = args.output_preset
+        source_preset = FLAGS.source_preset
+        output_preset = FLAGS.output_preset
 
     convert_to_embedding_preset(
         source_preset=source_preset,
         output_preset=output_preset,
-        pooling_intermediate_dim=args.pooling_intermediate_dim,
-        embedding_dim=args.embedding_dim,
+        pooling_intermediate_dim=FLAGS.pooling_intermediate_dim,
+        embedding_dim=FLAGS.embedding_dim,
     )
+
+
+if __name__ == "__main__":
+    app.run(main)
