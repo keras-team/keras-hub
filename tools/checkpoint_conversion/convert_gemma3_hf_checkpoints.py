@@ -209,6 +209,45 @@ def main(_):
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
 
+    # Debug: Print HF config
+    print("\n=== DEBUG: HuggingFace Config ===")
+    hf_config = hf_model.config
+    if hasattr(hf_config, "text_config"):
+        text_config = hf_config.text_config
+        print(f"  Model type: {hf_config.model_type}")
+        print(f"  text_config.hidden_size: {text_config.hidden_size}")
+        nh_layers = text_config.num_hidden_layers
+        print(f"  text_config.num_hidden_layers: {nh_layers}")
+        na_heads = text_config.num_attention_heads
+        print(f"  text_config.num_attention_heads: {na_heads}")
+        nkv_heads = text_config.num_key_value_heads
+        print(f"  text_config.num_key_value_heads: {nkv_heads}")
+        print(f"  text_config.head_dim: {text_config.head_dim}")
+        print(
+            f"  text_config.intermediate_size: {text_config.intermediate_size}"
+        )
+        sliding_w = getattr(text_config, "sliding_window", None)
+        print(f"  text_config.sliding_window: {sliding_w}")
+        q_scalar = getattr(text_config, "query_pre_attn_scalar", None)
+        print(f"  text_config.query_pre_attn_scalar: {q_scalar}")
+        r_scaling = getattr(text_config, "rope_scaling", None)
+        print(f"  text_config.rope_scaling: {r_scaling}")
+        r_params = getattr(text_config, "rope_parameters", None)
+        print(f"  text_config.rope_parameters: {r_params}")
+        r_theta = getattr(text_config, "rope_theta", None)
+        print(f"  text_config.rope_theta: {r_theta}")
+        r_local = getattr(text_config, "rope_local_base_freq", None)
+        print(f"  text_config.rope_local_base_freq: {r_local}")
+    if hasattr(hf_config, "vision_config") and hf_config.vision_config:
+        vision_config = hf_config.vision_config
+        vh_size = vision_config.hidden_size
+        print(f"  vision_config.hidden_size: {vh_size}")
+        v_size = vision_config.image_size
+        print(f"  vision_config.image_size: {v_size}")
+        vnh_layers = vision_config.num_hidden_layers
+        print(f"  vision_config.num_hidden_layers: {vnh_layers}")
+    print("=================================\n")
+
     # Verify the actual loaded dtype
     hf_dtype = next(hf_model.parameters()).dtype
     # Validate in float32 to reduce numerical drift
