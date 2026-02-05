@@ -14,4 +14,6 @@
 from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
 from keras_hub.src.models.qwen2_vl.qwen2_vl_causal_lm import Qwen2VLCausalLM
 from keras_hub.src.models.qwen2_vl.qwen2_vl_projector import Qwen2VLProjector
-from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import Qwen2VLVisionEncoder
+from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
+    Qwen2VLVisionEncoder,
+)
