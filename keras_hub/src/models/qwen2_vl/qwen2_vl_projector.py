@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import keras
-from keras import layers
-from keras import ops
+from keras import layers, ops
 
 
 class Qwen2VLProjector(layers.Layer):

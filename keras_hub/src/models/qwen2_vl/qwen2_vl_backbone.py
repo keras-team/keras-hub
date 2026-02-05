@@ -13,6 +13,7 @@
 # limitations under the License.
 import keras
 from keras import ops
+
 from keras_hub.src.models.backbone import Backbone
 
 

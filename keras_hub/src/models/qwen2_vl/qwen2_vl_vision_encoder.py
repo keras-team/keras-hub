@@ -222,18 +222,35 @@ class Qwen2VLRotaryEmbedding(layers.Layer):
         super().__init__(**kwargs)
         self.dim = dim
         self.base = base
+        self.inv_freq = self._compute_inv_freq(dim, base)
+
+    def _compute_inv_freq(self, dim, base):
+        exponent = np.arange(0, dim, 2).astype("float32")
+        value = exponent / dim
+        inv_freq = 1.0 / (base**value)
+        return inv_freq
 
     def call(self, grid_thw):
-        # Placeholder for 3D RoPE logic
-        # Returns dummy cos/sin shapes: (Batch, Seq_Len, Dim)
-        seq_len = ops.prod(grid_thw, axis=1)
-        max_len = ops.max(seq_len)
+        # grid_thw shape: (Batch, 3) -> [Time, Height, Width]
+        max_t = ops.max(grid_thw[:, 0])
+        max_h = ops.max(grid_thw[:, 1])
+        max_w = ops.max(grid_thw[:, 2])
 
-        shape = (1, max_len, self.dim)
-        cos = ops.ones(shape, dtype="float32")
-        sin = ops.zeros(shape, dtype="float32")
+        t_pos = ops.arange(max_t, dtype="float32")
+        h_pos = ops.arange(max_h, dtype="float32")
+        w_pos = ops.arange(max_w, dtype="float32")
 
-        return cos, sin
+        inv_freq_tensor = ops.convert_to_tensor(self.inv_freq, dtype="float32")
+
+        t_emb = ops.outer(t_pos, inv_freq_tensor)
+        h_emb = ops.outer(h_pos, inv_freq_tensor)
+        w_emb = ops.outer(w_pos, inv_freq_tensor)
+
+        t_emb = ops.concatenate([t_emb, t_emb], axis=-1)
+        h_emb = ops.concatenate([h_emb, h_emb], axis=-1)
+        w_emb = ops.concatenate([w_emb, w_emb], axis=-1)
+
+        return t_emb, h_emb, w_emb
 
     def get_config(self):
         config = super().get_config()
