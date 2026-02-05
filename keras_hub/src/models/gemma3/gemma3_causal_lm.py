@@ -250,11 +250,14 @@ class Gemma3CausalLM(CausalLM):
             inputs.get("vision_indices", None),
         )
 
-        if (
+        # Check if we actually have images to process by looking at vision_mask
+        has_images = (
             not self.backbone.text_only_model
-            and images is not None
-            and ops.size(images) > 0
-        ):
+            and vision_mask is not None
+            and ops.any(vision_mask)
+        )
+
+        if has_images:
             # Handle an unbatched image. Unlike `token_ids` and
             # `padding_mask`, this will not automatically be upranked.
             if len(ops.shape(images)) == 4:
