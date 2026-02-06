@@ -165,6 +165,7 @@ from keras_hub.src.models.segformer.segformer_image_converter import (
 from keras_hub.src.models.siglip.siglip_image_converter import (
     SigLIPImageConverter as SigLIPImageConverter,
 )
+from keras_hub.src.models.unet.unet_decoder import UNetDecoder as UNetDecoder
 from keras_hub.src.models.vgg.vgg_image_converter import (
     VGGImageConverter as VGGImageConverter,
 )
