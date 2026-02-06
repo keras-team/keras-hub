@@ -81,7 +81,7 @@ class TopPSampler(Sampler):
         sorted_next_token = random.categorical(
             # tf does not support half precision multinomial sampling, so make
             # sure we have full precision here.
-            ops.cast(ops.log(probabilities), "float32"),
+            ops.log(ops.cast(probabilities, "float32")),
             1,
             seed=self.seed_generator,
             dtype="int32",
