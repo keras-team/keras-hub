@@ -48,7 +48,7 @@ class RandomSampler(Sampler):
         # tf does not support half precision multinomial sampling, so make
         # sure we have full precision here.
         next_token_id = random.categorical(
-            ops.cast(ops.log(probabilities), "float32"),
+            ops.log(ops.cast(probabilities, "float32")),
             1,
             seed=self.seed_generator,
             dtype="int32",
