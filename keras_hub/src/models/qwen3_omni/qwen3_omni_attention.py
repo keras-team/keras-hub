@@ -74,6 +74,14 @@ class Qwen3OmniAttention(keras.layers.Layer):
         self.sliding_window_size = sliding_window_size
 
     def build(self, inputs_shape):
+        # Einsum variables:
+        # b = batch size
+        # q = query length
+        # k = key/value length
+        # m = model dim
+        # u = num query heads
+        # v = num key/value heads
+        # h = head dim
         hidden_dim = inputs_shape[-1]
         if not self.head_dim:
             self.head_dim = hidden_dim // self.num_query_heads
@@ -196,14 +204,10 @@ class Qwen3OmniAttention(keras.layers.Layer):
         batch_size = ops.shape(hidden_states)[0]
         seq_len = ops.shape(hidden_states)[1]
 
-        # Create default position IDs if not provided (for text-only mode)
         if position_ids is None:
-            # Shape: (3, batch, seq_len)
-            # For text-only: all 3 dimensions use same sequential positions
             text_positions = ops.arange(seq_len, dtype="int32")
             text_positions = ops.expand_dims(text_positions, axis=0)
             text_positions = ops.repeat(text_positions, batch_size, axis=0)
-            # Stack 3 copies along first dimension for (text, temporal, spatial)
             position_ids = ops.stack(
                 [text_positions, text_positions, text_positions], axis=0
             )
@@ -218,7 +222,6 @@ class Qwen3OmniAttention(keras.layers.Layer):
             value = self._value_dense(x)
             return key, value
 
-        # Handle caching
         if cache is not None:
             key_cache = cache[:, 0, ...]
             value_cache = cache[:, 1, ...]
@@ -231,21 +234,19 @@ class Qwen3OmniAttention(keras.layers.Layer):
                     self.multimodal_rotary_embedding.apply_multimodal_rotary_embedding(
                         query,
                         key[:, :1, :, :],
-                        position_ids,  # Use key slice as dummy for API
+                        position_ids,
                     )
                 )
             else:
-                # Generate new keys/values for the new token
                 key_update, value_update = _compute_key_value(hidden_states)
 
-                # Apply M-RoPE to query and new key
                 query, key_update = (
                     self.multimodal_rotary_embedding.apply_multimodal_rotary_embedding(
                         query, key_update, position_ids
                     )
                 )
 
-                # Update cache with new key/value (already has M-RoPE applied)
+                # Update cache with new key/value
                 start = [0, cache_update_index, 0, 0]
                 key = ops.slice_update(key_cache, start, key_update)
                 value = ops.slice_update(value_cache, start, value_update)
@@ -253,12 +254,11 @@ class Qwen3OmniAttention(keras.layers.Layer):
         else:
             if cache_update_index is not None:
                 raise ValueError(
-                    "`cache_update_index` should not be set if `cache` "
-                    "is `None`."
+                    "`cache_update_index` should not be set if `cache` is "
+                    f"`None`. Received: cache={cache}, "
+                    f"cache_update_index={cache_update_index}"
                 )
             key, value = _compute_key_value(hidden_states)
-
-            # Apply M-RoPE to Q and K (no caching scenario)
             query, key = (
                 self.multimodal_rotary_embedding.apply_multimodal_rotary_embedding(
                     query, key, position_ids
@@ -270,9 +270,12 @@ class Qwen3OmniAttention(keras.layers.Layer):
         key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
         value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
 
-        # Compute attention
         attention_output = self._compute_attention(
-            query, key, value, attention_mask, cache_update_index
+            query,
+            key,
+            value,
+            attention_mask,
+            cache_update_index=cache_update_index,
         )
 
         attention_output = self._dropout_layer(
@@ -285,7 +288,14 @@ class Qwen3OmniAttention(keras.layers.Layer):
         return attention_output
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
-        """Applies softmax with optional masking."""
+        """Applies softmax with optional masking.
+        Args:
+            attention_scores: Attention score tensor.
+            attention_mask: Optional mask tensor.
+
+        Returns:
+            Masked softmax attention weights.
+        """
         if attention_mask is not None:
             return self._softmax(
                 attention_scores, attention_mask[:, None, :, :]
@@ -295,20 +305,25 @@ class Qwen3OmniAttention(keras.layers.Layer):
     def _compute_attention(
         self, query, key, value, attention_mask=None, cache_update_index=None
     ):
-        """Computes attention using query, key, and value tensors."""
+        """Computes attention using query, key, and value tensors.
+
+        Args:
+            query: Query tensor.
+            key: Key tensor.
+            value: Value tensor.
+            attention_mask: Optional mask tensor.
+            cache_update_index: Index for sliding window computation.
+
+        Returns:
+            attention_output: Output tensor after applying attention.
+        """
         # Apply sliding window mask if configured
-        # (before fused/manual path split)
         if self.sliding_window_size:
             if attention_mask is None:
-                # Create a causal mask if none provided
                 query_len = ops.shape(query)[1]
                 key_len = ops.shape(key)[1]
 
-                # For cached generation (query_len=1, key_len=full_seq),
-                # new token should attend to all previous positions
                 if cache_update_index is not None:
-                    # Causal mask: attend to positions
-                    # [0:cache_update_index+query_len]
                     causal_mask = ops.arange(key_len) <= (
                         cache_update_index + query_len - 1
                     )
@@ -318,7 +333,6 @@ class Qwen3OmniAttention(keras.layers.Layer):
                         attention_mask, (query_len, key_len)
                     )
                 else:
-                    # Standard causal mask for non-cached scenario
                     attention_mask = ops.tril(
                         ops.ones((query_len, key_len), dtype="bool")
                     )
@@ -330,7 +344,6 @@ class Qwen3OmniAttention(keras.layers.Layer):
                 else 0,
             )
 
-        # Fused attention path (uses sliding window mask if applied above)
         if fused_attention_op_available():
             if attention_mask is not None:
                 attention_mask = ops.expand_dims(attention_mask, axis=1)
@@ -344,7 +357,6 @@ class Qwen3OmniAttention(keras.layers.Layer):
             )
             return attention_output
 
-        # Manual attention computation
         attention_scores = ops.einsum(self._dot_product_equation, query, key)
         attention_scores = ops.multiply(
             attention_scores,
@@ -362,17 +374,21 @@ class Qwen3OmniAttention(keras.layers.Layer):
         return attention_output
 
     def _mask_sliding_window(self, attention_mask, cache_update_index=0):
-        """Creates and combines a sliding window mask with the
-        attention mask."""
+        """Creates and combines a sliding window mask with the attention mask.
+        Args:
+            attention_mask: Original attention mask.
+            cache_update_index: Starting index for the sliding window.
+
+        Returns:
+            Combined attention mask with sliding window constraints.
+        """
         _, query_len, key_len = ops.shape(attention_mask)
         all_ones = ops.ones((key_len, key_len), "bool")
 
         if keras.config.backend() == "tensorflow":
+            # TODO carried over from qwen3moe
             import tensorflow as tf
 
-            # band_size - 1 because band_part uses 0-indexed offsets
-            # e.g., window_size=512 means each token can attend to
-            # 511 before and after
             band_size = ops.minimum(key_len, self.sliding_window_size - 1)
             band_size = ops.cast(band_size, "int32")
             sliding_mask = tf.linalg.band_part(all_ones, band_size, band_size)
