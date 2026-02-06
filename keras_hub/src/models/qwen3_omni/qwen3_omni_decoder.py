@@ -95,12 +95,13 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
         self.rope_scaling_factor = rope_scaling_factor
         self.rope_attention_scaling = rope_attention_scaling
         self.layer_norm_epsilon = layer_norm_epsilon
-        self.activation = activation or ops.silu
+        self.activation = keras.activations.get(activation or "silu")
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.dropout_rate = dropout
         self.sliding_window_size = sliding_window_size
         self.router_aux_loss_coefficient = router_aux_loss_coefficient
         self.is_sparse_mlp = is_sparse_mlp
+        self.supports_masking = True
 
     def build(self, input_shape):
         hidden_dim = input_shape[-1]
@@ -131,30 +132,31 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
         )
         self.attention.build(input_shape)
 
-        # Pre-FFN layer norm
-        self.pre_ffw_norm = Qwen3MoeLayerNorm(
+        # Post-attention layer norm
+        self.post_attention_layernorm = Qwen3MoeLayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
-            name="pre_ffw_norm",
+            name="post_attention_layernorm",
         )
-        self.pre_ffw_norm.build(input_shape)
+        self.post_attention_layernorm.build(input_shape)
 
         # MoE or dense FFN
         if self.is_sparse_mlp:
-            # Sparse MoE feedforward (reuse from Qwen3MoE)
+            # Sparse MoE feedforward reused from Qwen3Moe
             self.sparse_moe = Qwen3SparseMoeBlock(
                 hidden_dim=hidden_dim,
                 moe_intermediate_dim=self.moe_intermediate_dim,
                 num_experts=self.num_experts,
                 top_k=self.top_k,
                 norm_top_k_prob=self.norm_top_k_prob,
+                router_aux_loss_coefficient=self.router_aux_loss_coefficient,
                 kernel_initializer=clone_initializer(self.kernel_initializer),
                 dtype=self.dtype_policy,
                 name="sparse_moe",
             )
             self.sparse_moe.build(input_shape)
         else:
-            # Dense FFN (for non-MoE layers)
+            # Dense FFN for non-MoE layers
             self.dense_mlp = Qwen3MoeMLP(
                 intermediate_dim=self.intermediate_dim,
                 hidden_dim=hidden_dim,
@@ -197,54 +199,37 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
         Returns:
             Output tensor of shape (batch, seq_len, hidden_dim).
         """
-        x = inputs
+        self_attention_mask = self._compute_self_attention_mask(
+            inputs=inputs,
+            decoder_padding_mask=decoder_padding_mask,
+            cache=cache,
+            cache_update_index=cache_update_index,
+        )
+        residual = inputs
 
-        # Create attention mask from padding mask
-        attention_mask = None
-        if decoder_padding_mask is not None:
-            batch_size = ops.shape(inputs)[0]
-            input_length = ops.shape(inputs)[1]
-            attention_mask = merge_padding_and_attention_mask(
-                inputs,
-                decoder_padding_mask,
-                compute_causal_mask(
-                    batch_size,
-                    input_length,
-                    input_length,
-                    cache_update_index or 0,
-                ),
-            )
+        x = self.pre_attention_norm(inputs)
 
-        # Self-attention block with residual
-        residual = x
-        x = self.pre_attention_norm(x)
-
-        attention_output = self.attention(
+        # Self attention block.
+        x = self.attention(
             x,
             position_ids=position_ids,
-            attention_mask=attention_mask,
+            attention_mask=self_attention_mask,
             cache=cache,
             cache_update_index=cache_update_index,
             training=training,
         )
 
-        # Handle cache return
         if cache is not None:
-            attention_output, cache = attention_output
+            x, cache = x
 
         if self.dropout_rate > 0:
-            attention_output = self.dropout_layer(
-                attention_output, training=training
-            )
+            x = self.dropout_layer(x, training=training)
 
-        x = residual + attention_output
-
-        # Feedforward block with residual
+        x = x + residual
         residual = x
-        x = self.pre_ffw_norm(x)
 
+        x = self.post_attention_layernorm(x)
         if self.is_sparse_mlp:
-            # MoE feedforward
             x, router_logits = self.sparse_moe(x)
 
             # Compute auxiliary loss for load balancing
@@ -253,21 +238,61 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
                     router_logits,
                     self.num_experts,
                     self.top_k,
-                    attention_mask,
+                    self_attention_mask,
                 )
                 self.add_loss(self.router_aux_loss_coefficient * aux_loss)
         else:
-            # Dense feedforward
             x = self.dense_mlp(x)
 
-        if self.dropout_rate > 0:
-            x = self.dropout_layer(x, training=training)
-
-        x = residual + x
+        x = ops.cast(x, ops.dtype(residual))
+        x = x + residual
 
         if cache is not None:
             return x, cache
         return x
+
+    def _compute_self_attention_mask(
+        self,
+        inputs,
+        decoder_padding_mask,
+        cache,
+        cache_update_index,
+    ):
+        """Computes the self-attention mask combining causal and padding masks.
+
+        Args:
+            inputs: Input tensor.
+            decoder_padding_mask: Mask tensor for padding tokens.
+            cache: Optional cached key and value tensors.
+            cache_update_index: Index at which to update the cache.
+
+        Returns:
+            Combined attention mask tensor.
+        """
+        decoder_mask = merge_padding_and_attention_mask(
+            inputs, decoder_padding_mask, None
+        )
+        batch_size = ops.shape(inputs)[0]
+        input_length = output_length = ops.shape(inputs)[1]
+        # We need to handle a rectangular causal mask when doing cached
+        # decoding. For generative inference, `inputs` will
+        # generally be length 1, and `cache` will be the full generation length.
+        if cache is not None:
+            input_length = ops.shape(cache)[2]
+
+        cache_update_index = (
+            0 if cache_update_index is None else cache_update_index
+        )
+
+        causal_mask = compute_causal_mask(
+            batch_size, input_length, output_length, cache_update_index
+        )
+
+        return (
+            ops.minimum(decoder_mask, causal_mask)
+            if decoder_mask is not None
+            else causal_mask
+        )
 
     def get_config(self):
         config = super().get_config()
