@@ -27,12 +27,14 @@ class DepthAnythingDepthEstimatorTest(TestCase):
             16 * 4,
             1.0,
             0,
-            image_shape=(70, 70, 3),
+            image_shape=(126, 126, 3),
             apply_layernorm=True,
         )
-        self.images = np.ones((2, 70, 70, 3), dtype="float32")
-        self.depths = np.zeros((2, 70, 70, 1), dtype="float32")
-        self.image_converter = DepthAnythingImageConverter(image_size=(70, 70))
+        self.images = np.ones((2, 126, 126, 3), dtype="float32")
+        self.depths = np.zeros((2, 126, 126, 1), dtype="float32")
+        self.image_converter = DepthAnythingImageConverter(
+            image_size=(126, 126)
+        )
         self.preprocessor = DepthAnythingDepthEstimatorPreprocessor(
             self.image_converter
         )
@@ -58,7 +60,7 @@ class DepthAnythingDepthEstimatorTest(TestCase):
             cls=DepthAnythingDepthEstimator,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape={"depths": (2, 70, 70, 1)},
+            expected_output_shape={"depths": (2, 126, 126, 1)},
         )
 
     @pytest.mark.extra_large
