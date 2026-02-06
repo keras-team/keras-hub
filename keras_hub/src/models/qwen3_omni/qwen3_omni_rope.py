@@ -104,10 +104,6 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
         Returns:
             Tuple of (query_embed, key_embed) with M-RoPE applied.
         """
-        # Compute frequency matrices for each modality section
-        batch_size = ops.shape(query)[0]
-        seq_len = ops.shape(query)[1]
-
         # Compute inverse frequencies for the full head dimension
         head_dim_half = sum(self.mrope_section)
         idx = ops.arange(0, head_dim_half * 2, 2, dtype="float32")
@@ -136,11 +132,8 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
             freqs_stacked, self.mrope_section
         )
 
-        # Duplicate frequencies for cos/sin pairs and compute embeddings
-        # Shape: (batch, seq_len, head_dim)
-        embedding = ops.stack([freqs_interleaved, freqs_interleaved], axis=-1)
-        embedding = ops.reshape(
-            embedding, (batch_size, seq_len, sum(self.mrope_section) * 2)
+        embedding = ops.concatenate(
+            [freqs_interleaved, freqs_interleaved], axis=-1
         )
 
         # Apply attention scaling to cos/sin embeddings
