@@ -5,7 +5,6 @@ from keras import layers
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.backbone import Backbone
 
 
 def _create_sinusoidal_positions(length, channels, max_timescale=10000):
@@ -151,6 +150,8 @@ class Qwen3OmniAudioEncoderLayer(layers.Layer):
                 "embed_dim": self.embed_dim,
                 "num_heads": self.num_heads,
                 "ffn_dim": self.ffn_dim,
+                "activation": self.activation_fn.get_config()["activation"],
+                "dropout": self.dropout_layer.rate,
             }
         )
         return config
@@ -160,8 +161,8 @@ class Qwen3OmniAudioEncoderLayer(layers.Layer):
 
 
 @keras_hub_export("keras_hub.models.Qwen3OmniAudioEncoder")
-class Qwen3OmniAudioEncoder(Backbone):
-    """Audio encoder for Qwen3-Omni (Whisper-based).
+class Qwen3OmniAudioEncoder(keras.layers.Layer):
+    """Audio encoder for Qwen3-Omni
 
     This encoder processes mel-spectrogram audio features using a Whisper-style
     architecture with:
@@ -224,9 +225,9 @@ class Qwen3OmniAudioEncoder(Backbone):
         encoder_attention_heads=20,
         encoder_ffn_dim=5120,
         output_dim=2048,
-        downsample_hidden_size=1536,
+        downsample_hidden_size=480,
         max_source_positions=1500,
-        scale_embedding=True,
+        scale_embedding=False,
         activation_function="gelu",
         dropout=0.0,
         dtype=None,
@@ -279,16 +280,8 @@ class Qwen3OmniAudioEncoder(Backbone):
             name="conv_out",
         )
 
-        # === Fixed sinusoidal positional embeddings ===
-        positional_embedding = _create_sinusoidal_positions(
+        self._positional_embedding_np = _create_sinusoidal_positions(
             max_source_positions, d_model
-        )
-        self.positional_embedding = self.add_weight(
-            name="positional_embedding",
-            shape=(max_source_positions, d_model),
-            initializer=keras.initializers.Constant(positional_embedding),
-            trainable=False,
-            dtype=dtype,
         )
 
         # === Transformer encoder layers ===
@@ -307,14 +300,14 @@ class Qwen3OmniAudioEncoder(Backbone):
 
         # === Post-encoder normalization ===
         self.ln_post = layers.LayerNormalization(
-            epsilon=1e-5,
             dtype=dtype,
-            name="ln_post",
+            name="layer_norm",
         )
 
-        # === Output projection ===
+        # === Output Projection ===
         self.proj1 = layers.Dense(
             d_model,
+            use_bias=True,
             dtype=dtype,
             name="proj1",
         )
@@ -323,25 +316,14 @@ class Qwen3OmniAudioEncoder(Backbone):
         )
         self.proj2 = layers.Dense(
             output_dim,
+            use_bias=True,
             dtype=dtype,
             name="proj2",
         )
+        self.dropout_layer = layers.Dropout(0.0, dtype=dtype, name="dropout")
 
-        self.dropout_layer = layers.Dropout(dropout, dtype=dtype)
-
-        # === Functional Model ===
-        input_features = layers.Input(
-            shape=(None, num_mel_bins),
-            name="input_features",
-        )
-        outputs = self.call_with_inputs(input_features)
-
-        super().__init__(
-            inputs={"input_features": input_features},
-            outputs=outputs,
-            dtype=dtype,
-            **kwargs,
-        )
+        # Call parent init
+        super().__init__(dtype=dtype, **kwargs)
 
     def call_with_inputs(self, input_features, training=False):
         """Forward pass through the audio encoder.
@@ -368,25 +350,25 @@ class Qwen3OmniAudioEncoder(Backbone):
         hidden_states = ops.gelu(hidden_states)
 
         # Flatten spatial dimensions and project
-        # (batch, time/8, mel/8, hidden) -> (batch, time/8, hidden * mel/8)
         batch_size = ops.shape(hidden_states)[0]
         seq_len = ops.shape(hidden_states)[1]
+        hidden_states = ops.transpose(hidden_states, [0, 1, 3, 2])
         hidden_states = ops.reshape(hidden_states, [batch_size, seq_len, -1])
         hidden_states = self.conv_out(hidden_states)
 
         # Scale embeddings
         hidden_states = hidden_states * self.embed_scale
 
-        # Add positional embeddings
-        seq_len_actual = ops.shape(hidden_states)[1]
-        pos_emb = self.positional_embedding[:seq_len_actual, :]
-        hidden_states = hidden_states + pos_emb
-
-        hidden_states = self.dropout_layer(hidden_states, training=training)
+        # Add position embeddings
+        pos_embed_tensor = ops.convert_to_tensor(
+            self._positional_embedding_np, dtype=self.compute_dtype
+        )
+        positions = pos_embed_tensor[:seq_len, :]
+        hidden_states = hidden_states + positions
 
         # Apply transformer encoder layers
-        for layer in self.encoder_layers:
-            hidden_states = layer(
+        for encoder_layer in self.encoder_layers:
+            hidden_states = encoder_layer(
                 hidden_states,
                 training=training,
             )
@@ -398,6 +380,7 @@ class Qwen3OmniAudioEncoder(Backbone):
         hidden_states = self.proj1(hidden_states)
         hidden_states = self.proj_activation(hidden_states)
         hidden_states = self.proj2(hidden_states)
+        hidden_states = self.dropout_layer(hidden_states, training=training)
 
         return hidden_states
 
@@ -415,6 +398,20 @@ class Qwen3OmniAudioEncoder(Backbone):
         """
         return self.call_with_inputs(
             inputs["input_features"], training=training
+        )
+
+    def compute_output_spec(self, input_spec, **kwargs):
+        """Compute output shape for symbolic tracing."""
+        input_features_spec = input_spec["input_features"]
+        batch_size = input_features_spec.shape[0]
+        seq_len = (
+            input_features_spec.shape[1] // 8
+            if input_features_spec.shape[1]
+            else None
+        )
+        return keras.KerasTensor(
+            shape=(batch_size, seq_len, self.output_dim),
+            dtype=input_features_spec.dtype,
         )
 
     def get_config(self):
