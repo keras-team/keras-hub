@@ -409,6 +409,21 @@ from keras_hub.src.models.masked_lm import MaskedLM as MaskedLM
 from keras_hub.src.models.masked_lm_preprocessor import (
     MaskedLMPreprocessor as MaskedLMPreprocessor,
 )
+from keras_hub.src.models.metaclip_2.metaclip_2_backbone import (
+    MetaCLIP2Backbone as MetaCLIP2Backbone,
+)
+from keras_hub.src.models.metaclip_2.metaclip_2_preprocessor import (
+    MetaCLIP2Preprocessor as MetaCLIP2Preprocessor,
+)
+from keras_hub.src.models.metaclip_2.metaclip_2_text_encoder import (
+    MetaCLIP2TextEncoder as MetaCLIP2TextEncoder,
+)
+from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (
+    MetaCLIP2Tokenizer as MetaCLIP2Tokenizer,
+)
+from keras_hub.src.models.metaclip_2.metaclip_2_vision_encoder import (
+    MetaCLIP2VisionEncoder as MetaCLIP2VisionEncoder,
+)
 from keras_hub.src.models.mistral.mistral_backbone import (
     MistralBackbone as MistralBackbone,
 )
