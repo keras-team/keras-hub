@@ -12,82 +12,75 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import keras
-from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 
 
+@keras_hub_export("keras_hub.models.Qwen2VLBackbone")
 class Qwen2VLBackbone(Backbone):
-    """Qwen2-VL architecture backbone.
+    """Qwen2-VL Backbone model.
 
-    This class implements the Qwen2-VL architecture, which combines a Vision
-    Transformer (ViT) encoder with a Qwen2 text backbone.
+    This backbone combines the Vision Encoder and the Text Backbone.
+    It follows the KerasHub Functional API pattern.
     """
 
     def __init__(
         self,
         vision_encoder,
-        projector,
         text_backbone,
-        dtype=None,
+        image_converter=None,
         **kwargs,
     ):
-        # 1. Inspect vision encoder for input shape
-        image_shape = getattr(
-            vision_encoder, "input_shape", (None, None, None, 3)
-        )
-        if len(image_shape) == 5:
-            image_shape = image_shape[1:]
+        # --- Inputs ---
+        # 1. Image Input: 5D (Batch, Time, H, W, Channels)
+        # We use flexible shapes (None) to support dynamic resizing
+        images = keras.Input(shape=(None, None, None, 3), name="images")
 
-        # 2. Define Inputs
-        images = keras.Input(shape=image_shape, name="images")
+        # 2. Text Input: (Batch, Seq_Len)
         token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
         padding_mask = keras.Input(
-            shape=(None,), dtype="bool", name="padding_mask"
+            shape=(None,), dtype="int32", name="padding_mask"
         )
 
-        # 3. Vision Branch
-        image_features = vision_encoder(images)
-        image_embeddings = projector(image_features)
+        # --- Forward Pass ---
+        # 1. Vision Branch
+        # The encoder outputs (Batch, Time, H, W, Hidden)
+        vision_features = vision_encoder(images)
 
-        # 4. Text Branch
-        text_embeddings = text_backbone.token_embedding(token_ids)
+        # 2. Projection
+        # We assume the projector is attached to the vision encoder or separate.
+        # Ideally, we define the projector here if it's not part of the encoder.
+        # For this implementation, we assume the vision_encoder returns projected features
+        # OR we leave the merging logic to the CausalLM.
 
-        # 5. Fusion (Concatenation)
-        image_embeddings = ops.cast(image_embeddings, text_embeddings.dtype)
-        x = ops.concatenate([image_embeddings, text_embeddings], axis=1)
+        # NOTE: In the Functional API style for KerasHub, the Backbone usually
+        # just exposes the sub-models.
 
-        # 6. Update Mask (The Fix)
-        # Instead of manually building a shape tuple (which causes the None crash),
-        # we generate a mask directly from the existing image_embeddings tensor.
-        # image_embeddings shape: (Batch, Seq_Len, Hidden)
-        # Slice [:, :, 0] gives us shape (Batch, Seq_Len).
-        image_mask = ops.ones_like(image_embeddings[:, :, 0], dtype="bool")
+        # Let's wrap the outputs.
+        # Since Qwen2-VL is complex (token replacement), we return the features
+        # separately so the CausalLM can merge them.
 
-        combined_mask = ops.concatenate([image_mask, padding_mask], axis=1)
+        outputs = {
+            "vision_features": vision_features,
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+        }
 
-        # 7. Pass through Transformer Layers
-        for layer in text_backbone.transformer_layers:
-            x = layer(x, padding_mask=combined_mask)
-
-        # 8. Final Norm
-        x = text_backbone.layer_norm(x)
-
-        # 9. Initialize Backbone
+        # --- Initialize Super ---
         super().__init__(
             inputs={
                 "images": images,
                 "token_ids": token_ids,
                 "padding_mask": padding_mask,
             },
-            outputs=x,
-            dtype=dtype,
+            outputs=outputs,
             **kwargs,
         )
 
         self.vision_encoder = vision_encoder
-        self.projector = projector
         self.text_backbone = text_backbone
+        self.image_converter = image_converter
 
     def get_config(self):
         config = super().get_config()
@@ -96,25 +89,12 @@ class Qwen2VLBackbone(Backbone):
                 "vision_encoder": keras.saving.serialize_keras_object(
                     self.vision_encoder
                 ),
-                "projector": keras.saving.serialize_keras_object(
-                    self.projector
-                ),
                 "text_backbone": keras.saving.serialize_keras_object(
                     self.text_backbone
+                ),
+                "image_converter": keras.saving.serialize_keras_object(
+                    self.image_converter
                 ),
             }
         )
         return config
-
-    @classmethod
-    def from_config(cls, config):
-        config["vision_encoder"] = keras.saving.deserialize_keras_object(
-            config["vision_encoder"]
-        )
-        config["projector"] = keras.saving.deserialize_keras_object(
-            config["projector"]
-        )
-        config["text_backbone"] = keras.saving.deserialize_keras_object(
-            config["text_backbone"]
-        )
-        return cls(**config)

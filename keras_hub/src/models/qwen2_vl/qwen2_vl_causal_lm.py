@@ -13,51 +13,39 @@
 # limitations under the License.
 import keras
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
 
 
+@keras_hub_export("keras_hub.models.Qwen2VLCausalLM")
 class Qwen2VLCausalLM(CausalLM):
     """Qwen2-VL Causal LM model."""
 
     def __init__(self, backbone, preprocessor=None, **kwargs):
-        # 1. Do NOT pass backbone/preprocessor to super().
-        #    The traceback proved that parent classes just forward them to Layer,
-        #    causing a crash. We send only the remaining kwargs up.
-        super().__init__(**kwargs)
-
-        # 2. Manually attach the components.
-        #    Keras will still automatically track the weights of self.backbone.
+        super().__init__(backbone=backbone, preprocessor=preprocessor, **kwargs)
         self.backbone = backbone
-        self.preprocessor = preprocessor
 
-    def call(self, inputs, training=False):
-        x = self.backbone(inputs)
-        embedding_weights = (
-            self.backbone.text_backbone.token_embedding.embeddings
-        )
-        logits = keras.ops.matmul(x, keras.ops.transpose(embedding_weights))
-        return logits
+    def call(self, inputs, training=False, mask=None):
+        images = inputs["images"]
+        token_ids = inputs["token_ids"]
+        
+
+        vision_encoder = self.backbone.vision_encoder
+        text_backbone = self.backbone.text_backbone
+
+        image_embeds = vision_encoder(images, training=training)
+        text_embeds = text_backbone.token_embedding(token_ids)
+
+        x = keras.ops.concatenate([image_embeds, text_embeds], axis=1)
+
+        for layer in text_backbone.transformer_layers:
+            x = layer(x, training=training)
+
+        if hasattr(text_backbone, "layer_norm"):
+            x = text_backbone.layer_norm(x)
+
+        x = self.backbone.text_backbone.token_embedding(x, reverse=True)
+        return x
 
     def get_config(self):
-        # Since we didn't pass backbone to super, we must serialize it manually.
-        config = super().get_config()
-        config.update(
-            {
-                "backbone": keras.saving.serialize_keras_object(self.backbone),
-                "preprocessor": keras.saving.serialize_keras_object(
-                    self.preprocessor
-                ),
-            }
-        )
-        return config
-
-    @classmethod
-    def from_config(cls, config):
-        # And deserialize it manually.
-        config["backbone"] = keras.saving.deserialize_keras_object(
-            config["backbone"]
-        )
-        config["preprocessor"] = keras.saving.deserialize_keras_object(
-            config["preprocessor"]
-        )
-        return cls(**config)
+        return super().get_config()
