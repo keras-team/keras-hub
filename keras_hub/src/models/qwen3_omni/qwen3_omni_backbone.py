@@ -95,6 +95,12 @@ class Qwen3OmniBackbone(Backbone):
             encoder. If provided, enables audio modality. Defaults to None.
         vision_encoder: Qwen3OmniVisionEncoder or None. Pre-instantiated vision
             encoder. If provided, enables vision modality. Defaults to None.
+        image_token_id: int. Token ID for image placeholders.
+            Defaults to 151655.
+        video_token_id: int. Token ID for video placeholders.
+            Defaults to 151656.
+        audio_token_id: int. Token ID for audio placeholders.
+            Defaults to 151675.
         dtype: string or DTypePolicy. Model dtype. Defaults to None.
 
     Examples:
@@ -154,6 +160,9 @@ class Qwen3OmniBackbone(Backbone):
         mlp_only_layers=None,
         audio_encoder=None,
         vision_encoder=None,
+        image_token_id=151655,
+        video_token_id=151656,
+        audio_token_id=151675,
         dtype=None,
         **kwargs,
     ):
@@ -166,10 +175,6 @@ class Qwen3OmniBackbone(Backbone):
             dtype=dtype,
             name="token_embedding",
         )
-
-        # Store encoder references (will be preserved after super().__init__)
-        self._audio_encoder_instance = audio_encoder
-        self._vision_encoder_instance = vision_encoder
 
         # === MoE Transformer Decoder Layers ===
         if not mlp_only_layers:
@@ -215,12 +220,6 @@ class Qwen3OmniBackbone(Backbone):
             dtype=dtype,
             name="sequence_output_layernorm",
         )
-
-        # Store special token IDs for multimodal fusion
-        # These must be defined before functional model construction
-        self.audio_token_id = 151675  # <|audio|>
-        self.image_token_id = 151655  # <|image|>
-        self.video_token_id = 151656  # <|video|>
 
         # === Functional Model ===
 
@@ -287,6 +286,9 @@ class Qwen3OmniBackbone(Backbone):
         self.dropout = dropout
         self.tie_word_embeddings = tie_word_embeddings
         self.sliding_window_size = sliding_window_size
+        self.image_token_id = image_token_id
+        self.video_token_id = video_token_id
+        self.audio_token_id = audio_token_id
 
     def call(self, inputs, training=False):
         """Forward pass with multimodal fusion.
@@ -355,6 +357,9 @@ class Qwen3OmniBackbone(Backbone):
                 "sliding_window_size": self.sliding_window_size,
                 "router_aux_loss_coefficient": self.router_aux_loss_coefficient,
                 "mlp_only_layers": self.mlp_only_layers,
+                "image_token_id": self.image_token_id,
+                "video_token_id": self.video_token_id,
+                "audio_token_id": self.audio_token_id,
                 "audio_encoder": (
                     keras.saving.serialize_keras_object(self.audio_encoder)
                     if self.audio_encoder is not None
