@@ -183,11 +183,11 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         output_dim: int. The output projection dimension (should match text
             model hidden dimension). Defaults to `2048`.
         downsample_hidden_size: int. The hidden size for convolutional
-            downsampling layers. Defaults to `1536`.
+            downsampling layers. Defaults to `480`.
         max_source_positions: int. The maximum sequence length after
             downsampling. Defaults to `1500`.
         scale_embedding: bool. Whether to scale embeddings by sqrt(d_model).
-            Defaults to `True`.
+            Defaults to `False`.
         activation_function: string. The activation function name.
             Defaults to `"gelu"`.
         dropout: float. The dropout rate. Defaults to `0.0`.
@@ -320,7 +320,9 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
             dtype=dtype,
             name="proj2",
         )
-        self.dropout_layer = layers.Dropout(0.0, dtype=dtype, name="dropout")
+        self.dropout_layer = layers.Dropout(
+            dropout, dtype=dtype, name="dropout"
+        )
 
         # Call parent init
         super().__init__(dtype=dtype, **kwargs)
