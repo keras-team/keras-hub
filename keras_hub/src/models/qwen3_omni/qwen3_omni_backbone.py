@@ -56,8 +56,8 @@ class Qwen3OmniBackbone(Backbone):
     - 128 head dimension
     - M-RoPE section: [24, 20, 20] (text, temporal, spatial)
 
-    Note: Audio/vision encoders and the Talker component
-    are NOT included in this backbone.
+    Note: Audio/vision encoders can be optionally provided for
+    multimodal operation. The Talker component is not included.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -326,6 +326,7 @@ class Qwen3OmniBackbone(Backbone):
                 x,
                 position_ids=None,
                 decoder_padding_mask=padding_mask,
+                training=training,
             )
 
         # Final norm
@@ -373,6 +374,22 @@ class Qwen3OmniBackbone(Backbone):
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        if config.get("audio_encoder") is not None and isinstance(
+            config["audio_encoder"], dict
+        ):
+            config["audio_encoder"] = keras.layers.deserialize(
+                config["audio_encoder"]
+            )
+        if config.get("vision_encoder") is not None and isinstance(
+            config["vision_encoder"], dict
+        ):
+            config["vision_encoder"] = keras.layers.deserialize(
+                config["vision_encoder"]
+            )
+        return super().from_config(config)
 
     def _compute_embeddings(
         self,
