@@ -1,7 +1,4 @@
-import os
 from unittest.mock import patch
-
-os.environ["KERAS_BACKEND"] = "jax"
 
 import pytest
 from keras import ops
