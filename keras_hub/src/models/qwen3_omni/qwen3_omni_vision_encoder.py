@@ -607,7 +607,7 @@ class Qwen3OmniVisionEncoder(keras.layers.Layer):
         dtype=None,
         **kwargs,
     ):
-        # Call parent init FIRST (required for PyTorch backend)
+        # Call parent init
         super().__init__(dtype=dtype, **kwargs)
 
         self.depth = depth
