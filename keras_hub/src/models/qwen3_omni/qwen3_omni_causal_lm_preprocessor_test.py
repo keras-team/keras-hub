@@ -1,5 +1,14 @@
+import numpy as np
+import pytest
+
+from keras_hub.src.models.qwen3_omni.qwen3_omni_audio_converter import (
+    Qwen3OmniAudioConverter,
+)
 from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm_preprocessor import (
     Qwen3OmniCausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen3_omni.qwen3_omni_image_converter import (
+    Qwen3OmniImageConverter,
 )
 from keras_hub.src.models.qwen3_omni.qwen3_omni_tokenizer import (
     Qwen3OmniTokenizer,
@@ -68,3 +77,88 @@ class Qwen3OmniCausalLMPreprocessorTest(TestCase):
         preprocessor = Qwen3OmniCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "airplane at airport")
+
+    def test_with_audio_converter(self):
+        # Test preprocessing with audio converter
+        try:
+            import librosa  # noqa: F401
+
+            audio_converter = Qwen3OmniAudioConverter()
+            preprocessor = Qwen3OmniCausalLMPreprocessor(
+                tokenizer=self.tokenizer,
+                audio_converter=audio_converter,
+                sequence_length=8,
+            )
+            # Create dummy audio (1 second at 16kHz)
+            audio_data = np.random.randn(16000).astype(np.float32)
+            input_data = {
+                "prompts": "airplane at airport",
+                "responses": "airplane",
+                "audio": audio_data,
+            }
+            x, y, sw = preprocessor(input_data)
+            # Check that audio_features key is present
+            self.assertIn("audio_features", x)
+            self.assertIn("token_ids", x)
+            self.assertIn("padding_mask", x)
+        except ImportError:
+            self.skipTest("librosa not installed")
+
+    def test_with_image_converter(self):
+        # Test preprocessing with image converter
+        image_converter = Qwen3OmniImageConverter()
+        preprocessor = Qwen3OmniCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=image_converter,
+            sequence_length=8,
+        )
+        # Create dummy image
+        image_data = np.ones((224, 224, 3), dtype=np.uint8) * 128
+        input_data = {
+            "prompts": "airplane at airport",
+            "responses": "airplane",
+            "images": image_data,
+        }
+        x, y, sw = preprocessor(input_data)
+        # Check that pixel_values key is present
+        self.assertIn("pixel_values", x)
+        self.assertIn("token_ids", x)
+        self.assertIn("padding_mask", x)
+
+    def test_multimodal_generate_preprocess(self):
+        # Test generate preprocess with audio and images
+        try:
+            import librosa  # noqa: F401
+
+            audio_converter = Qwen3OmniAudioConverter()
+            image_converter = Qwen3OmniImageConverter()
+            preprocessor = Qwen3OmniCausalLMPreprocessor(
+                tokenizer=self.tokenizer,
+                audio_converter=audio_converter,
+                image_converter=image_converter,
+                sequence_length=8,
+            )
+            audio_data = np.random.randn(16000).astype(np.float32)
+            image_data = np.ones((224, 224, 3), dtype=np.uint8) * 128
+            input_data = {
+                "prompts": "airplane",
+                "audio": audio_data,
+                "images": image_data,
+            }
+            x = preprocessor.generate_preprocess(input_data)
+            # Check all keys are present
+            self.assertIn("token_ids", x)
+            self.assertIn("padding_mask", x)
+            self.assertIn("audio_features", x)
+            self.assertIn("pixel_values", x)
+        except ImportError:
+            self.skipTest("librosa not installed")
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in Qwen3OmniCausalLMPreprocessor.presets:
+            self.run_preset_test(
+                cls=Qwen3OmniCausalLMPreprocessor,
+                preset=preset,
+                input_data=self.input_data,
+            )
