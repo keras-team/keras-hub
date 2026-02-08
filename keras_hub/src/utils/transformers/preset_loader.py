@@ -137,6 +137,15 @@ class TransformersPresetLoader(PresetLoader):
     def load_tokenizer(self, cls, config_name="tokenizer.json", **kwargs):
         return self.converter.convert_tokenizer(cls, self.preset, **kwargs)
 
+    def load_audio_converter(self, cls, **kwargs):
+        if hasattr(self.converter, "load_audio_converter_config"):
+            config = self.converter.load_audio_converter_config(
+                self.preset, self.config
+            )
+            if config is not None:
+                return cls(**{**config, **kwargs})
+        return None
+
     def load_image_converter(self, cls, **kwargs):
         if hasattr(self.converter, "load_image_converter_config"):
             config = self.converter.load_image_converter_config(
