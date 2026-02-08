@@ -14,7 +14,7 @@ huggingface-cli login  # Required for gated model access
 Usage:
 ```shell
 cd tools/checkpoint_conversion
-python convert_gemma3_embedding_checkpoints.py --preset embeddinggemma_300m
+python convert_gemma3_embedding_checkpoints.py --preset embedding_gemma3_300m_en
 ```
 """
 
@@ -41,19 +41,14 @@ flags.DEFINE_string(
     None,
     "Preset name for output. Must be one of the keys in PRESET_MAP.",
 )
-flags.DEFINE_string(
-    "upload_uri",
-    None,
-    "Optional URI to upload the converted preset to (e.g., kaggle://...).",
-)
 
 # Map KerasHub preset names to HuggingFace model IDs
 PRESET_MAP = {
-    "embeddinggemma_300m": "google/embeddinggemma-300m",
+    "embedding_gemma3_300m_en": "google/embeddinggemma-300m",
 }
 
 BACKBONE_CONFIG = {
-    "embeddinggemma_300m": {
+    "embedding_gemma3_300m_en": {
         "vocabulary_size": 262144,
         "image_size": 896,
         "num_layers": 24,
@@ -232,15 +227,34 @@ def load_pooling_head_weights(hf_model_id):
 
 
 def convert_weights(keras_model, hf_weights, dense1_weights, dense2_weights):
-    """Transfer HuggingFace weights to KerasHub model with proper reshaping."""
+    """
+    Port weights from HuggingFace dictionary to KerasHub model.
+
+    This function handles:
+    1. Backbone weights: Mapping Gemma3CausalLM layers to KerasHub
+       Gemma3Backbone.
+       - Token embeddings
+       - Attention layers (Q, K, V, O projections)
+       - MLP layers (Gate, Up, Down projections)
+       - Layer norms (Pre-attention, Post-attention, Final norm)
+    2. Pooling head weights: Mapping SentenceTransformer dense layers.
+       - Dense 1 (768 -> 3072)
+       - Dense 2 (3072 -> 768)
+
+    Args:
+        keras_model: The target KerasHub Gemma3Backbone instance.
+        hf_weights: Dictionary of weights from the HF backbone model.
+        dense1_weights: Dictionary of weights from the first dense layer.
+        dense2_weights: Dictionary of weights from the second dense layer.
+    """
     print("Converting weights...")
     num_layers = keras_model.num_layers
 
     # Get model config for reshaping
-    num_q_heads = 3
-    num_kv_heads = 1
-    head_dim = 256
-    hidden_dim = 768
+    num_q_heads = keras_model.num_query_heads
+    num_kv_heads = keras_model.num_key_value_heads
+    head_dim = keras_model.head_dim
+    hidden_dim = keras_model.hidden_dim
 
     transferred = 0
     missing_keras = []
@@ -388,7 +402,22 @@ def convert_weights(keras_model, hf_weights, dense1_weights, dense2_weights):
 
 def validate_output(keras_model, keras_tokenizer, hf_model_id):
     """
-    Validate that KerasHub model produces same embeddings as HF model.
+    Validate numerical parity between KerasHub model and HF SentenceTransformer.
+
+    Performs three checks:
+    1. Parameter Count: Verifies exact match of backbone parameters.
+    2. Embedding Verification: Compares embeddings for test sentences
+       using Cosine Similarity (target > 0.9999).
+    3. Tokenization: Ensures KerasHub tokenizer matches HF tokenization
+       (with checks).
+
+    Args:
+        keras_model: The converted KerasHub model.
+        keras_tokenizer: The KerasHub tokenizer.
+        hf_model_id: The HuggingFace model ID to compare against.
+
+    Returns:
+        bool: True if all checks pass, False otherwise.
     """
     print("\n" + "=" * 60)
     print("NUMERICAL VERIFICATION")
@@ -464,6 +493,10 @@ def validate_output(keras_model, keras_tokenizer, hf_model_id):
     if hasattr(keras_tokens, "numpy"):
         keras_tokens = keras_tokens.numpy().tolist()
 
+    # Get sequence length from model config or default
+    seq_len = getattr(keras_model, "sliding_window_size", 512)
+    print(f"Using sequence length: {seq_len}")
+
     # Manually construct inputs with BOS and EOS tokens
     token_ids_list = []
     padding_mask_list = []
@@ -477,14 +510,14 @@ def validate_output(keras_model, keras_tokenizer, hf_model_id):
         )
         mask = [1] * len(seq)
 
-        # Pad to 512
-        pad_len = 512 - len(seq)
+        # Pad to sequence length
+        pad_len = seq_len - len(seq)
         if pad_len > 0:
             seq = seq + [0] * pad_len
             mask = mask + [0] * pad_len
         else:
-            seq = seq[:512]
-            mask = mask[:512]
+            seq = seq[:seq_len]
+            mask = mask[:seq_len]
 
         token_ids_list.append(seq)
         padding_mask_list.append(mask)
@@ -540,6 +573,12 @@ def validate_output(keras_model, keras_tokenizer, hf_model_id):
 
 
 def main(_):
+    """
+    Main entry point for the conversion script.
+
+    Loads the specified HuggingFace model, creates a KerasHub model,
+    transfers weights, validates the conversion, and saves the preset.
+    """
     preset = FLAGS.preset
     if preset not in PRESET_MAP:
         raise ValueError(
