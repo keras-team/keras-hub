@@ -65,7 +65,9 @@ class Qwen3OmniBackbone(Backbone):
         num_query_heads: int. The number of query attention heads.
         num_key_value_heads: int. The number of key/value attention heads.
         hidden_dim: int. The size of the transformer hidden state.
-        intermediate_dim: int. The output dimension of FFN layers.
+        intermediate_dim: int. The output dimension of dense FFN layers.
+        moe_intermediate_dim: int. The intermediate dimension of each MoE
+            expert FFN.
         head_dim: int. The dimension of each attention head.
         num_experts: int. Number of experts in MoE layers. Defaults to 128.
         num_experts_per_tok: int. Number of experts activated per token (top-k).
