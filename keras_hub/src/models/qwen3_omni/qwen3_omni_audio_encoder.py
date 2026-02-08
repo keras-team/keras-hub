@@ -233,6 +233,9 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         dtype=None,
         **kwargs,
     ):
+        # Call parent init FIRST (required for PyTorch backend)
+        super().__init__(dtype=dtype, **kwargs)
+
         self.num_mel_bins = num_mel_bins
         self.d_model = d_model
         self.encoder_layers_count = encoder_layers
@@ -323,9 +326,6 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         self.dropout_layer = layers.Dropout(
             dropout, dtype=dtype, name="dropout"
         )
-
-        # Call parent init
-        super().__init__(dtype=dtype, **kwargs)
 
     def call_with_inputs(self, input_features, training=False):
         """Forward pass through the audio encoder.
