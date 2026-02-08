@@ -78,110 +78,6 @@ BACKBONE_CONFIG = {
 }
 
 
-def get_hf_weight_map(num_layers):
-    """
-    Build mapping from HuggingFace weight keys to KerasHub layer paths.
-
-    Returns a dict: hf_key -> (keras_layer_name, weight_name, needs_transpose)
-    """
-    weight_map = {
-        # Token embedding (HF key has no "model." prefix)
-        "embed_tokens.weight": (
-            "token_embedding",
-            "embeddings",
-            False,
-        ),
-        # Final layer norm
-        "norm.weight": (
-            "final_normalization",
-            "scale",
-            False,
-        ),
-    }
-
-    # Decoder blocks (HF keys have no "model." prefix)
-    for i in range(num_layers):
-        prefix = f"layers.{i}"
-        keras_prefix = f"decoder_block_{i}"
-
-        # Attention weights
-        weight_map.update(
-            {
-                f"{prefix}.self_attn.q_proj.weight": (
-                    f"{keras_prefix}/attention",
-                    "query_dense/kernel",
-                    True,
-                ),
-                f"{prefix}.self_attn.k_proj.weight": (
-                    f"{keras_prefix}/attention",
-                    "key_dense/kernel",
-                    True,
-                ),
-                f"{prefix}.self_attn.v_proj.weight": (
-                    f"{keras_prefix}/attention",
-                    "value_dense/kernel",
-                    True,
-                ),
-                f"{prefix}.self_attn.o_proj.weight": (
-                    f"{keras_prefix}/attention",
-                    "output_dense/kernel",
-                    True,
-                ),
-                # Query/Key norms
-                f"{prefix}.self_attn.q_norm.weight": (
-                    f"{keras_prefix}/attention",
-                    "query_norm/scale",
-                    False,
-                ),
-                f"{prefix}.self_attn.k_norm.weight": (
-                    f"{keras_prefix}/attention",
-                    "key_norm/scale",
-                    False,
-                ),
-                # MLP weights
-                f"{prefix}.mlp.gate_proj.weight": (
-                    f"{keras_prefix}/gating_ffw",
-                    "kernel",
-                    True,
-                ),
-                f"{prefix}.mlp.up_proj.weight": (
-                    f"{keras_prefix}/gating_ffw_2",
-                    "kernel",
-                    True,
-                ),
-                f"{prefix}.mlp.down_proj.weight": (
-                    f"{keras_prefix}/ffw_linear",
-                    "kernel",
-                    True,
-                ),
-                # Layer norms
-                f"{prefix}.input_layernorm.weight": (
-                    f"{keras_prefix}/pre_attention_norm",
-                    "scale",
-                    False,
-                ),
-                f"{prefix}.post_attention_layernorm.weight": (
-                    f"{keras_prefix}/post_attention_norm",
-                    "scale",
-                    False,
-                ),
-                f"{prefix}.pre_feedforward_layernorm.weight": (
-                    f"{keras_prefix}/pre_ffw_norm",
-                    "scale",
-                    False,
-                ),
-                # Post FFW norm (present in this model)
-                f"{prefix}.post_feedforward_layernorm.weight": (
-                    f"{keras_prefix}/post_ffw_norm",
-                    "scale",
-                    False,
-                ),
-            }
-        )
-
-    return weight_map
-
-
 def load_hf_weights(hf_model_id):
     """Load weights from HuggingFace safetensors file."""
     print(f"Downloading weights from {hf_model_id}...")
@@ -409,7 +305,6 @@ def validate_output(keras_model, keras_tokenizer, hf_model_id):
     2. Embedding Verification: Compares embeddings for test sentences
        using Cosine Similarity (target > 0.9999).
     3. Tokenization: Ensures KerasHub tokenizer matches HF tokenization
-       (with checks).
 
     Args:
         keras_model: The converted KerasHub model.
