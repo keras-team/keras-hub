@@ -607,6 +607,9 @@ class Qwen3OmniVisionEncoder(keras.layers.Layer):
         dtype=None,
         **kwargs,
     ):
+        # Call parent init FIRST (required for PyTorch backend)
+        super().__init__(dtype=dtype, **kwargs)
+
         self.depth = depth
         self.hidden_size = hidden_size
         self.hidden_act = hidden_act
@@ -688,8 +691,6 @@ class Qwen3OmniVisionEncoder(keras.layers.Layer):
                 name=f"merger_list_{i}",
             )
             self.merger_list.append(merger)
-
-        super().__init__(dtype=dtype, **kwargs)
 
     def build(self, input_shape=None):
         # Build patch embedding with a representative shape
