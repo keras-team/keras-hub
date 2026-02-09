@@ -104,11 +104,27 @@ class PositionEmbedding(keras.layers.Layer):
         # than the sequence_length of the layer.
         position_embeddings = ops.convert_to_tensor(self.position_embeddings)
         if positions is None:
-            position_embeddings = ops.slice(
-                position_embeddings,
-                (start_index, 0),
-                (sequence_length, feature_length),
-            )
+            # Fast path for single-token cached decoding on torch: use direct
+            # indexing instead of ops.slice to avoid overhead.
+            # Only applies when both sequence_length and start_index are
+            # static Python ints (not traced values like in JAX JIT).
+            if (
+                isinstance(sequence_length, int)
+                and sequence_length == 1
+                and isinstance(start_index, int)
+            ):
+                position_embeddings = position_embeddings[
+                    start_index : start_index + 1, :
+                ]
+                position_embeddings = ops.expand_dims(
+                    position_embeddings, axis=0
+                )
+            else:
+                position_embeddings = ops.slice(
+                    position_embeddings,
+                    (start_index, 0),
+                    (sequence_length, feature_length),
+                )
         else:
             # Take care of unbatched `positions`.
             if len(ops.shape(positions)) == 1:

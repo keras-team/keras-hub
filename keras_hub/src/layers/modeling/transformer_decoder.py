@@ -238,6 +238,73 @@ class TransformerDecoder(keras.layers.Layer):
         # Create layers based on input shape.
         self.built = True
 
+    def call_cached(
+        self,
+        decoder_sequence,
+        self_attention_cache,
+        self_attention_cache_update_index,
+        self_attention_mask=None,
+    ):
+        """Fast path for cached autoregressive decoding (decoder-only).
+
+        Skips all validation checks, cross-attention logic, and mask
+        computation when a precomputed attention mask is provided.
+        This avoids redundant `compute_causal_mask` calls across layers
+        (12 calls per step → 1 call per step when mask is shared).
+        """
+        x = decoder_sequence
+
+        # Self attention block (normalize_first path for GPT-2).
+        residual = x
+        if self.normalize_first:
+            x = self._self_attention_layer_norm(x)
+
+        # Compute mask only if not provided (fallback).
+        if self_attention_mask is None:
+            self_attention_mask = self._compute_self_attention_mask(
+                decoder_sequence=decoder_sequence,
+                decoder_padding_mask=None,
+                decoder_attention_mask=None,
+                use_causal_mask=True,
+                self_attention_cache=self_attention_cache,
+                self_attention_cache_update_index=(
+                    self_attention_cache_update_index
+                ),
+            )
+
+        # Enable SDPA override for self-attention only (not cross-attention).
+        self._self_attention_layer._use_sdpa_override = True
+        x, self_attention_cache = self._self_attention_layer(
+            query=x,
+            value=x,
+            attention_mask=self_attention_mask,
+            cache=self_attention_cache,
+            cache_update_index=self_attention_cache_update_index,
+        )
+        # Reset SDPA override after use.
+        self._self_attention_layer._use_sdpa_override = False
+        # Dropout is a no-op during inference (rate=0 or training=False).
+        # Skip the call entirely to avoid layer overhead.
+        if self.dropout > 0:
+            x = self._self_attention_dropout(x, training=False)
+        x = x + residual
+        if not self.normalize_first:
+            x = self._self_attention_layer_norm(x)
+
+        # Feedforward block.
+        residual = x
+        if self.normalize_first:
+            x = self._feedforward_layer_norm(x)
+        x = self._feedforward_intermediate_dense(x)
+        x = self._feedforward_output_dense(x)
+        if self.dropout > 0:
+            x = self._feedforward_dropout(x, training=False)
+        x = x + residual
+        if not self.normalize_first:
+            x = self._feedforward_layer_norm(x)
+
+        return (x, self_attention_cache)
+
     def call(
         self,
         decoder_sequence,

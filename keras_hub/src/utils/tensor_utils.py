@@ -397,10 +397,13 @@ def any_equal(inputs, values, padding_mask):
             a value from any `values`. Padding mask will be applied before
             returning.
     """
-    output = ops.equal(inputs, values[0])
-    for value in values[1:]:
-        value_equality = ops.equal(inputs, value)
-        output = ops.logical_or(output, value_equality)
+    # Fast path for single stop token (most common case).
+    if len(values) == 1:
+        output = ops.equal(inputs, values[0])
+    else:
+        output = ops.equal(inputs, values[0])
+        for value in values[1:]:
+            output = ops.logical_or(output, ops.equal(inputs, value))
 
     return ops.logical_and(output, padding_mask)
 

@@ -150,7 +150,8 @@ class CausalLM(Task):
                 inputs,
                 stop_token_ids=None,
             ):
-                with torch.no_grad():
+                # Use torch.no_grad() and inference_mode for best performance
+                with torch.no_grad(), torch.inference_mode():
                     return self.generate_step(inputs, stop_token_ids)
 
             self.generate_function = wrapped_generate_function

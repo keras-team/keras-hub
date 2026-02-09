@@ -187,17 +187,53 @@ class GPT2CausalLM(CausalLM):
         )
         x = self.backbone.embeddings_add((tokens, positions))
         x = self.backbone.embeddings_dropout(x)
+
+        # Precompute the causal mask once and share across all layers.
+        # This saves (num_layers - 1) calls to compute_causal_mask per step.
+        # For GPT-2 base (12 layers), this is 11 fewer mask computations.
+        batch_size = ops.shape(token_ids)[0]
+        seq_len = ops.shape(token_ids)[1]
+        cache_len = ops.shape(cache)[3]  # max_length from cache shape
+        from keras_hub.src.layers.modeling.transformer_layer_utils import (
+            compute_causal_mask,
+        )
+
+        causal_mask = compute_causal_mask(
+            batch_size, cache_len, seq_len, cache_update_index
+        )
+
         # Each decoder layer has a cache; we update them separately.
-        caches = []
-        for i, transformer_layer in enumerate(self.backbone.transformer_layers):
-            current_cache = cache[:, i, ...]
-            x, next_cache = transformer_layer(
-                x,
-                self_attention_cache=current_cache,
-                self_attention_cache_update_index=cache_update_index,
-            )
-            caches.append(next_cache)
-        cache = ops.stack(caches, axis=1)
+        if keras.config.backend() == "torch":
+            # On torch, slice_update is in-place through views, so the
+            # original cache tensor is already updated. We don't need to
+            # collect and re-stack layer caches, saving 12 ops.stack calls
+            # per generation step.
+            # Use call_cached() fast path to skip validation overhead and
+            # pass the precomputed mask to avoid redundant mask creation.
+            for i, transformer_layer in enumerate(
+                self.backbone.transformer_layers
+            ):
+                current_cache = cache[:, i, ...]
+                x, _ = transformer_layer.call_cached(
+                    x,
+                    self_attention_cache=current_cache,
+                    self_attention_cache_update_index=cache_update_index,
+                    self_attention_mask=causal_mask,
+                )
+        else:
+            caches = []
+            for i, transformer_layer in enumerate(
+                self.backbone.transformer_layers
+            ):
+                current_cache = cache[:, i, ...]
+                x, next_cache = transformer_layer.call_cached(
+                    x,
+                    self_attention_cache=current_cache,
+                    self_attention_cache_update_index=cache_update_index,
+                    self_attention_mask=causal_mask,
+                )
+                caches.append(next_cache)
+            cache = ops.stack(caches, axis=1)
         hidden_states = x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
@@ -241,19 +277,30 @@ class GPT2CausalLM(CausalLM):
         # Start at the first index that has no user inputted id.
         index = ops.min(row_lengths)
 
+        # Determine if we can use direct tensor indexing (torch) or need
+        # ops.slice (JAX/TF, which require static shapes in JIT).
+        _use_direct_indexing = keras.config.backend() == "torch"
+
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.
             cache_update_index = index - 1
-            batch_size = ops.shape(prompt)[0]
-            prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
+            # Extract single token for cached forward pass.
+            if _use_direct_indexing:
+                # Direct indexing avoids ops.slice/convert_to_tensor overhead.
+                prompt = prompt[:, cache_update_index:cache_update_index + 1]
+            else:
+                batch_size = ops.shape(prompt)[0]
+                prompt = ops.slice(
+                    prompt, [0, cache_update_index], [batch_size, 1]
+                )
             logits, hidden_states, cache = self.call_with_cache(
                 prompt,
                 cache,
                 cache_update_index,
             )
             return (
-                ops.squeeze(logits, axis=1),
-                ops.squeeze(hidden_states, axis=1),
+                logits[:, 0, :],
+                hidden_states[:, 0, :],
                 cache,
             )
 

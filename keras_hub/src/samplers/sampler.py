@@ -134,8 +134,10 @@ class Sampler:
         This will always be done in full precision, regardless of dtype, and
         scale by `temperature`.
         """
-        logits = ops.cast(logits, "float32")
-        return keras.activations.softmax(logits / self.temperature)
+        logits_scaled = ops.cast(logits, "float32")
+        if self.temperature != 1.0:
+            logits_scaled = logits_scaled / self.temperature
+        return keras.activations.softmax(logits_scaled)
 
     def run_loop(
         self, cond, body, model=None, loop_vars=None, maximum_iterations=None
@@ -200,6 +202,8 @@ class Sampler:
             for ref_v, v in zip(self.variables, state[0]):
                 ref_v.assign(v)
         else:
+            # Use ops.while_loop for all other backends
+            # The PyTorch backend's while_loop is now optimized in Keras Core
             loop_vars = ops.while_loop(
                 cond=cond,
                 body=body,
