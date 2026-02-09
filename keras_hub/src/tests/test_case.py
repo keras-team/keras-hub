@@ -561,8 +561,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_output_shape=None,
         model=None,
         verify_numerics=True,
-        # No LiteRT output in model saving test; remove undefined return
         output_thresholds=None,
+        strict_input_types=False,  # Defaults to False to preserve legacy behavior
         **export_kwargs,
     ):
         """Export model to LiteRT format and verify outputs.
@@ -587,6 +587,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 with "max" and "mean" keys. Use "*" as wildcard for defaults.
                 Example: {"output1": {"max": 1e-4, "mean": 1e-5},
                          "*": {"max": 1e-3, "mean": 1e-4}}
+            strict_input_types: bool. If True, input data types (specifically bools)
+                are preserved as-is. If False (default), bools are converted to
+                int32 for compatibility with older models.
             **export_kwargs: Additional keyword arguments to pass to
                 model.export(), such as allow_custom_ops=True or
                 enable_select_tf_ops=True.
@@ -705,14 +708,15 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     if hasattr(x, "dtype"):
                         if isinstance(x, np.ndarray):
                             if x.dtype == bool:
-                                return x  # Keep as boolean!
+                                # Use strict mode if requested, otherwise legacy int32 conversion
+                                return x if strict_input_types else x.astype(np.int32)
                             elif x.dtype == np.float64:
                                 return x.astype(np.float32)
                             elif x.dtype == np.int64:
                                 return x.astype(np.int32)
                         else:  # TensorFlow tensor
                             if x.dtype == tf.bool:
-                                return x.numpy()
+                                return x.numpy() if strict_input_types else ops.cast(x, "int32").numpy()
                             elif x.dtype == tf.float64:
                                 return ops.cast(x, "float32").numpy()
                             elif x.dtype == tf.int64:
