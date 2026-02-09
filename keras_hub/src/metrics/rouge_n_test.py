@@ -68,15 +68,21 @@ class RougeNTest(TestCase):
         outputs = keras.layers.Identity()(inputs)
         model = keras.Model(inputs, outputs)
 
-        model.compile(metrics=[RougeN()])
+        class EmptyLoss(keras.Loss):
+            def __call__(self, y_true, y_pred, sample_weight):
+                return 0.5
 
-        y_pred = x = tf.constant(["hello this is fun"])
-        y = tf.constant(["hello this is awesome"])
+        model.compile(loss=EmptyLoss(), metrics=[RougeN()], run_eagerly=True)
 
-        output = model.compute_metrics(x, y, y_pred, sample_weight=None)
-        self.assertAllClose(output["precision"], 0.666666)
-        self.assertAllClose(output["recall"], 0.666666)
-        self.assertAllClose(output["f1_score"], 0.666666)
+        x = tf.constant([["hello this is fun"]])
+        y = tf.constant([["hello this is awesome"]])
+
+        output = model.evaluate(x, y, return_dict=True)
+        del output["loss"]
+        self.assertAllClose(
+            output,
+            {"precision": 0.666666, "recall": 0.666666, "f1_score": 0.666666},
+        )
 
     def test_incorrect_order(self):
         with self.assertRaises(ValueError):
