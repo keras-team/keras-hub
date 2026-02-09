@@ -18,7 +18,7 @@ class DepthAnythingBackboneTest(TestCase):
             16 * 4,
             1.0,
             0,
-            image_shape=(70, 70, 3),
+            image_shape=(126, 126, 3),
             apply_layernorm=True,
             name="image_encoder",
         )
@@ -31,14 +31,14 @@ class DepthAnythingBackboneTest(TestCase):
             "head_in_index": -1,
             "feature_keys": ["stage1", "stage2", "stage3", "stage4"],
         }
-        self.input_data = np.ones((2, 70, 70, 3), dtype="float32")
+        self.input_data = np.ones((2, 126, 126, 3), dtype="float32")
 
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=DepthAnythingBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output_shape=(2, 70, 70, 1),
+            expected_output_shape=(2, 126, 126, 1),
         )
 
     @pytest.mark.large

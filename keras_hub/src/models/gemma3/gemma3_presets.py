@@ -256,4 +256,40 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/function-gemma/keras/function_gemma_instruct_270m/1",
     },
+    "translategemma_4b_it": {
+        "metadata": {
+            "description": (
+                "4 billion parameter, 34-layer, multimodal instruction-tuned "
+                "translation model based on Gemma 3. Supports text and image "
+                "input for translation across 55 languages."
+            ),
+            "params": 4299915632,
+            "path": "gemma3",
+        },
+        "kaggle_handle": "kaggle://keras/translategemma/keras/translategemma_4b_it/1",
+    },
+    "translategemma_12b_it": {
+        "metadata": {
+            "description": (
+                "12 billion parameter, 48-layer, multimodal instruction-tuned "
+                "translation model based on Gemma 3. Supports text and image "
+                "input for translation across 55 languages."
+            ),
+            "params": 12187079280,
+            "path": "gemma3",
+        },
+        "kaggle_handle": "kaggle://keras/translategemma/keras/translategemma_12b_it/1",
+    },
+    "translategemma_27b_it": {
+        "metadata": {
+            "description": (
+                "27 billion parameter, 62-layer, multimodal instruction-tuned "
+                "translation model based on Gemma 3. Supports text and image "
+                "input for translation across 55 languages."
+            ),
+            "params": 27432062576,
+            "path": "gemma3",
+        },
+        "kaggle_handle": "kaggle://keras/translategemma/keras/translategemma_27b_it/1",
+    },
 }

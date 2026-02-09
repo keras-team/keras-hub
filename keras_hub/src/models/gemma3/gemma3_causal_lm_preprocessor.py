@@ -605,13 +605,27 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # === Vision processing ===
 
+        batch_size = tf.shape(prompts)[0]
+        desired_height = self.image_converter.image_size[0]
+        desired_width = self.image_converter.image_size[1]
         if images is None:
             # == Branch: vision model, with `None` value for `images` ==
 
             # To handle the text-only input case, we need to pass an empty
             # tensor so as to skip the vision layers of the model.
 
-            images = None
+            # TODO: Once functional models accept `None` inputs, consider
+            # passing this as `None` directly.
+            images = tf.ones(
+                shape=[
+                    batch_size,
+                    0,
+                    desired_height,
+                    desired_width,
+                    3,
+                ],
+                dtype="float32",
+            )
 
             vision_mask = tf.zeros_like(token_ids, dtype=bool)
 
@@ -668,10 +682,13 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         if isinstance(x, dict):
             images = x.get("images", None)
 
+            # TODO: do we even need `responses` for generation? Makes sense for
+            # finetuning only (i.e., `call()`).
+            responses = x.get("responses", None)
             prompts = x["prompts"]
         else:
             images = None
-
+            responses = None
             prompts = x
 
         # Find out if the input is batched/not batched. Uprank if not batched.
@@ -679,15 +696,16 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # the following logic (indices, etc.) uses tensors with a batch dim.
         # We will squeeze these back at the end.
         batched = True
-
-        batched = True
         if isinstance(prompts, str):
             batched = False
             prompts = [prompts]
+            if responses is not None:
+                responses = [responses]
         if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
             batched = False
-
             prompts = tf.expand_dims(prompts, axis=0)
+            if responses is not None:
+                responses = tf.expand_dims(responses, axis=0)
 
         # We have the same 8 cases here, as in `call()`.
         if self.text_only_model and images is not None:
@@ -711,7 +729,11 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # === Tokenization, padding, etc. ===
         prompts = self.tokenizer(prompts)
 
-        segments = (prompts,)
+        if responses is not None:
+            responses = self.tokenizer(responses)
+            segments = (prompts, responses)
+        else:
+            segments = (prompts,)
 
         # Padding.
         token_ids, segment_ids = self.packer(
@@ -737,13 +759,27 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # === Vision processing ===
 
+        batch_size = tf.shape(prompts)[0]
+        desired_height = self.image_converter.image_size[0]
+        desired_width = self.image_converter.image_size[1]
         if images is None:
             # == Branch: vision model, with `None` value for `images` ==
 
             # To handle the text-only input case, we need to pass an empty
             # tensor so as to skip the vision layers of the model.
 
-            images = None
+            # TODO: Once functional models accept `None` inputs, consider
+            # passing this as `None` directly.
+            images = tf.ones(
+                shape=[
+                    batch_size,
+                    0,
+                    desired_height,
+                    desired_width,
+                    3,
+                ],
+                dtype="float32",
+            )
 
             vision_mask = tf.zeros_like(token_ids, dtype=bool)
 
