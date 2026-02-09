@@ -174,7 +174,7 @@ class VideoPrismAttention(keras.layers.Layer):
         num_heads,
         key_dim,
         hidden_dim,
-        dropout=0,
+        dropout_rate=0,
         attention_logit_soft_cap=None,
         use_per_dim_scale=False,
         **kwargs,
@@ -183,7 +183,7 @@ class VideoPrismAttention(keras.layers.Layer):
         self.num_heads = num_heads
         self.key_dim = key_dim
         self.hidden_dim = hidden_dim
-        self.dropout = dropout
+        self.dropout_rate = dropout_rate
         self.attention_logit_soft_cap = attention_logit_soft_cap
         self.use_per_dim_scale = use_per_dim_scale
 
@@ -216,7 +216,7 @@ class VideoPrismAttention(keras.layers.Layer):
             name="output",
         )
         self.dropout_layer = keras.layers.Dropout(
-            self.dropout, dtype=self.dtype_policy, name="dropout"
+            self.dropout_rate, dtype=self.dtype_policy, name="dropout"
         )
         if self.use_per_dim_scale:
             self.per_dim_scale_layer = VideoPrismPerDimScale(
@@ -283,7 +283,7 @@ class VideoPrismAttention(keras.layers.Layer):
                 "num_heads": self.num_heads,
                 "key_dim": self.key_dim,
                 "hidden_dim": self.hidden_dim,
-                "dropout": self.dropout,
+                "dropout_rate": self.dropout_rate,
                 "attention_logit_soft_cap": self.attention_logit_soft_cap,
                 "use_per_dim_scale": self.use_per_dim_scale,
             }
@@ -309,7 +309,7 @@ class VideoPrismEncoderBlock(keras.layers.Layer):
         hidden_dim,
         intermediate_dim,
         dropout_rate=0.0,
-        attention_dropout=0.0,
+        attention_dropout_rate=0.0,
         layer_norm_epsilon=1e-6,
         attention_logit_soft_cap=None,
         activation="gelu",
@@ -322,7 +322,7 @@ class VideoPrismEncoderBlock(keras.layers.Layer):
         self.key_dim = hidden_dim // num_heads
         self.intermediate_dim = intermediate_dim
         self.dropout_rate = dropout_rate
-        self.attention_dropout = attention_dropout
+        self.attention_dropout_rate = attention_dropout_rate
         self.layer_norm_epsilon = layer_norm_epsilon
         self.attention_logit_soft_cap = attention_logit_soft_cap
         self.activation = activation
@@ -337,7 +337,7 @@ class VideoPrismEncoderBlock(keras.layers.Layer):
             num_heads=self.num_heads,
             key_dim=self.key_dim,
             hidden_dim=self.hidden_dim,
-            dropout=self.attention_dropout,
+            dropout_rate=self.attention_dropout_rate,
             attention_logit_soft_cap=self.attention_logit_soft_cap,
             dtype=self.dtype_policy,
             name="mha",
@@ -400,7 +400,7 @@ class VideoPrismEncoderBlock(keras.layers.Layer):
                 "key_dim": self.key_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "dropout_rate": self.dropout_rate,
-                "attention_dropout": self.attention_dropout,
+                "attention_dropout_rate": self.attention_dropout_rate,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "attention_logit_soft_cap": self.attention_logit_soft_cap,
                 "activation": self.activation,
@@ -425,7 +425,7 @@ class VideoPrismEncoder(keras.layers.Layer):
         hidden_dim,
         intermediate_dim,
         dropout_rate=0.0,
-        attention_dropout=0.0,
+        attention_dropout_rate=0.0,
         layer_norm_epsilon=1e-6,
         attention_logit_soft_cap=None,
         activation="gelu",
@@ -439,7 +439,7 @@ class VideoPrismEncoder(keras.layers.Layer):
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.dropout_rate = dropout_rate
-        self.attention_dropout = attention_dropout
+        self.attention_dropout_rate = attention_dropout_rate
         self.layer_norm_epsilon = layer_norm_epsilon
         self.attention_logit_soft_cap = attention_logit_soft_cap
         self.activation = activation
@@ -453,7 +453,7 @@ class VideoPrismEncoder(keras.layers.Layer):
                 hidden_dim=self.hidden_dim,
                 intermediate_dim=self.intermediate_dim,
                 dropout_rate=self.dropout_rate,
-                attention_dropout=self.attention_dropout,
+                attention_dropout_rate=self.attention_dropout_rate,
                 layer_norm_epsilon=self.layer_norm_epsilon,
                 attention_logit_soft_cap=self.attention_logit_soft_cap,
                 activation=self.activation,
@@ -493,9 +493,9 @@ class VideoPrismEncoder(keras.layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "dropout_rate": self.dropout_rate,
-                "attention_dropout": self.attention_dropout,
+                "attention_dropout_rate": self.attention_dropout_rate,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "attn_logit_cap": self.attn_logit_cap,
+                "attention_logit_soft_cap": self.attention_logit_soft_cap,
                 "activation": self.activation,
                 "is_causal": self.is_causal,
                 "use_final_layernorm": self.use_final_layernorm,
@@ -826,7 +826,7 @@ class VideoPrismAttenTokenPoolingLayer(keras.layers.Layer):
         query_dim: int. The dimensionality of the query vectors.
             Defaults to `hidden_dim` if not specified.
         num_queries: int. Number of attention queries. Defaults to `1`.
-        dropout: float. Dropout rate. Defaults to `0.0`.
+        dropout_rate: float. Dropout rate. Defaults to `0.0`.
         layer_norm_epsilon: float. Epsilon for layer normalization.
             Defaults to `1e-6`.
         **kwargs: Additional keyword arguments passed to `keras.layers.Layer`.
@@ -838,7 +838,7 @@ class VideoPrismAttenTokenPoolingLayer(keras.layers.Layer):
         hidden_dim,
         query_dim=None,
         num_queries=1,
-        dropout=0.0,
+        dropout_rate=0.0,
         layer_norm_epsilon=1e-6,
         use_per_dim_scale=True,
         **kwargs,
@@ -848,7 +848,7 @@ class VideoPrismAttenTokenPoolingLayer(keras.layers.Layer):
         self.hidden_dim = hidden_dim
         self.query_dim = query_dim or hidden_dim
         self.num_queries = num_queries
-        self.dropout = dropout
+        self.dropout_rate = dropout_rate
         self.layer_norm_epsilon = layer_norm_epsilon
         self.use_per_dim_scale = use_per_dim_scale
         self.key_dim = 4 * self.hidden_dim // self.num_heads
@@ -863,7 +863,7 @@ class VideoPrismAttenTokenPoolingLayer(keras.layers.Layer):
             num_heads=self.num_heads,
             key_dim=self.key_dim,
             hidden_dim=self.hidden_dim,  # Output dim
-            dropout=self.dropout,
+            dropout_rate=self.dropout_rate,
             use_per_dim_scale=self.use_per_dim_scale,
             dtype=self.dtype_policy,
             name="pooling_attention",
@@ -874,7 +874,7 @@ class VideoPrismAttenTokenPoolingLayer(keras.layers.Layer):
             name="pooling_attention_layer_norm",
         )
         self.dropout_layer = keras.layers.Dropout(
-            self.dropout, dtype=self.dtype_policy, name="attention_dropout"
+            self.dropout_rate, dtype=self.dtype_policy, name="attention_dropout"
         )
 
     def call(self, inputs, padding_mask=None):
@@ -902,7 +902,7 @@ class VideoPrismAttenTokenPoolingLayer(keras.layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "query_dim": self.query_dim,
                 "num_queries": self.num_queries,
-                "dropout": self.dropout,
+                "dropout_rate": self.dropout_rate,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )

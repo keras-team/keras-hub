@@ -88,7 +88,7 @@ class VideoPrismBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape={
-                "video_embeddings": (2, 16),
+                "vision_embeddings": (2, 16),
                 "text_embeddings": (2, 16),
             },
         )

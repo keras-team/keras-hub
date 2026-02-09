@@ -65,7 +65,7 @@ class VideoPrismBackbone(Backbone):
             text encoder. Set to `0` for video-only mode, or a positive value
             for multimodal mode with both video and text encoders.
             Defaults to `0`.
-        dropout: float. Dropout probability for the Transformer encoder.
+        dropout_rate: float. Dropout probability for the Transformer encoder.
             Defaults to `0.0`.
         attention_dropout: float. Dropout probability applied to the attention
             weights. Defaults to `0.0`.
@@ -88,7 +88,7 @@ class VideoPrismBackbone(Backbone):
 
         When `num_text_layers>0` (multimodal mode):
             A dictionary with two keys:
-            - `"video_embeddings"`: A tensor of shape
+            - `"vision_embeddings"`: A tensor of shape
               `(batch_size, hidden_dim)` containing the pooled and normalized
               video embeddings.
             - `"text_embeddings"`: A tensor of shape `(batch_size, hidden_dim)`
@@ -118,7 +118,7 @@ class VideoPrismBackbone(Backbone):
         "padding_mask": padding_mask,
     }
     outputs = backbone.predict(inputs)
-    outputs["video_embeddings"]  # (batch_size, hidden_dim)
+    outputs["vision_embeddings"]  # (batch_size, hidden_dim)
     outputs["text_embeddings"]  # (batch_size, hidden_dim)
     ```
     """
@@ -136,7 +136,7 @@ class VideoPrismBackbone(Backbone):
         vocabulary_size=0,
         num_text_layers=0,
         dropout_rate=0.0,
-        attention_dropout=0.0,
+        attention_dropout_rate=0.0,
         attention_logit_soft_cap=None,
         layer_norm_epsilon=1e-6,
         image_shape=(288, 288, 3),
@@ -167,7 +167,7 @@ class VideoPrismBackbone(Backbone):
             hidden_dim=hidden_dim,
             intermediate_dim=intermediate_dim,
             dropout_rate=dropout_rate,
-            attention_dropout=attention_dropout,
+            attention_dropout_rate=attention_dropout_rate,
             layer_norm_epsilon=layer_norm_epsilon,
             attention_logit_soft_cap=attention_logit_soft_cap,
             dtype=dtype,
@@ -185,7 +185,7 @@ class VideoPrismBackbone(Backbone):
             hidden_dim=hidden_dim,
             intermediate_dim=intermediate_dim,
             dropout_rate=dropout_rate,
-            attention_dropout=attention_dropout,
+            attention_dropout_rate=attention_dropout_rate,
             layer_norm_epsilon=layer_norm_epsilon,
             attention_logit_soft_cap=attention_logit_soft_cap,
             dtype=dtype,
@@ -209,7 +209,7 @@ class VideoPrismBackbone(Backbone):
                     hidden_dim=hidden_dim,
                     intermediate_dim=intermediate_dim,
                     dropout_rate=dropout_rate,
-                    attention_dropout=attention_dropout,
+                    attention_dropout_rate=attention_dropout_rate,
                     layer_norm_epsilon=layer_norm_epsilon,
                     attention_logit_soft_cap=attention_logit_soft_cap,
                     activation="gelu",
@@ -223,7 +223,7 @@ class VideoPrismBackbone(Backbone):
                 hidden_dim=hidden_dim,
                 query_dim=hidden_dim,
                 num_queries=1,
-                dropout=dropout_rate,
+                dropout_rate=dropout_rate,
                 layer_norm_epsilon=layer_norm_epsilon,
                 dtype=dtype,
                 name="video_pooler",
@@ -242,7 +242,7 @@ class VideoPrismBackbone(Backbone):
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
                 dropout_rate=dropout_rate,
-                attention_dropout=attention_dropout,
+                attention_dropout_rate=attention_dropout_rate,
                 layer_norm_epsilon=layer_norm_epsilon,
                 attention_logit_soft_cap=attention_logit_soft_cap,
                 activation="relu",  # Text encoder uses ReLU
@@ -303,7 +303,7 @@ class VideoPrismBackbone(Backbone):
         self.vocabulary_size = vocabulary_size
         self.num_text_layers = num_text_layers
         self.dropout_rate = dropout_rate
-        self.attention_dropout = attention_dropout
+        self.attention_dropout_rate = attention_dropout_rate
         self.attention_logit_soft_cap = attention_logit_soft_cap
         self.layer_norm_epsilon = layer_norm_epsilon
         self.image_shape = image_shape
@@ -351,7 +351,7 @@ class VideoPrismBackbone(Backbone):
                 "vocabulary_size": self.vocabulary_size,
                 "num_text_layers": self.num_text_layers,
                 "dropout_rate": self.dropout_rate,
-                "attention_dropout": self.attention_dropout,
+                "attention_dropout_rate": self.attention_dropout_rate,
                 "attention_logit_soft_cap": self.attention_logit_soft_cap,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "image_shape": self.image_shape,

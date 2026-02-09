@@ -36,7 +36,7 @@ class VideoPrismTokenizer(SentencePieceTokenizer):
     ```python
     # Unbatched input.
     tokenizer = keras_hub.models.VideoPrismTokenizer.from_preset(
-        "videoprism_base_en"
+        "videoprism_lvt_public_v1_base"
     )
     tokenizer("The quick brown fox jumped.")
 
