@@ -42,4 +42,12 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/mistral/keras/mistral_0.3_instruct_7b_en/1",
     },
+    "devstral_small_1_1": {
+        "metadata": {
+            "description": "Devstral Small 1.1 24B finetuned base model",
+            "params": 23572403200,
+            "path": "devstral_small_1_1",
+        },
+        "kaggle_handle": "kaggle://keras/mistral/keras/devstral_small_1_1/1",
+    },
 }

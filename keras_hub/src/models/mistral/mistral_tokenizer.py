@@ -3,6 +3,7 @@ from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
+from keras_hub.src.tokenizers.tiktoken_tokenizer import TiktokenTokenizer
 
 
 @keras_hub_export(
@@ -55,3 +56,29 @@ class MistralTokenizer(SentencePieceTokenizer):
         self._add_special_token("</s>", "end_token")
         self.pad_token_id = 0
         super().__init__(proto=proto, **kwargs)
+
+
+@keras_hub_export(
+    [
+        "keras_hub.tokenizers.MistralTiktokenTokenizer",
+        "keras_hub.models.MistralTiktokenTokenizer",
+    ]
+)
+class MistralTiktokenTokenizer(TiktokenTokenizer):
+    """
+    Tiktoken-based tokenizer for Mistral models.
+    """
+
+    backbone_cls = MistralBackbone
+
+    def __init__(self, proto, sequence_length=None, dtype="int32", **kwargs):
+        self._add_special_token("<s>", "start_token")
+        self._add_special_token("</s>", "end_token")
+        self.pad_token_id = 0
+
+        super().__init__(
+            proto=proto,
+            sequence_length=sequence_length,
+            dtype=dtype,
+            **kwargs,
+        )

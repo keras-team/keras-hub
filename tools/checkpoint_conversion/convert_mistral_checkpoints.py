@@ -5,10 +5,14 @@ import tempfile
 import traceback
 
 import numpy as np
+import torch
 from absl import app
 from absl import flags
 from keras import ops
-from transformers import AutoTokenizer
+
+# !pip install git+https://github.com/huggingface/transformers.git
+# !pip install mistral-common
+from transformers import MistralCommonBackend
 from transformers import MistralForCausalLM
 
 from keras_hub.models import MistralBackbone
@@ -22,6 +26,7 @@ PRESET_MAP = {
     "mistral_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.1",
     "mistral_0.2_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.2",
     "mistral_0.3_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.3",
+    "devstral_small_1_1": "mistralai/Devstral-Small-2507",
 }
 
 FLAGS = flags.FLAGS
@@ -219,22 +224,31 @@ def main(_):
 
     try:
         # === Load the Huggingface model ===
-        hf_model = MistralForCausalLM.from_pretrained(hf_preset)
-        hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
+        hf_model = MistralForCausalLM.from_pretrained(
+            hf_preset, torch_dtype=torch.float16
+        )
+
+        hf_tokenizer = MistralCommonBackend.from_pretrained(hf_preset)
         hf_model.eval()
         print("\n-> Huggingface model and tokenizer loaded")
+        hf_config = hf_model.config
+        rope_theta = getattr(
+            hf_config,
+            "rope_theta",
+            getattr(hf_config.rope_parameters, "theta", None),
+        )
 
         # === Load the KerasHub model ===
         backbone_kwargs = dict(
-            vocabulary_size=hf_model.config.vocab_size,
-            hidden_dim=hf_model.config.hidden_size,
-            num_layers=hf_model.config.num_hidden_layers,
-            num_query_heads=hf_model.config.num_attention_heads,
-            num_key_value_heads=hf_model.config.num_key_value_heads,
-            intermediate_dim=hf_model.config.intermediate_size,
-            sliding_window=hf_model.config.sliding_window,
-            layer_norm_epsilon=hf_model.config.rms_norm_eps,
-            rope_max_wavelength=hf_model.config.rope_theta,
+            vocabulary_size=hf_config.vocab_size,
+            hidden_dim=hf_config.hidden_size,
+            num_layers=hf_config.num_hidden_layers,
+            num_query_heads=hf_config.num_attention_heads,
+            num_key_value_heads=hf_config.num_key_value_heads,
+            intermediate_dim=hf_config.intermediate_size,
+            sliding_window=hf_config.sliding_window,
+            layer_norm_epsilon=hf_config.rms_norm_eps,
+            rope_max_wavelength=rope_theta,
             dtype="float32",
         )
         keras_hub_backbone = MistralBackbone(**backbone_kwargs)
