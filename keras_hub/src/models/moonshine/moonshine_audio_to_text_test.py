@@ -4,6 +4,7 @@ from unittest.mock import patch
 import keras
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter,
@@ -145,14 +146,31 @@ class MoonshineAudioToTextTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.skip(
-        reason="TODO: Bug with MoonshineAudioToText liteRT export"
-    )
     def test_litert_export(self):
+        # LiteRT inputs are strict about types.
+        # The model expects boolean masks, but the test data provides int32.
+
+        # 1. Convert ALL inputs to numpy first to avoid "mixing tensors" error.
+        input_data = {}
+        for k, v in self.input_data.items():
+            input_data[k] = ops.convert_to_numpy(v)
+
+        # 2. Force masks to boolean
+        if "encoder_padding_mask" in input_data:
+            input_data["encoder_padding_mask"] = np.array(
+                input_data["encoder_padding_mask"], dtype=bool
+            )
+
+        if "decoder_padding_mask" in input_data:
+            input_data["decoder_padding_mask"] = np.array(
+                input_data["decoder_padding_mask"], dtype=bool
+            )
+
         self.run_litert_export_test(
             cls=MoonshineAudioToText,
             init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
+            input_data=input_data,
+            strict_input_types=True,
         )
 
     @pytest.mark.extra_large
