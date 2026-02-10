@@ -169,8 +169,11 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             value = value.transpose(1, 2)
 
             # Convert attention mask to SDPA format.
+            # Keras convention: 1/True = attend, 0/False = don't attend
+            # PyTorch SDPA convention: True = mask out, False = attend
+            # So we need to invert the mask.
             if attention_mask is not None:
-                attention_mask = attention_mask.to(dtype=torch.bool)
+                attention_mask = ~attention_mask.to(dtype=torch.bool)
                 while attention_mask.dim() < 4:
                     attention_mask = attention_mask.unsqueeze(1)
 
