@@ -766,6 +766,9 @@ from keras_hub.src.models.vgg.vgg_image_classifier import (
 from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
     VGGImageClassifierPreprocessor as VGGImageClassifierPreprocessor,
 )
+from keras_hub.src.models.video_swin.video_swin_backbone import (
+    VideoSwinBackbone as VideoSwinBackbone,
+)
 from keras_hub.src.models.vit.vit_backbone import ViTBackbone as ViTBackbone
 from keras_hub.src.models.vit.vit_image_classifier import (
     ViTImageClassifier as ViTImageClassifier,
