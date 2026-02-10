@@ -28,22 +28,32 @@ from keras_hub.src.utils.transformers.export.qwen import (
 )
 from keras_hub.src.utils.transformers.export.qwen import get_qwen_weights_map
 
+# --- Qwen 3 Utils ---
+from keras_hub.src.utils.transformers.export.qwen3 import get_qwen3_config
+from keras_hub.src.utils.transformers.export.qwen3 import (
+    get_qwen3_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.qwen3 import get_qwen3_weights_map
+
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
     "Gemma3Backbone": get_gemma3_config,
     "QwenBackbone": get_qwen_config,
+    "Qwen3Backbone": get_qwen3_config,
 }
 
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
     "Gemma3Backbone": get_gemma3_weights_map,
     "QwenBackbone": get_qwen_weights_map,
+    "Qwen3Backbone": get_qwen3_weights_map,
 }
 
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
     "Gemma3Tokenizer": get_gemma3_tokenizer_config,
     "QwenTokenizer": get_qwen_tokenizer_config,
+    "Qwen3Tokenizer": get_qwen3_tokenizer_config,
 }
 
 
@@ -169,8 +179,8 @@ def export_tokenizer(tokenizer, path):
         else:
             warnings.warn(f"{vocab_spm_path} not found.")
 
-    # 2. BPE Models (Qwen)
-    elif tokenizer_type == "QwenTokenizer":
+    # 2. BPE Models (Qwen/Qwen3)
+    elif tokenizer_type in ["QwenTokenizer","Qwen3Tokenizer"]:
         vocab_json_path = os.path.join(path, "vocabulary.json")
         vocab_hf_path = os.path.join(path, "vocab.json")
         if os.path.exists(vocab_json_path):
