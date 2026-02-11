@@ -18,6 +18,7 @@ python convert_gemma3_embedding_checkpoints.py --preset embedding_gemma3_300m_en
 ```
 """
 
+import json
 import os
 
 os.environ["KERAS_BACKEND"] = "torch"
@@ -29,10 +30,15 @@ from absl import app
 from absl import flags
 from huggingface_hub import hf_hub_download
 from keras import ops
-from safetensors import safe_open
 from sentence_transformers import SentenceTransformer
 
 import keras_hub
+from keras_hub.src.utils.transformers.convert_gemma3 import (
+    convert_backbone_config,
+)
+from keras_hub.src.utils.transformers.convert_gemma3 import convert_tokenizer
+from keras_hub.src.utils.transformers.convert_gemma3 import convert_weights
+from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
 FLAGS = flags.FLAGS
 
@@ -47,254 +53,6 @@ PRESET_MAP = {
     "embedding_gemma3_300m_en": "google/embeddinggemma-300m",
 }
 
-BACKBONE_CONFIG = {
-    "embedding_gemma3_300m_en": {
-        "vocabulary_size": 262144,
-        "image_size": 896,
-        "num_layers": 24,
-        "num_query_heads": 3,
-        "num_key_value_heads": 1,
-        "hidden_dim": 768,
-        "intermediate_dim": 1152,
-        "head_dim": 256,
-        "query_head_dim_normalize": True,
-        "use_query_key_norm": True,
-        "use_post_ffw_norm": True,
-        "use_post_attention_norm": True,
-        "attention_logit_soft_cap": None,
-        "final_logit_soft_cap": None,
-        "use_sliding_window_attention": True,
-        "sliding_window_size": 512,
-        "local_rope_scaling_factor": 1.0,
-        "global_rope_scaling_factor": 1.0,
-        "vision_encoder": None,
-        "layer_norm_epsilon": 1e-6,
-        # Embedding model specific settings
-        "use_bidirectional_attention": True,
-        "is_embedding_model": True,
-        "pooling_intermediate_dim": 3072,
-        "embedding_dim": 768,
-    },
-}
-
-
-def load_hf_weights(hf_model_id):
-    """Load weights from HuggingFace safetensors file."""
-    print(f"Downloading weights from {hf_model_id}...")
-    file_path = hf_hub_download(
-        repo_id=hf_model_id,
-        filename="model.safetensors",
-    )
-
-    weights = {}
-    with safe_open(file_path, framework="pt", device="cpu") as f:
-        for key in f.keys():
-            weights[key] = f.get_tensor(key).numpy()
-
-    print(f"Loaded {len(weights)} weight tensors from HF checkpoint.")
-    return weights
-
-
-def load_pooling_head_weights(hf_model_id):
-    """Load the dense layer weights from sentence-transformers modules."""
-    print("Loading pooling head weights...")
-
-    # Dense layer 1
-    dense1_path = hf_hub_download(
-        repo_id=hf_model_id,
-        filename="2_Dense/model.safetensors",
-    )
-    dense1_weights = {}
-    with safe_open(dense1_path, framework="pt", device="cpu") as f:
-        for key in f.keys():
-            dense1_weights[key] = f.get_tensor(key).numpy()
-
-    # Dense layer 2
-    dense2_path = hf_hub_download(
-        repo_id=hf_model_id,
-        filename="3_Dense/model.safetensors",
-    )
-    dense2_weights = {}
-    with safe_open(dense2_path, framework="pt", device="cpu") as f:
-        for key in f.keys():
-            dense2_weights[key] = f.get_tensor(key).numpy()
-
-    return dense1_weights, dense2_weights
-
-
-def convert_weights(keras_model, hf_weights, dense1_weights, dense2_weights):
-    """
-    Port weights from HuggingFace dictionary to KerasHub model.
-
-    This function handles:
-    1. Backbone weights: Mapping Gemma3CausalLM layers to KerasHub
-       Gemma3Backbone.
-       - Token embeddings
-       - Attention layers (Q, K, V, O projections)
-       - MLP layers (Gate, Up, Down projections)
-       - Layer norms (Pre-attention, Post-attention, Final norm)
-    2. Pooling head weights: Mapping SentenceTransformer dense layers.
-       - Dense 1 (768 -> 3072)
-       - Dense 2 (3072 -> 768)
-
-    Args:
-        keras_model: The target KerasHub Gemma3Backbone instance.
-        hf_weights: Dictionary of weights from the HF backbone model.
-        dense1_weights: Dictionary of weights from the first dense layer.
-        dense2_weights: Dictionary of weights from the second dense layer.
-    """
-    print("Converting weights...")
-    num_layers = keras_model.num_layers
-
-    # Get model config for reshaping
-    num_q_heads = keras_model.num_query_heads
-    num_kv_heads = keras_model.num_key_value_heads
-    head_dim = keras_model.head_dim
-    hidden_dim = keras_model.hidden_dim
-
-    transferred = 0
-    missing_keras = []
-
-    # Transfer token embedding
-    if "embed_tokens.weight" in hf_weights:
-        try:
-            layer = keras_model.get_layer("token_embedding")
-            layer.embeddings.assign(hf_weights["embed_tokens.weight"])
-            transferred += 1
-            keras_embed = ops.convert_to_numpy(layer.embeddings)
-            hf_embed = hf_weights["embed_tokens.weight"]
-            diff = np.max(np.abs(keras_embed - hf_embed))
-            print(f"  -> Embedding weights transferred (max diff: {diff:.2e})")
-        except Exception as e:
-            missing_keras.append(f"token_embedding: {e}")
-
-    # Transfer final layer norm
-    if "norm.weight" in hf_weights:
-        try:
-            layer = keras_model.get_layer("final_normalization")
-            layer.scale.assign(hf_weights["norm.weight"])
-            transferred += 1
-        except Exception as e:
-            missing_keras.append(f"final_normalization: {e}")
-
-    # Transfer decoder block weights
-    for i in range(num_layers):
-        prefix = f"layers.{i}"
-        try:
-            block = keras_model.get_layer(f"decoder_block_{i}")
-            attn = block.attention
-
-            # Q projection
-            if f"{prefix}.self_attn.q_proj.weight" in hf_weights:
-                q_w = hf_weights[f"{prefix}.self_attn.q_proj.weight"]
-                q_w = q_w.T
-                q_w = q_w.reshape(hidden_dim, num_q_heads, head_dim)
-                q_w = np.transpose(q_w, (1, 0, 2))
-                attn.query_dense.kernel.assign(q_w)
-                transferred += 1
-
-            # K projection
-            if f"{prefix}.self_attn.k_proj.weight" in hf_weights:
-                k_w = hf_weights[f"{prefix}.self_attn.k_proj.weight"]
-                k_w = k_w.T
-                k_w = k_w.reshape(hidden_dim, num_kv_heads, head_dim)
-                k_w = np.transpose(k_w, (1, 0, 2))
-                attn.key_dense.kernel.assign(k_w)
-                transferred += 1
-
-            # V projection
-            if f"{prefix}.self_attn.v_proj.weight" in hf_weights:
-                v_w = hf_weights[f"{prefix}.self_attn.v_proj.weight"]
-                v_w = v_w.T
-                v_w = v_w.reshape(hidden_dim, num_kv_heads, head_dim)
-                v_w = np.transpose(v_w, (1, 0, 2))
-                attn.value_dense.kernel.assign(v_w)
-                transferred += 1
-
-            if f"{prefix}.self_attn.o_proj.weight" in hf_weights:
-                o_w = hf_weights[f"{prefix}.self_attn.o_proj.weight"]
-                o_w = o_w.T
-                o_w = o_w.reshape(num_q_heads, head_dim, hidden_dim)
-                attn.output_dense.kernel.assign(o_w)
-                transferred += 1
-
-            # Q/K norms
-            if f"{prefix}.self_attn.q_norm.weight" in hf_weights:
-                attn.query_norm.scale.assign(
-                    hf_weights[f"{prefix}.self_attn.q_norm.weight"]
-                )
-                transferred += 1
-            if f"{prefix}.self_attn.k_norm.weight" in hf_weights:
-                attn.key_norm.scale.assign(
-                    hf_weights[f"{prefix}.self_attn.k_norm.weight"]
-                )
-                transferred += 1
-
-            # MLP layers
-            if f"{prefix}.mlp.gate_proj.weight" in hf_weights:
-                block.gating_ffw.kernel.assign(
-                    hf_weights[f"{prefix}.mlp.gate_proj.weight"].T
-                )
-                transferred += 1
-            if f"{prefix}.mlp.up_proj.weight" in hf_weights:
-                block.gating_ffw_2.kernel.assign(
-                    hf_weights[f"{prefix}.mlp.up_proj.weight"].T
-                )
-                transferred += 1
-            if f"{prefix}.mlp.down_proj.weight" in hf_weights:
-                block.ffw_linear.kernel.assign(
-                    hf_weights[f"{prefix}.mlp.down_proj.weight"].T
-                )
-                transferred += 1
-            if f"{prefix}.input_layernorm.weight" in hf_weights:
-                block.pre_attention_norm.scale.assign(
-                    hf_weights[f"{prefix}.input_layernorm.weight"]
-                )
-                transferred += 1
-            if f"{prefix}.post_attention_layernorm.weight" in hf_weights:
-                block.post_attention_norm.scale.assign(
-                    hf_weights[f"{prefix}.post_attention_layernorm.weight"]
-                )
-                transferred += 1
-            if f"{prefix}.pre_feedforward_layernorm.weight" in hf_weights:
-                block.pre_ffw_norm.scale.assign(
-                    hf_weights[f"{prefix}.pre_feedforward_layernorm.weight"]
-                )
-                transferred += 1
-            if f"{prefix}.post_feedforward_layernorm.weight" in hf_weights:
-                block.post_ffw_norm.scale.assign(
-                    hf_weights[f"{prefix}.post_feedforward_layernorm.weight"]
-                )
-                transferred += 1
-
-        except Exception as e:
-            missing_keras.append(f"decoder_block_{i}: {e}")
-
-    # Transfer pooling head weights (if is_embedding_model layers exist)
-    try:
-        dense1_layer = keras_model.get_layer("pooling_dense_1")
-        if "linear.weight" in dense1_weights:
-            dense1_layer.kernel.assign(dense1_weights["linear.weight"].T)
-            transferred += 1
-            print("  -> Transferred pooling_dense_1 weights")
-    except Exception:
-        pass  # Layer may not exist in this version
-
-    try:
-        dense2_layer = keras_model.get_layer("embedding_projection")
-        if "linear.weight" in dense2_weights:
-            dense2_layer.kernel.assign(dense2_weights["linear.weight"].T)
-            transferred += 1
-            print("  -> Transferred embedding_projection weights")
-    except Exception:
-        pass  # Layer may not exist in this version
-
-    print(f"Transferred {transferred} weight tensors.")
-    if missing_keras:
-        print(f"Failed Keras transfers: {missing_keras[:5]}...")
-
-    return transferred
-
 
 def validate_output(keras_model, keras_tokenizer, hf_model_id):
     """
@@ -302,9 +60,8 @@ def validate_output(keras_model, keras_tokenizer, hf_model_id):
 
     Performs three checks:
     1. Parameter Count: Verifies exact match of backbone parameters.
-    2. Embedding Verification: Compares embeddings for test sentences
-       using Cosine Similarity (target > 0.9999).
-    3. Tokenization: Ensures KerasHub tokenizer matches HF tokenization
+    2. Tokenization: Ensures KerasHub tokenizer matches HF tokenization
+       (with checks).
 
     Args:
         keras_model: The converted KerasHub model.
@@ -330,11 +87,17 @@ def validate_output(keras_model, keras_tokenizer, hf_model_id):
     # Count KerasHub parameters
     keras_total_params = keras_model.count_params()
 
-    # Count HF parameters (transformer backbone only, not pooling head)
-    hf_transformer = list(hf_model._modules.values())[0]  # Transformer module
+    # Count HF parameters
+    hf_modules = list(hf_model._modules.values())
+    hf_transformer = hf_modules[0]  # Transformer module
     hf_backbone_params = sum(
         p.numel() for p in hf_transformer.auto_model.parameters()
     )
+
+    # Calculate HF pooling head params (sum of all other modules)
+    hf_pooling_params = 0
+    for module in hf_modules[1:]:
+        hf_pooling_params += sum(p.numel() for p in module.parameters())
 
     # KerasHub includes pooling head, so subtract it for fair comparison
     try:
@@ -347,18 +110,32 @@ def validate_output(keras_model, keras_tokenizer, hf_model_id):
         pooling_params = 0
 
     keras_backbone_params = keras_total_params - pooling_params
-
+    hf_total_params = hf_backbone_params + hf_pooling_params
     print(f"KerasHub total params:    {keras_total_params:,}")
-    print(f"  - Pooling head:         {pooling_params:,}")
-    print(f"  - Backbone only:        {keras_backbone_params:,}")
-    print(f"HF backbone params:       {hf_backbone_params:,}")
+    print(f"    - KerasHub Pooling head:    {pooling_params:,}")
+    print(f"    - KerasHub Backbone only:   {keras_backbone_params:,}")
+    print(f"HF total params:          {hf_total_params:,}")
+    print(f"    - HF backbone params:      {hf_backbone_params:,}")
+    print(f"    - HF pooling head params:  {hf_pooling_params:,}")
 
     param_diff = abs(keras_backbone_params - hf_backbone_params)
+    pooling_diff = abs(pooling_params - hf_pooling_params)
+    total_diff = abs(keras_total_params - hf_total_params)
 
     if param_diff == 0:
         print("✅ Parameter count EXACT MATCH!")
     else:
         print(f"❌ Parameter count mismatch! Diff: {param_diff:,}")
+
+    if pooling_diff == 0:
+        print("✅ Pooling parameter count EXACT MATCH!")
+    else:
+        print(f"❌ Pooling parameter count mismatch! Diff: {pooling_diff:,}")
+
+    if total_diff == 0:
+        print("✅ Total parameter count EXACT MATCH!")
+    else:
+        print(f"❌ Total parameter count mismatch! Diff: {total_diff:,}")
 
     # =========================================
     # EMBEDDING VERIFICATION
@@ -441,14 +218,6 @@ def validate_output(keras_model, keras_tokenizer, hf_model_id):
     max_diff = np.max(np.abs(hf_embeddings - keras_embeddings))
     print(f"Max absolute difference: {max_diff:.2e}")
 
-    # Cosine Similarity
-    def cosine_sim(a, b):
-        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
-    for i, text in enumerate(test_texts):
-        sim = cosine_sim(hf_embeddings[i], keras_embeddings[i])
-        print(f"Cosine similarity [{i}]: {sim:.6f}")
-
     # Final Result
     print("\n--- Result ---")
     passed = True
@@ -477,24 +246,31 @@ def main(_):
     preset = FLAGS.preset
     if preset not in PRESET_MAP:
         raise ValueError(
-            f"Invalid preset '{preset}'. Must be one of: "
-            f"{list(PRESET_MAP.keys())}"
+            f"Invalid preset '{preset}'. "
+            f"Must be one of: {list(PRESET_MAP.keys())}"
         )
 
     hf_model_id = PRESET_MAP[preset]
-    config = BACKBONE_CONFIG[preset]
 
     print(f"\n{'=' * 60}")
     print(f"Converting: {hf_model_id} -> {preset}")
     print(f"{'=' * 60}\n")
 
-    # Load HuggingFace weights
-    hf_weights = load_hf_weights(hf_model_id)
-    dense1_weights, dense2_weights = load_pooling_head_weights(hf_model_id)
+    # Download config to get parameters
+    print("Downloading config...")
+    config_path = hf_hub_download(hf_model_id, "config.json")
+    with open(config_path, "r") as f:
+        transformers_config = json.load(f)
+
+    # Convert config
+    keras_config = convert_backbone_config(transformers_config)
 
     # Create KerasHub model
     print("\nCreating KerasHub Gemma3Backbone...")
-    keras_model = keras_hub.models.Gemma3Backbone(**config, dtype="float32")
+    # Use float32 to match HF model default often
+    keras_model = keras_hub.models.Gemma3Backbone(
+        **keras_config, dtype="float32"
+    )
 
     # Build model by calling it once
     dummy_input = {
@@ -506,16 +282,28 @@ def main(_):
     print(f"KerasHub model parameters: {keras_model.count_params():,}")
 
     # Transfer weights
-    convert_weights(keras_model, hf_weights, dense1_weights, dense2_weights)
+    print("\nAttaching simple loader...")
+    print(f"Downloading model.safetensors into {preset}...")
+    os.makedirs(preset, exist_ok=True)
 
-    # Load tokenizer by downloading the model file directly
-    print("\nLoading tokenizer...")
-    tokenizer_model_path = hf_hub_download(
-        repo_id=hf_model_id,
-        filename="tokenizer.model",
-    )
-    keras_tokenizer = keras_hub.models.Gemma3Tokenizer(
-        proto=tokenizer_model_path
+    hf_hub_download(hf_model_id, "model.safetensors", local_dir=preset)
+
+    # We also need to download the dense layer weights for our new logic
+    print("Downloading dense layer weights...")
+    hf_hub_download(hf_model_id, "2_Dense/model.safetensors", local_dir=preset)
+    hf_hub_download(hf_model_id, "3_Dense/model.safetensors", local_dir=preset)
+
+    print("Converting weights...")
+
+    with SafetensorLoader(preset) as loader:
+        convert_weights(keras_model, loader, transformers_config)
+
+    # Convert tokenizer
+    print("\nConverting tokenizer...")
+    # Helper to clean up tokenizer download if needed
+    hf_hub_download(hf_model_id, "tokenizer.model", local_dir=preset)
+    keras_tokenizer = convert_tokenizer(
+        keras_hub.models.Gemma3Tokenizer, preset
     )
 
     # Validate
@@ -527,7 +315,6 @@ def main(_):
 
     # Save preset
     print(f"\nSaving to preset: ./{preset}")
-    os.makedirs(preset, exist_ok=True)
     keras_model.save_to_preset(preset)
     keras_tokenizer.save_to_preset(preset)
 

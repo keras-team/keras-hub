@@ -83,6 +83,12 @@ def convert_backbone_config(transformers_config):
     else:
         query_head_dim_normalize = True
 
+    # Determine if this is an embedding model based on hidden size
+    # The 300M embedding model has hidden_size=768
+    is_embedding_model = transformer_config["hidden_size"] == 768
+    pooling_intermediate_dim = 3072 if is_embedding_model else None
+    embedding_dim = 768 if is_embedding_model else None
+
     return {
         "vocabulary_size": transformer_config.get(
             "vocab_size", 262144 if vision_encoder is None else 262208
@@ -124,6 +130,9 @@ def convert_backbone_config(transformers_config):
             "use_query_key_norm", True
         ),
         "vision_encoder": vision_encoder,
+        "is_embedding_model": is_embedding_model,
+        "pooling_intermediate_dim": pooling_intermediate_dim,
+        "embedding_dim": embedding_dim,
     }
 
 
@@ -366,6 +375,48 @@ def convert_weights(backbone, loader, transformers_config):
         keras_variable=backbone.get_layer("final_normalization").scale,
         hf_weight_key=f"{prefix}.norm.weight",
     )
+
+    if backbone.is_embedding_model:
+        # For the embedding model, we need to load weights from the
+        # pooling and projection layers which are stored in separate files
+        # in the HF repo (2_Dense and 3_Dense folders).
+        # We use a trick here: we know `loader` has a `preset` attribute,
+        # so we can use `get_file` to download/locate these specific files.
+        try:
+            from safetensors import safe_open
+
+            from keras_hub.src.utils.preset_utils import get_file
+
+            def load_dense_weights(folder):
+                filename = f"{folder}/model.safetensors"
+                path = get_file(loader.preset, filename)
+                weights = {}
+                with safe_open(path, framework="np", device="cpu") as f:
+                    for key in f.keys():
+                        weights[key] = f.get_tensor(key)
+                return weights
+
+            # Dense 1 (pooling_dense_1)
+            dense1_weights = load_dense_weights("2_Dense")
+            if "linear.weight" in dense1_weights:
+                keras_model_layer = backbone.get_layer("pooling_dense_1")
+                keras_model_layer.kernel.assign(
+                    np.transpose(dense1_weights["linear.weight"])
+                )
+
+            # Dense 2 (embedding_projection)
+            dense2_weights = load_dense_weights("3_Dense")
+            if "linear.weight" in dense2_weights:
+                keras_model_layer = backbone.get_layer("embedding_projection")
+                keras_model_layer.kernel.assign(
+                    np.transpose(dense2_weights["linear.weight"])
+                )
+
+        except Exception as e:
+            print(
+                f"Warning: Failed to load embedding model weights: {e}. "
+                "The model will potentially yield incorrect embeddings."
+            )
 
     return backbone
 
