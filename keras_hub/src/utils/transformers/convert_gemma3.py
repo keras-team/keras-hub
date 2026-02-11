@@ -145,9 +145,14 @@ def convert_weights(backbone, loader, transformers_config):
             loader, ["model.language_model", "language_model.model"]
         )
 
+    def hf_key(suffix):
+        if prefix:
+            return f"{prefix}.{suffix}"
+        return suffix
+
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
-        hf_weight_key=f"{prefix}.embed_tokens.weight",
+        hf_weight_key=hf_key("embed_tokens.weight"),
     )
 
     def transpose(x, shape):
@@ -277,19 +282,23 @@ def convert_weights(backbone, loader, transformers_config):
 
         loader.port_weight(
             keras_variable=decoder_layer.pre_attention_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.input_layernorm.weight",
+            hf_weight_key=hf_key(f"layers.{i}.input_layernorm.weight"),
         )
         loader.port_weight(
             keras_variable=decoder_layer.post_attention_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.post_attention_layernorm.weight",
+            hf_weight_key=hf_key(f"layers.{i}.post_attention_layernorm.weight"),
         )
         loader.port_weight(
             keras_variable=decoder_layer.pre_ffw_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.pre_feedforward_layernorm.weight",
+            hf_weight_key=hf_key(
+                f"layers.{i}.pre_feedforward_layernorm.weight"
+            ),
         )
         loader.port_weight(
             keras_variable=decoder_layer.post_ffw_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.post_feedforward_layernorm.weight",
+            hf_weight_key=hf_key(
+                f"layers.{i}.post_feedforward_layernorm.weight"
+            ),
         )
 
         # Attention layers
@@ -297,7 +306,7 @@ def convert_weights(backbone, loader, transformers_config):
         ## Query
         loader.port_weight(
             keras_variable=decoder_layer.attention.query_dense.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.q_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.q_proj.weight"),
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
                 np.reshape(
                     hf_tensor,
@@ -308,12 +317,12 @@ def convert_weights(backbone, loader, transformers_config):
         )
         loader.port_weight(
             keras_variable=decoder_layer.attention.query_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.q_norm.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.q_norm.weight"),
         )
         ## Key
         loader.port_weight(
             keras_variable=decoder_layer.attention.key_dense.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.k_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.k_proj.weight"),
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
                 np.reshape(
                     hf_tensor,
@@ -324,12 +333,12 @@ def convert_weights(backbone, loader, transformers_config):
         )
         loader.port_weight(
             keras_variable=decoder_layer.attention.key_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.k_norm.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.k_norm.weight"),
         )
         ## Value
         loader.port_weight(
             keras_variable=decoder_layer.attention.value_dense.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.v_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.v_proj.weight"),
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
                 np.reshape(
                     hf_tensor,
@@ -341,7 +350,7 @@ def convert_weights(backbone, loader, transformers_config):
         ## Output
         loader.port_weight(
             keras_variable=decoder_layer.attention.output_dense.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.o_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.o_proj.weight"),
             # rearrange_patterns="c (a b) -> a b c",
             # rearrange_dims={"a": backbone.num_query_heads},
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
@@ -356,19 +365,19 @@ def convert_weights(backbone, loader, transformers_config):
         # MLP layers
         loader.port_weight(
             keras_variable=decoder_layer.gating_ffw.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.mlp.gate_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.mlp.gate_proj.weight"),
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=decoder_layer.gating_ffw_2.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.mlp.up_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.mlp.up_proj.weight"),
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=decoder_layer.ffw_linear.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.mlp.down_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.mlp.down_proj.weight"),
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
@@ -376,7 +385,7 @@ def convert_weights(backbone, loader, transformers_config):
     # Final normalization layer
     loader.port_weight(
         keras_variable=backbone.get_layer("final_normalization").scale,
-        hf_weight_key=f"{prefix}.norm.weight",
+        hf_weight_key=hf_key("norm.weight"),
     )
 
     if backbone.is_embedding_model:
