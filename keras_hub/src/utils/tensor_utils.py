@@ -397,6 +397,27 @@ def any_equal(inputs, values, padding_mask):
             a value from any `values`. Padding mask will be applied before
             returning.
     """
+    # Fast path for torch backend: use native torch ops to avoid
+    # ops dispatch overhead (~0.5ms saving per call).
+    if keras.config.backend() == "torch":
+        import torch
+
+        def _to_comparable(v):
+            if isinstance(v, (int, float)):
+                return v
+            if not isinstance(v, torch.Tensor):
+                return torch.tensor(v, device=inputs.device)
+            return v
+
+        v0 = _to_comparable(values[0])
+        if len(values) == 1:
+            output = inputs.eq(v0)
+        else:
+            output = inputs.eq(v0)
+            for value in values[1:]:
+                output = output | inputs.eq(_to_comparable(value))
+        return output & padding_mask
+
     # Fast path for single stop token (most common case).
     if len(values) == 1:
         output = ops.equal(inputs, values[0])

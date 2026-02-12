@@ -245,19 +245,30 @@ class TransformerDecoder(keras.layers.Layer):
         self_attention_cache_update_index,
         self_attention_mask=None,
     ):
-        """Fast path for cached autoregressive decoding (decoder-only).
+        """Ultra-fast path for cached autoregressive decoding (decoder-only).
 
-        Skips all validation checks, cross-attention logic, and mask
-        computation when a precomputed attention mask is provided.
-        This avoids redundant `compute_causal_mask` calls across layers
-        (12 calls per step → 1 call per step when mask is shared).
+        Bypasses ALL Layer.__call__ overhead by calling .call() directly
+        on every sublayer. This is safe during cached inference because:
+        - All layers are already built
+        - Input dtypes are already correct (same dtype flows through)
+        - No masking metadata needed
+        - No training-mode checks needed (always inference)
+        - No autocast scope changes needed
+
+        This saves ~10 Layer.__call__ invocations per transformer layer:
+        - 1 for self_attention_layer_norm
+        - 1 for self_attention_layer (which internally saves 4 more for
+          query/key/value/output dense via call_cached)
+        - 1 for feedforward_layer_norm
+        - 1 for feedforward_intermediate_dense
+        - 1 for feedforward_output_dense
         """
         x = decoder_sequence
 
         # Self attention block (normalize_first path for GPT-2).
         residual = x
         if self.normalize_first:
-            x = self._self_attention_layer_norm(x)
+            x = self._self_attention_layer_norm.call(x)
 
         # Compute mask only if not provided (fallback).
         if self_attention_mask is None:
@@ -272,36 +283,30 @@ class TransformerDecoder(keras.layers.Layer):
                 ),
             )
 
-        # Enable SDPA override for self-attention only (not cross-attention).
+        # Use call_cached() on the attention layer to bypass Layer.__call__
+        # overhead on all dense sublayers (query, key, value, output).
         self._self_attention_layer._use_sdpa_override = True
-        x, self_attention_cache = self._self_attention_layer(
+        x, self_attention_cache = self._self_attention_layer.call_cached(
             query=x,
-            value=x,
             attention_mask=self_attention_mask,
             cache=self_attention_cache,
             cache_update_index=self_attention_cache_update_index,
         )
-        # Reset SDPA override after use.
         self._self_attention_layer._use_sdpa_override = False
-        # Dropout is a no-op during inference (rate=0 or training=False).
-        # Skip the call entirely to avoid layer overhead.
-        if self.dropout > 0:
-            x = self._self_attention_dropout(x, training=False)
+
         x = x + residual
         if not self.normalize_first:
-            x = self._self_attention_layer_norm(x)
+            x = self._self_attention_layer_norm.call(x)
 
-        # Feedforward block.
+        # Feedforward block - bypass Layer.__call__ on all dense layers.
         residual = x
         if self.normalize_first:
-            x = self._feedforward_layer_norm(x)
-        x = self._feedforward_intermediate_dense(x)
-        x = self._feedforward_output_dense(x)
-        if self.dropout > 0:
-            x = self._feedforward_dropout(x, training=False)
+            x = self._feedforward_layer_norm.call(x)
+        x = self._feedforward_intermediate_dense.call(x)
+        x = self._feedforward_output_dense.call(x)
         x = x + residual
         if not self.normalize_first:
-            x = self._feedforward_layer_norm(x)
+            x = self._feedforward_layer_norm.call(x)
 
         return (x, self_attention_cache)
 

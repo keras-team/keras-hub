@@ -8,6 +8,7 @@ from keras import tree
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
 from keras_hub.src.samplers.serialization import get as get_sampler
+from keras_hub.src.utils.tensor_utils import any_equal
 
 try:
     import tensorflow as tf
@@ -122,8 +123,133 @@ class CausalLM(Task):
         # Clear the compiled generate function.
         self.generate_function = None
 
-    def generate_step(self):
-        """Run generation on a single batch of input."""
+    def generate_step(
+        self,
+        inputs,
+        stop_token_ids=None,
+    ):
+        """A compilable generation function for a single batch of inputs.
+
+        This default implementation works for all CausalLM models that
+        implement `call_with_cache()` and `_build_cache()`. It includes
+        backend-specific optimizations (e.g., direct tensor indexing on
+        torch) that benefit all models automatically.
+
+        Subclasses only need to override this if they require custom
+        generation logic beyond what `call_with_cache` provides.
+
+        Args:
+            inputs: A dictionary with two keys `"token_ids"` and
+                `"padding_mask"` and batched tensor values.
+            stop_token_ids: List of id's of end token's to stop on. If all
+                sequences have produced a new stop token, generation
+                will stop.
+        """
+        token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
+        # Create and seed cache with a single forward pass.
+        hidden_states, cache = self._build_cache(token_ids)
+        # Compute the lengths of all user inputted tokens ids.
+        row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
+        # Start at the first index that has no user inputted id.
+        index = ops.min(row_lengths)
+
+        # Use direct tensor indexing on torch backend to avoid
+        # ops.slice / convert_to_tensor overhead. JAX/TF need ops.slice
+        # for static shapes in JIT compilation.
+        _use_direct_indexing = keras.config.backend() == "torch"
+
+        if _use_direct_indexing:
+            import torch
+
+        def next(prompt, cache, index):
+            # The cache index is the index of our previous token.
+            cache_update_index = index - 1
+            # Extract single token for cached forward pass.
+            if _use_direct_indexing:
+                prompt = prompt[:, cache_update_index : cache_update_index + 1]
+                # Ensure cache_update_index is a tensor for
+                # call_with_cache, as some models pass it through to
+                # sublayers which require tensor-typed kwargs.
+                cache_update_index = torch.tensor(
+                    cache_update_index, dtype=torch.int32
+                )
+            else:
+                batch_size = ops.shape(prompt)[0]
+                prompt = ops.slice(
+                    prompt, [0, cache_update_index], [batch_size, 1]
+                )
+            logits, hidden_states, cache = self.call_with_cache(
+                prompt,
+                cache,
+                cache_update_index,
+            )
+            return (
+                logits[:, 0, :],
+                hidden_states[:, 0, :],
+                cache,
+            )
+
+        token_ids = self.sampler(
+            next=next,
+            prompt=token_ids,
+            cache=cache,
+            index=index,
+            mask=padding_mask,
+            stop_token_ids=stop_token_ids,
+            hidden_states=hidden_states,
+            model=self,
+        )
+
+        # Compute an output padding mask with the token ids we updated.
+        if stop_token_ids is not None:
+            # Build a mask of stop tokens locations not in the original
+            # prompt (not in locations where `padding_mask` is True).
+            end_locations = any_equal(
+                token_ids, stop_token_ids, ops.logical_not(padding_mask)
+            )
+            end_locations = ops.cast(end_locations, "int32")
+            # Use cumsum to get ones in all locations after end_locations.
+            cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
+            overflow = cumsum - end_locations
+            # Our padding mask is the inverse of these overflow locations.
+            padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
+        else:
+            # Without early stopping, all locations will have been updated.
+            padding_mask = ops.ones_like(token_ids, dtype="bool")
+        return {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+        }
+
+    def call_with_cache(
+        self,
+        token_ids,
+        cache,
+        cache_update_index,
+    ):
+        """Forward pass with cache for autoregressive inference.
+
+        Subclasses must override this method to define their specific
+        cached forward pass logic.
+
+        Args:
+            token_ids: a dense int Tensor with shape
+                `(batch_size, max_length)`.
+            cache: a dense float Tensor, the cache of key and value.
+            cache_update_index: int, or int Tensor. The index of current
+                inputs in the whole sequence.
+
+        Returns:
+            A (logits, hidden_states, cache) tuple.
+        """
+        raise NotImplementedError
+
+    def _build_cache(self, token_ids):
+        """Build an empty cache for use with `call_with_cache()`.
+
+        Subclasses must override this method to define their specific
+        cache structure.
+        """
         raise NotImplementedError
 
     def make_generate_function(self):

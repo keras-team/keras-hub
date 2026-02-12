@@ -137,6 +137,54 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             return attention_output, cache
         return attention_output
 
+    def call_cached(
+        self,
+        query,
+        attention_mask=None,
+        cache=None,
+        cache_update_index=None,
+    ):
+        """Ultra-fast path for cached autoregressive decoding.
+
+        Bypasses Layer.__call__ overhead on all sublayers by calling
+        .call() directly. This is safe because:
+        - All sublayers are already built
+        - Input dtypes are already correct (same dtype flows through)
+        - No masking metadata needed
+        - No training-mode checks needed (always inference)
+        - No autocast scope changes needed
+
+        This saves ~5 Layer.__call__ invocations per attention layer
+        (query_dense, key_dense, value_dense, output_dense, plus the
+        attention layer itself).
+        """
+        # Directly call .call() on dense layers, bypassing Layer.__call__
+        query_proj = self._query_dense.call(query)
+
+        key_cache = cache[:, 0, ...]
+        value_cache = cache[:, 1, ...]
+        if cache_update_index is None:
+            key = key_cache
+            value = value_cache
+        else:
+            key_update = self._key_dense.call(query)
+            value_update = self._value_dense.call(query)
+            start = [0, cache_update_index, 0, 0]
+            key = ops.slice_update(key_cache, start, key_update)
+            value = ops.slice_update(value_cache, start, value_update)
+            cache = ops.stack((key, value), axis=1)
+
+        attention_output, _ = self._compute_attention(
+            query=query_proj,
+            key=key,
+            value=value,
+            attention_mask=attention_mask,
+            training=False,
+        )
+
+        attention_output = self._output_dense.call(attention_output)
+        return attention_output, cache
+
     def _compute_attention(
         self,
         query,
@@ -169,11 +217,11 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             value = value.transpose(1, 2)
 
             # Convert attention mask to SDPA format.
-            # Keras convention: 1/True = attend, 0/False = don't attend
-            # PyTorch SDPA convention: True = mask out, False = attend
-            # So we need to invert the mask.
+            # Both Keras and PyTorch SDPA use the same convention for bool
+            # masks: True = attend, False = mask out.
+            # No inversion needed - pass through directly.
             if attention_mask is not None:
-                attention_mask = ~attention_mask.to(dtype=torch.bool)
+                attention_mask = attention_mask.to(dtype=torch.bool)
                 while attention_mask.dim() < 4:
                     attention_mask = attention_mask.unsqueeze(1)
 
