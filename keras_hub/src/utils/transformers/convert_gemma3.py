@@ -84,11 +84,18 @@ def convert_backbone_config(transformers_config):
     else:
         query_head_dim_normalize = True
 
-    # Determine if this is an embedding model based on hidden size
-    # The 300M embedding model has hidden_size=768
-    is_embedding_model = transformer_config["hidden_size"] == 768
-    pooling_intermediate_dim = 3072 if is_embedding_model else None
-    embedding_dim = 768 if is_embedding_model else None
+    # Determine if this is an embedding model based on bidirectional
+    # attention.The embedding model uses bidirectional attention,
+    # while causal models do not.
+    is_embedding_model = transformer_config.get(
+        "use_bidirectional_attention", False
+    )
+    pooling_intermediate_dim = None
+    embedding_dim = None
+
+    if is_embedding_model:
+        embedding_dim = transformer_config["hidden_size"]
+        pooling_intermediate_dim = 3072
 
     return {
         "vocabulary_size": transformer_config.get(
@@ -131,6 +138,7 @@ def convert_backbone_config(transformers_config):
             "use_query_key_norm", True
         ),
         "vision_encoder": vision_encoder,
+        # Embedding Gemma configuration
         "is_embedding_model": is_embedding_model,
         "pooling_intermediate_dim": pooling_intermediate_dim,
         "embedding_dim": embedding_dim,
