@@ -29,9 +29,9 @@ jobs:
     env:
       KERAS_BACKEND: ${{ matrix.backend }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Set up Python 3.11
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.11'
     - name: Get pip cache dir
@@ -40,7 +40,7 @@ jobs:
         python -m pip install --upgrade pip setuptools
         echo "::set-output name=dir::$(pip cache dir)"
     - name: pip cache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ steps.pip-cache.outputs.dir }}
         key: ${{ runner.os }}-pip-${{ hashFiles('requirements-common.txt') }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('pyproject.toml') }}
@@ -75,9 +75,9 @@ jobs:
     name: Check the code format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Get pip cache dir
@@ -86,7 +86,7 @@ jobs:
           python -m pip install --upgrade pip setuptools
           echo "::set-output name=dir::$(pip cache dir)"
       - name: pip cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.pip-cache.outputs.dir }}
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements-common.txt') }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('pyproject.toml') }}
