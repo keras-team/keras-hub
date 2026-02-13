@@ -20,6 +20,7 @@ python convert_gemma3_embedding_checkpoints.py --preset embedding_gemma3_300m
 
 import json
 import os
+import tempfile
 
 os.environ["KERAS_BACKEND"] = "torch"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -257,69 +258,77 @@ def main(_):
     print(f"Converting: {hf_model_id} -> {preset}")
     print(f"{'=' * 60}\n")
 
-    # Download config to get parameters
-    print("Downloading config...")
-    config_path = hf_hub_download(hf_model_id, "config.json")
-    with open(config_path, "r") as f:
-        transformers_config = json.load(f)
+    # Use a temporary directory for downloading HuggingFace artifacts
+    # This keeps the output preset directory clean
+    with tempfile.TemporaryDirectory() as temp_dir:
+        print(f"Using temporary directory for downloads: {temp_dir}")
 
-    # Convert config
-    keras_config = convert_backbone_config(transformers_config)
+        # Download config to get parameters
+        print("Downloading config...")
+        config_path = hf_hub_download(hf_model_id, "config.json")
+        with open(config_path, "r") as f:
+            transformers_config = json.load(f)
 
-    # Create KerasHub model
-    print("\nCreating KerasHub Gemma3Backbone...")
-    # Use float32 to match HF model default often
-    keras_model = keras_hub.models.Gemma3Backbone(
-        **keras_config, dtype="float32"
-    )
+        # Convert config
+        keras_config = convert_backbone_config(transformers_config)
 
-    # Build model by calling it once
-    dummy_input = {
-        "token_ids": np.ones((1, 16), dtype="int32"),
-        "padding_mask": np.ones((1, 16), dtype="int32"),
-    }
-    _ = keras_model(dummy_input)
+        # Create KerasHub model
+        print("\nCreating KerasHub Gemma3Backbone...")
+        # Use float32 to match HF model default often
+        keras_model = keras_hub.models.Gemma3Backbone(
+            **keras_config, dtype="float32"
+        )
 
-    print(f"KerasHub model parameters: {keras_model.count_params():,}")
+        # Build model by calling it once
+        dummy_input = {
+            "token_ids": np.ones((1, 16), dtype="int32"),
+            "padding_mask": np.ones((1, 16), dtype="int32"),
+        }
+        _ = keras_model(dummy_input)
 
-    # Transfer weights
-    print("\nAttaching simple loader...")
-    print(f"Downloading model.safetensors into {preset}...")
-    os.makedirs(preset, exist_ok=True)
+        print(f"KerasHub model parameters: {keras_model.count_params():,}")
 
-    hf_hub_download(hf_model_id, "model.safetensors", local_dir=preset)
+        # Transfer weights
+        print("\nAttaching simple loader...")
+        print("Downloading model.safetensors into temporary directory...")
 
-    # We also need to download the dense layer weights for our new logic
-    print("Downloading dense layer weights...")
-    hf_hub_download(hf_model_id, "2_Dense/model.safetensors", local_dir=preset)
-    hf_hub_download(hf_model_id, "3_Dense/model.safetensors", local_dir=preset)
+        hf_hub_download(hf_model_id, "model.safetensors", local_dir=temp_dir)
 
-    print("Converting weights...")
+        # We also need to download the dense layer weights for our new logic
+        print("Downloading dense layer weights...")
+        hf_hub_download(
+            hf_model_id, "2_Dense/model.safetensors", local_dir=temp_dir
+        )
+        hf_hub_download(
+            hf_model_id, "3_Dense/model.safetensors", local_dir=temp_dir
+        )
 
-    with SafetensorLoader(preset) as loader:
-        convert_weights(keras_model, loader, transformers_config)
+        print("Converting weights...")
 
-    # Convert tokenizer
-    print("\nConverting tokenizer...")
-    # Helper to clean up tokenizer download if needed
-    hf_hub_download(hf_model_id, "tokenizer.model", local_dir=preset)
-    keras_tokenizer = convert_tokenizer(
-        keras_hub.models.Gemma3Tokenizer, preset
-    )
+        with SafetensorLoader(temp_dir) as loader:
+            convert_weights(keras_model, loader, transformers_config)
 
-    # Validate
-    passed = validate_output(keras_model, keras_tokenizer, hf_model_id)
+        # Convert tokenizer
+        print("\nConverting tokenizer...")
+        # Helper to clean up tokenizer download if needed
+        hf_hub_download(hf_model_id, "tokenizer.model", local_dir=temp_dir)
+        keras_tokenizer = convert_tokenizer(
+            keras_hub.models.Gemma3Tokenizer, temp_dir
+        )
 
-    if not passed:
-        print("\n⚠️  Verification failed. Check weight mapping.")
-        return
+        # Validate
+        passed = validate_output(keras_model, keras_tokenizer, hf_model_id)
 
-    # Save preset
-    print(f"\nSaving to preset: ./{preset}")
-    keras_model.save_to_preset(preset)
-    keras_tokenizer.save_to_preset(preset)
+        if not passed:
+            print("\n⚠️  Verification failed. Check weight mapping.")
+            return
 
-    print(f"\n✅ Successfully converted and saved to: ./{preset}")
+        # Save preset
+        print(f"\nSaving to preset: ./{preset}")
+        keras_model.save_to_preset(preset)
+        keras_tokenizer.save_to_preset(preset)
+
+        print(f"\n✅ Successfully converted and saved to: ./{preset}")
 
 
 if __name__ == "__main__":
