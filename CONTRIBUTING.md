@@ -241,7 +241,7 @@ We welcome contributions for new models! To ensure a smooth process, please foll
 
 ### Finding and Proposing Models
 
-- **Finding Work**: Check the [Issues tab](https://github.com/keras-team/keras-hub/issues) for open model porting tasks. These are often tagged for visibility.
+- **Finding Work**: Check the [Issues tab](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22stat%3Acontributions%20welcome%22) for open model porting tasks. These are often tagged for visibility.
 - **Proposing Models**: If you want to port a model that isn't listed, please [open an issue](https://github.com/keras-team/keras-hub/issues/new) to discuss it first. The team will review the proposal to ensure it fits the project roadmap.
 - **Licensing**: **Strict Requirement**: We currently only accept models with **Apache 2.0**, **MIT**, **Llama Community License** or **Gemma** licenses. Please verify the license of the original model before starting.
 
@@ -258,11 +258,12 @@ A complete model port typically includes the following components:
 
 1. **Model Implementation**: The core model code (Backbone, Tokenizer, Task layers, Preprocessing).
 2. **Unit Tests**: Standard Keras unit tests for all components to ensure basic functionality and shape inference.
-3. **Conversion Script**: A script to convert weights from the original framework (e.g., Hugging Face) to KerasHub.
+3. **Conversion Script**: A script to convert weights from the original framework (e.g. Hugging Face Safetensors) to KerasHub.
 4. **Numeric Verification**: Use a verification script (or notebook) to check output alignment with the reference model.
     - **Requirement**: Verify numerical outputs against the original implementation (e.g., Hugging Face Transformers).
+    - **Parameter Count**: The parameter count of the KerasHub model must match the original model exactly.
     - **Process**: This verification is required for the PR to be approved.
-    - **Evidence**: Your PR **must** include a Colab notebook or screenshots showing outputs match within acceptable tolerance.
+    - **Evidence**: Your PR **must** include a Colab notebook or screenshots showing outputs match within an acceptable tolerance (1e-4 or lower) after a forward pass for both original and converted model.
 
 **Reference**: See [PR #2384 (GPT-OSS Model Port)](https://github.com/keras-team/keras-hub/pull/2384) for an example of a successful model porting PR.
 
