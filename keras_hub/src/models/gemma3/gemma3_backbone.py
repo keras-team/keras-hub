@@ -69,7 +69,7 @@ class Gemma3Backbone(Backbone):
         vision_encoder: A `Gemma3VisionEncoder` instance. `call()`
             takes in images and returns corresponding sequence of embeddings. If
             `None`, the model is a text-only model.
-        layer_norm_epsilon: float. The epsilon value user for every layer norm
+        layer_norm_epsilon: float. The epsilon value used for every layer norm
             in all transformer blocks. Defaults to `1e-6`.
         dropout: float. Dropout probability for the Transformer decoder blocks.
             Defaults to `0`.

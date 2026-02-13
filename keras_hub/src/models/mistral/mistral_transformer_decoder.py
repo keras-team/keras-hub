@@ -207,7 +207,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
             else self_attention_cache_update_index
         )
 
-        # The lower traingular attention mask
+        # The lower triangular attention mask
         causal_mask = compute_causal_mask(
             batch_size, input_length, output_length, cache_update_index
         )
