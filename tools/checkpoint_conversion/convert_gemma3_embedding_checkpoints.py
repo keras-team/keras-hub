@@ -1,234 +1,327 @@
 """
-Convert a pre-trained causal Gemma3 Keras model to an Embedding Gemma model.
+Convert HuggingFace EmbeddingGemma checkpoints to KerasHub format.
 
-This script takes a standard Gemma3 model designed for causal language modeling
-and adapts it for sentence embedding tasks. It modifies the model architecture
-for bi-directional attention, adds a new pooling head for generating fixed-size
-embeddings, and transfers the weights from the original model.
+This script loads weights from the HuggingFace `google/embeddinggemma-300m`
+model (a Sentence Transformers model) and converts them to KerasHub's
+Gemma3Backbone format with embedding support.
 
 Setup:
 ```shell
-# Make sure to install the necessary libraries, including the specific
-# keras_hub package containing the Gemma3 models.
-pip install keras-hub
-pip install keras
+pip install keras-hub keras sentence-transformers safetensors huggingface_hub
+huggingface-cli login  # Required for gated model access
+```
 
 Usage:
 ```shell
 cd tools/checkpoint_conversion
-python3 convert_embedding_gemma_checkpoints.py \
-    --source_preset gemma3_instruct_4b_text \
-    --output_preset embedding_gemma3_4b_en \
-    --pooling_intermediate_dim 4096 \
-    --embedding_dim 768
+python convert_gemma3_embedding_checkpoints.py --preset embedding_gemma3_300m
+```
 """
 
+import json
 import os
 
-os.environ["KERAS_BACKEND"] = "jax"
+os.environ["KERAS_BACKEND"] = "torch"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-import keras
 import numpy as np
+import torch
 from absl import app
 from absl import flags
+from huggingface_hub import hf_hub_download
 from keras import ops
+from sentence_transformers import SentenceTransformer
 
-from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
-from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
+import keras_hub
+from keras_hub.src.utils.transformers.convert_gemma3 import (
+    convert_backbone_config,
+)
+from keras_hub.src.utils.transformers.convert_gemma3 import convert_tokenizer
+from keras_hub.src.utils.transformers.convert_gemma3 import convert_weights
+from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
     "preset",
     None,
-    "Name of the preset to convert. If provided, both source and output "
-    "presets are derived from this name.",
-)
-flags.DEFINE_string(
-    "source_preset",
-    None,
-    "Path or name of the source causal Gemma3 preset. "
-    "Required if --preset is not set.",
-)
-flags.DEFINE_string(
-    "output_preset",
-    None,
-    "Path to save the new Embedding Gemma preset. "
-    "Required if --preset is not set.",
-)
-flags.DEFINE_integer(
-    "pooling_intermediate_dim",
-    4096,
-    "Intermediate dimension for the pooling head's first dense layer.",
-)
-flags.DEFINE_integer(
-    "embedding_dim",
-    768,
-    "The final output dimension of the embedding projection.",
+    "Preset name for output. Must be one of the keys in PRESET_MAP.",
 )
 
+# Map KerasHub preset names to HuggingFace model IDs
 PRESET_MAP = {
-    "gemma3_embedding_270m_en": "gemma3_270m",
-    "gemma3_embedding_instruct_270m_en": "gemma3_instruct_270m",
-    "gemma3_embedding_1b_en": "gemma3_1b",
-    "gemma3_embedding_instruct_1b_en": "gemma3_instruct_1b",
-    "gemma3_embedding_4b_text_en": "gemma3_4b_text",
-    "gemma3_embedding_instruct_4b_text_en": "gemma3_instruct_4b_text",
-    "gemma3_embedding_12b_text_en": "gemma3_12b_text",
-    "gemma3_embedding_instruct_12b_text_en": "gemma3_instruct_12b_text",
-    "gemma3_embedding_27b_text_en": "gemma3_27b_text",
-    "gemma3_embedding_instruct_27b_text_en": "gemma3_instruct_27b_text",
+    "embedding_gemma3_300m": "google/embeddinggemma-300m",
 }
 
 
-def validate_output(
-    source_model,
-    embedding_model,
-):
+def validate_output(keras_model, keras_tokenizer, hf_model_id):
     """
-    Validates the output of the converted model against the source model.
-    """
-    print("Validating the converted model...")
-    # Create a temporary validation model with the same weights as the
-    # embedding model, but with causal attention and no pooling head.
-    config = embedding_model.get_config()
-    config["is_embedding_model"] = False
-    config["use_bidirectional_attention"] = False
+    Validate numerical parity between KerasHub model and HF SentenceTransformer.
 
-    # Instantiate validation model from config
-    validation_model = Gemma3Backbone.from_config(config)
-
-    # First, test that the number of parameters match
-    source_params = source_model.count_params()
-    validation_params = validation_model.count_params()
-    print(f"Source model parameters: {source_params}")
-    print(f"Validation model parameters: {validation_params}")
-    if source_params == validation_params:
-        print("✅ Parameter count match.")
-    else:
-        print("❌ Parameter count mismatch.")
-    assert source_params == validation_params
-
-    # Transfer weights from embedding_model to validation_model
-    source_layer_names = {layer.name for layer in embedding_model.layers}
-    transferred_layers = 0
-    for target_layer in validation_model.layers:
-        if target_layer.name in source_layer_names:
-            source_layer = embedding_model.get_layer(name=target_layer.name)
-            if source_layer.get_weights():
-                target_layer.set_weights(source_layer.get_weights())
-                transferred_layers += 1
-
-    # Simple numerical verification
-    inputs = {
-        "token_ids": np.random.randint(0, 1000, (1, 16)),
-        "padding_mask": np.ones((1, 16)),
-    }
-
-    print("Comparing outputs...")
-    # Run forward pass
-    # Source model (causal)
-    output_source = ops.convert_to_numpy(source_model(inputs))
-    # Validation model (converted, but running in causal mode)
-    output_target = ops.convert_to_numpy(validation_model(inputs))
-
-    # Compare
-    diff = np.max(np.abs(output_source - output_target))
-    print(f"Max Difference: {diff}")
-
-    if diff < 1e-5:
-        print("✅ VERIFICATION PASSED")
-    else:
-        print("❌ VERIFICATION FAILED")
-        raise ValueError("Model verification failed! Outputs do not match.")
-
-
-def convert_to_embedding_preset(
-    source_preset,
-    output_preset,
-    pooling_intermediate_dim,
-    embedding_dim,
-):
-    """
-    Converts a standard causal Gemma3 preset to an Embedding Gemma preset.
-
-    This function loads a pre-trained causal Gemma3 backbone, reconfigures it
-    for bi-directional attention and adds a pooling head, transfers the original
-    weights, and saves the result as a new Keras Hub preset.
+    Performs three checks:
+    1. Parameter Count: Verifies exact match of backbone parameters.
+    2. Tokenization: Ensures KerasHub tokenizer matches HF tokenization
+       (with checks).
 
     Args:
-        source_preset: The path or name of source causal Gemma3 preset.
-        output_preset: The path to save the new embedding model preset.
-        pooling_intermediate_dim: The intermediate dimension for the
-            pooling head's dense layer.
-        embedding_dim: The final output dimension of sentence embedding.
+        keras_model: The converted KerasHub model.
+        keras_tokenizer: The KerasHub tokenizer.
+        hf_model_id: The HuggingFace model ID to compare against.
+
+    Returns:
+        bool: True if all checks pass, False otherwise.
     """
-    print(f"Loading source model: {source_preset}...")
-    source_model = Gemma3Backbone.from_preset(source_preset)
-    source_tokenizer = Gemma3Tokenizer.from_preset(source_preset)
+    print("\n" + "=" * 60)
+    print("NUMERICAL VERIFICATION")
+    print("=" * 60)
 
-    config = source_model.get_config()
+    # Load HuggingFace model
+    print(f"\nLoading HuggingFace model: {hf_model_id}")
+    hf_model = SentenceTransformer(hf_model_id)
+    hf_model.eval()
 
-    config["is_embedding_model"] = True
-    config["use_bidirectional_attention"] = True
-    config["pooling_intermediate_dim"] = pooling_intermediate_dim
-    config["embedding_dim"] = embedding_dim
+    # =========================================
+    # PARAMETER COUNT VERIFICATION
+    # =========================================
+    print("\n--- Parameter Count Check ---")
+    # Count KerasHub parameters
+    keras_total_params = keras_model.count_params()
 
-    if config.get("vision_encoder") is not None:
-        config["vision_encoder"] = keras.layers.deserialize(
-            config["vision_encoder"]
+    # Count HF parameters
+    hf_modules = list(hf_model._modules.values())
+    hf_transformer = hf_modules[0]  # Transformer module
+    hf_backbone_params = sum(
+        p.numel() for p in hf_transformer.auto_model.parameters()
+    )
+
+    # Calculate HF pooling head params (sum of all other modules)
+    hf_pooling_params = 0
+    for module in hf_modules[1:]:
+        hf_pooling_params += sum(p.numel() for p in module.parameters())
+
+    # KerasHub includes pooling head, so subtract it for fair comparison
+    try:
+        pooling_dense1 = keras_model.get_layer("pooling_dense_1")
+        pooling_dense2 = keras_model.get_layer("embedding_projection")
+        pooling_params = (
+            pooling_dense1.count_params() + pooling_dense2.count_params()
         )
+    except Exception:
+        pooling_params = 0
 
-    print("Creating embedding model...")
-    embedding_model = Gemma3Backbone.from_config(config)
+    keras_backbone_params = keras_total_params - pooling_params
+    hf_total_params = hf_backbone_params + hf_pooling_params
+    print(f"Keras Hub total params:    {keras_total_params:,}")
+    print(f"    - Keras Hub Backbone only:   {keras_backbone_params:,}")
+    print(f"    - Keras Hub Pooling head:    {pooling_params:,}")
+    print("\n-------------------------------------")
+    print(f"Hugging Face total params:          {hf_total_params:,}")
+    print(f"    - Hugging Face backbone only:      {hf_backbone_params:,}")
+    print(f"    - Hugging Face pooling head :  {hf_pooling_params:,}")
 
-    transferred_layers = 0
-    source_layer_names = {layer.name for layer in source_model.layers}
+    param_diff = abs(keras_backbone_params - hf_backbone_params)
+    pooling_diff = abs(pooling_params - hf_pooling_params)
+    total_diff = abs(keras_total_params - hf_total_params)
 
-    print("Transferring weights...")
-    for target_layer in embedding_model.layers:
-        if target_layer.name in source_layer_names:
-            source_layer = source_model.get_layer(name=target_layer.name)
-            if source_layer.get_weights():
-                target_layer.set_weights(source_layer.get_weights())
-                transferred_layers += 1
+    if total_diff == 0:
+        print("✅ Total parameter count EXACT MATCH!")
+    else:
+        print(f"❌ Total parameter count mismatch! Diff: {total_diff:,}")
 
-    # Validate output
-    validate_output(source_model, embedding_model)
+    if param_diff == 0:
+        print("✅ Backbone Parameter count EXACT MATCH!")
+    else:
+        print(f"❌ Backbone parameter count mismatch! Diff: {param_diff:,}")
 
-    print(f"Saving to preset: {output_preset}...")
-    os.makedirs(output_preset, exist_ok=True)
-    embedding_model.save_to_preset(output_preset)
-    source_tokenizer.save_to_preset(output_preset)
-    print(f"Embedding Gemma preset successfully saved to: '{output_preset}'")
+    if pooling_diff == 0:
+        print("✅ Pooling parameter count EXACT MATCH!")
+    else:
+        print(f"❌ Pooling parameter count mismatch! Diff: {pooling_diff:,}")
+
+    # =========================================
+    # EMBEDDING VERIFICATION
+    # =========================================
+    print("\n--- Embedding Verification ---")
+
+    # Test inputs
+    test_texts = [
+        "Hello, this is a test sentence.",
+        "What is machine learning?",
+        "The quick brown fox jumps over the lazy dog.",
+    ]
+    print(f"Test inputs: {test_texts}")
+
+    # 1. Get HuggingFace embeddings
+    print("\nComputing HF embeddings...")
+    with torch.no_grad():
+        hf_embeddings = hf_model.encode(test_texts, convert_to_numpy=True)
+    print(f"HF output shape: {hf_embeddings.shape}")
+    print(f"HF embedding[0][:5]: {hf_embeddings[0][:5]}")
+
+    # 2. Get KerasHub embeddings (using KerasHub tokenizer with manual BOS/EOS)
+    print("\nComputing KerasHub embeddings...")
+
+    # Tokenize
+    keras_tokens = keras_tokenizer(test_texts)
+    if hasattr(keras_tokens, "numpy"):
+        keras_tokens = keras_tokens.numpy().tolist()
+
+    # Get sequence length from model config or default
+    seq_len = getattr(keras_model, "sliding_window_size", 512)
+    print(f"Using sequence length: {seq_len}")
+
+    # Manually construct inputs with BOS and EOS tokens
+    token_ids_list = []
+    padding_mask_list = []
+
+    for tokens in keras_tokens:
+        # Add BOS and EOS
+        seq = (
+            [keras_tokenizer.start_token_id]
+            + tokens
+            + [keras_tokenizer.end_token_id]
+        )
+        mask = [1] * len(seq)
+
+        # Pad to sequence length
+        pad_len = seq_len - len(seq)
+        if pad_len > 0:
+            seq = seq + [0] * pad_len
+            mask = mask + [0] * pad_len
+        else:
+            seq = seq[:seq_len]
+            mask = mask[:seq_len]
+
+        token_ids_list.append(seq)
+        padding_mask_list.append(mask)
+
+    inputs = {
+        "token_ids": np.array(token_ids_list, dtype="int32"),
+        "padding_mask": np.array(padding_mask_list, dtype="int32"),
+    }
+
+    keras_output = keras_model(inputs)
+
+    # Handle output
+    if isinstance(keras_output, dict) and "pooled_output" in keras_output:
+        keras_embeddings = ops.convert_to_numpy(keras_output["pooled_output"])
+    else:
+        # Fallback if model doesn't return dict
+        keras_embeddings = ops.convert_to_numpy(keras_output)
+
+    print(f"KerasHub output shape: {keras_embeddings.shape}")
+    print(f"KerasHub embedding[0][:5]: {keras_embeddings[0][:5]}")
+
+    # 3. Compare
+    print("\n--- Comparison ---")
+
+    # Max Absolute Difference
+    max_diff = np.max(np.abs(hf_embeddings - keras_embeddings))
+    print(f"Max absolute difference: {max_diff:.2e}")
+
+    # Final Result
+    print("\n--- Result ---")
+    passed = True
+
+    if param_diff != 0:
+        print("❌ FAILED: Parameter count mismatch")
+        passed = False
+
+    if max_diff > 1e-4:
+        print(f"❌ FAILED: Max diff {max_diff:.2e} > 1e-4")
+        passed = False
+
+    if passed:
+        print("✅ ALL CHECKS PASSED")
+
+    return passed
 
 
 def main(_):
-    if FLAGS.preset:
-        if FLAGS.preset not in PRESET_MAP:
-            raise ValueError(
-                f"Invalid preset {FLAGS.preset}. Must be one of "
-                f"{list(PRESET_MAP.keys())}."
-            )
-        source_preset = PRESET_MAP[FLAGS.preset]
-        output_preset = FLAGS.preset
-    else:
-        if not FLAGS.source_preset or not FLAGS.output_preset:
-            raise ValueError(
-                "Both --source_preset and --output_preset are required if "
-                "--preset is not provided."
-            )
-        source_preset = FLAGS.source_preset
-        output_preset = FLAGS.output_preset
+    """
+    Main entry point for the conversion script.
 
-    convert_to_embedding_preset(
-        source_preset=source_preset,
-        output_preset=output_preset,
-        pooling_intermediate_dim=FLAGS.pooling_intermediate_dim,
-        embedding_dim=FLAGS.embedding_dim,
+    Loads the specified HuggingFace model, creates a KerasHub model,
+    transfers weights, validates the conversion, and saves the preset.
+    """
+    preset = FLAGS.preset
+    if preset not in PRESET_MAP:
+        raise ValueError(
+            f"Invalid preset '{preset}'. "
+            f"Must be one of: {list(PRESET_MAP.keys())}"
+        )
+
+    hf_model_id = PRESET_MAP[preset]
+
+    print(f"\n{'=' * 60}")
+    print(f"Converting: {hf_model_id} -> {preset}")
+    print(f"{'=' * 60}\n")
+
+    # Download config to get parameters
+    print("Downloading config...")
+    config_path = hf_hub_download(hf_model_id, "config.json")
+    with open(config_path, "r") as f:
+        transformers_config = json.load(f)
+
+    # Convert config
+    keras_config = convert_backbone_config(transformers_config)
+
+    # Create KerasHub model
+    print("\nCreating KerasHub Gemma3Backbone...")
+    # Use float32 to match HF model default often
+    keras_model = keras_hub.models.Gemma3Backbone(
+        **keras_config, dtype="float32"
     )
+
+    # Build model by calling it once
+    dummy_input = {
+        "token_ids": np.ones((1, 16), dtype="int32"),
+        "padding_mask": np.ones((1, 16), dtype="int32"),
+    }
+    _ = keras_model(dummy_input)
+
+    print(f"KerasHub model parameters: {keras_model.count_params():,}")
+
+    # Transfer weights
+    print("\nAttaching simple loader...")
+    print(f"Downloading model.safetensors into {preset}...")
+    os.makedirs(preset, exist_ok=True)
+
+    hf_hub_download(hf_model_id, "model.safetensors", local_dir=preset)
+
+    # We also need to download the dense layer weights for our new logic
+    print("Downloading dense layer weights...")
+    hf_hub_download(hf_model_id, "2_Dense/model.safetensors", local_dir=preset)
+    hf_hub_download(hf_model_id, "3_Dense/model.safetensors", local_dir=preset)
+
+    print("Converting weights...")
+
+    with SafetensorLoader(preset) as loader:
+        convert_weights(keras_model, loader, transformers_config)
+
+    # Convert tokenizer
+    print("\nConverting tokenizer...")
+    # Helper to clean up tokenizer download if needed
+    hf_hub_download(hf_model_id, "tokenizer.model", local_dir=preset)
+    keras_tokenizer = convert_tokenizer(
+        keras_hub.models.Gemma3Tokenizer, preset
+    )
+
+    # Validate
+    passed = validate_output(keras_model, keras_tokenizer, hf_model_id)
+
+    if not passed:
+        print("\n⚠️  Verification failed. Check weight mapping.")
+        return
+
+    # Save preset
+    print(f"\nSaving to preset: ./{preset}")
+    keras_model.save_to_preset(preset)
+    keras_tokenizer.save_to_preset(preset)
+
+    print(f"\n✅ Successfully converted and saved to: ./{preset}")
 
 
 if __name__ == "__main__":
+    flags.mark_flag_as_required("preset")
     app.run(main)

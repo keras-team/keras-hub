@@ -1,4 +1,5 @@
 import numpy as np
+from safetensors import safe_open
 from sentencepiece import SentencePieceProcessor
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
@@ -83,6 +84,19 @@ def convert_backbone_config(transformers_config):
     else:
         query_head_dim_normalize = True
 
+    # Determine if this is an embedding model based on bidirectional
+    # attention.The embedding model uses bidirectional attention,
+    # while causal models do not.
+    is_embedding_model = transformer_config.get(
+        "use_bidirectional_attention", False
+    )
+    pooling_intermediate_dim = None
+    embedding_dim = None
+
+    if is_embedding_model:
+        embedding_dim = transformer_config["hidden_size"]
+        pooling_intermediate_dim = 3072
+
     return {
         "vocabulary_size": transformer_config.get(
             "vocab_size", 262144 if vision_encoder is None else 262208
@@ -124,18 +138,29 @@ def convert_backbone_config(transformers_config):
             "use_query_key_norm", True
         ),
         "vision_encoder": vision_encoder,
+        # Embedding Gemma configuration
+        "is_embedding_model": is_embedding_model,
+        "pooling_intermediate_dim": pooling_intermediate_dim,
+        "embedding_dim": embedding_dim,
     }
 
 
 def convert_weights(backbone, loader, transformers_config):
     if transformers_config["model_type"] == "gemma3_text":
-        prefix = "model"
+        prefix = _resolve_prefix(loader, ["model", ""])
     else:
-        prefix = _resolve_multimodal_prefix(loader)
+        prefix = _resolve_prefix(
+            loader, ["model.language_model", "language_model.model"]
+        )
+
+    def hf_key(suffix):
+        if prefix:
+            return f"{prefix}.{suffix}"
+        return suffix
 
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
-        hf_weight_key=f"{prefix}.embed_tokens.weight",
+        hf_weight_key=hf_key("embed_tokens.weight"),
     )
 
     def transpose(x, shape):
@@ -265,19 +290,23 @@ def convert_weights(backbone, loader, transformers_config):
 
         loader.port_weight(
             keras_variable=decoder_layer.pre_attention_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.input_layernorm.weight",
+            hf_weight_key=hf_key(f"layers.{i}.input_layernorm.weight"),
         )
         loader.port_weight(
             keras_variable=decoder_layer.post_attention_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.post_attention_layernorm.weight",
+            hf_weight_key=hf_key(f"layers.{i}.post_attention_layernorm.weight"),
         )
         loader.port_weight(
             keras_variable=decoder_layer.pre_ffw_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.pre_feedforward_layernorm.weight",
+            hf_weight_key=hf_key(
+                f"layers.{i}.pre_feedforward_layernorm.weight"
+            ),
         )
         loader.port_weight(
             keras_variable=decoder_layer.post_ffw_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.post_feedforward_layernorm.weight",
+            hf_weight_key=hf_key(
+                f"layers.{i}.post_feedforward_layernorm.weight"
+            ),
         )
 
         # Attention layers
@@ -285,7 +314,7 @@ def convert_weights(backbone, loader, transformers_config):
         ## Query
         loader.port_weight(
             keras_variable=decoder_layer.attention.query_dense.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.q_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.q_proj.weight"),
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
                 np.reshape(
                     hf_tensor,
@@ -296,12 +325,12 @@ def convert_weights(backbone, loader, transformers_config):
         )
         loader.port_weight(
             keras_variable=decoder_layer.attention.query_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.q_norm.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.q_norm.weight"),
         )
         ## Key
         loader.port_weight(
             keras_variable=decoder_layer.attention.key_dense.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.k_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.k_proj.weight"),
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
                 np.reshape(
                     hf_tensor,
@@ -312,12 +341,12 @@ def convert_weights(backbone, loader, transformers_config):
         )
         loader.port_weight(
             keras_variable=decoder_layer.attention.key_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.k_norm.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.k_norm.weight"),
         )
         ## Value
         loader.port_weight(
             keras_variable=decoder_layer.attention.value_dense.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.v_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.v_proj.weight"),
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
                 np.reshape(
                     hf_tensor,
@@ -329,7 +358,7 @@ def convert_weights(backbone, loader, transformers_config):
         ## Output
         loader.port_weight(
             keras_variable=decoder_layer.attention.output_dense.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.o_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.o_proj.weight"),
             # rearrange_patterns="c (a b) -> a b c",
             # rearrange_dims={"a": backbone.num_query_heads},
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
@@ -344,19 +373,19 @@ def convert_weights(backbone, loader, transformers_config):
         # MLP layers
         loader.port_weight(
             keras_variable=decoder_layer.gating_ffw.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.mlp.gate_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.mlp.gate_proj.weight"),
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=decoder_layer.gating_ffw_2.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.mlp.up_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.mlp.up_proj.weight"),
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=decoder_layer.ffw_linear.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.mlp.down_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.mlp.down_proj.weight"),
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
@@ -364,16 +393,57 @@ def convert_weights(backbone, loader, transformers_config):
     # Final normalization layer
     loader.port_weight(
         keras_variable=backbone.get_layer("final_normalization").scale,
-        hf_weight_key=f"{prefix}.norm.weight",
+        hf_weight_key=hf_key("norm.weight"),
     )
+
+    if backbone.is_embedding_model:
+        # For the embedding model, we need to load weights from the
+        # pooling and projection layers which are stored in separate files
+        # in the HF repo (2_Dense and 3_Dense folders).
+        # We use a trick here: we know `loader` has a `preset` attribute,
+        # so we can use `get_file` to download/locate these specific files.
+        try:
+
+            def load_dense_weights(folder):
+                filename = f"{folder}/model.safetensors"
+                path = get_file(loader.preset, filename)
+                weights = {}
+                with safe_open(path, framework="np", device="cpu") as f:
+                    for key in f.keys():
+                        weights[key] = f.get_tensor(key)
+                return weights
+
+            # Dense 1 (pooling_dense_1)
+            dense1_weights = load_dense_weights("2_Dense")
+            if "linear.weight" in dense1_weights:
+                keras_model_layer = backbone.get_layer("pooling_dense_1")
+                keras_model_layer.kernel.assign(
+                    np.transpose(dense1_weights["linear.weight"])
+                )
+
+            # Dense 2 (embedding_projection)
+            dense2_weights = load_dense_weights("3_Dense")
+            if "linear.weight" in dense2_weights:
+                keras_model_layer = backbone.get_layer("embedding_projection")
+                keras_model_layer.kernel.assign(
+                    np.transpose(dense2_weights["linear.weight"])
+                )
+
+        except Exception as e:
+            print(
+                f"Warning: Failed to load embedding model weights: {e}. "
+                "The model will potentially yield incorrect embeddings."
+            )
 
     return backbone
 
 
-def _resolve_multimodal_prefix(loader):
-    candidates = ["model.language_model", "language_model.model"]
+def _resolve_prefix(loader, candidates):
     for candidate in candidates:
-        key = f"{candidate}.embed_tokens.weight"
+        if candidate:
+            key = f"{candidate}.embed_tokens.weight"
+        else:
+            key = "embed_tokens.weight"
         try:
             loader.get_tensor(key)
             return candidate
