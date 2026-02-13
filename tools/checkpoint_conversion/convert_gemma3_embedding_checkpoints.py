@@ -138,8 +138,6 @@ def validate_output(keras_model, keras_tokenizer, hf_model_id):
     else:
         print(f"❌ Pooling parameter count mismatch! Diff: {pooling_diff:,}")
 
-
-
     # =========================================
     # EMBEDDING VERIFICATION
     # =========================================
