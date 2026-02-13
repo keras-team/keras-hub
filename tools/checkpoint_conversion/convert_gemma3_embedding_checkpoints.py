@@ -290,14 +290,18 @@ def main(_):
 
         # Transfer weights
         print("\nAttaching simple loader...")
-        print(f"Downloading model.safetensors into temporary directory...")
+        print("Downloading model.safetensors into temporary directory...")
 
         hf_hub_download(hf_model_id, "model.safetensors", local_dir=temp_dir)
 
         # We also need to download the dense layer weights for our new logic
         print("Downloading dense layer weights...")
-        hf_hub_download(hf_model_id, "2_Dense/model.safetensors", local_dir=temp_dir)
-        hf_hub_download(hf_model_id, "3_Dense/model.safetensors", local_dir=temp_dir)
+        hf_hub_download(
+            hf_model_id, "2_Dense/model.safetensors", local_dir=temp_dir
+        )
+        hf_hub_download(
+            hf_model_id, "3_Dense/model.safetensors", local_dir=temp_dir
+        )
 
         print("Converting weights...")
 
