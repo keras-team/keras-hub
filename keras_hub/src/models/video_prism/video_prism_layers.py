@@ -7,6 +7,7 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
+from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 class VideoPrismFactorizedReshape(keras.layers.Layer):
@@ -14,18 +15,30 @@ class VideoPrismFactorizedReshape(keras.layers.Layer):
 
     Args:
         image_shape: tuple. The shape of a single image frame
-            (height, width, channels).
+            (height, width, channels) or (channels, height, width).
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
     """
 
-    def __init__(self, image_shape, **kwargs):
+    def __init__(self, image_shape, data_format=None, **kwargs):
         super().__init__(**kwargs)
         self.image_shape = image_shape
+        self.data_format = standardize_data_format(data_format)
 
     def call(self, inputs):
-        return ops.reshape(
-            inputs,
-            (-1, self.image_shape[0], self.image_shape[1], self.image_shape[2]),
-        )
+        if self.data_format == "channels_first":
+            inputs = ops.transpose(inputs, (0, 1, 3, 4, 2))
+            channels, height, width = self.image_shape
+        else:
+            height, width, channels = self.image_shape
+        return ops.reshape(inputs, (-1, height, width, channels))
 
     def get_config(self):
         config = super().get_config()
@@ -412,7 +425,9 @@ class VideoPrismEncoderBlock(keras.layers.Layer):
     def compute_output_shape(
         self, inputs_shape, padding_mask_shape=None, attention_mask_shape=None
     ):
-        return inputs_shape
+        output_shape = list(inputs_shape)
+        output_shape[-1] = self.hidden_dim
+        return output_shape
 
 
 class VideoPrismEncoder(keras.layers.Layer):
@@ -502,6 +517,13 @@ class VideoPrismEncoder(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(
+        self, inputs_shape, padding_mask_shape=None, attention_mask_shape=None
+    ):
+        output_shape = list(inputs_shape)
+        output_shape[-1] = self.hidden_dim
+        return output_shape
 
 
 class SinusoidalPositionalEmbedding(keras.layers.Layer):
@@ -714,7 +736,7 @@ class VideoPrismPatchingAndEmbedding(keras.layers.Layer):
             name="position_embedding",
         )
 
-    def build(self, input_shape):
+    def build(self, inputs_shape):
         self.patch_embedding.build((None, None, self.patches_flattened_dim))
         self.position_embedding.build((1, self.num_patches))
         self.position_ids = ops.expand_dims(
@@ -752,6 +774,9 @@ class VideoPrismPatchingAndEmbedding(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, inputs_shape):
+        return (None, self.num_patches, self.hidden_dim)
 
 
 class VideoPrismTemporalEmbedding(keras.layers.Layer):

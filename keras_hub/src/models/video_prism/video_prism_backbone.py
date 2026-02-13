@@ -24,6 +24,7 @@ from keras_hub.src.models.video_prism.video_prism_layers import (
 from keras_hub.src.models.video_prism.video_prism_layers import (
     VideoPrismTemporalEmbedding,
 )
+from keras_hub.src.utils.keras_utils import standardize_data_format
 
 
 @keras_hub_export("keras_hub.models.VideoPrismBackbone")
@@ -75,6 +76,15 @@ class VideoPrismBackbone(Backbone):
             `(height, width, channels)`. For example, `(288, 288, 3)`.
         layer_norm_epsilon: float. The epsilon for the layer normalization.
             Defaults to `1e-6`.
+        data_format: `None` or str. If specified, either `"channels_last"` or
+            `"channels_first"`. The ordering of the dimensions in the
+            inputs. `"channels_last"` corresponds to inputs with shape
+            `(batch_size, height, width, channels)`
+            while `"channels_first"` corresponds to inputs with shape
+            `(batch_size, channels, height, width)`. It defaults to the
+            `image_data_format` value found in your Keras config file at
+            `~/.keras/keras.json`. If you never set it, then it will be
+            `"channels_last"`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the model's computations and weights. Note that some operations,
             such as softmax and layer normalization, will always be performed
@@ -140,24 +150,37 @@ class VideoPrismBackbone(Backbone):
         attention_logit_soft_cap=None,
         layer_norm_epsilon=1e-6,
         image_shape=(288, 288, 3),
+        data_format=None,
         dtype=None,
         **kwargs,
     ):
-        num_patches = (image_shape[0] // patch_size) * (
-            image_shape[1] // patch_size
-        )
+        data_format = standardize_data_format(data_format)
+        if len(image_shape) != 3:
+            raise ValueError(
+                "`image_shape` must be a tuple of three integers: "
+                "(height, width, channels) or (channels, height, width). "
+                f"Received: image_shape={image_shape}"
+            )
+        if data_format == "channels_last":
+            height, width, channels = image_shape
+        else:
+            channels, height, width = image_shape
         has_text_encoder = num_text_layers > 0
+        num_patches = (height // patch_size) * (width // patch_size)
 
         # === Layers ===
         # Vision encoder.
         self.spatial_reshape = VideoPrismFactorizedReshape(
-            image_shape=image_shape, dtype=dtype, name="spatial_reshape"
+            image_shape=image_shape,
+            data_format=data_format,
+            dtype=dtype,
+            name="spatial_reshape",
         )
         self.spatial_embedding = VideoPrismPatchingAndEmbedding(
-            image_size=(image_shape[0], image_shape[1]),
+            image_size=(height, width),
             patch_size=(patch_size, patch_size),
             hidden_dim=hidden_dim,
-            num_channels=image_shape[2],
+            num_channels=channels,
             dtype=dtype,
             name="spatial_patching_and_embedding",
         )

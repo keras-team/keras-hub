@@ -30,11 +30,15 @@ class VideoPrismBackboneVideoOnlyTest(TestCase):
         )
 
     def test_backbone_basics(self):
-        self.run_backbone_test(
+        self.run_vision_backbone_test(
             cls=VideoPrismBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, self.num_frames, 49, 16),
+            # TODO: Set run_data_format_check=True.
+            # The expected_output_shape should not be transposed for
+            # VideoPrismBackbone
+            run_data_format_check=False,
         )
 
     @pytest.mark.large
@@ -83,7 +87,7 @@ class VideoPrismBackboneTest(TestCase):
         }
 
     def test_backbone_basics(self):
-        self.run_backbone_test(
+        self.run_vision_backbone_test(
             cls=VideoPrismBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
@@ -91,6 +95,10 @@ class VideoPrismBackboneTest(TestCase):
                 "vision_embeddings": (2, 16),
                 "text_embeddings": (2, 16),
             },
+            # TODO: Set run_data_format_check=True.
+            # The input_data is a dict which is not supported by
+            # run_data_format_check.
+            run_data_format_check=False,
         )
 
     @pytest.mark.large
