@@ -235,6 +235,45 @@ pre-commit run --all-files
 
 KerasHub uses [Ruff](https://docs.astral.sh/ruff/) to format the code.
 
+## Model Porting Guidelines
+
+We welcome contributions for new models! To ensure a smooth process, please follow these guidelines when porting a model to KerasHub.
+
+### Finding and Proposing Models
+
+- **Finding Work**: Check the [Issues tab](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22stat%3Acontributions%20welcome%22) for open model porting tasks. These are often tagged for visibility.
+- **Proposing Models**: If you want to port a model that isn't listed, please [open an issue](https://github.com/keras-team/keras-hub/issues/new) to discuss it first. The team will review the proposal to ensure it fits the project roadmap.
+- **Licensing**: **Strict Requirement**: We currently only accept models with **Apache 2.0**, **MIT**, **Llama Community License** or **Gemma** licenses. Please verify the license of the original model before starting.
+
+### Implementation Tools
+
+We have tools to help you port models from other frameworks:
+
+- **[Co-working with the Gemini CLI](#co-working-with-the-gemini-cli)**: Use the Gemini CLI to help generate code, unit tests, and conversion scripts.
+- **[Using the Model Porter Tool](#using-the-model-porter-tool)**: Automate the porting process using LLMs to generate files in the correct order.
+
+### Implementation Checklist
+
+A complete model port typically includes the following components:
+
+1. **Model Implementation**: The core model code (Backbone, Tokenizer, Task layers, Preprocessing).
+2. **Unit Tests**: Standard Keras unit tests for all components to ensure basic functionality and shape inference.
+3. **Conversion Script**: A script to convert weights from the original framework (e.g. Hugging Face Safetensors) to KerasHub.
+4. **Numeric Verification**: Use a verification script (or notebook) to check output alignment with the reference model.
+    - **Requirement**: Verify numerical outputs against the original implementation (e.g., Hugging Face Transformers).
+    - **Parameter Count**: The parameter count of the KerasHub model must match the original model exactly.
+    - **Process**: This verification is required for the PR to be approved.
+    - **Evidence**: Your PR **must** include a Colab notebook or screenshots showing outputs match within an acceptable tolerance (1e-4 or lower) after a forward pass for both original and converted model.
+
+**Reference**: See [PR #2384 (GPT-OSS Model Port)](https://github.com/keras-team/keras-hub/pull/2384) for an example of a successful model porting PR.
+
+### Post-Merge Process
+
+Once your PR is reviewed and merged:
+1. The Keras team will handle the full weight conversion using the checkpoint conversion script from your PR.
+2. The team will upload the weights to [Kaggle Models](https://www.kaggle.com/models?publisher=keras).
+3. The team will register the new Presets to KerasHub.
+
 ## Co-working with the Gemini CLI
 
 Let's accelerate the development with Gemini CLI.
