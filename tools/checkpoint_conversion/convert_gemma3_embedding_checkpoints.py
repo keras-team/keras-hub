@@ -14,7 +14,7 @@ huggingface-cli login  # Required for gated model access
 Usage:
 ```shell
 cd tools/checkpoint_conversion
-python convert_gemma3_embedding_checkpoints.py --preset embedding_gemma3_300m_en
+python convert_gemma3_embedding_checkpoints.py --preset embedding_gemma3_300m
 ```
 """
 
@@ -50,7 +50,7 @@ flags.DEFINE_string(
 
 # Map KerasHub preset names to HuggingFace model IDs
 PRESET_MAP = {
-    "embedding_gemma3_300m_en": "google/embeddinggemma-300m",
+    "embedding_gemma3_300m": "google/embeddinggemma-300m",
 }
 
 
@@ -111,31 +111,34 @@ def validate_output(keras_model, keras_tokenizer, hf_model_id):
 
     keras_backbone_params = keras_total_params - pooling_params
     hf_total_params = hf_backbone_params + hf_pooling_params
-    print(f"KerasHub total params:    {keras_total_params:,}")
-    print(f"    - KerasHub Pooling head:    {pooling_params:,}")
-    print(f"    - KerasHub Backbone only:   {keras_backbone_params:,}")
-    print(f"HF total params:          {hf_total_params:,}")
-    print(f"    - HF backbone params:      {hf_backbone_params:,}")
-    print(f"    - HF pooling head params:  {hf_pooling_params:,}")
+    print(f"Keras Hub total params:    {keras_total_params:,}")
+    print(f"    - Keras Hub Backbone only:   {keras_backbone_params:,}")
+    print(f"    - Keras Hub Pooling head:    {pooling_params:,}")
+    print("\n-------------------------------------")
+    print(f"Hugging Face total params:          {hf_total_params:,}")
+    print(f"    - Hugging Face backbone only:      {hf_backbone_params:,}")
+    print(f"    - Hugging Face pooling head :  {hf_pooling_params:,}")
 
     param_diff = abs(keras_backbone_params - hf_backbone_params)
     pooling_diff = abs(pooling_params - hf_pooling_params)
     total_diff = abs(keras_total_params - hf_total_params)
 
-    if param_diff == 0:
-        print("✅ Parameter count EXACT MATCH!")
+    if total_diff == 0:
+        print("✅ Total parameter count EXACT MATCH!")
     else:
-        print(f"❌ Parameter count mismatch! Diff: {param_diff:,}")
+        print(f"❌ Total parameter count mismatch! Diff: {total_diff:,}")
+
+    if param_diff == 0:
+        print("✅ Backbone Parameter count EXACT MATCH!")
+    else:
+        print(f"❌ Backbone parameter count mismatch! Diff: {param_diff:,}")
 
     if pooling_diff == 0:
         print("✅ Pooling parameter count EXACT MATCH!")
     else:
         print(f"❌ Pooling parameter count mismatch! Diff: {pooling_diff:,}")
 
-    if total_diff == 0:
-        print("✅ Total parameter count EXACT MATCH!")
-    else:
-        print(f"❌ Total parameter count mismatch! Diff: {total_diff:,}")
+
 
     # =========================================
     # EMBEDDING VERIFICATION
