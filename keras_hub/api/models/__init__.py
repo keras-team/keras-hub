@@ -766,6 +766,12 @@ from keras_hub.src.models.vgg.vgg_image_classifier import (
 from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
     VGGImageClassifierPreprocessor as VGGImageClassifierPreprocessor,
 )
+from keras_hub.src.models.video_prism.video_prism_backbone import (
+    VideoPrismBackbone as VideoPrismBackbone,
+)
+from keras_hub.src.models.video_prism.video_prism_tokenizer import (
+    VideoPrismTokenizer as VideoPrismTokenizer,
+)
 from keras_hub.src.models.vit.vit_backbone import ViTBackbone as ViTBackbone
 from keras_hub.src.models.vit.vit_image_classifier import (
     ViTImageClassifier as ViTImageClassifier,
