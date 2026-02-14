@@ -1,7 +1,4 @@
-from unittest.mock import patch
-
 import pytest
-from keras import ops
 
 from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
 from keras_hub.src.models.qwen2_vl.qwen2_vl_causal_lm import Qwen2VLCausalLM
@@ -20,28 +17,32 @@ class Qwen2VLCausalLMTest(TestCase):
         self.vocab += ["<|vision_start|>"]
         self.vocab += ["<|vision_end|>"]
         self.vocab += ["<|image_pad|>"]
-        self.vocab = dict(
-            [(token, i) for i, token in enumerate(self.vocab)]
-        )
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = [
-            "\u0120 a", "\u0120 t", "\u0120 i", "\u0120 b",
-            "a i", "p l", "n e",
+            "\u0120 a",
+            "\u0120 t",
+            "\u0120 i",
+            "\u0120 b",
+            "a i",
+            "p l",
+            "n e",
         ]
         self.merges += [
-            "\u0120a t", "p o", "r t", "\u0120t h", "ai r",
-            "pl a", "po rt",
+            "\u0120a t",
+            "p o",
+            "r t",
+            "\u0120t h",
+            "ai r",
+            "pl a",
+            "po rt",
         ]
         self.merges += ["\u0120ai r", "\u0120a i", "pla ne"]
         self.preprocessor = Qwen2VLCausalLMPreprocessor(
-            Qwen2VLTokenizer(
-                vocabulary=self.vocab, merges=self.merges
-            ),
+            Qwen2VLTokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=7,
         )
         self.backbone = Qwen2VLBackbone(
-            vocabulary_size=(
-                self.preprocessor.tokenizer.vocabulary_size()
-            ),
+            vocabulary_size=(self.preprocessor.tokenizer.vocabulary_size()),
             num_layers=2,
             num_query_heads=4,
             num_key_value_heads=2,

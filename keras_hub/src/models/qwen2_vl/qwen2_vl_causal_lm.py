@@ -149,9 +149,7 @@ class Qwen2VLCausalLM(CausalLM):
         # Compute position embeddings if position ids provided.
         position_embeddings = None
         if mrope_position_ids is not None:
-            head_dim = (
-                self.backbone.hidden_dim // self.backbone.num_query_heads
-            )
+            head_dim = self.backbone.hidden_dim // self.backbone.num_query_heads
             position_embeddings = _compute_mrope_embeddings(
                 mrope_position_ids,
                 head_dim,
@@ -161,9 +159,7 @@ class Qwen2VLCausalLM(CausalLM):
 
         # Each decoder layer has a cache; we update them separately.
         caches = []
-        for i, transformer_layer in enumerate(
-            self.backbone.transformer_layers
-        ):
+        for i, transformer_layer in enumerate(self.backbone.transformer_layers):
             current_cache = cache[:, i, ...]
             x, next_cache = transformer_layer(
                 x,
@@ -179,16 +175,15 @@ class Qwen2VLCausalLM(CausalLM):
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
-    def _build_cache(self, token_ids, padding_mask=None,
-                     mrope_position_ids=None):
+    def _build_cache(
+        self, token_ids, padding_mask=None, mrope_position_ids=None
+    ):
         """Build an empty cache for use with ``call_with_cache()``."""
         batch_size = ops.shape(token_ids)[0]
         max_length = ops.shape(token_ids)[1]
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_key_value_heads
-        head_dim = (
-            self.backbone.hidden_dim // self.backbone.num_query_heads
-        )
+        head_dim = self.backbone.hidden_dim // self.backbone.num_query_heads
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
         # Seed the cache.
@@ -229,9 +224,7 @@ class Qwen2VLCausalLM(CausalLM):
             # The cache index is the index of our previous token.
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
-            prompt = ops.slice(
-                prompt, [0, cache_update_index], [batch_size, 1]
-            )
+            prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
             logits, hidden_states, cache = self.call_with_cache(
                 token_ids=prompt,
                 cache=cache,

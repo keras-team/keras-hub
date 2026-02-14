@@ -5,7 +5,6 @@ and M-RoPE position ID computation for Qwen2-VL.
 """
 
 import keras
-import numpy as np
 import tensorflow as tf
 
 from keras_hub.src.api_export import keras_hub_export
@@ -17,9 +16,7 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
 from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (
     Qwen2VLImageConverter,
 )
-from keras_hub.src.models.qwen2_vl.qwen2_vl_tokenizer import (
-    Qwen2VLTokenizer,
-)
+from keras_hub.src.models.qwen2_vl.qwen2_vl_tokenizer import Qwen2VLTokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -130,11 +127,11 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
                 token_ids if batched else tf.squeeze(token_ids, axis=0)
             ),
             "padding_mask": (
-                padding_mask if batched
-                else tf.squeeze(padding_mask, axis=0)
+                padding_mask if batched else tf.squeeze(padding_mask, axis=0)
             ),
             "mrope_position_ids": (
-                mrope_position_ids if batched
+                mrope_position_ids
+                if batched
                 else tf.squeeze(mrope_position_ids, axis=0)
             ),
         }

@@ -1,8 +1,6 @@
 import pytest
 
-from keras_hub.src.models.qwen2_vl.qwen2_vl_tokenizer import (
-    Qwen2VLTokenizer,
-)
+from keras_hub.src.models.qwen2_vl.qwen2_vl_tokenizer import Qwen2VLTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -14,16 +12,24 @@ class Qwen2VLTokenizerTest(TestCase):
         self.vocab += ["<|vision_start|>"]
         self.vocab += ["<|vision_end|>"]
         self.vocab += ["<|image_pad|>"]
-        self.vocab = dict(
-            [(token, i) for i, token in enumerate(self.vocab)]
-        )
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = [
-            "\u0120 a", "\u0120 t", "\u0120 i", "\u0120 b",
-            "a i", "p l", "n e",
+            "\u0120 a",
+            "\u0120 t",
+            "\u0120 i",
+            "\u0120 b",
+            "a i",
+            "p l",
+            "n e",
         ]
         self.merges += [
-            "\u0120a t", "p o", "r t", "\u0120t h", "ai r",
-            "pl a", "po rt",
+            "\u0120a t",
+            "p o",
+            "r t",
+            "\u0120t h",
+            "ai r",
+            "pl a",
+            "po rt",
         ]
         self.merges += ["\u0120ai r", "\u0120a i", "pla ne"]
         self.init_kwargs = {

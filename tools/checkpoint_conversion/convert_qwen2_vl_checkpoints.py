@@ -87,9 +87,7 @@ def test_model(
     mean_abs_diff = np.mean(abs_diff)
 
     # Get dtype-appropriate tolerances.
-    tolerances = DTYPE_TOLERANCES.get(
-        keras_dtype, {"atol": 1e-4, "rtol": 1e-4}
-    )
+    tolerances = DTYPE_TOLERANCES.get(keras_dtype, {"atol": 1e-4, "rtol": 1e-4})
     atol = tolerances["atol"]
     rtol = tolerances["rtol"]
 
@@ -147,9 +145,7 @@ def main(_):
         device_map=device,
         torch_dtype=target_dtype,
     )
-    hf_tokenizer = AutoTokenizer.from_pretrained(
-        hf_preset, return_tensors="pt"
-    )
+    hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
 
     # Verify the actual loaded dtype.
@@ -167,8 +163,8 @@ def main(_):
     keras_hub_tokenizer = keras_hub.models.Qwen2VLTokenizer.from_preset(
         f"hf://{hf_preset}"
     )
-    keras_hub_preprocessor = (
-        keras_hub.models.Qwen2VLCausalLMPreprocessor(keras_hub_tokenizer)
+    keras_hub_preprocessor = keras_hub.models.Qwen2VLCausalLMPreprocessor(
+        keras_hub_tokenizer
     )
 
     print("\n-> Huggingface model and tokenizer loaded")
@@ -202,10 +198,8 @@ def main(_):
 
         # Reload in target dtype for saving.
         print(f"\n-> Reloading model in {save_dtype} for saving...")
-        keras_hub_backbone_save = (
-            keras_hub.models.Qwen2VLBackbone.from_preset(
-                f"hf://{hf_preset}", dtype=save_dtype
-            )
+        keras_hub_backbone_save = keras_hub.models.Qwen2VLBackbone.from_preset(
+            f"hf://{hf_preset}", dtype=save_dtype
         )
         keras_hub_lm_save = keras_hub.models.Qwen2VLCausalLM(
             backbone=keras_hub_backbone_save,

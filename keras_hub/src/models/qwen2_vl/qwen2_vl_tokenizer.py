@@ -8,7 +8,6 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
-
 VISION_START_TOKEN = "<|vision_start|>"
 VISION_END_TOKEN = "<|vision_end|>"
 IMAGE_PAD_TOKEN = "<|image_pad|>"

@@ -2,9 +2,7 @@
 
 import numpy as np
 
-from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import (
-    Qwen2VLBackbone,
-)
+from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -35,7 +33,8 @@ class Qwen2VLBackboneTextOnlyTest(TestCase):
 
         self.input_data = {
             "token_ids": np.random.randint(
-                0, self.vocabulary_size,
+                0,
+                self.vocabulary_size,
                 (self.batch_size, self.seq_length),
             ).astype("int32"),
             "padding_mask": np.ones(

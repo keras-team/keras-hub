@@ -10,10 +10,10 @@ from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
 from keras_hub.src.models.qwen2_vl.qwen2_vl_decoder import (
     Qwen2VLTransformerDecoder,
 )
-from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
 
 
 def _qwen2_vl_kernel_initializer(stddev=0.02):
@@ -320,7 +320,8 @@ def _compute_mrope_embeddings(
     # position_ids_expanded: (3, batch, 1, seq_len)
     position_ids_expanded = ops.expand_dims(position_ids, axis=2)
 
-    # freqs: (3, batch, dim//2, seq_len) -> transpose -> (3, batch, seq_len, dim//2)
+    # freqs: (3, batch, dim//2, seq_len) -> transpose
+    # -> (3, batch, seq_len, dim//2)
     freqs = ops.matmul(
         ops.cast(inv_freq_expanded, "float32"),
         ops.cast(position_ids_expanded, "float32"),

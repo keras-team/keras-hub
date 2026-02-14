@@ -22,9 +22,7 @@ def _rotate_half(x):
     return ops.concatenate((-x2, x1), axis=-1)
 
 
-def _apply_multimodal_rotary_pos_emb(
-    q, k, cos, sin, mrope_section
-):
+def _apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section):
     """Applies M-RoPE to query and key tensors.
 
     Splits the head dimension into temporal, height, and width sections.
@@ -263,9 +261,7 @@ class Qwen2VLAttention(keras.layers.Layer):
 
         # GQA: repeat key/value heads
         key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
-        value = ops.repeat(
-            value, repeats=self.num_key_value_groups, axis=2
-        )
+        value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
 
         attention_output = self._compute_attention(
             query,
@@ -312,9 +308,7 @@ class Qwen2VLAttention(keras.layers.Layer):
             )
             return attention_output
 
-        attention_scores = ops.einsum(
-            self._dot_product_equation, query, key
-        )
+        attention_scores = ops.einsum(self._dot_product_equation, query, key)
         attention_scores = ops.multiply(
             attention_scores,
             ops.cast(self._inv_norm_factor, self.compute_dtype),
@@ -323,9 +317,7 @@ class Qwen2VLAttention(keras.layers.Layer):
             attention_mask = self._mask_sliding_window(
                 attention_mask,
                 cache_update_index=(
-                    cache_update_index
-                    if cache_update_index is not None
-                    else 0
+                    cache_update_index if cache_update_index is not None else 0
                 ),
             )
         attention_scores = self._masked_softmax(
@@ -347,13 +339,9 @@ class Qwen2VLAttention(keras.layers.Layer):
         if keras.config.backend() == "tensorflow":
             import tensorflow as tf
 
-            band_size = ops.minimum(
-                key_len, self.sliding_window_size - 1
-            )
+            band_size = ops.minimum(key_len, self.sliding_window_size - 1)
             band_size = ops.cast(band_size, "int32")
-            sliding_mask = tf.linalg.band_part(
-                all_ones, band_size, band_size
-            )
+            sliding_mask = tf.linalg.band_part(all_ones, band_size, band_size)
         else:
             sliding_mask = ops.triu(
                 all_ones, -1 * self.sliding_window_size + 1
@@ -361,9 +349,7 @@ class Qwen2VLAttention(keras.layers.Layer):
         start = (cache_update_index, 0)
         sliding_mask = ops.slice(sliding_mask, start, (query_len, key_len))
         sliding_mask = ops.expand_dims(sliding_mask, 0)
-        return ops.logical_and(
-            attention_mask, ops.cast(sliding_mask, "bool")
-        )
+        return ops.logical_and(attention_mask, ops.cast(sliding_mask, "bool"))
 
     def get_config(self):
         config = super().get_config()

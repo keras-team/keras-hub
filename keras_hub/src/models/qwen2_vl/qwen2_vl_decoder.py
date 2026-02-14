@@ -7,10 +7,8 @@ standard QwenAttention.
 import keras
 from keras import ops
 
-from keras_hub.src.models.qwen2_vl.qwen2_vl_attention import (
-    Qwen2VLAttention,
-)
 from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
+from keras_hub.src.models.qwen2_vl.qwen2_vl_attention import Qwen2VLAttention
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -190,13 +188,9 @@ class Qwen2VLTransformerDecoder(keras.layers.Layer):
         residual = hidden_states
         hidden_states = self._feedforward_layernorm(hidden_states)
 
-        gate = self.activation(
-            self._feedforward_gate_dense(hidden_states)
-        )
+        gate = self.activation(self._feedforward_gate_dense(hidden_states))
         hidden_states = self._feedforward_intermediate_dense(hidden_states)
-        hidden_states = self._feedforward_output_dense(
-            gate * hidden_states
-        )
+        hidden_states = self._feedforward_output_dense(gate * hidden_states)
 
         hidden_states = residual + hidden_states
 

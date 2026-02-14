@@ -9,7 +9,6 @@ import keras
 from keras import ops
 
 from keras_hub.src.models.qwen2_vl.qwen2_vl_attention import _rotate_half
-from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 class Qwen2VLPatchEmbed(keras.layers.Layer):
@@ -65,7 +64,8 @@ class Qwen2VLPatchEmbed(keras.layers.Layer):
             Tensor of shape `(total_patches, embed_dim)`.
         """
         hidden_states = self.proj(hidden_states)
-        # Flatten spatial and temporal dims: (batch, embed_dim, 1, 1, 1) -> (batch, embed_dim)
+        # Flatten spatial and temporal dims:
+        # (batch, embed_dim, 1, 1, 1) -> (batch, embed_dim)
         hidden_states = ops.reshape(hidden_states, (-1, self.embed_dim))
         return hidden_states
 
@@ -103,11 +103,7 @@ class Qwen2VLVisionRotaryEmbedding(keras.layers.Layer):
         self.theta = theta
         # Compute inverse frequencies: 1 / (theta ^ (2i / dim))
         inv_freq = 1.0 / (
-            theta
-            ** (
-                ops.cast(ops.arange(0, dim, 2), "float32")
-                / dim
-            )
+            theta ** (ops.cast(ops.arange(0, dim, 2), "float32") / dim)
         )
         self.inv_freq = self.add_weight(
             name="inv_freq",
@@ -209,7 +205,6 @@ def _apply_rotary_pos_emb_vision(q, k, cos, sin):
     cos = ops.cast(ops.expand_dims(cos, axis=-2), "float32")
     sin = ops.cast(ops.expand_dims(sin, axis=-2), "float32")
 
-
     q_embed = q * cos + _rotate_half(q) * sin
     k_embed = k * cos + _rotate_half(k) * sin
     return ops.cast(q_embed, orig_q_dtype), ops.cast(k_embed, orig_k_dtype)
@@ -263,9 +258,7 @@ class Qwen2VLVisionAttention(keras.layers.Layer):
         # QKV projection: (seq_len, 3 * embed_dim)
         qkv = self.qkv(hidden_states)
         # Reshape to (seq_len, 3, num_heads, head_dim)
-        qkv = ops.reshape(
-            qkv, (seq_length, 3, self.num_heads, self.head_dim)
-        )
+        qkv = ops.reshape(qkv, (seq_length, 3, self.num_heads, self.head_dim))
         # Transpose to (3, seq_len, num_heads, head_dim)
         qkv = ops.transpose(qkv, (1, 0, 2, 3))
         query, key, value = qkv[0], qkv[1], qkv[2]
@@ -276,23 +269,15 @@ class Qwen2VLVisionAttention(keras.layers.Layer):
             query, key = _apply_rotary_pos_emb_vision(query, key, cos, sin)
 
         # Transpose for attention: (1, num_heads, seq_len, head_dim)
-        query = ops.transpose(
-            ops.expand_dims(query, axis=0), (0, 2, 1, 3)
-        )
-        key = ops.transpose(
-            ops.expand_dims(key, axis=0), (0, 2, 1, 3)
-        )
-        value = ops.transpose(
-            ops.expand_dims(value, axis=0), (0, 2, 1, 3)
-        )
+        query = ops.transpose(ops.expand_dims(query, axis=0), (0, 2, 1, 3))
+        key = ops.transpose(ops.expand_dims(key, axis=0), (0, 2, 1, 3))
+        value = ops.transpose(ops.expand_dims(value, axis=0), (0, 2, 1, 3))
 
         # Scaled dot-product attention
-        scale = self.head_dim ** -0.5
+        scale = self.head_dim**-0.5
         attn_weights = ops.matmul(query, ops.transpose(key, (0, 1, 3, 2)))
         attn_weights = attn_weights * scale
-        attn_weights = ops.softmax(
-            ops.cast(attn_weights, "float32"), axis=-1
-        )
+        attn_weights = ops.softmax(ops.cast(attn_weights, "float32"), axis=-1)
         attn_weights = ops.cast(attn_weights, query.dtype)
 
         attn_output = ops.matmul(attn_weights, value)
@@ -436,7 +421,7 @@ class Qwen2VLPatchMerger(keras.layers.Layer):
         self.context_dim = context_dim
         self.spatial_merge_size = spatial_merge_size
 
-        merge_hidden = context_dim * (spatial_merge_size ** 2)
+        merge_hidden = context_dim * (spatial_merge_size**2)
 
         self.ln_q = keras.layers.LayerNormalization(
             epsilon=1e-6,
@@ -466,7 +451,7 @@ class Qwen2VLPatchMerger(keras.layers.Layer):
             Tensor of shape `(merged_patches, hidden_size)`.
         """
         x = self.ln_q(x)
-        merge_size = self.spatial_merge_size ** 2
+        merge_size = self.spatial_merge_size**2
         # Reshape to group adjacent patches
         x = ops.reshape(x, (-1, merge_size * self.context_dim))
         x = self.dense1(x)
@@ -601,8 +586,12 @@ class Qwen2VLVisionEncoder(keras.layers.Layer):
             # Reshape for spatial merge grouping
             hpos_ids = ops.reshape(
                 hpos_ids,
-                (h // spatial_merge, spatial_merge,
-                 w // spatial_merge, spatial_merge),
+                (
+                    h // spatial_merge,
+                    spatial_merge,
+                    w // spatial_merge,
+                    spatial_merge,
+                ),
             )
             hpos_ids = ops.transpose(hpos_ids, (0, 2, 1, 3))
             hpos_ids = ops.reshape(hpos_ids, (-1,))
@@ -613,8 +602,12 @@ class Qwen2VLVisionEncoder(keras.layers.Layer):
             )
             wpos_ids = ops.reshape(
                 wpos_ids,
-                (h // spatial_merge, spatial_merge,
-                 w // spatial_merge, spatial_merge),
+                (
+                    h // spatial_merge,
+                    spatial_merge,
+                    w // spatial_merge,
+                    spatial_merge,
+                ),
             )
             wpos_ids = ops.transpose(wpos_ids, (0, 2, 1, 3))
             wpos_ids = ops.reshape(wpos_ids, (-1,))

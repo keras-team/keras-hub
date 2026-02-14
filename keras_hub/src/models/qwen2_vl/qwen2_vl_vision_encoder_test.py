@@ -1,13 +1,20 @@
 """Tests for Qwen2-VL Vision Encoder components."""
 
 import numpy as np
-from keras import ops
 
 from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
     Qwen2VLPatchEmbed,
+)
+from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
     Qwen2VLPatchMerger,
+)
+from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
     Qwen2VLVisionBlock,
+)
+from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
     Qwen2VLVisionEncoder,
+)
+from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
     Qwen2VLVisionRotaryEmbedding,
 )
 from keras_hub.src.tests.test_case import TestCase
@@ -81,9 +88,7 @@ class Qwen2VLVisionEncoderTest(TestCase):
         # Total patches = 1 * 4 * 4 = 16; after 3D patch embed these
         # become (num_patches, in_channels, temporal, patch_h, patch_w)
         num_patches = 16
-        dummy_input = np.random.rand(
-            num_patches, 3, 2, 4, 4
-        ).astype("float32")
+        dummy_input = np.random.rand(num_patches, 3, 2, 4, 4).astype("float32")
         grid_thw = np.array([[1, 4, 4]], dtype="int32")
 
         output = encoder(dummy_input, grid_thw)
@@ -105,12 +110,8 @@ class Qwen2VLVisionEncoderTest(TestCase):
         )
         # 2 images, each with grid_thw (1, 4, 4) -> 16 patches each
         num_patches = 32  # 16 + 16
-        dummy_input = np.random.rand(
-            num_patches, 3, 2, 4, 4
-        ).astype("float32")
-        grid_thw = np.array(
-            [[1, 4, 4], [1, 4, 4]], dtype="int32"
-        )
+        dummy_input = np.random.rand(num_patches, 3, 2, 4, 4).astype("float32")
+        grid_thw = np.array([[1, 4, 4], [1, 4, 4]], dtype="int32")
 
         output = encoder(dummy_input, grid_thw)
         # 32 patches / 4 = 8 merged patches

@@ -43,14 +43,10 @@ def convert_backbone_config(transformers_config):
             depth=vision_config.get("depth", 32),
             num_heads=vision_config.get("num_heads", 16),
             patch_size=vision_config.get("spatial_patch_size", 14),
-            temporal_patch_size=vision_config.get(
-                "temporal_patch_size", 2
-            ),
+            temporal_patch_size=vision_config.get("temporal_patch_size", 2),
             in_channels=vision_config.get("in_chans", 3),
             mlp_ratio=vision_config.get("mlp_ratio", 4.0),
-            spatial_merge_size=vision_config.get(
-                "spatial_merge_size", 2
-            ),
+            spatial_merge_size=vision_config.get("spatial_merge_size", 2),
             name="vision_encoder",
         )
         kwargs["vision_encoder"] = vision_encoder
@@ -70,9 +66,7 @@ def convert_weights(backbone, loader, transformers_config):
                 "token_embedding"
             ).reverse_embeddings,
             hf_weight_key="lm_head.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
 
     def transpose_and_reshape(x, shape):
@@ -132,23 +126,17 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_intermediate_dense.kernel,
             hf_weight_key=f"model.layers.{i}.mlp.up_proj.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_output_dense.kernel,
             hf_weight_key=f"model.layers.{i}.mlp.down_proj.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_gate_dense.kernel,
             hf_weight_key=f"model.layers.{i}.mlp.gate_proj.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
 
         # Feedforward layernorm
@@ -159,9 +147,7 @@ def convert_weights(backbone, loader, transformers_config):
 
     # Final normalization layer
     loader.port_weight(
-        keras_variable=backbone.get_layer(
-            "sequence_output_layernorm"
-        ).scale,
+        keras_variable=backbone.get_layer("sequence_output_layernorm").scale,
         hf_weight_key="model.norm.weight",
     )
 
@@ -263,9 +249,7 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=vision.merger.dense1.kernel,
             hf_weight_key="visual.merger.mlp.0.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=vision.merger.dense1.bias,
@@ -274,9 +258,7 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=vision.merger.dense2.kernel,
             hf_weight_key="visual.merger.mlp.2.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=vision.merger.dense2.bias,
