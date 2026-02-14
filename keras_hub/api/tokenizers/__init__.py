@@ -140,3 +140,4 @@ from keras_hub.src.tokenizers.word_piece_tokenizer import (
 from keras_hub.src.tokenizers.word_piece_tokenizer_trainer import (
     compute_word_piece_vocabulary as compute_word_piece_vocabulary,
 )
+from keras_hub.tokenizers import v2 as v2
