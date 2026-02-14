@@ -74,6 +74,15 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         cache_update_index=None,
         training=None,
     ):
+        # The internal dense layers don't support masking, but we handle it
+        # manually via the `attention_mask` argument. We strip the mask here
+        # to avoid warnings from the internal layers.
+        if hasattr(query, "_keras_mask"):
+            query._keras_mask = None
+        if hasattr(value, "_keras_mask"):
+            value._keras_mask = None
+        if key is not None and hasattr(key, "_keras_mask"):
+            key._keras_mask = None
         if key is None:
             key = value
 
