@@ -19,17 +19,16 @@ from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 
 @keras_hub_export("keras_hub.models.Qwen2VLCausalLMPreprocessor")
 class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
-    """Qwen2-VL Causal LM preprocessor.
+    """Qwen2-VL Causal LM Preprocessor.
 
     This class handles the preprocessing of inputs for the Qwen2-VL model.
-    It combines text tokenization with image preprocessing for the vision encoder.
+    It combines text tokenization with image preprocessing for the vision
+    encoder.
 
     Args:
         tokenizer: A `keras_hub.models.Tokenizer` instance.
-        image_converter: A callable or layer that converts raw images to tensors.
-            If `None`, image inputs will pass through unchanged.
-        sequence_length: The length of the packed inputs.
-        **kwargs: Standard Keras keyword arguments.
+        image_converter: A callable or layer that converts raw images
+            to tensors. If `None`, image inputs will pass through unchanged.
     """
 
     def __init__(

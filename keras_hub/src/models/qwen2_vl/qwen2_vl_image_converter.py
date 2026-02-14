@@ -12,15 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from keras_hub.src.api_export import keras_hub_export
+
 import numpy as np
 from keras import layers
 from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
+
 
 @keras_hub_export("keras_hub.layers.Qwen2VLImageConverter")
 class Qwen2VLImageConverter(layers.Layer):
-    """Image converter for Qwen2-VL that handles smart resizing and normalization.
+    """Image converter for Qwen2-VL.
+
+    This layer handles smart resizing and normalization.
 
     This layer analyzes the aspect ratio of input images and resizes them
     to an optimal grid size that is a multiple of the patch size.
@@ -74,9 +78,9 @@ class Qwen2VLImageConverter(layers.Layer):
         input_shape = ops.shape(image)
         h, w = input_shape[-3], input_shape[-2]
 
-        # Note: In graph execution, h/w might be symbolic.
-        # Smart resizing logic typically runs on CPU/NumPy side in preprocessing pipelines.
-        # For this implementation, we assume values are available or eager execution.
+        # Smart resizing logic typically runs on CPU/NumPy side in
+        # preprocessing pipelines. For this implementation, we assume
+        # values are available or eager execution.
         new_h, new_w = self._smart_resize(float(h), float(w))
 
         resized_image = ops.image.resize(image, (new_h, new_w))

@@ -28,7 +28,6 @@ class Qwen2VLCausalLM(CausalLM):
     def call(self, inputs, training=False, mask=None):
         images = inputs["images"]
         token_ids = inputs["token_ids"]
-        
 
         vision_encoder = self.backbone.vision_encoder
         text_backbone = self.backbone.text_backbone

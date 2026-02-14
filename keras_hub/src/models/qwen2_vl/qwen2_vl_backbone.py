@@ -51,8 +51,8 @@ class Qwen2VLBackbone(Backbone):
         # 2. Projection
         # We assume the projector is attached to the vision encoder or separate.
         # Ideally, we define the projector here if it's not part of the encoder.
-        # For this implementation, we assume the vision_encoder returns projected features
-        # OR we leave the merging logic to the CausalLM.
+        # For this implementation, we assume the vision_encoder returns
+        # projected features OR we leave the merging logic to the CausalLM.
 
         # NOTE: In the Functional API style for KerasHub, the Backbone usually
         # just exposes the sub-models.
