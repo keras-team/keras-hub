@@ -7,7 +7,6 @@ from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_hub.src.models.gpt2.gpt2_causal_lm_preprocessor import (
     GPT2CausalLMPreprocessor,
 )
-from keras_hub.src.utils.tensor_utils import any_equal
 
 
 @keras_hub_export("keras_hub.models.GPT2CausalLM")
@@ -187,17 +186,53 @@ class GPT2CausalLM(CausalLM):
         )
         x = self.backbone.embeddings_add((tokens, positions))
         x = self.backbone.embeddings_dropout(x)
+
+        # Precompute the causal mask once and share across all layers.
+        # This saves (num_layers - 1) calls to compute_causal_mask per step.
+        # For GPT-2 base (12 layers), this is 11 fewer mask computations.
+        batch_size = ops.shape(token_ids)[0]
+        seq_len = ops.shape(token_ids)[1]
+        cache_len = ops.shape(cache)[3]  # max_length from cache shape
+        from keras_hub.src.layers.modeling.transformer_layer_utils import (
+            compute_causal_mask,
+        )
+
+        causal_mask = compute_causal_mask(
+            batch_size, cache_len, seq_len, cache_update_index
+        )
+
         # Each decoder layer has a cache; we update them separately.
-        caches = []
-        for i, transformer_layer in enumerate(self.backbone.transformer_layers):
-            current_cache = cache[:, i, ...]
-            x, next_cache = transformer_layer(
-                x,
-                self_attention_cache=current_cache,
-                self_attention_cache_update_index=cache_update_index,
-            )
-            caches.append(next_cache)
-        cache = ops.stack(caches, axis=1)
+        if keras.config.backend() == "torch":
+            # On torch, slice_update is in-place through views, so the
+            # original cache tensor is already updated. We don't need to
+            # collect and re-stack layer caches, saving 12 ops.stack calls
+            # per generation step.
+            # Use call_cached() fast path to skip validation overhead and
+            # pass the precomputed mask to avoid redundant mask creation.
+            for i, transformer_layer in enumerate(
+                self.backbone.transformer_layers
+            ):
+                current_cache = cache[:, i, ...]
+                x, _ = transformer_layer.call_cached(
+                    x,
+                    self_attention_cache=current_cache,
+                    self_attention_cache_update_index=cache_update_index,
+                    self_attention_mask=causal_mask,
+                )
+        else:
+            caches = []
+            for i, transformer_layer in enumerate(
+                self.backbone.transformer_layers
+            ):
+                current_cache = cache[:, i, ...]
+                x, next_cache = transformer_layer.call_cached(
+                    x,
+                    self_attention_cache=current_cache,
+                    self_attention_cache_update_index=cache_update_index,
+                    self_attention_mask=causal_mask,
+                )
+                caches.append(next_cache)
+            cache = ops.stack(caches, axis=1)
         hidden_states = x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
@@ -214,81 +249,6 @@ class GPT2CausalLM(CausalLM):
         # Seed the cache.
         _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
         return hidden_states, cache
-
-    def generate_step(
-        self,
-        inputs,
-        stop_token_ids=None,
-    ):
-        """A compilable generation function for a single batch of inputs.
-
-        This function represents the inner, XLA-compilable, generation function
-        for a single batch of inputs. Inputs should have the same structure as
-        model inputs, a dictionary with keys `"token_ids"` and `"padding_mask"`.
-
-        Args:
-            inputs: A dictionary with two keys `"token_ids"` and
-                `"padding_mask"` and batched tensor values.
-            stop_token_ids: List of id's of end token's to stop on. If all
-                sequences have produced a new stop token, generation
-                will stop.
-        """
-        token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
-        # Create and seed cache with a single forward pass.
-        hidden_states, cache = self._build_cache(token_ids)
-        # Compute the lengths of all user inputted tokens ids.
-        row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
-        # Start at the first index that has no user inputted id.
-        index = ops.min(row_lengths)
-
-        def next(prompt, cache, index):
-            # The cache index is the index of our previous token.
-            cache_update_index = index - 1
-            batch_size = ops.shape(prompt)[0]
-            prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
-            logits, hidden_states, cache = self.call_with_cache(
-                prompt,
-                cache,
-                cache_update_index,
-            )
-            return (
-                ops.squeeze(logits, axis=1),
-                ops.squeeze(hidden_states, axis=1),
-                cache,
-            )
-
-        token_ids = self.sampler(
-            next=next,
-            prompt=token_ids,
-            cache=cache,
-            index=index,
-            mask=padding_mask,
-            stop_token_ids=stop_token_ids,
-            hidden_states=hidden_states,
-            model=self,
-        )
-
-        # Compute an output padding mask with the token ids we updated.
-        if stop_token_ids is not None:
-            # Build a mask of stop tokens locations not in the original
-            # prompt (not in locations where `padding_mask` is True).
-            end_locations = any_equal(
-                token_ids, stop_token_ids, ops.logical_not(padding_mask)
-            )
-
-            end_locations = ops.cast(end_locations, "int32")
-            # Use cumsum to get ones in all locations after end_locations.
-            cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
-            overflow = cumsum - end_locations
-            # Our padding mask is the inverse of these overflow locations.
-            padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
-        else:
-            # Without early stopping, all locations will have been updated.
-            padding_mask = ops.ones_like(token_ids, dtype="bool")
-        return {
-            "token_ids": token_ids,
-            "padding_mask": padding_mask,
-        }
 
     def score(
         self,
