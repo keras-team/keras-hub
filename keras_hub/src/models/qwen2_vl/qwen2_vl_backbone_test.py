@@ -26,11 +26,11 @@ class Qwen2VLBackboneTextOnlyTest(TestCase):
             "mrope_section": [1, 1, 2],  # sums to head_dim // 2 = 4
         }
 
-        # For M-RoPE, position_ids shape is (batch, 3, seq_len)
+        # For M-RoPE, position_ids shape is (batch, seq_len, 3)
         # For text-only, all 3 components are the same sequential IDs
         pos_ids = np.broadcast_to(
-            np.arange(self.seq_length)[None, None, :],
-            (self.batch_size, 3, self.seq_length),
+            np.arange(self.seq_length)[None, :, None],
+            (self.batch_size, self.seq_length, 3),
         ).astype("int32")
 
         self.input_data = {

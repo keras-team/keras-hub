@@ -65,7 +65,7 @@ class Qwen2VLBackbone(Backbone):
             `(batch, num_vision_tokens)`.
         vision_mask: Optional boolean mask, shape `(batch, seq_len)`,
             indicating vision token positions.
-        mrope_position_ids: Tensor of shape `(3, batch, seq_len)` with
+        mrope_position_ids: Tensor of shape `(batch, seq_len, 3)` with
             M-RoPE position IDs (temporal, height, width).
 
     Example:
@@ -172,7 +172,7 @@ class Qwen2VLBackbone(Backbone):
             shape=(None,), dtype="int32", name="padding_mask"
         )
         mrope_position_ids_input = keras.Input(
-            shape=(3, None), dtype="int32", name="mrope_position_ids"
+            shape=(None, 3), dtype="int32", name="mrope_position_ids"
         )
 
         inputs = {
@@ -207,7 +207,7 @@ class Qwen2VLBackbone(Backbone):
             inputs["grid_thw"] = grid_thw_input
 
         # Compute M-RoPE position embeddings
-        # mrope_position_ids shape: (batch, 3, seq_len)
+        # mrope_position_ids shape: (batch, seq_len, 3)
         # We need cos/sin of shape (3, batch, seq_len, head_dim)
         position_embeddings = _compute_mrope_embeddings(
             mrope_position_ids_input,
@@ -267,13 +267,12 @@ class Qwen2VLBackbone(Backbone):
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
                 "tie_word_embeddings": self.tie_word_embeddings,
-                "vision_encoder": (
-                    keras.layers.serialize(self.vision_encoder)
-                    if self.vision_encoder is not None
-                    else None
-                ),
             }
         )
+        if self.vision_encoder is not None:
+            config["vision_encoder"] = keras.layers.serialize(
+                self.vision_encoder
+            )
         return config
 
     @classmethod
@@ -290,7 +289,7 @@ def _compute_mrope_embeddings(
     """Compute M-RoPE cos/sin embeddings from position IDs.
 
     Args:
-        mrope_position_ids: Tensor of shape `(batch, 3, seq_len)` with
+        mrope_position_ids: Tensor of shape `(batch, seq_len, 3)` with
             [temporal, height, width] position indices.
         head_dim: int. Head dimension.
         rope_max_wavelength: float. Base wavelength for RoPE.
@@ -307,19 +306,16 @@ def _compute_mrope_embeddings(
         ** (ops.cast(ops.arange(0, dim, 2), "float32") / dim)
     )
 
-    # mrope_position_ids: (batch, 3, seq_len)
+    # mrope_position_ids: (batch, seq_len, 3)
     # Transpose to (3, batch, seq_len) for each component
     position_ids = ops.transpose(
-        ops.cast(mrope_position_ids, "float32"), (1, 0, 2)
+        ops.cast(mrope_position_ids, "float32"), (2, 0, 1)
     )
 
-    # inv_freq_expanded: (1, 1, dim//2, 1)
+    # inv_freq_expanded: (1, 1, dim//2, 1) -> tile to (3, 1, dim//2, 1)
+    # The batch dimension broadcasts implicitly during matmul.
     inv_freq_expanded = ops.reshape(inv_freq, (1, 1, -1, 1))
-    # Expand to (3, batch_size, dim//2, 1)
-    inv_freq_expanded = ops.broadcast_to(
-        inv_freq_expanded,
-        (3, ops.shape(position_ids)[1], len(inv_freq), 1),
-    )
+    inv_freq_expanded = ops.tile(inv_freq_expanded, (3, 1, 1, 1))
 
     # position_ids_expanded: (3, batch, 1, seq_len)
     position_ids_expanded = ops.expand_dims(position_ids, axis=2)
