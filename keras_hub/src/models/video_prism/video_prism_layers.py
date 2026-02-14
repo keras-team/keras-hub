@@ -45,6 +45,17 @@ class VideoPrismFactorizedReshape(keras.layers.Layer):
         config.update({"image_shape": self.image_shape})
         return config
 
+    def compute_output_shape(self, inputs_shape):
+        output_dim0 = None
+        if inputs_shape[0] is not None and inputs_shape[1] is not None:
+            output_dim0 = inputs_shape[0] * inputs_shape[1]
+        if self.data_format == "channels_first":
+            channels, height, width = self.image_shape
+        else:
+            height, width, channels = self.image_shape
+        output_shape = (output_dim0, height, width, channels)
+        return output_shape
+
 
 class VideoPrismFactorizedDecoding(keras.layers.Layer):
     def __init__(self, num_patches, num_frames, hidden_dim, **kwargs):
@@ -133,6 +144,13 @@ class VideoPrismMLP(keras.layers.Layer):
             self.dropout_rate, dtype=self.dtype_policy, name="dropout"
         )
 
+    def build(self, inputs_shape):
+        self.dense_1.build(inputs_shape)
+        inputs_shape = self.dense_1.compute_output_shape(inputs_shape)
+        self.dense_2.build(inputs_shape)
+        inputs_shape = self.dense_2.compute_output_shape(inputs_shape)
+        self.dropout.build(inputs_shape)
+
     def call(self, inputs):
         x = self.dense_1(inputs)
         x = self.dropout(x)
@@ -152,6 +170,11 @@ class VideoPrismMLP(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, inputs_shape):
+        output_shape = list(inputs_shape)
+        output_shape[-1] = self.hidden_dim
+        return output_shape
 
 
 class VideoPrismPerDimScale(keras.layers.Layer):
@@ -241,7 +264,7 @@ class VideoPrismAttention(keras.layers.Layer):
         self.key_dense.build(input_shape)
         self.value_dense.build(input_shape)
         self.output_dense.build(
-            input_shape[:-1] + (self.num_heads, self.key_dim)
+            list(input_shape)[:-1] + [self.num_heads, self.key_dim]
         )
         if self.use_per_dim_scale:
             self.per_dim_scale_layer.build(
@@ -373,6 +396,15 @@ class VideoPrismEncoderBlock(keras.layers.Layer):
             name="mlp",
         )
 
+    def build(
+        self, inputs_shape, padding_mask_shape=None, attention_mask_shape=None
+    ):
+        self.layer_norm_1.build(inputs_shape)
+        self.mha.build(inputs_shape)
+        self.dropout.build(inputs_shape)
+        self.layer_norm_2.build(inputs_shape)
+        self.mlp.build(inputs_shape)
+
     def _compute_attention_mask(self, x, padding_mask):
         if padding_mask is None and not self.is_causal:
             return None
@@ -488,6 +520,18 @@ class VideoPrismEncoder(keras.layers.Layer):
             )
         else:
             self.layer_norm = None
+
+    def build(
+        self, inputs_shape, padding_mask_shape=None, attention_mask_shape=None
+    ):
+        self.dropout.build(inputs_shape)
+        for i in range(self.num_layers):
+            self.encoder_layers[i].build(inputs_shape)
+            inputs_shape = self.encoder_layers[i].compute_output_shape(
+                inputs_shape
+            )
+        if self.use_final_layernorm:
+            self.layer_norm.build(inputs_shape)
 
     def call(self, inputs, padding_mask=None, attention_mask=None):
         x = self.dropout(inputs)
@@ -605,6 +649,9 @@ class VideoPrismClassToken(keras.layers.Layer):
         config.update({"hidden_dim": self.hidden_dim})
         return config
 
+    def compute_output_shape(self, inputs_shape):
+        return (inputs_shape[0], 1, self.hidden_dim)
+
 
 class VideoPrismEmbedding(keras.layers.Layer):
     """VideoPrism embedding layer.
@@ -640,7 +687,11 @@ class VideoPrismEmbedding(keras.layers.Layer):
             name="class_token",
         )
 
-    def call(self, token_ids, padding_mask):
+    def build(self, token_ids_shape, padding_mask_shape=None):
+        self.token_embedding.build(token_ids_shape)
+        self.position_embedding.build(token_ids_shape)
+
+    def call(self, token_ids, padding_mask=None):
         # Token Embedding
         x = self.token_embedding(token_ids)
         x = ops.multiply(
@@ -825,12 +876,6 @@ class VideoPrismTemporalEmbedding(keras.layers.Layer):
         pos_emb = self.embedding(self.pos_ids)
         return ops.add(x, ops.cast(pos_emb, x.dtype))
 
-    def compute_output_shape(self, input_shape):
-        output_dim0 = None
-        if input_shape[0] is not None and input_shape[1] is not None:
-            output_dim0 = (input_shape[0] // self.num_frames) * input_shape[1]
-        return (output_dim0, self.num_frames, self.hidden_dim)
-
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -840,6 +885,12 @@ class VideoPrismTemporalEmbedding(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, input_shape):
+        output_dim0 = None
+        if input_shape[0] is not None and input_shape[1] is not None:
+            output_dim0 = (input_shape[0] // self.num_frames) * input_shape[1]
+        return (output_dim0, self.num_frames, self.hidden_dim)
 
 
 class VideoPrismAttenTokenPoolingLayer(keras.layers.Layer):
@@ -876,7 +927,7 @@ class VideoPrismAttenTokenPoolingLayer(keras.layers.Layer):
         self.dropout_rate = dropout_rate
         self.layer_norm_epsilon = layer_norm_epsilon
         self.use_per_dim_scale = use_per_dim_scale
-        self.key_dim = 4 * self.hidden_dim // self.num_heads
+        key_dim = 4 * self.hidden_dim // self.num_heads
 
         self.pooling_attention_query = self.add_weight(
             shape=(self.num_queries, self.query_dim),
@@ -886,8 +937,8 @@ class VideoPrismAttenTokenPoolingLayer(keras.layers.Layer):
 
         self.pooling_attention = VideoPrismAttention(
             num_heads=self.num_heads,
-            key_dim=self.key_dim,
-            hidden_dim=self.hidden_dim,  # Output dim
+            key_dim=key_dim,
+            hidden_dim=self.hidden_dim,
             dropout_rate=self.dropout_rate,
             use_per_dim_scale=self.use_per_dim_scale,
             dtype=self.dtype_policy,
@@ -901,6 +952,12 @@ class VideoPrismAttenTokenPoolingLayer(keras.layers.Layer):
         self.dropout_layer = keras.layers.Dropout(
             self.dropout_rate, dtype=self.dtype_policy, name="attention_dropout"
         )
+
+    def build(self, inputs_shape, padding_mask_shape=None):
+        query_shape = (inputs_shape[0], self.num_queries, self.query_dim)
+        self.pooling_attention.build(query_shape)
+        self.layer_norm.build(query_shape)
+        self.dropout_layer.build(query_shape)
 
     def call(self, inputs, padding_mask=None):
         batch_size = ops.shape(inputs)[0]
@@ -929,6 +986,11 @@ class VideoPrismAttenTokenPoolingLayer(keras.layers.Layer):
                 "num_queries": self.num_queries,
                 "dropout_rate": self.dropout_rate,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
+                "use_per_dim_scale": self.use_per_dim_scale,
             }
         )
         return config
+
+    def compute_output_shape(self, inputs_shape, padding_mask_shape=None):
+        query_shape = (inputs_shape[0], self.num_queries, self.query_dim)
+        return query_shape
