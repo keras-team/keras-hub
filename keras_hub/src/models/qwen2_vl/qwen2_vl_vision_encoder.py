@@ -8,6 +8,7 @@ vision attention, transformer blocks, and spatial patch merging.
 import keras
 from keras import ops
 
+from keras_hub.src.models.qwen2_vl.qwen2_vl_attention import _rotate_half
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -208,11 +209,6 @@ def _apply_rotary_pos_emb_vision(q, k, cos, sin):
     cos = ops.cast(ops.expand_dims(cos, axis=-2), "float32")
     sin = ops.cast(ops.expand_dims(sin, axis=-2), "float32")
 
-    # rotate_half
-    def _rotate_half(x):
-        x1 = x[..., : x.shape[-1] // 2]
-        x2 = x[..., x.shape[-1] // 2 :]
-        return ops.concatenate((-x2, x1), axis=-1)
 
     q_embed = q * cos + _rotate_half(q) * sin
     k_embed = k * cos + _rotate_half(k) * sin
@@ -587,8 +583,8 @@ class Qwen2VLVisionEncoder(keras.layers.Layer):
                 `[temporal, height, width]` for each image/video.
 
         Returns:
-            Tensor of shape `(total_patches, head_dim)` with rotary
-            embeddings (cos and sin concatenated).
+            Tensor of shape `(total_patches, head_dim // 2)` with rotary
+            frequencies.
         """
         all_pos_ids = []
 

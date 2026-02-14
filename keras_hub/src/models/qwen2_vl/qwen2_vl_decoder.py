@@ -182,9 +182,7 @@ class Qwen2VLTransformerDecoder(keras.layers.Layer):
         )
 
         if cache is not None:
-            attention_output, cache = attention_output, cache
-            if isinstance(attention_output, tuple):
-                attention_output, cache = attention_output
+            attention_output, cache = attention_output
 
         hidden_states = residual + attention_output
 
