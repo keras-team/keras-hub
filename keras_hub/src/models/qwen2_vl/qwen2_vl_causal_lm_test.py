@@ -45,8 +45,8 @@ class Qwen2VLCausalLMTest(TestCase):
             num_layers=2,
             num_query_heads=4,
             num_key_value_heads=2,
-            hidden_dim=8,
-            intermediate_dim=16,
+            hidden_dim=32,
+            intermediate_dim=64,
             mrope_section=[1, 1, 2],
         )
         self.init_kwargs = {
