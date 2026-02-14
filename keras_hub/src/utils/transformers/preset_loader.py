@@ -22,6 +22,7 @@ from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
+from keras_hub.src.utils.transformers import convert_qwen2_vl
 from keras_hub.src.utils.transformers import convert_qwen3
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
@@ -71,6 +72,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_vit
         elif model_type == "qwen2":
             self.converter = convert_qwen
+        elif model_type == "qwen2_vl":
+            self.converter = convert_qwen2_vl
         elif model_type == "mixtral":
             self.converter = convert_mixtral
         elif model_type == "qwen2_moe":
