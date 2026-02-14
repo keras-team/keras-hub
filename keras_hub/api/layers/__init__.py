@@ -123,6 +123,12 @@ from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
 from keras_hub.src.models.parseq.parseq_image_converter import (
     PARSeqImageConverter as PARSeqImageConverter,
 )
+from keras_hub.src.models.qwen3_omni.qwen3_omni_audio_converter import (
+    Qwen3OmniAudioConverter as Qwen3OmniAudioConverter,
+)
+from keras_hub.src.models.qwen3_omni.qwen3_omni_image_converter import (
+    Qwen3OmniImageConverter as Qwen3OmniImageConverter,
+)
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter as ResNetImageConverter,
 )

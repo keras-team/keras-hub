@@ -566,6 +566,21 @@ from keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm import (
 from keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm_preprocessor import (
     Qwen3MoeCausalLMPreprocessor as Qwen3MoeCausalLMPreprocessor,
 )
+from keras_hub.src.models.qwen3_omni.qwen3_omni_audio_encoder import (
+    Qwen3OmniAudioEncoder as Qwen3OmniAudioEncoder,
+)
+from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import (
+    Qwen3OmniBackbone as Qwen3OmniBackbone,
+)
+from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm import (
+    Qwen3OmniCausalLM as Qwen3OmniCausalLM,
+)
+from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm_preprocessor import (
+    Qwen3OmniCausalLMPreprocessor as Qwen3OmniCausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen3_omni.qwen3_omni_vision_encoder import (
+    Qwen3OmniVisionEncoder as Qwen3OmniVisionEncoder,
+)
 from keras_hub.src.models.qwen_moe.qwen_moe_backbone import (
     QwenMoeBackbone as QwenMoeBackbone,
 )

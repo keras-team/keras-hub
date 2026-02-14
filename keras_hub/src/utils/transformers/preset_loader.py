@@ -24,6 +24,7 @@ from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
 from keras_hub.src.utils.transformers import convert_qwen3_moe
+from keras_hub.src.utils.transformers import convert_qwen3_omni
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_sam3
 from keras_hub.src.utils.transformers import convert_smollm3
@@ -77,6 +78,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen_moe
         elif model_type == "qwen3_moe":
             self.converter = convert_qwen3_moe
+        elif model_type == "qwen3_omni_moe":
+            self.converter = convert_qwen3_omni
         elif model_type == "qwen3":
             self.converter = convert_qwen3
         elif model_type == "sam3_video":
@@ -133,6 +136,15 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_tokenizer(self, cls, config_name="tokenizer.json", **kwargs):
         return self.converter.convert_tokenizer(cls, self.preset, **kwargs)
+
+    def load_audio_converter(self, cls, **kwargs):
+        if hasattr(self.converter, "load_audio_converter_config"):
+            config = self.converter.load_audio_converter_config(
+                self.preset, self.config
+            )
+            if config is not None:
+                return cls(**{**config, **kwargs})
+        return None
 
     def load_image_converter(self, cls, **kwargs):
         if hasattr(self.converter, "load_image_converter_config"):
