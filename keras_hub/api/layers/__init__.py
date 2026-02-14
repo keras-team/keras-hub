@@ -168,6 +168,9 @@ from keras_hub.src.models.siglip.siglip_image_converter import (
 from keras_hub.src.models.vgg.vgg_image_converter import (
     VGGImageConverter as VGGImageConverter,
 )
+from keras_hub.src.models.video_prism.video_prism_image_converter import (
+    VideoPrismImageConverter as VideoPrismImageConverter,
+)
 from keras_hub.src.models.vit.vit_image_converter import (
     ViTImageConverter as ViTImageConverter,
 )
