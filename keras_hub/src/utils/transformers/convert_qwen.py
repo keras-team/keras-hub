@@ -140,6 +140,21 @@ def convert_tokenizer(cls, preset, **kwargs):
             vocab[token["content"]] = token["id"]
             special_tokens.add(token["content"])
 
+    # Also load from tokenizer_config.json — some special tokens
+    # only appear there, not in tokenizer.json's added_tokens.
+    try:
+        wrapper_config = load_json(preset, "tokenizer_config.json")
+        added_decoder = wrapper_config.get("added_tokens_decoder", {})
+        for token_id_str, token_info in added_decoder.items():
+            content = token_info["content"]
+            if content not in vocab and not content.startswith(
+                "<|reserved_special_token_"
+            ):
+                vocab[content] = int(token_id_str)
+                special_tokens.add(content)
+    except Exception:
+        pass
+
     kwargs.update(
         {
             "unsplittable_tokens": list(special_tokens),
