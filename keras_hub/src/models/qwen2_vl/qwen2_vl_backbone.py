@@ -335,8 +335,6 @@ class Qwen2VLBackbone(Backbone):
             mrope_section,
         )
 
-        x = text_embeddings # Reset x to just text for now to avoid shape errors with the dummy add
-
         # Decoder layers
         for transformer_layer in transformer_layers:
             x = transformer_layer(
