@@ -668,6 +668,16 @@ class Qwen2VLVisionEncoder(keras.layers.Layer):
         merged = self.merger(hidden_states)
         return merged
 
+    def compute_output_shape(self, hidden_states_shape, grid_thw_shape):
+        del grid_thw_shape
+        return (hidden_states_shape[0], self.hidden_size)
+
+    def compute_output_spec(self, hidden_states, grid_thw):
+        output_shape = self.compute_output_shape(
+            hidden_states.shape, grid_thw.shape
+        )
+        return keras.KerasTensor(output_shape, dtype=self.compute_dtype)
+
     def get_config(self):
         config = super().get_config()
         config.update(

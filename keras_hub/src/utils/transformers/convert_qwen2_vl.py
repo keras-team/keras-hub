@@ -155,6 +155,22 @@ def convert_weights(backbone, loader, transformers_config):
     if backbone.vision_encoder is not None:
         vision = backbone.vision_encoder
 
+        # Build the vision encoder weights before porting variables.
+        h_w = vision.spatial_merge_size
+        num_patches = h_w * h_w
+        build_images = np.zeros(
+            (
+                num_patches,
+                vision.in_channels,
+                vision.temporal_patch_size,
+                vision.patch_size,
+                vision.patch_size,
+            ),
+            dtype="float32",
+        )
+        build_grid = np.array([[1, h_w, h_w]], dtype="int32")
+        vision(build_images, grid_thw=build_grid)
+
         # Patch embedding (Conv3D)
         loader.port_weight(
             keras_variable=vision.patch_embed.proj.kernel,
