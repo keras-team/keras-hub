@@ -11,7 +11,7 @@ class Qwen2VLTokenizerTest(TestCase):
         self.vocab += ["<|eot_id|>"]
         self.vocab += ["<|vision_start|>"]
         self.vocab += ["<|vision_end|>"]
-        self.vocab += ["<|image_pad|>"]
+        self.vocab += ["<|vision_pad|>"]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = [
             "\u0120 a",
@@ -58,11 +58,11 @@ class Qwen2VLTokenizerTest(TestCase):
         tokenizer = Qwen2VLTokenizer(**self.init_kwargs)
         self.assertIsNotNone(tokenizer.vision_start_token_id)
         self.assertIsNotNone(tokenizer.vision_end_token_id)
-        self.assertIsNotNone(tokenizer.image_pad_token_id)
+        self.assertIsNotNone(tokenizer.vision_pad_token_id)
         # Check they map to the right vocabulary ids.
         self.assertEqual(tokenizer.vision_start_token_id, 8)
         self.assertEqual(tokenizer.vision_end_token_id, 9)
-        self.assertEqual(tokenizer.image_pad_token_id, 10)
+        self.assertEqual(tokenizer.vision_pad_token_id, 10)
 
     @pytest.mark.extra_large
     def test_all_presets(self):

@@ -16,7 +16,7 @@ class Qwen2VLCausalLMTest(TestCase):
         self.vocab += ["<|eot_id|>"]
         self.vocab += ["<|vision_start|>"]
         self.vocab += ["<|vision_end|>"]
-        self.vocab += ["<|image_pad|>"]
+        self.vocab += ["<|vision_pad|>"]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = [
             "\u0120 a",

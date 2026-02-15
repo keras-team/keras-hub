@@ -10,7 +10,7 @@ from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 VISION_START_TOKEN = "<|vision_start|>"
 VISION_END_TOKEN = "<|vision_end|>"
-IMAGE_PAD_TOKEN = "<|image_pad|>"
+VISION_PAD_TOKEN = "<|vision_pad|>"
 
 
 @keras_hub_export(
@@ -50,7 +50,7 @@ class Qwen2VLTokenizer(BytePairTokenizer):
         # Vision special tokens.
         self._add_special_token(VISION_START_TOKEN, "vision_start_token")
         self._add_special_token(VISION_END_TOKEN, "vision_end_token")
-        self._add_special_token(IMAGE_PAD_TOKEN, "image_pad_token")
+        self._add_special_token(VISION_PAD_TOKEN, "vision_pad_token")
 
         super().__init__(
             vocabulary=vocabulary,
