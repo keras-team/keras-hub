@@ -139,6 +139,7 @@ class Qwen2VLBackbone(Backbone):
             dtype=dtype,
             name="token_embedding",
         )
+        self.vision_encoder = vision_encoder
 
         transformer_layers = []
         for i in range(num_layers):
