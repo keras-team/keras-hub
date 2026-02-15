@@ -56,6 +56,9 @@ from keras_hub.src.models.llama.llama_tokenizer import (
 from keras_hub.src.models.llama3.llama3_tokenizer import (
     Llama3Tokenizer as Llama3Tokenizer,
 )
+from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (
+    MetaCLIP2Tokenizer as MetaCLIP2Tokenizer,
+)
 from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )

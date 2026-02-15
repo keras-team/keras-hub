@@ -18,6 +18,7 @@ from keras_hub.src.utils.transformers import convert_gemma3
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
+from keras_hub.src.utils.transformers import convert_metaclip_2
 from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_pali_gemma
@@ -63,6 +64,8 @@ class TransformersPresetLoader(PresetLoader):
         elif model_type == "llama":
             # TODO: handle other llama versions.
             self.converter = convert_llama3
+        elif model_type == "metaclip_2":
+            self.converter = convert_metaclip_2
         elif model_type == "mistral":
             self.converter = convert_mistral
         elif model_type == "paligemma":
