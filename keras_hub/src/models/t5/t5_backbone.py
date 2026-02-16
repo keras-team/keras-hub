@@ -75,6 +75,10 @@ class T5Backbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+        import keras
+
+        nnx_enabled = keras.config.is_nnx_enabled()
+
         # Token embedding layer. This layer is shared by encoder and decoder.
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
@@ -89,6 +93,7 @@ class T5Backbone(Backbone):
             dtype=dtype,
             name="encoder_embedding_dropout",
         )
+
         self.encoder_transformer_layers = []
         for i in range(num_layers):
             layer = T5TransformerLayer(
@@ -106,21 +111,25 @@ class T5Backbone(Backbone):
                 name=f"transformer_encoder_layer_{i}",
             )
             self.encoder_transformer_layers.append(layer)
+
         self.encoder_layer_norm = T5LayerNorm(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="encoder_output_layer_norm",
         )
+
         self.encoder_dropout = keras.layers.Dropout(
             dropout,
             dtype=dtype,
             name="encoder_output_dropout",
         )
+
         self.decoder_embedding_dropout = keras.layers.Dropout(
             dropout,
             dtype=dtype,
             name="decoder_embedding_dropout",
         )
+
         self.decoder_transformer_layers = []
         for i in range(num_layers):
             layer = T5TransformerLayer(
@@ -138,80 +147,89 @@ class T5Backbone(Backbone):
                 name=f"transformer_decoder_layer_{i}",
             )
             self.decoder_transformer_layers.append(layer)
+
         self.decoder_layer_norm = T5LayerNorm(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="decoder_output_layer_norm",
         )
+
         self.decoder_dropout = keras.layers.Dropout(
             dropout,
             dtype=dtype,
             name="decoder_output_dropout",
         )
 
-        # === Functional Model ===
-        encoder_token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="encoder_token_ids"
-        )
-        encoder_padding_mask_input = keras.Input(
-            shape=(None,), dtype="int32", name="encoder_padding_mask"
-        )
-        decoder_token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="decoder_token_ids"
-        )
-        decoder_padding_mask_input = keras.Input(
-            shape=(None,), dtype="int32", name="decoder_padding_mask"
-        )
-        # Encoder.
-        x = self.token_embedding(encoder_token_id_input)
-        x = self.encoder_embedding_dropout(x)
-        encoder_attention_mask = encoder_padding_mask_input[:, None, :]
-        position_bias = None
-        for transformer_layer in self.encoder_transformer_layers:
-            output = transformer_layer(
-                x,
-                attention_mask=encoder_attention_mask,
-                position_bias=position_bias,
-                use_causal_mask=False,
+        if not nnx_enabled:
+            # === Functional Model ===
+            encoder_token_id_input = keras.Input(
+                shape=(None,), dtype="int32", name="encoder_token_ids"
             )
-            if isinstance(output, tuple):
-                x, position_bias = output
-        x = self.encoder_layer_norm(x)
-        x = self.encoder_dropout(x)
-        encoder_output = x
-        # Decoder.
-        x = self.token_embedding(decoder_token_id_input)
-        x = self.decoder_embedding_dropout(x)
-        decoder_attention_mask = decoder_padding_mask_input[:, None, :]
-        position_bias = None
-        for transformer_layer in self.decoder_transformer_layers:
-            output = transformer_layer(
-                x,
-                attention_mask=decoder_attention_mask,
-                position_bias=position_bias,
-                encoder_hidden_states=encoder_output,
-                encoder_attention_mask=encoder_attention_mask,
-                use_causal_mask=True,
+            encoder_padding_mask_input = keras.Input(
+                shape=(None,), dtype="int32", name="encoder_padding_mask"
             )
-            if isinstance(output, tuple):
-                x, position_bias = output
-        x = self.decoder_layer_norm(x)
-        x = self.decoder_dropout(x)
-        decoder_output = x
-        super().__init__(
-            {
-                "encoder_token_ids": encoder_token_id_input,
-                "encoder_padding_mask": encoder_padding_mask_input,
-                "decoder_token_ids": decoder_token_id_input,
-                "decoder_padding_mask": decoder_padding_mask_input,
-            },
-            outputs={
-                "encoder_sequence_output": encoder_output,
-                "decoder_sequence_output": decoder_output,
-            },
-            dtype=dtype,
-            **kwargs,
-        )
+            decoder_token_id_input = keras.Input(
+                shape=(None,), dtype="int32", name="decoder_token_ids"
+            )
+            decoder_padding_mask_input = keras.Input(
+                shape=(None,), dtype="int32", name="decoder_padding_mask"
+            )
+
+            # Encoder.
+            x = self.token_embedding(encoder_token_id_input)
+            x = self.encoder_embedding_dropout(x)
+            encoder_attention_mask = encoder_padding_mask_input[:, None, :]
+            position_bias = None
+            for transformer_layer in self.encoder_transformer_layers:
+                output = transformer_layer(
+                    x,
+                    attention_mask=encoder_attention_mask,
+                    position_bias=position_bias,
+                    use_causal_mask=False,
+                )
+                if isinstance(output, tuple):
+                    x, position_bias = output
+            x = self.encoder_layer_norm(x)
+            x = self.encoder_dropout(x)
+            encoder_output = x
+            # Decoder.
+            x = self.token_embedding(decoder_token_id_input)
+            x = self.decoder_embedding_dropout(x)
+            decoder_attention_mask = decoder_padding_mask_input[:, None, :]
+            position_bias = None
+            for transformer_layer in self.decoder_transformer_layers:
+                output = transformer_layer(
+                    x,
+                    attention_mask=decoder_attention_mask,
+                    position_bias=position_bias,
+                    encoder_hidden_states=encoder_output,
+                    encoder_attention_mask=encoder_attention_mask,
+                    use_causal_mask=True,
+                )
+                if isinstance(output, tuple):
+                    x, position_bias = output
+            x = self.decoder_layer_norm(x)
+            x = self.decoder_dropout(x)
+            decoder_output = x
+
+            super().__init__(
+                {
+                    "encoder_token_ids": encoder_token_id_input,
+                    "encoder_padding_mask": encoder_padding_mask_input,
+                    "decoder_token_ids": decoder_token_id_input,
+                    "decoder_padding_mask": decoder_padding_mask_input,
+                },
+                outputs={
+                    "encoder_sequence_output": encoder_output,
+                    "decoder_sequence_output": decoder_output,
+                },
+                dtype=dtype,
+                **kwargs,
+            )
+
+        else:
+            # NNX-safe subclassed model path
+            super().__init__(dtype=dtype, **kwargs)
 
         # === Config ===
         self.vocabulary_size = vocabulary_size
