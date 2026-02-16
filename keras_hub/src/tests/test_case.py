@@ -666,9 +666,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 # shapes match what the test provides.
                 if is_torch_backend and "input_signature" not in export_kwargs:
                     input_sig = self._build_input_signature(input_data)
-                    export_kwargs.setdefault(
-                        "input_signature", input_sig
-                    )
+                    export_kwargs.setdefault("input_signature", input_sig)
 
                 # Step 1: Export model and get Keras output
                 model.export(export_path, format="litert", **export_kwargs)
@@ -763,9 +761,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     # Handle torch tensors
                     if hasattr(x, "detach"):
                         x = x.detach().cpu().numpy()
-                    elif hasattr(x, "numpy") and not isinstance(
-                        x, np.ndarray
-                    ):
+                    elif hasattr(x, "numpy") and not isinstance(x, np.ndarray):
                         x = x.numpy()
                     if isinstance(x, np.ndarray):
                         if x.dtype == bool:
@@ -812,9 +808,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                         0
                     ]  # We verified len(sig_inputs) == 1 above
                     converted_input = convert_for_tflite(input_data)
-                    litert_output = runner(
-                        **{input_name: converted_input}
-                    )
+                    litert_output = runner(**{input_name: converted_input})
 
                 # Step 4: Verify outputs
                 self._verify_litert_outputs(

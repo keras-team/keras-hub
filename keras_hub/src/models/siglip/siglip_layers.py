@@ -466,9 +466,7 @@ class SigLIPMultiHeadAttentionPooling(layers.Layer):
         # Use expand_dims + broadcast_to instead of ops.repeat to avoid
         # SymInt issues during torch.export (repeat_interleave produces
         # unbacked symbolic dimensions).
-        probes = ops.broadcast_to(
-            self.probe, (batch_size, 1, self.hidden_dim)
-        )
+        probes = ops.broadcast_to(self.probe, (batch_size, 1, self.hidden_dim))
         hidden_states = self.attention(
             probes, inputs, inputs, training=training
         )
