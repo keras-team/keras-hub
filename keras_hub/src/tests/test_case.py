@@ -434,6 +434,28 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         restored_output = restored_model(input_data)
         self.assertAllClose(model_output, restored_output, atol=atol, rtol=rtol)
 
+    @staticmethod
+    def _build_input_signature(input_data):
+        """Build a concrete ``input_signature`` from actual data.
+
+        Returns a structure compatible with
+        ``keras.Model.export(input_signature=...)``: a single-element
+        list wrapping the mapped input structure, where each leaf is a
+        ``keras.InputSpec`` with fully concrete shapes (no ``None``
+        dims).  This ensures ``torch.export`` traces with the exact
+        shapes of the provided data.
+        """
+
+        def _to_spec(x):
+            if hasattr(x, "detach"):
+                x = x.detach().cpu().numpy()
+            elif hasattr(x, "numpy") and not isinstance(x, np.ndarray):
+                x = x.numpy()
+            dtype = str(x.dtype)
+            return keras.InputSpec(shape=x.shape, dtype=dtype)
+
+        return [tree.map_structure(_to_spec, input_data)]
+
     def _verify_litert_outputs(
         self,
         keras_output,
@@ -597,15 +619,25 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         ) < packaging.version.Version("3.13.0"):
             self.skipTest("LiteRT export requires Keras >= 3.13")
 
-        self.skipTest(
-            "#TODO: [#2572] Re-enable LiteRT tests after a new tf release. "
-            "Can't test with tf 2.20 due to tf.lite module deprecation."
-        )
+        is_torch_backend = keras.backend.backend() == "torch"
+
+        if is_torch_backend:
+            try:
+                import litert_torch  # noqa: F401
+            except (ImportError, ModuleNotFoundError):
+                self.skipTest(
+                    "litert-torch is required for LiteRT export "
+                    "with the torch backend"
+                )
+        else:
+            self.skipTest(
+                "#TODO: [#2572] Re-enable LiteRT tests after a new "
+                "tf release. Can't test with tf 2.20 due to tf.lite "
+                "module deprecation."
+            )
 
         # Extract comparison_mode from export_kwargs if provided
         comparison_mode = export_kwargs.pop("comparison_mode", "strict")
-        if keras.backend.backend() != "tensorflow":
-            self.skipTest("LiteRT export only supports TensorFlow backend")
 
         try:
             from ai_edge_litert.interpreter import Interpreter
@@ -627,6 +659,16 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
                 export_path = os.path.join(temp_dir, "model.tflite")
+
+                # For torch backend, torch.export bakes static shapes.
+                # Build a concrete input_signature from the actual
+                # input_data shape (not reduced to batch=1) so the traced
+                # shapes match what the test provides.
+                if is_torch_backend and "input_signature" not in export_kwargs:
+                    input_sig = self._build_input_signature(input_data)
+                    export_kwargs.setdefault(
+                        "input_signature", input_sig
+                    )
 
                 # Step 1: Export model and get Keras output
                 model.export(export_path, format="litert", **export_kwargs)
@@ -661,17 +703,28 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
                 # Verify input signature
                 if isinstance(input_data, dict):
-                    expected_inputs = set(input_data.keys())
-                    actual_inputs = set(sig_inputs)
-                    # Check that all expected inputs are in the signature
-                    # (allow signature to have additional optional inputs)
-                    missing_inputs = expected_inputs - actual_inputs
-                    if missing_inputs:
-                        self.fail(
-                            f"Missing inputs in SignatureDef: "
-                            f"{sorted(missing_inputs)}. "
-                            f"Expected: {sorted(expected_inputs)}, "
-                            f"SignatureDef has: {sorted(actual_inputs)}"
+                    if not is_torch_backend:
+                        # TF path: signature names match Keras names
+                        expected_inputs = set(input_data.keys())
+                        actual_inputs = set(sig_inputs)
+                        missing_inputs = expected_inputs - actual_inputs
+                        if missing_inputs:
+                            self.fail(
+                                f"Missing inputs in SignatureDef: "
+                                f"{sorted(missing_inputs)}. "
+                                f"Expected: {sorted(expected_inputs)}, "
+                                f"SignatureDef has: "
+                                f"{sorted(actual_inputs)}"
+                            )
+                    else:
+                        # Torch path: inputs are named args_0, args_1, …
+                        # Just verify counts match
+                        self.assertEqual(
+                            len(input_data),
+                            len(sig_inputs),
+                            f"Input count mismatch: model has "
+                            f"{len(input_data)} inputs but SignatureDef "
+                            f"has {len(sig_inputs)}: {sig_inputs}",
                         )
                 else:
                     # For numpy arrays, just verify we have exactly one input
@@ -683,8 +736,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                             f"{sig_inputs}"
                         )
 
-                # Verify output signature
-                if verify_numerics and isinstance(keras_output, dict):
+                # Verify output signature (skip for torch: names are
+                # output_0, output_1, not Keras names)
+                if (
+                    verify_numerics
+                    and isinstance(keras_output, dict)
+                    and not is_torch_backend
+                ):
                     expected_outputs = set(keras_output.keys())
                     actual_outputs = set(sig_outputs)
                     if expected_outputs != actual_outputs:
@@ -702,32 +760,51 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 # Convert input data dtypes to match TFLite expectations
                 def convert_for_tflite(x):
                     """Convert tensor/array to TFLite-compatible dtypes."""
-                    if hasattr(x, "dtype"):
-                        if isinstance(x, np.ndarray):
-                            if x.dtype == bool:
-                                return x.astype(np.int32)
-                            elif x.dtype == np.float64:
-                                return x.astype(np.float32)
-                            elif x.dtype == np.int64:
-                                return x.astype(np.int32)
-                        else:  # TensorFlow tensor
-                            if x.dtype == tf.bool:
-                                return ops.cast(x, "int32").numpy()
-                            elif x.dtype == tf.float64:
-                                return ops.cast(x, "float32").numpy()
-                            elif x.dtype == tf.int64:
-                                return ops.cast(x, "int32").numpy()
-                            else:
-                                return x.numpy() if hasattr(x, "numpy") else x
-                    elif hasattr(x, "numpy"):
-                        return x.numpy()
+                    # Handle torch tensors
+                    if hasattr(x, "detach"):
+                        x = x.detach().cpu().numpy()
+                    elif hasattr(x, "numpy") and not isinstance(
+                        x, np.ndarray
+                    ):
+                        x = x.numpy()
+                    if isinstance(x, np.ndarray):
+                        if x.dtype == bool:
+                            return x.astype(np.int32)
+                        elif x.dtype == np.float64:
+                            return x.astype(np.float32)
+                        elif x.dtype == np.int64:
+                            return x.astype(np.int32)
                     return x
 
                 if isinstance(input_data, dict):
                     converted_input_data = tree.map_structure(
                         convert_for_tflite, input_data
                     )
-                    litert_output = runner(**converted_input_data)
+                    if is_torch_backend:
+                        # Torch path: map dict values to args_N
+                        # by position (sorted dict key order).
+                        # Also cast each value to the dtype the
+                        # TFLite model actually expects (e.g. bool
+                        # padding_mask may have been fed as int32).
+                        expected_dtypes = {
+                            d["name"]: d["dtype"]
+                            for d in interpreter.get_input_details()
+                        }
+                        sig_input_names = sorted(sig_inputs)
+                        input_keys = list(input_data.keys())
+                        runner_kwargs = {}
+                        for i, key in enumerate(input_keys):
+                            sig_name = sig_input_names[i]
+                            val = converted_input_data[key]
+                            for dname, dt in expected_dtypes.items():
+                                if sig_name in dname:
+                                    if val.dtype != dt:
+                                        val = val.astype(dt)
+                                    break
+                            runner_kwargs[sig_name] = val
+                        litert_output = runner(**runner_kwargs)
+                    else:
+                        litert_output = runner(**converted_input_data)
                 else:
                     # For single tensor inputs, get the input name
                     sig_inputs = serving_sig.get("inputs", [])
@@ -735,7 +812,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                         0
                     ]  # We verified len(sig_inputs) == 1 above
                     converted_input = convert_for_tflite(input_data)
-                    litert_output = runner(**{input_name: converted_input})
+                    litert_output = runner(
+                        **{input_name: converted_input}
+                    )
 
                 # Step 4: Verify outputs
                 self._verify_litert_outputs(

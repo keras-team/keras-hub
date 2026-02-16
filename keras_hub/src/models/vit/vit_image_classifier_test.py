@@ -12,7 +12,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 class ViTImageClassifierTest(TestCase):
     def setUp(self):
-        self.images = np.ones((2, 28, 28, 3))
+        self.images = np.ones((2, 28, 28, 3), dtype="float32")
         self.labels = [0, 1]
         self.backbone = ViTBackbone(
             image_shape=(28, 28, 3),

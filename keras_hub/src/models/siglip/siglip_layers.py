@@ -463,7 +463,12 @@ class SigLIPMultiHeadAttentionPooling(layers.Layer):
 
     def call(self, inputs, training=None):
         batch_size = ops.shape(inputs)[0]
-        probes = ops.repeat(self.probe, repeats=batch_size, axis=0)
+        # Use expand_dims + broadcast_to instead of ops.repeat to avoid
+        # SymInt issues during torch.export (repeat_interleave produces
+        # unbacked symbolic dimensions).
+        probes = ops.broadcast_to(
+            self.probe, (batch_size, 1, self.hidden_dim)
+        )
         hidden_states = self.attention(
             probes, inputs, inputs, training=training
         )

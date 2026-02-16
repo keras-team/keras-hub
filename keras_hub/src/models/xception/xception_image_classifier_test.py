@@ -16,7 +16,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 class XceptionImageClassifierTest(TestCase):
     def setUp(self):
-        self.images = np.ones((2, 299, 299, 3))
+        self.images = np.ones((2, 299, 299, 3), dtype="float32")
         self.labels = [0, 1]
         self.backbone = XceptionBackbone(
             stackwise_conv_filters=[[32, 64], [128, 128], [256, 256]],
