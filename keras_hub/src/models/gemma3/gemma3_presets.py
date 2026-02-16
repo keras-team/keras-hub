@@ -292,4 +292,15 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/translategemma/keras/translategemma_27b_it/1",
     },
+    # Embedding Gemma presets
+    "embedding_gemma3_300m": {
+        "metadata": {
+            "description": (
+                "Embedding-focused Gemma 3 model (300M parameters, 24 layers)."
+            ),
+            "params": 307581696,
+            "path": "gemma3",
+        },
+        "kaggle_handle": "kaggle://keras/embeddinggemma/keras/embedding_gemma3_300m/2",
+    },
 }
