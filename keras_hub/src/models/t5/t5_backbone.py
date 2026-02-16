@@ -75,8 +75,6 @@ class T5Backbone(Backbone):
         dtype=None,
         **kwargs,
     ):
-        import keras
-
         nnx_enabled = keras.config.is_nnx_enabled()
 
         # Token embedding layer. This layer is shared by encoder and decoder.
@@ -88,6 +86,7 @@ class T5Backbone(Backbone):
             dtype=dtype,
             name="token_embedding",
         )
+
         self.encoder_embedding_dropout = keras.layers.Dropout(
             dropout,
             dtype=dtype,
@@ -160,6 +159,60 @@ class T5Backbone(Backbone):
             name="decoder_output_dropout",
         )
 
+        def _forward(inputs, training=False):
+            encoder_token_ids = inputs["encoder_token_ids"]
+            encoder_padding_mask = inputs["encoder_padding_mask"]
+            decoder_token_ids = inputs["decoder_token_ids"]
+            decoder_padding_mask = inputs["decoder_padding_mask"]
+            # Encoder
+            x = self.token_embedding(encoder_token_ids)
+            x = self.encoder_embedding_dropout(x, training=training)
+            encoder_attention_mask = encoder_padding_mask[:, None, :]
+            position_bias = None
+
+            for transformer_layer in self.encoder_transformer_layers:
+                output = transformer_layer(
+                    x,
+                    attention_mask=encoder_attention_mask,
+                    position_bias=position_bias,
+                    use_causal_mask=False,
+                    training=training,
+                )
+                if isinstance(output, tuple):
+                    x, position_bias = output
+
+            x = self.encoder_layer_norm(x)
+            x = self.encoder_dropout(x, training=training)
+            encoder_output = x
+            # Decoder
+            x = self.token_embedding(decoder_token_ids)
+            x = self.decoder_embedding_dropout(x, training=training)
+            decoder_attention_mask = decoder_padding_mask[:, None, :]
+            position_bias = None
+
+            for transformer_layer in self.decoder_transformer_layers:
+                output = transformer_layer(
+                    x,
+                    attention_mask=decoder_attention_mask,
+                    position_bias=position_bias,
+                    encoder_hidden_states=encoder_output,
+                    encoder_attention_mask=encoder_attention_mask,
+                    use_causal_mask=True,
+                    training=training,
+                )
+                if isinstance(output, tuple):
+                    x, position_bias = output
+
+            x = self.decoder_layer_norm(x)
+            x = self.decoder_dropout(x, training=training)
+
+            return {
+                "encoder_sequence_output": encoder_output,
+                "decoder_sequence_output": x,
+            }
+
+        self._forward = _forward
+
         if not nnx_enabled:
             # === Functional Model ===
             encoder_token_id_input = keras.Input(
@@ -175,42 +228,15 @@ class T5Backbone(Backbone):
                 shape=(None,), dtype="int32", name="decoder_padding_mask"
             )
 
-            # Encoder.
-            x = self.token_embedding(encoder_token_id_input)
-            x = self.encoder_embedding_dropout(x)
-            encoder_attention_mask = encoder_padding_mask_input[:, None, :]
-            position_bias = None
-            for transformer_layer in self.encoder_transformer_layers:
-                output = transformer_layer(
-                    x,
-                    attention_mask=encoder_attention_mask,
-                    position_bias=position_bias,
-                    use_causal_mask=False,
-                )
-                if isinstance(output, tuple):
-                    x, position_bias = output
-            x = self.encoder_layer_norm(x)
-            x = self.encoder_dropout(x)
-            encoder_output = x
-            # Decoder.
-            x = self.token_embedding(decoder_token_id_input)
-            x = self.decoder_embedding_dropout(x)
-            decoder_attention_mask = decoder_padding_mask_input[:, None, :]
-            position_bias = None
-            for transformer_layer in self.decoder_transformer_layers:
-                output = transformer_layer(
-                    x,
-                    attention_mask=decoder_attention_mask,
-                    position_bias=position_bias,
-                    encoder_hidden_states=encoder_output,
-                    encoder_attention_mask=encoder_attention_mask,
-                    use_causal_mask=True,
-                )
-                if isinstance(output, tuple):
-                    x, position_bias = output
-            x = self.decoder_layer_norm(x)
-            x = self.decoder_dropout(x)
-            decoder_output = x
+            outputs = self._forward(
+                {
+                    "encoder_token_ids": encoder_token_id_input,
+                    "encoder_padding_mask": encoder_padding_mask_input,
+                    "decoder_token_ids": decoder_token_id_input,
+                    "decoder_padding_mask": decoder_padding_mask_input,
+                },
+                training=False,
+            )
 
             super().__init__(
                 {
@@ -219,14 +245,10 @@ class T5Backbone(Backbone):
                     "decoder_token_ids": decoder_token_id_input,
                     "decoder_padding_mask": decoder_padding_mask_input,
                 },
-                outputs={
-                    "encoder_sequence_output": encoder_output,
-                    "decoder_sequence_output": decoder_output,
-                },
+                outputs=outputs,
                 dtype=dtype,
                 **kwargs,
             )
-
         else:
             # NNX-safe subclassed model path
             super().__init__(dtype=dtype, **kwargs)
@@ -243,6 +265,9 @@ class T5Backbone(Backbone):
         self.use_gated_activation = use_gated_activation
         self.layer_norm_epsilon = layer_norm_epsilon
         self.tie_embedding_weights = tie_embedding_weights
+
+    def call(self, inputs, training=False):
+        return self._forward(inputs, training=training)
 
     def get_config(self):
         config = super().get_config()
