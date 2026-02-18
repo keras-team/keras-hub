@@ -106,6 +106,8 @@ class Qwen2VLBackbone(Backbone):
             name="vision_encoder",
         )
 
+        self.vision_encoder.build()
+
         # === Text decoder ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,

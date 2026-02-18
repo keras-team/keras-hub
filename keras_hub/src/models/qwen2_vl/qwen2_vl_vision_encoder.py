@@ -350,6 +350,25 @@ class Qwen2VLVisionEncoder(layers.Layer):
             name="merger",
         )
 
+    def build(self, input_shape=None):
+        """Build all sublayers so their variables exist for weight loading."""
+        # Conv3D sees 5-D input after reshape+transpose in call().
+        conv_shape = (
+            None,
+            self.temporal_patch_size,
+            self.patch_size,
+            self.patch_size,
+            self.in_channels,
+        )
+        self.patch_embed.build(conv_shape)
+
+        # Blocks and merger operate on (seq_len, embed_dim).
+        block_shape = (None, self.embed_dim)
+        for block in self.blocks:
+            block.build(block_shape)
+        self.merger.build(block_shape)
+        self.built = True
+
     def _rot_pos_emb(self, grid_thw):
         """Build per-token (cos, sin) from grid_thw.
 
