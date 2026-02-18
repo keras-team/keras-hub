@@ -22,8 +22,8 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
        ``grid_t * grid_h * grid_w // spatial_merge_size²``.
     3. Inserts ``<|vision_start|>`` + N × ``<|image_pad|>`` +
        ``<|vision_end|>`` tokens into the text token sequence at the
-       position of the first ``<|image|>`` marker (or prepends them if
-       no marker is present).
+       position of the first ``<|image_pad|>`` marker (or prepends
+       them if no marker is present).
     4. Pads / truncates to ``sequence_length`` and builds ``padding_mask``.
 
     Returns a dict with keys:
@@ -110,7 +110,7 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
                 )
                 vision_block = np.array(
                     [self.tokenizer.vision_start_token_id]
-                    + [self.tokenizer.image_pad_token_id] * num_vision_tokens
+                    + [self.tokenizer.image_token_id] * num_vision_tokens
                     + [self.tokenizer.vision_end_token_id],
                     dtype="int32",
                 )
@@ -120,7 +120,7 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
             # otherwise prepend all blocks.
             combined_block = np.concatenate(vision_blocks)
             img_marker_positions = np.where(
-                token_ids == self.tokenizer.image_pad_token_id
+                token_ids == self.tokenizer.image_token_id
             )[0]
             if len(img_marker_positions) > 0:
                 # Replace the first marker with all vision blocks

@@ -16,9 +16,24 @@ class Qwen2VLTokenizer(QwenTokenizer):
     using the BytePair (BPE) method. It includes vocabulary and merges data
     necessary for tokenizing Qwen2-VL model inputs.
 
-    This tokenizer does not support special tokens for vision (such as
-    ``<|image_pad|>``, ``<|vision_start|>``, ``<|vision_end|>``). These
-    tokens are handled by the preprocessor layer.
+    In addition to standard text tokenization, this tokenizer exposes
+    vision-related token IDs used by the preprocessor to construct
+    multimodal input sequences:
+
+    - ``image_token_id``: resolved from ``<|image_pad|>`` (HF ID 151655).
+      One placeholder per merged vision patch is inserted by the
+      preprocessor.
+    - ``video_token_id``: resolved from ``<|video_pad|>`` (HF ID 151656).
+    - ``vision_start_token_id``: resolved from ``<|vision_start|>``
+      (HF ID 151652). Marks the start of a vision token block.
+    - ``vision_end_token_id``: resolved from ``<|vision_end|>``
+      (HF ID 151653). Marks the end of a vision token block.
+
+    Note: ``<|image_pad|>`` and ``<|video_pad|>`` are defined in
+    HuggingFace's ``tokenizer_config.json`` (``added_tokens_decoder``)
+    but are absent from ``tokenizer.json``'s ``added_tokens`` list.
+    The converter loads them from ``tokenizer_config.json`` so they
+    are present in the vocabulary passed to this class.
 
     Args:
         vocabulary: string or dict, maps token to integer ids. If it is a
@@ -48,7 +63,7 @@ class Qwen2VLTokenizer(QwenTokenizer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Vision-specific special tokens.
+        # Resolve vision-related special token IDs from the vocabulary.
         # During deserialization the vocabulary may not yet be available,
         # so fall back to ``None`` and resolve lazily.
         self._init_vision_token_ids()
@@ -56,10 +71,12 @@ class Qwen2VLTokenizer(QwenTokenizer):
     def _init_vision_token_ids(self):
         """Resolve vision token IDs from the vocabulary."""
         if self.vocabulary is not None:
-            self.image_pad_token_id = self.token_to_id("<|image_pad|>")
+            self.image_token_id = self.token_to_id("<|image_pad|>")
+            self.video_token_id = self.token_to_id("<|video_pad|>")
             self.vision_start_token_id = self.token_to_id("<|vision_start|>")
             self.vision_end_token_id = self.token_to_id("<|vision_end|>")
         else:
-            self.image_pad_token_id = None
+            self.image_token_id = None
+            self.video_token_id = None
             self.vision_start_token_id = None
             self.vision_end_token_id = None
