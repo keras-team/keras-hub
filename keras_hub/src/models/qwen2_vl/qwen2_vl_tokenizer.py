@@ -63,10 +63,6 @@ class Qwen2VLTokenizer(QwenTokenizer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Resolve vision-related special token IDs from the vocabulary.
-        # During deserialization the vocabulary may not yet be available,
-        # so fall back to ``None`` and resolve lazily via
-        # set_vocabulary_and_merges (called again by load_preset_assets).
         self._init_vision_token_ids()
 
     def set_vocabulary_and_merges(self, vocabulary, merges):

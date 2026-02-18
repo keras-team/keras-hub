@@ -40,7 +40,7 @@ flags.DEFINE_string(
 )
 
 
-# ── Helpers ──────────────────────────────────────────────────────────
+# Helpers
 
 
 def transpose_and_reshape(x, shape):
@@ -53,7 +53,7 @@ def transpose_2d(x):
     return np.transpose(x, axes=(1, 0))
 
 
-# ── 1. Build config from HF ─────────────────────────────────────────
+# Build config from HF
 
 
 def build_backbone_config(hf_config):
@@ -87,7 +87,7 @@ def build_backbone_config(hf_config):
     }
 
 
-# ── 2. Port weights ─────────────────────────────────────────────────
+# Port weights
 
 
 def port_weights(backbone, hf_state_dict):
@@ -179,7 +179,7 @@ def port_weights(backbone, hf_state_dict):
         get("model.norm.weight")
     )
 
-    # ── Vision encoder ──────────────────────────────────────────
+    # Vision encoder
     vision = backbone.get_layer("vision_encoder")
 
     # Conv3D patch embedding
@@ -187,7 +187,6 @@ def port_weights(backbone, hf_state_dict):
     vision.patch_embed.kernel.assign(
         np.transpose(get("visual.patch_embed.proj.weight"), (2, 3, 4, 1, 0))
     )
-    # HF has bias on patch_embed; KerasHub uses use_bias=False → skip
 
     # Vision blocks
     for i in range(vision.depth):
@@ -234,7 +233,7 @@ def port_weights(backbone, hf_state_dict):
     return backbone
 
 
-# ── 3. Verify tokenizer ─────────────────────────────────────────────
+# Verify tokenizer
 
 
 def verify_tokenizer(keras_tokenizer, hf_tokenizer):
@@ -255,12 +254,10 @@ def verify_tokenizer(keras_tokenizer, hf_tokenizer):
     print("  All tokenizer checks passed")
 
 
-# ── 4. Verify preprocessor ──────────────────────────────────────────
+# Verify preprocessor
 
 
 def verify_preprocessor(keras_tokenizer, hf_processor):
-    print("\n── Preprocessor verification ──")
-
     # Text-only
     text = "Describe the weather"
     hf_ids = hf_processor.tokenizer(text, add_special_tokens=False)["input_ids"]
@@ -301,20 +298,18 @@ def verify_preprocessor(keras_tokenizer, hf_processor):
         f"Image preprocessing: {expected} vision tokens "
         f"from grid {grid_thw[0].tolist()}"
     )
-    print("  All preprocessor checks passed")
+    print("All preprocessor checks passed")
 
 
-# ── 5. Verify backbone outputs ──────────────────────────────────────
+# Verify backbone outputs
 
 
 def verify_backbone(keras_backbone, keras_tokenizer, hf_model, hf_tokenizer):
-    print("\n── Backbone verification ──")
-
     # Parameter counts
     keras_params = keras_backbone.count_params()
     hf_params = hf_model.num_parameters()
-    print(f"  KerasHub params: {keras_params:,}")
-    print(f"  HF total params: {hf_params:,}")
+    print(f"KerasHub params: {keras_params:,}")
+    print(f"HF total params: {hf_params:,}")
 
     # Hidden state comparison (text-only path)
     test_text = "What is Keras?"
@@ -334,8 +329,8 @@ def verify_backbone(keras_backbone, keras_tokenizer, hf_model, hf_tokenizer):
     k_in = {k: v.to(device) for k, v in k_in.items()}
     keras_hidden = ops.convert_to_numpy(keras_backbone(k_in))
 
-    print(f"  HF hidden shape:    {hf_hidden.shape}")
-    print(f"  Keras hidden shape: {keras_hidden.shape}")
+    print(f"HF hidden shape:    {hf_hidden.shape}")
+    print(f"Keras hidden shape: {keras_hidden.shape}")
 
     try:
         np.testing.assert_allclose(
@@ -381,9 +376,6 @@ def verify_backbone(keras_backbone, keras_tokenizer, hf_model, hf_tokenizer):
     print("  Backbone verification complete")
 
 
-# ── Main ─────────────────────────────────────────────────────────────
-
-
 def main(_):
     preset = FLAGS.preset
     if preset not in PRESET_MAP:
@@ -393,7 +385,7 @@ def main(_):
         )
     hf_id = PRESET_MAP[preset]
 
-    # ── Load HF model ───────────────────────────────────────────
+    # Load HF model
     print(f"Loading HF model: {hf_id}")
     hf_model = Qwen2VLForConditionalGeneration.from_pretrained(
         hf_id, device_map=device, torch_dtype=torch.float32
@@ -407,37 +399,33 @@ def main(_):
     hf_config = hf_model.config.to_dict()
     print(f"  HF state_dict: {len(hf_state_dict)} tensors")
 
-    # ── Build KerasHub backbone from config ─────────────────────
-    print("\nBuilding KerasHub backbone from config...")
+    # Build KerasHub backbone from config
     backbone_kwargs = build_backbone_config(hf_config)
     print(f"  Config: {json.dumps(backbone_kwargs, indent=2)}")
     keras_backbone = Qwen2VLBackbone(**backbone_kwargs)
     keras_backbone.summary()
 
-    # ── Port weights ────────────────────────────────────────────
-    print("\nPorting weights...")
+    # Port weights
     port_weights(keras_backbone, hf_state_dict)
 
-    # ── Load KerasHub tokenizer ─────────────────────────────────
-    print("\nLoading KerasHub tokenizer...")
+    # Load KerasHub tokenizer
     keras_tokenizer = keras_hub.models.Qwen2VLTokenizer.from_preset(
         f"hf://{hf_id}"
     )
     print("  KerasHub tokenizer loaded")
 
-    # ── Verify ──────────────────────────────────────────────────
+    # Verify
     verify_tokenizer(keras_tokenizer, hf_tokenizer)
     verify_preprocessor(keras_tokenizer, hf_processor)
     verify_backbone(keras_backbone, keras_tokenizer, hf_model, hf_tokenizer)
 
-    print(f"\n🏁 All checks passed for {preset}!")
-
-    # ── Save preset ─────────────────────────────────────────────
+    # Save preset
     save_dir = f"./{preset}"
     keras_backbone.save_to_preset(save_dir)
     keras_tokenizer.save_to_preset(save_dir)
-    print(f"\n  Preset saved to {save_dir}/")
-    print(f"  Contents: {os.listdir(save_dir)}")
+    print(f"Preset saved to {save_dir}/")
+    print(f"Contents: {os.listdir(save_dir)}")
+    print(f"All checks passed for {preset}!")
 
 
 if __name__ == "__main__":

@@ -208,10 +208,10 @@ class Qwen2VLBackbone(Backbone):
         patch_values = inputs.get("patch_values", None)
         grid_thw = inputs.get("image_grid_thw", None)
 
-        # 1. Embed text tokens → (batch, seq_len, hidden_dim)
+        # Embed text tokens → (batch, seq_len, hidden_dim)
         x = self.token_embedding(token_ids)
 
-        # 2. If vision inputs are present, encode and scatter into x.
+        # If vision inputs are present, encode and scatter into x.
         if patch_values is not None and grid_thw is not None:
             # vision_features: (total_merged_tokens, hidden_dim)
             vision_features = self.vision_encoder(
@@ -251,7 +251,7 @@ class Qwen2VLBackbone(Backbone):
             x_flat = ops.scatter_update(x_flat, vision_indices, vision_features)
             x = ops.reshape(x_flat, (batch_size, seq_len, self.hidden_dim))
 
-        # 3. Decoder layers
+        # Decoder layers
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(
                 x,
@@ -259,7 +259,7 @@ class Qwen2VLBackbone(Backbone):
                 training=training,
             )
 
-        # 4. Final layer norm
+        # Final layer norm
         x = self.layer_norm(x)
         return x
 
