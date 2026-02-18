@@ -58,7 +58,6 @@ class T5Backbone(Backbone):
             such as softmax and layer normalization, will always be done at
             float32 precision regardless of dtype.
     """
-
     def __init__(
         self,
         vocabulary_size,
@@ -266,7 +265,7 @@ class T5Backbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.tie_embedding_weights = tie_embedding_weights
 
-    def call(self, inputs, training=False):
+    def call(self, inputs, training=None):
         return self._forward(inputs, training=training)
 
     def get_config(self):
