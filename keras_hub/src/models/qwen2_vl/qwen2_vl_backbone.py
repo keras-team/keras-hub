@@ -46,7 +46,10 @@ class Qwen2VLBackbone(Backbone):
         spatial_merge_size: int. Spatial merge factor for PatchMerger.
             Defaults to ``2``.
         image_token_id: int. Token id used as image placeholder in the text
-            sequence. Defaults to ``151655``.
+            sequence. The number of ``image_token_id`` placeholders in the
+            input must exactly equal the number of merged vision tokens
+            produced by encoding ``patch_values`` with ``image_grid_thw``.
+            Defaults to ``151655``.
         rope_max_wavelength: int. RoPE base wavelength for the text model.
             Defaults to ``1000000``.
         rope_scaling_factor: float. RoPE scaling factor. Defaults to ``1.0``.
@@ -233,6 +236,18 @@ class Qwen2VLBackbone(Backbone):
                 vision_indices = vision_indices[0]
             vision_indices = ops.reshape(vision_indices, (-1, 1))
             vision_indices = ops.cast(vision_indices, "int32")
+            n_placeholders = ops.shape(vision_indices)[0]
+            n_vision = ops.shape(vision_features)[0]
+            if n_placeholders != n_vision:
+                raise ValueError(
+                    f"Vision token count mismatch: the number of "
+                    f"image_token_id={self.image_token_id} placeholders "
+                    f"in token_ids ({n_placeholders}) does not equal the "
+                    f"number of merged vision tokens produced by the "
+                    f"vision encoder from patch_values/image_grid_thw "
+                    f"({n_vision}). Ensure the preprocessor inserts "
+                    f"exactly one placeholder per merged vision token."
+                )
             x_flat = ops.scatter_update(x_flat, vision_indices, vision_features)
             x = ops.reshape(x_flat, (batch_size, seq_len, self.hidden_dim))
 

@@ -305,7 +305,7 @@ class Qwen2VLCausalLM(CausalLM):
         # Start at the first index that has no user inputted id.
         index = ops.min(row_lengths)
 
-        def next(prompt, cache, index):
+        def next_token(prompt, cache, index):
             # The cache index is the index of our previous token.
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
@@ -322,7 +322,7 @@ class Qwen2VLCausalLM(CausalLM):
             )
 
         token_ids = self.sampler(
-            next=next,
+            next=next_token,
             prompt=token_ids,
             cache=cache,
             index=index,

@@ -147,7 +147,14 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
                 ]
             )
             token_ids = np.concatenate(
-                [token_ids, np.zeros(pad_len, dtype="int32")]
+                [
+                    token_ids,
+                    np.full(
+                        pad_len,
+                        self.tokenizer.pad_token_id,
+                        dtype="int32",
+                    ),
+                ]
             )
 
         return {

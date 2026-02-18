@@ -79,14 +79,25 @@ class Qwen2VLImageConverterTest(TestCase):
         np.testing.assert_array_equal(grid1, grid2)
 
     def test_image_normalization(self):
-        # Test that images are normalized with correct mean/std
+        # Test that images are normalized with correct mean/std.
+        # A uniform 255 image becomes (1.0 - mean) / std per channel.
         image = np.ones((224, 224, 3), dtype="float32") * 255
-        patches, _ = self.converter(image)
+        patches, grid_thw = self.converter(image)
 
-        # After normalization with mean=[0.48145466, 0.4578275, 0.40821073]
-        # and std=[0.26862954, 0.26130258, 0.27577711], pixel value 255 should
-        # be transformed to approximately (255/255 - mean) / std
-        # We're just checking it's been normalized (not exact values)
-        self.assertTrue(
-            patches.mean() > 0
-        )  # Should be positive after normalization
+        mean = np.array([0.48145466, 0.4578275, 0.40821073])
+        std = np.array([0.26862954, 0.26130258, 0.27577711])
+        expected = (1.0 - mean) / std  # per-channel expected values
+
+        # Each patch row is flattened as
+        # (temporal_patch_size * patch_size² values) per channel, so
+        # reshape to (..., 3) to extract per-channel means.
+        ps = self.converter.patch_size
+        tps = self.converter.temporal_patch_size
+        block = tps * ps * ps  # values per channel per patch
+        # patches shape: (total_patches, 3 * block)
+        reshaped = patches.reshape(-1, 3, block)  # (N, C, block)
+        channel_means = reshaped.mean(axis=(0, 2))  # (3,)
+
+        np.testing.assert_allclose(
+            channel_means, expected, atol=1e-5, rtol=1e-5
+        )
