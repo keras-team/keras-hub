@@ -1,7 +1,9 @@
 # TODO: Add Qwen2-VL presets once PR is accepted
 # Right now it is filled with dummy values
 
-# """Qwen2-VL preset configurations."""
+"""Qwen2-VL preset configurations."""
+
+backbone_presets = {}
 
 # backbone_presets = {
 #     "qwen2_vl_2b_base": {
