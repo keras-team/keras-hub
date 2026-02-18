@@ -88,6 +88,8 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
 
         # Tokenize text
         token_ids = self.tokenizer(text)
+        if hasattr(token_ids, "cpu"):
+            token_ids = token_ids.cpu()
         if hasattr(token_ids, "numpy"):
             token_ids = token_ids.numpy()
         token_ids = np.asarray(token_ids, dtype="int32").reshape(-1)
