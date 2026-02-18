@@ -179,7 +179,7 @@ class Qwen2VLImageConverter(ImageConverter):
 
         patches = np.stack(frames, axis=0)
 
-        patches = patches / 255.0
+        patches = patches / np.float32(255.0)
         patches = (patches - self.image_mean) / self.image_std
 
         patches = patches.transpose(0, 3, 1, 2)
@@ -219,7 +219,7 @@ class Qwen2VLImageConverter(ImageConverter):
         )
 
         grid_thw = np.array([[grid_t, grid_h, grid_w]], dtype="int32")
-        return patches.astype("float32"), grid_thw
+        return patches, grid_thw
 
     def _resize_frame(self, frame, target_h, target_w):
         """Resize a single frame using PIL (preferred) or NumPy fallback."""
