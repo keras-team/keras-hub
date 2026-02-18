@@ -16,9 +16,10 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
         self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
         self.vocab += ["<|endoftext|>"]
         self.vocab += ["<|eot_id|>"]
-        self.vocab += ["<|image_pad|>"]
         self.vocab += ["<|vision_start|>"]
         self.vocab += ["<|vision_end|>"]
+        self.vocab += ["<|image_pad|>"]
+        self.vocab += ["<|video_pad|>"]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]

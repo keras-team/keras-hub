@@ -158,7 +158,6 @@ def convert_weights(backbone, loader, transformers_config):
         hf_weight_key="visual.patch_embed.proj.weight",
         hook_fn=lambda x, _: np.transpose(x, (2, 3, 4, 1, 0)),
     )
-    # HF patch_embed has bias, KerasHub does not — skip it.
 
     # Vision blocks
     for i in range(vision.depth):
@@ -272,6 +271,21 @@ def convert_tokenizer(cls, preset, **kwargs):
         if not token["content"].startswith("<|reserved_special_token_"):
             vocab[token["content"]] = token["id"]
             special_tokens.add(token["content"])
+
+    # HF's tokenizer.json added_tokens goes up to <|vision_pad|> (151654)
+    # but tokenizer_config.json also defines <|image_pad|> (151655) and
+    # <|video_pad|> (151656) in added_tokens_decoder. Load those too.
+    try:
+        tok_cfg = load_json(preset, "tokenizer_config.json")
+        for _id_str, meta in tok_cfg.get("added_tokens_decoder", {}).items():
+            content = meta["content"]
+            if content not in vocab and not content.startswith(
+                "<|reserved_special_token_"
+            ):
+                vocab[content] = int(_id_str)
+                special_tokens.add(content)
+    except Exception:
+        pass
 
     kwargs.update(
         {
