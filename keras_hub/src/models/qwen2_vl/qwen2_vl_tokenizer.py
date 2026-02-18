@@ -1,0 +1,65 @@
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.qwen.qwen_tokenizer import QwenTokenizer
+from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
+
+
+@keras_hub_export(
+    [
+        "keras_hub.models.Qwen2VLTokenizer",
+        "keras_hub.tokenizers.Qwen2VLTokenizer",
+    ]
+)
+class Qwen2VLTokenizer(QwenTokenizer):
+    """Qwen2-VL tokenizer layer.
+
+    This tokenizer layer provides an implementation of a Qwen2-VL tokenizer
+    using the BytePair (BPE) method. It includes vocabulary and merges data
+    necessary for tokenizing Qwen2-VL model inputs.
+
+    This tokenizer does not support special tokens for vision (such as
+    ``<|image_pad|>``, ``<|vision_start|>``, ``<|vision_end|>``). These
+    tokens are handled by the preprocessor layer.
+
+    Args:
+        vocabulary: string or dict, maps token to integer ids. If it is a
+            string, it should be the file path to a json file.
+        merges: string or list, contains the merge rule. If it is a string,
+            it should be the file path to merge rules. The merge rule file
+            should have one merge rule per line.
+
+    Examples:
+
+    ```python
+    # Unbatched input.
+    tokenizer = keras_hub.models.Qwen2VLTokenizer.from_preset(
+        "qwen2_vl_2b_instruct",
+    )
+    tokenizer("The quick brown fox jumped.")
+
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
+
+    # Detokenization.
+    tokenizer.detokenize([[151643, 791, 4320, 14198]])
+    ```
+    """
+
+    backbone_cls = Qwen2VLBackbone
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Vision-specific special tokens.
+        # During deserialization the vocabulary may not yet be available,
+        # so fall back to ``None`` and resolve lazily.
+        self._init_vision_token_ids()
+
+    def _init_vision_token_ids(self):
+        """Resolve vision token IDs from the vocabulary."""
+        if self.vocabulary is not None:
+            self.image_pad_token_id = self.token_to_id("<|image_pad|>")
+            self.vision_start_token_id = self.token_to_id("<|vision_start|>")
+            self.vision_end_token_id = self.token_to_id("<|vision_end|>")
+        else:
+            self.image_pad_token_id = None
+            self.vision_start_token_id = None
+            self.vision_end_token_id = None
