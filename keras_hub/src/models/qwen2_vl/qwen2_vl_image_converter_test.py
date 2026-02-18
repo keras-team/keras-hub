@@ -13,7 +13,7 @@ class SmartResizeTest(TestCase):
         h, w = smart_resize(100, 100, factor=28)
         self.assertEqual(h % 28, 0)
         self.assertEqual(w % 28, 0)
-        self.assertEqual(h, 112)  # round(100/28)*28 = 4*28 = 112
+        self.assertEqual(h, 112)
         self.assertEqual(w, 112)
 
     def test_smart_resize_max_pixels(self):
