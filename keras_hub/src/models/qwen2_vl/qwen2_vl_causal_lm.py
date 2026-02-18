@@ -352,6 +352,3 @@ class Qwen2VLCausalLM(CausalLM):
             "token_ids": token_ids,
             "padding_mask": padding_mask,
         }
-
-    def get_config(self):
-        return super().get_config()

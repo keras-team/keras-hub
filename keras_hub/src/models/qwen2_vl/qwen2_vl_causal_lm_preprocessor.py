@@ -118,6 +118,7 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
 
             # Insert vision blocks: replace image markers if present,
             # otherwise prepend all blocks.
+            combined_block = np.concatenate(vision_blocks)
             img_marker_positions = np.where(
                 token_ids == self.tokenizer.image_pad_token_id
             )[0]
@@ -125,12 +126,10 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
                 # Replace the first marker with all vision blocks
                 # concatenated (multi-image).
                 pos = img_marker_positions[0]
-                combined_block = np.concatenate(vision_blocks)
                 token_ids = np.concatenate(
                     [token_ids[:pos], combined_block, token_ids[pos + 1 :]]
                 )
             else:
-                combined_block = np.concatenate(vision_blocks)
                 token_ids = np.concatenate([combined_block, token_ids])
 
         # Pad or truncate to seq_len
