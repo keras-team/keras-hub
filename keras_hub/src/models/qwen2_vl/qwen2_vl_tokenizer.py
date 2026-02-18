@@ -65,7 +65,20 @@ class Qwen2VLTokenizer(QwenTokenizer):
         super().__init__(*args, **kwargs)
         # Resolve vision-related special token IDs from the vocabulary.
         # During deserialization the vocabulary may not yet be available,
-        # so fall back to ``None`` and resolve lazily.
+        # so fall back to ``None`` and resolve lazily via
+        # set_vocabulary_and_merges (called again by load_preset_assets).
+        self._init_vision_token_ids()
+
+    def set_vocabulary_and_merges(self, vocabulary, merges):
+        """Override to re-resolve vision token IDs after vocabulary load.
+
+        Keras preset deserialization is two-phase: ``__init__`` is called
+        with ``vocabulary=None``, and then ``load_preset_assets``
+        loads the real vocabulary from files and calls this method.
+        By hooking here we ensure vision token IDs are set
+        correctly after both phases.
+        """
+        super().set_vocabulary_and_merges(vocabulary, merges)
         self._init_vision_token_ids()
 
     def _init_vision_token_ids(self):
