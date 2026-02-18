@@ -24,21 +24,27 @@ class Qwen2VLVisionEncoderTest(TestCase):
     def test_vision_encoder_basics(self):
         encoder = Qwen2VLVisionEncoder(**self.init_kwargs)
 
-        # Create dummy flat patch input
-        # (total_patches, in_channels * temporal_patch_size * patch_size^2)
-        # total_patches must equal grid_t * grid_h * grid_w
-        patch_flat_dim = 3 * 2 * 14 * 14
-        # grid_thw = [2, 2, 2] → total_patches = 2 * 2 * 2 = 8
-        hidden_states = np.random.rand(8, patch_flat_dim).astype("float32")
+        # Derive patch dimensions from init_kwargs to avoid drift.
+        kw = self.init_kwargs
+        patch_flat_dim = (
+            kw["in_channels"]
+            * kw["temporal_patch_size"]
+            * kw["patch_size"] ** 2
+        )
 
-        # Create dummy grid_thw (1 image with t=2, h=2, w=2)
+        # 1 image with t=2, h=2, w=2 → total_patches = 8
         grid_thw = np.array([[2, 2, 2]], dtype="int32")
+        total_patches = int(np.prod(grid_thw))
+        hidden_states = np.random.rand(total_patches, patch_flat_dim).astype(
+            "float32"
+        )
 
         output = encoder(hidden_states, grid_thw)
 
         # After merger, should reduce by spatial_merge_size^2
-        expected_tokens = 8 // (2**2)  # 8 / 4 = 2
-        self.assertEqual(output.shape, (expected_tokens, 128))
+        merge_sq = kw["spatial_merge_size"] ** 2
+        expected_tokens = total_patches // merge_sq
+        self.assertEqual(output.shape, (expected_tokens, kw["hidden_size"]))
 
     def test_vision_encoder_config_roundtrip(self):
         encoder = Qwen2VLVisionEncoder(**self.init_kwargs)
@@ -47,28 +53,42 @@ class Qwen2VLVisionEncoderTest(TestCase):
 
         # Verify config values match
         self.assertEqual(encoder.patch_size, new_encoder.patch_size)
+        self.assertEqual(
+            encoder.temporal_patch_size, new_encoder.temporal_patch_size
+        )
+        self.assertEqual(encoder.in_channels, new_encoder.in_channels)
         self.assertEqual(encoder.embed_dim, new_encoder.embed_dim)
         self.assertEqual(encoder.hidden_size, new_encoder.hidden_size)
         self.assertEqual(encoder.depth, new_encoder.depth)
+        self.assertEqual(encoder.num_heads, new_encoder.num_heads)
+        self.assertEqual(encoder.mlp_ratio, new_encoder.mlp_ratio)
+        self.assertEqual(
+            encoder.spatial_merge_size, new_encoder.spatial_merge_size
+        )
 
     @pytest.mark.large
     def test_vision_encoder_with_multiple_images(self):
         encoder = Qwen2VLVisionEncoder(**self.init_kwargs)
 
+        kw = self.init_kwargs
+        patch_flat_dim = (
+            kw["in_channels"]
+            * kw["temporal_patch_size"]
+            * kw["patch_size"] ** 2
+        )
+
         # 2 images with different grid sizes
-        patch_flat_dim = 3 * 2 * 14 * 14
-        # Image 1: 2x2x2 = 8 patches, Image 2: 2x4x4 = 32 patches
-        total_patches = 8 + 32
+        grid_thw = np.array([[2, 2, 2], [2, 4, 4]], dtype="int32")
+        total_patches = int(np.sum(np.prod(grid_thw, axis=1)))
         hidden_states = np.random.rand(total_patches, patch_flat_dim).astype(
             "float32"
         )
-        grid_thw = np.array([[2, 2, 2], [2, 4, 4]], dtype="int32")
 
         output = encoder(hidden_states, grid_thw)
 
-        # After merger: 8/4 + 32/4 = 2 + 8 = 10 tokens
-        expected_tokens = (8 + 32) // (2**2)
-        self.assertEqual(output.shape, (expected_tokens, 128))
+        merge_sq = kw["spatial_merge_size"] ** 2
+        expected_tokens = total_patches // merge_sq
+        self.assertEqual(output.shape, (expected_tokens, kw["hidden_size"]))
 
     def test_rotary_embeddings(self):
         encoder = Qwen2VLVisionEncoder(**self.init_kwargs)

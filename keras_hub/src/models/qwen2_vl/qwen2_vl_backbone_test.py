@@ -37,9 +37,6 @@ class Qwen2VLBackboneTest(TestCase):
 
     def test_backbone_with_vision_inputs(self):
         """Test that the backbone correctly handles vision inputs."""
-        backbone = Qwen2VLBackbone(**self.init_kwargs)
-
-        # Prepare inputs with image placeholder tokens.
         # image_token_id defaults to 151655, but vocab_size=1000,
         # so use a custom backbone with image_token_id=999.
         init_kwargs = dict(self.init_kwargs)

@@ -1,4 +1,5 @@
 import math
+import warnings
 
 import numpy as np
 
@@ -12,10 +13,6 @@ def smart_resize(
 ):
     """Resize image dimensions so both are divisible by ``factor`` and the
     total pixel count stays within ``[min_pixels, max_pixels]``.
-
-    Matches the HuggingFace ``smart_resize`` implementation exactly:
-    snap to ``factor`` first, then scale if the pixel bounds are violated,
-    using ``floor`` when downscaling and ``ceil`` when upscaling.
 
     Args:
         height: int. Original image height.
@@ -33,6 +30,11 @@ def smart_resize(
     Raises:
         ValueError: If the absolute aspect ratio exceeds 200.
     """
+    if height <= 0 or width <= 0:
+        raise ValueError(
+            f"Height and width must be positive, "
+            f"got height={height}, width={width}."
+        )
     if max(height, width) / min(height, width) > 200:
         raise ValueError(
             f"Absolute aspect ratio must be smaller than 200, got "
@@ -59,7 +61,7 @@ class Qwen2VLImageConverter(ImageConverter):
     patch tensor and ``grid_thw`` metadata required by
     ``Qwen2VLVisionEncoder``.
 
-    Processing steps (matching HF ``Qwen2VLImageProcessor._preprocess``):
+    Processing steps:
     1. Smart-resize to dimensions divisible by ``patch_size * merge_size``.
     2. Rescale pixel values to ``[0, 1]``.
     3. Normalize with CLIP mean/std.
@@ -84,6 +86,11 @@ class Qwen2VLImageConverter(ImageConverter):
             Defaults to CLIP mean.
         image_std: list of float. Per-channel normalization std.
             Defaults to CLIP std.
+
+    Note:
+        The ``dtype`` is always forced to ``float32`` for preprocessing
+        regardless of any value passed by the caller. A warning is emitted
+        if a non-default ``dtype`` is supplied.
     """
 
     backbone_cls = Qwen2VLBackbone
@@ -100,7 +107,14 @@ class Qwen2VLImageConverter(ImageConverter):
         **kwargs,
     ):
         # Force float32 for image preprocessing.
-        kwargs.pop("dtype", None)
+        user_dtype = kwargs.pop("dtype", None)
+        if user_dtype is not None:
+            warnings.warn(
+                f"Qwen2VLImageConverter forces dtype='float32' for "
+                f"preprocessing. The supplied dtype='{user_dtype}' "
+                f"will be ignored.",
+                stacklevel=2,
+            )
         super().__init__(dtype="float32", **kwargs)
         self.min_pixels = min_pixels
         self.max_pixels = max_pixels
@@ -212,8 +226,12 @@ class Qwen2VLImageConverter(ImageConverter):
         try:
             from PIL import Image as PILImage
 
+            if hasattr(PILImage, "Resampling"):
+                resample = PILImage.Resampling.BICUBIC
+            else:
+                resample = PILImage.BICUBIC
             pil = PILImage.fromarray(frame.astype("uint8"))
-            pil = pil.resize((target_w, target_h), PILImage.BICUBIC)
+            pil = pil.resize((target_w, target_h), resample)
             return np.array(pil, dtype="float32")
         except ImportError:
             return _numpy_resize(frame, target_h, target_w)
