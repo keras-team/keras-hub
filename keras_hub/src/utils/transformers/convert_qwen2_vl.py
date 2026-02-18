@@ -9,14 +9,18 @@ backbone_cls = Qwen2VLBackbone
 
 
 def convert_backbone_config(transformers_config):
+    # Newer transformers nest text params under "text_config".
+    tc = transformers_config.get("text_config", transformers_config)
     vision_config = transformers_config.get("vision_config", {})
+    rope_params = tc.get("rope_parameters", {})
+    rope_theta = tc.get("rope_theta", rope_params.get("rope_theta", 1000000))
     return {
-        "vocabulary_size": transformers_config["vocab_size"],
-        "num_layers": transformers_config["num_hidden_layers"],
-        "num_query_heads": transformers_config["num_attention_heads"],
-        "num_key_value_heads": transformers_config["num_key_value_heads"],
-        "hidden_dim": transformers_config["hidden_size"],
-        "intermediate_dim": transformers_config["intermediate_size"],
+        "vocabulary_size": tc["vocab_size"],
+        "num_layers": tc["num_hidden_layers"],
+        "num_query_heads": tc["num_attention_heads"],
+        "num_key_value_heads": tc["num_key_value_heads"],
+        "hidden_dim": tc["hidden_size"],
+        "intermediate_dim": tc["intermediate_size"],
         "vision_patch_size": vision_config.get("patch_size", 14),
         "vision_temporal_patch_size": vision_config.get(
             "temporal_patch_size", 2
@@ -34,15 +38,13 @@ def convert_backbone_config(transformers_config):
         "vision_mlp_ratio": vision_config.get("mlp_ratio", 4),
         "spatial_merge_size": vision_config.get("spatial_merge_size", 2),
         "image_token_id": transformers_config.get("image_token_id", 151655),
-        "rope_max_wavelength": transformers_config.get("rope_theta", 1000000),
-        "layer_norm_epsilon": transformers_config.get("rms_norm_eps", 1e-6),
+        "rope_max_wavelength": rope_theta,
+        "layer_norm_epsilon": tc.get("rms_norm_eps", 1e-6),
         "tie_word_embeddings": transformers_config.get(
             "tie_word_embeddings", False
         ),
-        "use_sliding_window_attention": transformers_config.get(
-            "use_sliding_window", False
-        ),
-        "sliding_window_size": transformers_config.get("sliding_window", 32768),
+        "use_sliding_window_attention": tc.get("use_sliding_window", False),
+        "sliding_window_size": tc.get("sliding_window", 32768),
     }
 
 
