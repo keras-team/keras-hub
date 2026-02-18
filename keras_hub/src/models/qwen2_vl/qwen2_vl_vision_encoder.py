@@ -350,8 +350,16 @@ class Qwen2VLVisionEncoder(layers.Layer):
             name="merger",
         )
 
+        # Eagerly build all sublayers so their variables exist for
+        # weight loading.  This is necessary because the vision encoder
+        # is NOT part of the backbone's Functional graph — Keras will
+        # not auto-build it during deserialization.
+        self.build()
+
     def build(self, input_shape=None):
         """Build all sublayers so their variables exist for weight loading."""
+        if self.built:
+            return
         # Conv3D sees 5-D input after reshape+transpose in call().
         conv_shape = (
             None,
