@@ -159,7 +159,7 @@ class T5Backbone(Backbone):
             name="decoder_output_dropout",
         )
 
-        def _forward(inputs, training=False):
+        def _forward(inputs, training=None):
             encoder_token_ids = inputs["encoder_token_ids"]
             encoder_padding_mask = inputs["encoder_padding_mask"]
             decoder_token_ids = inputs["decoder_token_ids"]
