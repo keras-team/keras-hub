@@ -1,11 +1,3 @@
-"""Qwen2-VL Attention layer with Multimodal RoPE (M-RoPE).
-
-This module implements multi-head attention with support for the novel
-Multimodal Rotary Position Embedding (M-RoPE), which decomposes RoPE
-into temporal, height, and width components for unified text/image/video
-position encoding.
-"""
-
 import math
 
 import keras

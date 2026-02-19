@@ -1,9 +1,3 @@
-"""Qwen2-VL Causal Language Model.
-
-End-to-end multimodal model for causal language modelling, supporting
-both image+text and text-only inputs.
-"""
-
 import numpy as np
 from keras import ops
 
@@ -225,11 +219,21 @@ class Qwen2VLCausalLM(CausalLM):
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
+            # Compute M-RoPE position IDs for the single generated token.
+            # During text generation, all three components (temporal, height,
+            # width) share the same sequential position.
+            step_position = ops.cast(
+                ops.reshape(cache_update_index, (1, 1, 1)), "int32"
+            )
+            step_mrope_ids = ops.broadcast_to(
+                step_position, (batch_size, 1, 3)
+            )
             logits, hidden_states, cache = self.call_with_cache(
                 token_ids=prompt,
                 cache=cache,
                 cache_update_index=cache_update_index,
                 padding_mask=padding_mask,
+                mrope_position_ids=step_mrope_ids,
             )
             return (
                 ops.squeeze(logits, axis=1),

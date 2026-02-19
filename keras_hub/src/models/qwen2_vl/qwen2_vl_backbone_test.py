@@ -1,6 +1,5 @@
-"""Tests for Qwen2-VL Backbone."""
-
 import numpy as np
+import pytest
 
 from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
 from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
@@ -59,6 +58,7 @@ class Qwen2VLBackboneTextOnlyTest(TestCase):
             ),
         )
 
+    @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=Qwen2VLBackbone,

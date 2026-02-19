@@ -1,16 +1,12 @@
-"""Qwen2-VL Tokenizer.
-
-Extends QwenTokenizer with vision-related special tokens for
-multimodal (image + text) processing.
-"""
-
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.qwen.qwen_tokenizer import QwenTokenizer
 from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
-from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 VISION_START_TOKEN = "<|vision_start|>"
 VISION_END_TOKEN = "<|vision_end|>"
 VISION_PAD_TOKEN = "<|vision_pad|>"
+IMAGE_PAD_TOKEN = "<|image_pad|>"
+VIDEO_PAD_TOKEN = "<|video_pad|>"
 
 
 @keras_hub_export(
@@ -19,11 +15,10 @@ VISION_PAD_TOKEN = "<|vision_pad|>"
         "keras_hub.models.Qwen2VLTokenizer",
     ]
 )
-class Qwen2VLTokenizer(BytePairTokenizer):
+class Qwen2VLTokenizer(QwenTokenizer):
     """Tokenizer for Qwen2-VL models.
 
-    This tokenizer implements byte-pair encoding (BPE) for Qwen2-VL
-    models, extending the base Qwen tokenizer with vision-related
+    This tokenizer extends the base Qwen tokenizer with vision-related
     special tokens for multimodal input handling.
 
     Args:
@@ -33,27 +28,28 @@ class Qwen2VLTokenizer(BytePairTokenizer):
 
     backbone_cls = Qwen2VLBackbone
 
-    def __init__(
-        self,
-        vocabulary=None,
-        merges=None,
-        **kwargs,
-    ):
-        # EOS token (same as base Qwen).
-        eos_token = "<|endoftext|>"
-        self._add_special_token(eos_token, "end_token")
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._init_vision_token_ids()
 
-        self.start_token_id = None
-        self.start_token = None
-        self.pad_token_id = 0
+    def set_vocabulary_and_merges(self, vocabulary, merges):
+        super().set_vocabulary_and_merges(vocabulary, merges)
+        self._init_vision_token_ids()
 
-        # Vision special tokens.
-        self._add_special_token(VISION_START_TOKEN, "vision_start_token")
-        self._add_special_token(VISION_END_TOKEN, "vision_end_token")
-        self._add_special_token(VISION_PAD_TOKEN, "vision_pad_token")
+    def _safe_token_to_id(self, token):
+        if self.vocabulary is None:
+            return None
+        return self.vocabulary.get(token)
 
-        super().__init__(
-            vocabulary=vocabulary,
-            merges=merges,
-            **kwargs,
+    def _init_vision_token_ids(self):
+        # Multimodal token IDs used by preprocessing/model plumbing.
+        self.image_token_id = self._safe_token_to_id(IMAGE_PAD_TOKEN)
+        self.video_token_id = self._safe_token_to_id(VIDEO_PAD_TOKEN)
+        self.vision_start_token_id = self._safe_token_to_id(
+            VISION_START_TOKEN
         )
+        self.vision_end_token_id = self._safe_token_to_id(VISION_END_TOKEN)
+        self.vision_pad_token_id = self._safe_token_to_id(VISION_PAD_TOKEN)
+        # Common alias names.
+        self.image_pad_token_id = self.image_token_id
+        self.video_pad_token_id = self.video_token_id

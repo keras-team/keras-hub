@@ -1,5 +1,3 @@
-"""Convert Qwen2-VL weights from HuggingFace Transformers."""
-
 import numpy as np
 
 from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
@@ -295,6 +293,21 @@ def convert_tokenizer(cls, preset, **kwargs):
         if not token["content"].startswith("<|reserved_special_token_"):
             vocab[token["content"]] = token["id"]
             special_tokens.add(token["content"])
+
+    # Also load from tokenizer_config.json — some special tokens
+    # (e.g. <|image_pad|> 151655, <|video_pad|> 151656) only appear
+    # in tokenizer_config.json's added_tokens_decoder.
+    try:
+        tok_cfg = load_json(preset, "tokenizer_config.json")
+        for _id_str, meta in tok_cfg.get("added_tokens_decoder", {}).items():
+            content = meta["content"]
+            if content not in vocab and not content.startswith(
+                "<|reserved_special_token_"
+            ):
+                vocab[content] = int(_id_str)
+                special_tokens.add(content)
+    except (FileNotFoundError, KeyError):
+        pass
 
     kwargs.update(
         {

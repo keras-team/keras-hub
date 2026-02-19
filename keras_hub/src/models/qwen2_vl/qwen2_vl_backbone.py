@@ -1,9 +1,3 @@
-"""Qwen2-VL Backbone model.
-
-Integrates the Vision Transformer encoder with the text decoder,
-supporting multimodal (image + text) and text-only inputs.
-"""
-
 import keras
 from keras import ops
 from keras.layers import ReversibleEmbedding
