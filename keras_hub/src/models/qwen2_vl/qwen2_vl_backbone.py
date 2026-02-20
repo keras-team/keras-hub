@@ -138,7 +138,6 @@ class Qwen2VLBackbone(Backbone):
                 vision_indices=vision_indices_input,
             )
 
-
         position_embeddings = _compute_mrope_embeddings(
             mrope_position_ids_input,
             head_dim,
