@@ -45,9 +45,7 @@ class Qwen2VLTokenizer(QwenTokenizer):
         # Multimodal token IDs used by preprocessing/model plumbing.
         self.image_token_id = self._safe_token_to_id(IMAGE_PAD_TOKEN)
         self.video_token_id = self._safe_token_to_id(VIDEO_PAD_TOKEN)
-        self.vision_start_token_id = self._safe_token_to_id(
-            VISION_START_TOKEN
-        )
+        self.vision_start_token_id = self._safe_token_to_id(VISION_START_TOKEN)
         self.vision_end_token_id = self._safe_token_to_id(VISION_END_TOKEN)
         self.vision_pad_token_id = self._safe_token_to_id(VISION_PAD_TOKEN)
         # Common alias names.

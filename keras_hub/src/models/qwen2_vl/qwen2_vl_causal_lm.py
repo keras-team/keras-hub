@@ -225,9 +225,7 @@ class Qwen2VLCausalLM(CausalLM):
             step_position = ops.cast(
                 ops.reshape(cache_update_index, (1, 1, 1)), "int32"
             )
-            step_mrope_ids = ops.broadcast_to(
-                step_position, (batch_size, 1, 3)
-            )
+            step_mrope_ids = ops.broadcast_to(step_position, (batch_size, 1, 3))
             logits, hidden_states, cache = self.call_with_cache(
                 token_ids=prompt,
                 cache=cache,
