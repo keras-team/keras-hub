@@ -214,9 +214,8 @@ class Qwen2VLInterleaveEmbeddings(keras.layers.Layer):
     def call(self, vision_embeddings, text_embeddings, vision_indices):
         batch_size, seq_length, hidden_dim = ops.shape(text_embeddings)
 
-        flat_text_embeddings = ops.reshape(
-            text_embeddings, (batch_size * seq_length, hidden_dim)
-        )
+        # Use -1 to avoid NumPy-triggering tuples with GPU tensors in Torch.
+        flat_text_embeddings = ops.reshape(text_embeddings, (-1, hidden_dim))
         # `vision_embeddings` is flattened as
         # `(batch * num_vision_tokens, hidden_dim)`.
         flat_vision_embeddings = vision_embeddings
@@ -285,6 +284,9 @@ class Qwen2VLFlattenVisionInputs(keras.layers.Layer):
         self.in_channels = in_channels
         self.temporal_patch_size = temporal_patch_size
         self.patch_size = patch_size
+
+    def build(self, input_shape):
+        self.built = True
 
     def call(self, images, grid_thw):
         flat_images = ops.reshape(
