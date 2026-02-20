@@ -58,6 +58,7 @@ class T5Backbone(Backbone):
             such as softmax and layer normalization, will always be done at
             float32 precision regardless of dtype.
     """
+
     def __init__(
         self,
         vocabulary_size,
@@ -120,7 +121,9 @@ class T5Backbone(Backbone):
             )
 
         self.encoder_layer_norm = T5LayerNorm(
-            epsilon=layer_norm_epsilon, dtype=dtype, name="encoder_output_layer_norm"
+            epsilon=layer_norm_epsilon,
+            dtype=dtype,
+            name="encoder_output_layer_norm",
         )
         self.encoder_dropout = keras.layers.Dropout(
             dropout, dtype=dtype, name="encoder_output_dropout"
@@ -150,7 +153,9 @@ class T5Backbone(Backbone):
             )
 
         self.decoder_layer_norm = T5LayerNorm(
-            epsilon=layer_norm_epsilon, dtype=dtype, name="decoder_output_layer_norm"
+            epsilon=layer_norm_epsilon,
+            dtype=dtype,
+            name="decoder_output_layer_norm",
         )
         self.decoder_dropout = keras.layers.Dropout(
             dropout, dtype=dtype, name="decoder_output_dropout"
@@ -203,21 +208,23 @@ class T5Backbone(Backbone):
     # Config
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "vocabulary_size": self.vocabulary_size,
-            "hidden_dim": self.hidden_dim,
-            "intermediate_dim": self.intermediate_dim,
-            "num_layers": self.num_layers,
-            "num_heads": self.num_heads,
-            "activation": keras.activations.serialize(self.activation),
-            "key_value_dim": self.key_value_dim,
-            "dropout": self.dropout,
-            "use_gated_activation": self.use_gated_activation,
-            "layer_norm_epsilon": self.layer_norm_epsilon,
-            "tie_embedding_weights": self.tie_embedding_weights,
-        })
+        config.update(
+            {
+                "vocabulary_size": self.vocabulary_size,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "activation": keras.activations.serialize(self.activation),
+                "key_value_dim": self.key_value_dim,
+                "dropout": self.dropout,
+                "use_gated_activation": self.use_gated_activation,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "tie_embedding_weights": self.tie_embedding_weights,
+            }
+        )
         return config
-    
+
     def _forward(self, inputs, training=None):
         encoder_token_ids = inputs["encoder_token_ids"]
         encoder_padding_mask = inputs["encoder_padding_mask"]
@@ -242,7 +249,9 @@ class T5Backbone(Backbone):
             if isinstance(output, tuple):
                 x, position_bias = output
 
-        encoder_output = self.encoder_dropout(self.encoder_layer_norm(x), training=training)
+        encoder_output = self.encoder_dropout(
+            self.encoder_layer_norm(x), training=training
+        )
 
         # Decoder
         x = self.token_embedding(decoder_token_ids)
@@ -264,7 +273,9 @@ class T5Backbone(Backbone):
             if isinstance(output, tuple):
                 x, position_bias = output
 
-        decoder_output = self.decoder_dropout(self.decoder_layer_norm(x), training=training)
+        decoder_output = self.decoder_dropout(
+            self.decoder_layer_norm(x), training=training
+        )
 
         return {
             "encoder_sequence_output": encoder_output,
