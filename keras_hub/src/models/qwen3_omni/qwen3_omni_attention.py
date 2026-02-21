@@ -11,7 +11,6 @@ from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class Qwen3OmniAttention(keras.layers.Layer):
     """Multi-head attention with Multimodal RoPE for Qwen3-Omni.
 
@@ -21,7 +20,7 @@ class Qwen3OmniAttention(keras.layers.Layer):
     - Query-Key normalization for training stability
     - Optional sliding window attention
 
-    The M-RoPE divides the head dimension into 3 sections [24, 20, 20] for
+    The M-RoPE divides the head dimension into 3 sections (24, 20, 20) for
     text, temporal, and spatial position encodings respectively.
 
     Args:
@@ -29,7 +28,7 @@ class Qwen3OmniAttention(keras.layers.Layer):
         num_key_value_heads: int. Number of key/value heads (for GQA).
         head_dim: int. The dimension of each attention head.
         mrope_section: tuple of 3 ints. Dimension allocation for M-RoPE
-            (text, temporal, spatial). Defaults to [24, 20, 20].
+            (text, temporal, spatial). Defaults to (24, 20, 20).
         rope_max_wavelength: int. Maximum wavelength for M-RoPE.
             Defaults to 1000000.
         rope_scaling_factor: float. Scaling factor for M-RoPE. Defaults to 1.0.
@@ -38,7 +37,7 @@ class Qwen3OmniAttention(keras.layers.Layer):
         layer_norm_epsilon: float. Epsilon for layer normalization.
         sliding_window_size: int or None. Size of sliding window.
             Defaults to None.
-        **kwargs: Additional keyword arguments.
+        **kwargs: Additional keyword arguments to pass to the layer
     """
 
     def __init__(

@@ -19,7 +19,6 @@ from keras_hub.src.models.qwen3_omni.qwen3_omni_attention import (
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
-@keras.saving.register_keras_serializable(package="keras_hub")
 class Qwen3OmniTransformerDecoder(keras.layers.Layer):
     """Qwen3-Omni transformer decoder block with MoE.
 
