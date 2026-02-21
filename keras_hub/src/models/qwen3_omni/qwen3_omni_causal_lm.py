@@ -35,50 +35,78 @@ class Qwen3OmniCausalLM(CausalLM):
     `fit()`, `predict()`, `evaluate()`, and `generate()`. This is done by
     default when creating the model with `from_preset()`.
 
-    Qwen3-Omni extends Qwen3 with multimodal capabilities (audio, vision, text)
-    and uses a Thinker-Talker architecture. This implementation focuses
-    on the Thinker (comprehension) component, which processes inputs using
-    Multimodal Rotary Position Embedding (M-RoPE) for efficient
-    multimodal fusion.
-    The architecture supports 128 experts with 8 active per token.
-
     Args:
         backbone: A `keras_hub.models.Qwen3OmniBackbone` instance.
         preprocessor: A `keras_hub.models.Qwen3OmniCausalLMPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
 
+    TODO: Update examples when presets added.
     Examples:
 
-    Note: Pretrained presets are not yet available for Qwen3-Omni.
-    Use the custom backbone configuration below.
-
-    Create a model with custom backbone and vocabulary.
+    Use `generate()` to do text generation.
     ```python
-    tokenizer = keras_hub.tokenizers.Qwen3OmniTokenizer(
-        vocabulary="qwen3_omni_vocab.json",
-        merges="qwen3_omni_merges.txt",
+    qwen3_omni_lm = keras_hub.models.Qwen3OmniCausalLM.from_preset(
+        "qwen3_omni_instruct"
     )
-    preprocessor = keras_hub.models.Qwen3OmniCausalLMPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=128,
+    qwen3_omni_lm.generate("I want to say", max_length=30)
+
+    # Generate with batched prompts.
+    qwen3_omni_lm.generate(["This is a", "Where are you"], max_length=30)
+    ```
+
+    Compile the `generate()` function with a custom sampler.
+    ```python
+    qwen3_omni_lm = keras_hub.models.Qwen3OmniCausalLM.from_preset(
+        "qwen3_omni_instruct"
     )
-    backbone = keras_hub.models.Qwen3OmniBackbone(
-        vocabulary_size=151936,
-        num_layers=28,
-        num_query_heads=16,
-        num_key_value_heads=2,
-        hidden_dim=1536,
-        intermediate_dim=8960,
-        moe_intermediate_dim=2560,
-        num_experts=64,
-        num_experts_per_tok=8,
+    qwen3_omni_lm.compile(sampler="top_k")
+    qwen3_omni_lm.generate("I want to say", max_length=30)
+
+    qwen3_omni_lm.compile(sampler=keras_hub.samplers.BeamSampler(num_beams=2))
+    qwen3_omni_lm.generate("I want to say", max_length=30)
+    ```
+
+    Use `generate()` without preprocessing.
+    ```python
+    prompt = {
+        # Token ids for "<bos> Qwen3 is".
+        "token_ids": np.array([[2, 12345, 678, 0, 0, 0, 0]] * 2),
+        # Use `"padding_mask"` to indicate values that should not be overridden.
+        "padding_mask": np.array([[1, 1, 1, 0, 0, 0, 0]] * 2),
+    }
+
+    qwen3_omni_lm = keras_hub.models.Qwen3OmniCausalLM.from_preset(
+        "qwen3_omni_instruct",
+        preprocessor=None,
     )
-    qwen3_omni_lm = keras_hub.models.Qwen3OmniCausalLM(
-        backbone=backbone,
-        preprocessor=preprocessor,
+    qwen3_omni_lm.generate(prompt)
+    ```
+
+    Call `fit()` on a single batch.
+    ```python
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    qwen3_omni_lm = keras_hub.models.Qwen3OmniCausalLM.from_preset(
+        "qwen3_omni_instruct"
     )
     qwen3_omni_lm.fit(x=features, batch_size=2)
+    ```
+
+    Call `fit()` without preprocessing.
+    ```python
+    x = {
+        # Token ids for "<bos> Qwen3 is a language model<eos>"
+        "token_ids": np.array([[2, 12345, 678, 543, 9876, 1, 0, 0]] * 2),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 0, 0]] * 2),
+    }
+    y = np.array([[12345, 678, 543, 9876, 1, 0, 0, 0]] * 2)
+    sw = np.array([[1, 1, 1, 1, 1, 0, 0, 0]] * 2)
+
+    qwen3_omni_lm = keras_hub.models.Qwen3OmniCausalLM.from_preset(
+        "qwen3_omni_instruct",
+        preprocessor=None,
+    )
+    qwen3_omni_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
     ```
     """
 
@@ -86,18 +114,31 @@ class Qwen3OmniCausalLM(CausalLM):
     preprocessor_cls = Qwen3OmniCausalLMPreprocessor
 
     def __init__(self, backbone, preprocessor=None, **kwargs):
-        # Store backbone and preprocessor
         self.backbone = backbone
         self.preprocessor = preprocessor
-
-        # Build functional model: backbone -> logits
         inputs = backbone.input
         hidden_states = backbone(inputs)
-        # Project hidden states to vocabulary logits using tied embeddings
         outputs = backbone.token_embedding(hidden_states, reverse=True)
         super().__init__(
             inputs=inputs,
             outputs=outputs,
+            **kwargs,
+        )
+
+    def compile(
+        self,
+        optimizer="auto",
+        loss="auto",
+        *,
+        weighted_metrics="auto",
+        sampler="greedy",
+        **kwargs,
+    ):
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            weighted_metrics=weighted_metrics,
+            sampler=sampler,
             **kwargs,
         )
 
@@ -107,37 +148,27 @@ class Qwen3OmniCausalLM(CausalLM):
         cache,
         cache_update_index,
     ):
-        """Forward pass with KV cache for efficient autoregressive generation.
+        """Forward pass of `Qwen3OmniCausalLM` with cache.
 
-        This method enables efficient text generation by caching
-        key/value tensors from previous tokens, avoiding redundant
-        computation during autoregressive decoding. Essential for the
-        `generate()` method.
+        `call_with_cache` adds an additional forward pass for the model for
+        autoregressive inference. Unlike calling the model directly, this method
+        allows caching previous key/value Tensors in multi-head attention layer,
+        and avoids recomputing the outputs of seen tokens.
 
         Args:
-            token_ids: Token IDs tensor with shape
-                `(batch_size, sequence_length)`. For generation,
-                typically `sequence_length=1` for new tokens.
-            cache: KV cache tensor with shape `(batch_size, num_layers, 2,
-                max_length, num_key_value_heads, head_dim)`. Contains cached
-                keys and values from previous forward passes.
-            cache_update_index: Integer index indicating where to
-                write the new KV values in the cache (typically current
-                sequence position - 1).
+            token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
+            cache: a dense float Tensor, the cache of key and value.
+            cache_update_index: int, or int Tensor. The index of current inputs
+            in the whole sequence.
 
         Returns:
-            Tuple of (logits, hidden_states, updated_cache):
-            - logits: Vocabulary logits, shape
-              `(batch_size, sequence_length, vocab_size)`
-            - hidden_states: Final layer outputs, shape
-              `(batch_size, sequence_length, hidden_dim)`
-            - updated_cache: Updated KV cache with same shape as
-              input cache
+            A (logits, hidden_states, cache) tuple. Where `logits` is the
+            language model logits for the input token_ids, `hidden_states` is
+            the final hidden representation of the input tokens, and `cache` is
+            the decoding cache.
         """
-        # Embed input tokens
         x = self.backbone.token_embedding(token_ids)
-
-        # Pass through decoder layers with caching
+        # Each decoder layer has a cache; we update them separately.
         updated_cache = []
         for i in range(self.backbone.num_layers):
             current_cache = cache[:, i, ...]
@@ -175,13 +206,10 @@ class Qwen3OmniCausalLM(CausalLM):
         num_layers = self.backbone.num_layers
         num_key_value_heads = self.backbone.num_key_value_heads
         head_dim = self.backbone.head_dim
-
-        # Cache shape: [batch, layers, 2 (key/value), seq_len,
-        # kv_heads, head_dim]
         shape = [
             batch_size,
             num_layers,
-            2,  # Separate storage for keys and values
+            2,
             max_length,
             num_key_value_heads,
             head_dim,
@@ -204,21 +232,22 @@ class Qwen3OmniCausalLM(CausalLM):
         model inputs, a dictionary with keys `"token_ids"` and `"padding_mask"`.
 
         Args:
-            inputs: Dictionary with keys `"token_ids"` and `"padding_mask"`.
-                - token_ids: Initial prompt tokens, shape
-                  `(batch_size, prompt_length)`
-                - padding_mask: Binary mask indicating valid tokens (1)
-                  vs padding (0)
-            stop_token_ids: Optional tuple of token IDs that trigger
-                early stopping (e.g., EOS token). Generation stops when
-                all sequences produce one of these tokens.
+            inputs: A dictionary with two keys `"token_ids"` and
+                `"padding_mask"` and batched tensor values.
+            stop_token_ids: Tuple of id's of the end token to stop on. If all
+                sequences have produced a new stop token, generation
+                will stop.
         """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
+        # Create and seed cache with a single forward pass.
         hidden_states, cache = self._build_cache(token_ids)
+        # Compute the lengths of all user inputted tokens ids.
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
+        # Start at the first index that has no user inputted id.
         index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
+            # The cache index is the index of our previous token.
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
@@ -244,15 +273,21 @@ class Qwen3OmniCausalLM(CausalLM):
             model=self,
         )
 
+        # Compute an output padding mask with the token ids we updated.
         if stop_token_ids is not None:
+            # Build a mask of stop token locations not in the original
+            # prompt (not in locations where `padding_mask` is True).
             end_locations = any_equal(
                 token_ids, stop_token_ids, ops.logical_not(padding_mask)
             )
             end_locations = ops.cast(end_locations, "int32")
+            # Use cumsum to get ones in all locations after end_locations.
             cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
             overflow = cumsum - end_locations
+            # Our padding mask is the inverse of these overflow locations.
             padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
         else:
+            # Without early stopping, all locations will have been updated.
             padding_mask = ops.ones_like(token_ids, dtype="bool")
         return {
             "token_ids": token_ids,
@@ -278,18 +313,11 @@ class Qwen3OmniCausalLM(CausalLM):
                 "token ids via the target_ids parameter."
             )
 
-        # Validate token_ids has at least 2 dimensions
-        token_ids_shape = ops.shape(token_ids)
-        if len(token_ids_shape) < 2:
-            raise ValueError(
-                f"token_ids must have at least 2 dimensions (batch, sequence). "
-                f"Received shape: {token_ids_shape}"
-            )
-
-        batch_shape = token_ids_shape[:2]
+        batch_shape = ops.shape(token_ids)[:2]
+        assert len(batch_shape) == 2
 
         if padding_mask is None:
-            padding_mask = ops.ones(shape=batch_shape, dtype="bool")
+            padding_mask = ops.ones(shape=batch_shape)
 
         if layer_intercept_fn is None:
 
