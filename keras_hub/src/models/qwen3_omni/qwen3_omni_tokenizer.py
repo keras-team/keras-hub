@@ -13,8 +13,6 @@ class Qwen3OmniTokenizer(BytePairTokenizer):
 
     This tokenizer implements byte-pair encoding (BPE) for Qwen3-Omni models,
     handling special tokens like EOS (end of sequence) and PAD (padding).
-    Qwen3-Omni extends Qwen3 with multimodal capabilities (audio, vision),
-    but uses the same text tokenization scheme.
 
     Args:
         vocabulary: Dictionary mapping tokens to token IDs, or path to
