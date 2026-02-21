@@ -85,27 +85,31 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
         # assets have loaded when restoring a saved model.
-        # Use MultiSegmentPacker for dict input with prompts/responses
-        # Use StartEndPacker from parent for simple text input
         super().build(input_shape)
-        # Handle None start/end tokens by using empty lists
-        start_val = (
-            self.tokenizer.start_token_id
-            if self.tokenizer.start_token_id is not None
-            else []
-        )
-        end_val = (
-            self.tokenizer.end_token_id
-            if self.tokenizer.end_token_id is not None
-            else []
-        )
         self.multi_packer = MultiSegmentPacker(
-            start_value=start_val,
-            end_value=end_val,
+            start_value=self.tokenizer.start_token_id or [],
+            end_value=self.tokenizer.end_token_id or [],
             pad_value=self.tokenizer.pad_token_id,
             sep_value=[],
             sequence_length=self.sequence_length,
         )
+
+    def _process_multimodal_inputs(self, x):
+        """Extract and convert audio/image inputs from a dict."""
+        audio_features = None
+        if "audio" in x and self.audio_converter:
+            audio_features = self.audio_converter(x["audio"])
+        pixel_values = None
+        if "images" in x and self.image_converter:
+            pixel_values = self.image_converter(x["images"])
+        return audio_features, pixel_values
+
+    def _add_multimodal_to_output(self, output, audio_features, pixel_values):
+        """Attach multimodal features to the output dict if present."""
+        if audio_features is not None:
+            output["audio_features"] = audio_features
+        if pixel_values is not None:
+            output["pixel_values"] = pixel_values
 
     @preprocessing_function
     def call(
@@ -117,12 +121,8 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
     ):
         sequence_length = sequence_length or self.sequence_length
 
-        # Handle both dict input (multimodal) and string input (text-only)
-        if isinstance(x, dict):
-            prompts = x["prompts"]
-            responses = x.get("responses", prompts)
-        else:
-            # Text-only mode: tokenize directly
+        # Text-only input (string or tensor)
+        if not isinstance(x, dict):
             x = self.tokenizer(x)
             token_ids, padding_mask = self.packer(
                 x,
@@ -130,31 +130,19 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
                 add_start_value=self.add_start_token,
                 add_end_value=self.add_end_token,
             )
-            # The last token does not have a next token, so we truncate it out.
-            result_x = {
+            x = {
                 "token_ids": token_ids[..., :-1],
                 "padding_mask": padding_mask[..., :-1],
             }
-            # Target `y` will be the next token.
-            result_y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
-            return keras.utils.pack_x_y_sample_weight(
-                result_x, result_y, sample_weight
-            )
+            y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
+            return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
-        # Tokenize text
-        prompts = self.tokenizer(prompts)
-        responses = self.tokenizer(responses)
+        # Multimodal dict input
+        prompts = self.tokenizer(x["prompts"])
+        responses = self.tokenizer(x.get("responses", x["prompts"]))
+        audio_features, pixel_values = self._process_multimodal_inputs(x)
 
-        # Process multimodal inputs
-        audio_features = None
-        if "audio" in x and self.audio_converter:
-            audio_features = self.audio_converter(x["audio"])
-
-        pixel_values = None
-        if "images" in x and self.image_converter:
-            pixel_values = self.image_converter(x["images"])
-
-        # Pad with one extra token to account for the truncation below.
+        # Pack prompt + response with one extra token for label shift.
         token_ids, segment_ids = self.multi_packer(
             (prompts, responses),
             sequence_length=sequence_length + 1,
@@ -164,21 +152,14 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         padding_mask = token_ids != self.tokenizer.pad_token_id
         response_mask = segment_ids == 1
 
-        # The last token does not have a next token, so we truncate it out.
+        # Truncate last token (no next-token target for it).
         x = {
             "token_ids": token_ids[..., :-1],
             "padding_mask": padding_mask[..., :-1],
         }
+        self._add_multimodal_to_output(x, audio_features, pixel_values)
 
-        # Add multimodal inputs if present
-        if audio_features is not None:
-            x["audio_features"] = audio_features
-        if pixel_values is not None:
-            x["pixel_values"] = pixel_values
-
-        # Target `y` will be the next token.
         y = token_ids[..., 1:]
-        # Only compute the loss for labels in the response.
         sample_weight = response_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
@@ -190,8 +171,6 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
     ):
         """Convert inputs to integer token input for generation.
 
-        Handles text, audio, and vision inputs for multimodal generation.
-
         Unlike calling the layer for training, this method does not compute
         labels and will never append a `tokenizer.end_token_id` to the end of
         the sequence (as generation is expected to continue at the end of the
@@ -200,9 +179,8 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         if not self.built:
             self.build(None)
 
-        # Handle both dict input (multimodal) and string input (text-only)
+        # Text-only input (string or tensor)
         if not isinstance(x, dict):
-            # Text-only mode: tokenize directly
             x = self.tokenizer(x)
             token_ids, padding_mask = self.packer(
                 x, sequence_length=sequence_length, add_end_value=False
@@ -212,21 +190,12 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
                 "padding_mask": padding_mask,
             }
 
-        prompts = x["prompts"]
-        prompts = self.tokenizer(prompts)
-
-        # Process multimodal inputs
-        audio_features = None
-        if "audio" in x and self.audio_converter:
-            audio_features = self.audio_converter(x["audio"])
-
-        pixel_values = None
-        if "images" in x and self.image_converter:
-            pixel_values = self.image_converter(x["images"])
+        # Multimodal dict input
+        prompts = self.tokenizer(x["prompts"])
+        audio_features, pixel_values = self._process_multimodal_inputs(x)
 
         if "responses" in x:
-            responses = self.tokenizer(x["responses"])
-            segments = (prompts, responses)
+            segments = (prompts, self.tokenizer(x["responses"]))
         else:
             segments = (prompts,)
 
@@ -242,11 +211,5 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             "token_ids": token_ids,
             "padding_mask": padding_mask,
         }
-
-        # Add multimodal inputs if present
-        if audio_features is not None:
-            result["audio_features"] = audio_features
-        if pixel_values is not None:
-            result["pixel_values"] = pixel_values
-
+        self._add_multimodal_to_output(result, audio_features, pixel_values)
         return result
