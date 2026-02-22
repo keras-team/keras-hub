@@ -1,5 +1,3 @@
-"""MetaCLIP 2 preprocessor implementation."""
-
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
@@ -22,8 +20,8 @@ except ImportError:
     tf = None
 
 
-@keras_hub_export("keras_hub.models.MetaCLIP2Preprocessor")
-class MetaCLIP2Preprocessor(CausalLMPreprocessor):
+@keras_hub_export("keras_hub.models.MetaCLIP2CausalLMPreprocessor")
+class MetaCLIP2CausalLMPreprocessor(CausalLMPreprocessor):
     """MetaCLIP 2 preprocessor.
 
     This preprocessing layer handles both text and image preprocessing for

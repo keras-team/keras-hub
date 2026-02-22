@@ -1,5 +1,3 @@
-"""Tests for MetaCLIP 2 backbone."""
-
 import pytest
 from keras import ops
 

@@ -1,5 +1,3 @@
-"""Tests for MetaCLIP 2 tokenizer."""
-
 import os
 
 from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (

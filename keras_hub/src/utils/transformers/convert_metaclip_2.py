@@ -1,5 +1,3 @@
-"""Convert MetaCLIP 2 checkpoints from HuggingFace Transformers."""
-
 import numpy as np
 
 from keras_hub.src.models.metaclip_2.metaclip_2_backbone import (

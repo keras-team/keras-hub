@@ -1,5 +1,3 @@
-"""Tests for MetaCLIP 2 preprocessor."""
-
 import os
 
 import numpy as np
@@ -8,8 +6,8 @@ from keras import ops
 from keras_hub.src.models.metaclip_2.metaclip_2_image_converter import (
     MetaCLIP2ImageConverter,
 )
-from keras_hub.src.models.metaclip_2.metaclip_2_preprocessor import (
-    MetaCLIP2Preprocessor,
+from keras_hub.src.models.metaclip_2.metaclip_2_causal_lm_preprocessor import (
+    MetaCLIP2CausalLMPreprocessor,
 )
 from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (
     MetaCLIP2Tokenizer,
@@ -17,7 +15,7 @@ from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (
 from keras_hub.src.tests.test_case import TestCase
 
 
-class MetaCLIP2PreprocessorTest(TestCase):
+class MetaCLIP2CausalLMPreprocessorTest(TestCase):
     def setUp(self):
         # Use the XLM-RoBERTa test vocab since MetaCLIP 2 uses XLM-V
         # which is based on XLM-RoBERTa architecture
@@ -40,18 +38,18 @@ class MetaCLIP2PreprocessorTest(TestCase):
         }
 
     def test_preprocessor_basics(self):
-        preprocessor = MetaCLIP2Preprocessor(**self.init_kwargs)
+        preprocessor = MetaCLIP2CausalLMPreprocessor(**self.init_kwargs)
         output = preprocessor(self.input_data)
         self.assertEqual(output["token_ids"].shape, (1, 16))
         self.assertEqual(output["images"].shape, (1, 32, 32, 3))
 
     def test_sequence_length_override(self):
-        preprocessor = MetaCLIP2Preprocessor(**self.init_kwargs)
+        preprocessor = MetaCLIP2CausalLMPreprocessor(**self.init_kwargs)
         output = preprocessor(self.input_data, sequence_length=8)
         self.assertEqual(output["token_ids"].shape, (1, 8))
 
     def test_to_lower(self):
-        preprocessor = MetaCLIP2Preprocessor(**self.init_kwargs, to_lower=True)
+        preprocessor = MetaCLIP2CausalLMPreprocessor(**self.init_kwargs, to_lower=True)
         output = preprocessor(
             {
                 "prompts": ["THE QUICK BROWN FOX"],
@@ -61,7 +59,7 @@ class MetaCLIP2PreprocessorTest(TestCase):
         self.assertEqual(output["token_ids"].shape, (1, 16))
 
     def test_start_end_tokens(self):
-        preprocessor = MetaCLIP2Preprocessor(**self.init_kwargs)
+        preprocessor = MetaCLIP2CausalLMPreprocessor(**self.init_kwargs)
         output = preprocessor(self.input_data)
         # Check that start token (0) is at the beginning
         token_ids = ops.convert_to_numpy(output["token_ids"])

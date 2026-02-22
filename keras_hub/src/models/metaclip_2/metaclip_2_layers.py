@@ -1,5 +1,3 @@
-"""MetaCLIP 2 layer implementations."""
-
 import math
 
 from keras import layers

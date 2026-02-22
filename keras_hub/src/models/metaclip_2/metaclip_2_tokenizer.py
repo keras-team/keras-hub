@@ -1,5 +1,3 @@
-"""MetaCLIP 2 tokenizer implementation using XLM-V (SentencePiece)."""
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.metaclip_2.metaclip_2_backbone import (
     MetaCLIP2Backbone,

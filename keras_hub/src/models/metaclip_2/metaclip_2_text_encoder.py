@@ -1,5 +1,3 @@
-"""MetaCLIP 2 text encoder implementation."""
-
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
