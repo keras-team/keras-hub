@@ -3,11 +3,11 @@ import os
 import numpy as np
 from keras import ops
 
-from keras_hub.src.models.metaclip_2.metaclip_2_image_converter import (
-    MetaCLIP2ImageConverter,
-)
 from keras_hub.src.models.metaclip_2.metaclip_2_causal_lm_preprocessor import (
     MetaCLIP2CausalLMPreprocessor,
+)
+from keras_hub.src.models.metaclip_2.metaclip_2_image_converter import (
+    MetaCLIP2ImageConverter,
 )
 from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (
     MetaCLIP2Tokenizer,
@@ -49,7 +49,9 @@ class MetaCLIP2CausalLMPreprocessorTest(TestCase):
         self.assertEqual(output["token_ids"].shape, (1, 8))
 
     def test_to_lower(self):
-        preprocessor = MetaCLIP2CausalLMPreprocessor(**self.init_kwargs, to_lower=True)
+        preprocessor = MetaCLIP2CausalLMPreprocessor(
+            **self.init_kwargs, to_lower=True
+        )
         output = preprocessor(
             {
                 "prompts": ["THE QUICK BROWN FOX"],
