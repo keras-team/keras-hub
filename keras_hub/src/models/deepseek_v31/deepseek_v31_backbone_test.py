@@ -47,7 +47,7 @@ class DeepSeekV31BackboneTest(TestCase):
             if actual_dtype not in allowed_dtypes:
                 self.fail(
                     msg
-                    or f"Tensor dtype {actual_dtype} not in allowed {allowed_dtypes}"
+                    or f"Tensor dtype {actual_dtype} not in allowed {allowed_dtypes}"  # noqa: E501
                 )
 
     def test_num_parameters(self):

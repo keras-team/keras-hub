@@ -58,11 +58,13 @@ class DeepSeekV31Tokenizer(BytePairTokenizer):
         # super().__init__, since BytePairTokenizer needs them at construction.
         if proto is not None:
             from keras.src.saving import serialization_lib
+
             if isinstance(proto, str) and serialization_lib.in_safe_mode():
                 raise ValueError(
-                    "Requested the loading of a SentencePiece proto file outside of the "
-                    "model archive. This carries a potential risk of loading "
-                    "arbitrary and sensitive files and thus it is disallowed "
+                    "Requested the loading of a SentencePiece proto file "
+                    "outside of the model archive. This carries a "
+                    "potential risk of loading arbitrary and sensitive files"
+                    " and thus it is disallowed "
                     "by default. If you trust the source of the artifact, you "
                     "can override this error by passing `safe_mode=False` to "
                     "the loading function, or calling "
@@ -70,6 +72,7 @@ class DeepSeekV31Tokenizer(BytePairTokenizer):
                 )
             try:
                 import sentencepiece as spm
+
                 sp = spm.SentencePieceProcessor()
                 sp.Load(proto)
                 vocabulary = {

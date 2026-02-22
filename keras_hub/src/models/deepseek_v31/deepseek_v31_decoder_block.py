@@ -238,7 +238,8 @@ class DeepSeekV31DecoderBlock(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
 
-        # Store every __init__ argument as an attribute (style guide requirement).
+        # Store every __init__ argument as
+        # an attribute (style guide requirement).
         self.hidden_dim = hidden_dim
         self.num_query_heads = num_query_heads
         self.num_key_value_heads = num_key_value_heads
@@ -276,7 +277,7 @@ class DeepSeekV31DecoderBlock(keras.layers.Layer):
             v_head_dim=v_head_dim,
             rope_max_wavelength=rope_max_wavelength,
             rope_scaling_factor=rope_scaling_factor,
-            yarn_original_max_position_embeddings=yarn_original_max_position_embeddings,
+            yarn_original_max_position_embeddings=yarn_original_max_position_embeddings,  # noqa: E501
             attention_dropout=dropout,
             kernel_initializer=kernel_initializer,
             name="attention",

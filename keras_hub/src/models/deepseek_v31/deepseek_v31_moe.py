@@ -198,7 +198,8 @@ class DeepSeekV31MoE(keras.layers.Layer):
         # 2. Compute Gate and Up projections for all experts simultaneously
         # hidden_states: (..., H)
         # expert_kernels: (E, H, I)
-        # einsum naturally broadcasts over the missing E dimension to compute (..., E, I)
+        # einsum naturally broadcasts over
+        # the missing E dimension to compute (..., E, I)
         gate_out = ops.einsum(
             "...h,ehi->...ei", hidden_states, self.expert_gate_kernel
         )
@@ -212,13 +213,15 @@ class DeepSeekV31MoE(keras.layers.Layer):
         # Expand router_mask to (..., E, 1) for broadcasting over I
         router_mask_expanded = ops.expand_dims(router_mask, axis=-1)
 
-        # Zero-out inactive experts and scale active ones by their affinity scores
+        # Zero-out inactive experts and
+        # scale active ones by their affinity scores
         expert_act_weighted = expert_act * router_mask_expanded
 
         # 4. Compute Down projection and sum over experts simultaneously
         # expert_act_weighted: (..., E, I)
         # expert_down_kernel: (E, I, H)
-        # This einsum performs the matmul and sums over the E dimension in one step
+        # This einsum performs the matmul and
+        # sums over the E dimension in one step
         # Output shape: (..., H)
         routed_out = ops.einsum(
             "...ei,eih->...h", expert_act_weighted, self.expert_down_kernel

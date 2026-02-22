@@ -1,4 +1,4 @@
-import os
+import os  # noqa: F401
 import pytest
 from keras_hub.src.models.deepseek_v31.deepseek_v31_tokenizer import (
     DeepSeekV31Tokenizer,
@@ -17,7 +17,8 @@ class DeepSeekV31TokenizerTest(TestCase):
         ):
             self.vocab[c] = i + 2
 
-        # Register the fully formed BPE chunks that get merged to prevent dropping them during detokenize
+        # Register the fully formed BPE chunks that get merged
+        # to prevent dropping them during detokenize
         self.vocab["th"] = 100
         self.vocab["ea"] = 101
 

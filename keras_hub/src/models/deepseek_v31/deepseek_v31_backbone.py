@@ -154,7 +154,7 @@ class DeepSeekV31Backbone(Backbone):
                     use_moe=(i >= first_k_dense_replace),
                     rope_max_wavelength=rope_max_wavelength,
                     rope_scaling_factor=rope_scaling_factor,
-                    yarn_original_max_position_embeddings=yarn_original_max_position_embeddings,
+                    yarn_original_max_position_embeddings=yarn_original_max_position_embeddings,  # noqa: E501
                     layer_norm_epsilon=layer_norm_epsilon,
                     dropout=dropout,
                     kernel_initializer=_deepseek_v31_kernel_initializer(
