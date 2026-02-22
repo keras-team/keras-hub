@@ -150,6 +150,18 @@ from keras_hub.src.models.deeplab_v3.deeplab_v3_image_segmeter_preprocessor impo
 from keras_hub.src.models.deeplab_v3.deeplab_v3_segmenter import (
     DeepLabV3ImageSegmenter as DeepLabV3ImageSegmenter,
 )
+from keras_hub.src.models.deepseek_v31.deepseek_v31_backbone import (
+    DeepSeekV31Backbone as DeepSeekV31Backbone,
+)
+from keras_hub.src.models.deepseek_v31.deepseek_v31_causal_lm import (
+    DeepSeekV31CausalLM as DeepSeekV31CausalLM,
+)
+from keras_hub.src.models.deepseek_v31.deepseek_v31_causal_lm_preprocessor import (
+    DeepSeekV31CausalLMPreprocessor as DeepSeekV31CausalLMPreprocessor,
+)
+from keras_hub.src.models.deepseek_v31.deepseek_v31_tokenizer import (
+    DeepSeekV31Tokenizer as DeepSeekV31Tokenizer,
+)
 from keras_hub.src.models.deit.deit_backbone import DeiTBackbone as DeiTBackbone
 from keras_hub.src.models.deit.deit_image_classifier import (
     DeiTImageClassifier as DeiTImageClassifier,

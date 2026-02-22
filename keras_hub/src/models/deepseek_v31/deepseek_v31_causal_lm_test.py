@@ -3,22 +3,22 @@ from unittest.mock import patch
 import pytest
 from keras import ops
 
-from keras_hub.src.models.deepseek_v3_1.deepseek_v3_1_backbone import (
-    DeepSeekV3_1Backbone,
+from keras_hub.src.models.deepseek_v31.deepseek_v31_backbone import (
+    DeepSeekV31Backbone,
 )
-from keras_hub.src.models.deepseek_v3_1.deepseek_v3_1_causal_lm import (
-    DeepSeekV3_1CausalLM,
+from keras_hub.src.models.deepseek_v31.deepseek_v31_causal_lm import (
+    DeepSeekV31CausalLM,
 )
-from keras_hub.src.models.deepseek_v3_1.deepseek_v3_1_causal_lm_preprocessor import (
-    DeepSeekV3_1CausalLMPreprocessor,
+from keras_hub.src.models.deepseek_v31.deepseek_v31_causal_lm_preprocessor import (
+    DeepSeekV31CausalLMPreprocessor,
 )
-from keras_hub.src.models.deepseek_v3_1.deepseek_v3_1_tokenizer import (
-    DeepSeekV3_1Tokenizer,
+from keras_hub.src.models.deepseek_v31.deepseek_v31_tokenizer import (
+    DeepSeekV31Tokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
 
 
-class DeepSeekV3_1CausalLMTest(TestCase):
+class DeepSeekV31CausalLMTest(TestCase):
     def setUp(self):
         # Explicit special tokens for default ID injection
         # Use same vocab as preprocessor test but with larger overall vocabulary
@@ -33,17 +33,15 @@ class DeepSeekV3_1CausalLMTest(TestCase):
             " ": 7,
         }
         self.merges = []
-        self.tokenizer = DeepSeekV3_1Tokenizer(
-            vocabulary=self.vocab, merges=self.merges
-        )
+        self.tokenizer = DeepSeekV31Tokenizer(vocabulary=self.vocab, merges=self.merges)
 
-        self.preprocessor = DeepSeekV3_1CausalLMPreprocessor(
+        self.preprocessor = DeepSeekV31CausalLMPreprocessor(
             self.tokenizer,
             sequence_length=8,
         )
 
         # Use large vocabulary size to match expected output shape
-        self.backbone = DeepSeekV3_1Backbone(
+        self.backbone = DeepSeekV31Backbone(
             vocabulary_size=151650,
             num_layers=2,
             hidden_dim=32,
@@ -67,23 +65,23 @@ class DeepSeekV3_1CausalLMTest(TestCase):
 
     def test_causal_lm_basics(self):
         self.run_task_test(
-            cls=DeepSeekV3_1CausalLM,
+            cls=DeepSeekV31CausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 8, 151650),
         )
 
     def test_generate(self):
-        causal_lm = DeepSeekV3_1CausalLM(**self.init_kwargs)
+        causal_lm = DeepSeekV31CausalLM(**self.init_kwargs)
         prompt = "a b"
         output = causal_lm.generate(prompt)
         self.assertTrue(prompt in output)
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in DeepSeekV3_1CausalLM.presets:
+        for preset in DeepSeekV31CausalLM.presets:
             self.run_preset_test(
-                cls=DeepSeekV3_1CausalLM,
+                cls=DeepSeekV31CausalLM,
                 preset=preset,
                 input_data=self.train_data,
             )

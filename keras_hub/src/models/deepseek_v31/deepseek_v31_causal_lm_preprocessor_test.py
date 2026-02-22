@@ -1,16 +1,16 @@
 import os
 import pytest
 
-from keras_hub.src.models.deepseek_v3_1.deepseek_v3_1_causal_lm_preprocessor import (
-    DeepSeekV3_1CausalLMPreprocessor,
+from keras_hub.src.models.deepseek_v31.deepseek_v31_causal_lm_preprocessor import (
+    DeepSeekV31CausalLMPreprocessor,
 )
-from keras_hub.src.models.deepseek_v3_1.deepseek_v3_1_tokenizer import (
-    DeepSeekV3_1Tokenizer,
+from keras_hub.src.models.deepseek_v31.deepseek_v31_tokenizer import (
+    DeepSeekV31Tokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
 
 
-class DeepSeekV3_1CausalLMPreprocessorTest(TestCase):
+class DeepSeekV31CausalLMPreprocessorTest(TestCase):
     def setUp(self):
         # FIX: The BytePairTokenizer StaticHashTable rejects duplicate keys.
         # "Ġ" maps to 6, and " " maps to 7 to maintain a valid 1:1 mapping.
@@ -25,9 +25,7 @@ class DeepSeekV3_1CausalLMPreprocessorTest(TestCase):
             " ": 7,
         }
         self.merges = []
-        self.tokenizer = DeepSeekV3_1Tokenizer(
-            vocabulary=self.vocab, merges=self.merges
-        )
+        self.tokenizer = DeepSeekV31Tokenizer(vocabulary=self.vocab, merges=self.merges)
         self.init_kwargs = {
             "tokenizer": self.tokenizer,
             "sequence_length": 8,
@@ -36,7 +34,7 @@ class DeepSeekV3_1CausalLMPreprocessorTest(TestCase):
 
     def test_preprocessor_basics(self):
         self.run_preprocessor_test(
-            cls=DeepSeekV3_1CausalLMPreprocessor,
+            cls=DeepSeekV31CausalLMPreprocessor,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output=(
@@ -52,7 +50,7 @@ class DeepSeekV3_1CausalLMPreprocessorTest(TestCase):
     def test_no_start_end_token(self):
         input_data = ["a b"] * 4
 
-        preprocessor = DeepSeekV3_1CausalLMPreprocessor(
+        preprocessor = DeepSeekV31CausalLMPreprocessor(
             **self.init_kwargs,
             add_start_token=False,
             add_end_token=False,
@@ -61,7 +59,7 @@ class DeepSeekV3_1CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [[2, 6, 3, 0, 0, 0, 0, 0]] * 4)
 
     def test_generate_preprocess(self):
-        preprocessor = DeepSeekV3_1CausalLMPreprocessor(**self.init_kwargs)
+        preprocessor = DeepSeekV31CausalLMPreprocessor(**self.init_kwargs)
         preprocessed = preprocessor.generate_preprocess(["a b"])
         self.assertIn("token_ids", preprocessed)
         self.assertIn("padding_mask", preprocessed)
@@ -69,16 +67,16 @@ class DeepSeekV3_1CausalLMPreprocessorTest(TestCase):
     @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
-            cls=DeepSeekV3_1CausalLMPreprocessor,
-            preset="deepseek_v3_1_base",
+            cls=DeepSeekV31CausalLMPreprocessor,
+            preset="deepseek_v31_base",
             input_data=self.input_data,
         )
 
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in DeepSeekV3_1CausalLMPreprocessor.presets:
+        for preset in DeepSeekV31CausalLMPreprocessor.presets:
             self.run_preset_test(
-                cls=DeepSeekV3_1CausalLMPreprocessor,
+                cls=DeepSeekV31CausalLMPreprocessor,
                 preset=preset,
                 input_data=self.input_data,
             )
