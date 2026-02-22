@@ -1,6 +1,6 @@
 import pytest
-from keras import ops
 from keras import mixed_precision
+from keras import ops
 
 from keras_hub.src.models.deepseek_v31.deepseek_v31_backbone import (
     DeepSeekV31Backbone,

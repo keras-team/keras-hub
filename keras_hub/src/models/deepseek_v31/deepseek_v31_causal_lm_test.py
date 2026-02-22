@@ -1,5 +1,5 @@
 import os  # noqa: F401
-from unittest.mock import patch
+
 import pytest
 from keras import ops  # noqa: F401
 
