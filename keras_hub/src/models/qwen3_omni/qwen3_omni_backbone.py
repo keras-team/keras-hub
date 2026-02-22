@@ -7,117 +7,80 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
 )
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
-from keras_hub.src.models.qwen3_omni.qwen3_omni_audio_encoder import (  # noqa: F401
-    Qwen3OmniAudioEncoder,
-)
 from keras_hub.src.models.qwen3_omni.qwen3_omni_decoder import (
     Qwen3OmniTransformerDecoder,
-)
-from keras_hub.src.models.qwen3_omni.qwen3_omni_vision_encoder import (  # noqa: F401
-    Qwen3OmniVisionEncoder,
 )
 
 
 def _qwen3_omni_kernel_initializer(stddev=0.02):
-    """Kernel initializer for Qwen3-Omni."""
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
 @keras_hub_export("keras_hub.models.Qwen3OmniBackbone")
 class Qwen3OmniBackbone(Backbone):
-    """Qwen3-Omni text backbone (Thinker text model component).
+    """Qwen3-Omni multimodal Transformer backbone.
 
-    This implements the core text transformer component from HuggingFace's
-    Qwen3-Omni architecture. In the full HuggingFace model hierarchy:
+    This backbone implements the base Transformer network for the Qwen3-Omni
+    model. It includes embedding lookups and transformer layers with a Mixture
+    of Experts (MoE) architecture, using Multimodal Rotary Position Embedding
+    (M-RoPE) for multimodal fusion. Audio/vision encoders can be optionally
+    provided for multimodal operation.
 
-    ```
-    Qwen3OmniMoeForConditionalGeneration (full multimodal model)
-    └── thinker: Qwen3OmniMoeThinkerForConditionalGeneration
-        ├── audio_tower: Audio encoder
-        ├── visual: Vision encoder
-        └── model: Qwen3OmniMoeThinkerTextModel ← This backbone
-    ```
-
-    **Important:** HuggingFace does not expose the text model as a standalone
-    class. This backbone corresponds to the `thinker.model` component of the
-    full `Qwen3OmniMoeForConditionalGeneration` model.
-
-    The architecture consists of:
-    - Text embedding layer (152064 vocab, 2048 dim)
-    - 48 MoE-based transformer decoder blocks
-    - Multimodal Rotary Position Embedding (M-RoPE)
-    - RMSNorm output layer
-
-    Model configuration (30B-A3B variant):
-    - 128 experts, 8 experts per token
-    - 48 decoder layers
-    - 2048 hidden dimension
-    - 32 query heads, 4 key-value heads (GQA)
-    - 128 head dimension
-    - M-RoPE section: [24, 20, 20] (text, temporal, spatial)
-
-    Note: Audio/vision encoders can be optionally provided for
-    multimodal operation. The Talker component is not included.
+    The default constructor gives a fully customizable, randomly initialized
+    Qwen3-Omni model with any number of layers, heads, and embedding
+    dimensions. To load preset architectures and weights, use the `from_preset`
+    constructor.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
-        num_layers: int. The number of transformer decoder layers.
-        num_query_heads: int. The number of query attention heads.
-        num_key_value_heads: int. The number of key/value attention heads.
-        hidden_dim: int. The size of the transformer hidden state.
-        intermediate_dim: int. The output dimension of dense FFN layers.
-        moe_intermediate_dim: int. The intermediate dimension of each MoE
-            expert FFN.
-        head_dim: int. The dimension of each attention head.
-        num_experts: int. Number of experts in MoE layers. Defaults to 128.
-        num_experts_per_tok: int. Number of experts activated per token (top-k).
-            Defaults to 8.
+        num_layers: int. The number of transformer layers.
+        num_query_heads: int. The number of heads for the query projections in
+            the attention layer.
+        num_key_value_heads: int. The number of heads for the key and value
+            projections in the attention layer.
+        hidden_dim: int. The size of the transformer hidden state at the end of
+            each transformer layer.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            the feedforward network for each transformer.
+        moe_intermediate_dim: int. The intermediate dimension for each expert
+            in the MoE feedforward network.
+        head_dim: int. The size of each attention head.
+        num_experts: int. The number of experts in each MoE layer.
+        num_experts_per_tok: int. The number of top experts to select for each
+            token in the MoE layer.
         mrope_section: tuple. M-RoPE section dimensions
             (text, temporal, spatial). Must sum to head_dim // 2.
-            Defaults to (24, 20, 20) for head_dim=128.
-        rope_max_wavelength: int. Max wavelength for RoPE. Defaults to 1000000.
-        rope_scaling_factor: float. Scaling factor for RoPE. Defaults to 1.0.
+        rope_max_wavelength: int. Max wavelength for RoPE.
+        rope_scaling_factor: float. Scaling factor for RoPE.
         rope_attention_scaling: float. Attention scaling for RoPE.
-            Defaults to 1.0.
-        layer_norm_epsilon: float. Epsilon for layer norm. Defaults to 1e-6.
-        dropout: float. Dropout rate. Defaults to 0.0.
+        layer_norm_epsilon: float. The epsilon value used for every layer norm
+            in the transformer model.
+        dropout: float. Dropout probability for the transformer encoder.
         tie_word_embeddings: bool. Whether to tie input/output embeddings.
-            Defaults to False.
         sliding_window_size: int or None. Size of sliding attention window.
-            Defaults to None (no sliding window).
-        norm_topk_prob: bool. Whether to normalize top-k probabilities
-            in routing.
-            Defaults to True.
-        decoder_sparse_step: int. Sparse step for MoE layers. Defaults to 1.
-        router_aux_loss_coefficient: float. Auxiliary loss coefficient for load
-            balancing. Defaults to 0.001.
+        norm_topk_prob: bool. Whether to normalize top-k probabilities.
+        decoder_sparse_step: int. Sparse step for MoE layers.
+        router_aux_loss_coefficient: float. Auxiliary loss coefficient.
         mlp_only_layers: list of int or None. Layers to use dense FFN instead
-            of MoE. Defaults to None.
+            of MoE.
         audio_encoder: Qwen3OmniAudioEncoder or None. Pre-instantiated audio
-            encoder. If provided, enables audio modality. Defaults to None.
+            encoder.
         vision_encoder: Qwen3OmniVisionEncoder or None. Pre-instantiated vision
-            encoder. If provided, enables vision modality. Defaults to None.
+            encoder.
         image_token_id: int. Token ID for image placeholders.
-            Defaults to 151655.
         video_token_id: int. Token ID for video placeholders.
-            Defaults to 151656.
         audio_token_id: int. Token ID for audio placeholders.
-            Defaults to 151675.
-        dtype: string or DTypePolicy. Model dtype. Defaults to None.
+        dtype: str or `keras.mixed_precision.DTypePolicy`. The dtype to use for
+            the model's computations and weights.
 
-    Examples:
-
+    Example:
     ```python
-    import numpy as np
-    import keras_hub
-
-    # Text-only mode
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
 
-    # Randomly initialized Qwen3-Omni Thinker (30B-A3B config)
+    # Randomly initialized Qwen3-Omni decoder with custom config.
     model = keras_hub.models.Qwen3OmniBackbone(
         vocabulary_size=152064,
         num_layers=48,
@@ -129,10 +92,8 @@ class Qwen3OmniBackbone(Backbone):
         head_dim=128,
         num_experts=128,
         num_experts_per_tok=8,
-        rope_max_wavelength=1000000,
-        dtype="bfloat16",
     )
-    output = model(input_data)
+    model(input_data)
     ```
     """
 
@@ -148,7 +109,7 @@ class Qwen3OmniBackbone(Backbone):
         moe_intermediate_dim,
         num_experts,
         num_experts_per_tok,
-        mrope_section=(24, 20, 20),
+        mrope_section,
         rope_max_wavelength=1000000,
         rope_scaling_factor=1.0,
         rope_attention_scaling=1.0,
@@ -162,13 +123,13 @@ class Qwen3OmniBackbone(Backbone):
         mlp_only_layers=None,
         audio_encoder=None,
         vision_encoder=None,
-        image_token_id=151655,
-        video_token_id=151656,
-        audio_token_id=151675,
+        image_token_id=None,
+        video_token_id=None,
+        audio_token_id=None,
         dtype=None,
         **kwargs,
     ):
-        # === Text Embedding Layer ===
+        # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
@@ -178,19 +139,16 @@ class Qwen3OmniBackbone(Backbone):
             name="token_embedding",
         )
 
-        # === MoE Transformer Decoder Layers ===
         if not mlp_only_layers:
             mlp_only_layers = []
 
         self.transformer_layers = []
         for i in range(num_layers):
-            # Determine if this layer uses MoE (sparse) or dense FFN
             is_sparse_mlp = (
                 (i not in mlp_only_layers)
                 and num_experts > 0
                 and (i + 1) % decoder_sparse_step == 0
             )
-
             layer = Qwen3OmniTransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
@@ -215,8 +173,6 @@ class Qwen3OmniBackbone(Backbone):
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-
-        # === Output Layer Norm ===
         self.layer_norm = Qwen3MoeLayerNorm(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
@@ -224,48 +180,34 @@ class Qwen3OmniBackbone(Backbone):
         )
 
         # === Functional Model ===
-
-        # Model inputs (text + optional multimodal)
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
         padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
-
-        # Only define text inputs for the Functional API model
-        # Multimodal inputs will be handled in call() override
-        inputs = {
-            "token_ids": token_id_input,
-            "padding_mask": padding_mask_input,
-        }
-
         x = self.token_embedding(token_id_input)
-
-        # Pass through MoE transformer decoder layers
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(
                 x,
-                position_ids=None,  # Auto-generated in attention layer
+                position_ids=None,
                 decoder_padding_mask=padding_mask_input,
             )
-
-        # Final layer norm
         sequence_output = self.layer_norm(x)
-
         super().__init__(
-            inputs=inputs,
+            inputs={
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input,
+            },
             outputs=sequence_output,
             dtype=dtype,
             **kwargs,
         )
 
-        # Restore encoder references as public attributes
-        # after super().__init__()
         self.audio_encoder = audio_encoder
         self.vision_encoder = vision_encoder
 
-        # Store configuration for serialization
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.head_dim = head_dim
         self.intermediate_dim = intermediate_dim
@@ -293,36 +235,15 @@ class Qwen3OmniBackbone(Backbone):
         self.audio_token_id = audio_token_id
 
     def call(self, inputs, training=False):
-        """Forward pass with multimodal fusion.
-
-        Args:
-            inputs: Dictionary with keys:
-                - token_ids: Text token IDs (batch, seq_len)
-                - padding_mask: Attention mask (batch, seq_len)
-                - audio_features: Optional audio mel-spectrograms
-                    (batch, time, mel_bins)
-                - pixel_values: Optional images/videos
-                    (total_patches, temporal_patch_size, patch_size,
-                    patch_size, in_channels)
-                - grid_thw: Optional integer tensor
-                    (num_images_or_videos, 3) for the vision encoder.
-            training: bool, whether in training mode
-
-        Returns:
-            Sequence output (batch, seq_len, hidden_dim)
-        """
         token_ids = inputs["token_ids"]
         padding_mask = inputs["padding_mask"]
         audio_features = inputs.get("audio_features", None)
         pixel_values = inputs.get("pixel_values", None)
         grid_thw = inputs.get("grid_thw", None)
 
-        # Compute embeddings with fusion
         x = self._compute_embeddings(
             token_ids, audio_features, pixel_values, grid_thw
         )
-
-        # Pass through transformer layers
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(
                 x,
@@ -330,8 +251,6 @@ class Qwen3OmniBackbone(Backbone):
                 decoder_padding_mask=padding_mask,
                 training=training,
             )
-
-        # Final norm
         return self.layer_norm(x)
 
     def get_config(self):
@@ -400,26 +319,12 @@ class Qwen3OmniBackbone(Backbone):
         pixel_values=None,
         grid_thw=None,
     ):
-        """Compute embeddings with multimodal fusion.
-
-        Args:
-            token_ids: Text token IDs (batch, seq_len)
-            audio_features: Audio mel-spectrograms (batch, time, mel_bins)
-            pixel_values: Pre-chunked image/video patches
-            grid_thw: Integer tensor (num_images_or_videos, 3)
-
-        Returns:
-            Fused embeddings (batch, seq_len, hidden_dim)
-        """
-        # Get text embeddings
         inputs_embeds = self.token_embedding(token_ids)
 
-        # Encode and merge audio
         if audio_features is not None and self.audio_encoder is not None:
             audio_embeds = self.audio_encoder(
                 {"input_features": audio_features}
             )
-            # Find audio token positions and replace
             audio_mask = ops.equal(
                 ops.cast(token_ids, "int32"), self.audio_token_id
             )
@@ -427,13 +332,11 @@ class Qwen3OmniBackbone(Backbone):
                 inputs_embeds, audio_mask, audio_embeds
             )
 
-        # Encode and merge vision
         if pixel_values is not None and self.vision_encoder is not None:
             vision_outputs = self.vision_encoder(
                 {"pixel_values": pixel_values, "grid_thw": grid_thw}
             )
             visual_embeds = vision_outputs["pooler_output"]
-            # Find image/video token positions and replace
             image_mask = ops.equal(
                 ops.cast(token_ids, "int32"), self.image_token_id
             )
@@ -448,35 +351,14 @@ class Qwen3OmniBackbone(Backbone):
         return inputs_embeds
 
     def _masked_scatter(self, target, mask, source):
-        """Replace embeddings at masked positions with source embeddings.
-
-        Args:
-            target: Target embeddings (batch, seq_len, hidden_dim)
-            mask: Boolean mask (batch, seq_len)
-            source: Source embeddings (batch, num_features, hidden_dim)
-
-        Returns:
-            Updated embeddings with source scattered at mask positions
-        """
-        # Expand mask to match embedding dimensions
-        mask_expanded = ops.expand_dims(mask, -1)  # (batch, seq_len, 1)
-        mask_expanded = ops.cast(mask_expanded, target.dtype)
-
-        # Cumulative sum of mask gives us indices into source
+        """Replace embeddings at masked positions with source embeddings."""
+        mask_expanded = ops.cast(ops.expand_dims(mask, -1), target.dtype)
         mask_int = ops.cast(mask, "int32")
-        cumsum = ops.cumsum(mask_int, axis=1)  # (batch, seq_len)
-        # Subtract 1 to get 0-indexed positions, clip negative to 0
-        source_indices = ops.maximum(cumsum - 1, 0)  # (batch, seq_len)
-
-        # Gather from source using indices: for each position in target,
-        # if masked, take from source at cumsum-1 index
-        # (batch, seq, 1)
+        cumsum = ops.cumsum(mask_int, axis=1)
+        source_indices = ops.maximum(cumsum - 1, 0)
         source_indices_expanded = ops.expand_dims(source_indices, -1)
         scattered_values = ops.take_along_axis(
             source, source_indices_expanded, axis=1
-        )  # (batch, seq_len, hidden)
-
-        # Keep target where mask=False, use scattered where True
+        )
         result = target * (1 - mask_expanded) + scattered_values * mask_expanded
-
         return result
