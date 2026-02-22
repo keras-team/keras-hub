@@ -33,7 +33,9 @@ class DeepSeekV31CausalLMTest(TestCase):
             " ": 7,
         }
         self.merges = []
-        self.tokenizer = DeepSeekV31Tokenizer(vocabulary=self.vocab, merges=self.merges)
+        self.tokenizer = DeepSeekV31Tokenizer(
+            vocabulary=self.vocab, merges=self.merges
+        )
 
         self.preprocessor = DeepSeekV31CausalLMPreprocessor(
             self.tokenizer,

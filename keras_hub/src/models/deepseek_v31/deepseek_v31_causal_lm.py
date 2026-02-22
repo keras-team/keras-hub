@@ -76,7 +76,11 @@ class DeepSeekV31CausalLM(CausalLM):
                         dtype=self.compute_dtype,
                     ),
                     ops.zeros(
-                        [batch_size, max_length, self.backbone.qk_rope_head_dim],
+                        [
+                            batch_size,
+                            max_length,
+                            self.backbone.qk_rope_head_dim,
+                        ],
                         dtype=self.compute_dtype,
                     ),
                 )

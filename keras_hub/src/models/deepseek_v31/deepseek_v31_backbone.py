@@ -3,7 +3,9 @@
 import keras
 from keras import ops
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.reversible_embedding import ReversibleEmbedding
+from keras_hub.src.layers.modeling.reversible_embedding import (
+    ReversibleEmbedding,
+)
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.deepseek_v31.deepseek_v31_decoder_block import (
     DeepSeekV31DecoderBlock,
@@ -127,7 +129,9 @@ class DeepSeekV31Backbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=False,
-            embeddings_initializer=_deepseek_v31_kernel_initializer(stddev=0.01),
+            embeddings_initializer=_deepseek_v31_kernel_initializer(
+                stddev=0.01
+            ),
             name="token_embedding",
         )
 
@@ -153,7 +157,9 @@ class DeepSeekV31Backbone(Backbone):
                     yarn_original_max_position_embeddings=yarn_original_max_position_embeddings,
                     layer_norm_epsilon=layer_norm_epsilon,
                     dropout=dropout,
-                    kernel_initializer=_deepseek_v31_kernel_initializer(stddev=0.02),
+                    kernel_initializer=_deepseek_v31_kernel_initializer(
+                        stddev=0.02
+                    ),
                     name=f"transformer_layer_{i}",
                 )
             )
@@ -164,7 +170,9 @@ class DeepSeekV31Backbone(Backbone):
         )
 
         # ===== Functional model =====
-        token_id_input = keras.Input(shape=(None,), dtype="int32", name="token_ids")
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
         padding_mask_input = keras.Input(
             shape=(None,), dtype="bool", name="padding_mask"
         )
@@ -175,7 +183,10 @@ class DeepSeekV31Backbone(Backbone):
         sequence_output = layer_norm(x)
 
         super().__init__(
-            inputs={"token_ids": token_id_input, "padding_mask": padding_mask_input},
+            inputs={
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input,
+            },
             outputs=sequence_output,
             **kwargs,
         )

@@ -62,8 +62,12 @@ class DeepSeekV31BackboneTest(TestCase):
         self.assertIsInstance(cache, list)
         self.assertEqual(len(cache), self.init_kwargs["num_layers"])
         for c_kv, k_rope in cache:
-            self.assertEqual(c_kv.shape, (2, 5, self.init_kwargs["kv_lora_rank"]))
-            self.assertEqual(k_rope.shape, (2, 5, self.init_kwargs["qk_rope_head_dim"]))
+            self.assertEqual(
+                c_kv.shape, (2, 5, self.init_kwargs["kv_lora_rank"])
+            )
+            self.assertEqual(
+                k_rope.shape, (2, 5, self.init_kwargs["qk_rope_head_dim"])
+            )
 
     @pytest.mark.extra_large
     def test_all_presets(self):

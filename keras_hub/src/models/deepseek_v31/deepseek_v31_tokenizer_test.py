@@ -12,7 +12,9 @@ class DeepSeekV31TokenizerTest(TestCase):
             "<｜begin▁of▁sentence｜>": 151646,
             "<｜end▁of▁sentence｜>": 151643,
         }
-        for i, c in enumerate("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ Ġ"):
+        for i, c in enumerate(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ Ġ"
+        ):
             self.vocab[c] = i + 2
 
         # Register the fully formed BPE chunks that get merged to prevent dropping them during detokenize

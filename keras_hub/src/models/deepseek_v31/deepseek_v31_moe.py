@@ -117,17 +117,29 @@ class DeepSeekV31MoE(keras.layers.Layer):
         # Routed experts (SwiGLU)
         # Stacked into batched tensors for vectorized XLA-compatible execution.
         self.expert_gate_kernel = self.add_weight(
-            shape=(self.num_routed_experts, self.hidden_dim, self.intermediate_dim),
+            shape=(
+                self.num_routed_experts,
+                self.hidden_dim,
+                self.intermediate_dim,
+            ),
             initializer=self.kernel_initializer,
             name="expert_gate_kernel",
         )
         self.expert_up_kernel = self.add_weight(
-            shape=(self.num_routed_experts, self.hidden_dim, self.intermediate_dim),
+            shape=(
+                self.num_routed_experts,
+                self.hidden_dim,
+                self.intermediate_dim,
+            ),
             initializer=self.kernel_initializer,
             name="expert_up_kernel",
         )
         self.expert_down_kernel = self.add_weight(
-            shape=(self.num_routed_experts, self.intermediate_dim, self.hidden_dim),
+            shape=(
+                self.num_routed_experts,
+                self.intermediate_dim,
+                self.hidden_dim,
+            ),
             initializer=self.kernel_initializer,
             name="expert_down_kernel",
         )
@@ -187,8 +199,12 @@ class DeepSeekV31MoE(keras.layers.Layer):
         # hidden_states: (..., H)
         # expert_kernels: (E, H, I)
         # einsum naturally broadcasts over the missing E dimension to compute (..., E, I)
-        gate_out = ops.einsum("...h,ehi->...ei", hidden_states, self.expert_gate_kernel)
-        up_out = ops.einsum("...h,ehi->...ei", hidden_states, self.expert_up_kernel)
+        gate_out = ops.einsum(
+            "...h,ehi->...ei", hidden_states, self.expert_gate_kernel
+        )
+        up_out = ops.einsum(
+            "...h,ehi->...ei", hidden_states, self.expert_up_kernel
+        )
 
         # 3. Apply SwiGLU activation and the routing mask
         expert_act = ops.silu(gate_out) * up_out

@@ -57,12 +57,24 @@ class DeepSeekV31Tokenizer(BytePairTokenizer):
         # Handle SentencePiece proto: extract vocab and merges before calling
         # super().__init__, since BytePairTokenizer needs them at construction.
         if proto is not None:
+            from keras.src.saving import serialization_lib
+            if isinstance(proto, str) and serialization_lib.in_safe_mode():
+                raise ValueError(
+                    "Requested the loading of a SentencePiece proto file outside of the "
+                    "model archive. This carries a potential risk of loading "
+                    "arbitrary and sensitive files and thus it is disallowed "
+                    "by default. If you trust the source of the artifact, you "
+                    "can override this error by passing `safe_mode=False` to "
+                    "the loading function, or calling "
+                    "`keras.config.enable_unsafe_deserialization()`."
+                )
             try:
                 import sentencepiece as spm
-
                 sp = spm.SentencePieceProcessor()
                 sp.Load(proto)
-                vocabulary = {sp.IdToPiece(i): i for i in range(sp.GetPieceSize())}
+                vocabulary = {
+                    sp.IdToPiece(i): i for i in range(sp.GetPieceSize())
+                }
                 merges = []
             except ImportError:
                 raise ImportError(
@@ -73,11 +85,13 @@ class DeepSeekV31Tokenizer(BytePairTokenizer):
         # BytePairTokenizer requires at least one merge rule to initialise its
         # internal StaticHashTable. Inject a harmless placeholder when the
         # merge list is empty (e.g. when loading from a SentencePiece proto).
-        if isinstance(merges, list) and len(merges) == 0 and vocabulary is not None:
+        if (
+            isinstance(merges, list)
+            and len(merges) == 0
+            and vocabulary is not None
+        ):
             merges = ["a b"]
 
-        # FIX: call super().__init__ BEFORE _add_special_token so that the
-        # parent Layer is fully initialised before we mutate its state.
         super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
 
         self._add_special_token("<｜begin▁of▁sentence｜>", "bos_token")

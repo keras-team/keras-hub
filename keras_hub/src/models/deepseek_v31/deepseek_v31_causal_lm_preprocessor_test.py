@@ -12,7 +12,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 class DeepSeekV31CausalLMPreprocessorTest(TestCase):
     def setUp(self):
-        # FIX: The BytePairTokenizer StaticHashTable rejects duplicate keys.
         # "Ġ" maps to 6, and " " maps to 7 to maintain a valid 1:1 mapping.
         self.vocab = {
             "<｜begin▁of▁sentence｜>": 151646,
@@ -25,7 +24,9 @@ class DeepSeekV31CausalLMPreprocessorTest(TestCase):
             " ": 7,
         }
         self.merges = []
-        self.tokenizer = DeepSeekV31Tokenizer(vocabulary=self.vocab, merges=self.merges)
+        self.tokenizer = DeepSeekV31Tokenizer(
+            vocabulary=self.vocab, merges=self.merges
+        )
         self.init_kwargs = {
             "tokenizer": self.tokenizer,
             "sequence_length": 8,

@@ -205,7 +205,8 @@ class DeepSeekV31Attention(keras.layers.Layer):
         self.kv_down_proj.build(input_shape)
         self.k_rope_proj.build(input_shape)
         self.output_proj.build(
-            list(input_shape[:-1]) + [self.num_key_value_heads * self.v_head_dim]
+            list(input_shape[:-1])
+            + [self.num_key_value_heads * self.v_head_dim]
         )
         super().build(input_shape)
 
@@ -213,7 +214,8 @@ class DeepSeekV31Attention(keras.layers.Layer):
         """Return YaRN-scaled RoPE inverse frequencies and magnitude scale."""
         dim = self.qk_rope_head_dim
         freqs = 1.0 / (
-            self.rope_max_wavelength ** (ops.arange(0, dim, 2, dtype="float32") / dim)
+            self.rope_max_wavelength
+            ** (ops.arange(0, dim, 2, dtype="float32") / dim)
         )
 
         if self.rope_scaling_factor <= 1.0:
@@ -221,7 +223,8 @@ class DeepSeekV31Attention(keras.layers.Layer):
 
         # Wavelength = 2π / freq. High-freq → small wavelength, low-freq →
         # large wavelength. YaRN applies more scaling to low-freq dimensions.
-        wavelengths = 2.0 * 3.14159265358979 / freqs
+        PI = 3.14159265358979
+        wavelengths = 2.0 * PI / freqs
         old_ctx = float(self.yarn_original_max_position_embeddings)
         beta_slow = float(self.yarn_beta_slow)
         beta_fast = float(self.yarn_beta_fast)
@@ -297,16 +300,24 @@ class DeepSeekV31Attention(keras.layers.Layer):
 
         # Apply RoPE to positional components.
         inv_freq, mscale = self._yarn_inv_freq("float32")  # compute once
-        q_rope = self._apply_rope(q_rope, cache_update_index, dtype, inv_freq, mscale)
-        k_rope = self._apply_rope(k_rope, cache_update_index, dtype, inv_freq, mscale)
+        q_rope = self._apply_rope(
+            q_rope, cache_update_index, dtype, inv_freq, mscale
+        )
+        k_rope = self._apply_rope(
+            k_rope, cache_update_index, dtype, inv_freq, mscale
+        )
 
         # KV cache: read full history and write current step.
         if cache is not None:
             c_kv_cache, k_rope_cache = cache
-            c_kv = ops.slice_update(c_kv_cache, [0, cache_update_index, 0], c_kv)
+            c_kv = ops.slice_update(
+                c_kv_cache, [0, cache_update_index, 0], c_kv
+            )
             k_rope_sq = ops.squeeze(k_rope, axis=1)
             k_rope = ops.expand_dims(
-                ops.slice_update(k_rope_cache, [0, cache_update_index, 0], k_rope_sq),
+                ops.slice_update(
+                    k_rope_cache, [0, cache_update_index, 0], k_rope_sq
+                ),
                 axis=1,
             )
             new_cache = (c_kv, ops.squeeze(k_rope, axis=1))
@@ -323,7 +334,9 @@ class DeepSeekV31Attention(keras.layers.Layer):
             [self.num_query_heads, self.qk_nope_head_dim, self.kv_lora_rank],
         )
         q_latent = ops.einsum("bhsd,hdk->bhsk", q_nope, w_uk)  # (B,H,S,lora)
-        c_kv_t = ops.expand_dims(ops.transpose(c_kv, [0, 2, 1]), axis=1)  # (B,1,lora,T)
+        c_kv_t = ops.expand_dims(
+            ops.transpose(c_kv, [0, 2, 1]), axis=1
+        )  # (B,1,lora,T)
         score_content = ops.matmul(q_latent, c_kv_t)  # (B,H,S,T)
 
         # RoPE attention scores.
@@ -333,17 +346,25 @@ class DeepSeekV31Attention(keras.layers.Layer):
         scale = ops.cast(
             1.0
             / ops.sqrt(
-                ops.cast(self.qk_nope_head_dim + self.qk_rope_head_dim, "float32")
+                ops.cast(
+                    self.qk_nope_head_dim + self.qk_rope_head_dim, "float32"
+                )
             ),
             dtype,
         )
-        scores = (ops.cast(score_content, dtype) + ops.cast(score_rope, dtype)) * scale
+        scores = (
+            ops.cast(score_content, dtype) + ops.cast(score_rope, dtype)
+        ) * scale
 
         # XLA-compatible causal mask using static shapes.
-        idx = ops.cast(0 if cache_update_index is None else cache_update_index, "int32")
+        idx = ops.cast(
+            0 if cache_update_index is None else cache_update_index, "int32"
+        )
         i_idx = ops.arange(seq_len, dtype="int32")[:, None] + idx
         j_idx = ops.arange(hist_len, dtype="int32")[None, :]
-        causal = ops.reshape(ops.cast(i_idx >= j_idx, dtype), [1, 1, seq_len, hist_len])
+        causal = ops.reshape(
+            ops.cast(i_idx >= j_idx, dtype), [1, 1, seq_len, hist_len]
+        )
 
         if attention_mask is not None:
             pad = ops.cast(attention_mask, dtype)
@@ -352,13 +373,17 @@ class DeepSeekV31Attention(keras.layers.Layer):
             elif len(pad.shape) == 3:
                 pad = pad[:, None, :, :]
             mask = ops.cast(
-                ops.logical_and(ops.cast(causal, "bool"), ops.cast(pad, "bool")),
+                ops.logical_and(
+                    ops.cast(causal, "bool"), ops.cast(pad, "bool")
+                ),
                 dtype,
             )
         else:
             mask = causal
 
-        large_neg = ops.cast(-3e4 if scores.dtype == "float16" else -1e9, scores.dtype)
+        large_neg = ops.cast(
+            -3e4 if scores.dtype == "float16" else -1e9, scores.dtype
+        )
         scores = scores + (1.0 - mask) * large_neg
         attn_weights = ops.softmax(scores, axis=-1)
         attn_weights = self.dropout(attn_weights, training=training)
