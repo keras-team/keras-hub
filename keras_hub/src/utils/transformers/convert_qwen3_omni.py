@@ -10,24 +10,12 @@ backbone_cls = Qwen3OmniBackbone
 
 
 def convert_backbone_config(transformers_config):
-    """Convert HuggingFace Qwen3-Omni config to KerasHub config.
-
-    Extracts nested configs from thinker_config:
-    - text_config: Text transformer params
-    - audio_config: Audio encoder params (optional)
-    - vision_config: Vision encoder params (optional)
-    """
-    # Qwen3-Omni has nested config:
-    # thinker_config.text_config contains the model params
+    """Convert HuggingFace Qwen3-Omni config to KerasHub config."""
     thinker_config = transformers_config.get("thinker_config", {})
     text_config = thinker_config.get("text_config", transformers_config)
-
-    # Extract mrope_section from rope_scaling dict (not top-level)
     rope_scaling = text_config.get("rope_scaling", {})
     mrope_section = rope_scaling.get("mrope_section", [24, 20, 20])
-
     backbone_config = {
-        # Text transformer params
         "vocabulary_size": text_config["vocab_size"],
         "hidden_dim": text_config["hidden_size"],
         "head_dim": text_config["head_dim"],
@@ -49,7 +37,6 @@ def convert_backbone_config(transformers_config):
         "tie_word_embeddings": text_config.get("tie_word_embeddings", False),
     }
 
-    # Token IDs from thinker config
     backbone_config["image_token_id"] = thinker_config.get(
         "image_token_id", 151655
     )
@@ -60,7 +47,6 @@ def convert_backbone_config(transformers_config):
         "audio_token_id", 151675
     )
 
-    # Audio encoder (optional)
     audio_config = thinker_config.get("audio_config")
     if audio_config:
         from keras_hub.src.models.qwen3_omni.qwen3_omni_audio_encoder import (
@@ -83,7 +69,6 @@ def convert_backbone_config(transformers_config):
             dropout=audio_config.get("dropout", 0.0),
         )
 
-    # Vision encoder (optional)
     vision_config = thinker_config.get("vision_config")
     if vision_config:
         from keras_hub.src.models.qwen3_omni.qwen3_omni_vision_encoder import (
@@ -110,13 +95,7 @@ def convert_backbone_config(transformers_config):
 
 
 def convert_weights(backbone, loader, transformers_config):
-    """Convert HF Thinker weights to KerasHub backbone.
-
-    HF structure:
-      thinker.audio_tower.* (audio encoder)
-      thinker.visual.* (vision encoder)
-      thinker.model.* (text transformer)
-    """
+    """Convert HF Thinker weights to KerasHub backbone."""
 
     # === Audio Encoder Weights ===
     if backbone.audio_encoder is not None:
@@ -613,35 +592,20 @@ def load_audio_converter_config(preset, transformers_config):
 
 
 def convert_tokenizer(cls, preset, **kwargs):
-    # Load vocab from vocab.json (flat dict: {token: id})
     vocab = load_json(preset, "vocab.json")
-
-    # Load merges from merges.txt (text file with merge rules)
     merges_file = get_file(preset, "merges.txt")
     with open(merges_file, "r") as f:
         merges = [line.strip() for line in f if line.strip()]
-
-    # Load special tokens from tokenizer_config.json
     tokenizer_config = load_json(preset, "tokenizer_config.json")
-
-    # Extract special tokens from added_tokens_decoder
     special_tokens = []
     if "added_tokens_decoder" in tokenizer_config:
         for token_id, token_info in tokenizer_config[
             "added_tokens_decoder"
         ].items():
             content = token_info.get("content", "")
-            # Skip reserved placeholder tokens
             if not content.startswith("<|reserved_special_token_"):
                 special_tokens.append(content)
-                # Add to vocab if not already present
                 if content not in vocab:
                     vocab[content] = int(token_id)
-
-    kwargs.update(
-        {
-            "unsplittable_tokens": special_tokens,
-        }
-    )
-
+    kwargs.update({"unsplittable_tokens": special_tokens})
     return cls(vocabulary=vocab, merges=merges, **kwargs)
