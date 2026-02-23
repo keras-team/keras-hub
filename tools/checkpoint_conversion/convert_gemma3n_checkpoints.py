@@ -792,8 +792,8 @@ def validate_output(keras_model, hf_model, hf_processor):
     print("🔶 Validating model outputs (text-only)...")
     text = (
         " This gap is likely due to error accumulation across 30 complex "
-        "layers (AltUp, Laurel, per-layer inputs) between JAX and PyTorch "
-        "backends."
+        "layers (AltUp, Laurel, per-layer inputs) between JAX and "
+        "PyTorch backends."
     )
     text_inputs = hf_processor(
         text=text,
@@ -860,22 +860,11 @@ def validate_output(keras_model, hf_model, hf_processor):
     print(
         f"  -> Predicted tokens match: {'✅ Yes' if tokens_match else '⚠️ No'}"
     )
-    # Decoded text output.
-    hf_text = hf_processor.tokenizer.decode(
-        hf_pred_tokens, skip_special_tokens=True
-    )
-    keras_text = hf_processor.tokenizer.decode(
-        keras_pred_tokens, skip_special_tokens=True
-    )
-    print(f"  -> HF predicted text:    {hf_text!r}")
-    print(f"  -> Keras predicted text: {keras_text!r}")
     # First 5 logit values at position 0.
     print(f"  -> HF logits[0,:5]:    {hf_output[0, 0, :5]}")
     print(f"  -> Keras logits[0,:5]: {keras_output[0, 0, :5]}")
 
     # Tolerance check (KerasHub standard: 1e-4).
-    pct_1e4 = 100 * np.mean(abs_diff <= 1e-4)
-    print(f"🔶 Elements within 1e-4: {pct_1e4:.1f}%")
     try:
         np.testing.assert_allclose(
             keras_output,
@@ -965,15 +954,6 @@ def validate_output(keras_model, hf_model, hf_processor):
         f"{match_count}/{total_count} "
         f"({'✅' if mm_tokens_match else '⚠️'})"
     )
-    # Decoded text output.
-    hf_mm_text = hf_processor.tokenizer.decode(
-        hf_mm_pred, skip_special_tokens=True
-    )
-    keras_mm_text = hf_processor.tokenizer.decode(
-        keras_mm_pred, skip_special_tokens=True
-    )
-    print(f"  -> HF predicted text:    {hf_mm_text!r}")
-    print(f"  -> Keras predicted text: {keras_mm_text!r}")
     # First 5 logit values at position 0.
     print(f"  -> HF logits[0,:5]:    {hf_mm_output[0, 0, :5]}")
     print(f"  -> Keras logits[0,:5]: {keras_mm_output[0, 0, :5]}")
@@ -1000,8 +980,6 @@ def validate_output(keras_model, hf_model, hf_processor):
                 f"max={np.max(mod_diff):.8f}"
             )
     # Multimodal tolerance check.
-    mm_pct_1e4 = 100 * np.mean(mm_abs_diff <= 1e-4)
-    print(f"🔶 Elements within 1e-4: {mm_pct_1e4:.1f}%")
     try:
         np.testing.assert_allclose(
             keras_mm_output,

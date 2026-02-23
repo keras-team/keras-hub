@@ -217,9 +217,9 @@ class Gemma3nTextDecoderBlock(keras.layers.Layer):
         cache_update_index,
     ):
         # If a 4D attention mask is passed,
-        # use it directly as the causal mask.
+        # squeeze it to 2D for standard processing.
         if padding_mask is not None and len(keras.ops.shape(padding_mask)) == 4:
-            return padding_mask
+            padding_mask = padding_mask[:, 0, 0, :]
 
         decoder_mask = merge_padding_and_attention_mask(
             inputs=x, padding_mask=padding_mask, attention_mask=None
