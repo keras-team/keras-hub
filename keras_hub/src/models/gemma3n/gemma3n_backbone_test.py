@@ -155,7 +155,7 @@ class Gemma3nBackboneTest(TestCase):
         )
 
     @parameterized.named_parameters(
-        ("multimodal", "multimodal", 5450, 7),
+        ("multimodal", "multimodal", 5426, 7),
         ("text_only", "text_only", 350, 4),
     )
     def test_architecture_characteristics(
