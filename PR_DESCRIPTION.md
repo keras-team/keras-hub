@@ -30,16 +30,16 @@ Python `None`-indexing creates a `tf.StridedSlice` with `new_axis_mask` in the T
 
 ```
 tf.StridedSlice(input, begin, end, strides, new_axis_mask=2)
-  → ⚠️  Falls to FlexStridedSlice (Flex delegate)
-  → ⛔  Unsupported in standalone ai_edge_litert (≥ 2.20 / TF 2.20+)
+  -- Falls to FlexStridedSlice (Flex delegate)
+  -- Unsupported in standalone ai_edge_litert (>= 2.20 / TF 2.20+)
 ```
 
 `ops.expand_dims()` traces as the native TFLite `ExpandDims` op, which has a builtin kernel in every deployment:
 
 ```
 tf.expand_dims(attention_mask, axis=1)
-  → ✅  Native TFLite ExpandDims builtin
-  → ✅  No Flex delegate required
+  -- Native TFLite ExpandDims builtin
+  -- No Flex delegate required
 ```
 
 ### Why does the torch backend avoid this entirely?
@@ -50,23 +50,36 @@ With `KERAS_BACKEND=torch`, `model.export(format="litert")` invokes `litert-torc
 
 ## Root Cause Analysis
 
+The core issue is that Python `None`-indexing (`attention_mask[:, None, :, :]`) traces differently on each backend. On TF it produces `StridedSlice` with `new_axis_mask`, which the TFLite converter cannot lower to a builtin op. Using `ops.expand_dims()` produces a native `ExpandDims` op on both backends.
+
 ```mermaid
 flowchart TD
-    A[attention_mask slicing] --> B[TF graph: StridedSlice]
-    B --> C[LiteRTExporter]
-    C --> D{Flex ops allowed?}
-    D -- No --> E[Runtime error]
-    D -- Yes --> F[Works with Flex]
-    
-    G[ops.expand_dims] --> H[TF graph: ExpandDims]
-    H --> I[LiteRTExporter]
-    I --> J[Native builtin]
+    subgraph "Before fix"
+        A["attention_mask[:, None, :, :]"] --> B[TF: StridedSlice with new_axis_mask]
+        B --> C{Flex delegate available?}
+        C -- No --> D[Runtime error]
+        C -- Yes --> E[Works but requires Flex]
+    end
+    subgraph "After fix"
+        F["ops.expand_dims(attention_mask, axis=1)"] --> G[TF: ExpandDims]
+        G --> H[Native TFLite builtin]
+        F --> I[Torch: torch.unsqueeze]
+        I --> J[litert-torch handles natively]
+    end
 ```
-```
+
+Both backends produce a portable op after the fix. On the torch backend, `ops.expand_dims` maps to `torch.unsqueeze` which `litert-torch` handles natively. The fix is needed primarily for TF backend compatibility, but it also makes the code backend-agnostic.
 
 ---
 
 ## Architecture: LiteRT Test Infrastructure
+
+The test infrastructure is built as extension methods on `TestCase` so every model test class gets LiteRT coverage with a single method call. The system detects the active Keras backend, selects the appropriate import checks and input signature format, and verifies exported `.tflite` models produce numerically correct outputs compared to the original Keras model.
+
+This infrastructure depends on the core keras PR (`torch-export-support`) which provides:
+- `model.export(format="litert")` routing for both TF and torch backends
+- `LiteRTExporter` (TF path) and `export_litert_via_torch()` (torch path) in `litert.py`
+- `ExportArchive`-based SavedModel tracing that avoids Keras 3 incompatibilities
 
 ### `run_litert_export_test()` flow
 
@@ -125,7 +138,7 @@ classDiagram
 
 ### 1. Attention Mask Fixes (13 models)
 
-All affected models made the same one-line change in their `_masked_softmax` (or equivalent) method:
+All affected models made the same one-line change in their `_masked_softmax` (or equivalent) method. The pattern is identical across all 13 models because they all inherit the same attention mask broadcasting pattern from the original transformer implementation.
 
 | Model | File |
 |---|---|
@@ -142,6 +155,8 @@ All affected models made the same one-line change in their `_masked_softmax` (or
 | Qwen3-MoE | `qwen3_moe/qwen3_moe_attention.py` |
 | Qwen-MoE | `qwen_moe/qwen_moe_attention.py` |
 | SigLIP | `siglip/siglip_layers.py` |
+
+The change replaces Python `None`-indexing (which creates `StridedSlice` with `new_axis_mask` in the TF graph) with `ops.expand_dims()` (which maps to the native `ExpandDims` TFLite builtin). This is semantically identical -- both add a dimension of size 1 at the specified axis -- but the latter produces a portable op that works without the Flex delegate.
 
 **Before:**
 ```python
@@ -163,19 +178,22 @@ return self._softmax(
 #### `_build_input_signature(input_data, is_torch_backend=False)`
 
 Converts runtime numpy/tensor `input_data` into a concrete input signature with:
-- **Torch path**: `keras.InputSpec` objects (required by `torch.export`)
-- **TF path**: `tf.TensorSpec` objects with `name=key` (preserves SignatureDef key names)
-- **Dtype normalization**: `float64 → float32`, `int64 → int32` (TFLite doesn't support 64-bit types)
-- **Always concrete shapes**: no `None` dims → avoids dynamic shape ops
+- **Torch path**: `keras.InputSpec` objects (required by `torch.export` via the core keras PR's `TorchExporter`)
+- **TF path**: `tf.TensorSpec` objects with `name=key` (preserves SignatureDef key names for `ExportArchive.add_endpoint`)
+- **Dtype normalization**: `float64` to `float32`, `int64` to `int32` (TFLite doesn't support 64-bit types)
+- **Always concrete shapes**: no `None` dims -- avoids dynamic shape ops that would require Flex delegate
+
+The two paths exist because the core keras export machinery (`litert.py`) expects different input signature types depending on the backend. The torch path routes through `litert-torch` which needs `torch.Tensor` sample inputs derived from `keras.InputSpec`, while the TF path routes through `tf.lite.TFLiteConverter` which needs `tf.TensorSpec` for the SavedModel signature.
 
 #### `run_litert_export_test(cls, init_kwargs, input_data, ...)`
 
 Full test runner:
-1. Detects backend and skips if `litert-torch` / `ai-edge-litert` not installed
-2. Instantiates model, runs one Keras forward pass, collects reference outputs
-3. Exports to `.tflite` with concrete `input_signature`
-4. Loads `.tflite` via `ai_edge_litert.Interpreter`, runs inference
-5. Verifies outputs match reference within threshold
+1. Detects backend (`keras.backend.backend()`) and skips if `litert-torch` / `ai-edge-litert` not installed
+2. Instantiates model from `cls(**init_kwargs)`, runs one Keras forward pass, collects reference outputs
+3. Calls `_build_input_signature()` to create backend-appropriate concrete signatures
+4. Exports `.tflite` via `model.export(format="litert", input_signature=...)` -- this calls into the core keras PR's `export_litert()` which routes to the appropriate backend
+5. Loads `.tflite` via `ai_edge_litert.Interpreter`, runs inference with `input_data`
+6. Verifies outputs match reference within threshold (strict or statistical mode)
 
 #### `_verify_litert_numerics(expected, actual, thresholds)`
 
@@ -194,16 +212,16 @@ output_thresholds = {
 
 ```python
 # Before (broken)
-dtype = x.dtype          # np.dtype('float64') — dtype instance  ✅
+dtype = x.dtype          # np.dtype('float64') -- dtype instance  [OK]
 if dtype == np.float64:
-    dtype = np.float32   # np.float32 — type class               ❌
+    dtype = np.float32   # np.float32 -- type class               [BUG]
 dtype_str = dtype.name   # AttributeError!
 
 # After (fixed)
 dtype = np.dtype(x.dtype)           # always a dtype instance
 if dtype == np.dtype("float64"):
-    dtype = np.dtype("float32")     # also a dtype instance ✅
-return keras.InputSpec(shape=x.shape, dtype=dtype.name)  # .name works ✅
+    dtype = np.dtype("float32")     # also a dtype instance [OK]
+return keras.InputSpec(shape=x.shape, dtype=dtype.name)  # .name works [OK]
 ```
 
 **Affected tests (before fix):** `PARSeqCausalLMTest`, `PaliGemmaCausalLMTest`
@@ -224,13 +242,15 @@ self.run_litert_export_test(
 
 ### 4. `xfail` Markers for Known Limitations
 
+These tests are marked with `@pytest.mark.xfail` so they don't block CI. They represent genuine limitations in `torch.export` or `litert-torch` that need upstream fixes. When upstream tools add support for these ops, the tests will become unexpected passes (xpass), signaling that the `xfail` markers can be removed.
+
 | Test | Reason | Limitation |
 |---|---|---|
 | `Llama3CausalLMTest.test_litert_export` | `GuardOnDataDependentSymNode` | `num_heads` value causes data-dependent shape; `torch.export` cannot trace |
-| `DFine object detector` | `torchvision::nms` | Not supported by `litert-torch` |
-| `FluxBackbone` | `aten.complex` | Complex tensor ops unsupported in LiteRT |
-| `VAEBackbone` | `tfl.pow` / NHWC amax | Non-contiguous layout and power op issues |
-| `SAM3` | `torchvision::nms` | Same as D-Fine |
+| `DFineObjectDetectorTest.test_litert_export` | `torchvision::nms` | Non-maximum suppression is a custom op not lowerable by `litert-torch` |
+| `FluxBackboneTest.test_litert_export` | `aten.complex` | Complex tensor arithmetic unsupported in LiteRT flatbuffer format |
+| `VAEBackboneTest.test_litert_export` | `tfl.pow` / NHWC amax | Non-contiguous memory layout and power op lowering issue |
+| `SAM3PCImageSegmenterTest.test_litert_export` | `torchvision::nms` | Same as D-Fine -- NMS is a custom torchvision op |
 
 ---
 
@@ -278,13 +298,15 @@ self.run_litert_export_test(
 
 ### TF Backend (`KERAS_BACKEND=tensorflow`)
 
+The TF backend LiteRT export uses the `LiteRTExporter` class from the core keras PR, which traces the model via `ExportArchive` into a SavedModel and then converts via `tf.lite.TFLiteConverter`. The attention mask `ops.expand_dims` fix is critical here -- without it, the `StridedSlice(new_axis_mask)` op would require the Flex delegate.
+
 | Model Family | Result | Notes |
 |---|---|---|
-| Gemma, Llama, Mistral, Mixtral, OPT, Phi-3 | ✅ PASS | ops.expand_dims fix required |
-| SigLIP, ViT, ResNet, HGNetV2 | ✅ PASS | Vision models |
-| Whisper, T5, DistilBERT, DeBERTa | ✅ PASS | |
+| Gemma, Llama, Mistral, Mixtral, OPT, Phi-3 | ✅ PASS | `ops.expand_dims` fix required for all attention models |
+| SigLIP, ViT, ResNet, HGNetV2 | ✅ PASS | Vision models (no attention mask slicing) |
+| Whisper, T5, DistilBERT, DeBERTa | ✅ PASS | Encoder-decoder / encoder-only models |
 | XLNet, Moonshine | ✅ PASS | |
-| Bloom, Falcon, GPT-2, Bart, SmolLM3, Roberta | ⚠️ Note | Tokenizer call-graph preserved via keras litert changes |
+| Bloom, Falcon, GPT-2, Bart, SmolLM3, Roberta | ✅ PASS | Tokenizer call-graph preserved via keras litert changes (two-pass conversion) |
 
 ---
 
