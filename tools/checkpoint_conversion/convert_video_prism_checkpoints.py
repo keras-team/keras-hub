@@ -2,12 +2,12 @@
 Convert VideoPrism checkpoints to the Keras format.
 
 The official repo is here:
-https://github.com/google-research/videoprism
+https://github.com/google-deepmind/videoprism
 
 Setup:
 
 ```shell
-git clone https://github.com/google-research/videoprism.git
+git clone https://github.com/google-deepmind/videoprism.git
 ```
 
 Usage:
