@@ -464,19 +464,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             def _to_spec(x):
                 x = _to_numpy(x)
                 # Normalize dtypes: TFLite/torch export doesn't support
-                # float64 or int64.
-                dtype = x.dtype
-                if dtype == np.float64:
-                    dtype = np.float32
-                elif dtype == np.int64:
-                    dtype = np.int32
-                # Convert numpy dtype to Keras dtype string
-                dtype_str = dtype.name
-                if dtype_str.startswith("float64"):
-                    dtype_str = "float32"
-                elif dtype_str.startswith("int64"):
-                    dtype_str = "int32"
-                return keras.InputSpec(shape=x.shape, dtype=dtype_str)
+                # float64 or int64.  Always work with np.dtype instances
+                # (not type objects like np.float32) so that .name works.
+                dtype = np.dtype(x.dtype)
+                if dtype == np.dtype("float64"):
+                    dtype = np.dtype("float32")
+                elif dtype == np.dtype("int64"):
+                    dtype = np.dtype("int32")
+                return keras.InputSpec(shape=x.shape, dtype=dtype.name)
             return [tree.map_structure(_to_spec, input_data)]
         else:
             # For TF backend: use tf.TensorSpec with names so that
