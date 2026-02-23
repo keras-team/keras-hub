@@ -461,6 +461,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             return x
 
         if is_torch_backend:
+
             def _to_spec(x):
                 x = _to_numpy(x)
                 # Normalize dtypes: TFLite/torch export doesn't support
@@ -472,6 +473,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 elif dtype == np.dtype("int64"):
                     dtype = np.dtype("int32")
                 return keras.InputSpec(shape=x.shape, dtype=dtype.name)
+
             return [tree.map_structure(_to_spec, input_data)]
         else:
             # For TF backend: use tf.TensorSpec with names so that
@@ -489,8 +491,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
             if isinstance(input_data, dict):
                 spec_dict = {
-                    k: _to_tf_spec(v, name=k)
-                    for k, v in input_data.items()
+                    k: _to_tf_spec(v, name=k) for k, v in input_data.items()
                 }
                 return [spec_dict]
             else:
