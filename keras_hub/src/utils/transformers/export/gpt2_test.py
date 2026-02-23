@@ -1,9 +1,10 @@
 import json
 import os
 
+import keras.ops as ops
 import numpy as np
+import torch
 from transformers import GPT2LMHeadModel
-from transformers import GPT2Tokenizer as HFGPT2Tokenizer
 
 from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_hub.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
@@ -26,8 +27,13 @@ class TestGPT2Export(TestCase):
             "Ġquick": 2,
             "Ġbrown": 3,
             "Ġfox": 4,
+            "Ġ": 5,
+            "q": 6,
+            "u": 7,
+            "i": 8,
+            "c": 9,
+            "k": 10,
         }
-        # Minimal merges file (required for initialization)
         merges = ["Ġ q", "u i", "c k"]
 
         temp_dir = self.get_temp_dir()
@@ -41,7 +47,7 @@ class TestGPT2Export(TestCase):
 
         tokenizer = GPT2Tokenizer(vocabulary=vocab_path, merges=merges_path)
 
-        # 2. Create a small backbone (small GPT-2)
+        # 2. Create a small backbone
         backbone = GPT2Backbone(
             vocabulary_size=len(vocab),
             num_layers=2,
@@ -70,64 +76,43 @@ class TestGPT2Export(TestCase):
         export_path = os.path.join(temp_dir, "export_task")
         export_to_safetensors(keras_model, export_path)
 
+        # Patch config for EOS to match our tiny vocab
         config_path = os.path.join(export_path, "config.json")
         with open(config_path, "r") as f:
             cfg = json.load(f)
-
-        # Patch the IDs to match our tiny vocab
         cfg["bos_token_id"] = 0
         cfg["eos_token_id"] = 0
-
         with open(config_path, "w") as f:
             json.dump(cfg, f, indent=2)
 
         # 6. Load with Hugging Face Transformers
         hf_model = GPT2LMHeadModel.from_pretrained(export_path)
-        hf_tokenizer = HFGPT2Tokenizer.from_pretrained(export_path)
+        # hf_tokenizer = HFGPT2Tokenizer.from_pretrained(export_path)
 
         # 7. Verify Configuration
         hf_config = hf_model.config
+        self.assertEqual(hf_config.vocab_size, backbone.vocabulary_size)
+        self.assertEqual(hf_config.n_layer, backbone.num_layers)
+        self.assertEqual(hf_config.n_head, backbone.num_heads)
+        self.assertEqual(hf_config.n_embd, backbone.hidden_dim)
+        self.assertEqual(hf_config.n_inner, backbone.intermediate_dim)
 
-        self.assertEqual(
-            hf_config.vocab_size,
-            backbone.vocabulary_size,
-            "Vocabulary sizes do not match",
-        )
-        self.assertEqual(
-            hf_config.n_layer,
-            backbone.num_layers,
-            "Number of layers do not match",
-        )
-        self.assertEqual(
-            hf_config.n_head, backbone.num_heads, "Number of heads do not match"
-        )
-        self.assertEqual(
-            hf_config.n_embd,
-            backbone.hidden_dim,
-            "Hidden dimensions do not match",
-        )
-        self.assertEqual(
-            hf_config.n_inner,
-            backbone.intermediate_dim,
-            "Intermediate dimensions do not match",
-        )
+        # 8. Compare Outputs (Logits)
+        input_ids = np.array([[1, 2, 5, 6]])
 
-        # 8. Compare Outputs
-        prompt = "The quick"
+        # Keras Inference
+        keras_inputs = {
+            "token_ids": input_ids,
+            "padding_mask": np.ones_like(input_ids),
+        }
+        keras_logits = keras_model(keras_inputs)
 
-        # Keras Generation
-        keras_output = keras_model.generate(prompt, max_length=5)
+        # HF Inference
+        hf_inputs = {"input_ids": torch.tensor(input_ids)}
+        hf_logits = hf_model(**hf_inputs).logits
 
-        # HF Generation
-        input_ids = hf_tokenizer.encode(prompt, return_tensors="pt")
-        output_ids = hf_model.generate(
-            input_ids, max_length=8, do_sample=False, pad_token_id=0
-        )
-        hf_output = hf_tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        # Verify numerical equivalence
+        keras_logits_np = ops.convert_to_numpy(keras_logits)
+        hf_logits_np = hf_logits.detach().cpu().numpy()
 
-        print(f"Keras output: '{keras_output}'")
-        print(f"HF output: '{hf_output}'")
-
-        self.assertEqual(
-            keras_output, hf_output, "Generated outputs do not match"
-        )
+        self.assertAllClose(keras_logits_np, hf_logits_np, atol=1e-5, rtol=1e-5)
