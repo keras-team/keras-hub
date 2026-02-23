@@ -185,7 +185,9 @@ def convert_model(hf_config, dtype=None):
         altup_active_idx=text_config.altup_active_idx,
         altup_correct_scale=text_config.altup_correct_scale,
         num_kv_shared_layers=text_config.num_kv_shared_layers,
-        final_logit_soft_cap=getattr(text_config, "final_logit_softcapping", None),
+        final_logit_soft_cap=getattr(
+            text_config, "final_logit_softcapping", None
+        ),
         vision_encoder_config=vision_encoder_config,
         vision_hidden_size=vision_config.hidden_size,
         vision_vocab_size=vision_config.vocab_size,
@@ -776,8 +778,10 @@ class HfToKerasConverter:
 
 def validate_output(keras_model, hf_model, hf_processor):
     keras_params = keras_model.count_params()
-    hf_params = sum(p.numel() for n, p in hf_model.named_parameters() if "lm_head" not in n)
-    print(f"🔶 Parameter count comparison:")
+    hf_params = sum(
+        p.numel() for n, p in hf_model.named_parameters() if "lm_head" not in n
+    )
+    print("🔶 Parameter count comparison:")
     print(f"   -> KerasHub backbone:    {keras_params:,}")
     print(f"   -> Huggingface backbone: {hf_params:,}")
     if keras_params != hf_params:
@@ -786,18 +790,19 @@ def validate_output(keras_model, hf_model, hf_processor):
         print("✅ Parameter counts match.")
 
     print("🔶 Validating model outputs (text-only)...")
-    text = " This gap is likely due to error accumulation across 30 complex layers (AltUp, Laurel, per-layer inputs) between JAX and PyTorch backends."
+    text = (
+        " This gap is likely due to error accumulation across 30 complex "
+        "layers (AltUp, Laurel, per-layer inputs) between JAX and PyTorch "
+        "backends."
+    )
     text_inputs = hf_processor(
-        text=text, return_tensors="pt", padding=False,
+        text=text,
+        return_tensors="pt",
+        padding=False,
     )
-    print(
-        f"  -> Input tokens: "
-        f"{text_inputs['input_ids'][0].tolist()}"
-    )
+    print(f"  -> Input tokens: {text_inputs['input_ids'][0].tolist()}")
     print("  -> Running HF model forward pass...")
-    hf_hidden = hf_model.model(
-        **text_inputs
-    ).last_hidden_state
+    hf_hidden = hf_model.model(**text_inputs).last_hidden_state
     hf_output = hf_model.lm_head(hf_hidden)
     # Apply final_logit_soft_cap to match Keras
     # token_embedding(reverse=True).
@@ -822,16 +827,16 @@ def validate_output(keras_model, hf_model, hf_processor):
         dtype=np.float32,
     )
     dummy_audio = np.zeros(
-        (1, 1, 1, 128), dtype=np.float32,
+        (1, 1, 1, 128),
+        dtype=np.float32,
     )
     dummy_audio_mask = np.zeros(
-        (1, 1, 1), dtype=bool,
+        (1, 1, 1),
+        dtype=bool,
     )
     backbone_keras_inputs = {
         "token_ids": text_inputs["input_ids"].numpy(),
-        "padding_mask": text_inputs[
-            "attention_mask"
-        ].numpy().astype(bool),
+        "padding_mask": text_inputs["attention_mask"].numpy().astype(bool),
         "images": dummy_image,
         "input_features": dummy_audio,
         "input_features_mask": dummy_audio_mask,
@@ -850,16 +855,10 @@ def validate_output(keras_model, hf_model, hf_processor):
     hf_pred_tokens = np.argmax(hf_output[0], axis=-1)
     keras_pred_tokens = np.argmax(keras_output[0], axis=-1)
     print(f"  -> HF predicted tokens:    {hf_pred_tokens.tolist()}")
+    print(f"  -> Keras predicted tokens: {keras_pred_tokens.tolist()}")
+    tokens_match = np.array_equal(hf_pred_tokens, keras_pred_tokens)
     print(
-        f"  -> Keras predicted tokens: "
-        f"{keras_pred_tokens.tolist()}"
-    )
-    tokens_match = np.array_equal(
-        hf_pred_tokens, keras_pred_tokens
-    )
-    print(
-        f"  -> Predicted tokens match: "
-        f"{'✅ Yes' if tokens_match else '⚠️ No'}"
+        f"  -> Predicted tokens match: {'✅ Yes' if tokens_match else '⚠️ No'}"
     )
     # Decoded text output.
     hf_text = hf_processor.tokenizer.decode(
@@ -872,36 +871,32 @@ def validate_output(keras_model, hf_model, hf_processor):
     print(f"  -> Keras predicted text: {keras_text!r}")
     # First 5 logit values at position 0.
     print(f"  -> HF logits[0,:5]:    {hf_output[0, 0, :5]}")
-    print(
-        f"  -> Keras logits[0,:5]: "
-        f"{keras_output[0, 0, :5]}"
-    )
+    print(f"  -> Keras logits[0,:5]: {keras_output[0, 0, :5]}")
 
     # Tolerance check (KerasHub standard: 1e-4).
     pct_1e4 = 100 * np.mean(abs_diff <= 1e-4)
-    print(
-        f"🔶 Elements within 1e-4: {pct_1e4:.1f}%"
-    )
+    print(f"🔶 Elements within 1e-4: {pct_1e4:.1f}%")
     try:
         np.testing.assert_allclose(
-            keras_output, hf_output, atol=1e-4, rtol=1e-4,
+            keras_output,
+            hf_output,
+            atol=1e-4,
+            rtol=1e-4,
         )
         print("✅ Text-only logits within 1e-4 tolerance.")
     except AssertionError as err:
         print(err.args[0])
 
     # ===== Multimodal validation (text + image + audio) =====
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("  MULTIMODAL VALIDATION (text + image + audio)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     image_size = hf_processor.image_processor.size
     image = Image.new(
         "RGB",
         (image_size["width"], image_size["height"]),
     )
-    sampling_rate = (
-        hf_processor.feature_extractor.sampling_rate
-    )
+    sampling_rate = hf_processor.feature_extractor.sampling_rate
     audio_data = np.zeros(int(sampling_rate * 2.0))
     mm_text = (
         f"A cat sat on a mat"
@@ -916,75 +911,44 @@ def validate_output(keras_model, hf_model, hf_processor):
         return_tensors="pt",
         padding="longest",
     )
-    print(
-        f"  -> Num tokens: "
-        f"{hf_mm_inputs['input_ids'].shape[1]}"
-    )
+    print(f"  -> Num tokens: {hf_mm_inputs['input_ids'].shape[1]}")
     print("  -> Running HF multimodal forward pass...")
     with torch.no_grad():
-        hf_mm_hidden = hf_model.model(
-            **hf_mm_inputs
-        ).last_hidden_state
+        hf_mm_hidden = hf_model.model(**hf_mm_inputs).last_hidden_state
         hf_mm_output = hf_model.lm_head(hf_mm_hidden)
         if final_logit_soft_cap is not None:
-            hf_mm_output = (
-                hf_mm_output / final_logit_soft_cap
-            )
+            hf_mm_output = hf_mm_output / final_logit_soft_cap
             hf_mm_output = torch.tanh(hf_mm_output)
-            hf_mm_output = (
-                hf_mm_output * final_logit_soft_cap
-            )
-    hf_mm_output = (
-        hf_mm_output.detach().cpu().float().numpy()
-    )
+            hf_mm_output = hf_mm_output * final_logit_soft_cap
+    hf_mm_output = hf_mm_output.detach().cpu().float().numpy()
     print(f"  -> HF output shape: {hf_mm_output.shape}")
     # Prepare Keras multimodal inputs.
-    mm_keras_inputs = {
-        k: v.numpy() for k, v in hf_mm_inputs.items()
-    }
+    mm_keras_inputs = {k: v.numpy() for k, v in hf_mm_inputs.items()}
     mm_backbone_inputs = {}
-    mm_backbone_inputs["token_ids"] = (
-        mm_keras_inputs.pop("input_ids")
-    )
-    mm_backbone_inputs["padding_mask"] = (
-        mm_keras_inputs.pop("attention_mask").astype(bool)
-    )
+    mm_backbone_inputs["token_ids"] = mm_keras_inputs.pop("input_ids")
+    mm_backbone_inputs["padding_mask"] = mm_keras_inputs.pop(
+        "attention_mask"
+    ).astype(bool)
     # Images.
     pixel_values = mm_keras_inputs.pop("pixel_values")
-    pixel_values_t = np.transpose(
-        pixel_values, (0, 2, 3, 1)
-    )
+    pixel_values_t = np.transpose(pixel_values, (0, 2, 3, 1))
     if pixel_values_t.ndim == 4:
-        pixel_values_t = np.expand_dims(
-            pixel_values_t, axis=1
-        )
+        pixel_values_t = np.expand_dims(pixel_values_t, axis=1)
     mm_backbone_inputs["images"] = pixel_values_t
     # Audio.
-    input_features = mm_keras_inputs.pop(
-        "input_features"
-    )
-    input_features_mask = mm_keras_inputs.pop(
-        "input_features_mask"
-    )
+    input_features = mm_keras_inputs.pop("input_features")
+    input_features_mask = mm_keras_inputs.pop("input_features_mask")
     input_features_mask = ~input_features_mask
     if input_features.ndim == 3:
-        input_features = np.expand_dims(
-            input_features, axis=1
-        )
+        input_features = np.expand_dims(input_features, axis=1)
     if input_features_mask.ndim == 2:
-        input_features_mask = np.expand_dims(
-            input_features_mask, axis=1
-        )
+        input_features_mask = np.expand_dims(input_features_mask, axis=1)
     mm_backbone_inputs["input_features"] = input_features
-    mm_backbone_inputs["input_features_mask"] = (
-        input_features_mask
-    )
+    mm_backbone_inputs["input_features_mask"] = input_features_mask
     print("  -> Running Keras multimodal forward pass...")
     keras_mm_output = keras_model(mm_backbone_inputs)
-    keras_mm_output = (
-        keras_model.language_model.token_embedding(
-            keras_mm_output, reverse=True
-        )
+    keras_mm_output = keras_model.language_model.token_embedding(
+        keras_mm_output, reverse=True
     )
     keras_mm_output = np.array(keras_mm_output)
     mm_abs_diff = np.abs(keras_mm_output - hf_mm_output)
@@ -993,9 +957,7 @@ def validate_output(keras_model, hf_model, hf_processor):
     # Predicted tokens (argmax of logits).
     hf_mm_pred = np.argmax(hf_mm_output[0], axis=-1)
     keras_mm_pred = np.argmax(keras_mm_output[0], axis=-1)
-    mm_tokens_match = np.array_equal(
-        hf_mm_pred, keras_mm_pred
-    )
+    mm_tokens_match = np.array_equal(hf_mm_pred, keras_mm_pred)
     match_count = np.sum(hf_mm_pred == keras_mm_pred)
     total_count = len(hf_mm_pred)
     print(
@@ -1011,26 +973,17 @@ def validate_output(keras_model, hf_model, hf_processor):
         keras_mm_pred, skip_special_tokens=True
     )
     print(f"  -> HF predicted text:    {hf_mm_text!r}")
-    print(
-        f"  -> Keras predicted text: {keras_mm_text!r}"
-    )
+    print(f"  -> Keras predicted text: {keras_mm_text!r}")
     # First 5 logit values at position 0.
-    print(
-        f"  -> HF logits[0,:5]:    "
-        f"{hf_mm_output[0, 0, :5]}"
-    )
-    print(
-        f"  -> Keras logits[0,:5]: "
-        f"{keras_mm_output[0, 0, :5]}"
-    )
+    print(f"  -> HF logits[0,:5]:    {hf_mm_output[0, 0, :5]}")
+    print(f"  -> Keras logits[0,:5]: {keras_mm_output[0, 0, :5]}")
     # Per-modality analysis.
     input_ids = mm_backbone_inputs["token_ids"][0]
     vision_offset = keras_model.embed_vision.vocab_offset
     audio_offset = keras_model.embed_audio.vocab_offset
     text_pos = np.where(input_ids < vision_offset)[0]
     vision_pos = np.where(
-        (input_ids >= vision_offset)
-        & (input_ids < audio_offset)
+        (input_ids >= vision_offset) & (input_ids < audio_offset)
     )[0]
     audio_pos = np.where(input_ids >= audio_offset)[0]
     for label, positions in [
@@ -1048,29 +1001,28 @@ def validate_output(keras_model, hf_model, hf_processor):
             )
     # Multimodal tolerance check.
     mm_pct_1e4 = 100 * np.mean(mm_abs_diff <= 1e-4)
-    print(
-        f"🔶 Elements within 1e-4: {mm_pct_1e4:.1f}%"
-    )
+    print(f"🔶 Elements within 1e-4: {mm_pct_1e4:.1f}%")
     try:
         np.testing.assert_allclose(
-            keras_mm_output, hf_mm_output,
-            atol=1e-4, rtol=1e-4,
+            keras_mm_output,
+            hf_mm_output,
+            atol=1e-4,
+            rtol=1e-4,
         )
-        print(
-            "✅ Multimodal logits within 1e-4 tolerance."
-        )
+        print("✅ Multimodal logits within 1e-4 tolerance.")
     except AssertionError as err:
         print(err.args[0])
 
 
 def _load_hf_model_and_processor(
-    preset, hf_model_name, cache_dir, torch_dtype,
+    preset,
+    hf_model_name,
+    cache_dir,
+    torch_dtype,
 ):
     """Load (or download) the HF model and processor."""
     model_cache_path = os.path.join(cache_dir, f"{preset}_model")
-    processor_cache_path = os.path.join(
-        cache_dir, f"{preset}_processor"
-    )
+    processor_cache_path = os.path.join(cache_dir, f"{preset}_processor")
     hf_model = None
     hf_processor = None
     if os.path.exists(model_cache_path) and os.path.exists(
@@ -1081,40 +1033,27 @@ def _load_hf_model_and_processor(
             f" from {cache_dir}"
         )
         try:
-            hf_model = (
-                Gemma3nForConditionalGeneration.from_pretrained(
-                    model_cache_path,
-                    torch_dtype=torch_dtype,
-                    low_cpu_mem_usage=True,
-                )
+            hf_model = Gemma3nForConditionalGeneration.from_pretrained(
+                model_cache_path,
+                torch_dtype=torch_dtype,
+                low_cpu_mem_usage=True,
             )
             hf_processor = Gemma3nProcessor.from_pretrained(
                 processor_cache_path
             )
         except Exception as e:
-            print(
-                f"⚠️ Failed to load from cache: {e}. "
-                "Downloading again..."
-            )
+            print(f"⚠️ Failed to load from cache: {e}. Downloading again...")
             hf_model = None
             hf_processor = None
     if hf_model is None or hf_processor is None:
-        print(
-            f"  -> Downloading Hugging Face model: {hf_model_name}"
+        print(f"  -> Downloading Hugging Face model: {hf_model_name}")
+        hf_model = Gemma3nForConditionalGeneration.from_pretrained(
+            hf_model_name,
+            torch_dtype=torch_dtype,
+            low_cpu_mem_usage=True,
         )
-        hf_model = (
-            Gemma3nForConditionalGeneration.from_pretrained(
-                hf_model_name,
-                torch_dtype=torch_dtype,
-                low_cpu_mem_usage=True,
-            )
-        )
-        hf_processor = Gemma3nProcessor.from_pretrained(
-            hf_model_name
-        )
-        print(
-            f"💾 Saving model and processor to cache: {cache_dir}"
-        )
+        hf_processor = Gemma3nProcessor.from_pretrained(hf_model_name)
+        print(f"💾 Saving model and processor to cache: {cache_dir}")
         os.makedirs(cache_dir, exist_ok=True)
         hf_model.save_pretrained(model_cache_path)
         hf_processor.save_pretrained(processor_cache_path)
@@ -1133,12 +1072,13 @@ def main(_):
     print("  FLOAT32 VALIDATION")
     print("=" * 60)
     hf_model_f32, hf_processor = _load_hf_model_and_processor(
-        preset, hf_model_name, cache_dir, torch.float32,
+        preset,
+        hf_model_name,
+        cache_dir,
+        torch.float32,
     )
     print("-> Creating Keras model (float32) for validation.")
-    keras_model_f32 = convert_model(
-        hf_model_f32.config, dtype="float32"
-    )
+    keras_model_f32 = convert_model(hf_model_f32.config, dtype="float32")
     print("-> Converting weights (float32).")
     converter = HfToKerasConverter(hf_model_f32)
     converter.convert(keras_model_f32)
@@ -1152,12 +1092,13 @@ def main(_):
     print("  SAVING BFLOAT16 PRESET")
     print("=" * 60)
     hf_model_bf16, _ = _load_hf_model_and_processor(
-        preset, hf_model_name, cache_dir, torch.bfloat16,
+        preset,
+        hf_model_name,
+        cache_dir,
+        torch.bfloat16,
     )
     print("-> Creating Keras model (bfloat16) for preset.")
-    keras_model_bf16 = convert_model(
-        hf_model_bf16.config, dtype="bfloat16"
-    )
+    keras_model_bf16 = convert_model(hf_model_bf16.config, dtype="bfloat16")
     print("-> Converting weights (bfloat16).")
     converter = HfToKerasConverter(hf_model_bf16)
     converter.convert(keras_model_bf16)
