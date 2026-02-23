@@ -57,6 +57,15 @@ class FNetTextClassifierTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        strict=False,
+        reason=(
+            "Upstream litert-torch limitation: FNet uses ops.fft2 which "
+            "produces aten.complex tensors. litert-torch has no lowering for "
+            "aten.complex.default. Will pass once complex tensor ops are "
+            "supported."
+        ),
+    )
     def test_litert_export(self):
         # F-Net does NOT use padding_mask - it only uses token_ids and
         # segment_ids. Don't add padding_mask to input_data.

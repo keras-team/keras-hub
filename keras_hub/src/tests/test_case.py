@@ -435,26 +435,71 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(model_output, restored_output, atol=atol, rtol=rtol)
 
     @staticmethod
-    def _build_input_signature(input_data):
+    def _build_input_signature(input_data, is_torch_backend=False):
         """Build a concrete ``input_signature`` from actual data.
 
         Returns a structure compatible with
         ``keras.Model.export(input_signature=...)``: a single-element
-        list wrapping the mapped input structure, where each leaf is a
-        ``keras.InputSpec`` with fully concrete shapes (no ``None``
-        dims).  This ensures ``torch.export`` traces with the exact
-        shapes of the provided data.
+        list wrapping the mapped input structure, where each leaf has
+        fully concrete shapes (no ``None`` dims). Concrete shapes allow
+        the TFLite converter to fully optimize operations statically,
+        avoiding dynamic shape ops that require the Flex delegate
+        (e.g. FlexStridedSlice).
+
+        For the TF backend, ``tf.TensorSpec`` objects with proper names
+        are used so that ``ExportArchive.add_endpoint`` preserves the
+        dict key names in the SavedModel SignatureDef.
+        For the torch backend, ``keras.InputSpec`` objects are used as
+        required by ``torch.export``.
         """
 
-        def _to_spec(x):
+        def _to_numpy(x):
             if hasattr(x, "detach"):
-                x = x.detach().cpu().numpy()
+                return x.detach().cpu().numpy()
             elif hasattr(x, "numpy") and not isinstance(x, np.ndarray):
-                x = x.numpy()
-            dtype = str(x.dtype)
-            return keras.InputSpec(shape=x.shape, dtype=dtype)
+                return x.numpy()
+            return x
 
-        return [tree.map_structure(_to_spec, input_data)]
+        if is_torch_backend:
+            def _to_spec(x):
+                x = _to_numpy(x)
+                # Normalize dtypes: TFLite/torch export doesn't support
+                # float64 or int64.
+                dtype = x.dtype
+                if dtype == np.float64:
+                    dtype = np.float32
+                elif dtype == np.int64:
+                    dtype = np.int32
+                # Convert numpy dtype to Keras dtype string
+                dtype_str = dtype.name
+                if dtype_str.startswith("float64"):
+                    dtype_str = "float32"
+                elif dtype_str.startswith("int64"):
+                    dtype_str = "int32"
+                return keras.InputSpec(shape=x.shape, dtype=dtype_str)
+            return [tree.map_structure(_to_spec, input_data)]
+        else:
+            # For TF backend: use tf.TensorSpec with names so that
+            # ExportArchive preserves dict key names in the SignatureDef.
+            def _to_tf_spec(x, name=None):
+                x = _to_numpy(x)
+                dtype = tf.as_dtype(x.dtype)
+                # TFLite doesn't support float64; match convert_for_tflite.
+                if dtype == tf.float64:
+                    dtype = tf.float32
+                # Normalize int64 to int32 for compatibility; test inputs are int32.
+                elif dtype == tf.int64:
+                    dtype = tf.int32
+                return tf.TensorSpec(shape=x.shape, dtype=dtype, name=name)
+
+            if isinstance(input_data, dict):
+                spec_dict = {
+                    k: _to_tf_spec(v, name=k)
+                    for k, v in input_data.items()
+                }
+                return [spec_dict]
+            else:
+                return [tree.map_structure(_to_tf_spec, input_data)]
 
     def _verify_litert_outputs(
         self,
@@ -630,11 +675,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     "with the torch backend"
                 )
         else:
-            self.skipTest(
-                "#TODO: [#2572] Re-enable LiteRT tests after a new "
-                "tf release. Can't test with tf 2.20 due to tf.lite "
-                "module deprecation."
-            )
+            try:
+                from ai_edge_litert.interpreter import Interpreter  # noqa: F401
+            except (ImportError, ModuleNotFoundError):
+                self.skipTest(
+                    "ai-edge-litert is required for LiteRT export "
+                    "with the tensorflow backend"
+                )
 
         # Extract comparison_mode from export_kwargs if provided
         comparison_mode = export_kwargs.pop("comparison_mode", "strict")
@@ -660,12 +707,15 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             with tempfile.TemporaryDirectory() as temp_dir:
                 export_path = os.path.join(temp_dir, "model.tflite")
 
-                # For torch backend, torch.export bakes static shapes.
                 # Build a concrete input_signature from the actual
                 # input_data shape (not reduced to batch=1) so the traced
-                # shapes match what the test provides.
-                if is_torch_backend and "input_signature" not in export_kwargs:
-                    input_sig = self._build_input_signature(input_data)
+                # shapes match what the test provides. This is important
+                # for both torch and TF backends to avoid dynamic shape
+                # operations that require Flex delegates.
+                if "input_signature" not in export_kwargs:
+                    input_sig = self._build_input_signature(
+                        input_data, is_torch_backend=is_torch_backend
+                    )
                     export_kwargs.setdefault("input_signature", input_sig)
 
                 # Step 1: Export model and get Keras output
@@ -764,9 +814,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     elif hasattr(x, "numpy") and not isinstance(x, np.ndarray):
                         x = x.numpy()
                     if isinstance(x, np.ndarray):
-                        if x.dtype == bool:
-                            return x.astype(np.int32)
-                        elif x.dtype == np.float64:
+                        if x.dtype == np.float64:
                             return x.astype(np.float32)
                         elif x.dtype == np.int64:
                             return x.astype(np.int32)

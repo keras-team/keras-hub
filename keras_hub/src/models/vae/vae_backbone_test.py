@@ -34,6 +34,14 @@ class VAEBackboneTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        strict=False,
+        reason=(
+            "Upstream litert-torch limitation: VAE uses pow ops which fail "
+            "TFLite legalization ('failed to legalize operation tfl.pow'). "
+            "Will pass once TFLite built-ins cover tfl.pow."
+        ),
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=VAEBackbone,
