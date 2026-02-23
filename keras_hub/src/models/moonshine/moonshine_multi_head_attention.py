@@ -328,10 +328,10 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         if final_mask is not None:
             mask_shape = keras.ops.shape(final_mask)
             if len(mask_shape) == 2:
-                final_mask = ops.expand_dims(final_mask, axis=1)
-                final_mask = ops.expand_dims(final_mask, axis=1)
+                final_mask = keras.ops.expand_dims(final_mask, axis=1)
+                final_mask = keras.ops.expand_dims(final_mask, axis=1)
             elif len(mask_shape) == 3:
-                final_mask = ops.expand_dims(final_mask, axis=1)
+                final_mask = keras.ops.expand_dims(final_mask, axis=1)
 
         attention_kwargs = {
             k: v for k, v in kwargs.items() if k != "padding_mask"

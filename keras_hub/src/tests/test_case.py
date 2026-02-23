@@ -484,7 +484,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 # TFLite doesn't support float64; match convert_for_tflite.
                 if dtype == tf.float64:
                     dtype = tf.float32
-                # Normalize int64 to int32 for compatibility; test inputs are int32.
+                # Normalize int64 to int32 for compatibility; test inputs
+                # are int32.
                 elif dtype == tf.int64:
                     dtype = tf.int32
                 return tf.TensorSpec(shape=x.shape, dtype=dtype, name=name)
