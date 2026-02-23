@@ -2,7 +2,7 @@
 
 **Branch:** `torch-backend-litert-support`  
 **Target:** `keras-team:master`  
-**Files changed:** 31 | **Insertions:** +15,889 | **Deletions:** −65
+**Files changed:** 31 | **Insertions:** +15,889 | **Deletions:** -65
 
 > **Depends on:** keras PR `torch-export-support` (adds LiteRT-via-torch backend routing)
 
@@ -52,15 +52,16 @@ With `KERAS_BACKEND=torch`, `model.export(format="litert")` invokes `litert-torc
 
 ```mermaid
 flowchart TD
-    A["attention_mask[:, None, :, :]"] --> B["TF graph: StridedSlice with new_axis_mask"]
-    B --> C["LiteRTExporter: TFLite converter"]
+    A[attention_mask slicing] --> B[TF graph: StridedSlice]
+    B --> C[LiteRTExporter]
     C --> D{Flex ops allowed?}
-    D -- No --> E["⛔ Runtime error: FlexStridedSlice unsupported"]
-    D -- Yes --> F["✅ Works but requires Flex delegate"]
+    D -- No --> E[Runtime error]
+    D -- Yes --> F[Works with Flex]
     
-    G["ops.expand_dims(attention_mask, axis=1)"] --> H["TF graph: ExpandDims"]
-    H --> I["LiteRTExporter: TFLite converter"]
-    I --> J["✅ Native ExpandDims builtin — no Flex needed"]
+    G[ops.expand_dims] --> H[TF graph: ExpandDims]
+    H --> I[LiteRTExporter]
+    I --> J[Native builtin]
+```
 ```
 
 ---
@@ -84,7 +85,7 @@ flowchart TD
     I --> J{comparison_mode}
     J -- strict --> K["_compare_outputs(): np.testing.assert_allclose\natol=1e-6"]
     J -- statistical --> L["_verify_litert_numerics():\nmax diff + mean diff thresholds"]
-    K --> M["✅ PASS / ❌ FAIL"]
+    K --> M["[OK] PASS / [FAIL] FAIL"]
     L --> M
 ```
 
@@ -104,7 +105,7 @@ classDiagram
         <<staticmethod>>
         Torch path: keras.InputSpec
         TF path: tf.TensorSpec with name=
-        dtype norm: float64→float32, int64→int32
+        dtype norm: float64-float32, int64-int32
     }
 
     class _verify_litert_numerics {
