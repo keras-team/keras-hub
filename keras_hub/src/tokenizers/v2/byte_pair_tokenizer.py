@@ -274,26 +274,38 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             )
 
     def _canonicalize_detokenize_inputs(self, inputs):
+        is_batched = True
         if isinstance(inputs, int):
-            return [inputs], False
+            inputs = [[inputs]]
+            is_batched = False
         elif isinstance(inputs, (tuple, list)):
-            return list(inputs), True
+            if not inputs or isinstance(inputs[0], int):
+                # Unbatched list of ints.
+                inputs = [list(inputs)]
+                is_batched = False
+            else:
+                # Batched list of lists of ints.
+                inputs = [list(seq) for seq in inputs]
         elif isinstance(inputs, np.ndarray) or keras.ops.is_tensor(inputs):
             inputs = keras.ops.convert_to_numpy(inputs)
-            if inputs.ndim == 0:  # scalar
-                inputs = [inputs.item()]
+            if inputs.ndim == 0:
+                inputs = [[inputs.item()]]
+                is_batched = False
             elif inputs.ndim == 1:
+                inputs = [inputs.tolist()]
+                is_batched = False
+            elif inputs.ndim == 2:
                 inputs = inputs.tolist()
             else:
                 raise ValueError(
-                    f"Array must be 0 or 1 dimensional, got {inputs.shape}."
+                    f"Array must be 0, 1 or 2 dimensional, got {inputs.shape}."
                 )
-            return inputs, True
         else:
             raise ValueError(
                 "Input should be an integer, a list of integers, backend "
                 f"tensor or numpy array. Received: {inputs}"
             )
+        return inputs, is_batched
 
     def tokenize(self, inputs):
         self._check_vocabulary()

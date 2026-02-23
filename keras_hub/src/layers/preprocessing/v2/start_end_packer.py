@@ -143,7 +143,7 @@ class StartEndPacker(PreprocessingLayer):
 
     def _canonicalize_inputs(self, inputs):
         if isinstance(inputs, (tuple, list)):
-            if isinstance(inputs[0], (tuple, list)):
+            if inputs and isinstance(inputs[0], (tuple, list)):
                 return inputs, True
             else:
                 return [inputs], False
@@ -153,7 +153,10 @@ class StartEndPacker(PreprocessingLayer):
             )
 
     def _get_type(self, inputs):
-        return type(inputs[0][0])
+        for sequence in inputs:
+            if sequence:
+                return type(sequence[0])
+        raise ValueError("Cannot determine token type from empty inputs.")
 
     def _canonicalize_value(self, values, input_type):
         if input_type is str:

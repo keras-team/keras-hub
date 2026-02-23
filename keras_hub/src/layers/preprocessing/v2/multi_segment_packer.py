@@ -190,7 +190,7 @@ class MultiSegmentPacker(PreprocessingLayer):
 
         def _canonicalize_single_input(inputs):
             if isinstance(inputs, (tuple, list)):
-                if isinstance(inputs[0], (tuple, list)):
+                if inputs and isinstance(inputs[0], (tuple, list)):
                     return inputs, True
                 else:
                     return [inputs], False
@@ -211,7 +211,10 @@ class MultiSegmentPacker(PreprocessingLayer):
         return x, batched[0]
 
     def _get_type(self, inputs):
-        return type(inputs[0][0])
+        for sequence in inputs:
+            if sequence:
+                return type(sequence[0])
+        raise ValueError("Cannot determine token type from empty inputs.")
 
     def _trim_inputs_round_robin(self, max_seq_length, segments):
         # segments: list of lists of lists
