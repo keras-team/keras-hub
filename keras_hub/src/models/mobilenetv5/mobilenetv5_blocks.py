@@ -85,7 +85,7 @@ class UniversalInvertedResidual(keras.layers.Layer):
         self.has_skip = (
             in_chs == self.filters and self.stride == 1
         ) and not self.noskip
-        use_bias = False
+        use_bias = self.norm_layer == "rms_norm"
 
         if self.dw_kernel_size_start:
             self.dw_start = ConvNormAct(
@@ -353,7 +353,7 @@ class EdgeResidual(keras.layers.Layer):
         else:
             mid_chs = adjust_channels(in_chs * self.exp_ratio)
         groups = num_groups(self.group_size, mid_chs)
-        use_bias = False
+        use_bias = self.norm_layer == "rms_norm"
         self.conv_exp = ConvNormAct(
             mid_chs,
             self.exp_kernel_size,
