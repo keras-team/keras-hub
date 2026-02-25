@@ -422,7 +422,7 @@ def convert_weights(backbone, loader, transformers_config):
 
         # Input layernorm
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layernorm.scale,
+            keras_variable=decoder_layer.pre_attention_norm.scale,
             hf_weight_key=f"model.layers.{i}.input_layernorm.weight",
         )
 
@@ -430,33 +430,33 @@ def convert_weights(backbone, loader, transformers_config):
 
         ## Query
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._query_dense.kernel,
+            keras_variable=decoder_layer.attention._query_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
             hook_fn=transpose_and_reshape,
         )
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._query_dense_layer_norm.scale,
+            keras_variable=decoder_layer.attention._query_dense_layer_norm.scale,
             hf_weight_key=f"model.layers.{i}.self_attn.q_norm.weight",
         )
         ## Key
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
+            keras_variable=decoder_layer.attention._key_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.k_proj.weight",
             hook_fn=transpose_and_reshape,
         )
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._key_dense_layer_norm.scale,
+            keras_variable=decoder_layer.attention._key_dense_layer_norm.scale,
             hf_weight_key=f"model.layers.{i}.self_attn.k_norm.weight",
         )
         ## Value
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._value_dense.kernel,
+            keras_variable=decoder_layer.attention._value_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.v_proj.weight",
             hook_fn=transpose_and_reshape,
         )
         ## Output
         loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layer._output_dense.kernel,
+            keras_variable=decoder_layer.attention._output_dense.kernel,
             hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
             hook_fn=transpose_and_reshape,
         )
@@ -469,7 +469,7 @@ def convert_weights(backbone, loader, transformers_config):
         ):
             # MoE layers
             loader.port_weight(
-                keras_variable=decoder_layer.mlp._sparse_feedforward_gate_dense.kernel,
+                keras_variable=decoder_layer.sparse_moe._sparse_feedforward_gate_dense.kernel,
                 hf_weight_key=f"model.layers.{i}.mlp.gate.weight",
                 hook_fn=lambda hf_tensor, _: np.transpose(
                     hf_tensor, axes=(1, 0)
@@ -510,29 +510,29 @@ def convert_weights(backbone, loader, transformers_config):
             )  # (num_experts, intermediate_dim, hidden_dim)
 
             # Assign batched weights to expert_bank
-            decoder_layer.mlp.expert_bank._expert_feedforward_gate_dense.assign(
+            decoder_layer.sparse_moe.expert_bank._expert_feedforward_gate_dense.assign(
                 gate_up_proj_batched
             )
-            decoder_layer.mlp.expert_bank._expert_feedforward_output_dense.assign(
+            decoder_layer.sparse_moe.expert_bank._expert_feedforward_output_dense.assign(
                 down_proj_batched
             )
         else:
             loader.port_weight(
-                keras_variable=decoder_layer._feedforward_intermediate_dense.kernel,
+                keras_variable=decoder_layer.dense_mlp._feedforward_intermediate_dense.kernel,
                 hf_weight_key=f"model.layers.{i}.mlp.up_proj.weight",
                 hook_fn=lambda hf_tensor, _: np.transpose(
                     hf_tensor, axes=(1, 0)
                 ),
             )
             loader.port_weight(
-                keras_variable=decoder_layer._feedforward_output_dense.kernel,
+                keras_variable=decoder_layer.dense_mlp._feedforward_output_dense.kernel,
                 hf_weight_key=f"model.layers.{i}.mlp.down_proj.weight",
                 hook_fn=lambda hf_tensor, _: np.transpose(
                     hf_tensor, axes=(1, 0)
                 ),
             )
             loader.port_weight(
-                keras_variable=decoder_layer._feedforward_gate_dense.kernel,
+                keras_variable=decoder_layer.dense_mlp._feedforward_gate_dense.kernel,
                 hf_weight_key=f"model.layers.{i}.mlp.gate_proj.weight",
                 hook_fn=lambda hf_tensor, _: np.transpose(
                     hf_tensor, axes=(1, 0)
@@ -541,7 +541,7 @@ def convert_weights(backbone, loader, transformers_config):
 
         # Feedforward layernorm
         loader.port_weight(
-            keras_variable=decoder_layer._feedforward_layernorm.scale,
+            keras_variable=decoder_layer.post_attention_layernorm.scale,
             hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
         )
 
@@ -569,7 +569,7 @@ def load_image_converter_config(preset, transformers_config):
         rescale_factor = preprocessor_config.get("rescale_factor", 1 / 255)
         offset = [(-m / s) for m, s in zip(image_mean, image_std)]
         scale = [(s * rescale_factor) for s in image_std]
-        image_size = vision_config.get("image_size", 448)
+        image_size = vision_config.get("image_size", 768)
         return {
             "image_size": (image_size, image_size),
             "scale": scale,
@@ -583,10 +583,14 @@ def load_audio_converter_config(preset, transformers_config):
     thinker_config = transformers_config.get("thinker_config", {})
     audio_config = thinker_config.get("audio_config")
     if audio_config:
+        preprocessor_config = load_json(preset, "preprocessor_config.json")
+        sampling_rate = preprocessor_config.get("sampling_rate", 16000)
+        n_samples = preprocessor_config.get("n_samples", 4800000)
+        max_audio_length = n_samples / sampling_rate
         return {
             "num_mels": audio_config.get("num_mel_bins", 128),
-            "sampling_rate": 16000,
-            "max_audio_length": 300,
+            "sampling_rate": sampling_rate,
+            "max_audio_length": max_audio_length,
         }
     return None
 
