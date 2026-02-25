@@ -92,6 +92,7 @@ class Qwen3OmniBackbone(Backbone):
         head_dim=128,
         num_experts=128,
         num_experts_per_tok=8,
+        mrope_section=(24, 20, 20),
     )
     model(input_data)
     ```
