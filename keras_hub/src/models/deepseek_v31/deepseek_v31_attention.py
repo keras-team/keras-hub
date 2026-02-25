@@ -1,5 +1,7 @@
 """DeepSeek V31 Multi-head Latent Attention layer."""
 
+import math
+
 import keras
 from keras import ops
 
@@ -232,7 +234,6 @@ class DeepSeekV31Attention(keras.layers.Layer):
 
         # Wavelength = 2π / freq. High-freq → small wavelength, low-freq →
         # large wavelength. YaRN applies more scaling to low-freq dimensions.
-        import math
 
         wavelengths = 2.0 * math.pi / freqs
         old_ctx = float(self.yarn_original_max_position_embeddings)
