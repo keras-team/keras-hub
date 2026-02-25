@@ -22,11 +22,11 @@ class Qwen3OmniTokenizer(BytePairTokenizer):
             `BytePairTokenizer` class.
 
     Examples:
-
+    TODO: Update once presets registered
     ```python
     # Load a preset tokenizer
     tokenizer = keras_hub.tokenizers.Qwen3OmniTokenizer.from_preset(
-        "qwen3_omni_0.5b_en"
+        "qwen3_omni_30b_a3b_thinking_en"
     )
 
     # Tokenize text

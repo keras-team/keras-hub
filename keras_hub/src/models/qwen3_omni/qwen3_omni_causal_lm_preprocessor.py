@@ -139,28 +139,46 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
 
         # Multimodal dict input
         prompts = self.tokenizer(x["prompts"])
-        responses = self.tokenizer(x.get("responses", x["prompts"]))
         audio_features, pixel_values = self._process_multimodal_inputs(x)
+        responses_text = x.get("responses", None)
 
-        # Pack prompt + response with one extra token for label shift.
-        token_ids, segment_ids = self.multi_packer(
-            (prompts, responses),
-            sequence_length=sequence_length + 1,
-            add_start_value=self.add_start_token,
-            add_end_value=self.add_end_token,
-        )
-        padding_mask = token_ids != self.tokenizer.pad_token_id
-        response_mask = segment_ids == 1
+        if responses_text is not None:
+            responses = self.tokenizer(responses_text)
+            # Pack prompt + response with one extra token for label shift.
+            token_ids, segment_ids = self.multi_packer(
+                (prompts, responses),
+                sequence_length=sequence_length + 1,
+                add_start_value=self.add_start_token,
+                add_end_value=self.add_end_token,
+            )
+            padding_mask = token_ids != self.tokenizer.pad_token_id
+            response_mask = segment_ids == 1
 
-        # Truncate last token (no next-token target for it).
-        x = {
-            "token_ids": token_ids[..., :-1],
-            "padding_mask": padding_mask[..., :-1],
-        }
-        self._add_multimodal_to_output(x, audio_features, pixel_values)
+            # Truncate last token (no next-token target for it).
+            x = {
+                "token_ids": token_ids[..., :-1],
+                "padding_mask": padding_mask[..., :-1],
+            }
+            self._add_multimodal_to_output(x, audio_features, pixel_values)
 
-        y = token_ids[..., 1:]
-        sample_weight = response_mask[..., 1:]
+            y = token_ids[..., 1:]
+            sample_weight = response_mask[..., 1:]
+        else:
+            # No responses — single-segment next-token prediction.
+            token_ids, padding_mask = self.packer(
+                prompts,
+                sequence_length=sequence_length + 1,
+                add_start_value=self.add_start_token,
+                add_end_value=self.add_end_token,
+            )
+            x = {
+                "token_ids": token_ids[..., :-1],
+                "padding_mask": padding_mask[..., :-1],
+            }
+            self._add_multimodal_to_output(x, audio_features, pixel_values)
+
+            y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
+
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     @preprocessing_function
