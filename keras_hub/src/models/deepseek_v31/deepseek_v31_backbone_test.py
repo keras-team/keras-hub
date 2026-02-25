@@ -1,5 +1,4 @@
 import pytest
-from keras import mixed_precision
 from keras import ops
 
 from keras_hub.src.models.deepseek_v31.deepseek_v31_backbone import (
@@ -9,12 +8,6 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class DeepSeekV31BackboneTest(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        # Enable mixed precision globally
-        policy = mixed_precision.Policy("mixed_float16")
-        mixed_precision.set_global_policy(policy)
-
     def setUp(self):
         self.init_kwargs = {
             "vocabulary_size": 1000,
@@ -39,16 +32,12 @@ class DeepSeekV31BackboneTest(TestCase):
         }
 
     def test_backbone_basics(self):
-        original_assert_dtype_equal = self.assertDTypeEqual
-
-        def assert_dtype_flexible(tensor, expected_dtype, msg=None):
-            actual_dtype = str(tensor.dtype)
-            allowed_dtypes = ["float16", "bfloat16"]
-            if actual_dtype not in allowed_dtypes:
-                self.fail(
-                    msg
-                    or f"Tensor dtype {actual_dtype} not in allowed {allowed_dtypes}"  # noqa: E501
-                )
+        self.run_backbone_test(
+            cls=DeepSeekV31Backbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(2, 5, 64),
+        )
 
     def test_num_parameters(self):
         model = DeepSeekV31Backbone(**self.init_kwargs)

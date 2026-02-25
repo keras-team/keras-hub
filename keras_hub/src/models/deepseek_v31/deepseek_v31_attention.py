@@ -140,18 +140,21 @@ class DeepSeekV31Attention(keras.layers.Layer):
             use_bias=False,
             kernel_initializer=kernel_initializer,
             name="q_down_proj",
+            dtype=self.dtype_policy,
         )
         self.q_up_nope_proj = keras.layers.Dense(
             num_query_heads * qk_nope_head_dim,
             use_bias=False,
             kernel_initializer=kernel_initializer,
             name="q_up_nope_proj",
+            dtype=self.dtype_policy,
         )
         self.q_up_rope_proj = keras.layers.Dense(
             num_query_heads * qk_rope_head_dim,
             use_bias=False,
             kernel_initializer=kernel_initializer,
             name="q_up_rope_proj",
+            dtype=self.dtype_policy,
         )
 
         # KV low-rank compression (eq. 1-5).
@@ -160,12 +163,14 @@ class DeepSeekV31Attention(keras.layers.Layer):
             use_bias=False,
             kernel_initializer=kernel_initializer,
             name="kv_down_proj",
+            dtype=self.dtype_policy,
         )
         self.k_rope_proj = keras.layers.Dense(
             qk_rope_head_dim,
             use_bias=False,
             kernel_initializer=kernel_initializer,
             name="k_rope_proj",
+            dtype=self.dtype_policy,
         )
 
         self.output_proj = keras.layers.Dense(
@@ -173,8 +178,12 @@ class DeepSeekV31Attention(keras.layers.Layer):
             use_bias=False,
             kernel_initializer=kernel_initializer,
             name="output_proj",
+            dtype=self.dtype_policy,
         )
-        self.dropout = keras.layers.Dropout(attention_dropout)
+        self.dropout = keras.layers.Dropout(
+            attention_dropout,
+            dtype=self.dtype_policy,
+        )
 
     def build(self, input_shape):
         # W_UK and W_UV are stored as raw weight matrices for the MLA
@@ -223,8 +232,9 @@ class DeepSeekV31Attention(keras.layers.Layer):
 
         # Wavelength = 2π / freq. High-freq → small wavelength, low-freq →
         # large wavelength. YaRN applies more scaling to low-freq dimensions.
-        PI = 3.14159265358979
-        wavelengths = 2.0 * PI / freqs
+        import math
+
+        wavelengths = 2.0 * math.pi / freqs
         old_ctx = float(self.yarn_original_max_position_embeddings)
         beta_slow = float(self.yarn_beta_slow)
         beta_fast = float(self.yarn_beta_fast)

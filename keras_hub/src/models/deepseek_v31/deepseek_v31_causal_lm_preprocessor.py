@@ -45,5 +45,18 @@ class DeepSeekV31CausalLMPreprocessor(CausalLMPreprocessor):
     backbone_cls = DeepSeekV31Backbone
     tokenizer_cls = DeepSeekV31Tokenizer
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        tokenizer,
+        sequence_length=1024,
+        add_start_token=True,
+        add_end_token=True,
+        **kwargs,
+    ):
+        super().__init__(
+            tokenizer=tokenizer,
+            sequence_length=sequence_length,
+            add_start_token=add_start_token,
+            add_end_token=add_end_token,
+            **kwargs,
+        )

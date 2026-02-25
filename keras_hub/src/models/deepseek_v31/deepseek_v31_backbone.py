@@ -127,6 +127,7 @@ class DeepSeekV31Backbone(Backbone):
         dropout=0.0,
         **kwargs,
     ):
+        dtype = kwargs.get("dtype")
         # ===== Build sub-layers =====
         token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
@@ -136,6 +137,7 @@ class DeepSeekV31Backbone(Backbone):
                 stddev=0.01
             ),
             name="token_embedding",
+            dtype=dtype,
         )
 
         transformer_layers = []
@@ -164,12 +166,14 @@ class DeepSeekV31Backbone(Backbone):
                         stddev=0.02
                     ),
                     name=f"transformer_layer_{i}",
+                    dtype=dtype,
                 )
             )
 
         layer_norm = DeepSeekV31RMSNorm(
             epsilon=layer_norm_epsilon,
             name="layer_norm",
+            dtype=dtype,
         )
 
         # ===== Functional model =====

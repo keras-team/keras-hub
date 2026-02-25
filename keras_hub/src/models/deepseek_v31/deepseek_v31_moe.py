@@ -63,6 +63,7 @@ class DeepSeekV31MoE(keras.layers.Layer):
         num_shared_experts=1,
         num_experts_per_tok=8,
         kernel_initializer="glorot_uniform",
+        epsilon=1e-9,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -72,6 +73,7 @@ class DeepSeekV31MoE(keras.layers.Layer):
         self.num_shared_experts = num_shared_experts
         self.num_experts_per_tok = num_experts_per_tok
         self.kernel_initializer = kernel_initializer
+        self.epsilon = epsilon
 
     def build(self, input_shape):
         # Router: maps hidden states to per-expert affinity logits.
@@ -165,7 +167,7 @@ class DeepSeekV31MoE(keras.layers.Layer):
 
         # Normalize only the selected K scores (eq. 13).
         top_k_weights = top_k_scores / (
-            ops.sum(top_k_scores, axis=-1, keepdims=True) + 1e-9
+            ops.sum(top_k_scores, axis=-1, keepdims=True) + self.epsilon
         )
         top_k_weights = ops.cast(top_k_weights, compute_dtype)
 
@@ -241,6 +243,7 @@ class DeepSeekV31MoE(keras.layers.Layer):
                 "num_shared_experts": self.num_shared_experts,
                 "num_experts_per_tok": self.num_experts_per_tok,
                 "kernel_initializer": self.kernel_initializer,
+                "epsilon": self.epsilon,
             }
         )
         return config

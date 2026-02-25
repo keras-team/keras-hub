@@ -110,18 +110,21 @@ class DeepSeekV31DenseFeedForward(keras.layers.Layer):
             use_bias=False,
             kernel_initializer=kernel_initializer,
             name="gate_proj",
+            dtype=self.dtype_policy,
         )
         self.up_proj = keras.layers.Dense(
             intermediate_dim,
             use_bias=False,
             kernel_initializer=kernel_initializer,
             name="up_proj",
+            dtype=self.dtype_policy,
         )
         self.down_proj = keras.layers.Dense(
             hidden_dim,
             use_bias=False,
             kernel_initializer=kernel_initializer,
             name="down_proj",
+            dtype=self.dtype_policy,
         )
 
     def build(self, input_shape):
@@ -265,6 +268,7 @@ class DeepSeekV31DecoderBlock(keras.layers.Layer):
         self.pre_attention_norm = DeepSeekV31RMSNorm(
             epsilon=layer_norm_epsilon,
             name="pre_attention_norm",
+            dtype=self.dtype_policy,
         )
         self.attention = DeepSeekV31Attention(
             hidden_dim=hidden_dim,
@@ -281,10 +285,12 @@ class DeepSeekV31DecoderBlock(keras.layers.Layer):
             attention_dropout=dropout,
             kernel_initializer=kernel_initializer,
             name="attention",
+            dtype=self.dtype_policy,
         )
         self.pre_ffn_norm = DeepSeekV31RMSNorm(
             epsilon=layer_norm_epsilon,
             name="pre_ffn_norm",
+            dtype=self.dtype_policy,
         )
 
         if use_moe:
@@ -296,6 +302,7 @@ class DeepSeekV31DecoderBlock(keras.layers.Layer):
                 num_experts_per_tok=num_experts_per_tok,
                 kernel_initializer=kernel_initializer,
                 name="ffn",
+                dtype=self.dtype_policy,
             )
         else:
             self.ffn = DeepSeekV31DenseFeedForward(
@@ -303,9 +310,13 @@ class DeepSeekV31DecoderBlock(keras.layers.Layer):
                 intermediate_dim=intermediate_dim,
                 kernel_initializer=kernel_initializer,
                 name="ffn",
+                dtype=self.dtype_policy,
             )
 
-        self.residual_dropout = keras.layers.Dropout(dropout)
+        self.residual_dropout = keras.layers.Dropout(
+            dropout,
+            dtype=self.dtype_policy,
+        )
 
     def call(
         self,
