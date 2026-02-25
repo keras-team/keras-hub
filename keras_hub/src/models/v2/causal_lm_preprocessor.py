@@ -1,5 +1,4 @@
 import keras
-import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.v2.start_end_packer import (
@@ -137,13 +136,6 @@ class CausalLMPreprocessor(Preprocessor):
 
     def _strip_to_ragged(self, token_ids, masks, ids_to_strip):
         """Remove masked and special tokens from a sequence."""
-        if keras.ops.is_tensor(token_ids):
-            token_ids = keras.ops.convert_to_numpy(token_ids)
-        if keras.ops.is_tensor(masks):
-            masks = keras.ops.convert_to_numpy(masks)
-
-        token_ids = np.array(token_ids).astype("int32")
-        masks = np.array(masks).astype("bool")
         for id in ids_to_strip:
             masks = masks & (token_ids != id)
         if token_ids.ndim == 1:

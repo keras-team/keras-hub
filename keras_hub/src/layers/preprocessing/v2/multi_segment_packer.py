@@ -211,9 +211,10 @@ class MultiSegmentPacker(PreprocessingLayer):
         return x, batched[0]
 
     def _get_type(self, inputs):
-        for sequence in inputs:
-            if sequence:
-                return type(sequence[0])
+        for segment in inputs:
+            for sequence in segment:
+                if sequence:
+                    return type(sequence[0])
         raise ValueError("Cannot determine token type from empty inputs.")
 
     def _trim_inputs_round_robin(self, max_seq_length, segments):

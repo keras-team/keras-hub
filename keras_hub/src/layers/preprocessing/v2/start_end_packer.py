@@ -181,10 +181,10 @@ class StartEndPacker(PreprocessingLayer):
         return x
 
     def _canonicalize_outputs(self, outputs, dtype=None):
-        if len(outputs[0]) > 0:
-            first_element = outputs[0][0]
-        else:
-            first_element = keras.tree.flatten(outputs)[0]
+        flat_outputs = keras.tree.flatten(outputs)
+        if not flat_outputs:
+            return np.array(outputs, dtype=dtype or self.compute_dtype)
+        first_element = flat_outputs[0]
         if not isinstance(first_element, str):
             return np.array(outputs, dtype=dtype or self.compute_dtype)
         else:
