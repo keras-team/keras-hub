@@ -23,7 +23,7 @@ class TestTask(TestCase):
     @pytest.mark.extra_large
     def test_convert_preset(self):
         model = Qwen3OmniCausalLM.from_preset(
-            "hf://Qwen/Qwen3-Omni-30B-A3B-Instruct"
+            "hf://Qwen/Qwen3-Omni-30B-A3B-Thinking"
         )
         prompt = "What is Keras?"
         output = model.generate([prompt], max_length=15)
@@ -31,7 +31,7 @@ class TestTask(TestCase):
 
     @pytest.mark.extra_large
     def test_class_detection(self):
-        preset_name = "hf://Qwen/Qwen3-Omni-30B-A3B-Instruct"
+        preset_name = "hf://Qwen/Qwen3-Omni-30B-A3B-Thinking"
         model = CausalLM.from_preset(
             preset_name,
             load_weights=False,
