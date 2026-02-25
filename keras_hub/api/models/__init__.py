@@ -159,9 +159,6 @@ from keras_hub.src.models.deepseek_v31.deepseek_v31_causal_lm import (
 from keras_hub.src.models.deepseek_v31.deepseek_v31_causal_lm_preprocessor import (
     DeepSeekV31CausalLMPreprocessor as DeepSeekV31CausalLMPreprocessor,
 )
-from keras_hub.src.models.deepseek_v31.deepseek_v31_tokenizer import (
-    DeepSeekV31Tokenizer as DeepSeekV31Tokenizer,
-)
 from keras_hub.src.models.deit.deit_backbone import DeiTBackbone as DeiTBackbone
 from keras_hub.src.models.deit.deit_image_classifier import (
     DeiTImageClassifier as DeiTImageClassifier,
