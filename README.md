@@ -1,183 +1,168 @@
-# KerasHub: Multi-framework Pretrained Models
-[![](https://github.com/keras-team/keras-hub/workflows/Tests/badge.svg?branch=master)](https://github.com/keras-team/keras-hub/actions?query=workflow%3ATests+branch%3Amaster)
-![Python](https://img.shields.io/badge/python-v3.11.0+-success.svg)
-[![Kaggle Models](https://img.shields.io/badge/Kaggle-Models-brightgreen?colorA=0099ff)](https://www.kaggle.com/organizations/keras/models)
-[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-hub/issues)
+---
+library_name: keras-hub
+license: apache-2.0
+tags:
+- text-classification
+- keras
+pipeline_tag: text-classification
+---
+### Model Overview
+An XLM-RoBERTa encoder network.
 
-> [!IMPORTANT]
-> 📢 KerasNLP is now KerasHub! 📢 Read
-> [the announcement](https://github.com/keras-team/keras-hub/issues/1831).
+This class implements a bi-directional Transformer-based encoder as
+described in ["Unsupervised Cross-lingual Representation Learning at Scale"](https://arxiv.org/abs/1911.02116).
+It includes the embedding lookups and transformer layers, but it does not
+include the masked language modeling head used during pretraining.
 
-**KerasHub** is a pretrained modeling library that aims to be simple, flexible,
-and fast. The library provides [Keras 3](https://keras.io/keras_3/)
-implementations of popular model architectures, paired with a collection of
-pretrained checkpoints available on [Kaggle Models](https://www.kaggle.com/organizations/keras/models).
-Models can be used with text, image, and audio data for generation, classification,
-and many other built in tasks.
+The default constructor gives a fully customizable, randomly initialized
+RoBERTa encoder with any number of layers, heads, and embedding dimensions.
+To load preset architectures and weights, use the `from_preset()`
+constructor.
 
-KerasHub is an extension of the core Keras API; KerasHub components are provided
-as `Layer` and `Model` implementations. If you are  familiar with Keras,
-congratulations! You already understand most of KerasHub.
+Disclaimer: Pre-trained models are provided on an "as is" basis, without
+warranties or conditions of any kind. The underlying model is provided by a
+third party and subject to a separate license, available
+[here](https://github.com/facebookresearch/fairseq).
 
-All models support JAX, TensorFlow, and PyTorch from a single model
-definition and can be fine-tuned on GPUs and TPUs out of the box. Models can
-be trained on individual accelerators with built-in PEFT techniques, or
-fine-tuned at scale with model and data parallel training. See our
-[Getting Started guide](https://keras.io/guides/keras_hub/getting_started)
-to start learning our API.
+## Links
 
-## Quick Links
+* [XLM-RoBERTa Quickstart Notebook](https://www.kaggle.com/code/laxmareddypatlolla/xlm-roberta-quickstart-notebook)
+* [XLM-RoBERTa  API Documentation](https://keras.io/keras_hub/api/models/xlm_roberta/)
+* [XLM-RoBERTa  Model Card](https://huggingface.co/FacebookAI/xlm-roberta-base)
+* [KerasHub Beginner Guide](https://keras.io/guides/keras_hub/getting_started/)
+* [KerasHub Model Publishing Guide](https://keras.io/guides/keras_hub/upload/)
 
-### For everyone
+## Installation
 
-- [Home page](https://keras.io/keras_hub)
-- [Getting started](https://keras.io/keras_hub/getting_started)
-- [Guides](https://keras.io/keras_hub/guides)
-- [API documentation](https://keras.io/keras_hub/api)
-- [Pre-trained models](https://keras.io/keras_hub/presets/)
+Keras and KerasHub can be installed with:
 
-### For contributors
-
-- [Call for Contributions](https://github.com/keras-team/keras-hub/issues/1835)
-- [Roadmap](https://github.com/keras-team/keras-hub/issues/1836)
-- [Contributing Guide](CONTRIBUTING.md)
-- [Style Guide](STYLE_GUIDE.md)
-- [API Design Guide](API_DESIGN_GUIDE.md)
-
-## Quickstart
-
-Choose a backend:
-
-```python
-import os
-os.environ["KERAS_BACKEND"] = "jax"  # Or "tensorflow" or "torch"!
+```
+pip install -U -q keras-hub
+pip install -U -q keras
 ```
 
-Import KerasHub and other libraries:
+Jax, TensorFlow, and Torch come preinstalled in Kaggle Notebooks. For instructions on installing them in another environment see the [Keras Getting Started](https://keras.io/getting_started/) page.
+
+## Presets
+
+The following model checkpoints are provided by the Keras team. Full code examples for each are available below.
+| Preset name    | Parameters | Description                                      |
+|----------------|------------|--------------------------------------------------|
+| xlm_roberta_base_multi |   277.45M  | 12-layer XLM-RoBERTa model where case is maintained. Trained on CommonCrawl in 100 languages.|
+| xlm_roberta_large_multi | 558.84M  | 24-layer XLM-RoBERTa model where case is maintained. Trained on CommonCrawl in 100 languages. |
+
+
+__Arguments__
+
+
+- __vocabulary_size__: int. The size of the token vocabulary.
+- __num_layers__: int. The number of transformer layers.
+- __num_heads__: int. The number of attention heads for each transformer.
+    The hidden size must be divisible by the number of attention heads.
+- __hidden_dim__: int. The size of the transformer encoding layer.
+- __intermediate_dim__: int. The output dimension of the first Dense layer in
+    a two-layer feedforward network for each transformer.
+- __dropout__: float. Dropout probability for the Transformer encoder.
+- __max_sequence_length__: int. The maximum sequence length this encoder can
+    consume. The sequence length of the input must be less than
+    `max_sequence_length` default value. This determines the variable
+    shape for positional embeddings.
+
+## Example Usage
+```python
+import keras
+import keras_hub
+import numpy as np
+```
+
+Raw string data.
+```python
+features = ["The quick brown fox jumped.", "نسيت الواجب"]
+labels = [0, 3]
+
+# Pretrained classifier.
+classifier = keras_hub.models.XLMRobertaClassifier.from_preset(
+    "xlm_roberta_large_multi",
+    num_classes=4,
+)
+classifier.fit(x=features, y=labels, batch_size=2)
+classifier.predict(x=features, batch_size=2)
+
+# Re-compile (e.g., with a new learning rate).
+classifier.compile(
+    loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    optimizer=keras.optimizers.Adam(5e-5),
+    jit_compile=True,
+)
+# Access backbone programmatically (e.g., to change `trainable`).
+classifier.backbone.trainable = False
+# Fit again.
+classifier.fit(x=features, y=labels, batch_size=2)
+```
+
+Preprocessed integer data.
+```python
+features = {
+    "token_ids": np.ones(shape=(2, 12), dtype="int32"),
+    "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2),
+}
+labels = [0, 3]
+
+# Pretrained classifier without preprocessing.
+classifier = keras_hub.models.XLMRobertaClassifier.from_preset(
+    "xlm_roberta_large_multi",
+    num_classes=4,
+    preprocessor=None,
+)
+classifier.fit(x=features, y=labels, batch_size=2)
+```
+
+## Example Usage with Hugging Face URI
 
 ```python
 import keras
 import keras_hub
 import numpy as np
-import tensorflow_datasets as tfds
 ```
 
-Load a resnet model and use it to predict a label for an image:
-
+Raw string data.
 ```python
-classifier = keras_hub.models.ImageClassifier.from_preset(
-    "resnet_50_imagenet",
-    activation="softmax",
+features = ["The quick brown fox jumped.", "نسيت الواجب"]
+labels = [0, 3]
+
+# Pretrained classifier.
+classifier = keras_hub.models.XLMRobertaClassifier.from_preset(
+    "hf://keras/xlm_roberta_large_multi",
+    num_classes=4,
 )
-url = "https://upload.wikimedia.org/wikipedia/commons/a/aa/California_quail.jpg"
-path = keras.utils.get_file(origin=url)
-image = keras.utils.load_img(path)
-preds = classifier.predict(np.array([image]))
-print(keras_hub.utils.decode_imagenet_predictions(preds))
+classifier.fit(x=features, y=labels, batch_size=2)
+classifier.predict(x=features, batch_size=2)
+
+# Re-compile (e.g., with a new learning rate).
+classifier.compile(
+    loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    optimizer=keras.optimizers.Adam(5e-5),
+    jit_compile=True,
+)
+# Access backbone programmatically (e.g., to change `trainable`).
+classifier.backbone.trainable = False
+# Fit again.
+classifier.fit(x=features, y=labels, batch_size=2)
 ```
 
-Load a Bert model and fine-tune it on IMDb movie reviews:
-
+Preprocessed integer data.
 ```python
-classifier = keras_hub.models.TextClassifier.from_preset(
-    "bert_base_en_uncased",
-    activation="softmax",
-    num_classes=2,
-)
-imdb_train, imdb_test = tfds.load(
-    "imdb_reviews",
-    split=["train", "test"],
-    as_supervised=True,
-    batch_size=16,
-)
-classifier.fit(imdb_train, validation_data=imdb_test)
-preds = classifier.predict(["What an amazing movie!", "A total waste of time."])
-print(preds)
-```
-
-## Installation
-
-To install the latest KerasHub release with Keras 3, simply run:
-
-```
-pip install --upgrade keras-hub
-```
-
-To install the latest nightly changes for both KerasHub and Keras, you can use
-our nightly package.
-
-```
-pip install --upgrade keras-hub-nightly
-```
-
-Currently, installing KerasHub will always pull in TensorFlow for use of the
-`tf.data` API for preprocessing. When pre-processing with `tf.data`, training
-can still happen on any backend.
-
-Visit the [core Keras getting started page](https://keras.io/getting_started/)
-for more information on installing Keras 3, accelerator support, and
-compatibility with different frameworks.
-
-## Configuring your backend
-
-If you have Keras 3 installed in your environment (see installation above),
-you can use KerasHub with any of JAX, TensorFlow and PyTorch. To do so, set the
-`KERAS_BACKEND` environment variable. For example:
-
-```shell
-export KERAS_BACKEND=jax
-```
-
-Or in Colab, with:
-
-```python
-import os
-os.environ["KERAS_BACKEND"] = "jax"
-
-import keras_hub
-```
-
-> [!IMPORTANT]
-> Make sure to set the `KERAS_BACKEND` **before** importing any Keras libraries;
-> it will be used to set up Keras when it is first imported.
-
-## Compatibility
-
-We follow [Semantic Versioning](https://semver.org/), and plan to
-provide backwards compatibility guarantees both for code and saved models built
-with our components. While we continue with pre-release `0.y.z` development, we
-may break compatibility at any time and APIs should not be considered stable.
-
-## Disclaimer
-
-KerasHub provides access to pre-trained models via the `keras_hub.models` API.
-These pre-trained models are provided on an "as is" basis, without warranties
-or conditions of any kind. The following underlying models are provided by third
-parties, and subject to separate licenses:
-BART, BLOOM, DeBERTa, DistilBERT, GPT-2, Llama, Mistral, OPT, RoBERTa, Whisper,
-and XLM-RoBERTa.
-
-## Citing KerasHub
-
-If KerasHub helps your research, we appreciate your citations.
-Here is the BibTeX entry:
-
-```bibtex
-@misc{kerashub2024,
-  title={KerasHub},
-  author={Watson, Matthew, and  Chollet, Fran\c{c}ois and Sreepathihalli,
-  Divyashree, and Saadat, Samaneh and Sampath, Ramesh, and Rasskin, Gabriel and
-  and Zhu, Scott and Singh, Varun and Wood, Luke and Tan, Zhenyu and Stenbit,
-  Ian and Qian, Chen, and Bischof, Jonathan and others},
-  year={2024},
-  howpublished={\url{https://github.com/keras-team/keras-hub}},
+features = {
+    "token_ids": np.ones(shape=(2, 12), dtype="int32"),
+    "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2),
 }
+labels = [0, 3]
+
+# Pretrained classifier without preprocessing.
+classifier = keras_hub.models.XLMRobertaClassifier.from_preset(
+    "hf://keras/xlm_roberta_large_multi",
+    num_classes=4,
+    preprocessor=None,
+)
+classifier.fit(x=features, y=labels, batch_size=2)
 ```
-
-## Acknowledgements
-
-Thank you to all of our wonderful contributors!
-
-<a href="https://github.com/keras-team/keras-hub/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=keras-team/keras-hub" />
-</a>
