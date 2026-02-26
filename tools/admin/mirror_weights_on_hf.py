@@ -101,7 +101,8 @@ def update_model_cards_on_hugging_face(presets):
                     time.sleep(KAGGLE_API_RATE_LIMIT_DELAY)  # Rate limit delay
                     break
                 except Exception as e:
-                    if "429" in str(e) and attempt < max_retries - 1:
+                    status_code = getattr(e, "status", None)
+                    if status_code == 429 and attempt < max_retries - 1:
                         wait_time = retry_delay ** (attempt + 1)
                         print(
                             f"Rate limited (429). Retrying in "
