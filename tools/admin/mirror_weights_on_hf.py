@@ -86,7 +86,10 @@ def update_model_cards_on_hugging_face(presets):
             readme_path = "README.md"
             model_slug = kaggle_handle.split("/")[1]
 
-            # Fetch model metadata from Kaggle with retry logic
+            # Skip Gemma models
+            if "gemma" in kaggle_handle:
+                print(f"Skipping Gemma model preset: {kaggle_handle}")
+                continue
             # for rate limiting
             max_retries = 3
             retry_delay = 2
@@ -101,7 +104,7 @@ def update_model_cards_on_hugging_face(presets):
                     if "429" in str(e) and attempt < max_retries - 1:
                         wait_time = retry_delay ** (attempt + 1)
                         print(
-                            f"⚠ Rate limited (429). Retrying in "
+                            f"Rate limited (429). Retrying in "
                             f"{wait_time}s... (Attempt "
                             f"{attempt + 1}/{max_retries})"
                         )
