@@ -1,9 +1,11 @@
+import keras
 import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.preprocessing.preprocessing_layer import (
+from keras_hub.src.layers.preprocessing.v2.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_hub.src.utils.tensor_utils import convert_to_list
 
 
 @keras_hub_export("keras_hub.layers.v2.MultiSegmentPacker")
@@ -190,6 +192,7 @@ class MultiSegmentPacker(PreprocessingLayer):
 
         def _canonicalize_single_input(inputs):
             if isinstance(inputs, (tuple, list)):
+                inputs = keras.tree.map_structure(convert_to_list, inputs)
                 if inputs and isinstance(inputs[0], (tuple, list)):
                     return inputs, True
                 else:

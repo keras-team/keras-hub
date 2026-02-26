@@ -106,7 +106,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         unsplittable_tokens=None,
         dtype="int32",
         **kwargs,
-    ) -> None:
+    ):
         if not is_int_dtype(dtype) and not is_string_dtype(dtype):
             raise ValueError(
                 "Output dtype must be an integer type or a string. "

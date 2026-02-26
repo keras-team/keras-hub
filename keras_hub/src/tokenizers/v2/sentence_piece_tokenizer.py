@@ -55,7 +55,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         add_bos=False,
         add_eos=False,
         **kwargs,
-    ) -> None:
+    ):
         if not is_int_dtype(dtype) and not is_string_dtype(dtype):
             raise ValueError(
                 "Output dtype must be an integer type or a string. "

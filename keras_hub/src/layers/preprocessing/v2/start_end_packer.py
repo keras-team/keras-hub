@@ -2,9 +2,10 @@ import keras
 import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.preprocessing.preprocessing_layer import (
+from keras_hub.src.layers.preprocessing.v2.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_hub.src.utils.tensor_utils import convert_to_list
 
 
 @keras_hub_export("keras_hub.layers.v2.StartEndPacker")
@@ -68,7 +69,7 @@ class StartEndPacker(PreprocessingLayer):
            [ 1,  8,  9, 10, 11,  2]], dtype=int32)
 
     Unbatched input (str).
-    >>> inputs = tf.constant(["this", "is", "fun"])
+    >>> inputs = ["this", "is", "fun"]
     >>> start_end_packer = keras_hub.layers.StartEndPacker(
     ...     sequence_length=6, start_value="<s>", end_value="</s>",
     ...     pad_value="<pad>"
@@ -78,7 +79,7 @@ class StartEndPacker(PreprocessingLayer):
     array(['<s>', 'this', 'is', 'fun', '</s>', '<pad>'], dtype='<U5')
 
     Batched input (str).
-    >>> inputs = tf.ragged.constant([["this", "is", "fun"], ["awesome"]])
+    >>> inputs = [["this", "is", "fun"], ["awesome"]]
     >>> start_end_packer = keras_hub.layers.StartEndPacker(
     ...     sequence_length=6, start_value="<s>", end_value="</s>",
     ...     pad_value="<pad>"
@@ -89,7 +90,7 @@ class StartEndPacker(PreprocessingLayer):
            ['<s>', 'awesome', '</s>', '<pad>', '<pad>', '<pad>']], dtype='<U7')
 
     Multiple start tokens.
-    >>> inputs = tf.ragged.constant([["this", "is", "fun"], ["awesome"]])
+    >>> inputs = [["this", "is", "fun"], ["awesome"]]
     >>> start_end_packer = keras_hub.layers.StartEndPacker(
     ...     sequence_length=6, start_value=["</s>", "<s>"], end_value="</s>",
     ...     pad_value="<pad>"
@@ -143,6 +144,7 @@ class StartEndPacker(PreprocessingLayer):
 
     def _canonicalize_inputs(self, inputs):
         if isinstance(inputs, (tuple, list)):
+            inputs = keras.tree.map_structure(convert_to_list, inputs)
             if inputs and isinstance(inputs[0], (tuple, list)):
                 return inputs, True
             else:
