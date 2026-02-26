@@ -2,6 +2,7 @@ import json
 import os
 import re
 import shutil
+import time
 
 from huggingface_hub import HfApi
 from huggingface_hub import hf_hub_download
@@ -18,6 +19,7 @@ except ImportError:
 HF_BASE_URI = "hf://keras"
 JSON_FILE_PATH = "tools/admin/hf_uploaded_presets.json"
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
+KAGGLE_API_RATE_LIMIT_DELAY = 1  # Delay between Kaggle API calls (s)
 
 
 def load_latest_hf_uploads(json_file_path):
@@ -54,7 +56,7 @@ def download_and_upload_missing_models(missing_in_hf_uploads):
             uploaded_handles.append(kaggle_handle)
         except Exception as e:
             print(
-                "Error in downloading  and uploading preset "
+                "Error in downloading and uploading preset "
                 f"{kaggle_handle}: {e}"
             )
             errored_uploads.append(kaggle_handle)
@@ -83,7 +85,30 @@ def update_model_cards_on_hugging_face(presets):
             repo_id = f"keras/{model}"
             readme_path = "README.md"
             model_slug = kaggle_handle.split("/")[1]
-            model_metadata = kaggle_api.model_get(f"{owner}/{model_slug}")
+
+            # Fetch model metadata from Kaggle with retry logic
+            # for rate limiting
+            max_retries = 3
+            retry_delay = 2
+            for attempt in range(max_retries):
+                try:
+                    model_metadata = kaggle_api.model_get(
+                        f"{owner}/{model_slug}"
+                    )
+                    time.sleep(KAGGLE_API_RATE_LIMIT_DELAY)  # Rate limit delay
+                    break
+                except Exception as e:
+                    if "429" in str(e) and attempt < max_retries - 1:
+                        wait_time = retry_delay ** (attempt + 1)
+                        print(
+                            f"⚠ Rate limited (429). Retrying in "
+                            f"{wait_time}s... (Attempt "
+                            f"{attempt + 1}/{max_retries})"
+                        )
+                        time.sleep(wait_time)
+                    else:
+                        raise
+
             description = model_metadata.description
             usage = model_metadata.instances[0].usage.replace(
                 "${VARIATION_SLUG}", model
@@ -158,7 +183,7 @@ def update_model_cards_on_hugging_face(presets):
                 path_in_repo="README.md",
                 repo_id=repo_id,
                 token=HF_TOKEN,
-                commit_message="Update README.md with new model card content",
+                commit_message=("Update README.md with new model card content"),
             )
             print(f"✓ Uploaded README.md to Hugging Face repository: {repo_id}")
             updated_count += 1
@@ -204,7 +229,7 @@ def main():
         JSON_FILE_PATH,
         sorted(list(set(latest_kaggle_handles) - set(errored_uploads))),
     )
-    print("uploads for the following models failed: ", errored_uploads)
+    print("Uploads for the following models failed: ", errored_uploads)
     print("Rest of the models up to date on HuggingFace")
 
     # Step 6: Update HuggingFace model card
