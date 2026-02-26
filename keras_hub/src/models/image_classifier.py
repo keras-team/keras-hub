@@ -35,17 +35,17 @@ class ImageClassifier(Task):
     Examples:
 
     Call `predict()` to run inference.
-```python
+    ```python
     # Load preset and train
     images = np.random.randint(0, 256, size=(2, 224, 224, 3))
     classifier = keras_hub.models.ImageClassifier.from_preset(
         "resnet_50_imagenet"
     )
     classifier.predict(images)
-```
+    ```
 
     Call `fit()` on a single batch.
-```python
+    ```python
     # Load preset and train
     images = np.random.randint(0, 256, size=(2, 224, 224, 3))
     labels = [0, 3]
@@ -53,10 +53,10 @@ class ImageClassifier(Task):
         "resnet_50_imagenet"
     )
     classifier.fit(x=images, y=labels, batch_size=2)
-```
+    ```
 
     Call `fit()` with custom loss, optimizer and backbone.
-```python
+    ```python
     classifier = keras_hub.models.ImageClassifier.from_preset(
         "resnet_50_imagenet"
     )
@@ -66,10 +66,10 @@ class ImageClassifier(Task):
     )
     classifier.backbone.trainable = False
     classifier.fit(x=images, y=labels, batch_size=2)
-```
+    ```
 
     Custom backbone.
-```python
+    ```python
     images = np.random.randint(0, 256, size=(2, 224, 224, 3))
     labels = [0, 3]
     backbone = keras_hub.models.ResNetBackbone(
@@ -85,7 +85,7 @@ class ImageClassifier(Task):
         num_classes=4,
     )
     classifier.fit(x=images, y=labels, batch_size=2)
-```
+    ```
     """
 
     def __init__(
@@ -100,13 +100,8 @@ class ImageClassifier(Task):
         **kwargs,
     ):
         head_dtype = head_dtype or backbone.dtype_policy
+        self.head_dtype = head_dtype  # ✅ CHANGE 1: store for serialization
         data_format = getattr(backbone, "data_format", None)
-
-        # ✅ CHANGE 1: Store head_dtype on self so get_config() can save it.
-        # Previously head_dtype was computed but never stored — so after
-        # save/load the dtype policy was silently lost for pooler,
-        # output_dropout, and output_dense layers.
-        self.head_dtype = head_dtype
 
         # === Layers ===
         self.backbone = backbone
@@ -167,10 +162,7 @@ class ImageClassifier(Task):
                 "pooling": self.pooling,
                 "activation": self.activation,
                 "dropout": self.dropout,
-                # ✅ CHANGE 2: Serialize head_dtype so it survives save/load.
-                # Previously this key was missing — confirmed by:
-                # "head_dtype in config: False"
-                "head_dtype": self.head_dtype,
+                "head_dtype": self.head_dtype,  # ✅ CHANGE 2: serialize head_dtype
             }
         )
         return config
