@@ -37,7 +37,10 @@ class VGGImageClassifier(ImageClassifier):
             VGG implementation, where backbone inputs will be flattened and
             passed through two dense layers with a `"relu"` activation.
         pooling_hidden_dim: the output feature size of the pooling dense layers.
-            This only applies when `pooling="flatten"`.
+            Only used when `pooling="flatten"`. Defaults to 4096 to match the
+            original VGG implementation.
+        dropout: float. The dropout rate to apply on the classification head.
+                Defaults to 0.0 (no dropout).
         activation: `None`, str, or callable. The activation function to use on
             the `Dense` layer. Set `activation=None` to return the output
             logits. Defaults to `"softmax"`.
@@ -132,53 +135,67 @@ class VGGImageClassifier(ImageClassifier):
                 name="pooler",
             )
         elif pooling == "flatten":
-            self.pooler = keras.Sequential(
-                [
-                    keras.layers.Flatten(name="flatten"),
-                    keras.layers.Dense(pooling_hidden_dim, activation="relu"),
-                    keras.layers.Dense(pooling_hidden_dim, activation="relu"),
-                ],
-                name="pooler",
-            )
+            self.pooler = keras.layers.Flatten(name="flatten")
         else:
             raise ValueError(
-                "Unknown `pooling` type. Polling should be either `'avg'` or "
-                f"`'max'`. Received: pooling={pooling}."
+                "Unknown `pooling` type. Pooling should be either `'avg'`, "
+                f"`'max'` or `'flatten'`. Received: pooling={pooling}."
             )
 
-        self.head = keras.Sequential(
-            [
-                keras.layers.Conv2D(
-                    filters=4096,
-                    kernel_size=7,
-                    name="fc1",
-                    activation=activation,
-                    use_bias=True,
-                    padding="same",
-                ),
-                keras.layers.Dropout(
-                    rate=dropout,
-                    dtype=head_dtype,
-                    name="output_dropout",
-                ),
-                keras.layers.Conv2D(
-                    filters=4096,
-                    kernel_size=1,
-                    name="fc2",
-                    activation=activation,
-                    use_bias=True,
-                    padding="same",
-                ),
-                self.pooler,
-                keras.layers.Dense(
-                    num_classes,
-                    activation=activation,
-                    dtype=head_dtype,
-                    name="predictions",
-                ),
-            ],
-            name="head",
-        )
+        if pooling == "flatten":
+            self.head = keras.Sequential(
+                [
+                    self.pooler,
+                    keras.layers.Dense(
+                        pooling_hidden_dim, activation="relu", name="fc1"
+                    ),
+                    keras.layers.Dropout(
+                        rate=dropout, dtype=head_dtype, name="dropout"
+                    ),
+                    keras.layers.Dense(
+                        pooling_hidden_dim, activation="relu", name="fc2"
+                    ),
+                    keras.layers.Dense(
+                        num_classes,
+                        activation=activation,
+                        dtype=head_dtype,
+                        name="predictions",
+                    ),
+                ],
+                name="head",
+            )
+        else:
+            self.head = keras.Sequential(
+                [
+                    keras.layers.Conv2D(
+                        filters=pooling_hidden_dim,
+                        kernel_size=7,
+                        name="fc1",
+                        activation="relu",
+                        use_bias=True,
+                        padding="same",
+                    ),
+                    keras.layers.Dropout(
+                        rate=dropout, dtype=head_dtype, name="output_dropout"
+                    ),
+                    keras.layers.Conv2D(
+                        filters=pooling_hidden_dim,
+                        kernel_size=1,
+                        name="fc2",
+                        activation="relu",
+                        use_bias=True,
+                        padding="same",
+                    ),
+                    self.pooler,
+                    keras.layers.Dense(
+                        num_classes,
+                        activation=activation,
+                        dtype=head_dtype,
+                        name="predictions",
+                    ),
+                ],
+                name="head",
+            )
 
         # === Functional Model ===
         inputs = self.backbone.input
