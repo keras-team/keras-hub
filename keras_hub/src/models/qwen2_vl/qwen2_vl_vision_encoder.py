@@ -65,9 +65,7 @@ class Qwen2VLPatchEmbed(keras.layers.Layer):
         # the user's default data format is channels_last.
         if self.data_format == "channels_last":
             # (batch, T, H, W, C) -> (batch, C, T, H, W)
-            hidden_states = ops.transpose(
-                hidden_states, (0, 4, 1, 2, 3)
-            )
+            hidden_states = ops.transpose(hidden_states, (0, 4, 1, 2, 3))
         hidden_states = self.proj(hidden_states)
         # Flatten spatial and temporal dims:
         # (batch, embed_dim, 1, 1, 1) -> (batch, embed_dim)

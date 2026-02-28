@@ -132,9 +132,7 @@ def validate_output(
     # HuggingFace generation.
     hf_inputs = hf_tokenizer([prompt], return_tensors="pt").to(device)
     hf_output_ids = hf_model.generate(**hf_inputs, max_new_tokens=20)
-    hf_text = hf_tokenizer.batch_decode(
-        hf_output_ids, skip_special_tokens=True
-    )
+    hf_text = hf_tokenizer.batch_decode(hf_output_ids, skip_special_tokens=True)
     print(f"HF generated:       {hf_text}")
 
     print("\n✓ Output validation complete (manual comparison above).")
