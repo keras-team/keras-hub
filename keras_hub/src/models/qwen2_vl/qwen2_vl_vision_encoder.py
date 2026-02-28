@@ -34,8 +34,10 @@ class Qwen2VLPatchEmbed(keras.layers.Layer):
         self.temporal_patch_size = temporal_patch_size
         self.in_channels = in_channels
         self.embed_dim = embed_dim
-        self.data_format = keras.config.image_data_format()
 
+        # The model's internal pipeline always produces patches in
+        # channels-first format: (batch, C, T, H, W). Keras handles
+        # cross-backend compatibility internally for Conv3D.
         self.proj = keras.layers.Conv3D(
             filters=embed_dim,
             kernel_size=(temporal_patch_size, patch_size, patch_size),
@@ -52,20 +54,11 @@ class Qwen2VLPatchEmbed(keras.layers.Layer):
         Args:
             hidden_states: Tensor of shape
                 `(total_patches, in_channels, temporal_patch_size,
-                  patch_size, patch_size)` when using
-                ``channels_first``, or
-                `(total_patches, temporal_patch_size, patch_size,
-                  patch_size, in_channels)` when using
-                ``channels_last``.
+                  patch_size, patch_size)`.
 
         Returns:
             Tensor of shape `(total_patches, embed_dim)`.
         """
-        # Conv3D always uses channels_first internally; transpose if
-        # the user's default data format is channels_last.
-        if self.data_format == "channels_last":
-            # (batch, T, H, W, C) -> (batch, C, T, H, W)
-            hidden_states = ops.transpose(hidden_states, (0, 4, 1, 2, 3))
         hidden_states = self.proj(hidden_states)
         # Flatten spatial and temporal dims:
         # (batch, embed_dim, 1, 1, 1) -> (batch, embed_dim)
