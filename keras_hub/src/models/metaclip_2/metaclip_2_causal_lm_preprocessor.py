@@ -51,7 +51,7 @@ class MetaCLIP2CausalLMPreprocessor(CausalLMPreprocessor):
     Examples:
     ```python
     # Load the preprocessor from a preset.
-    preprocessor = keras_hub.models.MetaCLIP2Preprocessor.from_preset(
+    preprocessor = keras_hub.models.MetaCLIP2CausalLMPreprocessor.from_preset(
         "metaclip_2_vit_huge_patch14_224"
     )
 

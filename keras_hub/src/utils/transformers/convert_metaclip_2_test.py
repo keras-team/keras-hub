@@ -22,7 +22,7 @@ class TestTask(TestCase):
         self.assertEqual(outputs["vision_logits"].shape, (1, 1))
         self.assertEqual(outputs["text_logits"].shape, (1, 1))
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_class_detection(self):
         model = Backbone.from_preset(
             "hf://facebook/metaclip-2-worldwide-huge-quickgelu",
