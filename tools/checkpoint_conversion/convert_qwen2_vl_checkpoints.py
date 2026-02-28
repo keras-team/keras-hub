@@ -74,15 +74,15 @@ def test_model(
         ),
     }
     hf_outputs = hf_model.model(**hf_inputs)
-    hf_hidden_states = (
+    hf_output_logits = (
         hf_outputs.last_hidden_state.detach().cpu().float().numpy()
     )
 
     keras_hub_output = keras_hub_model(keras_hub_inputs)
-    keras_hub_hidden = ops.convert_to_numpy(keras_hub_output)
+    keras_hub_logits = ops.convert_to_numpy(keras_hub_output)
 
     # Compute difference stats for reporting.
-    abs_diff = np.abs(keras_hub_hidden - hf_hidden_states)
+    abs_diff = np.abs(keras_hub_logits - hf_output_logits)
     max_abs_diff = np.max(abs_diff)
     mean_abs_diff = np.mean(abs_diff)
 
@@ -98,7 +98,7 @@ def test_model(
 
     try:
         np.testing.assert_allclose(
-            keras_hub_hidden, hf_hidden_states, atol=atol, rtol=rtol
+            keras_hub_logits, hf_output_logits, atol=atol, rtol=rtol
         )
         print("✓ All hidden states within tolerance.")
     except AssertionError as err:
@@ -110,6 +110,34 @@ def test_model(
         print(traceback.format_exc())
         print("Assertion message:")
         print(err.args[0])
+
+
+def validate_output(
+    keras_hub_model,
+    keras_hub_preprocessor,
+    hf_model,
+    hf_tokenizer,
+):
+    """Validate end-to-end text generation between KerasHub and HF models."""
+    prompt = "What is Keras?"
+
+    # KerasHub generation.
+    keras_hub_lm = keras_hub.models.Qwen2VLCausalLM(
+        backbone=keras_hub_model,
+        preprocessor=keras_hub_preprocessor,
+    )
+    keras_hub_text = keras_hub_lm.generate([prompt], max_length=20)
+    print(f"\nKerasHub generated: {keras_hub_text}")
+
+    # HuggingFace generation.
+    hf_inputs = hf_tokenizer([prompt], return_tensors="pt").to(device)
+    hf_output_ids = hf_model.generate(**hf_inputs, max_new_tokens=20)
+    hf_text = hf_tokenizer.batch_decode(
+        hf_output_ids, skip_special_tokens=True
+    )
+    print(f"HF generated:       {hf_text}")
+
+    print("\n✓ Output validation complete (manual comparison above).")
 
 
 def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
@@ -177,6 +205,12 @@ def main(_):
         hf_model,
         hf_tokenizer,
         keras_dtype,
+    )
+    validate_output(
+        keras_hub_backbone,
+        keras_hub_preprocessor,
+        hf_model,
+        hf_tokenizer,
     )
     print("\n-> Tests passed!")
 

@@ -16,7 +16,82 @@ def _qwen2_vl_kernel_initializer(stddev=0.02):
 
 @keras_hub_export("keras_hub.models.Qwen2VLBackbone")
 class Qwen2VLBackbone(Backbone):
-    """Qwen2-VL core network with optional vision encoder."""
+    """Qwen2-VL core network with optional vision encoder.
+
+    This network implements a Transformer-based decoder with Multimodal
+    Rotary Position Embedding (M-RoPE) support for handling text, image,
+    and video inputs. When a ``vision_encoder`` is provided, image/video
+    patches are encoded and interleaved with text token embeddings.
+
+    The default constructor gives a fully customizable, randomly
+    initialized Qwen2-VL model with any number of layers, heads, and
+    embedding dimensions. To load preset architectures and weights, use
+    the ``from_preset`` constructor.
+
+    Args:
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer decoder layers.
+        num_query_heads: int. The number of query attention heads for
+            each transformer layer.
+        num_key_value_heads: int. The number of key and value attention
+            heads for each transformer layer (for GQA).
+        hidden_dim: int. The size of the transformer hidden
+            representation.
+        intermediate_dim: int. The output dimension of the first Dense
+            layer in the SwiGLU feedforward network for each
+            transformer layer.
+        mrope_section: list. List of 3 ints specifying how many
+            half-head-dim elements are allocated to
+            [temporal, height, width] for M-RoPE.
+        rope_max_wavelength: float. The maximum angular wavelength of
+            the sine/cosine curves for rotary embeddings. Defaults to
+            `10000`.
+        layer_norm_epsilon: float. Epsilon for the RMS layer
+            normalization layers in the transformer decoder. Defaults
+            to `1e-6`.
+        dropout: float. Dropout rate for attention and hidden layers.
+            Defaults to `0`.
+        tie_word_embeddings: bool. Whether to tie input and output
+            embeddings. Defaults to `True`.
+        vision_encoder: ``keras.layers.Layer``. An optional
+            ``Qwen2VLVisionEncoder`` instance for processing image/video
+            inputs. When ``None``, the model operates in text-only mode.
+            Defaults to ``None``.
+        dtype: string or ``keras.mixed_precision.DTypePolicy``. The
+            dtype to use for model computations and weights. Note that
+            some computations, such as softmax and layer normalization,
+            will always be done at float32 precision regardless of
+            dtype.
+
+    Examples:
+
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array(
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]
+        ),
+        "mrope_position_ids": np.broadcast_to(
+            np.arange(12)[None, :, None],
+            (1, 12, 3),
+        ).astype("int32"),
+    }
+
+    # Randomly initialized Qwen2-VL decoder with custom config.
+    model = keras_hub.models.Qwen2VLBackbone(
+        vocabulary_size=152000,
+        hidden_dim=1536,
+        num_layers=28,
+        num_query_heads=12,
+        num_key_value_heads=2,
+        intermediate_dim=8960,
+        mrope_section=[16, 24, 24],
+        layer_norm_epsilon=1e-6,
+        dtype="float32",
+    )
+    model(input_data)
+    ```
+    """
 
     def __init__(
         self,
@@ -38,6 +113,7 @@ class Qwen2VLBackbone(Backbone):
         text_only_model = vision_encoder is None
         head_dim = hidden_dim // num_query_heads
 
+        # === Layers ===
         token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
@@ -84,6 +160,7 @@ class Qwen2VLBackbone(Backbone):
             name="sequence_output_layernorm",
         )
 
+        # === Functional Model ===
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
@@ -142,7 +219,6 @@ class Qwen2VLBackbone(Backbone):
             mrope_position_ids_input,
             head_dim,
             rope_max_wavelength,
-            mrope_section,
         )
 
         for transformer_layer in transformer_layers:
@@ -161,6 +237,7 @@ class Qwen2VLBackbone(Backbone):
             **kwargs,
         )
 
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
@@ -254,8 +331,6 @@ class Qwen2VLInterleaveEmbeddings(keras.layers.Layer):
         text_embeddings_shape,
         vision_indices_shape,
     ):
-        del vision_embeddings_shape
-        del vision_indices_shape
         return text_embeddings_shape
 
     def compute_output_spec(
@@ -304,11 +379,9 @@ class Qwen2VLFlattenVisionInputs(keras.layers.Layer):
 
 
 def _compute_mrope_embeddings(
-    mrope_position_ids, head_dim, rope_max_wavelength, mrope_section
+    mrope_position_ids, head_dim, rope_max_wavelength
 ):
     """Compute M-RoPE cos/sin embeddings from position IDs."""
-    del mrope_section  # Sections are applied in attention, not here.
-
     dim = head_dim
     inv_freq = 1.0 / (
         rope_max_wavelength

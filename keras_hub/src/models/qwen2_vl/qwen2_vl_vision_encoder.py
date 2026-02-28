@@ -1,10 +1,3 @@
-"""Qwen2-VL Vision Encoder.
-
-This module implements the Vision Transformer (ViT) for Qwen2-VL,
-including 3D patch embedding, 2D rotary position embeddings,
-vision attention, transformer blocks, and spatial patch merging.
-"""
-
 import keras
 from keras import ops
 
@@ -20,19 +13,19 @@ class Qwen2VLPatchEmbed(keras.layers.Layer):
     Args:
         patch_size: int. Spatial patch size (height and width).
         temporal_patch_size: int. Temporal patch size (number of frames
-            grouped together). Defaults to `2`.
-        in_channels: int. Number of input channels. Defaults to `3`.
-        embed_dim: int. Embedding dimension. Defaults to `1152`.
+            grouped together).
+        in_channels: int. Number of input channels.
+        embed_dim: int. Embedding dimension.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype
             for computations and weights.
     """
 
     def __init__(
         self,
-        patch_size=14,
-        temporal_patch_size=2,
-        in_channels=3,
-        embed_dim=1152,
+        patch_size,
+        temporal_patch_size,
+        in_channels,
+        embed_dim,
         dtype=None,
         **kwargs,
     ):
@@ -41,6 +34,7 @@ class Qwen2VLPatchEmbed(keras.layers.Layer):
         self.temporal_patch_size = temporal_patch_size
         self.in_channels = in_channels
         self.embed_dim = embed_dim
+        self.data_format = keras.config.image_data_format()
 
         self.proj = keras.layers.Conv3D(
             filters=embed_dim,
@@ -58,11 +52,22 @@ class Qwen2VLPatchEmbed(keras.layers.Layer):
         Args:
             hidden_states: Tensor of shape
                 `(total_patches, in_channels, temporal_patch_size,
-                  patch_size, patch_size)`.
+                  patch_size, patch_size)` when using
+                ``channels_first``, or
+                `(total_patches, temporal_patch_size, patch_size,
+                  patch_size, in_channels)` when using
+                ``channels_last``.
 
         Returns:
             Tensor of shape `(total_patches, embed_dim)`.
         """
+        # Conv3D always uses channels_first internally; transpose if
+        # the user's default data format is channels_last.
+        if self.data_format == "channels_last":
+            # (batch, T, H, W, C) -> (batch, C, T, H, W)
+            hidden_states = ops.transpose(
+                hidden_states, (0, 4, 1, 2, 3)
+            )
         hidden_states = self.proj(hidden_states)
         # Flatten spatial and temporal dims:
         # (batch, embed_dim, 1, 1, 1) -> (batch, embed_dim)

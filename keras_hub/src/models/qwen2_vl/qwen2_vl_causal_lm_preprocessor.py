@@ -1,9 +1,3 @@
-"""Qwen2-VL Causal LM Preprocessor.
-
-Handles tokenization, image preprocessing, vision token placement,
-and M-RoPE position ID computation for Qwen2-VL.
-"""
-
 import keras
 import tensorflow as tf
 

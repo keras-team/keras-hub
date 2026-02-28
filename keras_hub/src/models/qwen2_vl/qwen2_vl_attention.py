@@ -93,11 +93,15 @@ class Qwen2VLAttention(keras.layers.Layer):
         num_query_heads: int. Number of query attention heads.
         num_key_value_heads: int. Number of key/value heads (for GQA).
         hidden_dim: int. Model hidden dimension.
-        mrope_section: List of 3 ints specifying how many half-head-dim
-            elements are allocated to [temporal, height, width].
+        mrope_section: list. List of 3 ints specifying how many
+            half-head-dim elements are allocated to
+            [temporal, height, width].
         rope_max_wavelength: float. Max wavelength for RoPE base.
-        kernel_initializer: Initializer for the kernel weights.
-        bias_initializer: Initializer for the bias weights.
+            Defaults to `10000`.
+        kernel_initializer: string or `keras.initializers`. Initializer
+            for the kernel weights. Defaults to `"glorot_uniform"`.
+        bias_initializer: string or `keras.initializers`. Initializer
+            for the bias weights. Defaults to `"zeros"`.
         dropout: float. Dropout rate for attention weights.
         use_sliding_window_attention: bool. Whether to use sliding window.
         sliding_window_size: int. Sliding window size.

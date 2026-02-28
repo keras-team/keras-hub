@@ -1,9 +1,3 @@
-"""Qwen2-VL Transformer Decoder layer.
-
-Uses the Qwen2-VL attention with M-RoPE support instead of
-standard QwenAttention.
-"""
-
 import keras
 from keras import ops
 
