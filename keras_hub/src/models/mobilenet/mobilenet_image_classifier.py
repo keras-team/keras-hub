@@ -24,6 +24,7 @@ class MobileNetImageClassifier(ImageClassifier):
         **kwargs,
     ):
         head_dtype = head_dtype or backbone.dtype_policy
+        self.head_dtype = head_dtype
         data_format = getattr(backbone, "data_format", None)
 
         # === Layers ===
@@ -79,6 +80,7 @@ class MobileNetImageClassifier(ImageClassifier):
             {
                 "num_classes": self.num_classes,
                 "num_features": self.num_features,
+                "head_dtype": self.head_dtype,
             }
         )
         return config

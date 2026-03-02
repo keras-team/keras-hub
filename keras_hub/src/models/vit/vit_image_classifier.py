@@ -120,6 +120,7 @@ class ViTImageClassifier(ImageClassifier):
         **kwargs,
     ):
         head_dtype = head_dtype or backbone.dtype_policy
+        self.head_dtype = head_dtype
 
         # === Layers ===
         self.backbone = backbone
@@ -182,6 +183,7 @@ class ViTImageClassifier(ImageClassifier):
                 "intermediate_dim": self.intermediate_dim,
                 "activation": self.activation,
                 "dropout": self.dropout,
+                "head_dtype": self.head_dtype,
             }
         )
         return config
