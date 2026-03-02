@@ -40,7 +40,7 @@ class VGGImageClassifier(ImageClassifier):
             Only used when `pooling="flatten"`. Defaults to 4096 to match the
             original VGG implementation.
         dropout: float. The dropout rate to apply on the classification head.
-                Defaults to 0.0 (no dropout).
+            Defaults to 0.0 (no dropout).
         activation: `None`, str, or callable. The activation function to use on
             the `Dense` layer. Set `activation=None` to return the output
             logits. Defaults to `"softmax"`.
