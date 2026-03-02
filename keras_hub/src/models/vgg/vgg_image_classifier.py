@@ -150,7 +150,7 @@ class VGGImageClassifier(ImageClassifier):
                         pooling_hidden_dim, activation="relu", name="fc1"
                     ),
                     keras.layers.Dropout(
-                        rate=dropout, dtype=head_dtype, name="dropout"
+                        rate=dropout, dtype=head_dtype, name="output_dropout"
                     ),
                     keras.layers.Dense(
                         pooling_hidden_dim, activation="relu", name="fc2"
