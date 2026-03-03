@@ -21,8 +21,8 @@ class VGGImageClassifier(ImageClassifier):
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
     labels where `x` is a string and `y` is a integer from `[0, num_classes)`.
 
-    Not that unlike `keras_hub.model.ImageClassifier`, the `VGGImageClassifier`
-    allows and defaults to `pooling="flatten"`, when inputs are flatten and
+    Note that unlike `keras_hub.model.ImageClassifier`, the `VGGImageClassifier`
+    allows `pooling="flatten"`, where the backbone outputs are flattened and
     passed through two intermediate dense layers before the final output
     projection.
 
@@ -33,11 +33,9 @@ class VGGImageClassifier(ImageClassifier):
             a `keras.Layer` instance, or a callable. If `None` no preprocessing
             will be applied to the inputs.
         pooling: `"flatten"`, `"avg"`, or `"max"`. The type of pooling to apply
-            on backbone output. The default is flatten to match the original
-            VGG implementation, where backbone inputs will be flattened and
-            passed through two dense layers with a `"relu"` activation.
-        pooling_hidden_dim: the output feature size of the pooling dense layers.
-            Only used when `pooling="flatten"`. Defaults to 4096 to match the
+            on the backbone output. The default is `"avg"`.
+        pooling_hidden_dim: the output feature size of the classification head
+            before the last `Dense` layer. Defaults to 4096 to match the
             original VGG implementation.
         dropout: float. The dropout rate to apply on the classification head.
             Defaults to 0.0 (no dropout).
@@ -88,7 +86,7 @@ class VGGImageClassifier(ImageClassifier):
     ```python
     images = np.random.randint(0, 256, size=(2, 224, 224, 3))
     labels = [0, 3]
-    model = keras_hub.models.VGGBackbone(
+    backbone = keras_hub.models.VGGBackbone(
         stackwise_num_repeats = [2, 2, 3, 3, 3],
         stackwise_num_filters = [64, 128, 256, 512, 512],
         image_shape = (224, 224, 3),
