@@ -167,7 +167,7 @@ class DeiTImageClassifier(ImageClassifier):
                 "pooling": self.pooling,
                 "activation": self.activation,
                 "dropout": self.dropout,
-                "head_dtype": self.head_dtype,
+                "head_dtype": keras.dtype_policies.serialize(self.head_dtype),
             }
         )
         return config

@@ -80,7 +80,7 @@ class MobileNetImageClassifier(ImageClassifier):
             {
                 "num_classes": self.num_classes,
                 "num_features": self.num_features,
-                "head_dtype": self.head_dtype,
+                "head_dtype": keras.dtype_policies.serialize(self.head_dtype),
             }
         )
         return config

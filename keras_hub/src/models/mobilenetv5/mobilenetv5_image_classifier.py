@@ -153,7 +153,7 @@ class MobileNetV5ImageClassifier(ImageClassifier):
                 "head_hidden_size": self.head_hidden_size,
                 "global_pool": self.global_pool_type,
                 "drop_rate": self.drop_rate,
-                "head_dtype": self.head_dtype,
+                "head_dtype": keras.dtype_policies.serialize(self.head_dtype),
             }
         )
         return config

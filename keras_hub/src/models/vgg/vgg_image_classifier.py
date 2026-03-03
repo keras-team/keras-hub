@@ -212,7 +212,7 @@ class VGGImageClassifier(ImageClassifier):
                 "activation": self.activation,
                 "pooling_hidden_dim": self.pooling_hidden_dim,
                 "dropout": self.dropout,
-                "head_dtype": self.head_dtype,
+                "head_dtype": keras.dtype_policies.serialize(self.head_dtype),
             }
         )
         return config

@@ -212,7 +212,7 @@ class HGNetV2ImageClassifier(ImageClassifier):
                 "activation": self.activation,
                 "dropout": self.dropout,
                 "head_filters": self.head_filters,
-                "head_dtype": self.head_dtype,
+                "head_dtype": keras.dtype_policies.serialize(self.head_dtype),
             }
         )
         return config
