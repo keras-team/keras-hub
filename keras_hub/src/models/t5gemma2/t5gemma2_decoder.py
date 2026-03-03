@@ -62,6 +62,7 @@ class T5Gemma2DecoderLayer(keras.layers.Layer):
         attn_logit_softcapping=None,
         sliding_window=None,
         rope_max_wavelength=10000.0,
+        rope_scaling_factor=1.0,
         use_query_key_norm=True,
         dtype=None,
         **kwargs,
@@ -82,6 +83,7 @@ class T5Gemma2DecoderLayer(keras.layers.Layer):
         self.attention_type = layer_type
         self.sliding_window = sliding_window
         self.rope_max_wavelength = rope_max_wavelength
+        self.rope_scaling_factor = rope_scaling_factor
         self.cross_attention_hidden_size = cross_attention_hidden_size
         self.attn_logit_softcapping = attn_logit_softcapping
         self.use_query_key_norm = use_query_key_norm
@@ -110,6 +112,7 @@ class T5Gemma2DecoderLayer(keras.layers.Layer):
             attention_dropout=attention_dropout,
             attn_logit_softcapping=attn_logit_softcapping,
             rope_max_wavelength=self.rope_max_wavelength,
+            rope_scaling_factor=self.rope_scaling_factor,
             use_query_key_norm=use_query_key_norm,
             rms_norm_eps=rms_norm_eps,
             dtype=self.dtype_policy,

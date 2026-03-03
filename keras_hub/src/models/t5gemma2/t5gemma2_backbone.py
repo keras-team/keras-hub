@@ -138,6 +138,7 @@ class T5Gemma2Backbone(Backbone):
         attn_logit_softcapping=None,
         final_logit_softcapping=None,
         rope_max_wavelength=10000.0,
+        global_rope_scaling_factor=1.0,
         use_query_key_norm=True,
         dtype=None,
         **kwargs,
@@ -160,59 +161,89 @@ class T5Gemma2Backbone(Backbone):
             dtype=dtype,
             name="decoder_token_embedding",
         )
-        self.encoder_layers = [
-            T5Gemma2EncoderLayer(
-                hidden_size=encoder_hidden_dim,
-                rms_norm_eps=rms_norm_eps,
-                num_attention_heads=encoder_num_attention_heads,
-                num_key_value_heads=encoder_num_key_value_heads,
-                query_pre_attn_scalar=query_pre_attn_scalar,
-                attention_bias=attention_bias,
-                intermediate_size=encoder_intermediate_dim,
-                hidden_activation=hidden_activation,
-                head_dim=encoder_head_dim,
-                dropout_rate=dropout_rate,
-                initializer_range=initializer_range,
-                attention_dropout=attention_dropout,
-                layer_type=encoder_layer_types[i],
-                sliding_window=sliding_window,
-                attn_logit_softcapping=attn_logit_softcapping,
-                rope_max_wavelength=rope_max_wavelength,
-                use_query_key_norm=use_query_key_norm,
-                name=f"encoder_layer_{i}",
-                dtype=dtype,
+        self.encoder_layers = []
+        for i in range(encoder_num_layers):
+            # Per-layer RoPE wavelength: 10K for sliding, 1M for global.
+            layer_rope = (
+                rope_max_wavelength
+                if encoder_layer_types[i] == "sliding_attention"
+                else 1_000_000.0
             )
-            for i in range(encoder_num_layers)
-        ]
+            # Per-layer RoPE scaling: 1.0 for sliding (default),
+            # global_rope_scaling_factor for full_attention (linear).
+            layer_rope_factor = (
+                1.0
+                if encoder_layer_types[i] == "sliding_attention"
+                else global_rope_scaling_factor
+            )
+            self.encoder_layers.append(
+                T5Gemma2EncoderLayer(
+                    hidden_size=encoder_hidden_dim,
+                    rms_norm_eps=rms_norm_eps,
+                    num_attention_heads=encoder_num_attention_heads,
+                    num_key_value_heads=encoder_num_key_value_heads,
+                    query_pre_attn_scalar=query_pre_attn_scalar,
+                    attention_bias=attention_bias,
+                    intermediate_size=encoder_intermediate_dim,
+                    hidden_activation=hidden_activation,
+                    head_dim=encoder_head_dim,
+                    dropout_rate=dropout_rate,
+                    initializer_range=initializer_range,
+                    attention_dropout=attention_dropout,
+                    layer_type=encoder_layer_types[i],
+                    sliding_window=sliding_window,
+                    attn_logit_softcapping=attn_logit_softcapping,
+                    rope_max_wavelength=layer_rope,
+                    rope_scaling_factor=layer_rope_factor,
+                    use_query_key_norm=use_query_key_norm,
+                    name=f"encoder_layer_{i}",
+                    dtype=dtype,
+                )
+            )
         self.encoder_norm = RMSNormalization(epsilon=rms_norm_eps, dtype=dtype)
         self.encoder_dropout = keras.layers.Dropout(dropout_rate, dtype=dtype)
-        self.decoder_layers = [
-            T5Gemma2DecoderLayer(
-                hidden_size=decoder_hidden_dim,
-                rms_norm_eps=rms_norm_eps,
-                num_attention_heads=decoder_num_attention_heads,
-                num_key_value_heads=decoder_num_key_value_heads,
-                query_pre_attn_scalar=query_pre_attn_scalar,
-                attention_bias=attention_bias,
-                intermediate_size=decoder_intermediate_dim,
-                hidden_activation=hidden_activation,
-                dropout_rate=dropout_rate,
-                initializer_range=initializer_range,
-                head_dim=decoder_head_dim,
-                attention_dropout=attention_dropout,
-                layer_type=decoder_layer_types[i],
-                sliding_window=sliding_window,
-                cross_attention_hidden_size=(
-                    cross_attention_hidden_size or encoder_hidden_dim
-                ),
-                attn_logit_softcapping=attn_logit_softcapping,
-                rope_max_wavelength=rope_max_wavelength,
-                use_query_key_norm=use_query_key_norm,
-                name=f"decoder_layer_{i}",
-                dtype=dtype,
+        self.decoder_layers = []
+        for i in range(decoder_num_layers):
+            # Per-layer RoPE wavelength: 10K for sliding, 1M for global.
+            layer_rope = (
+                rope_max_wavelength
+                if decoder_layer_types[i] == "sliding_attention"
+                else 1_000_000.0
             )
-            for i in range(decoder_num_layers)
-        ]
+            # Per-layer RoPE scaling: 1.0 for sliding (default),
+            # global_rope_scaling_factor for full_attention (linear).
+            layer_rope_factor = (
+                1.0
+                if decoder_layer_types[i] == "sliding_attention"
+                else global_rope_scaling_factor
+            )
+            self.decoder_layers.append(
+                T5Gemma2DecoderLayer(
+                    hidden_size=decoder_hidden_dim,
+                    rms_norm_eps=rms_norm_eps,
+                    num_attention_heads=decoder_num_attention_heads,
+                    num_key_value_heads=decoder_num_key_value_heads,
+                    query_pre_attn_scalar=query_pre_attn_scalar,
+                    attention_bias=attention_bias,
+                    intermediate_size=decoder_intermediate_dim,
+                    hidden_activation=hidden_activation,
+                    dropout_rate=dropout_rate,
+                    initializer_range=initializer_range,
+                    head_dim=decoder_head_dim,
+                    attention_dropout=attention_dropout,
+                    layer_type=decoder_layer_types[i],
+                    sliding_window=sliding_window,
+                    cross_attention_hidden_size=(
+                        cross_attention_hidden_size or encoder_hidden_dim
+                    ),
+                    attn_logit_softcapping=attn_logit_softcapping,
+                    rope_max_wavelength=layer_rope,
+                    rope_scaling_factor=layer_rope_factor,
+                    use_query_key_norm=use_query_key_norm,
+                    name=f"decoder_layer_{i}",
+                    dtype=dtype,
+                )
+            )
         self.decoder_norm = RMSNormalization(epsilon=rms_norm_eps, dtype=dtype)
         self.decoder_dropout = keras.layers.Dropout(dropout_rate, dtype=dtype)
 

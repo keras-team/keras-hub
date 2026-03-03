@@ -6,23 +6,27 @@ backbone_cls = T5Gemma2Backbone
 
 def convert_backbone_config(transformers_config):
     """Convert a HuggingFace T5Gemma2 config to KerasHub backbone config."""
+    # T5Gemma2EncoderConfig is Gemma3Config with text params at
+    # encoder["text_config"]; decoder is Gemma3TextConfig (flat).
     encoder_config = transformers_config["encoder"]
+    enc_text = encoder_config["text_config"]
     decoder_config = transformers_config["decoder"]
 
-    if decoder_config.get("hidden_activation") == "gelu_pytorch_tanh":
-        decoder_config["hidden_activation"] = "gelu_approximate"
-    if encoder_config.get("hidden_activation") == "gelu_pytorch_tanh":
-        encoder_config["hidden_activation"] = "gelu_approximate"
+    hidden_activation = decoder_config.get(
+        "hidden_activation", "gelu_pytorch_tanh"
+    )
+    if hidden_activation == "gelu_pytorch_tanh":
+        hidden_activation = "gelu_approximate"
 
     backbone_config = {
         "vocabulary_size": decoder_config["vocab_size"],
-        "encoder_hidden_dim": encoder_config["hidden_size"],
-        "encoder_intermediate_dim": encoder_config["intermediate_size"],
-        "encoder_num_layers": encoder_config["num_hidden_layers"],
-        "encoder_num_attention_heads": encoder_config["num_attention_heads"],
-        "encoder_num_key_value_heads": encoder_config["num_key_value_heads"],
-        "encoder_head_dim": encoder_config["head_dim"],
-        "encoder_layer_types": encoder_config["layer_types"],
+        "encoder_hidden_dim": enc_text["hidden_size"],
+        "encoder_intermediate_dim": enc_text["intermediate_size"],
+        "encoder_num_layers": enc_text["num_hidden_layers"],
+        "encoder_num_attention_heads": enc_text["num_attention_heads"],
+        "encoder_num_key_value_heads": enc_text["num_key_value_heads"],
+        "encoder_head_dim": enc_text["head_dim"],
+        "encoder_layer_types": enc_text["layer_types"],
         "decoder_hidden_dim": decoder_config["hidden_size"],
         "decoder_intermediate_dim": decoder_config["intermediate_size"],
         "decoder_num_layers": decoder_config["num_hidden_layers"],
@@ -37,14 +41,17 @@ def convert_backbone_config(transformers_config):
             "tie_word_embeddings", True
         ),
         "attention_bias": decoder_config["attention_bias"],
-        "hidden_activation": decoder_config["hidden_activation"],
+        "hidden_activation": hidden_activation,
         "initializer_range": decoder_config["initializer_range"],
         "attention_dropout": decoder_config["attention_dropout"],
         "sliding_window": decoder_config["sliding_window"],
-        "cross_attention_hidden_size": encoder_config["hidden_size"],
+        "cross_attention_hidden_size": enc_text["hidden_size"],
         "attn_logit_softcapping": decoder_config["attn_logit_softcapping"],
         "final_logit_softcapping": decoder_config["final_logit_softcapping"],
-        "rope_max_wavelength": decoder_config["rope_theta"],
+        "rope_max_wavelength": decoder_config.get("rope_theta", 10000.0),
+        "global_rope_scaling_factor": decoder_config.get("rope_parameters", {})
+        .get("full_attention", {})
+        .get("factor", 1.0),
         "use_query_key_norm": True,
     }
     return backbone_config
@@ -53,23 +60,24 @@ def convert_backbone_config(transformers_config):
 def convert_weights(backbone, loader, transformers_config):
     """Convert T5Gemma2 weights from HuggingFace to KerasHub."""
     # Token embeddings.
+    # Encoder embeds are under encoder.text_model.embed_tokens.*
     loader.port_weight(
         keras_variable=backbone.token_embedding.embeddings,
-        hf_weight_key="encoder.embed_tokens.weight",
+        hf_weight_key="encoder.text_model.embed_tokens.weight",
     )
     loader.port_weight(
         keras_variable=backbone.decoder_token_embedding.embeddings,
         hf_weight_key="decoder.embed_tokens.weight",
     )
 
-    # Encoder.
+    # Encoder (weights under encoder.text_model.*).
     loader.port_weight(
         keras_variable=backbone.encoder_norm.scale,
-        hf_weight_key="encoder.norm.weight",
+        hf_weight_key="encoder.text_model.norm.weight",
     )
     for i in range(backbone.encoder_num_layers):
         layer = backbone.get_layer(f"encoder_layer_{i}")
-        hf_prefix = f"encoder.layers.{i}"
+        hf_prefix = f"encoder.text_model.layers.{i}"
 
         # Self-attention Q/K/V/O projections.
         loader.port_weight(
@@ -138,7 +146,7 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=(f"{hf_prefix}.post_feedforward_layernorm.weight"),
         )
 
-    # Decoder.
+    # Decoder (weights directly under decoder.*).
     loader.port_weight(
         keras_variable=backbone.decoder_norm.scale,
         hf_weight_key="decoder.norm.weight",

@@ -79,6 +79,7 @@ class T5Gemma2Attention(CachedGemmaAttention):
         attention_dropout=0.0,
         attn_logit_softcapping=None,
         rope_max_wavelength=10000.0,
+        rope_scaling_factor=1.0,
         use_query_key_norm=True,
         rms_norm_eps=1e-6,
         dtype=None,
@@ -102,6 +103,7 @@ class T5Gemma2Attention(CachedGemmaAttention):
         self.initializer_range = initializer_range
         self.attention_dropout = attention_dropout
         self.rope_max_wavelength = rope_max_wavelength
+        self.rope_scaling_factor = rope_scaling_factor
         self.use_query_key_norm = use_query_key_norm
         self.rms_norm_eps = rms_norm_eps
         self.num_key_value_groups = (
@@ -184,6 +186,7 @@ class T5Gemma2Attention(CachedGemmaAttention):
 
         self.rotary_embedding = RotaryEmbedding(
             max_wavelength=self.rope_max_wavelength,
+            scaling_factor=self.rope_scaling_factor,
             sequence_axis=1,
             feature_axis=3,
             name="rotary_embedding",
@@ -389,6 +392,7 @@ class T5Gemma2MergedAttention(CachedGemmaAttention):
         attention_dropout=0.0,
         attn_logit_softcapping=None,
         rope_max_wavelength=10000.0,
+        rope_scaling_factor=1.0,
         use_query_key_norm=True,
         rms_norm_eps=1e-6,
         dtype=None,
@@ -415,6 +419,7 @@ class T5Gemma2MergedAttention(CachedGemmaAttention):
         self.initializer_range = initializer_range
         self.attention_dropout = attention_dropout
         self.rope_max_wavelength = rope_max_wavelength
+        self.rope_scaling_factor = rope_scaling_factor
         self.use_query_key_norm = use_query_key_norm
         self.rms_norm_eps = rms_norm_eps
         self.num_key_value_groups = (
@@ -505,6 +510,7 @@ class T5Gemma2MergedAttention(CachedGemmaAttention):
 
         self.rotary_embedding = RotaryEmbedding(
             max_wavelength=self.rope_max_wavelength,
+            scaling_factor=self.rope_scaling_factor,
             sequence_axis=1,
             feature_axis=3,
             name="rotary_embedding",
