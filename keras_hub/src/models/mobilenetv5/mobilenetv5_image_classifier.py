@@ -88,7 +88,6 @@ class MobileNetV5ImageClassifier(ImageClassifier):
         **kwargs,
     ):
         head_dtype = head_dtype or backbone.dtype_policy
-        self.head_dtype = head_dtype
         data_format = getattr(backbone, "data_format", "channels_last")
 
         # === Layers ===
@@ -141,6 +140,7 @@ class MobileNetV5ImageClassifier(ImageClassifier):
 
         # === Config ===
         self.num_classes = num_classes
+        self.head_dtype = head_dtype
         self.head_hidden_size = head_hidden_size
         self.global_pool_type = global_pool
         self.drop_rate = drop_rate

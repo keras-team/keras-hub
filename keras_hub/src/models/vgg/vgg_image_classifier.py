@@ -114,7 +114,6 @@ class VGGImageClassifier(ImageClassifier):
         **kwargs,
     ):
         head_dtype = head_dtype or backbone.dtype_policy
-        self.head_dtype = head_dtype
         data_format = getattr(backbone, "data_format", None)
 
         # === Layers ===
@@ -196,6 +195,7 @@ class VGGImageClassifier(ImageClassifier):
 
         # === Config ===
         self.num_classes = num_classes
+        self.head_dtype = head_dtype
         self.activation = activation
         self.pooling = pooling
         self.pooling_hidden_dim = pooling_hidden_dim

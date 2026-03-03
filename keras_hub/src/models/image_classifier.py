@@ -100,6 +100,7 @@ class ImageClassifier(Task):
         **kwargs,
     ):
         head_dtype = head_dtype or backbone.dtype_policy
+        self.head_dtype = head_dtype
         data_format = getattr(backbone, "data_format", None)
 
         # === Layers ===
@@ -161,6 +162,7 @@ class ImageClassifier(Task):
                 "pooling": self.pooling,
                 "activation": self.activation,
                 "dropout": self.dropout,
+                "head_dtype": self.head_dtype,
             }
         )
         return config

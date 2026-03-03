@@ -117,7 +117,6 @@ class HGNetV2ImageClassifier(ImageClassifier):
     ):
         name = kwargs.get("name", "hgnetv2_image_classifier")
         head_dtype = head_dtype or backbone.dtype_policy
-        self.head_dtype = head_dtype
         data_format = getattr(backbone, "data_format", "channels_last")
         channel_axis = -1 if data_format == "channels_last" else 1
         self.head_filters = (
@@ -202,6 +201,7 @@ class HGNetV2ImageClassifier(ImageClassifier):
         self.pooling = pooling
         self.dropout = dropout
         self.num_classes = num_classes
+        self.head_dtype = head_dtype
 
     def get_config(self):
         config = Task.get_config(self)

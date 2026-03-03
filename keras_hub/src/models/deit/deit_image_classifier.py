@@ -115,7 +115,6 @@ class DeiTImageClassifier(ImageClassifier):
         **kwargs,
     ):
         head_dtype = head_dtype or backbone.dtype_policy
-        self.head_dtype = head_dtype
 
         # === Layers ===
         self.backbone = backbone
@@ -154,6 +153,7 @@ class DeiTImageClassifier(ImageClassifier):
 
         # === config ===
         self.num_classes = num_classes
+        self.head_dtype = head_dtype
         self.pooling = pooling
         self.activation = activation
         self.dropout = dropout
