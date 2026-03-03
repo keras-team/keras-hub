@@ -56,6 +56,9 @@ from keras_hub.src.models.llama.llama_tokenizer import (
 from keras_hub.src.models.llama3.llama3_tokenizer import (
     Llama3Tokenizer as Llama3Tokenizer,
 )
+from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (
+    MetaCLIP2Tokenizer as MetaCLIP2Tokenizer,
+)
 from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
@@ -112,6 +115,9 @@ from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer as T5Tokenizer
 from keras_hub.src.models.t5gemma.t5gemma_tokenizer import (
     T5GemmaTokenizer as T5GemmaTokenizer,
 )
+from keras_hub.src.models.video_prism.video_prism_tokenizer import (
+    VideoPrismTokenizer as VideoPrismTokenizer,
+)
 from keras_hub.src.models.whisper.whisper_tokenizer import (
     WhisperTokenizer as WhisperTokenizer,
 )
@@ -140,3 +146,4 @@ from keras_hub.src.tokenizers.word_piece_tokenizer import (
 from keras_hub.src.tokenizers.word_piece_tokenizer_trainer import (
     compute_word_piece_vocabulary as compute_word_piece_vocabulary,
 )
+from keras_hub.tokenizers import v2 as v2
