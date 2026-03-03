@@ -171,7 +171,7 @@ class VGGImageClassifier(ImageClassifier):
                         name="fc1",
                         activation="relu",
                         use_bias=True,
-                        padding="same",
+                        padding="valid",
                     ),
                     keras.layers.Dropout(
                         rate=dropout, dtype=head_dtype, name="output_dropout"
