@@ -238,6 +238,78 @@ class TransformerDecoder(keras.layers.Layer):
         # Create layers based on input shape.
         self.built = True
 
+    def call_cached(
+        self,
+        decoder_sequence,
+        self_attention_cache,
+        self_attention_cache_update_index,
+        self_attention_mask=None,
+    ):
+        """Ultra-fast path for cached autoregressive decoding (decoder-only).
+
+        Bypasses ALL Layer.__call__ overhead by calling .call() directly
+        on every sublayer. This is safe during cached inference because:
+        - All layers are already built
+        - Input dtypes are already correct (same dtype flows through)
+        - No masking metadata needed
+        - No training-mode checks needed (always inference)
+        - No autocast scope changes needed
+
+        This saves ~10 Layer.__call__ invocations per transformer layer:
+        - 1 for self_attention_layer_norm
+        - 1 for self_attention_layer (which internally saves 4 more for
+          query/key/value/output dense via call_cached)
+        - 1 for feedforward_layer_norm
+        - 1 for feedforward_intermediate_dense
+        - 1 for feedforward_output_dense
+        """
+        x = decoder_sequence
+
+        # Self attention block (normalize_first path for GPT-2).
+        residual = x
+        if self.normalize_first:
+            x = self._self_attention_layer_norm.call(x)
+
+        # Compute mask only if not provided (fallback).
+        if self_attention_mask is None:
+            self_attention_mask = self._compute_self_attention_mask(
+                decoder_sequence=decoder_sequence,
+                decoder_padding_mask=None,
+                decoder_attention_mask=None,
+                use_causal_mask=True,
+                self_attention_cache=self_attention_cache,
+                self_attention_cache_update_index=(
+                    self_attention_cache_update_index
+                ),
+            )
+
+        # Use call_cached() on the attention layer to bypass Layer.__call__
+        # overhead on all dense sublayers (query, key, value, output).
+        self._self_attention_layer._use_sdpa_override = True
+        x, self_attention_cache = self._self_attention_layer.call_cached(
+            query=x,
+            attention_mask=self_attention_mask,
+            cache=self_attention_cache,
+            cache_update_index=self_attention_cache_update_index,
+        )
+        self._self_attention_layer._use_sdpa_override = False
+
+        x = x + residual
+        if not self.normalize_first:
+            x = self._self_attention_layer_norm.call(x)
+
+        # Feedforward block - bypass Layer.__call__ on all dense layers.
+        residual = x
+        if self.normalize_first:
+            x = self._feedforward_layer_norm.call(x)
+        x = self._feedforward_intermediate_dense.call(x)
+        x = self._feedforward_output_dense.call(x)
+        x = x + residual
+        if not self.normalize_first:
+            x = self._feedforward_layer_norm.call(x)
+
+        return (x, self_attention_cache)
+
     def call(
         self,
         decoder_sequence,

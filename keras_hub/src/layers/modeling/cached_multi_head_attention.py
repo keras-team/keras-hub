@@ -3,6 +3,21 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 
+# Check if SDPA is available for the PyTorch backend.
+_TORCH_SDPA_AVAILABLE = None
+
+
+def _check_torch_sdpa():
+    global _TORCH_SDPA_AVAILABLE
+    if _TORCH_SDPA_AVAILABLE is None:
+        try:
+            import torch.nn.functional as F
+
+            _TORCH_SDPA_AVAILABLE = hasattr(F, "scaled_dot_product_attention")
+        except ImportError:
+            _TORCH_SDPA_AVAILABLE = False
+    return _TORCH_SDPA_AVAILABLE
+
 
 @keras_hub_export("keras_hub.layers.CachedMultiHeadAttention")
 class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
@@ -121,3 +136,112 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         if cache is not None:
             return attention_output, cache
         return attention_output
+
+    def call_cached(
+        self,
+        query,
+        attention_mask=None,
+        cache=None,
+        cache_update_index=None,
+    ):
+        """Ultra-fast path for cached autoregressive decoding.
+
+        Bypasses Layer.__call__ overhead on all sublayers by calling
+        .call() directly. This is safe because:
+        - All sublayers are already built
+        - Input dtypes are already correct (same dtype flows through)
+        - No masking metadata needed
+        - No training-mode checks needed (always inference)
+        - No autocast scope changes needed
+
+        This saves ~5 Layer.__call__ invocations per attention layer
+        (query_dense, key_dense, value_dense, output_dense, plus the
+        attention layer itself).
+        """
+        # Directly call .call() on dense layers, bypassing Layer.__call__
+        query_proj = self._query_dense.call(query)
+
+        key_cache = cache[:, 0, ...]
+        value_cache = cache[:, 1, ...]
+        if cache_update_index is None:
+            key = key_cache
+            value = value_cache
+        else:
+            key_update = self._key_dense.call(query)
+            value_update = self._value_dense.call(query)
+            start = [0, cache_update_index, 0, 0]
+            key = ops.slice_update(key_cache, start, key_update)
+            value = ops.slice_update(value_cache, start, value_update)
+            cache = ops.stack((key, value), axis=1)
+
+        attention_output, _ = self._compute_attention(
+            query=query_proj,
+            key=key,
+            value=value,
+            attention_mask=attention_mask,
+            training=False,
+        )
+
+        attention_output = self._output_dense.call(attention_output)
+        return attention_output, cache
+
+    def _compute_attention(
+        self,
+        query,
+        key,
+        value,
+        attention_mask=None,
+        training=None,
+        return_attention_scores=False,
+    ):
+        """Override to use SDPA during cached inference on torch.
+
+        Only activated when `_use_sdpa_override` is set True (by the
+        TransformerDecoder.call_cached fast path for self-attention).
+        Falls back to the parent implementation otherwise.
+        """
+        if (
+            keras.config.backend() == "torch"
+            and not return_attention_scores
+            and (training is None or training is False)
+            and len(query.shape) == 4
+            and _check_torch_sdpa()
+            and getattr(self, "_use_sdpa_override", False)
+        ):
+            import torch
+            import torch.nn.functional as F
+
+            # Transpose from (B, S, H, D) to (B, H, S, D) for SDPA.
+            query = query.transpose(1, 2)
+            key = key.transpose(1, 2)
+            value = value.transpose(1, 2)
+
+            # Convert attention mask to SDPA format.
+            # Both Keras and PyTorch SDPA use the same convention for bool
+            # masks: True = attend, False = mask out.
+            # No inversion needed - pass through directly.
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(dtype=torch.bool)
+                while attention_mask.dim() < 4:
+                    attention_mask = attention_mask.unsqueeze(1)
+
+            attention_output = F.scaled_dot_product_attention(
+                query,
+                key,
+                value,
+                attn_mask=attention_mask,
+                dropout_p=0.0,
+            )
+
+            # Transpose back from (B, H, T, D) to (B, T, H, D).
+            attention_output = attention_output.transpose(1, 2)
+            return attention_output, None
+
+        return super()._compute_attention(
+            query=query,
+            key=key,
+            value=value,
+            attention_mask=attention_mask,
+            training=training,
+            return_attention_scores=return_attention_scores,
+        )

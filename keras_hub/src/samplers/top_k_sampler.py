@@ -1,3 +1,4 @@
+from keras import config
 from keras import ops
 from keras import random
 
@@ -47,6 +48,32 @@ class TopKSampler(Sampler):
         self.seed_generator = random.SeedGenerator(seed)
 
     def get_next_token(self, probabilities):
+        # Fast path for torch backend: use native torch ops to avoid
+        # ops dispatch overhead (saves ~2ms per iteration).
+        if config.backend() == "torch":
+            import torch
+
+            top_k_pred, top_k_indices = torch.topk(
+                probabilities, k=self.k, sorted=False
+            )
+            # torch.multinomial on MPS/CPU with tiny tensors (batch=1, k=5)
+            # is much faster on CPU (~0.03ms vs ~1.7ms on MPS).
+            # For CUDA, keep on device.
+            device = top_k_pred.device
+            if device.type == "mps":
+                top_k_cpu = top_k_pred.to(device="cpu", dtype=torch.float32)
+                sample_indices = torch.multinomial(top_k_cpu, num_samples=1).to(
+                    device=device
+                )
+            else:
+                sample_indices = torch.multinomial(
+                    top_k_pred.to(dtype=torch.float32), num_samples=1
+                )
+            # Gather the original token indices.
+            output = torch.gather(top_k_indices, 1, sample_indices)
+            return output.squeeze(-1)
+
+        # Default path for JAX/TF: use keras ops.
         # Filter out top-k tokens.
         top_k_pred, top_k_indices = ops.top_k(
             probabilities,

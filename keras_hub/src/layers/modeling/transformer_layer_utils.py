@@ -41,6 +41,18 @@ def compute_causal_mask(batch_size, input_length, output_length, cache_index=0):
         `(batch_size, output_length, input_length)` that can be passed to a
         attention layer.
     """
+    # Fast path for autoregressive generation: when output_length=1 (single
+    # token), the causal mask is simply True for all positions up to
+    # cache_index and False after. This avoids ops.arange/expand_dims/
+    # broadcast_to overhead that is significant when called 12×46 times.
+    if isinstance(output_length, int) and output_length == 1:
+        j = ops.arange(input_length, dtype="float32")
+        mask = ops.expand_dims(
+            ops.expand_dims(j <= ops.cast(cache_index, "float32"), axis=0),
+            axis=0,
+        )
+        return ops.broadcast_to(mask, (batch_size, 1, input_length))
+
     i = ops.arange(output_length, dtype="float32")
     i = i + ops.cast(cache_index, "float32")
     i = ops.expand_dims(i, axis=1)
