@@ -27,10 +27,17 @@ class T5Gemma2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
     preprocessor is attached to a `keras_hub.models.T5Gemma2Seq2SeqLM`
     instance, these methods will be called implicitly in `generate()`.
 
+    When an `image_converter` is provided, the preprocessor also
+    supports multimodal inputs with images. Images are inserted into
+    the encoder sequence as placeholder tokens that the backbone's
+    vision encoder will replace with image embeddings.
+
     Args:
         tokenizer: A `keras_hub.models.T5Gemma2Tokenizer` instance.
         encoder_sequence_length: The length of the packed encoder inputs.
         decoder_sequence_length: The length of the packed decoder inputs.
+        image_converter: A `keras_hub.layers.ImageConverter` instance,
+            or `None` for text-only. Defaults to `None`.
         add_start_token: If `True`, prepend the start token. Defaults
             to `False`.
         add_end_token: If `True`, append the end token. Defaults to
@@ -45,6 +52,7 @@ class T5Gemma2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         tokenizer,
         encoder_sequence_length=512,
         decoder_sequence_length=512,
+        image_converter=None,
         add_start_token=False,
         add_end_token=True,
         **kwargs,
@@ -57,6 +65,7 @@ class T5Gemma2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         )
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
+        self.image_converter = image_converter
 
     @preprocessing_function
     def call(

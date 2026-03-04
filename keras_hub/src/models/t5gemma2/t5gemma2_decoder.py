@@ -1,6 +1,6 @@
 import keras
 
-from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
+from keras_hub.src.models.gemma3.gemma3_layers import RMSNormalization
 from keras_hub.src.models.t5gemma2.t5gemma2_attention import (
     T5Gemma2MergedAttention,
 )

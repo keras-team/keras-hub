@@ -1,6 +1,6 @@
 import keras
 
-from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
+from keras_hub.src.models.gemma3.gemma3_layers import RMSNormalization
 from keras_hub.src.models.t5gemma2.t5gemma2_attention import T5Gemma2Attention
 from keras_hub.src.models.t5gemma2.t5gemma2_layers import T5Gemma2MLP
 
@@ -164,6 +164,30 @@ class T5Gemma2EncoderLayer(keras.layers.Layer):
         additive_mask = (
             1.0 - keras.ops.cast(attention_mask, hidden_states.dtype)
         ) * -1e9
+        # Apply bidirectional sliding window for sliding_attention layers.
+        if (
+            self.attention_type == "sliding_attention"
+            and self.sliding_window is not None
+        ):
+            seq_len = keras.ops.shape(hidden_states)[1]
+            # Build position indices for the sliding window mask.
+            q_idx = keras.ops.arange(seq_len)[:, None]  # (S, 1)
+            kv_idx = keras.ops.arange(seq_len)[None, :]  # (1, S)
+            dist = q_idx - kv_idx
+            # HF bidirectional window:
+            #   left_window  = (sliding_window + 1) // 2
+            #   right_window = sliding_window // 2 + 1
+            left_w = (self.sliding_window + 1) // 2
+            right_w = self.sliding_window // 2 + 1
+            window_mask = ((dist >= 0) & (dist < left_w)) | (
+                (dist < 0) & (-dist < right_w)
+            )
+            # Expand to (1, 1, S, S) and convert to additive mask.
+            window_mask = keras.ops.cast(
+                window_mask[None, None, :, :], hidden_states.dtype
+            )
+            window_additive = (1.0 - window_mask) * -1e9
+            additive_mask = additive_mask + window_additive
         return additive_mask
 
     def call(

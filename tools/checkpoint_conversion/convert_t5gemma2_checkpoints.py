@@ -7,11 +7,13 @@ import traceback
 import huggingface_hub
 import keras
 import numpy as np
+import requests
 import torch
 import transformers
 from absl import app
 from absl import flags
 from checkpoint_conversion_utils import get_md5_checksum
+from PIL import Image
 
 import keras_hub
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
@@ -28,7 +30,6 @@ device = torch.device("cpu")
 torch.set_default_device(device)
 torch.set_default_dtype(torch.float32)
 
-# Placeholder preset map — populate when checkpoints are released.
 PRESET_MAP = {
     "t5gemma2_270m_270m": "google/t5gemma-2-270m-270m",
     "t5gemma2_1b_1b": "google/t5gemma-2-1b-1b",
@@ -48,8 +49,6 @@ def convert_checkpoints(hf_model):
     print("\n-> Convert original weights to KerasHub format.")
     print("\n-> Load KerasHub model.")
 
-    # T5Gemma2EncoderConfig is Gemma3Config with text params at
-    # encoder.text_config.*; decoder is Gemma3TextConfig (flat).
     encoder_config = hf_model.config.encoder
     enc_text_config = encoder_config.text_config
     decoder_config = hf_model.config.decoder
@@ -57,6 +56,35 @@ def convert_checkpoints(hf_model):
         decoder_config.hidden_activation = "gelu_approximate"
     if enc_text_config.hidden_activation == "gelu_pytorch_tanh":
         enc_text_config.hidden_activation = "gelu_approximate"
+
+    # Vision encoder (optional — only present in multimodal models).
+    vision_encoder = None
+    has_vision = hasattr(encoder_config, "vision_config") and (
+        encoder_config.vision_config is not None
+    )
+    if has_vision:
+        from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+            Gemma3VisionEncoder,
+        )
+
+        vc = encoder_config.vision_config
+        mm_tokens = getattr(encoder_config, "mm_tokens_per_image", 256)
+        pool_size = int(vc.image_size // vc.patch_size // int(mm_tokens**0.5))
+        vision_encoder = Gemma3VisionEncoder(
+            image_size=vc.image_size,
+            patch_size=vc.patch_size,
+            num_heads=vc.num_attention_heads,
+            hidden_dim=vc.hidden_size,
+            num_layers=vc.num_hidden_layers,
+            intermediate_dim=vc.intermediate_size,
+            output_dim=enc_text_config.hidden_size,
+            pool_size=pool_size,
+            layer_norm_epsilon=getattr(vc, "layer_norm_eps", 1e-6),
+        )
+        print(
+            f"  Vision encoder created: {vc.image_size}x{vc.image_size}, "
+            f"pool_size={pool_size}, mm_tokens={mm_tokens}"
+        )
 
     keras.config.set_floatx("float32")
     keras_hub_model = keras_hub.models.T5Gemma2Backbone(
@@ -95,7 +123,19 @@ def convert_checkpoints(hf_model):
                 "factor", 1.0
             )
         ),
+        encoder_rope_max_wavelength=(
+            enc_text_config.rope_parameters.get("sliding_attention", {}).get(
+                "rope_theta", None
+            )
+        ),
+        encoder_global_rope_scaling_factor=(
+            enc_text_config.rope_parameters.get("full_attention", {}).get(
+                "factor", None
+            )
+        ),
         use_query_key_norm=True,
+        vision_encoder=vision_encoder,
+        eoi_token_index=getattr(hf_model.config, "eoi_token_index", 256000),
         dtype="float32",
     )
 
@@ -111,6 +151,108 @@ def convert_checkpoints(hf_model):
     keras_hub_model.get_layer("decoder_token_embedding").embeddings.assign(
         hf_wts["decoder.embed_tokens.weight"].numpy()
     )
+
+    # Vision encoder weights.
+    if has_vision:
+        ve = keras_hub_model.vision_encoder
+        ie = ve.get_layer("image_encoder")
+        ie.vision_embeddings.patch_embedding.kernel.assign(
+            hf_wts[
+                "encoder.vision_tower.vision_model."
+                "embeddings.patch_embedding.weight"
+            ]
+            .permute(2, 3, 1, 0)
+            .numpy()
+        )
+        ie.vision_embeddings.patch_embedding.bias.assign(
+            hf_wts[
+                "encoder.vision_tower.vision_model."
+                "embeddings.patch_embedding.bias"
+            ].numpy()
+        )
+        ie.vision_embeddings.position_embedding.embeddings.assign(
+            hf_wts[
+                "encoder.vision_tower.vision_model."
+                "embeddings.position_embedding.weight"
+            ].numpy()
+        )
+        for vi in range(ie.num_layers):
+            vp = f"encoder.vision_tower.vision_model.encoder.layers.{vi}"
+            rb = ie.resblocks[vi]
+            rb.layer_norm_1.gamma.assign(
+                hf_wts[f"{vp}.layer_norm1.weight"].numpy()
+            )
+            rb.layer_norm_1.beta.assign(
+                hf_wts[f"{vp}.layer_norm1.bias"].numpy()
+            )
+            rb.attn.query_proj.kernel.assign(
+                hf_wts[f"{vp}.self_attn.q_proj.weight"].T.numpy()
+            )
+            rb.attn.query_proj.bias.assign(
+                hf_wts[f"{vp}.self_attn.q_proj.bias"].numpy()
+            )
+            rb.attn.key_proj.kernel.assign(
+                hf_wts[f"{vp}.self_attn.k_proj.weight"].T.numpy()
+            )
+            rb.attn.key_proj.bias.assign(
+                hf_wts[f"{vp}.self_attn.k_proj.bias"].numpy()
+            )
+            rb.attn.value_proj.kernel.assign(
+                hf_wts[f"{vp}.self_attn.v_proj.weight"].T.numpy()
+            )
+            rb.attn.value_proj.bias.assign(
+                hf_wts[f"{vp}.self_attn.v_proj.bias"].numpy()
+            )
+            rb.attn.out_proj.kernel.assign(
+                hf_wts[f"{vp}.self_attn.out_proj.weight"].T.numpy()
+            )
+            rb.attn.out_proj.bias.assign(
+                hf_wts[f"{vp}.self_attn.out_proj.bias"].numpy()
+            )
+            rb.layer_norm_2.gamma.assign(
+                hf_wts[f"{vp}.layer_norm2.weight"].numpy()
+            )
+            rb.layer_norm_2.beta.assign(
+                hf_wts[f"{vp}.layer_norm2.bias"].numpy()
+            )
+            rb.mlp_dense_1.kernel.assign(
+                hf_wts[f"{vp}.mlp.fc1.weight"].T.numpy()
+            )
+            rb.mlp_dense_1.bias.assign(hf_wts[f"{vp}.mlp.fc1.bias"].numpy())
+            rb.mlp_dense_2.kernel.assign(
+                hf_wts[f"{vp}.mlp.fc2.weight"].T.numpy()
+            )
+            rb.mlp_dense_2.bias.assign(hf_wts[f"{vp}.mlp.fc2.bias"].numpy())
+        ie.encoder_layer_norm.gamma.assign(
+            hf_wts[
+                "encoder.vision_tower.vision_model.post_layernorm.weight"
+            ].numpy()
+        )
+        ie.encoder_layer_norm.beta.assign(
+            hf_wts[
+                "encoder.vision_tower.vision_model.post_layernorm.bias"
+            ].numpy()
+        )
+        # Multi-modal projector.
+        vo = ve.get_layer("vision_output_encoder")
+        vo.vision_soft_embedding_norm.scale.assign(
+            hf_wts[
+                "encoder.multi_modal_projector.mm_soft_emb_norm.weight"
+            ].numpy()
+        )
+        vo.vision_input_projection.kernel.assign(
+            hf_wts[
+                "encoder.multi_modal_projector.mm_input_projection_weight"
+            ].numpy()
+        )
+        # EOI embeddings.
+        keras_hub_model.encoder_eoi_embedding.assign(
+            hf_wts["encoder.text_model.embed_tokens.eoi_embedding"].numpy()
+        )
+        keras_hub_model.decoder_eoi_embedding.assign(
+            hf_wts["decoder.embed_tokens.eoi_embedding"].numpy()
+        )
+        print("  Vision encoder weights loaded.")
 
     # Encoder (weights under encoder.text_model.*).
     enc_hdim = keras_hub_model.encoder_hidden_dim
@@ -285,16 +427,18 @@ def extract_vocab(hf_model_dir):
     return keras_hub_tokenizer
 
 
-def check_output(
+def check_text_output(
     keras_hub_tokenizer,
     keras_hub_model,
     hf_tokenizer,
     hf_model,
 ):
     """Check outputs of KerasHub and HuggingFace models match."""
-    # Parameter count check.
-    # Note: HF model includes vision encoder (SigLIP) params
-    # that our text-only KerasHub backbone doesn't have.
+    # Note: KerasHub counts encoder + decoder embeddings as separate
+    # weight matrices. HF shares a single nn.Embedding across
+    # encoder/decoder/lm_head, so counts it once.
+    print("\n--- Model Verification starts ---")
+    print("\n")
     print("\n-> Verify parameter counts.")
     keras_hub_params = keras_hub_model.count_params()
     hf_params = hf_model.num_parameters()
@@ -303,14 +447,15 @@ def check_output(
     if keras_hub_params == hf_params:
         print("-> Parameter counts match!")
     else:
-        diff = hf_params - keras_hub_params
+        diff = keras_hub_params - hf_params
         print(
             f"-> Parameter count difference: {diff:,} "
-            f"(expected — HF includes vision encoder)"
+            f"(expected — KerasHub has separate encoder/decoder "
+            f"embeddings; HF shares a single nn.Embedding)"
         )
 
     # Output comparison.
-    print("\n-> Check the outputs.")
+    print("\n-> ---- Text-only verification. ----\n")
     enc_sample_text = [
         "cricket is awesome, easily the best sport in the world!"
     ]
@@ -339,7 +484,23 @@ def check_output(
         "decoder_padding_mask": np.ones_like(keras_hub_dec_token_ids),
     }
 
-    print("\n--- Model Verification ---")
+    # If multimodal backbone, add dummy image/vision_indices inputs.
+    # Conv2D can't process batch=0, so pass 1 dummy (all-zeros) image.
+    # InterleaveEmbeddings restores the 0th index after scatter, so
+    # the dummy image embedding is effectively a no-op.
+    if keras_hub_model.vision_encoder is not None:
+        image_size = keras_hub_model.vision_encoder.image_size
+        num_vision_tokens = (
+            keras_hub_model.vision_encoder.num_vision_tokens_per_image
+        )
+        keras_hub_inputs["images"] = np.zeros(
+            (1, 1, image_size, image_size, 3), dtype="float32"
+        )
+        # All indices point to 0; InterleaveEmbeddings restores
+        # the original embedding at position 0 after scattering.
+        keras_hub_inputs["vision_indices"] = np.zeros(
+            (1, num_vision_tokens), dtype="int32"
+        )
     keras_hub_output = keras_hub_model.predict(keras_hub_inputs)
 
     # HF.
@@ -401,6 +562,150 @@ def check_output(
         print("\n")
 
 
+def check_multimodal_output(
+    keras_hub_model,
+    hf_model,
+    hf_model_dir,
+    hf_tokenizer,
+):
+    """Check multimodal (text+image) outputs match between KerasHub and HF."""
+    if keras_hub_model.vision_encoder is None:
+        print("\n-> Skipping multimodal check (text-only model).")
+        return
+
+    print("\n-> ---- Multimodal (text+image) verification. ----\n")
+
+    # Download a test image.
+    image_url = (
+        "https://huggingface.co/datasets/huggingface/"
+        "documentation-images/resolve/main/bee.jpg"
+    )
+    print(f"  Downloading test image: {image_url}")
+    image = Image.open(requests.get(image_url, stream=True).raw).convert("RGB")
+
+    # HF side: use AutoProcessor for proper multimodal preprocessing.
+    hf_processor = transformers.AutoProcessor.from_pretrained(hf_model_dir)
+    enc_prompt = "<start_of_image> Describe this image"
+    dec_prompt = "This image shows"
+
+    # HF encoder inputs (with image).
+    hf_enc_inputs = hf_processor(
+        text=enc_prompt, images=image, return_tensors="pt"
+    )
+    # HF decoder inputs.
+    hf_dec_inputs = hf_tokenizer(dec_prompt, return_tensors="pt")
+    hf_decoder_input_ids = torch.cat(
+        [
+            torch.tensor([[hf_tokenizer.bos_token_id]]),
+            hf_dec_inputs["input_ids"],
+        ],
+        dim=-1,
+    )
+    hf_decoder_attention_mask = torch.cat(
+        [
+            torch.ones(1, 1, dtype=torch.long),
+            hf_dec_inputs["attention_mask"],
+        ],
+        dim=-1,
+    )
+
+    with torch.no_grad():
+        hf_output = hf_model(
+            input_ids=hf_enc_inputs["input_ids"],
+            attention_mask=hf_enc_inputs["attention_mask"],
+            pixel_values=hf_enc_inputs["pixel_values"],
+            decoder_input_ids=hf_decoder_input_ids,
+            decoder_attention_mask=hf_decoder_attention_mask,
+        )
+
+    # Build KerasHub inputs from HF token_ids (same tokenizer).
+    keras_enc_token_ids = hf_enc_inputs["input_ids"].numpy()
+    keras_enc_padding_mask = hf_enc_inputs["attention_mask"].numpy()
+    keras_dec_token_ids = hf_decoder_input_ids.numpy()
+    keras_dec_padding_mask = hf_decoder_attention_mask.numpy()
+
+    # Transpose HF pixel_values (B,C,H,W) to KerasHub (B,1,H,W,C).
+    pixel_values = hf_enc_inputs["pixel_values"].numpy()
+    if pixel_values.ndim == 5:
+        pixel_values = np.transpose(pixel_values, (0, 1, 3, 4, 2))
+    elif pixel_values.ndim == 4:
+        pixel_values = np.transpose(pixel_values, (0, 2, 3, 1))
+        pixel_values = np.expand_dims(pixel_values, axis=1)
+
+    # Find positions of image placeholder tokens for vision_indices.
+    image_token_id = hf_processor.tokenizer.convert_tokens_to_ids(
+        "<image_soft_token>"
+    )
+    num_vision_tokens = (
+        keras_hub_model.vision_encoder.num_vision_tokens_per_image
+    )
+    # Find indices of image placeholder tokens.
+    token_ids_flat = keras_enc_token_ids[0]
+    vision_idx_list = np.where(token_ids_flat == image_token_id)[0].tolist()
+
+    # Pad or truncate to num_vision_tokens.
+    if len(vision_idx_list) < num_vision_tokens:
+        vision_idx_list = vision_idx_list + [0] * (
+            num_vision_tokens - len(vision_idx_list)
+        )
+    vision_indices = np.array(
+        [vision_idx_list[:num_vision_tokens]], dtype="int32"
+    )
+
+    keras_hub_inputs = {
+        "encoder_token_ids": keras_enc_token_ids,
+        "encoder_padding_mask": keras_enc_padding_mask,
+        "decoder_token_ids": keras_dec_token_ids,
+        "decoder_padding_mask": keras_dec_padding_mask,
+        "images": pixel_values.astype("float32"),
+        "vision_indices": vision_indices,
+    }
+
+    print("\n--- Multimodal Verification ---")
+    keras_hub_output = keras_hub_model.predict(keras_hub_inputs)
+
+    # Relaxed tolerances: vision encoder compounds f32 drift across layers.
+
+    # Encoder output comparison.
+    keras_enc_out = keras_hub_output["encoder_sequence_output"]
+    hf_enc_out = hf_output.encoder_last_hidden_state.detach().float().numpy()
+    enc_abs_diff = np.abs(keras_enc_out - hf_enc_out)
+    print("Encoder Outputs (multimodal):")
+    print("KerasHub output:", keras_enc_out[0, 0, :10])
+    print("HF output:", hf_enc_out[0, 0, :10])
+    print(f"Mean absolute diff: {enc_abs_diff.mean():.6f}")
+
+    try:
+        np.testing.assert_allclose(
+            keras_enc_out, hf_enc_out, rtol=1e-4, atol=1e-4
+        )
+        print("-> Encoder outputs match! (rtol=1e-4, atol=1e-4)")
+    except AssertionError as err:
+        print("\n")
+        print(traceback.format_exc())
+        print(err.args[0])
+        print("\n")
+
+    # Decoder output comparison.
+    keras_dec_out = keras_hub_output["decoder_sequence_output"]
+    hf_dec_out = hf_output.last_hidden_state.detach().float().numpy()
+    dec_abs_diff = np.abs(keras_dec_out - hf_dec_out)
+    print("Decoder Outputs (multimodal):")
+    print("KerasHub output:", keras_dec_out[0, 0, :10])
+    print("HF output:", hf_dec_out[0, 0, :10])
+    print(f"Mean absolute diff: {dec_abs_diff.mean():.6f}")
+    try:
+        np.testing.assert_allclose(
+            keras_dec_out, hf_dec_out, rtol=1e-4, atol=1e-4
+        )
+        print("-> Decoder outputs match! (rtol=1e-4, atol=1e-4)")
+    except AssertionError as err:
+        print("\n")
+        print(traceback.format_exc())
+        print(err.args[0])
+        print("\n")
+
+
 def main(_):
     os.makedirs(FLAGS.preset, exist_ok=True)
 
@@ -419,9 +724,7 @@ def main(_):
     print("\n-> Load HF model and HF tokenizer.")
     hf_model = transformers.AutoModel.from_pretrained(hf_model_dir)
     hf_model.float()  # Convert all params/buffers to float32.
-    # Fix embed_scale buffers: they were created in bfloat16
-    # during init (non-persistent), so .float() preserves
-    # the bf16-rounded value. Re-create with true f32 precision.
+    # Re-create embed_scale with true f32 precision (bf16-init artifact).
     enc_hdim = hf_model.config.encoder.text_config.hidden_size
     dec_hdim = hf_model.config.decoder.hidden_size
     hf_model.encoder.text_model.embed_tokens.embed_scale = torch.tensor(
@@ -437,12 +740,20 @@ def main(_):
     print("\n-> Load KerasHub tokenizer.")
     keras_hub_tokenizer = extract_vocab(hf_model_dir)
 
-    check_output(
+    check_text_output(
         keras_hub_tokenizer,
         keras_hub_model,
         hf_tokenizer,
         hf_model,
     )
+
+    check_multimodal_output(
+        keras_hub_model,
+        hf_model,
+        hf_model_dir,
+        hf_tokenizer,
+    )
+
     print("\n-> Releasing HF backbone from memory.")
     del hf_model
     gc.collect()
@@ -457,7 +768,6 @@ def main(_):
         preprocessor=preprocessor,
         dtype=keras_hub_model.dtype,
     )
-    keras_lm.compile(sampler="greedy")
 
     print(f"\n-> Saving T5Gemma2Seq2SeqLM preset to `{FLAGS.preset}`.")
     keras_lm.save_to_preset(FLAGS.preset)

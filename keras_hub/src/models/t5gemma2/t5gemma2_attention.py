@@ -3,8 +3,8 @@ import inspect
 import keras
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
-from keras_hub.src.models.gemma.gemma_attention import CachedGemmaAttention
-from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
+from keras_hub.src.models.gemma3.gemma3_attention import CachedGemma3Attention
+from keras_hub.src.models.gemma3.gemma3_layers import RMSNormalization
 from keras_hub.src.models.t5gemma2.t5gemma2_layers import (
     t5gemma2_kernel_initializer,
 )
@@ -33,7 +33,7 @@ def repeat_kv(hidden_states, n_rep):
     )
 
 
-class T5Gemma2Attention(CachedGemmaAttention):
+class T5Gemma2Attention(CachedGemma3Attention):
     """Self-attention layer for T5Gemma2 encoder and decoder.
 
     This layer performs self-attention with Rotary Positional Embeddings
@@ -341,7 +341,7 @@ class T5Gemma2Attention(CachedGemmaAttention):
         return config
 
 
-class T5Gemma2MergedAttention(CachedGemmaAttention):
+class T5Gemma2MergedAttention(CachedGemma3Attention):
     """Merged self-attention and cross-attention for T5Gemma2 decoder.
 
     This layer fuses self-attention and cross-attention into a single

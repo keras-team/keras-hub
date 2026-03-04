@@ -1,9 +1,11 @@
 import keras
+from keras import ops
 from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
+from keras_hub.src.models.gemma3.gemma3_layers import Gemma3InterleaveEmbeddings
+from keras_hub.src.models.gemma3.gemma3_layers import RMSNormalization
 from keras_hub.src.models.t5gemma2.t5gemma2_decoder import T5Gemma2DecoderLayer
 from keras_hub.src.models.t5gemma2.t5gemma2_encoder import T5Gemma2EncoderLayer
 from keras_hub.src.models.t5gemma2.t5gemma2_layers import (
@@ -21,6 +23,11 @@ class T5Gemma2Backbone(Backbone):
     self+cross attention in the decoder (unlike T5Gemma1 which used
     separate attention sublayers), Gemma3-style Q/K normalization,
     and per-layer-type sliding window attention patterns.
+
+    When a `vision_encoder` is provided, the model also accepts image
+    inputs. Images are processed by the vision encoder and the resulting
+    embeddings are interleaved into the encoder text embeddings at
+    positions marked by image placeholder tokens.
 
     Args:
         vocabulary_size: int, The size of the vocabulary.
@@ -61,8 +68,14 @@ class T5Gemma2Backbone(Backbone):
             softcapping.
         rope_max_wavelength: float, RoPE maximum wavelength.
             Defaults to `10000.0`.
+        global_rope_scaling_factor: float, RoPE scaling factor for
+            full attention layers. Defaults to `1.0`.
         use_query_key_norm: bool, Whether to use Gemma3-style Q/K
             normalization. Defaults to `True`.
+        vision_encoder: optional, A `Gemma3VisionEncoder` instance for
+            multimodal inputs. When `None`, the model is text-only.
+        eoi_token_index: int, Token index for the end-of-image token.
+            Defaults to `256000`.
         dtype: dtype for computations. Defaults to `None`.
         **kwargs: Additional keyword arguments.
 
@@ -139,11 +152,19 @@ class T5Gemma2Backbone(Backbone):
         final_logit_softcapping=None,
         rope_max_wavelength=10000.0,
         global_rope_scaling_factor=1.0,
+        encoder_rope_max_wavelength=None,
+        encoder_global_rope_scaling_factor=None,
         use_query_key_norm=True,
+        vision_encoder=None,
+        eoi_token_index=256000,
         dtype=None,
         **kwargs,
     ):
         self.kernel_initializer = t5gemma2_kernel_initializer(initializer_range)
+
+        # Determine if text-only.
+        self.vision_encoder = vision_encoder
+        text_only_model = vision_encoder is None
 
         # === Layers ===
         self.token_embedding = keras.layers.Embedding(
@@ -161,11 +182,42 @@ class T5Gemma2Backbone(Backbone):
             dtype=dtype,
             name="decoder_token_embedding",
         )
+
+        # Vision interleaving layer (only when vision encoder is present).
+        if not text_only_model:
+            self.interleave_embeddings = Gemma3InterleaveEmbeddings(
+                num_vision_tokens_per_image=self.vision_encoder.num_vision_tokens_per_image,
+                dtype=dtype,
+                name="interleave_embeddings",
+            )
+            # EOI (end-of-image) embeddings: learned vectors that
+            # replace the standard embedding at eoi_token_index.
+            self.encoder_eoi_embedding = keras.Variable(
+                keras.ops.zeros((encoder_hidden_dim,)),
+                name="encoder_eoi_embedding",
+            )
+            self.decoder_eoi_embedding = keras.Variable(
+                keras.ops.zeros((decoder_hidden_dim,)),
+                name="decoder_eoi_embedding",
+            )
+
+        # Encoder may have different RoPE config than decoder.
+        enc_rope = (
+            encoder_rope_max_wavelength
+            if encoder_rope_max_wavelength is not None
+            else rope_max_wavelength
+        )
+        enc_rope_factor = (
+            encoder_global_rope_scaling_factor
+            if encoder_global_rope_scaling_factor is not None
+            else global_rope_scaling_factor
+        )
+
         self.encoder_layers = []
         for i in range(encoder_num_layers):
-            # Per-layer RoPE wavelength: 10K for sliding, 1M for global.
+            # Per-layer RoPE wavelength: base for sliding, 1M for global.
             layer_rope = (
-                rope_max_wavelength
+                enc_rope
                 if encoder_layer_types[i] == "sliding_attention"
                 else 1_000_000.0
             )
@@ -174,7 +226,7 @@ class T5Gemma2Backbone(Backbone):
             layer_rope_factor = (
                 1.0
                 if encoder_layer_types[i] == "sliding_attention"
-                else global_rope_scaling_factor
+                else enc_rope_factor
             )
             self.encoder_layers.append(
                 T5Gemma2EncoderLayer(
@@ -261,11 +313,50 @@ class T5Gemma2Backbone(Backbone):
             shape=(None,), dtype="int32", name="decoder_padding_mask"
         )
 
+        # Optional vision inputs.
+        if not text_only_model:
+            image_size = self.vision_encoder.image_size
+            image_input = keras.Input(
+                shape=(None, image_size, image_size, 3),
+                name="images",
+            )
+            vision_indices_input = keras.Input(
+                shape=(None,), dtype="int32", name="vision_indices"
+            )
+
         # Encoder.
         encoder_embeddings = self.token_embedding(encoder_token_id_input)
-        encoder_embeddings = encoder_embeddings * keras.ops.cast(
-            keras.ops.sqrt(encoder_hidden_dim), encoder_embeddings.dtype
+        encoder_embeddings = encoder_embeddings * ops.cast(
+            ops.sqrt(encoder_hidden_dim), encoder_embeddings.dtype
         )
+
+        # Handle EOI embedding replacement.
+        if not text_only_model:
+            # Replace embeddings at eoi_token_index positions with the
+            # learned eoi_embedding (a separate parameter per HF design).
+            # Use ops.where with automatic broadcasting (no broadcast_to
+            # needed — avoids issues with symbolic shapes during tracing).
+            eoi_mask = ops.cast(
+                ops.expand_dims(
+                    ops.equal(encoder_token_id_input, eoi_token_index),
+                    axis=-1,
+                ),
+                encoder_embeddings.dtype,
+            )
+            encoder_embeddings = (
+                eoi_mask * self.encoder_eoi_embedding
+                + (1 - eoi_mask) * encoder_embeddings
+            )
+
+        # Interleave vision embeddings if images are provided.
+        if not text_only_model:
+            img_embeddings = self.vision_encoder(image_input)
+            encoder_embeddings = self.interleave_embeddings(
+                image_embeddings=img_embeddings,
+                text_embeddings=encoder_embeddings,
+                vision_indices=vision_indices_input,
+            )
+
         encoder_hidden_states = self.encoder_dropout(encoder_embeddings)
         for layer in self.encoder_layers:
             encoder_hidden_states = layer(
@@ -279,9 +370,24 @@ class T5Gemma2Backbone(Backbone):
         decoder_embeddings = self.decoder_token_embedding(
             decoder_token_id_input
         )
-        decoder_embeddings = decoder_embeddings * keras.ops.cast(
-            keras.ops.sqrt(decoder_hidden_dim), decoder_embeddings.dtype
+        decoder_embeddings = decoder_embeddings * ops.cast(
+            ops.sqrt(decoder_hidden_dim), decoder_embeddings.dtype
         )
+
+        # Handle EOI embedding replacement in decoder.
+        if not text_only_model:
+            dec_eoi_mask = ops.cast(
+                ops.expand_dims(
+                    ops.equal(decoder_token_id_input, eoi_token_index),
+                    axis=-1,
+                ),
+                decoder_embeddings.dtype,
+            )
+            decoder_embeddings = (
+                dec_eoi_mask * self.decoder_eoi_embedding
+                + (1 - dec_eoi_mask) * decoder_embeddings
+            )
+
         decoder_hidden_states = self.decoder_dropout(decoder_embeddings)
         for layer in self.decoder_layers:
             decoder_hidden_states, _ = layer(
@@ -292,13 +398,22 @@ class T5Gemma2Backbone(Backbone):
         decoder_output = self.decoder_norm(decoder_hidden_states)
         decoder_output = self.decoder_dropout(decoder_output)
 
+        inputs = {
+            "encoder_token_ids": encoder_token_id_input,
+            "encoder_padding_mask": encoder_padding_mask_input,
+            "decoder_token_ids": decoder_token_id_input,
+            "decoder_padding_mask": decoder_padding_mask_input,
+        }
+        if not text_only_model:
+            inputs.update(
+                {
+                    "images": image_input,
+                    "vision_indices": vision_indices_input,
+                }
+            )
+
         super().__init__(
-            inputs={
-                "encoder_token_ids": encoder_token_id_input,
-                "encoder_padding_mask": encoder_padding_mask_input,
-                "decoder_token_ids": decoder_token_id_input,
-                "decoder_padding_mask": decoder_padding_mask_input,
-            },
+            inputs=inputs,
             outputs={
                 "encoder_sequence_output": encoder_output,
                 "decoder_sequence_output": decoder_output,
@@ -338,7 +453,20 @@ class T5Gemma2Backbone(Backbone):
         self.attn_logit_softcapping = attn_logit_softcapping
         self.final_logit_softcapping = final_logit_softcapping
         self.rope_max_wavelength = rope_max_wavelength
+        self.global_rope_scaling_factor = global_rope_scaling_factor
+        self.encoder_rope_max_wavelength = encoder_rope_max_wavelength
+        self.encoder_global_rope_scaling_factor = (
+            encoder_global_rope_scaling_factor
+        )
         self.use_query_key_norm = use_query_key_norm
+        self.eoi_token_index = eoi_token_index
+        self.text_only_model = text_only_model
+
+        # Keep `num_vision_tokens_per_image` for easy access.
+        if not text_only_model:
+            self.num_vision_tokens_per_image = (
+                self.vision_encoder.num_vision_tokens_per_image
+            )
 
     def get_config(self):
         config = super().get_config()
@@ -382,7 +510,31 @@ class T5Gemma2Backbone(Backbone):
                 "attn_logit_softcapping": self.attn_logit_softcapping,
                 "final_logit_softcapping": (self.final_logit_softcapping),
                 "rope_max_wavelength": self.rope_max_wavelength,
+                "global_rope_scaling_factor": (self.global_rope_scaling_factor),
+                "encoder_rope_max_wavelength": (
+                    self.encoder_rope_max_wavelength
+                ),
+                "encoder_global_rope_scaling_factor": (
+                    self.encoder_global_rope_scaling_factor
+                ),
                 "use_query_key_norm": self.use_query_key_norm,
+                "eoi_token_index": self.eoi_token_index,
             }
         )
+        if self.vision_encoder is not None:
+            config["vision_encoder"] = keras.saving.serialize_keras_object(
+                self.vision_encoder
+            )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        vision_encoder = config.pop("vision_encoder", None)
+        if vision_encoder is not None and isinstance(vision_encoder, dict):
+            vision_encoder = keras.saving.deserialize_keras_object(
+                vision_encoder
+            )
+            config["vision_encoder"] = vision_encoder
+        elif vision_encoder is not None:
+            config["vision_encoder"] = vision_encoder
+        return cls(**config)
