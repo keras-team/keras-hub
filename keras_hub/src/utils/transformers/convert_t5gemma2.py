@@ -18,7 +18,7 @@ def load_image_converter_config(preset, transformers_config):
     rescale_factor = preprocessor_config["rescale_factor"]
     offset = [(-m / s) for m, s in zip(mean, std)]
     scale = [(s * rescale_factor) for s in std]
-    image_size = encoder_config["vision_config"].get("image_size", 896)
+    image_size = encoder_config["vision_config"]["image_size"]
     return {
         "image_size": (image_size, image_size),
         "scale": scale,
@@ -34,9 +34,7 @@ def convert_backbone_config(transformers_config):
     enc_text = encoder_config["text_config"]
     decoder_config = transformers_config["decoder"]
 
-    hidden_activation = decoder_config.get(
-        "hidden_activation", "gelu_pytorch_tanh"
-    )
+    hidden_activation = decoder_config["hidden_activation"]
     if hidden_activation == "gelu_pytorch_tanh":
         hidden_activation = "gelu_approximate"
 
@@ -59,9 +57,9 @@ def convert_backbone_config(transformers_config):
             pool_size=int(
                 vision_config["image_size"]
                 // vision_config["patch_size"]
-                // int(encoder_config.get("mm_tokens_per_image", 256) ** 0.5)
+                // int(encoder_config["mm_tokens_per_image"] ** 0.5)
             ),
-            layer_norm_epsilon=vision_config.get("layer_norm_eps", 1e-6),
+            layer_norm_epsilon=vision_config["layer_norm_eps"],
         )
 
     backbone_config = {
@@ -83,9 +81,7 @@ def convert_backbone_config(transformers_config):
         "dropout_rate": decoder_config["dropout_rate"],
         "rms_norm_eps": decoder_config["rms_norm_eps"],
         "query_pre_attn_scalar": decoder_config["query_pre_attn_scalar"],
-        "tie_word_embeddings": transformers_config.get(
-            "tie_word_embeddings", True
-        ),
+        "tie_word_embeddings": transformers_config["tie_word_embeddings"],
         "attention_bias": decoder_config["attention_bias"],
         "hidden_activation": hidden_activation,
         "initializer_range": decoder_config["initializer_range"],
@@ -94,21 +90,22 @@ def convert_backbone_config(transformers_config):
         "cross_attention_hidden_size": enc_text["hidden_size"],
         "attn_logit_softcapping": decoder_config["attn_logit_softcapping"],
         "final_logit_softcapping": decoder_config["final_logit_softcapping"],
-        "rope_max_wavelength": decoder_config.get("rope_theta", 10000.0),
-        "global_rope_scaling_factor": decoder_config.get("rope_parameters", {})
-        .get("full_attention", {})
-        .get("factor", 1.0),
-        "encoder_rope_max_wavelength": enc_text.get("rope_parameters", {})
-        .get("sliding_attention", {})
-        .get("rope_theta", None),
-        "encoder_global_rope_scaling_factor": enc_text.get(
-            "rope_parameters", {}
-        )
-        .get("full_attention", {})
-        .get("factor", None),
-        "use_query_key_norm": True,
+        "rope_max_wavelength": (
+            decoder_config["rope_parameters"]["sliding_attention"]["rope_theta"]
+        ),
+        "global_rope_scaling_factor": (
+            decoder_config["rope_parameters"]["full_attention"]["factor"]
+        ),
+        "encoder_rope_max_wavelength": (
+            enc_text["rope_parameters"]["sliding_attention"]["rope_theta"]
+        ),
+        "encoder_global_rope_scaling_factor": (
+            enc_text["rope_parameters"]["full_attention"]["factor"]
+        ),
+        # use_qk_norm may not be in config JSON; default True.
+        "use_query_key_norm": enc_text.get("use_qk_norm", True),
         "vision_encoder": vision_encoder,
-        "eoi_token_index": transformers_config.get("eoi_token_index", 256000),
+        "eoi_token_index": transformers_config["eoi_token_index"],
     }
     return backbone_config
 

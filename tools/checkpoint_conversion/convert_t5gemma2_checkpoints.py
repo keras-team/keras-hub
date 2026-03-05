@@ -2,7 +2,6 @@ import gc
 import os
 import random
 import shutil
-import traceback
 
 import huggingface_hub
 import keras
@@ -117,25 +116,23 @@ def convert_checkpoints(hf_model):
         cross_attention_hidden_size=enc_text_config.hidden_size,
         attn_logit_softcapping=(decoder_config.attn_logit_softcapping),
         final_logit_softcapping=(decoder_config.final_logit_softcapping),
-        rope_max_wavelength=getattr(decoder_config, "rope_theta", 10000.0),
+        rope_max_wavelength=(
+            decoder_config.rope_parameters["sliding_attention"]["rope_theta"]
+        ),
         global_rope_scaling_factor=(
-            decoder_config.rope_parameters.get("full_attention", {}).get(
-                "factor", 1.0
-            )
+            decoder_config.rope_parameters["full_attention"]["factor"]
         ),
         encoder_rope_max_wavelength=(
-            enc_text_config.rope_parameters.get("sliding_attention", {}).get(
-                "rope_theta", None
-            )
+            enc_text_config.rope_parameters["sliding_attention"]["rope_theta"]
         ),
         encoder_global_rope_scaling_factor=(
-            enc_text_config.rope_parameters.get("full_attention", {}).get(
-                "factor", None
-            )
+            enc_text_config.rope_parameters["full_attention"]["factor"]
         ),
-        use_query_key_norm=True,
+        use_query_key_norm=any(
+            "q_norm" in k for k in hf_model.state_dict().keys()
+        ),
         vision_encoder=vision_encoder,
-        eoi_token_index=getattr(hf_model.config, "eoi_token_index", 256000),
+        eoi_token_index=hf_model.config.eoi_token_index,
         dtype="float32",
     )
 
@@ -432,6 +429,7 @@ def check_text_output(
     keras_hub_model,
     hf_tokenizer,
     hf_model,
+    preprocessor,
 ):
     """Check outputs of KerasHub and HuggingFace models match."""
     # Note: KerasHub counts encoder + decoder embeddings as separate
@@ -463,7 +461,7 @@ def check_text_output(
         "football is good too, but nowhere near as good as cricket."
     ]
 
-    # KerasHub.
+    # KerasHub — build unpadded inputs (match HF's natural lengths).
     keras_hub_enc_token_ids = hf_tokenizer(
         enc_sample_text, return_tensors="np"
     )["input_ids"]
@@ -483,24 +481,11 @@ def check_text_output(
         "decoder_token_ids": keras_hub_dec_token_ids,
         "decoder_padding_mask": np.ones_like(keras_hub_dec_token_ids),
     }
-
-    # If multimodal backbone, add dummy image/vision_indices inputs.
-    # Conv2D can't process batch=0, so pass 1 dummy (all-zeros) image.
-    # InterleaveEmbeddings restores the 0th index after scatter, so
-    # the dummy image embedding is effectively a no-op.
-    if keras_hub_model.vision_encoder is not None:
-        image_size = keras_hub_model.vision_encoder.image_size
-        num_vision_tokens = (
-            keras_hub_model.vision_encoder.num_vision_tokens_per_image
-        )
-        keras_hub_inputs["images"] = np.zeros(
-            (1, 1, image_size, image_size, 3), dtype="float32"
-        )
-        # All indices point to 0; InterleaveEmbeddings restores
-        # the original embedding at position 0 after scattering.
-        keras_hub_inputs["vision_indices"] = np.zeros(
-            (1, num_vision_tokens), dtype="int32"
-        )
+    # For multimodal backbones, use preprocessor to add dummy
+    # image/vision_indices (the single source of truth).
+    keras_hub_inputs = preprocessor._add_vision_inputs(
+        keras_hub_inputs, batch_size=1
+    )
     keras_hub_output = keras_hub_model.predict(keras_hub_inputs)
 
     # HF.
@@ -530,36 +515,52 @@ def check_text_output(
     # Encoder output comparison.
     keras_enc_out = keras_hub_output["encoder_sequence_output"]
     hf_enc_out = hf_output.encoder_last_hidden_state.detach().float().numpy()
+    enc_abs_diff = np.abs(keras_enc_out - hf_enc_out)
+    print()
     print("Encoder Outputs:")
     print("KerasHub output:", keras_enc_out[0, 0, :10])
     print("HF output:", hf_enc_out[0, 0, :10])
+    print(f"Mean absolute diff: {enc_abs_diff.mean():.6f}")
     try:
         np.testing.assert_allclose(
             keras_enc_out, hf_enc_out, rtol=1e-4, atol=1e-4
         )
         print("-> Encoder outputs match! (rtol=1e-4, atol=1e-4)")
-    except AssertionError as err:
-        print("\n")
-        print(traceback.format_exc())
-        print(err.args[0])
-        print("\n")
+    except AssertionError:
+        mismatch = np.sum(
+            ~np.isclose(keras_enc_out, hf_enc_out, rtol=1e-4, atol=1e-4)
+        )
+        total = keras_enc_out.size
+        print(
+            f"-> Encoder outputs differ slightly beyond rtol=1e-4 "
+            f"(mismatched: {mismatch}/{total}, "
+            f"{mismatch / total * 100:.2f}%)"
+        )
 
     # Decoder output comparison.
     keras_dec_out = keras_hub_output["decoder_sequence_output"]
     hf_dec_out = hf_output.last_hidden_state.detach().float().numpy()
+    dec_abs_diff = np.abs(keras_dec_out - hf_dec_out)
+    print()
     print("Decoder Outputs:")
     print("KerasHub output:", keras_dec_out[0, 0, :10])
     print("HF output:", hf_dec_out[0, 0, :10])
+    print(f"Mean absolute diff: {dec_abs_diff.mean():.6f}")
     try:
         np.testing.assert_allclose(
             keras_dec_out, hf_dec_out, rtol=1e-4, atol=1e-4
         )
         print("-> Decoder outputs match! (rtol=1e-4, atol=1e-4)")
-    except AssertionError as err:
-        print("\n")
-        print(traceback.format_exc())
-        print(err.args[0])
-        print("\n")
+    except AssertionError:
+        mismatch = np.sum(
+            ~np.isclose(keras_dec_out, hf_dec_out, rtol=1e-4, atol=1e-4)
+        )
+        total = keras_dec_out.size
+        print(
+            f"-> Decoder outputs differ slightly beyond rtol=1e-4 "
+            f"(mismatched: {mismatch}/{total}, "
+            f"{mismatch / total * 100:.2f}%)"
+        )
 
 
 def check_multimodal_output(
@@ -664,32 +665,36 @@ def check_multimodal_output(
     print("\n--- Multimodal Verification ---")
     keras_hub_output = keras_hub_model.predict(keras_hub_inputs)
 
-    # Relaxed tolerances: vision encoder compounds f32 drift across layers.
-
     # Encoder output comparison.
     keras_enc_out = keras_hub_output["encoder_sequence_output"]
     hf_enc_out = hf_output.encoder_last_hidden_state.detach().float().numpy()
     enc_abs_diff = np.abs(keras_enc_out - hf_enc_out)
+    print()
     print("Encoder Outputs (multimodal):")
     print("KerasHub output:", keras_enc_out[0, 0, :10])
     print("HF output:", hf_enc_out[0, 0, :10])
     print(f"Mean absolute diff: {enc_abs_diff.mean():.6f}")
-
     try:
         np.testing.assert_allclose(
             keras_enc_out, hf_enc_out, rtol=1e-4, atol=1e-4
         )
         print("-> Encoder outputs match! (rtol=1e-4, atol=1e-4)")
-    except AssertionError as err:
-        print("\n")
-        print(traceback.format_exc())
-        print(err.args[0])
-        print("\n")
+    except AssertionError:
+        mismatch = np.sum(
+            ~np.isclose(keras_enc_out, hf_enc_out, rtol=1e-4, atol=1e-4)
+        )
+        total = keras_enc_out.size
+        print(
+            f"-> Encoder outputs differ slightly beyond rtol=1e-4 "
+            f"(mismatched: {mismatch}/{total}, "
+            f"{mismatch / total * 100:.2f}%)"
+        )
 
     # Decoder output comparison.
     keras_dec_out = keras_hub_output["decoder_sequence_output"]
     hf_dec_out = hf_output.last_hidden_state.detach().float().numpy()
     dec_abs_diff = np.abs(keras_dec_out - hf_dec_out)
+    print()
     print("Decoder Outputs (multimodal):")
     print("KerasHub output:", keras_dec_out[0, 0, :10])
     print("HF output:", hf_dec_out[0, 0, :10])
@@ -699,11 +704,16 @@ def check_multimodal_output(
             keras_dec_out, hf_dec_out, rtol=1e-4, atol=1e-4
         )
         print("-> Decoder outputs match! (rtol=1e-4, atol=1e-4)")
-    except AssertionError as err:
-        print("\n")
-        print(traceback.format_exc())
-        print(err.args[0])
-        print("\n")
+    except AssertionError:
+        mismatch = np.sum(
+            ~np.isclose(keras_dec_out, hf_dec_out, rtol=1e-4, atol=1e-4)
+        )
+        total = keras_dec_out.size
+        print(
+            f"-> Decoder outputs differ slightly beyond rtol=1e-4 "
+            f"(mismatched: {mismatch}/{total}, "
+            f"{mismatch / total * 100:.2f}%)"
+        )
 
 
 def main(_):
@@ -740,11 +750,30 @@ def main(_):
     print("\n-> Load KerasHub tokenizer.")
     keras_hub_tokenizer = extract_vocab(hf_model_dir)
 
+    # Create preprocessor to check_text_output can use it.
+    preprocessor_kwargs = {}
+    if keras_hub_model.vision_encoder is not None:
+        preprocessor_kwargs.update(
+            {
+                "image_size": keras_hub_model.vision_encoder.image_size,
+                "num_vision_tokens_per_image": (
+                    keras_hub_model.vision_encoder.num_vision_tokens_per_image
+                ),
+            }
+        )
+    preprocessor = T5Gemma2Seq2SeqLMPreprocessor(
+        tokenizer=keras_hub_tokenizer,
+        encoder_sequence_length=512,
+        decoder_sequence_length=512,
+        **preprocessor_kwargs,
+    )
+
     check_text_output(
         keras_hub_tokenizer,
         keras_hub_model,
         hf_tokenizer,
         hf_model,
+        preprocessor,
     )
 
     check_multimodal_output(
@@ -758,11 +787,6 @@ def main(_):
     del hf_model
     gc.collect()
 
-    preprocessor = T5Gemma2Seq2SeqLMPreprocessor(
-        tokenizer=keras_hub_tokenizer,
-        encoder_sequence_length=512,
-        decoder_sequence_length=512,
-    )
     keras_lm = T5Gemma2Seq2SeqLM(
         backbone=keras_hub_model,
         preprocessor=preprocessor,

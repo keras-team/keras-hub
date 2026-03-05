@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
@@ -53,6 +54,8 @@ class T5Gemma2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         encoder_sequence_length=512,
         decoder_sequence_length=512,
         image_converter=None,
+        image_size=None,
+        num_vision_tokens_per_image=None,
         add_start_token=False,
         add_end_token=True,
         **kwargs,
@@ -66,6 +69,34 @@ class T5Gemma2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
         self.image_converter = image_converter
+        self._vision_image_size = image_size
+        self.num_vision_tokens_per_image = num_vision_tokens_per_image
+
+    def _add_vision_inputs(self, x, batch_size):
+        """Add dummy image/vision_indices for multimodal text-only input.
+
+        When a multimodal backbone (with vision encoder) is used for
+        text-only inference, the functional model still requires
+        `images` and `vision_indices` inputs. This method provides
+        dummy values that act as a no-op: InterleaveEmbeddings
+        restores position 0 after scattering zero-indexed updates.
+        """
+        if self._vision_image_size is not None and "images" not in x:
+            x["images"] = np.zeros(
+                (
+                    batch_size,
+                    1,
+                    self._vision_image_size,
+                    self._vision_image_size,
+                    3,
+                ),
+                dtype="float32",
+            )
+            x["vision_indices"] = np.zeros(
+                (batch_size, self.num_vision_tokens_per_image),
+                dtype="int32",
+            )
+        return x
 
     @preprocessing_function
     def call(
@@ -98,12 +129,14 @@ class T5Gemma2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
             add_start_value=True,
             add_end_value=self.add_end_token,
         )
+        batch_size = tf.shape(encoder_token_ids)[0]
         x = {
             "encoder_token_ids": encoder_token_ids,
             "encoder_padding_mask": encoder_padding_mask,
             "decoder_token_ids": decoder_token_ids[..., :-1],
             "decoder_padding_mask": decoder_padding_mask[..., :-1],
         }
+        x = self._add_vision_inputs(x, batch_size)
         y = decoder_token_ids[..., 1:]
         sample_weight = decoder_padding_mask[..., 1:]
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
@@ -149,12 +182,14 @@ class T5Gemma2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
             add_end_value=False,
         )
 
-        return {
+        batch_size = tf.shape(encoder_token_ids)[0]
+        out = {
             "encoder_token_ids": encoder_token_ids,
             "encoder_padding_mask": encoder_padding_mask,
             "decoder_token_ids": decoder_token_ids,
             "decoder_padding_mask": decoder_padding_mask,
         }
+        return self._add_vision_inputs(out, batch_size)
 
     def get_config(self):
         config = super().get_config()
@@ -162,6 +197,10 @@ class T5Gemma2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
             {
                 "add_start_token": self.add_start_token,
                 "add_end_token": self.add_end_token,
+                "image_size": self._vision_image_size,
+                "num_vision_tokens_per_image": (
+                    self.num_vision_tokens_per_image
+                ),
             }
         )
         return config
