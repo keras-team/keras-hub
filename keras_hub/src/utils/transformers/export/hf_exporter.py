@@ -100,10 +100,27 @@ def export_backbone(backbone, path, include_lm_head=False):
     # Save weights based on backend
     weights_path = os.path.join(path, "model.safetensors")
     if backend == "torch":
-        import torch
-        from safetensors.torch import save_file
+        import struct
 
-        weights_dict_torch = {}
+        import torch
+        from safetensors.torch import _SIZE
+
+        _DTYPE_MAP = {
+            "float32": "F32",
+            "bfloat16": "BF16",
+            "float16": "F16",
+            "int64": "I64",
+            "int32": "I32",
+            "int16": "I16",
+            "int8": "I8",
+            "uint8": "U8",
+            "bool": "BOOL",
+            "float64": "F64",
+        }
+
+        # Pass 1: generate metadata
+        header = {"__metadata__": {"format": "pt"}}
+        offset = 0
         for k, v in weights_dict.items():
             tensor = v.value if hasattr(v, "value") else v
 
@@ -116,31 +133,47 @@ def export_backbone(backbone, path, include_lm_head=False):
             else:
                 t = tensor
 
-            if hasattr(t, "contiguous"):
-                t = t.contiguous()
+            dtype_str = str(t.dtype).split(".")[-1]
+            dtype_mapped = _DTYPE_MAP.get(dtype_str, "F32")
 
-            weights_dict_torch[k] = t
+            shape = list(t.shape)
+            byte_size = t.nelement() * _SIZE[t.dtype]
 
-        # --- Handle Tied Weights ---
-        if (
-            "lm_head.weight" in weights_dict_torch
-            and "transformer.wte.weight" in weights_dict_torch
-        ):
-            wte = weights_dict_torch["transformer.wte.weight"]
-            lm = weights_dict_torch["lm_head.weight"]
-            if wte.data_ptr() == lm.data_ptr():
-                weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
+            header[k] = {
+                "dtype": dtype_mapped,
+                "shape": shape,
+                "data_offsets": [offset, offset + byte_size],
+            }
+            offset += byte_size
 
-        elif (
-            "lm_head.weight" in weights_dict_torch
-            and "model.embed_tokens.weight" in weights_dict_torch
-        ):
-            wte = weights_dict_torch["model.embed_tokens.weight"]
-            lm = weights_dict_torch["lm_head.weight"]
-            if wte.data_ptr() == lm.data_ptr():
-                weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
+        header_json = json.dumps(header, separators=(",", ":")).encode("utf-8")
+        pad_len = (8 - len(header_json) % 8) % 8
+        header_json += b" " * pad_len
+        header_len = len(header_json)
 
-        save_file(weights_dict_torch, weights_path, metadata={"format": "pt"})
+        # Pass 2: write data streamingly
+        # Handles model writing one tensor at a time, avoiding OOMs
+        with open(weights_path, "wb") as f:
+            f.write(struct.pack("<Q", header_len))
+            f.write(header_json)
+
+            for k, v in weights_dict.items():
+                tensor = v.value if hasattr(v, "value") else v
+
+                if isinstance(tensor, torch.Tensor):
+                    t = tensor.detach().to("cpu")
+                elif hasattr(tensor, "numpy"):
+                    t = torch.tensor(tensor.numpy())
+                elif hasattr(tensor, "__array__"):
+                    t = torch.tensor(tensor)
+                else:
+                    t = tensor
+
+                if hasattr(t, "contiguous"):
+                    t = t.contiguous()
+
+                b = t.view(torch.uint8).numpy().tobytes()
+                f.write(b)
 
     elif backend == "tensorflow":
         from safetensors.tensorflow import save_file
