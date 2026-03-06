@@ -64,11 +64,11 @@ class T5Gemma2BackboneTest(TestCase):
     def test_asymmetrical_backbone(self):
         asym_kwargs = {
             "vocabulary_size": 100,
-            "encoder_hidden_dim": 48,
+            "encoder_hidden_dim": 32,
             "encoder_intermediate_dim": 96,
             "encoder_num_layers": 3,
-            "encoder_num_attention_heads": 6,
-            "encoder_num_key_value_heads": 3,
+            "encoder_num_attention_heads": 4,
+            "encoder_num_key_value_heads": 2,
             "encoder_head_dim": 8,
             "encoder_layer_types": ["full_attention"] * 3,
             "decoder_hidden_dim": 32,
@@ -85,7 +85,7 @@ class T5Gemma2BackboneTest(TestCase):
             "dropout_rate": 0.1,
             "rms_norm_eps": 1e-6,
             "tie_word_embeddings": True,
-            "cross_attention_hidden_size": 48,
+            "cross_attention_hidden_size": 32,
             "use_query_key_norm": True,
         }
         self.run_backbone_test(
@@ -93,7 +93,7 @@ class T5Gemma2BackboneTest(TestCase):
             init_kwargs=asym_kwargs,
             input_data=self.input_data,
             expected_output_shape={
-                "encoder_sequence_output": (2, 16, 48),
+                "encoder_sequence_output": (2, 16, 32),
                 "decoder_sequence_output": (2, 16, 32),
             },
         )
