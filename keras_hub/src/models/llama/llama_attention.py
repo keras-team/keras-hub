@@ -192,8 +192,15 @@ class LlamaAttention(keras.layers.Layer):
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
         if attention_mask is not None:
+            # Use ops.expand_dims instead of Python None indexing
+            # (attention_mask[:, None, :, :]).  Python None indexing traces
+            # as tf.StridedSlice(new_axis_mask) in the TF graph, which falls
+            # to the Flex delegate and is not supported by standalone
+            # ai_edge_litert (TF 2.20+).  ops.expand_dims traces as the
+            # native TFLite ExpandDims op instead.
             return self._softmax(
-                attention_scores, attention_mask[:, None, :, :]
+                attention_scores,
+                ops.expand_dims(attention_mask, axis=1),
             )
         return self._softmax(attention_scores)
 
