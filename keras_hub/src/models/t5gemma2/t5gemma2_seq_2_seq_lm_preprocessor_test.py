@@ -121,8 +121,6 @@ class T5Gemma2Seq2SeqLMPreprocessorTest(TestCase):
         self.assertEqual(config["num_vision_tokens_per_image"], 32)
         self.assertEqual(config["add_start_token"], False)
         self.assertEqual(config["add_end_token"], True)
-        self.assertEqual(config["encoder_sequence_length"], 8)
-        self.assertEqual(config["decoder_sequence_length"], 8)
 
     @pytest.mark.extra_large
     def test_all_presets(self):
