@@ -140,6 +140,7 @@ class MobileNetV5ImageClassifier(ImageClassifier):
 
         # === Config ===
         self.num_classes = num_classes
+        self.head_dtype = head_dtype
         self.head_hidden_size = head_hidden_size
         self.global_pool_type = global_pool
         self.drop_rate = drop_rate
@@ -152,6 +153,7 @@ class MobileNetV5ImageClassifier(ImageClassifier):
                 "head_hidden_size": self.head_hidden_size,
                 "global_pool": self.global_pool_type,
                 "drop_rate": self.drop_rate,
+                "head_dtype": keras.dtype_policies.serialize(self.head_dtype),
             }
         )
         return config
