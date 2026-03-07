@@ -107,9 +107,6 @@ class MetaCLIP2VisionEncoder(Backbone):
             )
             for i in range(num_layers)
         ]
-        self.post_layer_norm = layers.LayerNormalization(
-            epsilon=1e-5, dtype=dtype, name=f"{prefix}post_layer_norm"
-        )
 
         # === Functional Model ===
         image_input = layers.Input(shape=image_shape, name="images")
