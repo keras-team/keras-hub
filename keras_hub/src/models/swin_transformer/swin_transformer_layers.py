@@ -455,14 +455,14 @@ class SwinTransformerBlock(keras.layers.Layer):
             img_mask = ops.zeros((1, H, W, 1), dtype="int32")
             cnt = 0
             h_slices = [
-                (0, int(H // 2)),
-                (int(H // 2), int(H - self.shift_size)),
-                (int(H - self.shift_size), int(H)),
+                (0, H - self.window_size),
+                (H - self.window_size, H - self.shift_size),
+                (H - self.shift_size, H),
             ]
             w_slices = [
-                (0, int(W // 2)),
-                (int(W // 2), int(W - self.shift_size)),
-                (int(W - self.shift_size), int(W)),
+                (0, W - self.window_size),
+                (W - self.window_size, W - self.shift_size),
+                (W - self.shift_size, W),
             ]
             for h in h_slices:
                 for w in w_slices:
