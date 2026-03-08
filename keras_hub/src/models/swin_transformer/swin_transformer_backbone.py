@@ -106,7 +106,6 @@ class SwinTransformerBackbone(Backbone):
             embed_dim=embed_dim,
             norm_layer=(layers.LayerNormalization if patch_norm else None),
             data_format=data_format,
-            patch_norm=patch_norm,
             dtype=dtype,
             name="patch_embedding",
         )

@@ -606,7 +606,6 @@ class PatchEmbedding(layers.Layer):
         norm_layer: Callable layer class for normalization (e.g.,
             LayerNormalization).
         data_format: str. Either "channels_last" or "channels_first".
-        patch_norm: bool. Whether to apply normalization.
     """
 
     def __init__(
@@ -615,14 +614,12 @@ class PatchEmbedding(layers.Layer):
         embed_dim=96,
         norm_layer=None,
         data_format="channels_last",
-        patch_norm=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.patch_size = patch_size
         self.embed_dim = embed_dim
         self.data_format = data_format
-        self.patch_norm = patch_norm
         self.norm_layer = norm_layer
 
         self.proj = layers.Conv2D(
@@ -636,7 +633,7 @@ class PatchEmbedding(layers.Layer):
             kernel_initializer="lecun_normal",
         )
 
-        if self.patch_norm and self.norm_layer is not None:
+        if self.norm_layer is not None:
             self.norm = norm_layer(
                 epsilon=1e-5, dtype=self.dtype_policy, name="norm"
             )
@@ -659,7 +656,6 @@ class PatchEmbedding(layers.Layer):
                 "patch_size": self.patch_size,
                 "embed_dim": self.embed_dim,
                 "data_format": self.data_format,
-                "patch_norm": self.patch_norm,
                 "norm_layer": keras.saving.serialize_keras_object(
                     self.norm_layer
                 )
