@@ -1,8 +1,3 @@
-import collections.abc
-from typing import Any
-from typing import Tuple
-from typing import Union
-
 import keras
 from keras import layers
 from keras import ops
@@ -171,18 +166,26 @@ class Mlp(layers.Layer):
         self.act_layer = act_layer
         self.dropout_rate = dropout_rate
 
-        self.fc1 = layers.Dense(hidden_features, name="fc1")
-        self.fc2 = layers.Dense(out_features, name="fc2")
-        self.drop = layers.Dropout(dropout_rate) if dropout_rate > 0.0 else None
+        self.fc1 = layers.Dense(
+            hidden_features, dtype=self.dtype_policy, name="fc1"
+        )
+        self.fc2 = layers.Dense(
+            out_features, dtype=self.dtype_policy, name="fc2"
+        )
+        self.dropout = (
+            layers.Dropout(dropout_rate, dtype=self.dtype_policy)
+            if dropout_rate > 0.0
+            else None
+        )
 
     def call(self, x):
         x = self.fc1(x)
         x = self.act_layer(x)
-        if self.drop is not None:
-            x = self.drop(x)
+        if self.dropout is not None:
+            x = self.dropout(x)
         x = self.fc2(x)
-        if self.drop is not None:
-            x = self.drop(x)
+        if self.dropout is not None:
+            x = self.dropout(x)
         return x
 
     def get_config(self):
@@ -218,7 +221,7 @@ class WindowAttention(keras.layers.Layer):
             key, value. Default: True
         qk_scale (float, optional): Override default scaling factor for
             queries and keys (default: head_dim ** -0.5)
-        attn_drop (float, optional): Dropout ratio of attention weights.
+        attention_dropout (float, optional): Dropout ratio of attention weights.
             Default: 0.0
         proj_drop (float, optional): Dropout ratio of output. Default: 0.0
     """
@@ -231,16 +234,16 @@ class WindowAttention(keras.layers.Layer):
         window_size=7,
         qkv_bias=True,
         qk_scale=None,
-        attn_drop=0.0,
+        attention_dropout=0.0,
         proj_drop=0.0,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.dim = dim
         self.window_size = (
-            window_size
-            if isinstance(window_size, collections.abc.Iterable)
-            else (window_size, window_size)
+            (window_size, window_size)
+            if isinstance(window_size, int)
+            else window_size
         )
         self.win_h, self.win_w = self.window_size
         self.window_area = self.win_h * self.win_w
@@ -249,7 +252,7 @@ class WindowAttention(keras.layers.Layer):
         self.scale = qk_scale if qk_scale is not None else self.head_dim**-0.5
         self.attn_dim = self.head_dim * self.num_heads
         self.qkv_bias = qkv_bias
-        self.attn_drop_rate = attn_drop
+        self.attn_drop_rate = attention_dropout
         self.proj_drop_rate = proj_drop
 
         self.relative_position_index = get_relative_position_index(
@@ -260,11 +263,18 @@ class WindowAttention(keras.layers.Layer):
         self.qkv = keras.layers.Dense(
             self.head_dim * self.num_heads * 3,
             use_bias=self.qkv_bias,
+            dtype=self.dtype_policy,
             name="attention_qkv",
         )
-        self.attn_drop = keras.layers.Dropout(self.attn_drop_rate)
-        self.proj = keras.layers.Dense(self.dim, name="attention_projection")
-        self.proj_drop = keras.layers.Dropout(self.proj_drop_rate)
+        self.attention_dropout_layer = keras.layers.Dropout(
+            self.attn_drop_rate, dtype=self.dtype_policy
+        )
+        self.proj = keras.layers.Dense(
+            self.dim, dtype=self.dtype_policy, name="attention_projection"
+        )
+        self.proj_drop = keras.layers.Dropout(
+            self.proj_drop_rate, dtype=self.dtype_policy
+        )
 
         self.relative_position_bias_table = self.add_weight(
             shape=((2 * self.win_h - 1) * (2 * self.win_w - 1), self.num_heads),
@@ -274,7 +284,7 @@ class WindowAttention(keras.layers.Layer):
         )
         super().build(input_shape)
 
-    def _get_rel_pos_bias(self) -> Any:
+    def _get_rel_pos_bias(self):
         relative_position_bias = ops.take(
             self.relative_position_bias_table,
             self.relative_position_index,
@@ -282,9 +292,7 @@ class WindowAttention(keras.layers.Layer):
         )
         return ops.transpose(relative_position_bias, (2, 0, 1))
 
-    def call(
-        self, x, mask=None, return_attns=False
-    ) -> Union[Any, Tuple[Any, Any]]:
+    def call(self, x, mask=None, return_attns=False):
         """
         Args:
             x: input features with shape of (num_windows*B, N, C)
@@ -315,7 +323,7 @@ class WindowAttention(keras.layers.Layer):
         else:
             attn = ops.nn.softmax(attn, -1)
 
-        attn = self.attn_drop(attn)
+        attn = self.attention_dropout_layer(attn)
 
         x = ops.matmul(attn, v)
         x = ops.transpose(x, axes=[0, 2, 1, 3])
@@ -342,7 +350,7 @@ class WindowAttention(keras.layers.Layer):
                 "attn_dim": self.attn_dim,
                 "scale": self.scale,
                 "qkv_bias": self.qkv_bias,
-                "attn_drop": self.attn_drop,
+                "attention_dropout": self.attn_drop_rate,
                 "proj_drop": self.proj_drop,
             }
         )
@@ -361,8 +369,8 @@ class SwinTransformerBlock(keras.layers.Layer):
         mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
         qkv_bias (bool, optional): If True, add a learnable bias to query,
             key, value. Default: True
-        drop (float, optional): Dropout rate. Default: 0.0
-        attn_drop (float, optional): Attention dropout rate. Default: 0.0
+        dropout_rate (float, optional): Dropout rate. Default: 0.0
+        attention_dropout (float, optional): Attention dropout rate. Default: 0.0
         drop_path (float, optional): Stochastic depth rate. Default: 0.0
         act_layer (keras.layers.Layer, optional): Activation layer. Default:
             keras.layers.Activation("gelu")
@@ -379,8 +387,8 @@ class SwinTransformerBlock(keras.layers.Layer):
         shift_size=0,
         mlp_ratio=4.0,
         qkv_bias=True,
-        drop=0.0,
-        attn_drop=0.0,
+        dropout_rate=0.0,
+        attention_dropout=0.0,
         drop_path=0.0,
         act_layer=keras.activations.gelu,
         norm_layer=keras.layers.LayerNormalization,
@@ -399,26 +407,34 @@ class SwinTransformerBlock(keras.layers.Layer):
             self.shift_size = 0
             self.window_size = min(self.input_resolution)
 
-        self.norm1 = norm_layer(epsilon=1e-5, name="norm1")
+        self.norm1 = norm_layer(
+            epsilon=1e-5, dtype=self.dtype_policy, name="norm1"
+        )
         self.attn = WindowAttention(
             dim=dim,
             num_heads=num_heads,
             window_size=window_size,
             qkv_bias=qkv_bias,
-            attn_drop=attn_drop,
-            proj_drop=drop,
+            attention_dropout=attention_dropout,
+            proj_drop=dropout_rate,
+            dtype=self.dtype_policy,
             name="attn",
         )
         self.drop_path = (
-            DropPath(drop_path) if drop_path > 0.0 else keras.layers.Identity()
+            DropPath(drop_path, dtype=self.dtype_policy)
+            if drop_path > 0.0
+            else keras.layers.Identity(dtype=self.dtype_policy)
         )
-        self.norm2 = norm_layer(epsilon=1e-5, name="norm2")
+        self.norm2 = norm_layer(
+            epsilon=1e-5, dtype=self.dtype_policy, name="norm2"
+        )
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=mlp_hidden_dim,
             act_layer=self.act_layer,
-            dropout_rate=drop,
+            dropout_rate=dropout_rate,
+            dtype=self.dtype_policy,
             name="mlp",
         )
 
@@ -534,8 +550,15 @@ class PatchMerging(layers.Layer):
     def __init__(self, dim, **kwargs):
         super().__init__(**kwargs)
         self.dim = dim
-        self.reduction = layers.Dense(2 * dim, use_bias=False, name="reduction")
-        self.norm = layers.LayerNormalization(epsilon=1e-5, name="norm")
+        self.reduction = layers.Dense(
+            2 * dim,
+            use_bias=False,
+            dtype=self.dtype_policy,
+            name="reduction",
+        )
+        self.norm = layers.LayerNormalization(
+            epsilon=1e-5, dtype=self.dtype_policy, name="norm"
+        )
 
     def call(self, x, H, W):
         """Forward pass.
@@ -607,12 +630,13 @@ class PatchEmbedding(layers.Layer):
             strides=patch_size,
             padding="VALID",
             data_format=data_format,
+            dtype=self.dtype_policy,
             name="conv_projection",
             kernel_initializer="lecun_normal",
         )
 
         if self.patch_norm and self.norm_layer is not None:
-            self.norm = norm_layer(name="norm")
+            self.norm = norm_layer(dtype=self.dtype_policy, name="norm")
         else:
             self.norm = None
 
@@ -663,8 +687,8 @@ class SwinTransformerStage(layers.Layer):
         window_size: Local window size.
         mlp_ratio: Ratio of mlp hidden dim to embedding dim.
         qkv_bias: If True, add a learnable bias to query, key, value.
-        drop: Dropout rate.
-        attn_drop: Dropout rate for attention.
+        dropout_rate: Dropout rate.
+        attention_dropout: Dropout rate for attention.
         drop_path: Stochastic depth rate.
         downsample: Downsample layer at the end of the layer.
         input_resolution: Input resolution.
@@ -678,8 +702,8 @@ class SwinTransformerStage(layers.Layer):
         window_size=7,
         mlp_ratio=4.0,
         qkv_bias=True,
-        drop=0.0,
-        attn_drop=0.0,
+        dropout_rate=0.0,
+        attention_dropout=0.0,
         drop_path=0.0,
         downsample=None,
         input_resolution=None,
@@ -695,8 +719,8 @@ class SwinTransformerStage(layers.Layer):
         self.downsample = downsample
         self._drop_path = drop_path
         self._qkv_bias = qkv_bias
-        self._drop = drop
-        self._attn_drop = attn_drop
+        self._dropout_rate = dropout_rate
+        self._attention_dropout = attention_dropout
         self.input_resolution = input_resolution
 
     def build(self, input_shape):
@@ -710,11 +734,12 @@ class SwinTransformerStage(layers.Layer):
                     shift_size=0 if (i % 2 == 0) else self.window_size // 2,
                     mlp_ratio=self.mlp_ratio,
                     qkv_bias=self._qkv_bias,
-                    drop=self._drop,
-                    attn_drop=self._attn_drop,
+                    dropout_rate=self._dropout_rate,
+                    attention_dropout=self._attention_dropout,
                     drop_path=self._drop_path[i]
                     if isinstance(self._drop_path, list)
                     else self._drop_path,
+                    dtype=self.dtype_policy,
                     name=f"blocks_{i}",
                 )
             )
@@ -722,6 +747,7 @@ class SwinTransformerStage(layers.Layer):
         if self.downsample is not None:
             self.downsample = self.downsample(
                 dim=self.dim,
+                dtype=self.dtype_policy,
                 name="downsample",
             )
 
@@ -756,8 +782,8 @@ class SwinTransformerStage(layers.Layer):
                 "window_size": self.window_size,
                 "mlp_ratio": self.mlp_ratio,
                 "qkv_bias": self._qkv_bias,
-                "drop": self._drop,
-                "attn_drop": self._attn_drop,
+                "dropout_rate": self._dropout_rate,
+                "attention_dropout": self._attention_dropout,
                 "drop_path": self._drop_path,
                 "downsample": keras.utils.serialize_keras_object(
                     self.downsample

@@ -36,22 +36,27 @@ class SwinTransformerBackbone(Backbone):
     Args:
         image_shape: tuple of ints. The shape of the input images, excluding
             batch dimension.
-        patch_size: int. Size of the patches to be extracted from the input
-            images.
         embed_dim: int. Base dimension of the transformer.
         depths: tuple of ints. Number of transformer blocks in each stage.
         num_heads: tuple of ints. Number of attention heads in each stage.
         window_size: int. Size of the attention window.
+        patch_size: int. Size of the patches to be extracted from the input
+            images. Defaults to `4`.
         mlp_ratio: float. Ratio of mlp hidden dim to embedding dim.
+            Defaults to `4.0`.
         qkv_bias: bool. If True, add a learnable bias to query, key, value.
-        drop: float. Dropout rate.
-        attn_drop: float. Dropout rate for attention.
-        drop_path: float. Stochastic depth rate.
+            Defaults to `True`.
+        dropout_rate: float. Dropout rate. Defaults to `0.0`.
+        attention_dropout: float. Dropout rate for attention.
+            Defaults to `0.0`.
+        drop_path: float. Stochastic depth rate. Defaults to `0.1`.
         patch_norm: bool. If True, add normalization after patch embedding.
-        data_format: str. Format of the input data, either "channels_last" or
-            "channels_first".
+            Defaults to `True`.
+        data_format: str. Format of the input data, either `"channels_last"`
+            or `"channels_first"`. Defaults to `None` (which uses
+            `"channels_last"`).
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
-            for model computations and weights.
+            for model computations and weights. Defaults to `None`.
 
     Examples:
     ```python
@@ -64,12 +69,10 @@ class SwinTransformerBackbone(Backbone):
     # Randomly initialized Swin Transformer with custom config.
     model = keras_hub.models.SwinTransformerBackbone(
         image_shape=(224, 224, 3),
-        patch_size=4,
         embed_dim=96,
         depths=(2, 2, 6, 2),
         num_heads=(3, 6, 12, 24),
         window_size=7,
-        mlp_ratio=4.0,
     )
     model(np.ones((1, 224, 224, 3)))
     ```
@@ -78,82 +81,64 @@ class SwinTransformerBackbone(Backbone):
     def __init__(
         self,
         image_shape,
+        embed_dim,
+        depths,
+        num_heads,
+        window_size,
         patch_size=4,
-        embed_dim=96,
-        depths=(2, 2, 6, 2),
-        num_heads=(3, 6, 12, 24),
-        window_size=7,
         mlp_ratio=4.0,
         qkv_bias=True,
-        drop=0.0,
-        attn_drop=0.0,
+        dropout_rate=0.0,
+        attention_dropout=0.0,
         drop_path=0.1,
         patch_norm=True,
-        data_format="channels_last",
+        data_format=None,
         dtype=None,
         **kwargs,
     ):
-        if dtype is None:
-            dtype = keras.backend.floatx()
+        if data_format is None:
+            data_format = "channels_last"
 
-        # === Layers ===
-        self.patch_embedding = PatchEmbedding(
+        dpr = [float(x) for x in ops.linspace(0.0, drop_path, sum(depths))]
+
+        # === Functional Model ===
+        inputs = keras.Input(shape=image_shape)
+
+        x = PatchEmbedding(
             patch_size=patch_size,
             embed_dim=embed_dim,
             norm_layer=layers.LayerNormalization if patch_norm else None,
             data_format=data_format,
             patch_norm=patch_norm,
+            dtype=dtype,
             name="patch_embedding",
-        )
-
-        self.pos_drop = layers.Dropout(drop)
-
-        # Stochastic depth decay rule
-        dpr = [float(x) for x in ops.linspace(0.0, drop_path, sum(depths))]
-
-        # === Functional Model ===
-        inputs = keras.Input(shape=image_shape)
-        x = self.patch_embedding(inputs)
-        x = self.pos_drop(x)
+        )(inputs)
+        x = layers.Dropout(dropout_rate, dtype=dtype, name="pos_drop")(x)
 
         h, w = image_shape[0] // patch_size, image_shape[1] // patch_size
 
-        # Build stages
-        self.stages = []
         for i in range(len(depths)):
-            stage = SwinTransformerStage(
+            x = SwinTransformerStage(
                 dim=int(embed_dim * 2**i),
                 depth=depths[i],
                 num_heads=num_heads[i],
                 window_size=window_size,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
-                drop=drop,
-                attn_drop=attn_drop,
+                dropout_rate=dropout_rate,
+                attention_dropout=attention_dropout,
                 drop_path=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
                 downsample=PatchMerging if (i < len(depths) - 1) else None,
                 input_resolution=(h, w),
+                dtype=dtype,
                 name=f"stage_{i}",
-            )
-            self.stages.append(stage)
+            )(x)
             h //= 2
             w //= 2
 
-        # Final norm
-        self.norm_layers = [
-            layers.LayerNormalization(epsilon=1e-5, name=f"norm_{i}")
-            for i in range(len(depths))
-        ]
-        self.norm = layers.LayerNormalization(epsilon=1e-5, name="output_norm")
-
-        # Forward pass
-        features = []
-
-        for i, stage in enumerate(self.stages):
-            x = stage(x)
-            features.append(self.norm_layers[i](x))
-
-        x = self.norm(x)
+        x = layers.LayerNormalization(
+            epsilon=1e-5, dtype=dtype, name="output_norm"
+        )(x)
 
         super().__init__(inputs=inputs, outputs=x, dtype=dtype, **kwargs)
 
@@ -166,8 +151,8 @@ class SwinTransformerBackbone(Backbone):
         self.window_size = window_size
         self.mlp_ratio = mlp_ratio
         self.qkv_bias = qkv_bias
-        self.drop = drop
-        self.attn_drop = attn_drop
+        self.dropout_rate = dropout_rate
+        self.attention_dropout = attention_dropout
         self.drop_path = drop_path
         self.patch_norm = patch_norm
         self.data_format = data_format
@@ -184,8 +169,8 @@ class SwinTransformerBackbone(Backbone):
                 "window_size": self.window_size,
                 "mlp_ratio": self.mlp_ratio,
                 "qkv_bias": self.qkv_bias,
-                "drop": self.drop,
-                "attn_drop": self.attn_drop,
+                "dropout_rate": self.dropout_rate,
+                "attention_dropout": self.attention_dropout,
                 "drop_path": self.drop_path,
                 "patch_norm": self.patch_norm,
                 "data_format": self.data_format,
