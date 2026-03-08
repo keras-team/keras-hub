@@ -370,7 +370,8 @@ class SwinTransformerBlock(keras.layers.Layer):
         qkv_bias (bool, optional): If True, add a learnable bias to query,
             key, value. Default: True
         dropout_rate (float, optional): Dropout rate. Default: 0.0
-        attention_dropout (float, optional): Attention dropout rate. Default: 0.0
+        attention_dropout (float, optional): Attention dropout rate.
+            Default: 0.0
         drop_path (float, optional): Stochastic depth rate. Default: 0.0
         act_layer (keras.layers.Layer, optional): Activation layer. Default:
             keras.layers.Activation("gelu")

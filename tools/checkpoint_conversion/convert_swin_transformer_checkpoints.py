@@ -189,8 +189,8 @@ def validate_output(keras_model, hf_model, hf_processor):
     image_size = hf_processor.size["height"]
     image_resized = image.resize((image_size, image_size), Image.BICUBIC)
     img_np = np.array(image_resized).astype("float32") / 255.0
-    img_np = (img_np - np.array([0.485, 0.456, 0.406])) / np.array(
-        [0.229, 0.224, 0.225]
+    img_np = (img_np - np.array(hf_processor.image_mean)) / np.array(
+        hf_processor.image_std
     )
     keras_input = np.expand_dims(img_np, 0)
     keras_outputs = keras_model(keras_input, training=False)

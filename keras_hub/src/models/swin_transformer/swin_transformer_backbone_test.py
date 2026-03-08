@@ -34,4 +34,3 @@ class SwinTransformerBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
-
