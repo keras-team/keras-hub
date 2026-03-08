@@ -637,7 +637,9 @@ class PatchEmbedding(layers.Layer):
         )
 
         if self.patch_norm and self.norm_layer is not None:
-            self.norm = norm_layer(dtype=self.dtype_policy, name="norm")
+            self.norm = norm_layer(
+                epsilon=1e-5, dtype=self.dtype_policy, name="norm"
+            )
         else:
             self.norm = None
 
