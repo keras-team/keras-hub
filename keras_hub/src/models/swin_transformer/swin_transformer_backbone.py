@@ -101,24 +101,27 @@ class SwinTransformerBackbone(Backbone):
 
         dpr = [float(x) for x in ops.linspace(0.0, drop_path, sum(depths))]
 
-        # === Functional Model ===
+        # === Layers ===
         inputs = keras.Input(shape=image_shape)
 
-        x = PatchEmbedding(
+        patch_embedding_layer = PatchEmbedding(
             patch_size=patch_size,
             embed_dim=embed_dim,
-            norm_layer=layers.LayerNormalization if patch_norm else None,
+            norm_layer=(layers.LayerNormalization if patch_norm else None),
             data_format=data_format,
             patch_norm=patch_norm,
             dtype=dtype,
             name="patch_embedding",
-        )(inputs)
+        )
+        x = patch_embedding_layer(inputs)
         x = layers.Dropout(dropout_rate, dtype=dtype, name="pos_drop")(x)
 
-        h, w = image_shape[0] // patch_size, image_shape[1] // patch_size
+        h = image_shape[0] // patch_size
+        w = image_shape[1] // patch_size
 
+        stage_layers = []
         for i in range(len(depths)):
-            x = SwinTransformerStage(
+            stage = SwinTransformerStage(
                 dim=int(embed_dim * 2**i),
                 depth=depths[i],
                 num_heads=num_heads[i],
@@ -128,19 +131,28 @@ class SwinTransformerBackbone(Backbone):
                 dropout_rate=dropout_rate,
                 attention_dropout=attention_dropout,
                 drop_path=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
-                downsample=PatchMerging if (i < len(depths) - 1) else None,
+                downsample=(PatchMerging if (i < len(depths) - 1) else None),
                 input_resolution=(h, w),
                 dtype=dtype,
                 name=f"stage_{i}",
-            )(x)
-            h //= 2
-            w //= 2
+            )
+            x = stage(x)
+            stage_layers.append(stage)
+            if i < len(depths) - 1:
+                h //= 2
+                w //= 2
 
-        x = layers.LayerNormalization(
-            epsilon=1e-5, dtype=dtype, name="output_norm"
-        )(x)
+        norm_layer = layers.LayerNormalization(
+            epsilon=1e-5, dtype=dtype, name="norm"
+        )
+        x = norm_layer(x)
 
         super().__init__(inputs=inputs, outputs=x, dtype=dtype, **kwargs)
+
+        # === Layer references ===
+        self.patch_embedding = patch_embedding_layer
+        self.stages = stage_layers
+        self.norm = norm_layer
 
         # === Config ===
         self.image_shape = image_shape
