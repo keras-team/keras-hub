@@ -152,7 +152,7 @@ class Mlp(layers.Layer):
         in_features,
         hidden_features=None,
         out_features=None,
-        act_layer=keras.activations.relu,
+        act_layer=keras.activations.gelu,
         dropout_rate=0.0,
         **kwargs,
     ):
@@ -718,15 +718,13 @@ class SwinTransformerStage(layers.Layer):
         self.window_size = window_size
         self.num_heads = num_heads
         self.mlp_ratio = mlp_ratio
-        self.blocks = []
-        self.downsample = downsample
         self._drop_path = drop_path
         self._qkv_bias = qkv_bias
         self._dropout_rate = dropout_rate
         self._attention_dropout = attention_dropout
         self.input_resolution = input_resolution
 
-    def build(self, input_shape):
+        self.blocks = []
         for i in range(self.depth):
             self.blocks.append(
                 SwinTransformerBlock(
@@ -747,14 +745,22 @@ class SwinTransformerStage(layers.Layer):
                 )
             )
 
-        if self.downsample is not None:
-            self.downsample = self.downsample(
+        self._downsample_cls = downsample
+        if downsample is not None:
+            self.downsample = downsample(
                 dim=self.dim,
                 dtype=self.dtype_policy,
                 name="downsample",
             )
+        else:
+            self.downsample = None
 
-        super().build(input_shape)
+    def compute_output_shape(self, input_shape):
+        if self.downsample is not None:
+            H, W = self.input_resolution
+            new_H, new_W = (H + 1) // 2, (W + 1) // 2
+            return (input_shape[0], new_H * new_W, self.dim * 2)
+        return input_shape
 
     def call(self, x):
         """Forward pass.
@@ -789,10 +795,11 @@ class SwinTransformerStage(layers.Layer):
                 "attention_dropout": self._attention_dropout,
                 "drop_path": self._drop_path,
                 "downsample": keras.utils.serialize_keras_object(
-                    self.downsample
+                    self._downsample_cls
                 )
-                if self.downsample
+                if self._downsample_cls
                 else None,
+                "input_resolution": self.input_resolution,
             }
         )
         return config

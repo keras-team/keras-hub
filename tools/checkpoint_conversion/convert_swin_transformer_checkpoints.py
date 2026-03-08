@@ -71,8 +71,8 @@ def convert_model(hf_model):
         window_size=config["window_size"],
         mlp_ratio=config["mlp_ratio"],
         qkv_bias=config["qkv_bias"],
-        drop=config["hidden_dropout_prob"],
-        attn_drop=config["attention_probs_dropout_prob"],
+        dropout_rate=config["hidden_dropout_prob"],
+        attention_dropout=config["attention_probs_dropout_prob"],
         drop_path=config["drop_path_rate"],
         patch_norm=True,
     )

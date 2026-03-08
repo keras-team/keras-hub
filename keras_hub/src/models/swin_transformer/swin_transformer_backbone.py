@@ -15,9 +15,6 @@ from keras_hub.src.models.swin_transformer.swin_transformer_layers import (
 )
 
 
-def swin_kernel_initializer(stddev=0.02):
-    return keras.initializers.TruncatedNormal(stddev=stddev)
-
 
 @keras_hub_export("keras_hub.models.SwinTransformerBackbone")
 class SwinTransformerBackbone(Backbone):
