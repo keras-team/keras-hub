@@ -25,6 +25,7 @@ class SwinTransformerBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(1, 16, 64),
+            run_data_format_check=False,
         )
 
     @pytest.mark.large

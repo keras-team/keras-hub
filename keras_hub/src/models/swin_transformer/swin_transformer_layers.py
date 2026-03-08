@@ -640,6 +640,15 @@ class PatchEmbedding(layers.Layer):
         else:
             self.norm = None
 
+    def compute_output_shape(self, input_shape):
+        if self.data_format == "channels_first":
+            h, w = input_shape[-2], input_shape[-1]
+        else:
+            h, w = input_shape[-3], input_shape[-2]
+        h = h // self.patch_size
+        w = w // self.patch_size
+        return (input_shape[0], h * w, self.embed_dim)
+
     def call(self, x):
         x = self.proj(x)  # shape: (B, H//P, W//P, C)
         if self.data_format == "channels_first":

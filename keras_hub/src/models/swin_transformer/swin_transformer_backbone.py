@@ -15,7 +15,6 @@ from keras_hub.src.models.swin_transformer.swin_transformer_layers import (
 )
 
 
-
 @keras_hub_export("keras_hub.models.SwinTransformerBackbone")
 class SwinTransformerBackbone(Backbone):
     """A Swin Transformer backbone network.
