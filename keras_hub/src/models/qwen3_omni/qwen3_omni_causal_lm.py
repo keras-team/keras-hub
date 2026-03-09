@@ -41,13 +41,12 @@ class Qwen3OmniCausalLM(CausalLM):
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
 
-    TODO: Update examples when presets added.
     Examples:
 
     Use `generate()` to do text generation.
     ```python
     qwen3_omni_lm = keras_hub.models.Qwen3OmniCausalLM.from_preset(
-        "qwen3_omni_instruct"
+        "hf://Qwen/Qwen3-Omni-30B-A3B-Thinking"
     )
     qwen3_omni_lm.generate("I want to say", max_length=30)
 
@@ -58,7 +57,7 @@ class Qwen3OmniCausalLM(CausalLM):
     Compile the `generate()` function with a custom sampler.
     ```python
     qwen3_omni_lm = keras_hub.models.Qwen3OmniCausalLM.from_preset(
-        "qwen3_omni_instruct"
+        "hf://Qwen/Qwen3-Omni-30B-A3B-Thinking"
     )
     qwen3_omni_lm.compile(sampler="top_k")
     qwen3_omni_lm.generate("I want to say", max_length=30)
@@ -77,7 +76,7 @@ class Qwen3OmniCausalLM(CausalLM):
     }
 
     qwen3_omni_lm = keras_hub.models.Qwen3OmniCausalLM.from_preset(
-        "qwen3_omni_instruct",
+        "hf://Qwen/Qwen3-Omni-30B-A3B-Thinking",
         preprocessor=None,
     )
     qwen3_omni_lm.generate(prompt)
@@ -87,7 +86,7 @@ class Qwen3OmniCausalLM(CausalLM):
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
     qwen3_omni_lm = keras_hub.models.Qwen3OmniCausalLM.from_preset(
-        "qwen3_omni_instruct"
+        "hf://Qwen/Qwen3-Omni-30B-A3B-Thinking"
     )
     qwen3_omni_lm.fit(x=features, batch_size=2)
     ```
@@ -103,7 +102,7 @@ class Qwen3OmniCausalLM(CausalLM):
     sw = np.array([[1, 1, 1, 1, 1, 0, 0, 0]] * 2)
 
     qwen3_omni_lm = keras_hub.models.Qwen3OmniCausalLM.from_preset(
-        "qwen3_omni_instruct",
+        "hf://Qwen/Qwen3-Omni-30B-A3B-Thinking",
         preprocessor=None,
     )
     qwen3_omni_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)

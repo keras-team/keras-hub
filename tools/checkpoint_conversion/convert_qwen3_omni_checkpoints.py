@@ -65,6 +65,7 @@ def test_model(
         np.testing.assert_allclose(
             keras_hub_logits, hf_output_logits, atol=1e-3
         )
+        print("All numerics match with tolerance limit 1e-3")
     except AssertionError as err:
         print("\n")
         print(traceback.format_exc())
