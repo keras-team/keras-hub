@@ -1,4 +1,3 @@
-import keras
 import pytest
 
 from keras_hub.src.models.backbone import Backbone
@@ -12,13 +11,6 @@ from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm import (
 from keras_hub.src.tests.test_case import TestCase
 
 
-# NOTE: This test is valid and should pass locally. It is skipped only on
-# TensorFlow GPU CI because of ResourceExhaustedError (OOM). Revisit once
-# TensorFlow GPU CI runs without hitting OOM.
-@pytest.mark.skipif(
-    keras.backend.backend() == "tensorflow",
-    reason="TensorFlow GPU CI OOM (ResourceExhaustedError)",
-)
 class TestTask(TestCase):
     @pytest.mark.extra_large
     def test_convert_preset(self):
