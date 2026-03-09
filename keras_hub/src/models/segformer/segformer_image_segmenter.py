@@ -40,7 +40,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
         projection_filters: int, number of filters in the
             convolution layer projecting the concatenated features into a
             segmentation map. Defaults to 256`.
-        dropout: float. The dropout rate to apply before the
+        dropout_rate: float. The dropout rate to apply before the
             segmentation head. Defaults to `0.1`.
 
 
@@ -123,7 +123,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
         backbone,
         num_classes,
         preprocessor=None,
-        dropout=0.1,
+        dropout_rate=0.1,
         **kwargs,
     ):
         if not isinstance(backbone, keras.layers.Layer) or not isinstance(
@@ -140,7 +140,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
 
         self.backbone = backbone
         self.preprocessor = preprocessor
-        self.dropout = keras.layers.Dropout(dropout)
+        self.dropout = keras.layers.Dropout(dropout_rate)
         self.output_segmentation_head = keras.layers.Conv2D(
             filters=num_classes, kernel_size=1, strides=1
         )
@@ -165,7 +165,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
         # === Config ===
         self.num_classes = num_classes
         self.backbone = backbone
-        self.dropout_rate = dropout
+        self.dropout_rate = dropout_rate
 
     def get_config(self):
         config = super().get_config()
@@ -173,7 +173,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
             {
                 "num_classes": self.num_classes,
                 "backbone": keras.saving.serialize_keras_object(self.backbone),
-                "dropout": self.dropout_rate,
+                "dropout_rate": self.dropout_rate,
             }
         )
         return config
