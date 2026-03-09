@@ -14,6 +14,7 @@ device = torch.device("cpu")
 torch.set_default_device(device)
 
 from keras import ops  # noqa: E402
+from transformers import AutoModelForMultimodalLM  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
 
 import keras_hub  # noqa: E402
@@ -123,15 +124,6 @@ def main(_):
     hf_preset = PRESET_MAP[preset]
 
     # === Load the Huggingface model ===
-    # Qwen3-Omni architecture:
-    #   Qwen3OmniMoeForConditionalGeneration (full model)
-    #   └── thinker: Qwen3OmniMoeThinkerForConditionalGeneration
-    #       ├── audio_tower: Audio encoder
-    #       ├── visual: Vision encoder
-    #       └── model: Qwen3OmniMoeThinkerTextModel
-
-    from transformers import AutoModelForMultimodalLM
-
     hf_full_model = AutoModelForMultimodalLM.from_pretrained(
         hf_preset,
         device_map=device,
