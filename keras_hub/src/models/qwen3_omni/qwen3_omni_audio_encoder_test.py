@@ -53,4 +53,4 @@ class Qwen3OmniAudioEncoderTest(TestCase):
         restored = Qwen3OmniAudioEncoder.from_config(config)
         self.assertEqual(restored.d_model, 32)
         self.assertEqual(restored.output_dim, 16)
-        self.assertEqual(len(restored.encoder_layers), 2)
+        self.assertEqual(restored.encoder_layers, 2)

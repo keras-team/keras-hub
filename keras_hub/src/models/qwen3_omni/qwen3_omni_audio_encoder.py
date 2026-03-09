@@ -108,7 +108,7 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
 
         self.num_mel_bins = num_mel_bins
         self.d_model = d_model
-        self.encoder_layers_count = encoder_layers
+        self.encoder_layers = encoder_layers
         self.encoder_attention_heads = encoder_attention_heads
         self.encoder_ffn_dim = encoder_ffn_dim
         self.output_dim = output_dim
@@ -116,7 +116,7 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         self.max_source_positions = max_source_positions
         self.scale_embedding = scale_embedding
         self.activation_function = activation_function
-        self.dropout_rate = dropout
+        self.dropout = dropout
 
         self.embed_scale = math.sqrt(d_model) if scale_embedding else 1.0
 
@@ -158,7 +158,7 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         )
 
         # === Transformer encoder layers ===
-        self.encoder_layers = [
+        self.encoder_transformer_layers = [
             Qwen3OmniAudioEncoderLayer(
                 embed_dim=d_model,
                 num_heads=encoder_attention_heads,
@@ -239,7 +239,7 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         hidden_states = hidden_states + positions
 
         # Apply transformer encoder layers
-        for encoder_layer in self.encoder_layers:
+        for encoder_layer in self.encoder_transformer_layers:
             hidden_states = encoder_layer(
                 hidden_states,
                 training=training,
@@ -292,7 +292,7 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
             {
                 "num_mel_bins": self.num_mel_bins,
                 "d_model": self.d_model,
-                "encoder_layers": self.encoder_layers_count,
+                "encoder_layers": self.encoder_layers,
                 "encoder_attention_heads": self.encoder_attention_heads,
                 "encoder_ffn_dim": self.encoder_ffn_dim,
                 "output_dim": self.output_dim,
@@ -300,7 +300,7 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
                 "max_source_positions": self.max_source_positions,
                 "scale_embedding": self.scale_embedding,
                 "activation_function": self.activation_function,
-                "dropout": self.dropout_rate,
+                "dropout": self.dropout,
             }
         )
         return config
