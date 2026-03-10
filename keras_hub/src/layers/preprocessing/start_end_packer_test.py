@@ -409,7 +409,6 @@ class StartEndPackerTest(TestCase):
             [True, True, True, True, True, False],
             [True, True, True, True, True, True],
         ]
-        print(padding_mask)
         self.assertAllEqual(output, expected_output)
         self.assertAllEqual(padding_mask, expected_padding_mask)
 
