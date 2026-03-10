@@ -491,7 +491,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         # outside the `tf.data` pipeline. So we always call
         # `_set_vocabulary_and_merges_tf`.
         try:
-            print("HELLO!")
             self._set_vocabulary_and_merges_tf(vocabulary, merges)
         except ImportError:
             pass
