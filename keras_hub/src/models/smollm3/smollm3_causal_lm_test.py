@@ -14,21 +14,29 @@ from keras_hub.src.tests.test_case import TestCase
 
 class SmolLM3CausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab += ["<|begin_of_text|>"]
-        self.vocab += ["<|end_of_text|>"]
-        self.vocab += ["<think>"]
-        self.vocab += ["</think>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += [
+            "<|begin_of_text|>",
+            "<|end_of_text|>",
+            "<think>",
+            "</think>",
+            "!",
+        ]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.preprocessor = SmolLM3CausalLMPreprocessor(
             SmolLM3Tokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=8,
         )
+        self.vocabulary_size = self.preprocessor.tokenizer.vocabulary_size()
         self.backbone = SmolLM3Backbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            vocabulary_size=self.vocabulary_size,
             hidden_dim=64,
             intermediate_dim=128,
             num_layers=2,

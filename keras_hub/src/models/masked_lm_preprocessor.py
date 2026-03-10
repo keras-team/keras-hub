@@ -79,6 +79,10 @@ class MaskedLMPreprocessor(Preprocessor):
         self.random_token_rate = random_token_rate
         self.masker = None
 
+        # TODO(hongyu): Since `MultiSegmentPacker` requires TF workflow, we
+        # currently disable the Python workflow for `MaskedLMPreprocessor`.
+        self.tokenizer._allow_python_workflow = False
+
     def build(self, input_shape):
         super().build(input_shape)
         # Defer masker creation to `build()` so that we can be sure tokenizer

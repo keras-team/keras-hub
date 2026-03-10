@@ -19,7 +19,9 @@ class BytePairTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
         self.tokenizer = BytePairTokenizer(
-            vocabulary=VOCAB_PATH, merges=MERGE_PATH
+            vocabulary=VOCAB_PATH,
+            merges=MERGE_PATH,
+            _allow_python_workflow=False,
         )
 
     def test_tokenize_list_input(self):
@@ -195,3 +197,13 @@ class BytePairTokenizerTest(TestCase):
                 r"model archive.*Vocabulary file: .*vocab\.json",
             ):
                 tokenizer.set_vocabulary_and_merges(vocab_path, merges_path)
+
+
+class BytePairTokenizerDisallowPythonWorkflowTest(BytePairTokenizerTest):
+    def setUp(self):
+        super().setUp()
+        self.tokenizer = BytePairTokenizer(
+            vocabulary=VOCAB_PATH,
+            merges=MERGE_PATH,
+            _allow_python_workflow=False,
+        )

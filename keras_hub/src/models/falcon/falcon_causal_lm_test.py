@@ -14,12 +14,16 @@ from keras_hub.src.tests.test_case import TestCase
 
 class FalconCausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab += ["<|endoftext|>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["!", "<|endoftext|>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.tokenizer = FalconTokenizer(
             vocabulary=self.vocab, merges=self.merges
         )
@@ -27,8 +31,9 @@ class FalconCausalLMTest(TestCase):
             self.tokenizer,
             sequence_length=8,
         )
+        self.vocabulary_size = self.preprocessor.tokenizer.vocabulary_size()
         self.backbone = FalconBackbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            vocabulary_size=self.vocabulary_size,
             num_layers=2,
             num_attention_heads=2,
             hidden_dim=4,
@@ -47,12 +52,11 @@ class FalconCausalLMTest(TestCase):
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_causal_lm_basics(self):
-        vocabulary_size = self.tokenizer.vocabulary_size()
         self.run_task_test(
             cls=FalconCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 8, vocabulary_size),
+            expected_output_shape=(2, 8, self.vocabulary_size),
         )
 
     def test_generate(self):

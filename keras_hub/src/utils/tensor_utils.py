@@ -215,6 +215,46 @@ def convert_preprocessing_outputs(x):
     return keras.tree.map_structure(convert, x)
 
 
+def convert_preprocessing_outputs_python(x):
+    """Convert outputs after preprocessing to a backend agnostic format.
+
+    This function is used to convert `tf.Tensor` and `tf.RaggedTensor` output
+    from preprocessing layers to either:
+
+    - The correct tensor type for the Keras backend framework.
+    - Python lists, in the case of string data.
+
+    Examples:
+    ```python
+    # A batch of three samples each with two string segments.
+    x = (["hi", "yo", "hey"], ["bye", "ciao", ""])
+    keras_hub.utils.convert_preprocessing_outputs_python(x)
+
+    # A batch of features in a dictionary.
+    x = {
+        "text": ["hi", "hello", "hey"],
+        "images": np.ones((3, 64, 64, 3)),
+        "labels": [1, 0, 1],
+    }
+    keras_hub.utils.convert_preprocessing_outputs_python(x)
+    ```
+    """
+    if in_no_convert_scope():
+        return x
+
+    def convert(x):
+        if x is None:
+            return x
+        if isinstance(x, str):
+            return tensor_to_list(x)
+        dtype = None
+        if hasattr(x, "dtype"):
+            dtype = keras.backend.standardize_dtype(x.dtype)
+        return ops.convert_to_tensor(x, dtype=dtype)
+
+    return keras.tree.map_structure(convert, x)
+
+
 def _decode_strings_to_utf8(inputs):
     """Recursively decodes to list of strings with 'utf-8' encoding."""
     if isinstance(inputs, bytes):
