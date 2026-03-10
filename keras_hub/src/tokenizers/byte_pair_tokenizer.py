@@ -10,12 +10,19 @@ import os
 from typing import Iterable
 
 import keras
+import numpy as np
 import regex as re
+import tokenizers
 from keras.src.saving import serialization_lib
+from tokenizers import decoders
+from tokenizers import models
+from tokenizers import pre_tokenizers
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -51,6 +58,12 @@ SPLIT_PATTERN_1 = SPLIT_PATTERN_1.replace(
 # Multiple \n\n\n in sequence must not be split for Llama3.
 # SPLIT_PATTERN_2 = rf"""[\s६{SPECIAL_WHITESPACES}]$"""
 SPLIT_PATTERN_2 = rf"""[ \t\r\f\v६{SPECIAL_WHITESPACES}]$"""
+
+# From Llama3's tokenizer implementation.
+SPLIT_PATTERN_TOKENIZERS = (
+    "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| "
+    "?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+)
 
 
 def create_alts_for_unsplittable_tokens(unsplittable_tokens):
@@ -292,23 +305,16 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 f"Received: dtype={dtype}"
             )
 
-        super().__init__(dtype=dtype, **kwargs)
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            dtype=dtype, _allow_python_workflow=_allow_python_workflow, **kwargs
+        )
         self.sequence_length = sequence_length
         self.add_prefix_space = add_prefix_space
         if unsplittable_tokens is None:
             unsplittable_tokens = self.special_tokens
         self.unsplittable_tokens = unsplittable_tokens
         self.file_assets = [VOCAB_FILENAME, MERGES_FILENAME]
-
-        # Create byte <=> unicode mapping. This is useful for handling
-        # whitespace tokens.
-        byte_list, unicode_list = bytes_to_unicode()
-        self.byte2unicode = create_static_hashtable(
-            byte_list, unicode_list, default=""
-        )
-        self.unicode2byte = create_static_hashtable(
-            unicode_list, byte_list, default=""
-        )
 
         self.set_vocabulary_and_merges(vocabulary, merges)
 
@@ -326,62 +332,20 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         merges_path = os.path.join(dir_path, MERGES_FILENAME)
         self.set_vocabulary_and_merges(vocab_path, merges_path)
 
-    def set_vocabulary_and_merges(self, vocabulary, merges):
-        """Set the vocabulary and merge rules from data or files."""
-        if vocabulary is None or merges is None:
-            # Clear vocab related state.
-            self.vocabulary = None
-            self.merges = None
-            self.cache = None
-            self.id_to_token_map = None
-            self.token_to_id_map = None
-            self.merge_ranks_lookup_default = None
-            self.merge_ranks = None
-            return
+    def _set_vocabulary_and_merges_tf(self, vocabulary, merges):
+        assert_tf_libs_installed(self.__class__.__name__)
+        self.vocabulary = vocabulary.copy()
+        self.merges = merges
 
-        if isinstance(vocabulary, str):
-            if serialization_lib.in_safe_mode():
-                raise ValueError(
-                    "Requested the loading of a vocabulary file outside of the "
-                    "model archive. This carries a potential risk of loading "
-                    "arbitrary and sensitive files and thus it is disallowed "
-                    "by default. If you trust the source of the artifact, you "
-                    "can override this error by passing `safe_mode=False` to "
-                    "the loading function, or calling "
-                    "`keras.config.enable_unsafe_deserialization()`. "
-                    f"Vocabulary file: '{vocabulary}'"
-                )
-            with open(vocabulary, "r", encoding="utf-8") as f:
-                self.vocabulary = json.load(f)
-        elif isinstance(vocabulary, dict):
-            self.vocabulary = vocabulary.copy()
-        else:
-            raise ValueError(
-                "Vocabulary must be an file path or dictionary mapping string "
-                "token to int ids. Received: "
-                f"`type(vocabulary)={type(vocabulary)}`."
-            )
-        if isinstance(merges, str):
-            if serialization_lib.in_safe_mode():
-                raise ValueError(
-                    "Requested the loading of a merges file outside of the "
-                    "model archive. This carries a potential risk of loading "
-                    "arbitrary and sensitive files and thus it is disallowed "
-                    "by default. If you trust the source of the artifact, you "
-                    "can override this error by passing `safe_mode=False` to "
-                    "the loading function, or calling "
-                    "`keras.config.enable_unsafe_deserialization()`. "
-                    f"Merges file: '{merges}'"
-                )
-            with open(merges, encoding="utf-8") as f:
-                self.merges = [bp.rstrip() for bp in f]
-        elif isinstance(merges, Iterable):
-            self.merges = list(merges)
-        else:
-            raise ValueError(
-                "Merges must be a file path or a list of merge rules. "
-                f"Received: `type(merges)={type(merges)}`"
-            )
+        # Create byte <=> unicode mapping. This is useful for handling
+        # whitespace tokens.
+        byte_list, unicode_list = bytes_to_unicode()
+        self.byte2unicode = create_static_hashtable(
+            byte_list, unicode_list, default=""
+        )
+        self.unicode2byte = create_static_hashtable(
+            unicode_list, byte_list, default=""
+        )
 
         self.cache = BytePairTokenizerCache()
         if self.unsplittable_tokens:
@@ -413,7 +377,146 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             list(range(len(self.merges))),
             default=self.merge_ranks_lookup_default,
         )
+
+        # Dummy attrs for serialization compatibility.
+        if not hasattr(self, "_tokenizer"):
+            self._tokenizer = None
+
+    def _set_vocabulary_and_merges_tokenizers(self, vocabulary, merges):
+        self.vocabulary = vocabulary.copy()
+        self.merges = merges
+        _merges = []
+        for merge in merges:
+            if "#version:" in merge.lstrip():
+                continue
+            a, b = str(merge).split(" ")
+            if a not in vocabulary or b not in vocabulary:
+                raise ValueError(
+                    f"Merge rule '{merge}' contains token '{a}' or '{b}' that "
+                    "is not in the vocabulary."
+                )
+            _merges.append((a, b))
+
+        self._tokenizer = tokenizers.Tokenizer(
+            models.BPE(vocab=vocabulary, merges=_merges)
+        )
+        if self.unsplittable_tokens:
+            self._tokenizer.add_special_tokens(self.unsplittable_tokens)
+        # Ensure the implementation matches Llama3's tokenizer behavior.
+        self._tokenizer.pre_tokenizer = pre_tokenizers.Sequence(
+            [
+                pre_tokenizers.Split(
+                    pattern=SPLIT_PATTERN_TOKENIZERS, behavior="isolated"
+                ),
+                pre_tokenizers.ByteLevel(
+                    add_prefix_space=self.add_prefix_space, use_regex=False
+                ),
+            ]
+        )
+        self._tokenizer.decoder = decoders.ByteLevel()
+
+        # Dummy attrs for serialization compatibility.
+        if not hasattr(self, "cache"):
+            self.byte2unicode = None
+            self.unicode2byte = None
+            self.cache = None
+            self.id_to_token_map = None
+            self.token_to_id_map = None
+            self.merge_ranks_lookup_default = None
+            self.merge_ranks = None
+
+    def set_vocabulary_and_merges(self, vocabulary, merges):
+        """Set the vocabulary and merge rules from data or files."""
+        if vocabulary is None or merges is None:
+            # Clear vocab related state.
+            self.vocabulary = None
+            self.merges = None
+            # _set_vocabulary_and_merges_tf
+            self.byte2unicode = None
+            self.unicode2byte = None
+            self.cache = None
+            self.id_to_token_map = None
+            self.token_to_id_map = None
+            self.merge_ranks_lookup_default = None
+            self.merge_ranks = None
+            # _set_vocabulary_and_merges_tokenizers
+            self._tokenizer = None
+            return
+
+        if isinstance(vocabulary, str):
+            if serialization_lib.in_safe_mode():
+                raise ValueError(
+                    "Requested the loading of a vocabulary file outside of the "
+                    "model archive. This carries a potential risk of loading "
+                    "arbitrary and sensitive files and thus it is disallowed "
+                    "by default. If you trust the source of the artifact, you "
+                    "can override this error by passing `safe_mode=False` to "
+                    "the loading function, or calling "
+                    "`keras.config.enable_unsafe_deserialization()`. "
+                    f"Vocabulary file: '{vocabulary}'"
+                )
+            with open(vocabulary, "r", encoding="utf-8") as f:
+                vocabulary = json.load(f)
+        elif isinstance(vocabulary, dict):
+            vocabulary = vocabulary.copy()
+        else:
+            raise ValueError(
+                "Vocabulary must be an file path or dictionary mapping string "
+                "token to int ids. Received: "
+                f"`type(vocabulary)={type(vocabulary)}`."
+            )
+        if isinstance(merges, str):
+            if serialization_lib.in_safe_mode():
+                raise ValueError(
+                    "Requested the loading of a merges file outside of the "
+                    "model archive. This carries a potential risk of loading "
+                    "arbitrary and sensitive files and thus it is disallowed "
+                    "by default. If you trust the source of the artifact, you "
+                    "can override this error by passing `safe_mode=False` to "
+                    "the loading function, or calling "
+                    "`keras.config.enable_unsafe_deserialization()`. "
+                    f"Merges file: '{merges}'"
+                )
+            with open(merges, encoding="utf-8") as f:
+                merges = [bp.rstrip() for bp in f]
+        elif isinstance(merges, Iterable):
+            merges = list(merges)
+        else:
+            raise ValueError(
+                "Merges must be a file path or a list of merge rules. "
+                f"Received: `type(merges)={type(merges)}`"
+            )
+
+        # When using `BytePairTokenizer` with `tf.data`, it must be built
+        # outside the `tf.data` pipeline. So we always call
+        # `_set_vocabulary_and_merges_tf`.
+        try:
+            print("HELLO!")
+            self._set_vocabulary_and_merges_tf(vocabulary, merges)
+        except ImportError:
+            pass
+        if self._allow_python_workflow:
+            self._set_vocabulary_and_merges_tokenizers(vocabulary, merges)
+
         self._update_special_token_ids()
+
+    def _check_vocabulary(self):
+        if self.vocabulary is None:
+            raise ValueError(
+                "No vocabulary has been set for BytePairTokenizer. Make sure "
+                "to pass `vocabulary` and `merges` arguments when creating the "
+                "layer."
+            )
+
+    def _maybe_initialized_tf(self):
+        if getattr(self, "cache", None) is None:
+            self._set_vocabulary_and_merges_tf(self.vocabulary, self.merges)
+
+    def _maybe_initialized_tokenizers(self):
+        if getattr(self, "_tokenizer", None) is None:
+            self._set_vocabulary_and_merges_tokenizers(
+                self.vocabulary, self.merges
+            )
 
     def get_vocabulary(self):
         """Get the tokenizer vocabulary as a list of strings tokens."""
@@ -425,25 +528,55 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         self._check_vocabulary()
         return len(self.vocabulary)
 
-    def id_to_token(self, id):
-        """Convert an integer id to a string token."""
+    def _id_to_token_tf(self, id):
+        self._maybe_initialized_tf()
         # This will be slow, but keep memory usage down compared to building a
         # dict. Assuming the main use case is looking up a few special tokens
         # early in the vocab, this should be fine.
-        self._check_vocabulary()
-
         keys = self.get_vocabulary()
         for token in keys:
             if self.vocabulary[token] == id:
                 return token
         raise ValueError(f"`id` is out of the vocabulary. Received: {id}")
 
+    def _id_to_token_tokenizers(self, id):
+        self._maybe_initialized_tokenizers()
+        try:
+            token = self._tokenizer.id_to_token(id)
+        except OverflowError:
+            token = None
+        if token is None:
+            raise ValueError(f"Id {id} is out of vocabulary range.")
+        return token
+
+    def id_to_token(self, id):
+        """Convert an integer id to a string token."""
+        self._check_vocabulary()
+        if not self._allow_python_workflow or in_tf_function():
+            return self._id_to_token_tf(id)
+        else:
+            return self._id_to_token_tokenizers(id)
+
+    def _token_to_id_tf(self, token):
+        self._maybe_initialized_tf()
+        return self.vocabulary[token]
+
+    def _token_to_id_tokenizers(self, token):
+        self._maybe_initialized_tokenizers()
+        token_id = self._tokenizer.token_to_id(token)
+        if token_id is None:
+            raise ValueError(f"Token '{token}' is not in the vocabulary.")
+        return token_id
+
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
         self._check_vocabulary()
-        return self.vocabulary[token]
+        if not self._allow_python_workflow or in_tf_function():
+            return self._token_to_id_tf(token)
+        else:
+            return self._token_to_id_tokenizers(token)
 
-    def _bpe_merge_one_step(self, words, mask):
+    def _bpe_merge_one_step_tf(self, words, mask):
         """Perform one step of byte-pair merge."""
         # Get all word pairs.
         first, second = words[:, :-1], words[:, 1:]
@@ -524,7 +657,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         words = remove_strings_from_inputs(words, "")
         return [words, mask]
 
-    def _bpe_merge(self, inputs):
+    def _bpe_merge_tf(self, inputs):
         """Perform byte-pair merge for each word in the inputs."""
         num_words = tf.shape(inputs)[0]
 
@@ -535,7 +668,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         initial_mask = tf.fill((num_words,), True)
         merged_words, _ = tf.while_loop(
             loop_condition,
-            tf.function(self._bpe_merge_one_step),
+            tf.function(self._bpe_merge_one_step_tf),
             loop_vars=[
                 inputs,
                 initial_mask,
@@ -547,17 +680,28 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         )
         return merged_words
 
-    def _check_vocabulary(self):
-        if self.vocabulary is None:
-            raise ValueError(
-                "No vocabulary has been set for BytePairTokenizer. Make sure "
-                "to pass `vocabulary` and `merges` arguments when creating the "
-                "layer."
-            )
+    def _bpe_merge_and_update_cache_tf(self, tokens):
+        """Process unseen tokens and add to cache."""
+
+        def _transform_bytes(tokens):
+            """Map token bytes to unicode using `byte2unicode`."""
+            split_bytes = tf.strings.bytes_split(tokens)
+            split_unicode = self.byte2unicode.lookup(split_bytes)
+            return split_unicode
+
+        words = _transform_bytes(tokens)
+        tokenized_words = self._bpe_merge_tf(words)
+
+        # For each word, join all its token by a whitespace,
+        # e.g., ["dragon", "fly"] => "dragon fly" for hash purpose.
+        tokenized_words = tf.strings.reduce_join(
+            tokenized_words, axis=1, separator=" "
+        )
+        self.cache.insert(tokens, tokenized_words)
 
     @preprocessing_function
-    def tokenize(self, inputs):
-        self._check_vocabulary()
+    def _tokenize_tf(self, inputs):
+        self._maybe_initialized_tf()
         if self.add_prefix_space:
             inputs = tf.strings.join([" ", inputs])
 
@@ -570,7 +714,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 "`tokenize()` inputs should be a string, list of strings, or "
                 f"string tensor with rank < 2. Received: {inputs}"
             )
-
         raw_tokens = split_strings_for_bpe(inputs, self.unsplittable_tokens)
         token_row_splits = raw_tokens.row_splits
         flat_tokens = raw_tokens.flat_values
@@ -578,14 +721,13 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         # Check cache.
         cache_lookup = self.cache.lookup(flat_tokens)
         cache_mask = cache_lookup == ""
-
         has_unseen_words = tf.math.reduce_any(
             (cache_lookup == "") & (flat_tokens != "")
         )
 
         def process_unseen_tokens():
             unseen_tokens = tf.boolean_mask(flat_tokens, cache_mask)
-            self._bpe_merge_and_update_cache(unseen_tokens)
+            self._bpe_merge_and_update_cache_tf(unseen_tokens)
             return self.cache.lookup(flat_tokens)
 
         # If `has_unseen_words == True`, it means not all tokens are in cache,
@@ -595,7 +737,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             process_unseen_tokens,
             lambda: cache_lookup,
         )
-
         tokens = tf.strings.split(tokenized_words, sep=" ")
         if self.compute_dtype != tf.string:
             # Encode merged tokens.
@@ -617,12 +758,71 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         if unbatched:
             tokens = tf.squeeze(tokens, 0)
             tf.ensure_shape(tokens, shape=[self.sequence_length])
-
         return tokens
 
-    @preprocessing_function
-    def detokenize(self, inputs):
+    def _tokenize_tokenizers(self, inputs):
+        self._maybe_initialized_tokenizers()
+
+        def _canonicalize_tokenize_inputs(inputs):
+            if isinstance(inputs, str):
+                return [inputs], False
+            elif isinstance(inputs, (tuple, list)):
+                if not all(isinstance(i, str) for i in inputs):
+                    raise ValueError(
+                        "If a list or tuple is provided as input, all elements "
+                        "must be strings. "
+                        f"Received: {inputs}"
+                    )
+                return list(inputs), True
+            elif tf is not None and isinstance(inputs, tf.Tensor):
+                unbatched = inputs.shape.rank == 0
+                if unbatched:
+                    inputs = tf.expand_dims(inputs, 0)
+                inputs = inputs.numpy().tolist()
+                inputs = keras.tree.map_structure(
+                    lambda x: x.decode("utf-8"), inputs
+                )
+                return inputs, not unbatched
+            else:
+                raise ValueError(
+                    "Input should be a string or a list of strings. "
+                    f"Received: {inputs}"
+                )
+
+        inputs, batched = _canonicalize_tokenize_inputs(inputs)
+        outputs = self._tokenizer.encode_batch(inputs)
+        if is_int_dtype(self.compute_dtype):
+            batched_tokens = [o.ids for o in outputs]
+        else:
+            batched_tokens = [o.tokens for o in outputs]
+
+        # Convert to a dense output if `sequence_length` is set.
+        if self.sequence_length:
+            # Truncate sequences to `sequence_length`.
+            batched_tokens = [
+                tokens[: self.sequence_length] for tokens in batched_tokens
+            ]
+            # Pad sequences to `sequence_length`.
+            pad_token_id = getattr(self, "pad_token_id", 0)
+            batched_tokens = [
+                tokens + [pad_token_id] * (self.sequence_length - len(tokens))
+                for tokens in batched_tokens
+            ]
+
+        if not batched:
+            batched_tokens = batched_tokens[0]
+        return batched_tokens
+
+    def tokenize(self, inputs):
         self._check_vocabulary()
+        if not self._allow_python_workflow or in_tf_function():
+            return self._tokenize_tf(inputs)
+        else:
+            return self._tokenize_tokenizers(inputs)
+
+    @preprocessing_function
+    def _detokenize_tf(self, inputs):
+        self._maybe_initialized_tf()
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         inputs = tf.cast(inputs, self.dtype)
         unicode_text = tf.strings.reduce_join(
@@ -637,28 +837,66 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             outputs = tf.squeeze(outputs, 0)
         return outputs
 
+    def _detokenize_tokenizers(self, inputs):
+        self._maybe_initialized_tokenizers()
+
+        def _canonicalize_detokenize_inputs(inputs):
+            is_batched = True
+            if isinstance(inputs, int):
+                inputs = [[inputs]]
+                is_batched = False
+            elif isinstance(inputs, (tuple, list)):
+                if not inputs or isinstance(inputs[0], int):
+                    # Unbatched list of ints.
+                    inputs = [list(inputs)]
+                    is_batched = False
+                else:
+                    # Batched list of lists of ints.
+                    inputs = [list(seq) for seq in inputs]
+            elif isinstance(inputs, np.ndarray) or keras.ops.is_tensor(inputs):
+                inputs = keras.ops.convert_to_numpy(inputs)
+                if inputs.ndim == 0:
+                    inputs = [[inputs.item()]]
+                    is_batched = False
+                elif inputs.ndim == 1:
+                    inputs = [inputs.tolist()]
+                    is_batched = False
+                elif inputs.ndim == 2:
+                    inputs = inputs.tolist()
+                else:
+                    raise ValueError(
+                        f"Array must be 0, 1 or 2 dimensional, "
+                        f"got {inputs.shape}."
+                    )
+            else:
+                raise ValueError(
+                    "Input should be an integer, a list of integers, backend "
+                    f"tensor or numpy array. Received: {inputs}"
+                )
+            return inputs, is_batched
+
+        inputs, batched = _canonicalize_detokenize_inputs(inputs)
+        outputs = self._tokenizer.decode_batch(
+            inputs, skip_special_tokens=False
+        )
+        if not batched:
+            outputs = outputs[0]
+        return outputs
+
+    def detokenize(self, inputs):
+        self._check_vocabulary()
+        if not self._allow_python_workflow or in_tf_function():
+            return self._detokenize_tf(inputs)
+        else:
+            return self._detokenize_tokenizers(inputs)
+
+    def call(self, inputs, *args, training=None, **kwargs):
+        return self.tokenize(inputs, *args, **kwargs)
+
     def compute_output_spec(self, input_spec):
         return keras.KerasTensor(
             input_spec.shape + (self.sequence_length,), dtype=self.compute_dtype
         )
-
-    def _transform_bytes(self, tokens):
-        """Map token bytes to unicode using `byte2unicode`."""
-        split_bytes = tf.strings.bytes_split(tokens)
-        split_unicode = self.byte2unicode.lookup(split_bytes)
-        return split_unicode
-
-    def _bpe_merge_and_update_cache(self, tokens):
-        """Process unseen tokens and add to cache."""
-        words = self._transform_bytes(tokens)
-        tokenized_words = self._bpe_merge(words)
-
-        # For each word, join all its token by a whitespace,
-        # e.g., ["dragon", "fly"] => "dragon fly" for hash purpose.
-        tokenized_words = tf.strings.reduce_join(
-            tokenized_words, axis=1, separator=" "
-        )
-        self.cache.insert(tokens, tokenized_words)
 
     def get_config(self):
         config = super().get_config()
