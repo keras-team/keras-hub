@@ -1,9 +1,7 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.preprocessing.v2.start_end_packer import (
-    StartEndPacker,
-)
+from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.preprocessor import Preprocessor
 
 

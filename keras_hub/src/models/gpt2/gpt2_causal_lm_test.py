@@ -15,18 +15,23 @@ from keras_hub.src.tests.test_case import TestCase
 
 class GPT2CausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab += ["<|endoftext|>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["!", "<|endoftext|>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.preprocessor = GPT2CausalLMPreprocessor(
             GPT2Tokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=8,
         )
+        self.vocabulary_size = self.preprocessor.tokenizer.vocabulary_size()
         self.backbone = GPT2Backbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            vocabulary_size=self.vocabulary_size,
             num_layers=2,
             num_heads=2,
             hidden_dim=4,
@@ -45,7 +50,7 @@ class GPT2CausalLMTest(TestCase):
             cls=GPT2CausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 8, 7),
+            expected_output_shape=(2, 8, self.vocabulary_size),
         )
 
     def test_generate(self):
@@ -145,7 +150,7 @@ class GPT2CausalLMTest(TestCase):
         # Setup prompts, models, and associated expected shapes.
         prompts = [" airplane at airport", " airplane at airport"]
         causal_lm = GPT2CausalLM(**self.init_kwargs)
-        expected_score_shape = (2, 8, 7)
+        expected_score_shape = (2, 8, self.vocabulary_size)
 
         # Preprocess prompts to get tokenized representations and padding masks.
         preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(
@@ -192,7 +197,7 @@ class GPT2CausalLMTest(TestCase):
         prompts = [" airplane at airport", " airplane at airport"]
         causal_lm = GPT2CausalLM(**self.init_kwargs)
         expected_embedded_shape = (2, 8, 4)
-        expected_score_shape = (2, 8, 7)
+        expected_score_shape = (2, 8, self.vocabulary_size)
 
         # Preprocess prompts to get tokenized representations and padding masks.
         preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(
