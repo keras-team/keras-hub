@@ -6,14 +6,17 @@ from keras_hub.src.tests.test_case import TestCase
 
 class Llama3TokenizerTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab += ["<|end_of_text|>", "<|begin_of_text|>"]
-        self.vocab += ["<|start_header_id|>", "<|end_header_id|>"]
-        self.vocab += ["<|eot_id|>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["!", "<|end_of_text|>", "<|begin_of_text|>"]
+        self.vocab += ["<|start_header_id|>", "<|end_header_id|>", "<|eot_id|>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
         self.input_data = [
             "<|begin_of_text|>airplane at airport<|end_of_text|>",
@@ -25,7 +28,14 @@ class Llama3TokenizerTest(TestCase):
             cls=Llama3Tokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[[7, 1, 3, 4, 2, 5, 6], [2, 3, 2, 5]],
+            expected_output=[
+                [1, 8, 20, 30, 29, 22, 3],
+                [29, 20, 29, 22],
+            ],
+            expected_detokenize_output=[
+                "<|begin_of_text|>airplane at airport<|end_of_text|>",
+                " airplane airport",
+            ],
         )
 
     def test_errors_missing_special_tokens(self):
