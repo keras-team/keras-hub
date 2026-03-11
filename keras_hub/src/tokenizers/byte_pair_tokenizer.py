@@ -337,6 +337,15 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         assert_tf_libs_installed(self.__class__.__name__)
         self.vocabulary = vocabulary.copy()
         self.merges = merges
+        for merge in merges:
+            if "#version:" in merge.lstrip():
+                continue
+            a, b = str(merge).split(" ")
+            if a not in vocabulary or b not in vocabulary:
+                raise ValueError(
+                    f"Merge rule '{merge}' contains token '{a}' or '{b}' that "
+                    "is not in the vocabulary."
+                )
 
         # Create byte <=> unicode mapping. This is useful for handling
         # whitespace tokens.
