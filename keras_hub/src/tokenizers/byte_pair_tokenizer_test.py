@@ -19,9 +19,7 @@ class BytePairTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
         self.tokenizer = BytePairTokenizer(
-            vocabulary=VOCAB_PATH,
-            merges=MERGE_PATH,
-            _allow_python_workflow=False,
+            vocabulary=VOCAB_PATH, merges=MERGE_PATH
         )
 
     def test_tokenize_list_input(self):
