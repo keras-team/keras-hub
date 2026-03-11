@@ -262,30 +262,31 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     Examples:
 
     Tokenize
-    >>> vocab = {"butter": 1, "fly": 2}
     >>> merge = ["b u", "t t", "e r", "bu tt", "butt er", "f l", "fl y"]
+    >>> vocab = []
+    >>> [vocab.extend([a, b, a + b]) for a, b in [m.split(" ") for m in merge]]
+    >>> vocab = sorted(set(vocab))  # Remove duplicates
+    >>> vocab = dict([(token, i) for i, token in enumerate(vocab)])
     >>> tokenizer = keras_hub.tokenizers.BytePairTokenizer(vocab, merge)
     >>> outputs = tokenizer("butterfly")
     >>> np.array(outputs)
-    array([1, 2], dtype=int32)
+    array([3, 8])
     >>> seq1, seq2 = tokenizer(["butterfly", "butter"])
     >>> np.array(seq1)
-    array([1, 2])
+    array([3, 8])
     >>> np.array(seq2)
-    array([1])
+    array([3])
     >>> tokenizer = keras_hub.tokenizers.BytePairTokenizer(
     ...     vocab, merge, sequence_length=2)
     >>> seq1, seq2 = tokenizer(["butterfly", "butter"])
     >>> np.array(seq1)
-    array([1, 2], dtype=int32)
+    array([3, 8])
     >>> np.array(seq2)
-    array([1, 0], dtype=int32)
+    array([3, 0])
 
     Detokenize
-    >>> vocab = {"butter": 1, "fly": 2}
-    >>> merge = ["b u", "t t", "e r", "bu tt", "butt er", "f l", "fl y"]
     >>> tokenizer = keras_hub.tokenizers.BytePairTokenizer(vocab, merge)
-    >>> tokenizer.detokenize([[1, 2]])
+    >>> tokenizer.detokenize([[3, 8]])
     ['butterfly']
     """
 

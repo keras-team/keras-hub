@@ -82,7 +82,7 @@ class StartEndPacker(PreprocessingLayer):
            [ 1,  8,  9, 10, 11,  2]], dtype=int32)
 
     Unbatched input (str).
-    >>> inputs = tf.constant(["this", "is", "fun"])
+    >>> inputs = ["this", "is", "fun"]
     >>> start_end_packer = keras_hub.layers.StartEndPacker(
     ...     sequence_length=6, start_value="<s>", end_value="</s>",
     ...     pad_value="<pad>"
@@ -92,7 +92,7 @@ class StartEndPacker(PreprocessingLayer):
     array(['<s>', 'this', 'is', 'fun', '</s>', '<pad>'], dtype='<U5')
 
     Batched input (str).
-    >>> inputs = tf.ragged.constant([["this", "is", "fun"], ["awesome"]])
+    >>> inputs = [["this", "is", "fun"], ["awesome"]]
     >>> start_end_packer = keras_hub.layers.StartEndPacker(
     ...     sequence_length=6, start_value="<s>", end_value="</s>",
     ...     pad_value="<pad>"
@@ -103,7 +103,7 @@ class StartEndPacker(PreprocessingLayer):
            ['<s>', 'awesome', '</s>', '<pad>', '<pad>', '<pad>']], dtype='<U7')
 
     Multiple start tokens.
-    >>> inputs = tf.ragged.constant([["this", "is", "fun"], ["awesome"]])
+    >>> inputs = [["this", "is", "fun"], ["awesome"]]
     >>> start_end_packer = keras_hub.layers.StartEndPacker(
     ...     sequence_length=6, start_value=["</s>", "<s>"], end_value="</s>",
     ...     pad_value="<pad>"
@@ -125,7 +125,10 @@ class StartEndPacker(PreprocessingLayer):
         padding_side="right",
         **kwargs,
     ):
-        super().__init__(name=name, **kwargs)
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            name=name, _allow_python_workflow=_allow_python_workflow, **kwargs
+        )
 
         self.sequence_length = sequence_length
 
@@ -344,7 +347,7 @@ class StartEndPacker(PreprocessingLayer):
         add_start_value=True,
         add_end_value=True,
     ):
-        if in_tf_function():
+        if not self._allow_python_workflow or in_tf_function():
             return self._call_tf(
                 inputs,
                 sequence_length=sequence_length,
