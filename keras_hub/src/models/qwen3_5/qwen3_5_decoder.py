@@ -199,8 +199,12 @@ class Qwen3_5TransformerDecoder(keras.layers.Layer):
             x = self._linear_attn(
                 x,
                 attention_mask=decoder_padding_mask,
+                cache=self_attention_cache,
+                cache_update_index=self_attention_cache_update_index,
                 training=training,
             )
+            if self_attention_cache is not None:
+                x, self_attention_cache = x
         elif self.layer_type == "full_attention":
             self_attention_mask = self._compute_self_attention_mask(
                 decoder_sequence=decoder_sequence,
@@ -238,6 +242,12 @@ class Qwen3_5TransformerDecoder(keras.layers.Layer):
         decoder_output = x + residual
 
         if self_attention_cache is not None:
+            if self.layer_type == "linear_attention":
+                return (
+                    decoder_output,
+                    self_attention_cache[0],
+                    self_attention_cache[1],
+                )
             return decoder_output, self_attention_cache
         return decoder_output
 

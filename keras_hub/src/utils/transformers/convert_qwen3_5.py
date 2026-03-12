@@ -160,11 +160,6 @@ def convert_weights(backbone, loader, transformers_config):
                 hf_weight_key=f"{prefix}.linear_attn.conv1d.weight",
                 hook_fn=lambda hf_tensor, _: np.squeeze(hf_tensor, axis=1),
             )
-            # Conv1d bias.
-            loader.port_weight(
-                keras_variable=gdn.conv1d_bias,
-                hf_weight_key=f"{prefix}.linear_attn.conv1d.bias",
-            )
             # dt_bias.
             loader.port_weight(
                 keras_variable=gdn.dt_bias,
@@ -179,6 +174,7 @@ def convert_weights(backbone, loader, transformers_config):
             loader.port_weight(
                 keras_variable=gdn.norm.scale,
                 hf_weight_key=f"{prefix}.linear_attn.norm.weight",
+                hook_fn=lambda hf_tensor, _: hf_tensor - 1.0,
             )
             # Output projection.
             loader.port_weight(
@@ -227,7 +223,9 @@ def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_config = load_json(preset, "tokenizer.json")
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
-    merges = [" ".join(item) for item in merges]
+    # Merges may be lists (["Ġ", "a"]) or already strings ("Ġ a").
+    if merges and isinstance(merges[0], list):
+        merges = [" ".join(item) for item in merges]
 
     # Load all special tokens except "reserved" ones.
     special_tokens = set()

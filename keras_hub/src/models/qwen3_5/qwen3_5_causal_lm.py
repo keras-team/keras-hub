@@ -50,6 +50,7 @@ class Qwen3_5CausalLM(CausalLM):
         token_ids,
         cache,
         cache_update_index,
+        padding_mask=None,
     ):
         """Forward pass with cache for autoregressive decoding.
 
@@ -66,51 +67,117 @@ class Qwen3_5CausalLM(CausalLM):
             (logits, hidden_states, cache) tuple.
         """
         x = self.backbone.token_embedding(token_ids)
-        updated_cache = []
+
+        # We need three separate lists because XLA requires tensors to
+        # have consistent shapes. KV cache, Conv cache, and Recurrent cache
+        # all have completely different shapes and cannot be stacked.
+        kv_cache = cache[0]
+        conv_cache = cache[1]
+        recurrent_cache = cache[2]
+
+        next_kv_cache = []
+        next_conv_cache = []
+        next_recurrent_cache = []
+
         for i in range(self.backbone.num_layers):
             layer = self.backbone.transformer_layers[i]
             if layer.layer_type == "full_attention":
-                current_cache = cache[:, i, ...]
-                x, next_cache = layer(
+                current_kv = kv_cache[:, i, ...]
+                x, next_kv = layer(
                     x,
-                    self_attention_cache=current_cache,
-                    self_attention_cache_update_index=(cache_update_index),
+                    decoder_padding_mask=padding_mask,
+                    self_attention_cache=current_kv,
+                    self_attention_cache_update_index=cache_update_index,
                 )
-                updated_cache.append(next_cache)
+                next_kv_cache.append(next_kv)
+
+                # Append placeholders for linear attention
+                next_conv_cache.append(conv_cache[:, i, ...])
+                next_recurrent_cache.append(recurrent_cache[:, i, ...])
             else:
-                # Linear attention layers don't use KV cache.
-                x = layer(x)
-                # Append a zero placeholder to keep cache shape.
-                updated_cache.append(cache[:, i, ...])
-        cache = ops.stack(updated_cache, axis=1)
+                # Linear attention (GatedDeltaNet)
+                current_conv = conv_cache[:, i, ...]
+                current_recurrent = recurrent_cache[:, i, ...]
+
+                x, next_conv, next_recurrent = layer(
+                    x,
+                    decoder_padding_mask=padding_mask,
+                    self_attention_cache=(current_conv, current_recurrent),
+                    self_attention_cache_update_index=cache_update_index,
+                )
+                next_conv_cache.append(next_conv)
+                next_recurrent_cache.append(next_recurrent)
+
+                # Append placeholder for full attention
+                next_kv_cache.append(kv_cache[:, i, ...])
+
+        # Stack caches along the layer dimension
+        next_cache = (
+            ops.stack(next_kv_cache, axis=1),
+            ops.stack(next_conv_cache, axis=1),
+            ops.stack(next_recurrent_cache, axis=1),
+        )
+
         hidden_states = x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
-        return logits, hidden_states, cache
+        return logits, hidden_states, next_cache
 
-    def _build_cache(self, token_ids):
+    def _build_cache(self, token_ids, padding_mask):
         """Build an empty cache for use with ``call_with_cache()``."""
         batch_size = ops.shape(token_ids)[0]
         max_length = ops.shape(token_ids)[1]
         num_layers = self.backbone.num_layers
-        num_key_value_heads = self.backbone.num_key_value_heads
+        num_kv_heads = self.backbone.num_key_value_heads
         head_dim = self.backbone.head_dim
-        shape = [
+
+        # KV Cache shape: (B, num_layers, 2, seq_len, num_kv_heads, head_dim)
+        kv_shape = [
             batch_size,
             num_layers,
             2,
             max_length,
-            num_key_value_heads,
+            num_kv_heads,
             head_dim,
         ]
-        cache = ops.zeros(shape, dtype=self.compute_dtype)
-        _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
+        kv_cache = ops.zeros(kv_shape, dtype=self.compute_dtype)
+
+        # Conv cache shape: (B, num_layers, conv_dim, conv_kernel_size - 1)
+        linear_key_dim = (
+            self.backbone.linear_num_key_heads
+            * self.backbone.linear_key_head_dim
+        )
+        linear_val_dim = (
+            self.backbone.linear_num_value_heads
+            * self.backbone.linear_value_head_dim
+        )
+        conv_dim = linear_key_dim * 2 + linear_val_dim
+        conv_shape = [
+            batch_size,
+            num_layers,
+            conv_dim,
+            self.backbone.linear_conv_kernel_dim - 1,
+        ]
+        conv_cache = ops.zeros(conv_shape, dtype=self.compute_dtype)
+        recurrent_shape = [
+            batch_size,
+            num_layers,
+            self.backbone.linear_num_value_heads,
+            self.backbone.linear_key_head_dim,
+            self.backbone.linear_value_head_dim,
+        ]
+        recurrent_cache = ops.zeros(recurrent_shape, dtype="float32")
+
+        cache = (kv_cache, conv_cache, recurrent_cache)
+        _, hidden_states, cache = self.call_with_cache(
+            token_ids, cache, 0, padding_mask=padding_mask
+        )
         return hidden_states, cache
 
     def generate_step(self, inputs, stop_token_ids=None):
         """A compilable generation function for a single batch."""
         token_ids = inputs["token_ids"]
         padding_mask = inputs["padding_mask"]
-        hidden_states, cache = self._build_cache(token_ids)
+        hidden_states, cache = self._build_cache(token_ids, padding_mask)
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         index = ops.min(row_lengths)
 
@@ -119,7 +186,7 @@ class Qwen3_5CausalLM(CausalLM):
             batch_size = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
             logits, hidden_states, cache = self.call_with_cache(
-                prompt, cache, cache_update_index
+                prompt, cache, cache_update_index, padding_mask=None
             )
             return (
                 ops.squeeze(logits, axis=1),
