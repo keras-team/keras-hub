@@ -9,12 +9,16 @@ from keras_hub.src.tests.test_case import TestCase
 
 class BartSeq2SeqLMPreprocessorTest(TestCase):
     def setUp(self):
-        self.vocab = ["<s>", "<pad>", "</s>", "air", "Ġair", "plane", "Ġat"]
-        self.vocab += ["port", "<mask>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<s>", "<pad>", "</s>", "<mask>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.tokenizer = BartTokenizer(
             vocabulary=self.vocab, merges=self.merges
         )
@@ -37,12 +41,12 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "encoder_token_ids": [[0, 4, 5, 6, 2]],
+                    "encoder_token_ids": [[3, 27, 18, 28, 0]],
                     "encoder_padding_mask": [[1, 1, 1, 1, 1]],
-                    "decoder_token_ids": [[2, 0, 4, 5, 4, 7, 2, 1]],
+                    "decoder_token_ids": [[0, 3, 27, 18, 27, 20, 0, 2]],
                     "decoder_padding_mask": [[1, 1, 1, 1, 1, 1, 1, 0]],
                 },
-                [[0, 4, 5, 4, 7, 2, 1, 1]],
+                [[3, 27, 18, 27, 20, 0, 2, 2]],
                 [[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0]],
             ),
             token_id_key="decoder_token_ids",
@@ -58,9 +62,9 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
         self.assertAllClose(
             output,
             {
-                "encoder_token_ids": [[0, 4, 5, 6, 2]],
+                "encoder_token_ids": [[3, 27, 18, 28, 0]],
                 "encoder_padding_mask": [[1, 1, 1, 1, 1]],
-                "decoder_token_ids": [[2, 0, 4, 5, 4, 7, 1, 1]],
+                "decoder_token_ids": [[0, 3, 27, 18, 27, 20, 2, 2]],
                 "decoder_padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
             },
         )
@@ -68,7 +72,7 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
     def test_generate_postprocess(self):
         preprocessor = BartSeq2SeqLMPreprocessor(**self.init_kwargs)
         input_data = {
-            "decoder_token_ids": [0, 4, 5, 6, 2],
+            "decoder_token_ids": [3, 27, 18, 28, 0],
             "decoder_padding_mask": [1, 1, 1, 1, 1],
         }
         output = preprocessor.generate_postprocess(input_data)

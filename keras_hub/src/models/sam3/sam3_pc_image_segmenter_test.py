@@ -88,18 +88,15 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
             crop_to_aspect_ratio=False,
             antialias=True,
         )
-        self.tokenizer = SAM3Tokenizer(
-            {
-                "!": 0,
-                '"': 1,
-                "#": 2,
-                "$": 3,
-                "%": 4,
-                "<|endoftext|>": 5,
-                "<|startoftext|>": 6,
-            },
-            ["i n", "t h", "a n"],
-        )
+        merges = ["i n", "t h", "a n"]
+        vocab = []
+        for merge in merges:
+            a, b = merge.split(" ")
+            vocab.extend([a, b, a + b])
+        vocab += ["!", '"', "#", "$", "%", "<|endoftext|>", "<|startoftext|>"]
+        vocab = sorted(set(vocab))  # Remove duplicates
+        vocab = dict([(token, i) for i, token in enumerate(vocab)])
+        self.tokenizer = SAM3Tokenizer(vocab, merges)
         self.preprocessor = SAM3PromptableConceptImageSegmenterPreprocessor(
             self.tokenizer, self.image_converter
         )

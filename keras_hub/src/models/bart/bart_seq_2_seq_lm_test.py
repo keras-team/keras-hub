@@ -14,19 +14,24 @@ from keras_hub.src.tests.test_case import TestCase
 
 class BartSeq2SeqLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["<s>", "<pad>", "</s>", "air", "Ġair", "plane", "Ġat"]
-        self.vocab += ["port", "<mask>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<s>", "<pad>", "</s>", "<mask>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.preprocessor = BartSeq2SeqLMPreprocessor(
             BartTokenizer(vocabulary=self.vocab, merges=self.merges),
             encoder_sequence_length=12,
             decoder_sequence_length=10,
         )
+        self.vocabulary_size = self.preprocessor.tokenizer.vocabulary_size()
         self.backbone = BartBackbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            vocabulary_size=self.vocabulary_size,
             num_layers=2,
             num_heads=2,
             hidden_dim=4,
@@ -53,7 +58,7 @@ class BartSeq2SeqLMTest(TestCase):
             cls=BartSeq2SeqLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 10, 9),
+            expected_output_shape=(2, 10, self.vocabulary_size),
         )
 
     def test_generate(self):
