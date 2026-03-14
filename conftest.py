@@ -16,7 +16,6 @@ OPENVINO_SUPPORTED_PATHS = [
 OPENVINO_SPECIFIC_SKIPPING_TESTS = {
     "test_backbone_basics": "bfloat16 dtype not supported",
     "test_score_loss": "Non-implemented roll operation",
-    "test_causal_lm_basics": "Missing ops and requires trainable backend",
 }
 
 
