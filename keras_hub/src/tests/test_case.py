@@ -1112,6 +1112,47 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             output = ops.argmax(output, axis=-1)
             self.assertAllEqual(output, expected_labels)
 
+    def run_positions_test(
+        self,
+        cls,
+        init_kwargs,
+        vocabulary_size,
+    ):
+        """Tests that conventional and flexible positions give same output."""
+        model = cls(**init_kwargs)
+
+        rng = np.random.default_rng(seed=42)
+        x1 = {
+            "token_ids": rng.integers(low=1, high=vocabulary_size, size=(2, 5)),
+            "padding_mask": np.array(
+                [
+                    [True] * 3 + [False] * 2,
+                    [True] * 2 + [False] * 3,
+                ]
+            ),
+        }
+        # Convert token_ids to list for easier manipulation.
+        token_ids_lst = x1["token_ids"].tolist()
+        x2 = {
+            "token_ids": np.array(
+                [
+                    [0] + token_ids_lst[0][:3] + [0],
+                    [0] * 2 + token_ids_lst[1][:2] + [0],
+                ]
+            ),
+            "padding_mask": np.array(
+                [
+                    [False] + [True] * 3 + [False],
+                    [False] * 2 + [True] * 2 + [False],
+                ]
+            ),
+        }
+
+        output_1 = model.predict(x1)
+        output_2 = model.predict(x2)
+        self.assertAllClose(output_1[0][:3], output_2[0][1:4])
+        self.assertAllClose(output_1[1][:2], output_2[1][2:4])
+
     def get_test_data_dir(self):
         return str(pathlib.Path(__file__).parent / "test_data")
 
