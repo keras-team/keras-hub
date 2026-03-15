@@ -256,6 +256,31 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
 
         return hidden_states
 
+    def build(self, input_shape=None):
+        mel_after_conv1 = (self.num_mel_bins + 1) // 2
+        mel_after_conv2 = (mel_after_conv1 + 1) // 2
+        mel_after_conv3 = (mel_after_conv2 + 1) // 2
+
+        self.conv2d1.build((None, None, self.num_mel_bins, 1))
+        self.conv2d2.build(
+            (None, None, mel_after_conv1, self.downsample_hidden_size)
+        )
+        self.conv2d3.build(
+            (None, None, mel_after_conv2, self.downsample_hidden_size)
+        )
+        self.conv_out.build(
+            (None, None, mel_after_conv3 * self.downsample_hidden_size)
+        )
+
+        encoder_input_shape = (None, None, self.d_model)
+        for encoder_layer in self.encoder_transformer_layers:
+            encoder_layer.build(encoder_input_shape)
+
+        self.ln_post.build(encoder_input_shape)
+        self.proj1.build(encoder_input_shape)
+        self.proj2.build((None, None, self.d_model))
+        self.built = True
+
     def call(self, inputs, training=False):
         """Process a dict of inputs through the audio encoder.
 
