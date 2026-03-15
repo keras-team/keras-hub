@@ -100,6 +100,8 @@ def convert_weights(backbone, loader, transformers_config):
     # === Audio Encoder Weights ===
     if backbone.audio_encoder is not None:
         audio_enc = backbone.audio_encoder
+        if not audio_enc.built:
+            audio_enc.build()
 
         # Conv downsampling layers
         def conv2d_transpose(x, _):
@@ -145,9 +147,7 @@ def convert_weights(backbone, loader, transformers_config):
         def audio_transpose_and_reshape(x, shape):
             return np.reshape(np.transpose(x), shape)
 
-        for i in range(audio_enc.encoder_layers_count):
-            layer = audio_enc.encoder_layers[i]
-
+        for i, layer in enumerate(audio_enc.encoder_transformer_layers):
             # Self-attention layer norm
             loader.port_weight(
                 keras_variable=layer.self_attn_layer_norm.gamma,
@@ -260,6 +260,8 @@ def convert_weights(backbone, loader, transformers_config):
     # === Vision Encoder Weights ===
     if backbone.vision_encoder is not None:
         vision_enc = backbone.vision_encoder
+        if not vision_enc.built:
+            vision_enc.build()
 
         # Patch embedding (Conv3D)
         def conv3d_transpose(x, _):

@@ -1,3 +1,4 @@
+import math
 import os
 import traceback
 
@@ -31,12 +32,36 @@ flags.DEFINE_string(
 )
 
 
+def _count_weight_params(weights):
+    total = 0
+    seen = set()
+    for weight in weights:
+        weight_id = id(weight)
+        if weight_id in seen:
+            continue
+        seen.add(weight_id)
+        total += math.prod(int(dim) for dim in weight.shape)
+    return total
+
+
+def count_keras_hub_thinker_params(keras_hub_model):
+    backbone_weights = list(keras_hub_model.weights)
+    extra_weights = []
+    if keras_hub_model.audio_encoder is not None:
+        extra_weights.extend(keras_hub_model.audio_encoder.weights)
+    if keras_hub_model.vision_encoder is not None:
+        extra_weights.extend(keras_hub_model.vision_encoder.weights)
+    return _count_weight_params(backbone_weights + extra_weights)
+
+
 def test_model(
     keras_hub_model, keras_hub_tokenizer, hf_model, hf_model_tokenizer
 ):
     # First, test that the number of parameters match
-    keras_hub_params = keras_hub_model.count_params()
+    keras_hub_params = count_keras_hub_thinker_params(keras_hub_model)
     hf_params = hf_model.num_parameters()
+    print(f"KerasHub thinker params: {keras_hub_params:,}")
+    print(f"HuggingFace thinker params: {hf_params:,}")
     assert keras_hub_params == hf_params
 
     # Test the outputs of both the models
