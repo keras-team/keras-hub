@@ -174,31 +174,18 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
             Interleaved frequencies of shape
             (batch, seq_len, sum(mrope_section))
         """
-        freqs_t = freqs[0]
-
         head_dim_half = sum(mrope_section)
         indices_list = []
-        interleaved_length = min(mrope_section[1], mrope_section[2]) * 3
 
-        for pos in range(interleaved_length):
-            if pos % 3 == 0:
-                # Text dimension
-                indices_list.append(freqs[0][..., pos : pos + 1])
-            elif pos % 3 == 1:
-                # Temporal dimension
-                indices_list.append(freqs[1][..., pos : pos + 1])
-            else:
-                # Spatial dimension
-                indices_list.append(freqs[2][..., pos : pos + 1])
+        for pos in range(head_dim_half):
+            source_dim = 0
+            if pos % 3 == 1 and pos < mrope_section[1] * 3:
+                source_dim = 1
+            elif pos % 3 == 2 and pos < mrope_section[2] * 3:
+                source_dim = 2
+            indices_list.append(freqs[source_dim][..., pos : pos + 1])
 
-        # Remaining positions will be all from text dimension
-        if interleaved_length < head_dim_half:
-            indices_list.append(freqs_t[..., interleaved_length:])
-
-        # Concatenate all selected frequencies
-        result = ops.concatenate(indices_list, axis=-1)
-
-        return result
+        return ops.concatenate(indices_list, axis=-1)
 
     def _apply_rotary_pos_emb_single(self, tensor, cos_emb, sin_emb):
         """Apply rotary position embedding to a single tensor.
@@ -212,9 +199,7 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
             Tensor with rotary embedding applied.
         """
         x1, x2 = ops.split(tensor, 2, axis=-1)
-
-        half_rot_tensor = ops.stack([-x2, x1], axis=-2)
-        half_rot_tensor = ops.reshape(half_rot_tensor, ops.shape(tensor))
+        half_rot_tensor = ops.concatenate([-x2, x1], axis=-1)
 
         return (tensor * cos_emb) + (half_rot_tensor * sin_emb)
 
