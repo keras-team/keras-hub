@@ -31,7 +31,11 @@ def convert_backbone_config(transformers_config):
         "layer_norm_epsilon": text_config["rms_norm_eps"],
         "rope_max_wavelength": text_config["rope_theta"],
         "mrope_section": tuple(mrope_section),
-        "sliding_window_size": text_config.get("sliding_window"),
+        "sliding_window_size": (
+            text_config.get("sliding_window")
+            if text_config.get("use_sliding_window", False)
+            else None
+        ),
         "router_aux_loss_coefficient": text_config["router_aux_loss_coef"],
         "mlp_only_layers": text_config.get("mlp_only_layers", []),
         "tie_word_embeddings": text_config.get("tie_word_embeddings", False),
