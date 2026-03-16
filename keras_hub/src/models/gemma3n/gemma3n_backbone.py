@@ -1,6 +1,7 @@
 import inspect
 
 import keras
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
@@ -17,7 +18,7 @@ from keras_hub.src.models.mobilenetv5.mobilenetv5_backbone import (
 class Gemma3nMultimodalEmbedder(keras.layers.Layer):
     """A layer for handling multimodal embeddings.
 
-    This layer manages embeddings for different modalities (here, vision, text,
+    This layer manages embeddings for different modalities (vision, text,
     and audio). It can take either token IDs or pre-computed embedding vectors
     as input. The embeddings are normalized and projected to match the text
     model's hidden size.
@@ -196,17 +197,13 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
         seq_len = input_ids_spec.shape[1]
         inputs_embeds_spec = keras.KerasTensor(
             shape=(batch_size, seq_len, self.text_hidden_size),
-            dtype=input_ids_spec.dtype
-            if hasattr(input_ids_spec.dtype, "name")
-            else "float32",
+            dtype=self.dtype,
         )
         num_layers = self.language_model.num_hidden_layers
         per_layer_hidden_size = self.language_model.hidden_size_per_layer_input
         per_layer_inputs_spec = keras.KerasTensor(
             shape=(batch_size, seq_len, num_layers, per_layer_hidden_size),
-            dtype=input_ids_spec.dtype
-            if hasattr(input_ids_spec.dtype, "name")
-            else "float32",
+            dtype=self.dtype,
         )
         return inputs_embeds_spec, per_layer_inputs_spec
 
@@ -216,11 +213,11 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
         input_features = inputs.get("input_features")
         input_features_mask = inputs.get("input_features_mask")
         inputs_embeds = self.language_model.embed_tokens(input_ids)
-        per_layer_inputs_mask = keras.ops.logical_and(
+        per_layer_inputs_mask = ops.logical_and(
             input_ids >= 0, input_ids < self.vocab_size_per_layer_input
         )
-        per_layer_inputs_tokens = keras.ops.where(
-            per_layer_inputs_mask, input_ids, keras.ops.zeros_like(input_ids)
+        per_layer_inputs_tokens = ops.where(
+            per_layer_inputs_mask, input_ids, ops.zeros_like(input_ids)
         )
         per_layer_inputs = self.language_model.get_per_layer_inputs(
             per_layer_inputs_tokens
@@ -233,7 +230,7 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                     self.embed_vision.vocab_offset
                     + self.embed_vision.vocab_size
                 )
-            vision_mask = keras.ops.logical_and(
+            vision_mask = ops.logical_and(
                 input_ids >= self.embed_vision.vocab_offset,
                 input_ids < vision_upper_bound,
             )
@@ -242,12 +239,12 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                 + self.embed_vision.embedding.input_dim
                 - 1
             )
-            vision_input_ids = keras.ops.where(
+            vision_input_ids = ops.where(
                 vision_mask, input_ids, dummy_vision_token_id
             )
             vision_embeds_from_vocab = self.embed_vision(vision_input_ids)
-            expanded_vision_mask = keras.ops.expand_dims(vision_mask, axis=-1)
-            inputs_embeds = keras.ops.where(
+            expanded_vision_mask = ops.expand_dims(vision_mask, axis=-1)
+            inputs_embeds = ops.where(
                 expanded_vision_mask,
                 vision_embeds_from_vocab,
                 inputs_embeds,
@@ -259,65 +256,56 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                 + self.embed_audio.embedding.input_dim
                 - 1
             )
-            audio_input_ids = keras.ops.where(
+            audio_input_ids = ops.where(
                 audio_mask, input_ids, dummy_audio_token_id
             )
             audio_embeds_from_vocab = self.embed_audio(audio_input_ids)
-            expanded_audio_mask = keras.ops.expand_dims(audio_mask, axis=-1)
-            inputs_embeds = keras.ops.where(
+            expanded_audio_mask = ops.expand_dims(audio_mask, axis=-1)
+            inputs_embeds = ops.where(
                 expanded_audio_mask, audio_embeds_from_vocab, inputs_embeds
             )
 
         if pixel_values is not None and self.vision_encoder:
             reshape_target = (-1,) + tuple(self.vision_encoder.image_shape)
-            pixel_values = keras.ops.reshape(pixel_values, reshape_target)
+            pixel_values = ops.reshape(pixel_values, reshape_target)
             vision_features = self.vision_encoder(pixel_values)
             if self.vision_encoder.data_format == "channels_first":
-                vision_features = keras.ops.transpose(
-                    vision_features, (0, 2, 3, 1)
-                )
-            shape = keras.ops.shape(vision_features)
-            vision_features = keras.ops.reshape(
+                vision_features = ops.transpose(vision_features, (0, 2, 3, 1))
+            shape = ops.shape(vision_features)
+            vision_features = ops.reshape(
                 vision_features, (shape[0], shape[1] * shape[2], shape[3])
             )
-            vision_features *= keras.ops.sqrt(
-                keras.ops.cast(
+            vision_features *= ops.sqrt(
+                ops.cast(
                     self.vision_encoder.num_features, dtype=inputs_embeds.dtype
                 )
             )
             vision_embeds = self.embed_vision(vision_features)
-            image_token_mask = keras.ops.equal(input_ids, self.image_token_id)
+            image_token_mask = ops.equal(input_ids, self.image_token_id)
 
             def scatter_vision_features():
-                batch_size, seq_len, hidden_size = keras.ops.shape(
-                    inputs_embeds
-                )
-                flat_vision_embeds = keras.ops.reshape(
+                batch_size, seq_len, hidden_size = ops.shape(inputs_embeds)
+                flat_vision_embeds = ops.reshape(
                     vision_embeds, [-1, hidden_size]
                 )
-                flat_full_mask = keras.ops.reshape(image_token_mask, [-1])
+                flat_full_mask = ops.reshape(image_token_mask, [-1])
                 gather_indices = (
-                    keras.ops.cumsum(keras.ops.cast(flat_full_mask, "int32"))
-                    - 1
+                    ops.cumsum(ops.cast(flat_full_mask, "int32")) - 1
                 )
-                gather_indices = keras.ops.where(
-                    flat_full_mask, gather_indices, 0
-                )
-                replacement_values = keras.ops.take(
+                gather_indices = ops.where(flat_full_mask, gather_indices, 0)
+                replacement_values = ops.take(
                     flat_vision_embeds, gather_indices, axis=0
                 )
-                replacement_tensor = keras.ops.reshape(
+                replacement_tensor = ops.reshape(
                     replacement_values, (batch_size, seq_len, hidden_size)
                 )
-                expanded_full_mask = keras.ops.expand_dims(
-                    image_token_mask, axis=-1
-                )
-                return keras.ops.where(
+                expanded_full_mask = ops.expand_dims(image_token_mask, axis=-1)
+                return ops.where(
                     expanded_full_mask, replacement_tensor, inputs_embeds
                 )
 
-            inputs_embeds = keras.ops.cond(
-                keras.ops.any(image_token_mask),
+            inputs_embeds = ops.cond(
+                ops.any(image_token_mask),
                 scatter_vision_features,
                 lambda: inputs_embeds,
             )
@@ -327,25 +315,23 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
             and input_features_mask is not None
             and self.audio_encoder
         ):
-            original_shape = keras.ops.shape(input_features)
+            original_shape = ops.shape(input_features)
             b, n, t, f = (
                 original_shape[0],
                 original_shape[1],
                 original_shape[2],
                 original_shape[3],
             )
-            input_features = keras.ops.reshape(input_features, (b * n, t, f))
-            input_features_mask = keras.ops.reshape(
-                input_features_mask, (b * n, t)
-            )
+            input_features = ops.reshape(input_features, (b * n, t, f))
+            input_features_mask = ops.reshape(input_features_mask, (b * n, t))
             audio_features, _ = self.audio_encoder(
                 (input_features, input_features_mask)
             )
             audio_embeds = self.embed_audio(audio_features)
-            audio_embeds_shape = keras.ops.shape(audio_embeds)
+            audio_embeds_shape = ops.shape(audio_embeds)
             t_out, h = audio_embeds_shape[1], audio_embeds_shape[2]
-            audio_embeds = keras.ops.reshape(audio_embeds, (b, n, t_out, h))
-            shape = keras.ops.shape(audio_embeds)
+            audio_embeds = ops.reshape(audio_embeds, (b, n, t_out, h))
+            shape = ops.shape(audio_embeds)
             audio_batch_size, audio_num_clips, audio_seq_len, hidden_size = (
                 shape[0],
                 shape[1],
@@ -358,69 +344,55 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                 + self.embed_audio.embedding.input_dim
                 - 1
             )
-            padding_toks = keras.ops.convert_to_tensor(
+            padding_toks = ops.convert_to_tensor(
                 [[last_audio_token_id]], dtype="int64"
             )
             padding_embs = self.embed_audio(padding_toks)
-            padding_token = keras.ops.squeeze(padding_embs, axis=[0])
-            flat_audio_embeds = keras.ops.reshape(
-                audio_embeds, [-1, hidden_size]
-            )
-            vocab = keras.ops.concatenate(
-                [flat_audio_embeds, padding_token], axis=0
-            )
-            pad_token_index = keras.ops.shape(flat_audio_embeds)[0]
-            indices = keras.ops.arange(target_len)
+            padding_token = ops.squeeze(padding_embs, axis=[0])
+            flat_audio_embeds = ops.reshape(audio_embeds, [-1, hidden_size])
+            vocab = ops.concatenate([flat_audio_embeds, padding_token], axis=0)
+            pad_token_index = ops.shape(flat_audio_embeds)[0]
+            indices = ops.arange(target_len)
             is_real_token = indices < audio_seq_len
             batch_offsets = (
-                keras.ops.arange(audio_batch_size * audio_num_clips)
-                * audio_seq_len
+                ops.arange(audio_batch_size * audio_num_clips) * audio_seq_len
             )
-            real_indices = keras.ops.expand_dims(
-                indices, 0
-            ) + keras.ops.expand_dims(batch_offsets, 1)
-            final_indices = keras.ops.where(
-                keras.ops.expand_dims(is_real_token, 0),
+            real_indices = ops.expand_dims(indices, 0) + ops.expand_dims(
+                batch_offsets, 1
+            )
+            final_indices = ops.where(
+                ops.expand_dims(is_real_token, 0),
                 real_indices,
                 pad_token_index,
             )
-            audio_embeds = keras.ops.take(vocab, final_indices, axis=0)
-            audio_embeds = keras.ops.reshape(
+            audio_embeds = ops.take(vocab, final_indices, axis=0)
+            audio_embeds = ops.reshape(
                 audio_embeds,
                 (audio_batch_size, audio_num_clips * target_len, hidden_size),
             )
-            audio_token_mask = keras.ops.equal(input_ids, self.audio_token_id)
+            audio_token_mask = ops.equal(input_ids, self.audio_token_id)
 
             def scatter_audio_features():
-                batch_size, seq_len, hidden_size = keras.ops.shape(
-                    inputs_embeds
-                )
-                flat_audio_embeds = keras.ops.reshape(
-                    audio_embeds, [-1, hidden_size]
-                )
-                flat_full_mask = keras.ops.reshape(audio_token_mask, [-1])
+                batch_size, seq_len, hidden_size = ops.shape(inputs_embeds)
+                flat_audio_embeds = ops.reshape(audio_embeds, [-1, hidden_size])
+                flat_full_mask = ops.reshape(audio_token_mask, [-1])
                 gather_indices = (
-                    keras.ops.cumsum(keras.ops.cast(flat_full_mask, "int32"))
-                    - 1
+                    ops.cumsum(ops.cast(flat_full_mask, "int32")) - 1
                 )
-                gather_indices = keras.ops.where(
-                    flat_full_mask, gather_indices, 0
-                )
-                replacement_values = keras.ops.take(
+                gather_indices = ops.where(flat_full_mask, gather_indices, 0)
+                replacement_values = ops.take(
                     flat_audio_embeds, gather_indices, axis=0
                 )
-                replacement_tensor = keras.ops.reshape(
+                replacement_tensor = ops.reshape(
                     replacement_values, (batch_size, seq_len, hidden_size)
                 )
-                expanded_full_mask = keras.ops.expand_dims(
-                    audio_token_mask, axis=-1
-                )
-                return keras.ops.where(
+                expanded_full_mask = ops.expand_dims(audio_token_mask, axis=-1)
+                return ops.where(
                     expanded_full_mask, replacement_tensor, inputs_embeds
                 )
 
-            inputs_embeds = keras.ops.cond(
-                keras.ops.any(audio_token_mask),
+            inputs_embeds = ops.cond(
+                ops.any(audio_token_mask),
                 scatter_audio_features,
                 lambda: inputs_embeds,
             )
@@ -495,7 +467,8 @@ class Gemma3nBackbone(Backbone):
         max_position_embeddings: int. The maximum sequence length.
         vocab_size_per_layer_input: int. The vocab size for per-layer inputs.
         hidden_size_per_layer_input: int. The hidden size for per-layer inputs.
-        altup_num_inputs: int. The number of inputs for the AltUp mechanism.
+        altup_num_inputs: int. The number of inputs for the Alternating Updates
+            (AltUp) mechanism.
         laurel_rank: int. The rank for the Laurel block.
         attention_bias: bool. Whether to use a bias in the attention
             projections.
@@ -598,7 +571,7 @@ class Gemma3nBackbone(Backbone):
     input_data = {
         "token_ids": np.random.randint(0, 50, size=(1, 16), dtype="int32"),
         "attention_mask": np.ones((1, 1, 16, 16), dtype=bool),
-        "pixel_values": np.random.rand(1, 1, 224, 224, 3).astype("float32"),
+        "images": np.random.rand(1, 1, 224, 224, 3).astype("float32"),
         "input_features": np.random.rand(1, 16, 32).astype("float32"),
         "input_features_mask": np.zeros((1, 16), dtype=bool),
     }

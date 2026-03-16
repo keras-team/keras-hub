@@ -1,6 +1,7 @@
 import math
 
 import keras
+from keras import ops
 
 from keras_hub.src.models.gemma3n.gemma3n_text_decoder import (
     Gemma3nTextDecoderBlock,
@@ -247,9 +248,9 @@ class Gemma3nTextModel(keras.layers.Layer):
 
     def get_per_layer_inputs(self, input_ids):
         embeds = self.embed_tokens_per_layer(input_ids)
-        return keras.ops.reshape(
+        return ops.reshape(
             embeds,
-            keras.ops.shape(input_ids)
+            ops.shape(input_ids)
             + (self.num_hidden_layers, self.hidden_size_per_layer_input),
         )
 
@@ -258,9 +259,9 @@ class Gemma3nTextModel(keras.layers.Layer):
         per_layer_projection = (
             per_layer_projection * self.per_layer_projection_scale
         )
-        per_layer_projection = keras.ops.reshape(
+        per_layer_projection = ops.reshape(
             per_layer_projection,
-            keras.ops.shape(inputs_embeds)[:-1]
+            ops.shape(inputs_embeds)[:-1]
             + (self.num_hidden_layers, self.hidden_size_per_layer_input),
         )
         per_layer_projection = self.per_layer_projection_norm(
@@ -286,12 +287,10 @@ class Gemma3nTextModel(keras.layers.Layer):
             return self.embed_tokens(inputs)
         else:
             embedding_weights = self.embed_tokens.embedding.embeddings
-            logits = keras.ops.matmul(
-                inputs, keras.ops.transpose(embedding_weights)
-            )
+            logits = ops.matmul(inputs, ops.transpose(embedding_weights))
             if self.final_logit_soft_cap is not None:
                 logits = logits / self.final_logit_soft_cap
-                logits = keras.ops.tanh(logits)
+                logits = ops.tanh(logits)
                 logits = logits * self.final_logit_soft_cap
             return logits
 
@@ -316,22 +315,22 @@ class Gemma3nTextModel(keras.layers.Layer):
         cache_update_mask=None,
     ):
         hidden_states_0 = inputs_embeds
-        target_magnitude = keras.ops.sqrt(
-            keras.ops.mean(hidden_states_0**2, axis=-1, keepdims=True)
+        target_magnitude = ops.sqrt(
+            ops.mean(hidden_states_0**2, axis=-1, keepdims=True)
         )
         epsilon = 1e-5
         temp_hidden_states = [hidden_states_0]
         for proj in self.altup_projections:
             altup_proj = proj(hidden_states_0)
-            new_magnitude = keras.ops.sqrt(
-                keras.ops.maximum(
-                    keras.ops.mean(altup_proj**2, axis=-1, keepdims=True),
+            new_magnitude = ops.sqrt(
+                ops.maximum(
+                    ops.mean(altup_proj**2, axis=-1, keepdims=True),
                     epsilon,
                 )
             )
             current_hidden_state = altup_proj * target_magnitude / new_magnitude
             temp_hidden_states.append(current_hidden_state)
-        hidden_states = keras.ops.stack(temp_hidden_states, axis=0)
+        hidden_states = ops.stack(temp_hidden_states, axis=0)
 
         new_caches = []
         last_nonshared_layer_idx = {}
@@ -360,7 +359,7 @@ class Gemma3nTextModel(keras.layers.Layer):
                     cache_update_mask=cache_update_mask,
                 )
                 new_caches.append(new_cache)
-            cache = keras.ops.stack(new_caches, axis=1)
+            cache = ops.stack(new_caches, axis=1)
         else:
             for i, decoder_layer in enumerate(self.transformer_layers):
                 is_kv_shared_layer = i >= self.first_kv_shared_layer_idx > 0
@@ -384,15 +383,15 @@ class Gemma3nTextModel(keras.layers.Layer):
                     cache=current_cache,
                 )
                 new_caches.append(new_cache)
-        target_magnitude = keras.ops.sqrt(
-            keras.ops.mean(hidden_states[0] ** 2, axis=-1, keepdims=True)
+        target_magnitude = ops.sqrt(
+            ops.mean(hidden_states[0] ** 2, axis=-1, keepdims=True)
         )
         temp_hidden_states = [hidden_states[0]]
         for i, proj in enumerate(self.altup_unembed_projections):
             altup_unemb_proj = proj(hidden_states[i + 1])
-            new_magnitude = keras.ops.sqrt(
-                keras.ops.maximum(
-                    keras.ops.mean(altup_unemb_proj**2, axis=-1, keepdims=True),
+            new_magnitude = ops.sqrt(
+                ops.maximum(
+                    ops.mean(altup_unemb_proj**2, axis=-1, keepdims=True),
                     epsilon,
                 )
             )
@@ -400,8 +399,8 @@ class Gemma3nTextModel(keras.layers.Layer):
                 altup_unemb_proj * target_magnitude / new_magnitude
             )
             temp_hidden_states.append(current_hidden_state)
-        hidden_states = keras.ops.stack(temp_hidden_states)
-        hidden_states = keras.ops.mean(hidden_states, axis=0)
+        hidden_states = ops.stack(temp_hidden_states)
+        hidden_states = ops.mean(hidden_states, axis=0)
         normalized = self.final_normalization(hidden_states)
         if cache is not None:
             return normalized, cache

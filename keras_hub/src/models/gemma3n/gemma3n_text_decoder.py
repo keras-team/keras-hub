@@ -1,6 +1,7 @@
 import math
 
 import keras
+from keras import ops
 
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
@@ -216,19 +217,14 @@ class Gemma3nTextDecoderBlock(keras.layers.Layer):
         cache,
         cache_update_index,
     ):
-        # If a 4D attention mask is passed,
-        # squeeze it to 2D for standard processing.
-        if padding_mask is not None and len(keras.ops.shape(padding_mask)) == 4:
-            padding_mask = padding_mask[:, 0, 0, :]
-
         decoder_mask = merge_padding_and_attention_mask(
             inputs=x, padding_mask=padding_mask, attention_mask=None
         )
 
-        batch_size = keras.ops.shape(x)[0]
-        input_length = output_length = keras.ops.shape(x)[1]
+        batch_size = ops.shape(x)[0]
+        input_length = output_length = ops.shape(x)[1]
         if cache is not None:
-            input_length = keras.ops.shape(cache)[3]
+            input_length = ops.shape(cache)[3]
 
         causal_mask = compute_causal_mask(
             batch_size=batch_size,
@@ -239,7 +235,7 @@ class Gemma3nTextDecoderBlock(keras.layers.Layer):
 
         # Respect the padding mask.
         if decoder_mask is not None:
-            causal_mask = keras.ops.minimum(decoder_mask, causal_mask)
+            causal_mask = ops.minimum(decoder_mask, causal_mask)
 
         return causal_mask
 
@@ -312,7 +308,7 @@ class Gemma3nTextDecoderBlock(keras.layers.Layer):
             corrected_predictions_list[i] = (
                 corrected_predictions_list[i] + first_prediction_normed
             )
-        output = keras.ops.stack(corrected_predictions_list, axis=0)
+        output = ops.stack(corrected_predictions_list, axis=0)
         return output, new_cache
 
     def get_config(self):

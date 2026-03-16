@@ -1,4 +1,5 @@
 import keras
+from keras import ops
 
 
 class Gemma3nRMSNorm(keras.layers.Layer):
@@ -32,28 +33,10 @@ class Gemma3nRMSNorm(keras.layers.Layer):
         super().build(input_shape)
 
     def call(self, x):
-        norm_x = x * keras.ops.rsqrt(
-            keras.ops.mean(keras.ops.square(x), axis=-1, keepdims=True)
-            + self.eps
+        norm_x = x * ops.rsqrt(
+            ops.mean(ops.square(x), axis=-1, keepdims=True) + self.eps
         )
         return norm_x * self.scale
-
-    def _int8_call(self, x):
-        x = keras.ops.cast(x, "float32")
-        norm_x = x * keras.ops.rsqrt(
-            keras.ops.mean(keras.ops.square(x), axis=-1, keepdims=True)
-            + self.eps
-        )
-        norm_x = norm_x * self.scale
-        return keras.ops.cast(norm_x, x.dtype)
-
-    def _float8_call(self, x):
-        x_calc = keras.ops.cast(x, "float32")
-        norm_x = x_calc * keras.ops.rsqrt(
-            keras.ops.mean(keras.ops.square(x_calc), axis=-1, keepdims=True)
-            + self.eps
-        )
-        return keras.ops.cast(norm_x * self.scale, x.dtype)
 
     def get_config(self):
         config = super().get_config()

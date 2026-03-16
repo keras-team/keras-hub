@@ -1,4 +1,5 @@
 import keras
+from keras import ops
 
 from keras_hub.src.models.gemma3n.rms_normalization import Gemma3nRMSNorm
 
@@ -40,7 +41,7 @@ class Gemma3nTextScaledWordEmbedding(keras.layers.Layer):
 
     def call(self, inputs):
         embeddings = self.embedding(inputs)
-        scale = keras.ops.cast(self.embed_scale, embeddings.dtype)
+        scale = ops.cast(self.embed_scale, embeddings.dtype)
         return embeddings * scale
 
     def get_config(self):
@@ -116,30 +117,30 @@ class Gemma3nTextMLP(keras.layers.Layer):
         super().build(input_shape)
 
     def _gaussian_topk(self, inputs):
-        target_sparsity_tensor = keras.ops.convert_to_tensor(
+        target_sparsity_tensor = ops.convert_to_tensor(
             self.activation_sparsity, dtype="float32"
         )
-        std_multiplier = keras.ops.erfinv(
-            2 * target_sparsity_tensor - 1
-        ) * keras.ops.sqrt(keras.ops.convert_to_tensor(2.0, dtype="float32"))
-        std_multiplier = keras.ops.cast(std_multiplier, dtype=inputs.dtype)
-        inputs_mean = keras.ops.mean(inputs, axis=-1, keepdims=True)
-        inputs_std = keras.ops.std(inputs, axis=-1, keepdims=True)
+        std_multiplier = ops.erfinv(2 * target_sparsity_tensor - 1) * ops.sqrt(
+            ops.convert_to_tensor(2.0, dtype="float32")
+        )
+        std_multiplier = ops.cast(std_multiplier, dtype=inputs.dtype)
+        inputs_mean = ops.mean(inputs, axis=-1, keepdims=True)
+        inputs_std = ops.std(inputs, axis=-1, keepdims=True)
         cutoff_x = inputs_mean + inputs_std * std_multiplier
-        return keras.ops.relu(inputs - cutoff_x)
+        return ops.relu(inputs - cutoff_x)
 
     def call(self, hidden_states):
         input_dtype = hidden_states.dtype
         gate_proj = self.gate_proj(hidden_states)
-        gate_proj_calc = keras.ops.cast(gate_proj, "float32")
+        gate_proj_calc = ops.cast(gate_proj, "float32")
         if self.activation_sparsity > 0.0:
             gate_proj_calc = self._gaussian_topk(gate_proj_calc)
         activations_calc = self.act_fn(gate_proj_calc)
         up_proj = self.up_proj(hidden_states)
-        up_proj_calc = keras.ops.cast(up_proj, "float32")
+        up_proj_calc = ops.cast(up_proj, "float32")
         mult_calc = activations_calc * up_proj_calc
         down_proj_calc = self.down_proj(mult_calc)
-        return keras.ops.cast(down_proj_calc, input_dtype)
+        return ops.cast(down_proj_calc, input_dtype)
 
     def get_config(self):
         config = super().get_config()
@@ -305,41 +306,37 @@ class Gemma3nTextAltUp(keras.layers.Layer):
     def compute_router_modalities(self, x):
         router_inputs = self.router_norm(x) * self.router_input_scale
         routed = self.modality_router(router_inputs)
-        return keras.ops.cast(
-            keras.ops.tanh(keras.ops.cast(routed, "float32")), x.dtype
-        )
+        return ops.cast(ops.tanh(ops.cast(routed, "float32")), x.dtype)
 
     def predict(self, hidden_states):
         modalities = self.compute_router_modalities(
             hidden_states[self.altup_active_idx]
         )
-        modalities_shape = keras.ops.shape(modalities)
+        modalities_shape = ops.shape(modalities)
         reshape_shape = modalities_shape[:-1] + (
             self.altup_num_inputs,
             self.altup_num_inputs,
         )
-        all_coefs = keras.ops.reshape(
+        all_coefs = ops.reshape(
             self.prediction_coefs(modalities),
             reshape_shape,
         )
-        all_coefs = keras.ops.transpose(all_coefs, (0, 1, 3, 2))
-        predictions = keras.ops.matmul(
-            keras.ops.transpose(hidden_states, (1, 2, 3, 0)), all_coefs
+        all_coefs = ops.transpose(all_coefs, (0, 1, 3, 2))
+        predictions = ops.matmul(
+            ops.transpose(hidden_states, (1, 2, 3, 0)), all_coefs
         )
-        predictions = keras.ops.transpose(predictions, (3, 0, 1, 2))
+        predictions = ops.transpose(predictions, (3, 0, 1, 2))
         predictions += hidden_states
         return predictions
 
     def correct(self, predictions, activated):
         modalities = self.compute_router_modalities(activated)
         innovation = activated - predictions[self.altup_active_idx]
-        innovation = keras.ops.repeat(
-            keras.ops.expand_dims(innovation, 0), self.altup_num_inputs, axis=0
+        innovation = ops.repeat(
+            ops.expand_dims(innovation, 0), self.altup_num_inputs, axis=0
         )
         all_coefs = self.correction_coefs(modalities) + 1.0
-        all_coefs = keras.ops.expand_dims(
-            keras.ops.transpose(all_coefs, (2, 0, 1)), -1
-        )
+        all_coefs = ops.expand_dims(ops.transpose(all_coefs, (2, 0, 1)), -1)
         corrected = innovation * all_coefs
         corrected += predictions
         return corrected

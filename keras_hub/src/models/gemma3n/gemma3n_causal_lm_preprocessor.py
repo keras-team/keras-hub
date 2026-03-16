@@ -1,6 +1,11 @@
 import keras
 import numpy as np
-import tensorflow as tf
+from keras import ops
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
@@ -310,28 +315,24 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         ```
         """
         batch_size, sequence_length = vision_mask.shape
-        vision_mask_flattened = tf.reshape(vision_mask, [-1])
-        vision_indices = tf.where(vision_mask_flattened)[..., 0]
-        vision_indices = tf.cast(vision_indices, dtype=tf.int32)
-        row_lengths = tf.math.reduce_sum(
-            tf.cast(vision_mask, dtype=vision_indices.dtype), axis=1
+        vision_mask_flattened = ops.reshape(vision_mask, [-1])
+        vision_indices = ops.where(vision_mask_flattened)[..., 0]
+        vision_indices = ops.cast(vision_indices, dtype="int32")
+        row_lengths = ops.sum(
+            ops.cast(vision_mask, dtype=vision_indices.dtype), axis=1
         )
         batched_vision_indices = tf.RaggedTensor.from_row_lengths(
             values=vision_indices,
             row_lengths=row_lengths,
         )
-        to_subtract = tf.math.scalar_mul(
-            scalar=tf.cast(sequence_length, dtype=tf.int32),
-            x=tf.range(
-                start=0,
-                limit=tf.shape(vision_mask)[0],
-                dtype=tf.int32,
-            ),
+        to_subtract = ops.cast(sequence_length, dtype="int32") * ops.arange(
+            start=0,
+            stop=ops.shape(vision_mask)[0],
+            dtype="int32",
         )
         # All indices should be independent of other samples in the batch.
-        batched_vision_indices = tf.math.subtract(
-            batched_vision_indices,
-            tf.expand_dims(to_subtract, axis=-1),
+        batched_vision_indices = batched_vision_indices - ops.expand_dims(
+            to_subtract, axis=-1
         )
         # Pad the indices.
         batched_vision_indices = batched_vision_indices.to_tensor(
@@ -349,28 +350,24 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         Similar to _get_vision_indices but for audio tokens.
         """
         batch_size, sequence_length = audio_mask.shape
-        audio_mask_flattened = tf.reshape(audio_mask, [-1])
-        audio_indices = tf.where(audio_mask_flattened)[..., 0]
-        audio_indices = tf.cast(audio_indices, dtype=tf.int32)
-        row_lengths = tf.math.reduce_sum(
-            tf.cast(audio_mask, dtype=audio_indices.dtype), axis=1
+        audio_mask_flattened = ops.reshape(audio_mask, [-1])
+        audio_indices = ops.where(audio_mask_flattened)[..., 0]
+        audio_indices = ops.cast(audio_indices, dtype="int32")
+        row_lengths = ops.sum(
+            ops.cast(audio_mask, dtype=audio_indices.dtype), axis=1
         )
         batched_audio_indices = tf.RaggedTensor.from_row_lengths(
             values=audio_indices,
             row_lengths=row_lengths,
         )
-        to_subtract = tf.math.scalar_mul(
-            scalar=tf.cast(sequence_length, dtype=tf.int32),
-            x=tf.range(
-                start=0,
-                limit=tf.shape(audio_mask)[0],
-                dtype=tf.int32,
-            ),
+        to_subtract = ops.cast(sequence_length, dtype="int32") * ops.arange(
+            start=0,
+            stop=ops.shape(audio_mask)[0],
+            dtype="int32",
         )
         # All indices should be independent of other samples in the batch.
-        batched_audio_indices = tf.math.subtract(
-            batched_audio_indices,
-            tf.expand_dims(to_subtract, axis=-1),
+        batched_audio_indices = batched_audio_indices - ops.expand_dims(
+            to_subtract, axis=-1
         )
         # Pad the indices.
         batched_audio_indices = batched_audio_indices.to_tensor(
@@ -411,47 +408,47 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         x = {
             "token_ids": token_ids
             if batched
-            else tf.squeeze(token_ids, axis=0),
+            else ops.squeeze(token_ids, axis=0),
             "padding_mask": padding_mask
             if batched
-            else tf.squeeze(padding_mask, axis=0),
+            else ops.squeeze(padding_mask, axis=0),
         }
         if self.image_converter is not None:
             vision_indices = self._get_vision_indices(vision_mask=vision_mask)
-            x["images"] = images if batched else tf.squeeze(images, axis=0)
+            x["images"] = images if batched else ops.squeeze(images, axis=0)
             x["vision_indices"] = (
                 vision_indices
                 if batched
-                else tf.squeeze(vision_indices, axis=0)
+                else ops.squeeze(vision_indices, axis=0)
             )
             x["vision_mask"] = (
-                vision_mask if batched else tf.squeeze(vision_mask, axis=0)
+                vision_mask if batched else ops.squeeze(vision_mask, axis=0)
             )
         if self.audio_converter is not None:
             audio_indices = self._get_audio_indices(audio_mask=audio_mask)
             x["input_features"] = (
                 input_features
                 if batched
-                else tf.squeeze(input_features, axis=0)
+                else ops.squeeze(input_features, axis=0)
             )
             x["input_features_mask"] = (
                 input_features_mask
                 if batched
-                else tf.squeeze(input_features_mask, axis=0)
+                else ops.squeeze(input_features_mask, axis=0)
             )
             x["audio_indices"] = (
-                audio_indices if batched else tf.squeeze(audio_indices, axis=0)
+                audio_indices if batched else ops.squeeze(audio_indices, axis=0)
             )
             x["audio_mask"] = (
-                audio_mask if batched else tf.squeeze(audio_mask, axis=0)
+                audio_mask if batched else ops.squeeze(audio_mask, axis=0)
             )
             # For generation only.
             if not return_labels:
-                x["audios"] = audios if batched else tf.squeeze(audios, axis=0)
+                x["audios"] = audios if batched else ops.squeeze(audios, axis=0)
         if return_labels:
             if not batched:
-                y = tf.squeeze(y, axis=0)
-                sample_weight = tf.squeeze(sample_weight, 0)
+                y = ops.squeeze(y, axis=0)
+                sample_weight = ops.squeeze(sample_weight, axis=0)
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
         else:
             return x
@@ -476,20 +473,20 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
                     f"Received: `type(images)` = {type(images)}"
                 )
         if not batched:
-            images = tf.expand_dims(images, axis=0)
+            images = ops.expand_dims(images, axis=0)
         # If the input is a list of images, instead of list of lists of images.
         if len(images.shape) == 4:
-            images = tf.expand_dims(images, axis=1)
+            images = ops.expand_dims(images, axis=1)
         # Convert to dense tensor.
         images = images.to_tensor(
             shape=[None, self.max_images_per_prompt, None, None, 3],
             default_value=0,
         )
         # Resize, rescale, etc. the images.
-        original_images_shape = tf.shape(images)
+        original_images_shape = ops.shape(images)
         # Before passing through image converter, we need to collapse the
         # first two dimensions.
-        images = tf.reshape(
+        images = ops.reshape(
             images,
             [
                 -1,
@@ -504,7 +501,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         ):
             images = images.cpu()
         # Recover the rank.
-        images = tf.reshape(
+        images = ops.reshape(
             images,
             [
                 original_images_shape[0],
@@ -530,14 +527,16 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             if len(audios.shape) > 1:
                 audios = tf.RaggedTensor.from_tensor(audios)
             else:
-                audios = tf.ragged.constant([audios.numpy()], dtype=tf.float32)
+                audios = tf.RaggedTensor.from_tensor(
+                    tf.expand_dims(audios, axis=0)
+                )
         else:
             # Attempt to convert anyway.
             try:
                 audios = tf.convert_to_tensor(audios, dtype=tf.float32)
                 if len(audios.shape) == 1:
-                    audios = tf.ragged.constant(
-                        [audios.numpy()], dtype=tf.float32
+                    audios = tf.RaggedTensor.from_tensor(
+                        tf.expand_dims(audios, axis=0)
                     )
                 else:
                     audios = tf.RaggedTensor.from_tensor(audios)
@@ -547,34 +546,34 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
                     f"Received: `type(audios)` = {type(audios)}"
                 )
         if not batched:
-            audios = tf.expand_dims(audios, axis=0)
+            audios = ops.expand_dims(audios, axis=0)
         # If the input is a list of audio arrays, instead of list of lists.
         if len(audios.shape) == 2:
-            audios = tf.expand_dims(audios, axis=1)
+            audios = ops.expand_dims(audios, axis=1)
         # Convert to dense tensor.
         audios = audios.to_tensor(
             shape=[None, self.max_audios_per_prompt, None],
             default_value=0,
         )
         # Process through audio converter.
-        original_audios_shape = tf.shape(audios)
+        original_audios_shape = ops.shape(audios)
         batch_size = original_audios_shape[0]
         num_audios = original_audios_shape[1]
         # Flatten batch and audio dimensions for processing.
-        audios_flat = tf.reshape(audios, [-1, original_audios_shape[-1]])
+        audios_flat = ops.reshape(audios, [-1, original_audios_shape[-1]])
         # Process audio through converter.
         input_features, input_features_mask = self.audio_converter(
             audios_flat,
             padding="longest",
         )
         # Reshape back to [batch_size, max_audios_per_prompt, ...].
-        feature_shape = tf.shape(input_features)
-        input_features = tf.reshape(
+        feature_shape = ops.shape(input_features)
+        input_features = ops.reshape(
             input_features,
             [batch_size, num_audios, feature_shape[1], feature_shape[2]],
         )
-        mask_shape = tf.shape(input_features_mask)
-        input_features_mask = tf.reshape(
+        mask_shape = ops.shape(input_features_mask)
+        input_features_mask = ops.reshape(
             input_features_mask,
             [batch_size, num_audios, mask_shape[1]],
         )
@@ -602,8 +601,8 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             responses = [responses]
         if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
             batched = False
-            prompts = tf.expand_dims(prompts, axis=0)
-            responses = tf.expand_dims(responses, axis=0)
+            prompts = ops.expand_dims(prompts, axis=0)
+            responses = ops.expand_dims(responses, axis=0)
         # Extract images and audios from the input.
         images = x.get("images", None)
         audios = x.get("audios", None)
@@ -659,14 +658,14 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             sample_weight = response_mask[..., 1:]
             # Squeeze if not batched.
             if not batched:
-                x["token_ids"] = tf.squeeze(x["token_ids"], axis=0)
-                x["padding_mask"] = tf.squeeze(x["padding_mask"], axis=0)
-                y = tf.squeeze(y, axis=0)
-                sample_weight = tf.squeeze(sample_weight, axis=0)
+                x["token_ids"] = ops.squeeze(x["token_ids"], axis=0)
+                x["padding_mask"] = ops.squeeze(x["padding_mask"], axis=0)
+                y = ops.squeeze(y, axis=0)
+                sample_weight = ops.squeeze(sample_weight, axis=0)
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
         # === Multimodal processing ===
-        batch_size = tf.shape(prompts)[0]
+        batch_size = ops.shape(prompts)[0]
         desired_height = (
             self.image_converter.image_size[0] if self.image_converter else 0
         )
@@ -675,7 +674,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         )
         # Process vision.
         if images is None and self.image_converter is not None:
-            images = tf.ones(
+            images = ops.ones(
                 shape=[
                     batch_size,
                     0,
@@ -685,13 +684,13 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
                 ],
                 dtype="float32",
             )
-            vision_mask = tf.zeros_like(token_ids, dtype=bool)
+            vision_mask = ops.zeros_like(token_ids, dtype=bool)
         elif images is not None and self.image_converter is not None:
             images = self._preprocess_images(images=images, batched=batched)
             vision_mask = token_ids == self.tokenizer.image_placeholder_id
         else:
             # No image converter.
-            images = tf.ones(
+            images = ops.ones(
                 shape=[
                     batch_size,
                     0,
@@ -701,22 +700,22 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
                 ],
                 dtype="float32",
             )
-            vision_mask = tf.zeros_like(token_ids, dtype=bool)
+            vision_mask = ops.zeros_like(token_ids, dtype=bool)
         # Process audio.
         if audios is None and self.audio_converter is not None:
-            audios = tf.ones(
+            audios = ops.ones(
                 shape=[batch_size, 0, 0],
                 dtype="float32",
             )
-            input_features = tf.ones(
+            input_features = ops.ones(
                 shape=[batch_size, 0, 0, self.audio_converter.feature_size],
                 dtype="float32",
             )
-            input_features_mask = tf.ones(
+            input_features_mask = ops.ones(
                 shape=[batch_size, 0, 0],
                 dtype="bool",
             )
-            audio_mask = tf.zeros_like(token_ids, dtype=bool)
+            audio_mask = ops.zeros_like(token_ids, dtype=bool)
         elif audios is not None and self.audio_converter is not None:
             audios, input_features, input_features_mask = (
                 self._preprocess_audios(audios=audios, batched=batched)
@@ -729,19 +728,19 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
                 if self.audio_converter is not None
                 else 128
             )
-            audios = tf.ones(
+            audios = ops.ones(
                 shape=[batch_size, 0, 0],
                 dtype="float32",
             )
-            input_features = tf.ones(
+            input_features = ops.ones(
                 shape=[batch_size, 0, 0, feature_size],
                 dtype="float32",
             )
-            input_features_mask = tf.ones(
+            input_features_mask = ops.ones(
                 shape=[batch_size, 0, 0],
                 dtype="bool",
             )
-            audio_mask = tf.zeros_like(token_ids, dtype=bool)
+            audio_mask = ops.zeros_like(token_ids, dtype=bool)
 
         return self._format_output(
             images=images,
@@ -797,9 +796,9 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
                 responses = [responses]
         if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
             batched = False
-            prompts = tf.expand_dims(prompts, axis=0)
+            prompts = ops.expand_dims(prompts, axis=0)
             if responses is not None:
-                responses = tf.expand_dims(responses, axis=0)
+                responses = ops.expand_dims(responses, axis=0)
         # Validate multimodal inputs.
         if self.text_only_model and (images is not None or audios is not None):
             raise ValueError(
@@ -845,17 +844,17 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         if self.text_only_model:
             return {
                 "token_ids": (
-                    token_ids if batched else tf.squeeze(token_ids, axis=0)
+                    token_ids if batched else ops.squeeze(token_ids, axis=0)
                 ),
                 "padding_mask": (
                     padding_mask
                     if batched
-                    else tf.squeeze(padding_mask, axis=0)
+                    else ops.squeeze(padding_mask, axis=0)
                 ),
             }
 
         # === Multimodal processing ===
-        batch_size = tf.shape(prompts)[0]
+        batch_size = ops.shape(prompts)[0]
         desired_height = (
             self.image_converter.image_size[0] if self.image_converter else 0
         )
@@ -864,7 +863,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         )
         # Process vision.
         if images is None and self.image_converter is not None:
-            images = tf.ones(
+            images = ops.ones(
                 shape=[
                     batch_size,
                     0,
@@ -874,13 +873,13 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
                 ],
                 dtype="float32",
             )
-            vision_mask = tf.zeros_like(token_ids, dtype=bool)
+            vision_mask = ops.zeros_like(token_ids, dtype=bool)
         elif images is not None and self.image_converter is not None:
             images = self._preprocess_images(images=images, batched=batched)
             vision_mask = token_ids == self.tokenizer.image_placeholder_id
         else:
             # No image converter.
-            images = tf.ones(
+            images = ops.ones(
                 shape=[
                     batch_size,
                     0,
@@ -890,22 +889,22 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
                 ],
                 dtype="float32",
             )
-            vision_mask = tf.zeros_like(token_ids, dtype=bool)
+            vision_mask = ops.zeros_like(token_ids, dtype=bool)
         # Process audio.
         if audios is None and self.audio_converter is not None:
-            audios = tf.ones(
+            audios = ops.ones(
                 shape=[batch_size, 0, 0],
                 dtype="float32",
             )
-            input_features = tf.ones(
+            input_features = ops.ones(
                 shape=[batch_size, 0, 0, self.audio_converter.feature_size],
                 dtype="float32",
             )
-            input_features_mask = tf.ones(
+            input_features_mask = ops.ones(
                 shape=[batch_size, 0, 0],
                 dtype="bool",
             )
-            audio_mask = tf.zeros_like(token_ids, dtype=bool)
+            audio_mask = ops.zeros_like(token_ids, dtype=bool)
         elif audios is not None and self.audio_converter is not None:
             audios, input_features, input_features_mask = (
                 self._preprocess_audios(audios=audios, batched=batched)
@@ -918,19 +917,19 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
                 if self.audio_converter is not None
                 else 128
             )
-            audios = tf.ones(
+            audios = ops.ones(
                 shape=[batch_size, 0, 0],
                 dtype="float32",
             )
-            input_features = tf.ones(
+            input_features = ops.ones(
                 shape=[batch_size, 0, 0, feature_size],
                 dtype="float32",
             )
-            input_features_mask = tf.ones(
+            input_features_mask = ops.ones(
                 shape=[batch_size, 0, 0],
                 dtype="bool",
             )
-            audio_mask = tf.zeros_like(token_ids, dtype=bool)
+            audio_mask = ops.zeros_like(token_ids, dtype=bool)
 
         return self._format_output(
             images=images,

@@ -1,4 +1,5 @@
 import keras
+from keras import ops
 
 from keras_hub.src.models.gemma3n.gemma3n_audio_layers import (
     Gemma3nAudioConformerAttention,
@@ -55,6 +56,24 @@ class Gemma3nAudioSubSampleConvProjection(keras.layers.Layer):
         self.sscp_conv_kernel_size = sscp_conv_kernel_size
         self.sscp_conv_stride_size = sscp_conv_stride_size
         self.sscp_conv_group_norm_eps = sscp_conv_group_norm_eps
+
+        # as per model specifics, we always perform 2 convolutions
+        if len(sscp_conv_channel_size) != 2:
+            raise ValueError(
+                f"sscp_conv_channel_size must have exactly 2 elements, "
+                f"got {len(sscp_conv_channel_size)}"
+            )
+        if len(sscp_conv_kernel_size) != 2:
+            raise ValueError(
+                f"sscp_conv_kernel_size must have exactly 2 elements, "
+                f"got {len(sscp_conv_kernel_size)}"
+            )
+        if len(sscp_conv_stride_size) != 2:
+            raise ValueError(
+                f"sscp_conv_stride_size must have exactly 2 elements, "
+                f"got {len(sscp_conv_stride_size)}"
+            )
+
         current_f_for_block_input = input_feat_size
         self.calculated_block_padding = []
         self.calculated_f_out_dims = []
@@ -79,25 +98,23 @@ class Gemma3nAudioSubSampleConvProjection(keras.layers.Layer):
             self.calculated_f_out_dims.append(f_out_after_conv)
             current_f_for_block_input = f_out_after_conv
         self.conv_0 = Gemma3nAudioSSCPConvBlock(
-            idx=0,
             input_freq_dim=input_feat_size,
-            sscp_conv_channel_size=sscp_conv_channel_size,
-            sscp_conv_kernel_size=sscp_conv_kernel_size,
-            sscp_conv_stride_size=sscp_conv_stride_size,
-            sscp_conv_group_norm_eps=sscp_conv_group_norm_eps,
+            out_channels=sscp_conv_channel_size[0],
+            kernel_size=sscp_conv_kernel_size[0],
+            stride_size=sscp_conv_stride_size[0],
+            group_norm_eps=sscp_conv_group_norm_eps,
             manual_padding=self.calculated_block_padding[0],
             name="conv_0",
             dtype=self.dtype_policy,
         )
         self.conv_1 = Gemma3nAudioSSCPConvBlock(
-            idx=1,
-            name="conv_1",
             input_freq_dim=self.calculated_f_out_dims[0],
-            sscp_conv_channel_size=sscp_conv_channel_size,
-            sscp_conv_kernel_size=sscp_conv_kernel_size,
-            sscp_conv_stride_size=sscp_conv_stride_size,
-            sscp_conv_group_norm_eps=sscp_conv_group_norm_eps,
+            out_channels=sscp_conv_channel_size[1],
+            kernel_size=sscp_conv_kernel_size[1],
+            stride_size=sscp_conv_stride_size[1],
+            group_norm_eps=sscp_conv_group_norm_eps,
             manual_padding=self.calculated_block_padding[1],
+            name="conv_1",
             dtype=self.dtype_policy,
         )
         self.input_proj_linear = keras.layers.Dense(
@@ -158,14 +175,12 @@ class Gemma3nAudioSubSampleConvProjection(keras.layers.Layer):
         return (b, t_out_1, self.hidden_size)
 
     def call(self, audio_encodings):
-        audio_encodings_reshaped = keras.ops.expand_dims(audio_encodings, 1)
+        audio_encodings_reshaped = ops.expand_dims(audio_encodings, 1)
         x = self.conv_0(audio_encodings_reshaped)
         x = self.conv_1(x)
-        b, c_out, t_out, f_out = keras.ops.shape(x)
-        x_permuted = keras.ops.transpose(x, (0, 2, 3, 1))
-        output_flattened = keras.ops.reshape(
-            x_permuted, (b, t_out, f_out * c_out)
-        )
+        b, c_out, t_out, f_out = ops.shape(x)
+        x_permuted = ops.transpose(x, (0, 2, 3, 1))
+        output_flattened = ops.reshape(x_permuted, (b, t_out, f_out * c_out))
         return self.input_proj_linear(output_flattened)
 
     def get_config(self):
@@ -197,17 +212,17 @@ class Gemma3nAudioConformerBlock(keras.layers.Layer):
         rms_norm_eps: float. Epsilon value for the Gemma 3n RMS normalization
             layers.
         gradient_clipping: float. The maximum absolute value for the gradient.
-        conf_residual_weight: float. The weight for the residual connection in
+        residual_weight: float. The weight for the residual connection in
             the feed-forward layers.
-        conf_num_attention_heads: int. The number of attention heads.
-        conf_attention_chunk_size: int. The size of chunks for local attention.
-        conf_attention_context_right: int. The right context size for local
+        num_attention_heads: int. The number of attention heads.
+        attention_chunk_size: int. The size of chunks for local attention.
+        num_attention_context_right: int. The right context size for local
             attention.
-        conf_attention_context_left: int. The left context size for local
+        num_attention_context_left: int. The left context size for local
             attention.
-        conf_attention_logit_cap: float. The maximum value for the attention
+        attention_logit_cap: float. The maximum value for the attention
             logits.
-        conf_conv_kernel_size: int. The kernel size for the 1D convolution
+        conv_kernel_size: int. The kernel size for the 1D convolution
             layer.
     """
 
@@ -216,13 +231,13 @@ class Gemma3nAudioConformerBlock(keras.layers.Layer):
         hidden_size,
         rms_norm_eps,
         gradient_clipping,
-        conf_residual_weight,
-        conf_num_attention_heads,
-        conf_attention_chunk_size,
-        conf_attention_context_right,
-        conf_attention_context_left,
-        conf_attention_logit_cap,
-        conf_conv_kernel_size,
+        residual_weight,
+        num_attention_heads,
+        attention_chunk_size,
+        num_attention_context_right,
+        num_attention_context_left,
+        attention_logit_cap,
+        conv_kernel_size,
         dtype=None,
         **kwargs,
     ):
@@ -230,17 +245,17 @@ class Gemma3nAudioConformerBlock(keras.layers.Layer):
         self.hidden_size = hidden_size
         self.rms_norm_eps = rms_norm_eps
         self.gradient_clipping = gradient_clipping
-        self.conf_residual_weight = conf_residual_weight
-        self.conf_num_attention_heads = conf_num_attention_heads
-        self.conf_attention_chunk_size = conf_attention_chunk_size
-        self.conf_attention_context_right = conf_attention_context_right
-        self.conf_attention_context_left = conf_attention_context_left
-        self.conf_attention_logit_cap = conf_attention_logit_cap
-        self.conf_conv_kernel_size = conf_conv_kernel_size
+        self.residual_weight = residual_weight
+        self.num_attention_heads = num_attention_heads
+        self.attention_chunk_size = attention_chunk_size
+        self.num_attention_context_right = num_attention_context_right
+        self.num_attention_context_left = num_attention_context_left
+        self.attention_logit_cap = attention_logit_cap
+        self.conv_kernel_size = conv_kernel_size
         self.ffw_layer_start = Gemma3nAudioConformerFeedForward(
             hidden_size=hidden_size,
             gradient_clipping=gradient_clipping,
-            conf_residual_weight=conf_residual_weight,
+            residual_weight=residual_weight,
             rms_norm_eps=rms_norm_eps,
             dtype=self.dtype_policy,
             name="ffw_layer_start",
@@ -248,18 +263,18 @@ class Gemma3nAudioConformerBlock(keras.layers.Layer):
         self.attention = Gemma3nAudioConformerAttention(
             hidden_size=hidden_size,
             gradient_clipping=gradient_clipping,
-            conf_num_attention_heads=conf_num_attention_heads,
-            conf_attention_chunk_size=conf_attention_chunk_size,
-            conf_attention_context_right=conf_attention_context_right,
-            conf_attention_context_left=conf_attention_context_left,
-            conf_attention_logit_cap=conf_attention_logit_cap,
+            num_attention_heads=num_attention_heads,
+            attention_chunk_size=attention_chunk_size,
+            num_attention_context_right=num_attention_context_right,
+            num_attention_context_left=num_attention_context_left,
+            attention_logit_cap=attention_logit_cap,
             dtype=self.dtype_policy,
             name="attention",
         )
         self.lconv1d = Gemma3nAudioConformerLightConv1d(
             hidden_size=hidden_size,
             rms_norm_eps=rms_norm_eps,
-            conf_conv_kernel_size=conf_conv_kernel_size,
+            conv_kernel_size=conv_kernel_size,
             gradient_clipping=gradient_clipping,
             dtype=self.dtype_policy,
             name="lconv1d",
@@ -267,7 +282,7 @@ class Gemma3nAudioConformerBlock(keras.layers.Layer):
         self.ffw_layer_end = Gemma3nAudioConformerFeedForward(
             hidden_size=hidden_size,
             gradient_clipping=gradient_clipping,
-            conf_residual_weight=conf_residual_weight,
+            residual_weight=residual_weight,
             rms_norm_eps=rms_norm_eps,
             dtype=self.dtype_policy,
             name="ffw_layer_end",
@@ -298,27 +313,39 @@ class Gemma3nAudioConformerBlock(keras.layers.Layer):
         super().build(input_shape)
 
     def compute_output_shape(self, input_shape):
-        audio_encodings_shape, _ = input_shape
-        return audio_encodings_shape
+        if (
+            isinstance(input_shape, tuple)
+            and len(input_shape) == 2
+            and isinstance(input_shape[0], tuple)
+        ):
+            audio_encodings_shape, _ = input_shape
+            return audio_encodings_shape
+        elif isinstance(input_shape, tuple) and len(input_shape) >= 3:
+            return input_shape
+        else:
+            raise ValueError(
+                f"Unexpected `input_shape` structure for "
+                f"Gemma3nAudioConformerBlock: {input_shape}"
+            )
 
     def call(self, inputs):
         audio_encodings, audio_mel_mask = inputs
         audio_encodings = self.ffw_layer_start(audio_encodings)
         audio_encodings = self.attention(audio_encodings, audio_mel_mask)
-        validity_mask_for_lconv = keras.ops.logical_not(audio_mel_mask)
-        mask_shape = keras.ops.shape(validity_mask_for_lconv)
-        enc_shape = keras.ops.shape(audio_encodings)
+        validity_mask_for_lconv = ops.logical_not(audio_mel_mask)
+        mask_shape = ops.shape(validity_mask_for_lconv)
+        enc_shape = ops.shape(audio_encodings)
         if len(mask_shape) < len(enc_shape):
-            validity_mask_for_lconv = keras.ops.expand_dims(
+            validity_mask_for_lconv = ops.expand_dims(
                 validity_mask_for_lconv, -1
             )
-        audio_encodings_for_lconv_input = audio_encodings * keras.ops.cast(
+        audio_encodings_for_lconv_input = audio_encodings * ops.cast(
             validity_mask_for_lconv,
             audio_encodings.dtype,
         )
         audio_encodings = self.lconv1d(audio_encodings_for_lconv_input)
         audio_encodings = self.ffw_layer_end(audio_encodings)
-        audio_encodings = keras.ops.clip(
+        audio_encodings = ops.clip(
             audio_encodings, -self.gradient_clipping, self.gradient_clipping
         )
         output = self.norm(audio_encodings)
@@ -331,13 +358,13 @@ class Gemma3nAudioConformerBlock(keras.layers.Layer):
                 "hidden_size": self.hidden_size,
                 "rms_norm_eps": self.rms_norm_eps,
                 "gradient_clipping": self.gradient_clipping,
-                "conf_residual_weight": self.conf_residual_weight,
-                "conf_num_attention_heads": self.conf_num_attention_heads,
-                "conf_attention_chunk_size": self.conf_attention_chunk_size,
-                "conf_attention_context_right": self.conf_attention_context_right,  # noqa: E501
-                "conf_attention_context_left": self.conf_attention_context_left,
-                "conf_attention_logit_cap": self.conf_attention_logit_cap,
-                "conf_conv_kernel_size": self.conf_conv_kernel_size,
+                "residual_weight": self.residual_weight,
+                "num_attention_heads": self.num_attention_heads,
+                "attention_chunk_size": self.attention_chunk_size,
+                "num_attention_context_right": self.num_attention_context_right,  # noqa: E501
+                "num_attention_context_left": self.num_attention_context_left,
+                "attention_logit_cap": self.attention_logit_cap,
+                "conv_kernel_size": self.conv_kernel_size,
             }
         )
         return config
@@ -362,25 +389,25 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
             of the two convolutional blocks in the subsampler.
         sscp_conv_group_norm_eps: float. Epsilon value for the Group
             Normalization layers in the subsampler.
-        conf_num_hidden_layers: int. The number of conformer blocks.
+        num_hidden_layers: int. The number of conformer blocks.
         rms_norm_eps: float. Epsilon value for the Gemma 3n RMS normalization
             layers.
         gradient_clipping: float. The maximum absolute value for the gradient.
-        conf_residual_weight: float. The weight for the residual connection in
+        residual_weight: float. The weight for the residual connection in
             the feed-forward layers of the conformer blocks.
-        conf_num_attention_heads: int. The number of attention heads in the
+        num_attention_heads: int. The number of attention heads in the
             conformer blocks.
-        conf_attention_chunk_size: int. The size of chunks for local attention
+        attention_chunk_size: int. The size of chunks for local attention
             in the conformer blocks.
-        conf_attention_context_right: int. The right context size for local
+        num_attention_context_right: int. The right context size for local
             attention in the conformer blocks.
-        conf_attention_context_left: int. The left context size for local
+        num_attention_context_left: int. The left context size for local
             attention in the conformer blocks.
-        conf_attention_logit_cap: float. The maximum value for the attention
+        attention_logit_cap: float. The maximum value for the attention
             logits in the conformer blocks.
-        conf_conv_kernel_size: int. The kernel size for the 1D convolution
+        conv_kernel_size: int. The kernel size for the 1D convolution
             layer in the conformer blocks.
-        conf_reduction_factor: int. The factor by which to reduce the sequence
+        reduction_factor: int. The factor by which to reduce the sequence
             length of the final output.
     """
 
@@ -392,17 +419,17 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
         sscp_conv_kernel_size,
         sscp_conv_stride_size,
         sscp_conv_group_norm_eps,
-        conf_num_hidden_layers,
+        num_hidden_layers,
         rms_norm_eps,
         gradient_clipping,
-        conf_residual_weight,
-        conf_num_attention_heads,
-        conf_attention_chunk_size,
-        conf_attention_context_right,
-        conf_attention_context_left,
-        conf_attention_logit_cap,
-        conf_conv_kernel_size,
-        conf_reduction_factor,
+        residual_weight,
+        num_attention_heads,
+        attention_chunk_size,
+        num_attention_context_right,
+        num_attention_context_left,
+        attention_logit_cap,
+        conv_kernel_size,
+        reduction_factor,
         dtype=None,
         **kwargs,
     ):
@@ -413,17 +440,17 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
         self.sscp_conv_kernel_size = sscp_conv_kernel_size
         self.sscp_conv_stride_size = sscp_conv_stride_size
         self.sscp_conv_group_norm_eps = sscp_conv_group_norm_eps
-        self.conf_num_hidden_layers = conf_num_hidden_layers
+        self.num_hidden_layers = num_hidden_layers
         self.rms_norm_eps = rms_norm_eps
         self.gradient_clipping = gradient_clipping
-        self.conf_residual_weight = conf_residual_weight
-        self.conf_num_attention_heads = conf_num_attention_heads
-        self.conf_attention_chunk_size = conf_attention_chunk_size
-        self.conf_attention_context_right = conf_attention_context_right
-        self.conf_attention_context_left = conf_attention_context_left
-        self.conf_attention_logit_cap = conf_attention_logit_cap
-        self.conf_conv_kernel_size = conf_conv_kernel_size
-        self.conf_reduction_factor = conf_reduction_factor
+        self.residual_weight = residual_weight
+        self.num_attention_heads = num_attention_heads
+        self.attention_chunk_size = attention_chunk_size
+        self.num_attention_context_right = num_attention_context_right
+        self.num_attention_context_left = num_attention_context_left
+        self.attention_logit_cap = attention_logit_cap
+        self.conv_kernel_size = conv_kernel_size
+        self.reduction_factor = reduction_factor
         self.subsample_conv_projection = Gemma3nAudioSubSampleConvProjection(
             input_feat_size,
             hidden_size,
@@ -439,17 +466,17 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
                 hidden_size,
                 rms_norm_eps,
                 gradient_clipping,
-                conf_residual_weight,
-                conf_num_attention_heads,
-                conf_attention_chunk_size,
-                conf_attention_context_right,
-                conf_attention_context_left,
-                conf_attention_logit_cap,
-                conf_conv_kernel_size,
+                residual_weight,
+                num_attention_heads,
+                attention_chunk_size,
+                num_attention_context_right,
+                num_attention_context_left,
+                attention_logit_cap,
+                conv_kernel_size,
                 dtype=self.dtype_policy,
                 name=f"conformer_block_{i}",
             )
-            for i in range(conf_num_hidden_layers)
+            for i in range(num_hidden_layers)
         ]
 
     def build(self, input_shape):
@@ -469,9 +496,6 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
             audio_mel_shape
         )
         t_sub = encodings_shape[1]
-        time_stride_product = 1
-        for stride_pair in self.sscp_conv_stride_size:
-            time_stride_product *= stride_pair[0]
         batch_size = audio_mel_shape[0]
         current_mask_shape = (
             (batch_size, t_sub) if t_sub is not None else (batch_size, None)
@@ -490,9 +514,6 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
             audio_mel_shape
         )
         t_sub = encodings_shape[1]
-        time_stride_product = 1
-        for stride_pair in self.sscp_conv_stride_size:
-            time_stride_product *= stride_pair[0]
         batch_size = audio_mel_shape[0]
         current_mask_shape = (
             (batch_size, t_sub) if t_sub is not None else (batch_size, None)
@@ -503,10 +524,10 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
                 (current_encodings_shape, current_mask_shape)
             )
         final_mask_shape = current_mask_shape
-        if self.conf_reduction_factor > 1:
+        if self.reduction_factor > 1:
             t_sub = current_encodings_shape[1]
             if t_sub is not None:
-                new_t = t_sub // self.conf_reduction_factor
+                new_t = t_sub // self.reduction_factor
                 current_encodings_shape = (
                     current_encodings_shape[0],
                     new_t,
@@ -522,35 +543,33 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
     def call(self, inputs):
         audio_mel, audio_mel_mask = inputs
         audio_encodings = self.subsample_conv_projection(audio_mel)
-        t_sub = keras.ops.shape(audio_encodings)[1]
+        t_sub = ops.shape(audio_encodings)[1]
         time_stride_product = 1
         for stride_pair in self.sscp_conv_stride_size:
             time_stride_product *= stride_pair[0]
-        mask_rank = len(keras.ops.shape(audio_mel_mask))
+        mask_rank = len(ops.shape(audio_mel_mask))
         audio_mel_mask_to_take = audio_mel_mask
         if mask_rank > 2:
-            audio_mel_mask_to_take = keras.ops.squeeze(
+            audio_mel_mask_to_take = ops.squeeze(
                 audio_mel_mask, axis=list(range(1, mask_rank - 1))
             )
-        indices = keras.ops.arange(0, t_sub) * time_stride_product
-        indices = keras.ops.clip(
-            indices, 0, keras.ops.shape(audio_mel_mask_to_take)[1] - 1
-        )
-        current_mask = keras.ops.take(audio_mel_mask_to_take, indices, axis=1)
+        indices = ops.arange(0, t_sub) * time_stride_product
+        indices = ops.clip(indices, 0, ops.shape(audio_mel_mask_to_take)[1] - 1)
+        current_mask = ops.take(audio_mel_mask_to_take, indices, axis=1)
         for block in self.conformer:
             audio_encodings = block((audio_encodings, current_mask))
 
-        if self.conf_reduction_factor > 1:
-            audio_encodings = audio_encodings[:, :: self.conf_reduction_factor]
-            current_mask = current_mask[:, :: self.conf_reduction_factor]
-        mask_shape = keras.ops.shape(current_mask)
-        enc_shape = keras.ops.shape(audio_encodings)
+        if self.reduction_factor > 1:
+            audio_encodings = audio_encodings[:, :: self.reduction_factor]
+            current_mask = current_mask[:, :: self.reduction_factor]
+        mask_shape = ops.shape(current_mask)
+        enc_shape = ops.shape(audio_encodings)
         if len(mask_shape) < len(enc_shape):
-            current_mask_expanded = keras.ops.expand_dims(current_mask, axis=-1)
+            current_mask_expanded = ops.expand_dims(current_mask, axis=-1)
         else:
             current_mask_expanded = current_mask
-        return audio_encodings * keras.ops.cast(
-            keras.ops.logical_not(current_mask_expanded),
+        return audio_encodings * ops.cast(
+            ops.logical_not(current_mask_expanded),
             audio_encodings.dtype,
         ), current_mask
 
@@ -564,17 +583,17 @@ class Gemma3nAudioEncoder(keras.layers.Layer):
                 "sscp_conv_kernel_size": self.sscp_conv_kernel_size,
                 "sscp_conv_stride_size": self.sscp_conv_stride_size,
                 "sscp_conv_group_norm_eps": self.sscp_conv_group_norm_eps,
-                "conf_num_hidden_layers": self.conf_num_hidden_layers,
+                "num_hidden_layers": self.num_hidden_layers,
                 "rms_norm_eps": self.rms_norm_eps,
                 "gradient_clipping": self.gradient_clipping,
-                "conf_residual_weight": self.conf_residual_weight,
-                "conf_num_attention_heads": self.conf_num_attention_heads,
-                "conf_attention_chunk_size": self.conf_attention_chunk_size,
-                "conf_attention_context_right": self.conf_attention_context_right,  # noqa: E501
-                "conf_attention_context_left": self.conf_attention_context_left,
-                "conf_attention_logit_cap": self.conf_attention_logit_cap,
-                "conf_conv_kernel_size": self.conf_conv_kernel_size,
-                "conf_reduction_factor": self.conf_reduction_factor,
+                "residual_weight": self.residual_weight,
+                "num_attention_heads": self.num_attention_heads,
+                "attention_chunk_size": self.attention_chunk_size,
+                "num_attention_context_right": self.num_attention_context_right,  # noqa: E501
+                "num_attention_context_left": self.num_attention_context_left,
+                "attention_logit_cap": self.attention_logit_cap,
+                "conv_kernel_size": self.conv_kernel_size,
+                "reduction_factor": self.reduction_factor,
             }
         )
         return config
