@@ -509,3 +509,16 @@ def target_gather(
         return gather_unbatched(targets, indices, mask, mask_val)
     elif len(targets_shape) == 3:
         return _gather_batched(targets, indices, mask, mask_val)
+
+
+def convert_to_list(inputs):
+    """Converts NumPy array, backend tensor to a list.
+
+    Args:
+        inputs: NumPy array or backend tensor.
+    """
+    if isinstance(inputs, np.ndarray):
+        return inputs.tolist()
+    elif keras.ops.is_tensor(inputs):
+        return keras.ops.convert_to_numpy(inputs).tolist()
+    return inputs

@@ -71,8 +71,9 @@ def convert_head(
     loader,
     timm_config: dict[Any],
 ):
-    convert_conv2d(task.head, loader, "fc1", "pre_logits.fc1")
-    convert_conv2d(task.head, loader, "fc2", "pre_logits.fc2")
+    if task.pooling != "flatten":
+        convert_conv2d(task.head, loader, "fc1", "pre_logits.fc1")
+        convert_conv2d(task.head, loader, "fc2", "pre_logits.fc2")
 
     loader.port_weight(
         task.head.get_layer("predictions").kernel,
