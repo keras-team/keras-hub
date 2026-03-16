@@ -285,7 +285,7 @@ def tf_copy_gfile_to_cache(preset, path):
             # Work around this bug.
             os.remove(local_path)
             if isinstance(
-                e, tf.errors.PermissionDeniedError, tf.errors.NotFoundError
+                e, (tf.errors.PermissionDeniedError, tf.errors.NotFoundError)
             ):
                 raise FileNotFoundError(
                     f"`{path}` doesn't exist in preset directory `{preset}`.",

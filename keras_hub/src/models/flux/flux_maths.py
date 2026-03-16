@@ -56,10 +56,7 @@ class RotaryPositionalEmbedding(keras.layers.Layer):
         scale = ops.arange(0, dim, 2, dtype="float32") / dim
         omega = 1.0 / (theta**scale)
         out = ops.einsum("...n,d->...nd", pos, omega)
-        out = ops.stack(
-            [ops.cos(out), -ops.sin(out), ops.sin(out), ops.cos(out)], axis=-1
-        )
-        out = ops.reshape(out, ops.shape(out)[:-1] + (2, 2))
+        out = ops.stack([ops.cos(out), ops.sin(out)], axis=-1)
         return ops.cast(out, dtype="float32")
 
 
@@ -71,26 +68,43 @@ class ApplyRoPE(keras.layers.Layer):
         xq: KerasTensor. The query tensor of shape (..., L, D).
         xk: KerasTensor. The key tensor of shape (..., L, D).
         freqs_cis: KerasTensor. The frequency complex numbers tensor with shape
-            `(..., 2)`.
+            (..., L, D//2, 2).
 
     Returns:
         tuple[KerasTensor, KerasTensor]: The transformed query and key tensors.
     """
 
     def call(self, xq, xk, freqs_cis):
-        xq_ = ops.reshape(xq, (*ops.shape(xq)[:-1], -1, 1, 2))
-        xk_ = ops.reshape(xk, (*ops.shape(xk)[:-1], -1, 1, 2))
+        # xq, xk shape (..., num_heads, seq_len, D)
+        # freqs_cis shape (..., seq_len, D//2, 2)
+        # Expand freqs_cis to match num_heads dimension
+        freqs_cis = ops.expand_dims(freqs_cis, axis=-4)
+        # Now freqs_cis shape (..., 1, seq_len, D//2, 2)
 
-        xq_out = (
-            freqs_cis[..., 0] * xq_[..., 0] + freqs_cis[..., 1] * xq_[..., 1]
+        xq_ = ops.reshape(xq, (*ops.shape(xq)[:-1], -1, 2))
+        xk_ = ops.reshape(xk, (*ops.shape(xk)[:-1], -1, 2))
+
+        xq_real = xq_[..., 0]
+        xq_imag = xq_[..., 1]
+        xk_real = xk_[..., 0]
+        xk_imag = xk_[..., 1]
+
+        freqs_cos = freqs_cis[..., 0]
+        freqs_sin = freqs_cis[..., 1]
+
+        xq_out_real = xq_real * freqs_cos - xq_imag * freqs_sin
+        xq_out_imag = xq_real * freqs_sin + xq_imag * freqs_cos
+        xk_out_real = xk_real * freqs_cos - xk_imag * freqs_sin
+        xk_out_imag = xk_real * freqs_sin + xk_imag * freqs_cos
+
+        xq_out = ops.reshape(
+            ops.stack([xq_out_real, xq_out_imag], axis=-1), ops.shape(xq)
         )
-        xk_out = (
-            freqs_cis[..., 0] * xk_[..., 0] + freqs_cis[..., 1] * xk_[..., 1]
+        xk_out = ops.reshape(
+            ops.stack([xk_out_real, xk_out_imag], axis=-1), ops.shape(xk)
         )
 
-        return ops.reshape(xq_out, ops.shape(xq)), ops.reshape(
-            xk_out, ops.shape(xk)
-        )
+        return xq_out, xk_out
 
 
 class FluxRoPEAttention(keras.layers.Layer):

@@ -1,4 +1,5 @@
 import numpy as np
+from safetensors import safe_open
 from sentencepiece import SentencePieceProcessor
 
 from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
@@ -37,6 +38,7 @@ def convert_backbone_config(transformers_config):
     else:
         vision_config = transformers_config["vision_config"]
         image_size = vision_config["image_size"]
+        transformer_config = transformers_config["text_config"]
         vision_encoder_config = {
             "image_size": image_size,
             "patch_size": vision_config["patch_size"],
@@ -44,21 +46,57 @@ def convert_backbone_config(transformers_config):
             "hidden_dim": vision_config["hidden_size"],
             "num_layers": vision_config["num_hidden_layers"],
             "intermediate_dim": vision_config["intermediate_size"],
-            "output_dim": 2560,
+            "output_dim": transformer_config["hidden_size"],
             "pool_size": 4,
             "layer_norm_epsilon": vision_config.get("layer_norm_eps", 1e-6),
         }
         vision_encoder = Gemma3VisionEncoder(**vision_encoder_config)
-        transformer_config = transformers_config["text_config"]
 
-    if "rope_parameters" in transformer_config:
-        rope_global_config = transformer_config.get("rope_parameters", {}).get(
-            "full_attention"
-        )
-    elif "rope_scaling" in transformer_config:
-        rope_global_config = transformer_config["rope_scaling"]
+    # Extract rope parameters. HuggingFace uses `rope_scaling` for the
+    # global rotary embedding. `rope_parameters` is optional and not used
+    # by HF for global scaling when `rope_scaling` is None.
+    rope_scaling = transformer_config.get("rope_scaling", None)
+    rope_params = transformer_config.get("rope_parameters") or {}
+
+    if rope_scaling is not None:
+        rope_global_config = rope_scaling or {}
     else:
-        rope_global_config = {}
+        rope_global_config = rope_params.get("full_attention", {})
+
+    rope_local_config = rope_params.get("sliding_attention", {})
+
+    # Determine sliding window attention usage from layer_types or config
+    sliding_window = transformer_config.get("sliding_window", None)
+    layer_types = transformer_config.get("layer_types", [])
+
+    use_sliding_window_attention = sliding_window not in (None, 0) or any(
+        lt == "sliding_attention" for lt in layer_types
+    )
+
+    # Determine query_head_dim_normalize
+    # If query_pre_attn_scalar equals head_dim, then normalize by head_dim
+    query_pre_attn_scalar = transformer_config.get(
+        "query_pre_attn_scalar", None
+    )
+    head_dim = transformer_config.get("head_dim")
+    if query_pre_attn_scalar is not None and head_dim is not None:
+        query_head_dim_normalize = query_pre_attn_scalar == head_dim
+    else:
+        query_head_dim_normalize = True
+
+    # Determine if this is an embedding model based on bidirectional
+    # attention.The embedding model uses bidirectional attention,
+    # while causal models do not.
+    is_embedding_model = transformer_config.get(
+        "use_bidirectional_attention", False
+    )
+    pooling_intermediate_dim = None
+    embedding_dim = None
+
+    if is_embedding_model:
+        embedding_dim = transformer_config["hidden_size"]
+        pooling_intermediate_dim = 3072
+
     return {
         "vocabulary_size": transformer_config.get(
             "vocab_size", 262144 if vision_encoder is None else 262208
@@ -70,38 +108,59 @@ def convert_backbone_config(transformers_config):
         "hidden_dim": transformer_config["hidden_size"],
         "intermediate_dim": transformer_config["intermediate_size"],
         "head_dim": transformer_config["head_dim"],
-        "use_post_ffw_norm": True,
-        "use_post_attention_norm": True,
-        "attention_logit_softcap": transformer_config.get(
-            "attn_logit_softcap", None
+        # Gemma3 models use post-norm and post-attention norm by default
+        "use_post_ffw_norm": transformer_config.get("use_post_ffw_norm", True),
+        "use_post_attention_norm": transformer_config.get(
+            "use_post_attention_norm", True
         ),
-        "final_logit_softcap": transformer_config.get(
-            "final_logit_softcap", None
+        # Handle soft-capping parameters (may be null)
+        "attention_logit_soft_cap": transformer_config.get(
+            "attn_logit_softcapping", None
         ),
-        "use_sliding_window_attention": True,
-        "query_head_dim_normalize": True,
-        "sliding_window_size": transformer_config["sliding_window"],
-        "local_rope_scaling_factor": 1.0,
-        "global_rope_scaling_factor": (
-            rope_global_config.get("factor", 1.0) if rope_global_config else 1.0
+        "final_logit_soft_cap": transformer_config.get(
+            "final_logit_softcapping", None
         ),
+        # Use sliding window attention if configured
+        "use_sliding_window_attention": use_sliding_window_attention,
+        # Normalize query by head_dim if query_pre_attn_scalar == head_dim
+        "query_head_dim_normalize": query_head_dim_normalize,
+        # Sliding window size (default to 1024 for full attention layers)
+        "sliding_window_size": sliding_window or 4096,
+        # Rope scaling factors for local (sliding) and global (full) attention
+        "local_rope_scaling_factor": rope_local_config.get("factor", 1.0),
+        "global_rope_scaling_factor": rope_global_config.get("factor", 1.0),
         "layer_norm_epsilon": transformer_config.get("rms_norm_eps", 1e-6),
         "use_bidirectional_attention": transformer_config.get(
             "use_bidirectional_attention", False
         ),
+        # Gemma3 uses query/key normalization by default
+        "use_query_key_norm": transformer_config.get(
+            "use_query_key_norm", True
+        ),
         "vision_encoder": vision_encoder,
+        # Embedding Gemma configuration
+        "is_embedding_model": is_embedding_model,
+        "pooling_intermediate_dim": pooling_intermediate_dim,
+        "embedding_dim": embedding_dim,
     }
 
 
 def convert_weights(backbone, loader, transformers_config):
     if transformers_config["model_type"] == "gemma3_text":
-        prefix = "model"
+        prefix = _resolve_prefix(loader, ["model", ""])
     else:
-        prefix = "language_model.model"
+        prefix = _resolve_prefix(
+            loader, ["model.language_model", "language_model.model"]
+        )
+
+    def hf_key(suffix):
+        if prefix:
+            return f"{prefix}.{suffix}"
+        return suffix
 
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
-        hf_weight_key=f"{prefix}.embed_tokens.weight",
+        hf_weight_key=hf_key("embed_tokens.weight"),
     )
 
     def transpose(x, shape):
@@ -231,19 +290,23 @@ def convert_weights(backbone, loader, transformers_config):
 
         loader.port_weight(
             keras_variable=decoder_layer.pre_attention_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.input_layernorm.weight",
+            hf_weight_key=hf_key(f"layers.{i}.input_layernorm.weight"),
         )
         loader.port_weight(
             keras_variable=decoder_layer.post_attention_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.post_attention_layernorm.weight",
+            hf_weight_key=hf_key(f"layers.{i}.post_attention_layernorm.weight"),
         )
         loader.port_weight(
             keras_variable=decoder_layer.pre_ffw_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.pre_feedforward_layernorm.weight",
+            hf_weight_key=hf_key(
+                f"layers.{i}.pre_feedforward_layernorm.weight"
+            ),
         )
         loader.port_weight(
             keras_variable=decoder_layer.post_ffw_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.post_feedforward_layernorm.weight",
+            hf_weight_key=hf_key(
+                f"layers.{i}.post_feedforward_layernorm.weight"
+            ),
         )
 
         # Attention layers
@@ -251,7 +314,7 @@ def convert_weights(backbone, loader, transformers_config):
         ## Query
         loader.port_weight(
             keras_variable=decoder_layer.attention.query_dense.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.q_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.q_proj.weight"),
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
                 np.reshape(
                     hf_tensor,
@@ -262,12 +325,12 @@ def convert_weights(backbone, loader, transformers_config):
         )
         loader.port_weight(
             keras_variable=decoder_layer.attention.query_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.q_norm.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.q_norm.weight"),
         )
         ## Key
         loader.port_weight(
             keras_variable=decoder_layer.attention.key_dense.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.k_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.k_proj.weight"),
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
                 np.reshape(
                     hf_tensor,
@@ -278,12 +341,12 @@ def convert_weights(backbone, loader, transformers_config):
         )
         loader.port_weight(
             keras_variable=decoder_layer.attention.key_norm.scale,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.k_norm.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.k_norm.weight"),
         )
         ## Value
         loader.port_weight(
             keras_variable=decoder_layer.attention.value_dense.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.v_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.v_proj.weight"),
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
                 np.reshape(
                     hf_tensor,
@@ -295,7 +358,7 @@ def convert_weights(backbone, loader, transformers_config):
         ## Output
         loader.port_weight(
             keras_variable=decoder_layer.attention.output_dense.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.self_attn.o_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.self_attn.o_proj.weight"),
             # rearrange_patterns="c (a b) -> a b c",
             # rearrange_dims={"a": backbone.num_query_heads},
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
@@ -310,19 +373,19 @@ def convert_weights(backbone, loader, transformers_config):
         # MLP layers
         loader.port_weight(
             keras_variable=decoder_layer.gating_ffw.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.mlp.gate_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.mlp.gate_proj.weight"),
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=decoder_layer.gating_ffw_2.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.mlp.up_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.mlp.up_proj.weight"),
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=decoder_layer.ffw_linear.kernel,
-            hf_weight_key=f"{prefix}.layers.{i}.mlp.down_proj.weight",
+            hf_weight_key=hf_key(f"layers.{i}.mlp.down_proj.weight"),
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
@@ -330,10 +393,63 @@ def convert_weights(backbone, loader, transformers_config):
     # Final normalization layer
     loader.port_weight(
         keras_variable=backbone.get_layer("final_normalization").scale,
-        hf_weight_key=f"{prefix}.norm.weight",
+        hf_weight_key=hf_key("norm.weight"),
     )
 
+    if backbone.is_embedding_model:
+        # For the embedding model, we need to load weights from the
+        # pooling and projection layers which are stored in separate files
+        # in the HF repo (2_Dense and 3_Dense folders).
+        # We use a trick here: we know `loader` has a `preset` attribute,
+        # so we can use `get_file` to download/locate these specific files.
+        try:
+
+            def load_dense_weights(folder):
+                filename = f"{folder}/model.safetensors"
+                path = get_file(loader.preset, filename)
+                weights = {}
+                with safe_open(path, framework="np", device="cpu") as f:
+                    for key in f.keys():
+                        weights[key] = f.get_tensor(key)
+                return weights
+
+            # Dense 1 (pooling_dense_1)
+            dense1_weights = load_dense_weights("2_Dense")
+            if "linear.weight" in dense1_weights:
+                keras_model_layer = backbone.get_layer("pooling_dense_1")
+                keras_model_layer.kernel.assign(
+                    np.transpose(dense1_weights["linear.weight"])
+                )
+
+            # Dense 2 (embedding_projection)
+            dense2_weights = load_dense_weights("3_Dense")
+            if "linear.weight" in dense2_weights:
+                keras_model_layer = backbone.get_layer("embedding_projection")
+                keras_model_layer.kernel.assign(
+                    np.transpose(dense2_weights["linear.weight"])
+                )
+
+        except Exception as e:
+            print(
+                f"Warning: Failed to load embedding model weights: {e}. "
+                "The model will potentially yield incorrect embeddings."
+            )
+
     return backbone
+
+
+def _resolve_prefix(loader, candidates):
+    for candidate in candidates:
+        if candidate:
+            key = f"{candidate}.embed_tokens.weight"
+        else:
+            key = "embed_tokens.weight"
+        try:
+            loader.get_tensor(key)
+            return candidate
+        except Exception:
+            continue
+    return candidates[0]
 
 
 def convert_tokenizer(cls, preset, **kwargs):

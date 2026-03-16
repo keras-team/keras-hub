@@ -1,5 +1,7 @@
 """Convert huggingface models to KerasHub."""
 
+import inspect
+
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.preset_utils import jax_memory_cleanup
@@ -16,6 +18,7 @@ from keras_hub.src.utils.transformers import convert_gemma3
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
+from keras_hub.src.utils.transformers import convert_metaclip_2
 from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_pali_gemma
@@ -23,6 +26,7 @@ from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
+from keras_hub.src.utils.transformers import convert_sam3
 from keras_hub.src.utils.transformers import convert_smollm3
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_vit
@@ -60,6 +64,8 @@ class TransformersPresetLoader(PresetLoader):
         elif model_type == "llama":
             # TODO: handle other llama versions.
             self.converter = convert_llama3
+        elif model_type == "metaclip_2":
+            self.converter = convert_metaclip_2
         elif model_type == "mistral":
             self.converter = convert_mistral
         elif model_type == "paligemma":
@@ -76,6 +82,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen3_moe
         elif model_type == "qwen3":
             self.converter = convert_qwen3
+        elif model_type == "sam3_video":
+            self.converter = convert_sam3
         elif model_type == "smollm3":
             self.converter = convert_smollm3
         elif model_type == "t5gemma":
@@ -90,7 +98,16 @@ class TransformersPresetLoader(PresetLoader):
         return self.converter.backbone_cls
 
     def load_backbone(self, cls, load_weights, **kwargs):
-        keras_config = self.converter.convert_backbone_config(self.config)
+        convert_backbone_config_param_len = len(
+            inspect.signature(self.converter.convert_backbone_config).parameters
+        )
+        if convert_backbone_config_param_len != 1:
+            backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
+            keras_config = self.converter.convert_backbone_config(
+                self.config, cls, **backbone_kwargs
+            )
+        else:
+            keras_config = self.converter.convert_backbone_config(self.config)
         backbone = cls(**{**keras_config, **kwargs})
         if load_weights:
             jax_memory_cleanup(backbone)

@@ -361,7 +361,7 @@ class Task(PipelineModel):
 
             # Output captured summary for non-interactive logging.
             if print_fn:
-                print_fn(console.end_capture(), line_break=False)
+                print_fn(console.end_capture().rstrip("\n"))
 
         super().summary(
             line_length=line_length,
