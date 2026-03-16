@@ -121,6 +121,30 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
             run_quantization_check=False,
         )
 
+    def test_embedding_model(self):
+        embedding_dim = 16
+        pooling_intermediate_dim = 32
+        init_kwargs = self.text_init_kwargs.copy()
+        input_data = self.text_backbone_input_data.copy()
+
+        init_kwargs["is_embedding_model"] = True
+        init_kwargs["embedding_dim"] = embedding_dim
+        init_kwargs["pooling_intermediate_dim"] = pooling_intermediate_dim
+
+        self.run_backbone_test(
+            cls=Gemma3Backbone,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+            expected_output_shape={
+                "sequence_output": (
+                    self.batch_size,
+                    self.text_sequence_length,
+                    8,
+                ),
+                "pooled_output": (self.batch_size, embedding_dim),
+            },
+        )
+
     @parameterized.named_parameters(
         ("text_and_vision", "text_and_vision", 7560, 15),
         ("text_only", "text_only", 5752, 10),

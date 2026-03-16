@@ -33,7 +33,7 @@ class BertBackbone(Backbone):
         vocabulary_size: int. The size of the token vocabulary.
         num_layers: int. The number of transformer layers.
         num_heads: int. The number of attention heads for each transformer.
-            The hidden size must be divisible by the number of attention heads.
+            The hidden_dim must be divisible by the number of attention heads.
         hidden_dim: int. The size of the transformer encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.

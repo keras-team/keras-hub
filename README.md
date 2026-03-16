@@ -1,6 +1,7 @@
 # KerasHub: Multi-framework Pretrained Models
 [![](https://github.com/keras-team/keras-hub/workflows/Tests/badge.svg?branch=master)](https://github.com/keras-team/keras-hub/actions?query=workflow%3ATests+branch%3Amaster)
 ![Python](https://img.shields.io/badge/python-v3.11.0+-success.svg)
+[![Kaggle Models](https://img.shields.io/badge/Kaggle-Models-brightgreen?colorA=0099ff)](https://www.kaggle.com/organizations/keras/models)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-hub/issues)
 
 > [!IMPORTANT]
@@ -10,7 +11,7 @@
 **KerasHub** is a pretrained modeling library that aims to be simple, flexible,
 and fast. The library provides [Keras 3](https://keras.io/keras_3/)
 implementations of popular model architectures, paired with a collection of
-pretrained checkpoints available on [Kaggle Models](https://kaggle.com/models/).
+pretrained checkpoints available on [Kaggle Models](https://www.kaggle.com/organizations/keras/models).
 Models can be used with text, image, and audio data for generation, classification,
 and many other built in tasks.
 
@@ -100,13 +101,6 @@ To install the latest KerasHub release with Keras 3, simply run:
 
 ```
 pip install --upgrade keras-hub
-```
-
-Our text tokenizers are based on TensorFlow Text. Hence, if you are using any
-model which has language as a modality, you will have to run:
-
-```
-pip install --upgrade keras-hub[nlp]
 ```
 
 To install the latest nightly changes for both KerasHub and Keras, you can use

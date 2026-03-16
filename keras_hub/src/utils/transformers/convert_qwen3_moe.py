@@ -198,7 +198,10 @@ def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_config = load_json(preset, "tokenizer.json")
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
-    merges = [" ".join(item) for item in merges]
+    # Check if merges are already strings or lists
+    # If they are lists, join them into strings.
+    if merges and isinstance(merges[0], list):
+        merges = [" ".join(item) for item in merges]
 
     # Load all special tokens with the exception of "reserved" ones.
     special_tokens = set()

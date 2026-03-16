@@ -27,6 +27,13 @@ from keras_hub.src.utils.transformers.export.gemma3 import (
     get_gemma3_weights_map,
 )
 
+# --- GPT2 Utils ---
+from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_config
+from keras_hub.src.utils.transformers.export.gpt2 import (
+    get_gpt2_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_weights_map
+
 # --- Qwen Utils ---
 from keras_hub.src.utils.transformers.export.qwen import get_qwen_config
 from keras_hub.src.utils.transformers.export.qwen import (
@@ -38,18 +45,21 @@ MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
     "Gemma3Backbone": get_gemma3_config,
     "QwenBackbone": get_qwen_config,
+    "GPT2Backbone": get_gpt2_config,
 }
 
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
     "Gemma3Backbone": get_gemma3_weights_map,
     "QwenBackbone": get_qwen_weights_map,
+    "GPT2Backbone": get_gpt2_weights_map,
 }
 
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
     "Gemma3Tokenizer": get_gemma3_tokenizer_config,
     "QwenTokenizer": get_qwen_tokenizer_config,
+    "GPT2Tokenizer": get_gpt2_tokenizer_config,
 }
 
 
@@ -71,9 +81,11 @@ def export_backbone(backbone, path, include_lm_head=False):
         raise ValueError(
             f"Export to Transformers format not implemented for {model_type}"
         )
+
     # Get config
     get_config_fn = MODEL_CONFIGS[model_type]
     hf_config = get_config_fn(backbone)
+
     # Get weights
     get_weights_fn = MODEL_EXPORTERS[model_type]
     weights_dict = get_weights_fn(backbone, include_lm_head=include_lm_head)
@@ -94,11 +106,27 @@ def export_backbone(backbone, path, include_lm_head=False):
     # Save weights based on backend
     weights_path = os.path.join(path, "model.safetensors")
     if backend == "torch":
-        # Lazy import to prevent crash on TF-only environments
-        import torch
-        from safetensors.torch import save_file
+        import struct
 
-        weights_dict_torch = {}
+        import torch
+        from safetensors.torch import _SIZE
+
+        _DTYPE_MAP = {
+            "float32": "F32",
+            "bfloat16": "BF16",
+            "float16": "F16",
+            "int64": "I64",
+            "int32": "I32",
+            "int16": "I16",
+            "int8": "I8",
+            "uint8": "U8",
+            "bool": "BOOL",
+            "float64": "F64",
+        }
+
+        # Pass 1: generate metadata
+        header = {"__metadata__": {"format": "pt"}}
+        offset = 0
         for k, v in weights_dict.items():
             tensor = v.value if hasattr(v, "value") else v
 
@@ -111,22 +139,47 @@ def export_backbone(backbone, path, include_lm_head=False):
             else:
                 t = tensor
 
-            if hasattr(t, "contiguous"):
-                t = t.contiguous()
+            dtype_str = str(t.dtype).split(".")[-1]
+            dtype_mapped = _DTYPE_MAP.get(dtype_str, "F32")
 
-            weights_dict_torch[k] = t
+            shape = list(t.shape)
+            byte_size = t.nelement() * _SIZE[t.dtype]
 
-        # Handle Tied Weights
-        if (
-            "lm_head.weight" in weights_dict_torch
-            and "model.embed_tokens.weight" in weights_dict_torch
-        ):
-            wte = weights_dict_torch["model.embed_tokens.weight"]
-            lm = weights_dict_torch["lm_head.weight"]
-            if wte.data_ptr() == lm.data_ptr():
-                weights_dict_torch["lm_head.weight"] = lm.clone().contiguous()
+            header[k] = {
+                "dtype": dtype_mapped,
+                "shape": shape,
+                "data_offsets": [offset, offset + byte_size],
+            }
+            offset += byte_size
 
-        save_file(weights_dict_torch, weights_path, metadata={"format": "pt"})
+        header_json = json.dumps(header, separators=(",", ":")).encode("utf-8")
+        pad_len = (8 - len(header_json) % 8) % 8
+        header_json += b" " * pad_len
+        header_len = len(header_json)
+
+        # Pass 2: write data streamingly
+        # Handles model writing one tensor at a time, avoiding OOMs
+        with open(weights_path, "wb") as f:
+            f.write(struct.pack("<Q", header_len))
+            f.write(header_json)
+
+            for k, v in weights_dict.items():
+                tensor = v.value if hasattr(v, "value") else v
+
+                if isinstance(tensor, torch.Tensor):
+                    t = tensor.detach().to("cpu")
+                elif hasattr(tensor, "numpy"):
+                    t = torch.tensor(tensor.numpy())
+                elif hasattr(tensor, "__array__"):
+                    t = torch.tensor(tensor)
+                else:
+                    t = tensor
+
+                if hasattr(t, "contiguous"):
+                    t = t.contiguous()
+
+                b = t.view(torch.uint8).numpy().tobytes()
+                f.write(b)
 
     elif backend == "tensorflow":
         from safetensors.tensorflow import save_file
@@ -148,15 +201,15 @@ def export_tokenizer(tokenizer, path):
         path: str. Path to save the exported tokenizer.
     """
     os.makedirs(path, exist_ok=True)
-    # Save tokenizer assets
     tokenizer.save_assets(path)
-    # Export tokenizer config
+
     tokenizer_type = tokenizer.__class__.__name__
     if tokenizer_type not in MODEL_TOKENIZER_CONFIGS:
         raise ValueError(
             f"Export to Transformers format not implemented for \
                 {tokenizer_type}"
         )
+
     get_tokenizer_config_fn = MODEL_TOKENIZER_CONFIGS[tokenizer_type]
     tokenizer_config = get_tokenizer_config_fn(tokenizer)
     tokenizer_config_path = os.path.join(path, "tokenizer_config.json")
@@ -179,14 +232,16 @@ def export_tokenizer(tokenizer, path):
                 "in the original model."
             )
 
-    # 2. BPE Models (Qwen)
-    elif tokenizer_type == "QwenTokenizer":
+    # 2. BPE Models (Qwen / GPT-2)
+    elif tokenizer_type in ["QwenTokenizer", "GPT2Tokenizer"]:
         vocab_json_path = os.path.join(path, "vocabulary.json")
         vocab_hf_path = os.path.join(path, "vocab.json")
         if os.path.exists(vocab_json_path):
             shutil.move(vocab_json_path, vocab_hf_path)
         else:
-            warnings.warn(f"{vocab_json_path} not found.")
+            warnings.warn(
+                f"{vocab_json_path} not found.Tokenizer may not load correctly."
+            )
 
     # Generate tokenizer.json for models that need it
     if tokenizer_type == "Gemma3Tokenizer":
@@ -272,9 +327,6 @@ def export_to_safetensors(keras_model, path):
         keras_model.preprocessor is not None
         and keras_model.preprocessor.tokenizer is None
     ):
-        raise ValueError(
-            "CausalLM preprocessor must have a tokenizer for export "
-            "if attached."
-        )
+        raise ValueError("CausalLM preprocessor must have a tokenizer.")
     if keras_model.preprocessor is not None:
         export_tokenizer(keras_model.preprocessor.tokenizer, path)
