@@ -16,7 +16,6 @@ def get_gemma3_config(backbone):
 
     # Extract rope_theta from a full attention layer
     # Full attention layers use the base rope_wavelength (1M for Gemma3)
-    # Find the first full attention layer (where i % 6 == 5 or any non-sliding layer)
     rope_theta = 1000000.0  # Default for Gemma3
     for i in range(backbone.num_layers):
         layer = backbone.get_layer(f"decoder_block_{i}")
