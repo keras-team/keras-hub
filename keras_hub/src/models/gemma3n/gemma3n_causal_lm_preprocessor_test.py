@@ -63,6 +63,21 @@ class Gemma3nCausalLMPreprocessorTest(TestCase):
         self.audio_converter = Gemma3nAudioConverter(
             feature_size=16,
             sampling_rate=16000,
+            padding_value=0.0,
+            return_attention_mask=True,
+            frame_length_ms=32.0,
+            hop_length_ms=10.0,
+            min_frequency=125.0,
+            max_frequency=7600.0,
+            preemphasis=0.97,
+            preemphasis_htk_flavor=True,
+            fft_overdrive=True,
+            dither=0.0,
+            input_scale_factor=1.0,
+            mel_floor=1e-5,
+            per_bin_mean=None,
+            per_bin_stddev=None,
+            padding_side="right",
         )
         self.init_audio_kwargs = {
             "tokenizer": self.tokenizer,

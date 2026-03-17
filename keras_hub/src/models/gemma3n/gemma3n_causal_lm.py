@@ -262,13 +262,11 @@ class Gemma3nCausalLM(CausalLM):
         # Create causal attention mask.
         if padding_mask is None:
             padding_mask = ops.ones((batch_size, max_length), dtype="bool")
-        attention_mask = ops.cast(padding_mask, dtype="bool")
-        attention_mask = ops.expand_dims(attention_mask, axis=1)
-        attention_mask = ops.expand_dims(attention_mask, axis=1)
+        padding_mask = ops.cast(padding_mask, dtype="bool")
         # Each decoder layer has a cache; we update them separately.
         hidden_states, new_cache = self.backbone.language_model(
             input_ids=token_ids,
-            attention_mask=attention_mask,
+            padding_mask=padding_mask,
             inputs_embeds=inputs_embeds,
             per_layer_inputs=per_layer_inputs,
             cache=cache,
@@ -347,6 +345,10 @@ class Gemma3nCausalLM(CausalLM):
         vision_mask = inputs.get("vision_mask", None)
         audio_mask = inputs.get("audio_mask", None)
         # Handle unbatched inputs by adding batch dimension.
+        if len(ops.shape(token_ids)) == 1:
+            token_ids = ops.expand_dims(token_ids, axis=0)
+        if len(ops.shape(padding_mask)) == 1:
+            padding_mask = ops.expand_dims(padding_mask, axis=0)
         if pixel_values is not None and len(ops.shape(pixel_values)) == 4:
             pixel_values = ops.expand_dims(pixel_values, axis=0)
         if vision_mask is not None and len(ops.shape(vision_mask)) == 1:

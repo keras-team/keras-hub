@@ -307,7 +307,7 @@ class Gemma3nTextModel(keras.layers.Layer):
     def call(
         self,
         input_ids,
-        attention_mask,
+        padding_mask,
         inputs_embeds,
         per_layer_inputs,
         cache=None,
@@ -352,7 +352,7 @@ class Gemma3nTextModel(keras.layers.Layer):
                     (
                         hidden_states,
                         per_layer_input,
-                        attention_mask,
+                        padding_mask,
                     ),
                     cache=current_cache,
                     cache_update_index=cache_update_index,
@@ -378,7 +378,7 @@ class Gemma3nTextModel(keras.layers.Layer):
                     (
                         hidden_states,
                         per_layer_input,
-                        attention_mask,
+                        padding_mask,
                     ),
                     cache=current_cache,
                 )

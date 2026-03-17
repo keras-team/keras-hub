@@ -1,9 +1,11 @@
 import math
 
-import keras
 import numpy as np
-from keras import ops
 
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.models.gemma3n.gemma3n_backbone import Gemma3nBackbone
@@ -162,16 +164,13 @@ class Gemma3nAudioConverter(AudioConverter):
         self.per_bin_stddev = per_bin_stddev
         self.frame_length = int(round(sampling_rate * frame_length_ms / 1000.0))
         self.hop_length = int(round(sampling_rate * hop_length_ms / 1000.0))
-        self.mel_floor = ops.convert_to_tensor(
-            mel_floor, dtype=self.compute_dtype
-        )
         fft_length = 2 ** math.ceil(math.log2(self.frame_length))
         if self.fft_overdrive:
             fft_length *= 2
         self.fft_length = fft_length
-        hann_arange = ops.arange(self.frame_length, dtype=self.compute_dtype)
+        hann_arange = tf.range(self.frame_length, dtype=self.compute_dtype)
         self.window = 0.5 * (
-            1 - ops.cos(2 * np.pi * hann_arange / self.frame_length)
+            1 - tf.cos(2 * np.pi * hann_arange / self.frame_length)
         )
         self.mel_filters = self._create_filterbank_matrix(
             n_freqs=self.fft_length // 2 + 1,
@@ -181,27 +180,9 @@ class Gemma3nAudioConverter(AudioConverter):
             sample_rate=self.sampling_rate,
             fft_length=fft_length,
         )
-        if per_bin_mean is not None:
-            self.per_bin_mean = ops.reshape(
-                ops.convert_to_tensor(per_bin_mean, dtype=self.compute_dtype),
-                (1, 1, feature_size),
-            )
-        else:
-            self.per_bin_mean = None
-        if per_bin_stddev is not None:
-            self.per_bin_stddev = ops.reshape(
-                ops.convert_to_tensor(per_bin_stddev, dtype=self.compute_dtype),
-                (1, 1, feature_size),
-            )
-        else:
-            self.per_bin_stddev = None
         self._convert_input_args = False
         self._allow_non_tensor_positional_args = True
         self.built = True
-
-    def audio_shape(self):
-        """Returns the preprocessed size of a single audio sample."""
-        return (None, self.feature_size)
 
     def _create_filterbank_matrix(
         self,
@@ -212,27 +193,27 @@ class Gemma3nAudioConverter(AudioConverter):
         sample_rate,
         fft_length,
     ):
-        all_freqs = ops.cast(ops.arange(n_freqs), dtype=self.compute_dtype) * (
+        all_freqs = tf.cast(tf.range(n_freqs), dtype=self.compute_dtype) * (
             sample_rate / fft_length
         )
         m_min = 2595.0 * math.log10(1.0 + (f_min / 700.0))
         m_max = 2595.0 * math.log10(1.0 + (f_max / 700.0))
         m_pts = np.linspace(m_min, m_max, n_mels + 2, dtype=np.float32)
         f_pts = 700.0 * (10 ** (m_pts / 2595.0) - 1.0)
-        f_pts = ops.convert_to_tensor(f_pts, dtype=self.compute_dtype)
+        f_pts = tf.constant(f_pts, dtype=self.compute_dtype)
         f_diff = f_pts[1:] - f_pts[:-1]
-        slopes = ops.expand_dims(f_pts, 0) - ops.expand_dims(all_freqs, 1)
-        zero = ops.zeros(1, dtype=self.compute_dtype)
+        slopes = tf.expand_dims(f_pts, 0) - tf.expand_dims(all_freqs, 1)
+        zero = tf.zeros(1, dtype=self.compute_dtype)
         down_slopes = (-1.0 * slopes[:, :-2]) / f_diff[:-1]
         up_slopes = slopes[:, 2:] / f_diff[1:]
-        fb = ops.maximum(zero, ops.minimum(down_slopes, up_slopes))
-        return ops.convert_to_tensor(fb, dtype=self.compute_dtype)
+        fb = tf.maximum(zero, tf.minimum(down_slopes, up_slopes))
+        return tf.constant(fb, dtype=self.compute_dtype)
 
     def _extract_spectrogram(self, waveform, attention_mask):
-        waveform = ops.cast(waveform, dtype=self.compute_dtype)
+        waveform = tf.cast(waveform, dtype=self.compute_dtype)
         if self.dither > 0.0:
-            waveform = waveform + self.dither * keras.random.normal(
-                ops.shape(waveform), dtype=waveform.dtype
+            waveform = waveform + self.dither * tf.random.normal(
+                tf.shape(waveform), dtype=waveform.dtype
             )
         if self.input_scale_factor != 1.0:
             waveform = waveform * self.input_scale_factor
@@ -242,54 +223,219 @@ class Gemma3nAudioConverter(AudioConverter):
                 rest_of_samples = (
                     waveform[:, 1:] - self.preemphasis * waveform[:, :-1]
                 )
-                waveform = ops.concatenate(
-                    [first_sample, rest_of_samples], axis=-1
-                )
+                waveform = tf.concat([first_sample, rest_of_samples], axis=-1)
             else:
-                waveform = ops.concatenate(
+                waveform = tf.concat(
                     [
                         waveform[:, :1],
                         waveform[:, 1:] - self.preemphasis * waveform[:, :-1],
                     ],
                     axis=-1,
                 )
-
-        # Manual framing to replace tf.signal.frame
-        waveform_length = ops.shape(waveform)[1]
-        num_frames = (
-            waveform_length - self.frame_length
-        ) // self.hop_length + 1
-
-        # Create frame indices
-        frame_starts = ops.arange(num_frames) * self.hop_length
-        frame_indices = ops.expand_dims(frame_starts, axis=-1) + ops.arange(
-            self.frame_length
+        frames = tf.signal.frame(
+            waveform,
+            frame_length=self.frame_length,
+            frame_step=self.hop_length,
+            pad_end=False,
         )
-
-        # Gather frames
-        frames = ops.take(waveform, frame_indices, axis=1)
-
-        # Apply window
         frames = frames * self.window
-
-        # Pad frames for FFT
         pad_length = self.fft_length - self.frame_length
         paddings = [[0, 0], [0, 0], [0, pad_length]]
-        frames = ops.pad(frames, paddings)
-
-        # Compute RFFT
-        real_part, imag_part = ops.rfft(frames, fft_length=self.fft_length)
-        magnitude_spec = ops.sqrt(real_part**2 + imag_part**2)
-
-        mel_spec = ops.matmul(magnitude_spec, self.mel_filters)
-        log_mel_spec = ops.log(ops.maximum(mel_spec, self.mel_floor))
+        frames = tf.pad(frames, paddings)
+        stft = tf.signal.rfft(frames)
+        magnitude_spec = tf.abs(stft)
+        mel_spec = tf.matmul(magnitude_spec, self.mel_filters)
+        mel_floor_tensor = tf.constant(self.mel_floor, dtype=self.compute_dtype)
+        log_mel_spec = tf.math.log(tf.maximum(mel_spec, mel_floor_tensor))
         if self.per_bin_mean is not None:
-            log_mel_spec = log_mel_spec - self.per_bin_mean
+            per_bin_mean_tensor = tf.constant(
+                self.per_bin_mean,
+                shape=(1, 1, self.feature_size),
+                dtype=self.compute_dtype,
+            )
+            log_mel_spec = log_mel_spec - per_bin_mean_tensor
         if self.per_bin_stddev is not None:
-            log_mel_spec = log_mel_spec / self.per_bin_stddev
-        mel_spectrogram = ops.squeeze(log_mel_spec, axis=0)
-        mask = ops.cast(attention_mask[:: self.hop_length], dtype="bool")
-        return mel_spectrogram, mask[: ops.shape(mel_spectrogram)[0]]
+            per_bin_stddev_tensor = tf.constant(
+                self.per_bin_stddev,
+                shape=(1, 1, self.feature_size),
+                dtype=self.compute_dtype,
+            )
+            log_mel_spec = log_mel_spec / per_bin_stddev_tensor
+        mel_spectrogram = tf.squeeze(log_mel_spec, axis=0)
+        mask = tf.cast(attention_mask[:: self.hop_length], dtype=tf.bool)
+        return mel_spectrogram, mask[: tf.shape(mel_spectrogram)[0]]
+
+    def _get_padding_strategies(self, padding=False, max_length=None):
+        if padding is not False:
+            if padding is True:
+                padding_strategy = "longest"
+            else:
+                padding_strategy = padding
+        else:
+            padding_strategy = "do_not_pad"
+        if max_length is None:
+            if padding_strategy == "max_length":
+                raise ValueError(
+                    "When setting padding='max_length', max_length must be "
+                    "defined"
+                )
+        if padding_strategy != "do_not_pad" and (self.padding_value is None):
+            raise ValueError("Padding requested but no padding_value defined")
+        return padding_strategy
+
+    def _pad(
+        self,
+        input_features,
+        attention_mask=None,
+        max_length=None,
+        padding_strategy="do_not_pad",
+        pad_to_multiple_of=None,
+        return_attention_mask=None,
+    ):
+        required_input = input_features
+        if padding_strategy == "longest":
+            max_length = len(required_input)
+        if (
+            max_length is not None
+            and pad_to_multiple_of is not None
+            and (max_length % pad_to_multiple_of != 0)
+        ):
+            max_length = (
+                (max_length // pad_to_multiple_of) + 1
+            ) * pad_to_multiple_of
+        needs_to_be_padded = (
+            padding_strategy != "do_not_pad"
+            and len(required_input) < max_length
+        )
+        if return_attention_mask and attention_mask is None:
+            attention_mask = np.ones(len(required_input), dtype=np.int32)
+        if needs_to_be_padded:
+            difference = max_length - len(required_input)
+            if self.padding_side == "right":
+                if return_attention_mask:
+                    attention_mask = np.pad(attention_mask, (0, difference))
+                if required_input.ndim > 1:
+                    padding_shape = ((0, difference), (0, 0))
+                else:
+                    padding_shape = ((0, difference),)
+                input_features = np.pad(
+                    required_input,
+                    padding_shape,
+                    "constant",
+                    constant_values=self.padding_value,
+                )
+            elif self.padding_side == "left":
+                if return_attention_mask:
+                    attention_mask = np.pad(attention_mask, (difference, 0))
+                if required_input.ndim > 1:
+                    padding_shape = ((difference, 0), (0, 0))
+                else:
+                    padding_shape = ((difference, 0),)
+                input_features = np.pad(
+                    required_input,
+                    padding_shape,
+                    "constant",
+                    constant_values=self.padding_value,
+                )
+        return input_features, attention_mask
+
+    def _truncate(
+        self,
+        input_features,
+        attention_mask=None,
+        max_length=None,
+        pad_to_multiple_of=None,
+        truncation=None,
+    ):
+        if not truncation:
+            return input_features, attention_mask
+        elif truncation and max_length is None:
+            raise ValueError(
+                "When setting truncation=True, max_length must be defined"
+            )
+        required_input = input_features
+        if (
+            max_length is not None
+            and pad_to_multiple_of is not None
+            and (max_length % pad_to_multiple_of != 0)
+        ):
+            max_length = (
+                (max_length // pad_to_multiple_of) + 1
+            ) * pad_to_multiple_of
+        needs_to_be_truncated = len(required_input) > max_length
+        if needs_to_be_truncated:
+            input_features = input_features[:max_length]
+            if attention_mask is not None:
+                attention_mask = attention_mask[:max_length]
+        return input_features, attention_mask
+
+    def pad(
+        self,
+        input_features,
+        padding=True,
+        max_length=None,
+        truncation=False,
+        pad_to_multiple_of=None,
+        return_attention_mask=None,
+    ):
+        required_input = input_features
+        return_attention_mask = (
+            return_attention_mask
+            if return_attention_mask is not None
+            else self.return_attention_mask
+        )
+        if len(required_input) == 0:
+            return [], [] if return_attention_mask else None
+        required_input = [np.asarray(v) for v in required_input]
+        padding_strategy = self._get_padding_strategies(
+            padding=padding, max_length=max_length
+        )
+        batch_size = len(required_input)
+        truncated_inputs = []
+        truncated_masks = []
+        for i in range(batch_size):
+            inputs = required_input[i]
+            mask = (
+                np.ones(len(inputs), dtype=np.int32)
+                if return_attention_mask
+                else None
+            )
+            inputs_slice, mask_slice = self._truncate(
+                inputs,
+                attention_mask=mask,
+                max_length=max_length,
+                pad_to_multiple_of=pad_to_multiple_of,
+                truncation=truncation,
+            )
+            truncated_inputs.append(inputs_slice)
+            if mask_slice is not None:
+                truncated_masks.append(mask_slice)
+        if padding_strategy == "longest":
+            max_length = max(
+                len(input_slice) for input_slice in truncated_inputs
+            )
+            padding_strategy = "max_length"
+        batch_outputs_features = []
+        batch_outputs_masks = []
+        for i in range(batch_size):
+            inputs = truncated_inputs[i]
+            mask = truncated_masks[i] if return_attention_mask else None
+            outputs_features, outputs_mask = self._pad(
+                inputs,
+                attention_mask=mask,
+                max_length=max_length,
+                padding_strategy=padding_strategy,
+                pad_to_multiple_of=pad_to_multiple_of,
+                return_attention_mask=return_attention_mask,
+            )
+            if outputs_features.dtype == np.dtype(np.float64):
+                outputs_features = outputs_features.astype(np.float32)
+            batch_outputs_features.append(outputs_features)
+            if outputs_mask is not None:
+                batch_outputs_masks.append(outputs_mask)
+        if not return_attention_mask:
+            return batch_outputs_features, None
+        return batch_outputs_features, batch_outputs_masks
 
     def call(
         self,
@@ -300,159 +446,59 @@ class Gemma3nAudioConverter(AudioConverter):
         pad_to_multiple_of=128,
         return_attention_mask=True,
     ):
-        # Convert input to tensor and determine if batched
-        if not ops.is_tensor(raw_speech):
-            if isinstance(raw_speech, (list, tuple)):
-                # Check if it's a list of sequences (batched) or single sequence
-                if len(raw_speech) > 0 and isinstance(
-                    raw_speech[0], (list, np.ndarray)
-                ):
-                    # Batched: list of sequences
-                    was_batched = True
-                    # Convert each to tensor and find max length for padding
-                    tensors = [
-                        ops.reshape(
-                            ops.convert_to_tensor(s, dtype=self.compute_dtype),
-                            [-1],
-                        )
-                        for s in raw_speech
-                    ]
-                    lengths = [ops.shape(t)[0] for t in tensors]
-
-                    if padding == "longest" or padding is True:
-                        max_length = max(lengths)
-                        if pad_to_multiple_of is not None:
-                            remainder = max_length % pad_to_multiple_of
-                            if remainder != 0:
-                                max_length = max_length + (
-                                    pad_to_multiple_of - remainder
-                                )
-
-                    # Truncate and pad each tensor
-                    padded_tensors = []
-                    masks = []
-                    for t, orig_len in zip(tensors, lengths):
-                        # Truncate
-                        if truncation and max_length is not None:
-                            t = t[:max_length]
-                            orig_len = min(orig_len, max_length)
-
-                        # Pad
-                        if max_length is not None:
-                            current_len = ops.shape(t)[0]
-                            pad_amount = max_length - current_len
-                            if self.padding_side == "right":
-                                t = ops.pad(
-                                    t,
-                                    [[0, pad_amount]],
-                                    constant_values=self.padding_value,
-                                )
-                            else:
-                                t = ops.pad(
-                                    t,
-                                    [[pad_amount, 0]],
-                                    constant_values=self.padding_value,
-                                )
-
-                        # Create mask
-                        final_len = ops.shape(t)[0]
-                        mask = ops.cast(
-                            ops.arange(final_len) < orig_len, dtype="int32"
-                        )
-
-                        padded_tensors.append(t)
-                        masks.append(mask)
-
-                    raw_speech = ops.stack(padded_tensors, axis=0)
-                    attention_masks = ops.stack(masks, axis=0)
-                else:
-                    # Single sequence
-                    was_batched = False
-                    raw_speech = ops.reshape(
-                        ops.convert_to_tensor(
-                            raw_speech, dtype=self.compute_dtype
-                        ),
-                        [1, -1],
-                    )
+        def _process_in_py(raw_speech_tensor):
+            raw_speech_np = raw_speech_tensor.numpy()
+            is_batched = raw_speech_np.ndim > 1
+            if is_batched:
+                speech_list = [rs.reshape(-1, 1) for rs in raw_speech_np]
             else:
-                # Single array/value
-                was_batched = False
-                raw_speech = ops.reshape(
-                    ops.convert_to_tensor(raw_speech, dtype=self.compute_dtype),
-                    [1, -1],
-                )
-        else:
-            # Already a tensor
-            ndim = len(raw_speech.shape)
-            was_batched = ndim > 1
-            if not was_batched:
-                raw_speech = ops.reshape(raw_speech, [1, -1])
-
-        # Handle tensor input (create masks if not already created)
-        if "attention_masks" not in locals():
-            batch_size = ops.shape(raw_speech)[0]
-            seq_length = ops.shape(raw_speech)[1]
-
-            # Determine target length
-            if padding == "longest" or padding is True:
-                target_length = seq_length
-                if pad_to_multiple_of is not None:
-                    remainder = target_length % pad_to_multiple_of
-                    if remainder != 0:
-                        target_length = target_length + (
-                            pad_to_multiple_of - remainder
-                        )
-                max_length = target_length
-
-            # Truncate if needed
-            if (
-                truncation
-                and max_length is not None
-                and seq_length > max_length
-            ):
-                raw_speech = raw_speech[:, :max_length]
-                seq_length = max_length
-
-            # Pad if needed
-            if max_length is not None and seq_length < max_length:
-                pad_amount = max_length - seq_length
-                if self.padding_side == "right":
-                    raw_speech = ops.pad(
-                        raw_speech,
-                        [[0, 0], [0, pad_amount]],
-                        constant_values=self.padding_value,
-                    )
-                else:
-                    raw_speech = ops.pad(
-                        raw_speech,
-                        [[0, 0], [pad_amount, 0]],
-                        constant_values=self.padding_value,
-                    )
-
-            # Create attention masks
-            final_length = ops.shape(raw_speech)[1]
-            attention_masks = ops.ones(
-                (batch_size, final_length), dtype="int32"
+                raw_speech_np = np.atleast_1d(raw_speech_np)
+                speech_list = [raw_speech_np.reshape(-1, 1)]
+            input_features_list, attention_mask_list = self.pad(
+                speech_list,
+                padding=padding,
+                max_length=max_length,
+                truncation=truncation,
+                pad_to_multiple_of=pad_to_multiple_of,
+                return_attention_mask=return_attention_mask,
             )
+            prepared_speech = []
+            prepared_speech_mask = []
+            for speech, mask in zip(input_features_list, attention_mask_list):
+                speech_tensor = tf.constant(speech.T, dtype=self.compute_dtype)
+                mask_tensor = tf.constant(mask, dtype=tf.int32)
+                features, feature_mask = self._extract_spectrogram(
+                    speech_tensor, mask_tensor
+                )
+                prepared_speech.append(features)
+                prepared_speech_mask.append(feature_mask)
+            input_features = tf.stack(prepared_speech)
+            input_features_mask = tf.stack(prepared_speech_mask)
+            if not is_batched:
+                input_features = tf.squeeze(input_features, axis=0)
+                input_features_mask = tf.squeeze(input_features_mask, axis=0)
+            return input_features, input_features_mask
 
-        # Process spectrogram extraction using map
-        def process_single_sample(args):
-            waveform, mask = args
-            waveform = ops.expand_dims(
-                waveform, axis=0
-            )  # Add batch dim for _extract_spectrogram
-            features, feature_mask = self._extract_spectrogram(waveform, mask)
-            return features, feature_mask
-
-        results = ops.map(process_single_sample, (raw_speech, attention_masks))
-
-        input_features, input_features_mask = results
-
-        # Remove batch dimension if input wasn't batched
-        if not was_batched:
-            input_features = input_features[0]
-            input_features_mask = input_features_mask[0]
-
+        if not isinstance(raw_speech, (tf.Tensor, tf.RaggedTensor)):
+            was_batched = isinstance(raw_speech, (list, tuple))
+            raw_speech = tf.convert_to_tensor(
+                raw_speech, dtype=self.compute_dtype
+            )
+        else:
+            was_batched = raw_speech.shape.rank > 1
+        input_features, input_features_mask = tf.py_function(
+            _process_in_py,
+            inp=[raw_speech],
+            Tout=[self.compute_dtype, tf.bool],
+        )
+        num_frames = None
+        if was_batched:
+            input_features.set_shape([None, num_frames, self.feature_size])
+            input_features_mask.set_shape([None, num_frames])
+        else:
+            input_features.set_shape([num_frames, self.feature_size])
+            input_features_mask.set_shape([num_frames])
+        input_features_mask = tf.cast(input_features_mask, dtype="int32")
         return input_features, input_features_mask
 
     def get_config(self):
