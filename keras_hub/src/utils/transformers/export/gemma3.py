@@ -14,14 +14,17 @@ def get_gemma3_config(backbone):
     # Check if this is a vision model
     has_vision = backbone.vision_encoder is not None
 
-    # Extract rope_theta from a full attention layer
-    # Full attention layers use the base rope_wavelength (1M for Gemma3)
-    rope_theta = 1000000.0  # Default for Gemma3
+    # Extract rope_theta values from layers
+    # Sliding/local attention layers typically use 10K, full/global use 1M
+    rope_theta_local = 10000.0  # Default for sliding attention
+    rope_theta_global = 1000000.0  # Default for full attention
+    
     for i in range(backbone.num_layers):
         layer = backbone.get_layer(f"decoder_block_{i}")
-        if not layer.use_sliding_window_attention:
-            rope_theta = layer.rope_wavelength
-            break
+        if layer.use_sliding_window_attention:
+            rope_theta_local = layer.rope_wavelength
+        else:
+            rope_theta_global = layer.rope_wavelength
 
     # Base text config
     text_config = {
@@ -33,7 +36,7 @@ def get_gemma3_config(backbone):
         "intermediate_size": backbone.intermediate_dim,
         "head_dim": backbone.head_dim,
         "rms_norm_eps": backbone.layer_norm_epsilon,
-        "rope_theta": rope_theta,
+        "rope_theta": rope_theta_global,
         "attention_bias": False,
         "attention_dropout": backbone.dropout,
         "hidden_activation": "gelu_pytorch_tanh",
@@ -48,23 +51,20 @@ def get_gemma3_config(backbone):
         "use_bidirectional_attention": backbone.use_bidirectional_attention,
     }
 
-    # Add rope_parameters if rope scaling factors are not default (1.0)
-    if (
-        backbone.local_rope_scaling_factor != 1.0
-        or backbone.global_rope_scaling_factor != 1.0
-    ):
-        rope_parameters = {}
-        if backbone.local_rope_scaling_factor != 1.0:
-            rope_parameters["sliding_attention"] = {
-                "factor": backbone.local_rope_scaling_factor,
-                "type": "linear",
-            }
-        if backbone.global_rope_scaling_factor != 1.0:
-            rope_parameters["full_attention"] = {
-                "factor": backbone.global_rope_scaling_factor,
-                "type": "linear",
-            }
-        text_config["rope_parameters"] = rope_parameters
+    # Always add rope_parameters for Gemma3 (HF expects both keys to exist)
+    rope_parameters = {
+        "sliding_attention": {
+            "factor": backbone.local_rope_scaling_factor,
+            "type": "linear",
+            "rope_theta": rope_theta_local,
+        },
+        "full_attention": {
+            "factor": backbone.global_rope_scaling_factor,
+            "type": "linear",
+            "rope_theta": rope_theta_global,
+        },
+    }
+    text_config["rope_parameters"] = rope_parameters
 
     if has_vision:
         # Vision + Text model
