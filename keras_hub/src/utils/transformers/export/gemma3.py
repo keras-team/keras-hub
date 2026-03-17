@@ -18,7 +18,7 @@ def get_gemma3_config(backbone):
     # Sliding/local attention layers typically use 10K, full/global use 1M
     rope_theta_local = 10000.0  # Default for sliding attention
     rope_theta_global = 1000000.0  # Default for full attention
-    
+
     for i in range(backbone.num_layers):
         layer = backbone.get_layer(f"decoder_block_{i}")
         if layer.use_sliding_window_attention:
