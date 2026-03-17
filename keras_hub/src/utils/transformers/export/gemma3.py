@@ -14,6 +14,16 @@ def get_gemma3_config(backbone):
     # Check if this is a vision model
     has_vision = backbone.vision_encoder is not None
 
+    # Extract rope_theta from a full attention layer
+    # Full attention layers use the base rope_wavelength (1M for Gemma3)
+    # Find the first full attention layer (where i % 6 == 5 or any non-sliding layer)
+    rope_theta = 1000000.0  # Default for Gemma3
+    for i in range(backbone.num_layers):
+        layer = backbone.get_layer(f"decoder_block_{i}")
+        if not layer.use_sliding_window_attention:
+            rope_theta = layer.rope_wavelength
+            break
+
     # Base text config
     text_config = {
         "vocab_size": backbone.vocabulary_size,
@@ -24,7 +34,7 @@ def get_gemma3_config(backbone):
         "intermediate_size": backbone.intermediate_dim,
         "head_dim": backbone.head_dim,
         "rms_norm_eps": backbone.layer_norm_epsilon,
-        "rope_theta": 1000000.0,
+        "rope_theta": rope_theta,
         "attention_bias": False,
         "attention_dropout": backbone.dropout,
         "hidden_activation": "gelu_pytorch_tanh",
@@ -36,7 +46,26 @@ def get_gemma3_config(backbone):
         "query_pre_attn_scalar": backbone.head_dim
         if backbone.query_head_dim_normalize
         else backbone.hidden_dim // backbone.num_query_heads,
+        "use_bidirectional_attention": backbone.use_bidirectional_attention,
     }
+
+    # Add rope_parameters if rope scaling factors are not default (1.0)
+    if (
+        backbone.local_rope_scaling_factor != 1.0
+        or backbone.global_rope_scaling_factor != 1.0
+    ):
+        rope_parameters = {}
+        if backbone.local_rope_scaling_factor != 1.0:
+            rope_parameters["sliding_attention"] = {
+                "factor": backbone.local_rope_scaling_factor,
+                "type": "linear",
+            }
+        if backbone.global_rope_scaling_factor != 1.0:
+            rope_parameters["full_attention"] = {
+                "factor": backbone.global_rope_scaling_factor,
+                "type": "linear",
+            }
+        text_config["rope_parameters"] = rope_parameters
 
     if has_vision:
         # Vision + Text model

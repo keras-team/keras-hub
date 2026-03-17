@@ -43,7 +43,7 @@ class TestGemma3Export(TestCase):
             final_logit_soft_cap=None,
             use_sliding_window_attention=False,
             sliding_window_size=4096,
-            vision_encoder=None,  # TODO: enable for vision models
+            vision_encoder=None,
             layer_norm_epsilon=1e-6,
             dropout=0,
         )
