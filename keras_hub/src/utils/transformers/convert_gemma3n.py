@@ -13,7 +13,13 @@ backbone_cls = Gemma3nBackbone
 
 
 MOBILENETV5_300M_ENC_ARCH_DEF = [
-    ["er_r1_k3_s2_e4_c128", "er_r1_k3_s1_e4_c128", "er_r1_k3_s1_e4_c128"],
+    # Stage 0: 128x128 in
+    [
+        "er_r1_k3_s2_e4_c128",
+        "er_r1_k3_s1_e4_c128",
+        "er_r1_k3_s1_e4_c128",
+    ],
+    # Stage 1: 256x256 in
     [
         "uir_r1_a3_k5_s2_e6_c256",
         "uir_r1_a5_k0_s1_e4_c256",
@@ -21,6 +27,7 @@ MOBILENETV5_300M_ENC_ARCH_DEF = [
         "uir_r1_a5_k0_s1_e4_c256",
         "uir_r1_a3_k0_s1_e4_c256",
     ],
+    # Stage 2: 640x640 in
     [
         "uir_r1_a5_k5_s2_e6_c640",
         "uir_r1_a5_k0_s1_e4_c640",
@@ -53,9 +60,18 @@ MOBILENETV5_300M_ENC_ARCH_DEF = [
         "uir_r1_a0_k0_s1_e2_c640",
         "mqa_r1_k3_h12_v2_s1_d64_c640",
         "uir_r1_a0_k0_s1_e2_c640",
+        "mqa_r1_k3_h12_v2_s1_d64_c640",
+        "uir_r1_a0_k0_s1_e2_c640",
+        "mqa_r1_k3_h12_v2_s1_d64_c640",
+        "uir_r1_a0_k0_s1_e2_c640",
+        "mqa_r1_k3_h12_v2_s1_d64_c640",
+        "uir_r1_a0_k0_s1_e2_c640",
     ],
+    # Stage 3: 1280x1280 in
     [
         "uir_r1_a5_k5_s2_e6_c1280",
+        "mqa_r1_k3_h16_s1_d96_c1280",
+        "uir_r1_a0_k0_s1_e2_c1280",
         "mqa_r1_k3_h16_s1_d96_c1280",
         "uir_r1_a0_k0_s1_e2_c1280",
         "mqa_r1_k3_h16_s1_d96_c1280",
