@@ -1,6 +1,7 @@
 import os
 
 import numpy as np
+import torch
 from transformers import AutoModel
 from transformers import AutoModelForCausalLM
 from transformers import AutoTokenizer
@@ -140,13 +141,19 @@ class TestGemma3Export(TestCase):
         keras_output = keras_model.generate(prompt, max_length=20)
 
         # Generate with HuggingFace model using slow tokenizer
-        input_ids_slow = hf_tokenizer_slow.encode(prompt, return_tensors="pt")
+        # Transformers 5.3.0 GemmaTokenizer (BPE) fails to encode
+        # Unigram test vocab properly.
+        # So we use the Keras preprocessor to get the valid
+        # input IDs for testing the model export.
+        keras_inputs = preprocessor.generate_preprocess(prompt)["token_ids"]
+        keras_inputs = keras_inputs[keras_inputs != 0]  # strip padding
+        input_ids_slow = torch.tensor([keras_inputs.numpy()])
         output_ids_slow = hf_full_model.generate(
             input_ids_slow, max_length=20, do_sample=False
         )
         hf_slow_output = hf_tokenizer_slow.decode(
             output_ids_slow[0], skip_special_tokens=True
-        )
+        ).lstrip()
 
         # Debug print to see the actual outputs
         print(f"Keras output: '{keras_output}'")
