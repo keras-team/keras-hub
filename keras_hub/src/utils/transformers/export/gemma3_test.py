@@ -1,5 +1,6 @@
 import os
 
+import keras.ops as ops
 import numpy as np
 import torch
 from transformers import AutoModel
@@ -147,7 +148,7 @@ class TestGemma3Export(TestCase):
         # input IDs for testing the model export.
         keras_inputs = preprocessor.generate_preprocess(prompt)["token_ids"]
         keras_inputs = keras_inputs[keras_inputs != 0]  # strip padding
-        input_ids_slow = torch.tensor([keras_inputs.numpy()])
+        input_ids_slow = torch.tensor([ops.convert_to_numpy(keras_inputs)])
         output_ids_slow = hf_full_model.generate(
             input_ids_slow, max_length=20, do_sample=False
         )
