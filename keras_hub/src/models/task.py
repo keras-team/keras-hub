@@ -119,6 +119,10 @@ class Task(PipelineModel):
             config["preprocessor"] = keras.layers.deserialize(
                 config["preprocessor"]
             )
+        if "head_dtype" in config and isinstance(config["head_dtype"], dict):
+            config["head_dtype"] = keras.dtype_policies.deserialize(
+                config["head_dtype"]
+            )
         return cls(**config)
 
     @classproperty

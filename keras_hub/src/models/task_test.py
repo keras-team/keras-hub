@@ -273,6 +273,26 @@ class TestTask(TestCase):
         actual = restored_task.predict(batch)
         self.assertAllClose(expected, actual)
 
+    def test_image_classifier_head_dtype_serialization(self):
+        inputs = keras.Input(shape=(None, None, 3))
+        outputs = keras.layers.Dense(8)(inputs)
+        backbone = keras.Model(inputs, outputs)
+        model = ImageClassifier(
+            backbone=backbone,
+            num_classes=10,
+            head_dtype="float32",
+        )
+        # Verify head_dtype is in config
+        config = model.get_config()
+        self.assertIn("head_dtype", config)
+
+        # Verify round-trip via from_config
+        restored = ImageClassifier.from_config(config)
+        self.assertEqual(
+            str(model.head_dtype),
+            str(restored.head_dtype),
+        )
+
     def _create_gemma_for_export_tests(self):
         proto = os.path.join(self.get_test_data_dir(), "gemma_export_vocab.spm")
         tokenizer = GemmaTokenizer(proto=proto)
