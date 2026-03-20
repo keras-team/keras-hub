@@ -242,7 +242,10 @@ class Qwen3MoeExperts(keras.layers.Layer):
             "th,ehm->etm", hidden_states, self._expert_feedforward_gate_dense
         )
         gate, up = ops.split(gate_up, 2, axis=-1)
-        hidden = up * self.activation(gate)
+        gate = ops.cast(gate, "float32")
+        gate = self.activation(gate)
+        gate = ops.cast(gate, up.dtype)
+        hidden = up * gate
         out = ops.einsum(
             "eti,eih->eth", hidden, self._expert_feedforward_output_dense
         )
@@ -331,11 +334,12 @@ class Qwen3SparseMoeBlock(keras.layers.Layer):
         router_logits = self._sparse_feedforward_gate_dense(
             hidden_states_flattened
         )
-        router_probs = ops.softmax(router_logits, axis=-1)
+        router_probs = ops.softmax(ops.cast(router_logits, "float32"), axis=-1)
 
         top_p, top_i = ops.top_k(router_probs, k=self.top_k)
         if self.norm_top_k_prob:
             top_p = top_p / ops.sum(top_p, axis=-1, keepdims=True)
+        top_p = ops.cast(top_p, hidden_states_flattened.dtype)
 
         one_hot = ops.one_hot(top_i, self.num_experts)
         one_hot = ops.cast(one_hot, top_p.dtype)
