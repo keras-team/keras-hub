@@ -1,6 +1,4 @@
-from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import (
-    Qwen3ASRTokenizer,
-)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import Qwen3ASRTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 

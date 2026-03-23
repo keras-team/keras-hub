@@ -10,9 +10,7 @@ backbone_presets = {
             "params": 600000000,
             "path": "qwen3_asr",
         },
-        "kaggle_handle": (
-            "kaggle://keras/qwen3-asr/keras/qwen3_asr_0.6b/1"
-        ),
+        "kaggle_handle": ("kaggle://keras/qwen3-asr/keras/qwen3_asr_0.6b/1"),
     },
     "qwen3_asr_1.7b": {
         "metadata": {
@@ -24,8 +22,6 @@ backbone_presets = {
             "params": 1700000000,
             "path": "qwen3_asr",
         },
-        "kaggle_handle": (
-            "kaggle://keras/qwen3-asr/keras/qwen3_asr_1.7b/1"
-        ),
+        "kaggle_handle": ("kaggle://keras/qwen3-asr/keras/qwen3_asr_1.7b/1"),
     },
 }

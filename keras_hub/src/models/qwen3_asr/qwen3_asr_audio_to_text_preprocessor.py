@@ -1,5 +1,4 @@
 import keras
-import numpy as np
 
 try:
     import tensorflow as tf
@@ -11,12 +10,8 @@ from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.audio_to_text_preprocessor import (
     AudioToTextPreprocessor,
 )
-from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import (
-    Qwen3ASRBackbone,
-)
-from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import (
-    Qwen3ASRTokenizer,
-)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import Qwen3ASRBackbone
+from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import Qwen3ASRTokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 

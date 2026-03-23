@@ -68,9 +68,6 @@ from keras_hub.src.models.mixtral.mixtral_tokenizer import (
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer as MoonshineTokenizer,
 )
-from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import (
-    Qwen3ASRTokenizer as Qwen3ASRTokenizer,
-)
 from keras_hub.src.models.opt.opt_tokenizer import OPTTokenizer as OPTTokenizer
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer as PaliGemmaTokenizer,
@@ -86,6 +83,9 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 )
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
+)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import (
+    Qwen3ASRTokenizer as Qwen3ASRTokenizer,
 )
 from keras_hub.src.models.qwen3_moe.qwen3_moe_tokenizer import (
     Qwen3MoeTokenizer as Qwen3MoeTokenizer,

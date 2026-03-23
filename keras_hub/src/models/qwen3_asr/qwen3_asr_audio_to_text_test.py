@@ -11,12 +11,8 @@ from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_to_text import (
 from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_to_text_preprocessor import (  # noqa: E501
     Qwen3ASRAudioToTextPreprocessor,
 )
-from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import (
-    Qwen3ASRBackbone,
-)
-from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import (
-    Qwen3ASRTokenizer,
-)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import Qwen3ASRBackbone
+from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import Qwen3ASRTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -81,10 +77,8 @@ class Qwen3ASRAudioToTextTest(TestCase):
             ),
             "token_ids": np.array(
                 [
-                    [audio_token_id] * 10
-                    + [2, 3, 4, 5, 0, 0, 0, 0, 0, 0],
-                    [audio_token_id] * 10
-                    + [2, 3, 4, 5, 6, 7, 0, 0, 0, 0],
+                    [audio_token_id] * 10 + [2, 3, 4, 5, 0, 0, 0, 0, 0, 0],
+                    [audio_token_id] * 10 + [2, 3, 4, 5, 6, 7, 0, 0, 0, 0],
                 ],
                 dtype="int32",
             ),

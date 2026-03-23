@@ -8,9 +8,7 @@ backbone_cls = Qwen3ASRBackbone
 
 def convert_backbone_config(transformers_config):
     # The HF config nests audio and text configs under thinker_config.
-    thinker_cfg = transformers_config.get(
-        "thinker_config", transformers_config
-    )
+    thinker_cfg = transformers_config.get("thinker_config", transformers_config)
     audio_cfg = thinker_cfg.get("audio_config", thinker_cfg)
     text_cfg = thinker_cfg.get("text_config", thinker_cfg)
 
@@ -25,13 +23,9 @@ def convert_backbone_config(transformers_config):
         "num_mel_bins": audio_cfg.get("num_mel_bins", 128),
         "encoder_d_model": audio_cfg.get("d_model", 1024),
         "encoder_num_layers": audio_cfg.get("encoder_layers", 24),
-        "encoder_attention_heads": audio_cfg.get(
-            "encoder_attention_heads", 16
-        ),
+        "encoder_attention_heads": audio_cfg.get("encoder_attention_heads", 16),
         "encoder_ffn_dim": audio_cfg.get("encoder_ffn_dim", 4096),
-        "downsample_hidden_size": audio_cfg.get(
-            "downsample_hidden_size", 480
-        ),
+        "downsample_hidden_size": audio_cfg.get("downsample_hidden_size", 480),
         "n_window": audio_cfg.get("n_window", 50),
         "n_window_infer": audio_cfg.get("n_window_infer", 800),
         "max_source_positions": audio_cfg.get("max_source_positions", 1500),
@@ -141,9 +135,7 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=enc_layer.fc1.kernel,
             hf_weight_key=f"{hf_prefix}.fc1.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=enc_layer.fc1.bias,
@@ -152,9 +144,7 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=enc_layer.fc2.kernel,
             hf_weight_key=f"{hf_prefix}.fc2.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=enc_layer.fc2.bias,
@@ -176,9 +166,7 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=audio_enc.output_proj_1.kernel,
             hf_weight_key="thinker.audio_tower.proj1.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=audio_enc.output_proj_1.bias,
@@ -187,9 +175,7 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=audio_enc.output_proj_2.kernel,
             hf_weight_key="thinker.audio_tower.proj2.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=audio_enc.output_proj_2.bias,

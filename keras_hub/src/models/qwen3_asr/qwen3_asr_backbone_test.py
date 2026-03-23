@@ -69,12 +69,8 @@ class Qwen3ASRBackboneTest(TestCase):
             "audio_features": np.random.uniform(size=(1, 160, 32)).astype(
                 "float32"
             ),
-            "token_ids": np.array(
-                [[200] * 20 + [1, 2, 3]], dtype="int32"
-            ),
-            "padding_mask": np.array(
-                [[1] * 20 + [1, 1, 1]], dtype="int32"
-            ),
+            "token_ids": np.array([[200] * 20 + [1, 2, 3]], dtype="int32"),
+            "padding_mask": np.array([[1] * 20 + [1, 1, 1]], dtype="int32"),
         }
         output = model(input_data)
         self.assertEqual(output.shape, (1, 23, 32))

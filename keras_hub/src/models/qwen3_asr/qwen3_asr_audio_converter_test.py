@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
     Qwen3ASRAudioConverter,

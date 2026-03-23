@@ -1,8 +1,7 @@
 import math
 
-import numpy as np
-
 import keras
+import numpy as np
 from keras import ops
 
 
@@ -25,9 +24,7 @@ def _compute_sinusoidal_embeddings(length, channels, max_timescale=10000):
         np.arange(length, dtype="float32")[:, np.newaxis]
         * inv_timescales[np.newaxis, :]
     )
-    return np.concatenate(
-        [np.sin(scaled_time), np.cos(scaled_time)], axis=1
-    )
+    return np.concatenate([np.sin(scaled_time), np.cos(scaled_time)], axis=1)
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
@@ -283,7 +280,7 @@ class Qwen3ASREncoder(keras.layers.Layer):
         self.dropout = dropout
 
         # Compute frequency dimension after three stride-2 convolutions.
-        # PyTorch Conv2d with padding=1: out = (in + 2*1 - 3)//2 + 1 = (in-1)//2 + 1
+        # Conv2d padding=1: out = (in + 2 - 3)//2 + 1 = (in-1)//2 + 1
         freq = num_mel_bins
         for _ in range(3):
             freq = (freq - 1) // 2 + 1
@@ -447,9 +444,7 @@ class Qwen3ASREncoder(keras.layers.Layer):
 
         # Add sinusoidal positional embeddings (per chunk).
         pos_emb = self._sinusoidal_embeddings[:chunk_tokens, :]
-        pos_emb = ops.cast(
-            ops.convert_to_tensor(pos_emb), hidden_states.dtype
-        )
+        pos_emb = ops.cast(ops.convert_to_tensor(pos_emb), hidden_states.dtype)
         hidden_states = hidden_states + ops.expand_dims(pos_emb, 0)
 
         # Reshape back: (batch, num_chunks * chunk_tokens, d_model).
@@ -475,7 +470,9 @@ class Qwen3ASREncoder(keras.layers.Layer):
             )
             attention_mask = ops.where(
                 same_window,
-                ops.zeros((actual_tokens, actual_tokens), dtype=hidden_states.dtype),
+                ops.zeros(
+                    (actual_tokens, actual_tokens), dtype=hidden_states.dtype
+                ),
                 ops.full(
                     (actual_tokens, actual_tokens),
                     float("-inf"),

@@ -1,4 +1,3 @@
-import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -6,9 +5,7 @@ from keras_hub.src.models.audio_to_text import AudioToText
 from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_to_text_preprocessor import (  # noqa: E501
     Qwen3ASRAudioToTextPreprocessor,
 )
-from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import (
-    Qwen3ASRBackbone,
-)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import Qwen3ASRBackbone
 from keras_hub.src.utils.tensor_utils import any_equal
 
 

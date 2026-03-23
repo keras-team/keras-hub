@@ -1,5 +1,4 @@
 import os
-import traceback
 
 os.environ["KERAS_BACKEND"] = "torch"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -13,7 +12,6 @@ torch.manual_seed(123)
 device = torch.device("cpu")
 torch.set_default_device(device)
 
-from keras import ops  # noqa: E402
 
 import keras_hub  # noqa: E402
 
