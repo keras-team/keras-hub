@@ -68,6 +68,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_metaclip_2
         elif model_type == "mistral":
             self.converter = convert_mistral
+        elif model_type == "mistral3":
+            self.converter = convert_mistral
         elif model_type == "paligemma":
             self.converter = convert_pali_gemma
         elif model_type == "vit":
