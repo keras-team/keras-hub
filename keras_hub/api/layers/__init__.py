@@ -121,6 +121,9 @@ from keras_hub.src.models.mobilenetv5.mobilenetv5_image_converter import (
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter as MoonshineAudioConverter,
 )
+from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
+    Qwen3ASRAudioConverter as Qwen3ASRAudioConverter,
+)
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter as PaliGemmaImageConverter,
 )

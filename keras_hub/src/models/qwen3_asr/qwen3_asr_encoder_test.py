@@ -54,10 +54,12 @@ class Qwen3ASREncoderTest(TestCase):
             encoder_attention_heads=4,
             encoder_ffn_dim=128,
             downsample_hidden_size=16,
+            n_window=40,
+            max_source_positions=100,
         )
         x = keras.random.uniform((2, 80, 32), dtype="float32")
         output = encoder(x)
-        # time: 80 -> 40 -> 20 -> 10 after three stride-2 convolutions.
+        # time: 80 -> 10 after three stride-2 convolutions.
         self.assertEqual(output.shape, (2, 10, 64))
 
     def test_output_shape_with_projection(self):
@@ -69,6 +71,8 @@ class Qwen3ASREncoderTest(TestCase):
             encoder_ffn_dim=128,
             downsample_hidden_size=16,
             output_dim=96,
+            n_window=40,
+            max_source_positions=100,
         )
         x = keras.random.uniform((2, 80, 32), dtype="float32")
         output = encoder(x)
@@ -82,8 +86,10 @@ class Qwen3ASREncoderTest(TestCase):
             encoder_attention_heads=4,
             encoder_ffn_dim=128,
             downsample_hidden_size=16,
+            n_window=50,
+            max_source_positions=200,
         )
-        # 800 -> 400 -> 200 -> 100
+        # 800 -> 100 after downsampling.
         shape = encoder.compute_output_shape((2, 800, 128))
         self.assertEqual(shape, (2, 100, 64))
 
@@ -96,6 +102,8 @@ class Qwen3ASREncoderTest(TestCase):
             encoder_ffn_dim=128,
             downsample_hidden_size=16,
             output_dim=96,
+            n_window=50,
+            max_source_positions=200,
         )
         shape = encoder.compute_output_shape((2, 800, 128))
         self.assertEqual(shape, (2, 100, 96))
@@ -109,25 +117,28 @@ class Qwen3ASREncoderTest(TestCase):
             encoder_ffn_dim=128,
             downsample_hidden_size=16,
             output_dim=96,
+            n_window=50,
+            max_source_positions=1500,
             dropout=0.1,
         )
         config = encoder.get_config()
         restored = Qwen3ASREncoder.from_config(config)
         self.assertEqual(restored.get_config(), config)
 
-    def test_1_7b_config_output_shape(self):
-        """Verify output shape with the 1.7B model config values."""
+    def test_chunked_processing(self):
+        """Verify chunking pads and processes correctly."""
         encoder = Qwen3ASREncoder(
-            num_mel_bins=128,
-            d_model=1024,
+            num_mel_bins=32,
+            d_model=64,
             encoder_layers=1,
-            encoder_attention_heads=16,
-            encoder_ffn_dim=4096,
-            downsample_hidden_size=480,
-            output_dim=2048,
+            encoder_attention_heads=4,
+            encoder_ffn_dim=128,
+            downsample_hidden_size=16,
+            n_window=40,
+            max_source_positions=100,
         )
-        # Use a single-layer encoder to keep the test fast.
-        x = keras.random.uniform((1, 800, 128), dtype="float32")
+        # 200 frames, chunk_size = 80 -> 2.5 chunks, padded to 3.
+        x = keras.random.uniform((1, 200, 32), dtype="float32")
         output = encoder(x)
-        # 800 -> 400 -> 200 -> 100
-        self.assertEqual(output.shape, (1, 100, 2048))
+        # 200 -> 25 audio tokens.
+        self.assertEqual(output.shape, (1, 25, 64))

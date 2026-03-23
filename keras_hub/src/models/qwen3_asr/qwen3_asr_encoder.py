@@ -1,7 +1,33 @@
 import math
 
+import numpy as np
+
 import keras
 from keras import ops
+
+
+def _compute_sinusoidal_embeddings(length, channels, max_timescale=10000):
+    """Compute sinusoidal positional embeddings.
+
+    Args:
+        length: int. Maximum sequence length.
+        channels: int. Embedding dimension (must be even).
+        max_timescale: float. Maximum timescale for the sinusoids.
+
+    Returns:
+        Numpy array of shape ``(length, channels)``.
+    """
+    log_timescale_increment = np.log(max_timescale) / (channels // 2 - 1)
+    inv_timescales = np.exp(
+        -log_timescale_increment * np.arange(channels // 2, dtype="float32")
+    )
+    scaled_time = (
+        np.arange(length, dtype="float32")[:, np.newaxis]
+        * inv_timescales[np.newaxis, :]
+    )
+    return np.concatenate(
+        [np.sin(scaled_time), np.cos(scaled_time)], axis=1
+    )
 
 
 @keras.saving.register_keras_serializable(package="keras_hub")
@@ -190,35 +216,41 @@ class Qwen3ASREncoder(keras.layers.Layer):
     transformer encoder layers, producing hidden states for the Qwen3 text
     decoder.
 
-    The encoder consists of:
-    1. Three Conv2D layers with stride 2 and GELU activation, providing 8x
-       downsampling in both time and frequency dimensions.
-    2. Linear projection from the flattened conv output to the model dimension.
-    3. Scaling by ``sqrt(d_model)``.
-    4. A stack of transformer encoder layers, each with standard multi-head
-       self-attention and a GELU feedforward network.
-    5. Post-encoder layer normalization.
-    6. Optional two-layer projection (Dense, GELU, Dense) to map encoder
-       outputs to the text decoder dimension.
+    The encoder matches the HuggingFace Qwen3-ASR architecture:
+
+    1. Input mel features are split into chunks of ``n_window * 2`` frames.
+       Each chunk is processed independently through three Conv2D layers
+       (stride 2, GELU activation) providing 8x downsampling.
+    2. Flattened conv outputs are projected to ``d_model`` via a linear layer
+       (``conv_out``). Note: the flatten order is (channels, frequency) to
+       match the HF weight layout.
+    3. Sinusoidal positional embeddings are added per-chunk.
+    4. Chunks are concatenated and processed through transformer encoder
+       layers with windowed bidirectional self-attention. The window size
+       is controlled by ``n_window_infer`` and groups multiple conv chunks.
+    5. Post-encoder layer normalization (``ln_post``).
+    6. Two-layer projection (``proj1`` + GELU + ``proj2``) maps encoder
+       outputs to the text decoder hidden dimension.
 
     Args:
-        num_mel_bins: int. Number of mel frequency bins in the input
-            spectrogram. Defaults to 128.
-        d_model: int. Hidden size of the transformer encoder.
-            Defaults to 1024.
-        encoder_layers: int. Number of transformer encoder layers.
-            Defaults to 24.
+        num_mel_bins: int. Number of mel frequency bins. Defaults to ``128``.
+        d_model: int. Hidden size of the encoder. Defaults to ``1024``.
+        encoder_layers: int. Number of transformer layers. Defaults to ``24``.
         encoder_attention_heads: int. Number of attention heads.
-            Defaults to 16.
-        encoder_ffn_dim: int. Intermediate dimension of the feedforward
-            network in each encoder layer. Defaults to 4096.
-        downsample_hidden_size: int. Number of filters for the Conv2D
-            downsampling layers. Defaults to 480.
-        output_dim: int or None. If set, adds a projection to map encoder
-            outputs to this dimension. Typically the text decoder hidden
-            size. Defaults to None.
-        dropout: float. Dropout rate for attention weights.
-            Defaults to 0.0.
+            Defaults to ``16``.
+        encoder_ffn_dim: int. FFN intermediate dimension. Defaults to ``4096``.
+        downsample_hidden_size: int. Conv2D filter count. Defaults to ``480``.
+        output_dim: int or None. Output projection dimension. Typically the
+            text decoder hidden size. Defaults to ``None``.
+        n_window: int. Half the chunk size in mel frames. Input is split into
+            chunks of ``n_window * 2`` frames. Defaults to ``50``.
+        n_window_infer: int. Attention window size in mel frames. Controls
+            how many conv chunks are grouped for self-attention. Tokens
+            from different windows cannot attend to each other.
+            Defaults to ``800``.
+        max_source_positions: int. Maximum sequence length for positional
+            embeddings. Defaults to ``1500``.
+        dropout: float. Dropout rate. Defaults to ``0.0``.
         **kwargs: Additional keyword arguments.
     """
 
@@ -231,6 +263,9 @@ class Qwen3ASREncoder(keras.layers.Layer):
         encoder_ffn_dim=4096,
         downsample_hidden_size=480,
         output_dim=None,
+        n_window=50,
+        n_window_infer=800,
+        max_source_positions=1500,
         dropout=0.0,
         **kwargs,
     ):
@@ -242,14 +277,22 @@ class Qwen3ASREncoder(keras.layers.Layer):
         self.encoder_ffn_dim = encoder_ffn_dim
         self.downsample_hidden_size = downsample_hidden_size
         self.output_dim = output_dim
+        self.n_window = n_window
+        self.n_window_infer = n_window_infer
+        self.max_source_positions = max_source_positions
         self.dropout = dropout
-        self.embed_scale = math.sqrt(d_model)
 
         # Compute frequency dimension after three stride-2 convolutions.
+        # PyTorch Conv2d with padding=1: out = (in + 2*1 - 3)//2 + 1 = (in-1)//2 + 1
         freq = num_mel_bins
         for _ in range(3):
-            freq = (freq + 1) // 2
+            freq = (freq - 1) // 2 + 1
         self._freq_after_conv = freq
+
+        # Precompute sinusoidal positional embeddings.
+        self._sinusoidal_embeddings = _compute_sinusoidal_embeddings(
+            max_source_positions, d_model
+        )
 
     def build(self, input_shape):
         # Conv2D downsampling layers.
@@ -300,7 +343,7 @@ class Qwen3ASREncoder(keras.layers.Layer):
             )
             self._encoder_layers.append(layer)
 
-        # Post-encoder layer normalization.
+        # Post-encoder layer normalization (ln_post in HF).
         self.layer_norm = keras.layers.LayerNormalization(
             axis=-1,
             epsilon=1e-5,
@@ -308,7 +351,7 @@ class Qwen3ASREncoder(keras.layers.Layer):
             name="layer_norm",
         )
 
-        # Optional output projection.
+        # Output projection (proj1 + GELU + proj2).
         if self.output_dim is not None:
             self.output_proj_1 = keras.layers.Dense(
                 self.d_model,
@@ -361,27 +404,88 @@ class Qwen3ASREncoder(keras.layers.Layer):
 
         Returns:
             Encoder hidden states of shape
-            ``(batch_size, time_steps // 8, output_dim or d_model)``.
+            ``(batch_size, num_audio_tokens, output_dim or d_model)``.
         """
-        # Add channel dimension: (batch, time, mel) -> (batch, time, mel, 1).
-        x = ops.expand_dims(input_features, axis=-1)
+        batch_size = ops.shape(input_features)[0]
+        time_steps = ops.shape(input_features)[1]
+
+        # Pad time to a multiple of chunk_size for uniform chunking.
+        chunk_size = self.n_window * 2
+        remainder = time_steps % chunk_size
+        pad_amount = ops.where(remainder > 0, chunk_size - remainder, 0)
+        input_features = ops.pad(
+            input_features, [[0, 0], [0, pad_amount], [0, 0]]
+        )
+        padded_time = ops.shape(input_features)[1]
+        num_chunks = padded_time // chunk_size
+
+        # Reshape into chunks: (batch, num_chunks, chunk_size, mel_bins).
+        x = ops.reshape(
+            input_features,
+            (batch_size, num_chunks, chunk_size, self.num_mel_bins),
+        )
+        # Merge batch and chunk dims: (batch*num_chunks, chunk_size, mel, 1).
+        x = ops.reshape(
+            x,
+            (batch_size * num_chunks, chunk_size, self.num_mel_bins, 1),
+        )
 
         # Conv2D downsampling with GELU activation.
         x = keras.activations.gelu(self.conv2d_1(x))
         x = keras.activations.gelu(self.conv2d_2(x))
         x = keras.activations.gelu(self.conv2d_3(x))
 
-        # Flatten frequency and channel dimensions.
-        # (batch, T//8, F//8, C) -> (batch, T//8, F//8 * C)
-        batch_size = ops.shape(x)[0]
-        time_steps = ops.shape(x)[1]
-        x = ops.reshape(x, (batch_size, time_steps, -1))
+        # Keras Conv2D (channels-last) output: (B, T, F, C).
+        # HF flattens as (B, T, C*F) -- channels before frequency.
+        # We must transpose F and C before flattening to match HF weights.
+        x = ops.transpose(x, (0, 1, 3, 2))  # (B, T, C, F)
+        chunk_tokens = ops.shape(x)[1]
+        x = ops.reshape(x, (batch_size * num_chunks, chunk_tokens, -1))
 
-        # Project to d_model and scale.
+        # Project to d_model.
         hidden_states = self.conv_projection(x)
-        hidden_states = hidden_states * ops.cast(
-            self.embed_scale, hidden_states.dtype
+
+        # Add sinusoidal positional embeddings (per chunk).
+        pos_emb = self._sinusoidal_embeddings[:chunk_tokens, :]
+        pos_emb = ops.cast(
+            ops.convert_to_tensor(pos_emb), hidden_states.dtype
         )
+        hidden_states = hidden_states + ops.expand_dims(pos_emb, 0)
+
+        # Reshape back: (batch, num_chunks * chunk_tokens, d_model).
+        hidden_states = ops.reshape(
+            hidden_states, (batch_size, num_chunks * chunk_tokens, self.d_model)
+        )
+
+        # Trim to actual audio length (remove padding tokens).
+        actual_tokens = (time_steps + 7) // 8
+        hidden_states = hidden_states[:, :actual_tokens, :]
+
+        # Build windowed attention mask. Tokens in different windows
+        # cannot attend to each other, matching the HF cu_seqlens logic.
+        # Window size in tokens = chunk_tokens * (n_window_infer / chunk_size).
+        chunks_per_window = self.n_window_infer // (self.n_window * 2)
+        window_tokens = chunk_tokens * chunks_per_window
+        if attention_mask is None:
+            positions = ops.arange(actual_tokens)
+            window_ids = positions // window_tokens
+            same_window = ops.equal(
+                ops.expand_dims(window_ids, 1),
+                ops.expand_dims(window_ids, 0),
+            )
+            attention_mask = ops.where(
+                same_window,
+                ops.zeros((actual_tokens, actual_tokens), dtype=hidden_states.dtype),
+                ops.full(
+                    (actual_tokens, actual_tokens),
+                    float("-inf"),
+                    dtype=hidden_states.dtype,
+                ),
+            )
+            # Broadcast for (batch, heads, seq, seq).
+            attention_mask = ops.expand_dims(
+                ops.expand_dims(attention_mask, 0), 0
+            )
 
         # Transformer encoder layers.
         for layer in self._encoder_layers:
@@ -394,7 +498,7 @@ class Qwen3ASREncoder(keras.layers.Layer):
         # Post-encoder layer normalization.
         hidden_states = self.layer_norm(hidden_states)
 
-        # Optional output projection.
+        # Output projection.
         if self.output_dim is not None:
             hidden_states = keras.activations.gelu(
                 self.output_proj_1(hidden_states)
@@ -406,8 +510,7 @@ class Qwen3ASREncoder(keras.layers.Layer):
     def compute_output_shape(self, input_shape):
         time_steps = input_shape[1]
         if time_steps is not None:
-            for _ in range(3):
-                time_steps = (time_steps + 1) // 2
+            time_steps = (time_steps + 7) // 8
         out_dim = (
             self.output_dim if self.output_dim is not None else self.d_model
         )
@@ -424,6 +527,9 @@ class Qwen3ASREncoder(keras.layers.Layer):
                 "encoder_ffn_dim": self.encoder_ffn_dim,
                 "downsample_hidden_size": self.downsample_hidden_size,
                 "output_dim": self.output_dim,
+                "n_window": self.n_window,
+                "n_window_infer": self.n_window_infer,
+                "max_source_positions": self.max_source_positions,
                 "dropout": self.dropout,
             }
         )

@@ -12,6 +12,49 @@ def _qwen3_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
+@keras.saving.register_keras_serializable(package="keras_hub")
+class ReplaceAudioEmbeddings(keras.layers.Layer):
+    """Replace token embeddings at audio placeholder positions.
+
+    The Qwen3-ASR architecture uses replacement embedding: audio encoder
+    outputs are scattered into the positions of ``<|AUDIO|>`` placeholder
+    tokens in the full token sequence.
+
+    Args:
+        audio_token_id: int. Token ID of the audio placeholder.
+    """
+
+    def __init__(self, audio_token_id, **kwargs):
+        super().__init__(**kwargs)
+        self.audio_token_id = audio_token_id
+
+    def call(self, embeddings, audio_embeddings, token_ids):
+        audio_mask = ops.equal(token_ids, self.audio_token_id)  # (B, S)
+
+        # Build indices mapping each audio mask position to the
+        # corresponding audio embedding index.
+        cum = ops.cumsum(ops.cast(audio_mask, "int32"), axis=1)
+        indices = ops.clip(cum - 1, 0, ops.shape(audio_embeddings)[1] - 1)
+
+        # Gather audio embeddings aligned to the full sequence.
+        indices_3d = ops.broadcast_to(
+            ops.expand_dims(indices, -1),
+            ops.shape(embeddings),
+        )
+        audio_aligned = ops.take_along_axis(
+            audio_embeddings, indices_3d, axis=1
+        )
+
+        # Select audio embeddings where mask is True, text otherwise.
+        mask_3d = ops.expand_dims(audio_mask, -1)
+        return ops.where(mask_3d, audio_aligned, embeddings)
+
+    def get_config(self):
+        config = super().get_config()
+        config["audio_token_id"] = self.audio_token_id
+        return config
+
+
 class Qwen3ASRBackbone(Backbone):
     """Qwen3-ASR core network with hyperparameters.
 
@@ -20,23 +63,19 @@ class Qwen3ASRBackbone(Backbone):
     for automatic speech recognition.
 
     The forward pass works as follows:
-    1. Mel spectrogram features are processed by the audio encoder, producing
-       a sequence of audio embeddings projected to the decoder hidden
-       dimension.
-    2. Text token IDs are embedded via a shared token embedding layer.
-    3. Audio embeddings and text embeddings are concatenated along the
-       sequence axis (audio first, then text).
-    4. The concatenated sequence is passed through a stack of Qwen3
-       Transformer decoder layers with causal attention.
-    5. A final RMS normalization is applied to produce the output hidden
-       states.
 
-    For a higher-level object for text generation, see
-    ``keras_hub.models.Qwen3ASRCausalLM`` (forthcoming).
+    1. All token IDs (including ``<|AUDIO|>`` placeholders) are embedded.
+    2. Mel spectrogram features are processed by the audio encoder,
+       producing a sequence of audio embeddings projected to the decoder
+       hidden dimension.
+    3. Audio embeddings **replace** the embeddings at ``<|AUDIO|>``
+       placeholder positions (replacement embedding).
+    4. The combined sequence is passed through Qwen3 decoder layers with
+       causal attention.
+    5. A final RMS normalization produces the output hidden states.
 
     The default constructor gives a fully customizable, randomly initialized
-    model. To load preset architectures and weights, use the ``from_preset``
-    constructor.
+    model. To load preset architectures and weights, use ``from_preset``.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -60,8 +99,14 @@ class Qwen3ASRBackbone(Backbone):
             each encoder layer. Defaults to ``4096``.
         downsample_hidden_size: int. The number of Conv2D filters for audio
             downsampling. Defaults to ``480``.
+        audio_token_id: int. Token ID of the ``<|AUDIO|>`` placeholder.
+            Defaults to ``151676``.
+        n_window: int. Half the chunk size in mel frames for the audio
+            encoder. Defaults to ``50``.
+        max_source_positions: int. Maximum position embedding length for the
+            audio encoder. Defaults to ``1500``.
         rope_max_wavelength: int. The maximum angular wavelength for rotary
-            position embeddings. Defaults to ``10000``.
+            position embeddings. Defaults to ``1000000``.
         rope_scaling_factor: float. The scaling factor for rotary position
             embeddings. Defaults to ``1.0``.
         layer_norm_epsilon: float. Epsilon for layer normalization.
@@ -78,10 +123,8 @@ class Qwen3ASRBackbone(Backbone):
     ```python
     input_data = {
         "audio_features": np.random.uniform(size=(1, 800, 128)),
-        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
-        "padding_mask": np.array(
-            [[1] * 100 + [1] * 12]  # 100 audio tokens + 12 text tokens
-        ),
+        "token_ids": np.array([[151676] * 100 + [1, 2, 3]]),
+        "padding_mask": np.array([[1] * 103]),
     }
     model = keras_hub.models.Qwen3ASRBackbone(
         vocabulary_size=151936,
@@ -118,7 +161,11 @@ class Qwen3ASRBackbone(Backbone):
         encoder_attention_heads=16,
         encoder_ffn_dim=4096,
         downsample_hidden_size=480,
-        rope_max_wavelength=10000,
+        audio_token_id=151676,
+        n_window=50,
+        n_window_infer=800,
+        max_source_positions=1500,
+        rope_max_wavelength=1000000,
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
         dropout=0.0,
@@ -136,6 +183,9 @@ class Qwen3ASRBackbone(Backbone):
             encoder_ffn_dim=encoder_ffn_dim,
             downsample_hidden_size=downsample_hidden_size,
             output_dim=hidden_dim,
+            n_window=n_window,
+            n_window_infer=n_window_infer,
+            max_source_positions=max_source_positions,
             dtype=dtype,
             name="audio_encoder",
         )
@@ -146,6 +196,11 @@ class Qwen3ASRBackbone(Backbone):
             embeddings_initializer=_qwen3_kernel_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
+        )
+        self.audio_replacer = ReplaceAudioEmbeddings(
+            audio_token_id=audio_token_id,
+            dtype=dtype,
+            name="audio_replacer",
         )
         self.transformer_layers = []
         for i in range(num_layers):
@@ -182,12 +237,12 @@ class Qwen3ASRBackbone(Backbone):
             shape=(None,), dtype="int32", name="padding_mask"
         )
 
-        # Encode audio and embed text.
-        audio_embeddings = self.audio_encoder(audio_input)
-        text_embeddings = self.token_embedding(token_id_input)
+        # Embed all tokens (including audio placeholders).
+        embeddings = self.token_embedding(token_id_input)
 
-        # Concatenate: [audio_embeddings, text_embeddings].
-        x = ops.concatenate((audio_embeddings, text_embeddings), axis=1)
+        # Encode audio and replace placeholder embeddings.
+        audio_embeddings = self.audio_encoder(audio_input)
+        x = self.audio_replacer(embeddings, audio_embeddings, token_id_input)
 
         # Run through the decoder.
         for transformer_layer in self.transformer_layers:
@@ -219,6 +274,10 @@ class Qwen3ASRBackbone(Backbone):
         self.encoder_attention_heads = encoder_attention_heads
         self.encoder_ffn_dim = encoder_ffn_dim
         self.downsample_hidden_size = downsample_hidden_size
+        self.audio_token_id = audio_token_id
+        self.n_window = n_window
+        self.n_window_infer = n_window_infer
+        self.max_source_positions = max_source_positions
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -243,6 +302,10 @@ class Qwen3ASRBackbone(Backbone):
                 "encoder_attention_heads": self.encoder_attention_heads,
                 "encoder_ffn_dim": self.encoder_ffn_dim,
                 "downsample_hidden_size": self.downsample_hidden_size,
+                "audio_token_id": self.audio_token_id,
+                "n_window": self.n_window,
+                "n_window_infer": self.n_window_infer,
+                "max_source_positions": self.max_source_positions,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
