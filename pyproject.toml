@@ -28,6 +28,7 @@ classifiers = [
 dependencies = [
 
     "keras @ git+https://github.com/pctablet505/keras@fix/20260-layers-property-setter",
+    
     "absl-py",
     "numpy",
     "packaging",
