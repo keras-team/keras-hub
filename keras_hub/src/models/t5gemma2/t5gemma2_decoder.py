@@ -1,4 +1,5 @@
 import keras
+from keras import ops
 
 from keras_hub.src.models.gemma3.gemma3_layers import RMSNormalization
 from keras_hub.src.models.t5gemma2.t5gemma2_attention import (
@@ -182,47 +183,52 @@ class T5Gemma2DecoderLayer(keras.layers.Layer):
     ):
         """Creates a causal attention mask for self-attention."""
         if cache is not None:
-            q_len = keras.ops.shape(hidden_states)[1]
-            kv_len = keras.ops.shape(cache)[2]
-            q_indices = (
-                keras.ops.arange(0, q_len, dtype="int32") + cache_update_index
-            )
-            kv_indices = keras.ops.arange(0, kv_len, dtype="int32")
+            q_len = ops.shape(hidden_states)[1]
+            kv_len = ops.shape(cache)[2]
+            q_indices = ops.arange(0, q_len, dtype="int32") + cache_update_index
+            kv_indices = ops.arange(0, kv_len, dtype="int32")
         else:
-            q_len = kv_len = keras.ops.shape(hidden_states)[1]
-            q_indices = keras.ops.arange(0, q_len, dtype="int32")
-            kv_indices = keras.ops.arange(0, kv_len, dtype="int32")
+            q_len = kv_len = ops.shape(hidden_states)[1]
+            q_indices = ops.arange(0, q_len, dtype="int32")
+            kv_indices = ops.arange(0, kv_len, dtype="int32")
         causal_mask = kv_indices[None, :] <= q_indices[:, None]
         if self.attention_type == "sliding_attention":
             sliding_mask = (
                 q_indices[:, None] - (self.sliding_window - 1)
             ) <= kv_indices[None, :]
-            causal_mask = keras.ops.logical_and(causal_mask, sliding_mask)
+            causal_mask = ops.logical_and(causal_mask, sliding_mask)
         final_mask = causal_mask[None, None, :, :]
+
+        # Broadcast the mask to match the batch size.
+        batch_size = ops.shape(hidden_states)[0]
+        final_mask = ops.broadcast_to(
+            final_mask, (batch_size, 1, q_len, kv_len)
+        )
+
         if padding_mask is not None:
             padding_mask_slice = padding_mask[:, :kv_len]
             padding_mask_4d = padding_mask_slice[:, None, None, :]
-            final_mask = keras.ops.logical_and(final_mask, padding_mask_4d)
-        return (1.0 - keras.ops.cast(final_mask, hidden_states.dtype)) * -1e9
+            final_mask = ops.logical_and(final_mask, padding_mask_4d)
+        return (1.0 - ops.cast(final_mask, hidden_states.dtype)) * -1e9
 
     def _make_cross_attention_mask(self, hidden_states, padding_mask):
         """Creates a bidirectional mask for cross-attention."""
         if padding_mask is None:
             return None
-        q_len = keras.ops.shape(hidden_states)[1]
+        q_len = ops.shape(hidden_states)[1]
         bidirectional_mask = padding_mask[:, None, None, :]
         # Broadcast to (batch, 1, q_len, enc_len).
-        bidirectional_mask = keras.ops.broadcast_to(
+        bidirectional_mask = ops.broadcast_to(
             bidirectional_mask,
             (
-                keras.ops.shape(hidden_states)[0],
+                ops.shape(hidden_states)[0],
                 1,
                 q_len,
-                keras.ops.shape(padding_mask)[1],
+                ops.shape(padding_mask)[1],
             ),
         )
         additive_mask = (
-            1.0 - keras.ops.cast(bidirectional_mask, hidden_states.dtype)
+            1.0 - ops.cast(bidirectional_mask, hidden_states.dtype)
         ) * -1e9
         return additive_mask
 
@@ -268,7 +274,7 @@ class T5Gemma2DecoderLayer(keras.layers.Layer):
 
         # Concatenate self and cross masks along the KV dimension.
         if cross_attention_mask is not None:
-            merged_mask = keras.ops.concatenate(
+            merged_mask = ops.concatenate(
                 [self_attention_mask, cross_attention_mask], axis=-1
             )
         else:
