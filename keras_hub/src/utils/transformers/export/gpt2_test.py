@@ -34,6 +34,9 @@ class TestGPT2Export(TestCase):
             "i": 8,
             "c": 9,
             "k": 10,
+            "Ġq": 11,
+            "ui": 12,
+            "ck": 13,
         }
         merges = ["Ġ q", "u i", "c k"]
 
