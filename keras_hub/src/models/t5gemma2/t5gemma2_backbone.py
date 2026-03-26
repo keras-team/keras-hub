@@ -20,7 +20,7 @@ class T5Gemma2Backbone(Backbone):
 
     This class implements the encoder-decoder backbone of the T5Gemma2
     model. T5Gemma2 is based on Gemma3 and features merged
-    self+cross attention in the decoder (unlike T5Gemma1 which used
+    self+cross attention in the decoder (unlike T5Gemma which used
     separate attention sublayers), Gemma3-style Q/K normalization,
     and per-layer-type sliding window attention patterns.
 
@@ -193,11 +193,11 @@ class T5Gemma2Backbone(Backbone):
             # EOI (end-of-image) embeddings: learned vectors that
             # replace the standard embedding at eoi_token_index.
             self.encoder_eoi_embedding = keras.Variable(
-                keras.ops.zeros((encoder_hidden_dim,)),
+                ops.zeros((encoder_hidden_dim,)),
                 name="encoder_eoi_embedding",
             )
             self.decoder_eoi_embedding = keras.Variable(
-                keras.ops.zeros((decoder_hidden_dim,)),
+                ops.zeros((decoder_hidden_dim,)),
                 name="decoder_eoi_embedding",
             )
 

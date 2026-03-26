@@ -11,7 +11,7 @@ class T5Gemma2DecoderLayer(keras.layers.Layer):
     """Decoder layer for the T5Gemma2 model.
 
     This layer implements a single decoder block in the T5Gemma2
-    architecture. Unlike T5Gemma1 which has separate self-attention and
+    architecture. Unlike T5Gemma which has separate self-attention and
     cross-attention sub-layers, T5Gemma2 uses a single
     `T5Gemma2MergedAttention` layer that fuses self-attention and
     cross-attention by concatenating their K/V pairs.
@@ -195,7 +195,7 @@ class T5Gemma2DecoderLayer(keras.layers.Layer):
         causal_mask = kv_indices[None, :] <= q_indices[:, None]
         if self.attention_type == "sliding_attention":
             sliding_mask = (
-                q_indices[:, None] - self.sliding_window
+                q_indices[:, None] - (self.sliding_window - 1)
             ) <= kv_indices[None, :]
             causal_mask = keras.ops.logical_and(causal_mask, sliding_mask)
         final_mask = causal_mask[None, None, :, :]

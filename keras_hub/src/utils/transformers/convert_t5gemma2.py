@@ -1,6 +1,10 @@
+import re
+
 import numpy as np
+from sentencepiece import sentencepiece_model_pb2 as sp_pb2
 
 from keras_hub.src.models.t5gemma2.t5gemma2_backbone import T5Gemma2Backbone
+from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import load_json
 
@@ -71,6 +75,7 @@ def convert_backbone_config(transformers_config):
         "encoder_num_key_value_heads": enc_text["num_key_value_heads"],
         "encoder_head_dim": enc_text["head_dim"],
         "encoder_layer_types": enc_text["layer_types"],
+        "tie_word_embeddings": enc_text["tie_word_embeddings"],
         "decoder_hidden_dim": decoder_config["hidden_size"],
         "decoder_intermediate_dim": decoder_config["intermediate_size"],
         "decoder_num_layers": decoder_config["num_hidden_layers"],
@@ -81,7 +86,6 @@ def convert_backbone_config(transformers_config):
         "dropout_rate": decoder_config["dropout_rate"],
         "rms_norm_eps": decoder_config["rms_norm_eps"],
         "query_pre_attn_scalar": decoder_config["query_pre_attn_scalar"],
-        "tie_word_embeddings": transformers_config["tie_word_embeddings"],
         "attention_bias": decoder_config["attention_bias"],
         "hidden_activation": hidden_activation,
         "initializer_range": decoder_config["initializer_range"],
@@ -238,32 +242,32 @@ def convert_weights(backbone, loader, transformers_config):
         # EOI embeddings.
         loader.port_weight(
             keras_variable=backbone.encoder_eoi_embedding,
-            hf_weight_key="encoder.text_model.embed_tokens.eoi_embedding",
+            hf_weight_key="encoder.embed_tokens.eoi_embedding",
         )
         loader.port_weight(
             keras_variable=backbone.decoder_eoi_embedding,
-            hf_weight_key="decoder.embed_tokens.eoi_embedding",
+            hf_weight_key="encoder.embed_tokens.eoi_embedding",
         )
 
     # === Text encoder weights ===
     # Token embeddings.
     loader.port_weight(
         keras_variable=backbone.token_embedding.embeddings,
-        hf_weight_key="encoder.text_model.embed_tokens.weight",
+        hf_weight_key="encoder.embed_tokens.weight",
     )
     loader.port_weight(
         keras_variable=backbone.decoder_token_embedding.embeddings,
-        hf_weight_key="decoder.embed_tokens.weight",
+        hf_weight_key="encoder.embed_tokens.weight",
     )
 
-    # Encoder (weights under encoder.text_model.*).
+    # Encoder (weights under encoder.*).
     loader.port_weight(
         keras_variable=backbone.encoder_norm.scale,
-        hf_weight_key="encoder.text_model.norm.weight",
+        hf_weight_key="encoder.norm.weight",
     )
     for i in range(backbone.encoder_num_layers):
         layer = backbone.get_layer(f"encoder_layer_{i}")
-        hf_prefix = f"encoder.text_model.layers.{i}"
+        hf_prefix = f"encoder.layers.{i}"
 
         # Self-attention Q/K/V/O projections.
         loader.port_weight(
@@ -409,6 +413,101 @@ def convert_weights(backbone, loader, transformers_config):
         )
 
 
+def _build_sentencepiece_proto(tokenizer_config):
+    """Build a serialized SentencePiece proto from a tokenizer.json config.
+
+    Used when `tokenizer.model` is not available in the HF repo (e.g.
+    T5Gemma2 repos only ship `tokenizer.json`). Reconstructs a BPE
+    SentencePiece model that is byte-for-byte compatible with the
+    Gemma-family tokenizer.
+    """
+    vocab = dict(tokenizer_config["model"]["vocab"])
+    merges = list(tokenizer_config["model"]["merges"])
+
+    # Normalise merge format: [["a","b"], ...] → ["a b", ...].
+    if merges and isinstance(merges[0], list) and len(merges[0]) == 2:
+        merges = [" ".join(m) for m in merges]
+
+    # Include added / special tokens.
+    special_token_strings = set()
+    for token_info in tokenizer_config.get("added_tokens", []):
+        content = token_info["content"]
+        vocab[content] = token_info["id"]
+        if token_info.get("special", False):
+            special_token_strings.add(content)
+
+    # Map each merge result → rank so we can assign piece scores.
+    merge_result_rank = {}
+    for rank, rule in enumerate(merges):
+        parts = rule.split(" ", 1)
+        if len(parts) == 2:
+            merge_result_rank[parts[0] + parts[1]] = rank
+
+    model_proto = sp_pb2.ModelProto()
+
+    # Trainer spec.
+    ts = model_proto.trainer_spec
+    ts.model_type = sp_pb2.TrainerSpec.BPE
+    ts.vocab_size = len(vocab)
+    ts.byte_fallback = True
+
+    # Normalizer spec – replicate the HF normalizer: Replace(" " → "▁").
+    ns = model_proto.normalizer_spec
+    ns.name = "identity"
+    ns.add_dummy_prefix = False
+    ns.escape_whitespaces = True
+    ns.remove_extra_whitespaces = False
+
+    # Denormalizer spec (for detokenization).
+    dns = model_proto.denormalizer_spec
+    dns.add_dummy_prefix = False
+    dns.escape_whitespaces = True
+    dns.remove_extra_whitespaces = False
+
+    # Byte-fallback regex for <0xNN> tokens.
+    _byte_re = re.compile(r"^<0x[0-9A-Fa-f]{2}>$")
+
+    # Sentinel score for base characters (lower than any merge).
+    base_score = -float(len(merges) + 1)
+
+    # Pieces must be ordered by ID (index == ID in SP protos).
+    for token_str, _token_id in sorted(vocab.items(), key=lambda kv: kv[1]):
+        piece = model_proto.pieces.add()
+        piece.piece = token_str
+
+        if token_str == "<unk>":
+            piece.type = sp_pb2.ModelProto.SentencePiece.UNKNOWN
+            piece.score = 0.0
+        elif _byte_re.match(token_str):
+            piece.type = sp_pb2.ModelProto.SentencePiece.BYTE
+            piece.score = 0.0
+        elif token_str in special_token_strings:
+            piece.type = sp_pb2.ModelProto.SentencePiece.USER_DEFINED
+            piece.score = 0.0
+        elif token_str in merge_result_rank:
+            piece.type = sp_pb2.ModelProto.SentencePiece.NORMAL
+            piece.score = -float(merge_result_rank[token_str])
+        else:
+            # Base character – not the result of any merge.
+            piece.type = sp_pb2.ModelProto.SentencePiece.NORMAL
+            piece.score = base_score
+
+    return model_proto.SerializeToString()
+
+
 def convert_tokenizer(cls, preset, **kwargs):
-    """Convert a T5Gemma2 tokenizer."""
-    return cls(get_file(preset, "tokenizer.model"), **kwargs)
+    """Convert a T5Gemma2 tokenizer.
+
+    Tries to load `tokenizer.model` directly from the preset. If the file
+    is not present (T5Gemma2 HF repos only publish `tokenizer.json`),
+    the SentencePiece proto is constructed programmatically from
+    `tokenizer.json` using `_build_sentencepiece_proto`.
+    """
+    if check_file_exists(preset, "tokenizer.model"):
+        proto = get_file(preset, "tokenizer.model")
+        return cls(proto=proto, **kwargs)
+
+    # tokenizer.model not found – build proto from tokenizer.json.
+    tokenizer_config = load_json(preset, "tokenizer.json")
+    proto_bytes = _build_sentencepiece_proto(tokenizer_config)
+    return cls(proto=proto_bytes, **kwargs)

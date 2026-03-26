@@ -1,4 +1,4 @@
-import keras
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
@@ -18,7 +18,7 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
     "context" text (fed to the encoder), and the decoder predicts the
     next token based on both the encoder inputs and the previous tokens.
 
-    T5Gemma2 extends T5Gemma1 by using Gemma3-based components, with
+    T5Gemma2 extends T5Gemma by using Gemma3-based components, with
     merged self+cross attention in the decoder, Gemma3-style Q/K
     normalization, and per-layer-type RoPE.
 
@@ -96,7 +96,7 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
         logits = backbone.decoder_token_embedding(sequence_output, reverse=True)
         if self.backbone.final_logit_softcapping is not None:
             logits = logits / self.backbone.final_logit_softcapping
-            logits = keras.ops.tanh(logits)
+            logits = ops.tanh(logits)
             logits = logits * self.backbone.final_logit_softcapping
         super().__init__(
             inputs=inputs,
@@ -107,8 +107,8 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
     def call_encoder(self, token_ids, padding_mask):
         """Process inputs through the encoder stack."""
         encoder_embeddings = self.backbone.token_embedding(token_ids)
-        encoder_embeddings *= keras.ops.cast(
-            keras.ops.sqrt(self.backbone.encoder_hidden_dim),
+        encoder_embeddings *= ops.cast(
+            ops.sqrt(self.backbone.encoder_hidden_dim),
             encoder_embeddings.dtype,
         )
         encoder_hidden_states = self.backbone.encoder_dropout(
@@ -156,8 +156,8 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
         """
         self_attention_cache, cross_attention_cache = cache
         hidden_states = self.backbone.decoder_token_embedding(decoder_token_ids)
-        hidden_states *= keras.ops.cast(
-            keras.ops.sqrt(self.backbone.decoder_hidden_dim),
+        hidden_states *= ops.cast(
+            ops.sqrt(self.backbone.decoder_hidden_dim),
             hidden_states.dtype,
         )
         hidden_states = self.backbone.decoder_dropout(
@@ -188,10 +188,8 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
             new_self_cache, new_cross_cache = updated_layer_cache
             updated_self_attention_caches.append(new_self_cache)
             updated_cross_attention_caches.append(new_cross_cache)
-        self_attention_cache = keras.ops.stack(
-            updated_self_attention_caches, axis=1
-        )
-        cross_attention_cache = keras.ops.stack(
+        self_attention_cache = ops.stack(updated_self_attention_caches, axis=1)
+        cross_attention_cache = ops.stack(
             updated_cross_attention_caches, axis=1
         )
         hidden_states = self.backbone.decoder_norm(hidden_states)
@@ -200,7 +198,7 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
         )
         if self.backbone.final_logit_softcapping is not None:
             logits = logits / self.backbone.final_logit_softcapping
-            logits = keras.ops.tanh(logits)
+            logits = ops.tanh(logits)
             logits = logits * self.backbone.final_logit_softcapping
         return (
             logits,
@@ -219,7 +217,7 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
         encoder_output, encoder_padding_mask = self.call_encoder(
             encoder_token_ids, encoder_padding_mask
         )
-        batch_size = keras.ops.shape(decoder_token_ids)[0]
+        batch_size = ops.shape(decoder_token_ids)[0]
         num_layers = self.backbone.decoder_num_layers
         num_kv_heads = self.backbone.decoder_num_key_value_heads
         head_dim = self.backbone.decoder_head_dim
@@ -227,11 +225,11 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
             batch_size,
             num_layers,
             2,
-            keras.ops.shape(decoder_token_ids)[1],
+            ops.shape(decoder_token_ids)[1],
             num_kv_heads,
             head_dim,
         )
-        self_attention_cache = keras.ops.zeros(
+        self_attention_cache = ops.zeros(
             self_cache_shape, dtype=self.compute_dtype
         )
         cross_attention_cache = None
@@ -266,17 +264,13 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
             decoder_padding_mask=decoder_padding_mask,
         )
         encoder_output, encoder_padding_mask = extra_cache_info
-        row_lengths = keras.ops.sum(
-            keras.ops.cast(decoder_padding_mask, "int32"), axis=-1
-        )
-        index = keras.ops.min(row_lengths)
+        row_lengths = ops.sum(ops.cast(decoder_padding_mask, "int32"), axis=-1)
+        index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
             cache_update_index = index - 1
-            batch_size = keras.ops.shape(prompt)[0]
-            prompt = keras.ops.slice(
-                prompt, [0, cache_update_index], [batch_size, 1]
-            )
+            batch_size = ops.shape(prompt)[0]
+            prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
             (
                 logits,
                 _,
@@ -290,7 +284,7 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
                 encoder_padding_mask=encoder_padding_mask,
             )
             return (
-                keras.ops.squeeze(logits, axis=1),
+                ops.squeeze(logits, axis=1),
                 None,
                 updated_cache,
             )
@@ -310,18 +304,14 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
             end_locations = any_equal(
                 decoder_token_ids,
                 stop_token_ids,
-                keras.ops.logical_not(decoder_padding_mask),
+                ops.logical_not(decoder_padding_mask),
             )
-            end_locations = keras.ops.cast(end_locations, "int32")
-            cumsum = keras.ops.cast(
-                keras.ops.cumsum(end_locations, axis=-1), "int32"
-            )
+            end_locations = ops.cast(end_locations, "int32")
+            cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
             overflow = cumsum - end_locations
-            decoder_padding_mask = keras.ops.logical_not(
-                keras.ops.cast(overflow, "bool")
-            )
+            decoder_padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
         else:
-            decoder_padding_mask = keras.ops.ones_like(
+            decoder_padding_mask = ops.ones_like(
                 decoder_token_ids, dtype="bool"
             )
 

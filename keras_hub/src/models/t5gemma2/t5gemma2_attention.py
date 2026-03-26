@@ -352,7 +352,7 @@ class T5Gemma2MergedAttention(CachedGemma3Attention):
     single attention computation is performed over the merged K/V.
 
     This merged approach is the key architectural difference between
-    T5Gemma2 and T5Gemma1.
+    T5Gemma2 and T5Gemma.
 
     Args:
         hidden_size: int, Dimensionality of the decoder hidden states.
