@@ -16,7 +16,7 @@ def load_image_converter_config(preset, transformers_config):
     encoder_config = transformers_config.get("encoder", {})
     if "vision_config" not in encoder_config:
         return None
-    preprocessor_config = load_json(preset, "preprocessor_config.json")
+    preprocessor_config = load_json(preset, "processor_config.json")
     mean = preprocessor_config["image_mean"]
     std = preprocessor_config["image_std"]
     rescale_factor = preprocessor_config["rescale_factor"]

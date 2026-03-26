@@ -8,6 +8,7 @@ import torch
 import transformers
 from absl import app
 from absl import flags
+from keras import ops
 from PIL import Image
 
 import keras_hub
@@ -75,50 +76,29 @@ def check_text_output(
         "football is good too, but nowhere near as good as cricket."
     ]
 
-    # KerasHub — build unpadded inputs (match HF's natural lengths).
-    keras_hub_tokenizer = preprocessor.tokenizer
-    keras_hub_enc_token_ids = hf_tokenizer(
-        enc_sample_text, return_tensors="np"
-    )["input_ids"]
-    keras_hub_dec_token_ids = hf_tokenizer(
-        dec_sample_text, return_tensors="np"
-    )["input_ids"]
-    keras_hub_dec_token_ids = np.concatenate(
-        [
-            np.array([[keras_hub_tokenizer.start_token_id]]),
-            keras_hub_dec_token_ids,
-        ],
-        axis=-1,
+    # KerasHub — use preprocessor natively
+    # This automatically prepends start_token_id, appends EOS tokens, pads,
+    # and generates dummy vision variables automatically.
+    x, y, sample_weight = preprocessor(
+        {
+            "encoder_text": enc_sample_text,
+            "decoder_text": dec_sample_text,
+        }
     )
-    keras_hub_inputs = {
-        "encoder_token_ids": keras_hub_enc_token_ids,
-        "encoder_padding_mask": np.ones_like(keras_hub_enc_token_ids),
-        "decoder_token_ids": keras_hub_dec_token_ids,
-        "decoder_padding_mask": np.ones_like(keras_hub_dec_token_ids),
-    }
-    # For multimodal backbones, use preprocessor to add dummy
-    # image/vision_indices (the single source of truth).
-    keras_hub_inputs = preprocessor._add_vision_inputs(
-        keras_hub_inputs, batch_size=1
-    )
+    keras_hub_inputs = x
     keras_hub_output = keras_hub_model.predict(keras_hub_inputs)
 
-    # HF.
-    hf_enc_inputs = hf_tokenizer(enc_sample_text, return_tensors="pt")
-    hf_dec_inputs = hf_tokenizer(dec_sample_text, return_tensors="pt")
-    hf_decoder_input_ids = torch.cat(
-        [
-            torch.tensor([[hf_tokenizer.bos_token_id]]),
-            hf_dec_inputs["input_ids"],
-        ],
-        dim=-1,
-    )
-    hf_decoder_attention_mask = torch.cat(
-        [
-            torch.ones(1, 1, dtype=torch.long),
-            hf_dec_inputs["attention_mask"],
-        ],
-        dim=-1,
+    # HF — align sequence lengths EXACTLY with KerasHub preprocessor output
+    def to_torch(x):
+        return torch.tensor(ops.convert_to_numpy(x), dtype=torch.long)
+
+    hf_enc_inputs = {
+        "input_ids": to_torch(keras_hub_inputs["encoder_token_ids"]),
+        "attention_mask": to_torch(keras_hub_inputs["encoder_padding_mask"]),
+    }
+    hf_decoder_input_ids = to_torch(keras_hub_inputs["decoder_token_ids"])
+    hf_decoder_attention_mask = to_torch(
+        keras_hub_inputs["decoder_padding_mask"]
     )
 
     hf_output = hf_model(
@@ -131,6 +111,14 @@ def check_text_output(
     # Encoder output comparison.
     keras_enc_out = keras_hub_output["encoder_sequence_output"]
     hf_enc_out = hf_output.encoder_last_hidden_state.detach().float().numpy()
+
+    # Slice to unpadded length to avoid padding token noise
+    enc_valid_len = int(
+        ops.convert_to_numpy(keras_hub_inputs["encoder_padding_mask"][0]).sum()
+    )
+    keras_enc_out = keras_enc_out[:, :enc_valid_len, :]
+    hf_enc_out = hf_enc_out[:, :enc_valid_len, :]
+
     enc_abs_diff = np.abs(keras_enc_out - hf_enc_out)
     print()
     print("Encoder Outputs:")
@@ -156,6 +144,14 @@ def check_text_output(
     # Decoder output comparison.
     keras_dec_out = keras_hub_output["decoder_sequence_output"]
     hf_dec_out = hf_output.decoder_hidden_states[-1].detach().float().numpy()
+
+    # Slice to unpadded length to avoid padding token noise
+    dec_valid_len = int(
+        ops.convert_to_numpy(keras_hub_inputs["decoder_padding_mask"][0]).sum()
+    )
+    keras_dec_out = keras_dec_out[:, :dec_valid_len, :]
+    hf_dec_out = hf_dec_out[:, :dec_valid_len, :]
+
     dec_abs_diff = np.abs(keras_dec_out - hf_dec_out)
     print()
     print("Decoder Outputs:")
@@ -211,20 +207,8 @@ def check_multimodal_output(
     )
     # HF decoder inputs.
     hf_dec_inputs = hf_tokenizer(dec_prompt, return_tensors="pt")
-    hf_decoder_input_ids = torch.cat(
-        [
-            torch.tensor([[hf_tokenizer.bos_token_id]]),
-            hf_dec_inputs["input_ids"],
-        ],
-        dim=-1,
-    )
-    hf_decoder_attention_mask = torch.cat(
-        [
-            torch.ones(1, 1, dtype=torch.long),
-            hf_dec_inputs["attention_mask"],
-        ],
-        dim=-1,
-    )
+    hf_decoder_input_ids = hf_dec_inputs["input_ids"]
+    hf_decoder_attention_mask = hf_dec_inputs["attention_mask"]
 
     with torch.no_grad():
         hf_output = hf_model(
@@ -376,8 +360,6 @@ def main(_):
         )
     preprocessor = T5Gemma2Seq2SeqLMPreprocessor(
         tokenizer=keras_hub_tokenizer,
-        encoder_sequence_length=512,
-        decoder_sequence_length=512,
         **preprocessor_kwargs,
     )
 
