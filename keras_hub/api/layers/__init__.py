@@ -169,6 +169,9 @@ from keras_hub.src.models.segformer.segformer_image_converter import (
 from keras_hub.src.models.siglip.siglip_image_converter import (
     SigLIPImageConverter as SigLIPImageConverter,
 )
+from keras_hub.src.models.swin_transformer.swin_transformer_image_converter import (
+    SwinTransformerImageConverter as SwinTransformerImageConverter,
+)
 from keras_hub.src.models.vgg.vgg_image_converter import (
     VGGImageConverter as VGGImageConverter,
 )
