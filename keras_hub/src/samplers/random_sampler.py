@@ -45,8 +45,10 @@ class RandomSampler(Sampler):
 
     def get_next_token(self, probabilities):
         # Sample the next token from the probability distribution.
+        # tf does not support half precision multinomial sampling, so make
+        # sure we have full precision here.
         next_token_id = random.categorical(
-            ops.log(probabilities),
+            ops.log(ops.cast(probabilities, "float32")),
             1,
             seed=self.seed_generator,
             dtype="int32",
