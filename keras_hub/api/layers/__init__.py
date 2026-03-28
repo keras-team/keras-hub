@@ -127,6 +127,9 @@ from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
 from keras_hub.src.models.parseq.parseq_image_converter import (
     PARSeqImageConverter as PARSeqImageConverter,
 )
+from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
+    Qwen3ASRAudioConverter as Qwen3ASRAudioConverter,
+)
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter as ResNetImageConverter,
 )

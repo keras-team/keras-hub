@@ -573,6 +573,18 @@ from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
 from keras_hub.src.models.qwen3.qwen3_tokenizer import (
     Qwen3Tokenizer as Qwen3Tokenizer,
 )
+from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_to_text import (
+    Qwen3ASRAudioToText as Qwen3ASRAudioToText,
+)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_to_text_preprocessor import (
+    Qwen3ASRAudioToTextPreprocessor as Qwen3ASRAudioToTextPreprocessor,
+)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import (
+    Qwen3ASRBackbone as Qwen3ASRBackbone,
+)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import (
+    Qwen3ASRTokenizer as Qwen3ASRTokenizer,
+)
 from keras_hub.src.models.qwen3_moe.qwen3_moe_backbone import (
     Qwen3MoeBackbone as Qwen3MoeBackbone,
 )

@@ -24,6 +24,7 @@ from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
+from keras_hub.src.utils.transformers import convert_qwen3_asr
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_sam3
@@ -82,6 +83,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen3_moe
         elif model_type == "qwen3":
             self.converter = convert_qwen3
+        elif model_type in ("qwen3_asr", "qwen2_audio"):
+            self.converter = convert_qwen3_asr
         elif model_type == "sam3_video":
             self.converter = convert_sam3
         elif model_type == "smollm3":
