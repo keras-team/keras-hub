@@ -258,7 +258,7 @@ class Qwen3MoeAttention(keras.layers.Layer):
         """
         if attention_mask is not None:
             return self._softmax(
-                attention_scores, attention_mask[:, None, :, :]
+                attention_scores, ops.expand_dims(attention_mask, axis=1)
             )
         return self._softmax(attention_scores)
 

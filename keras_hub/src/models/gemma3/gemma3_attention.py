@@ -229,7 +229,9 @@ class CachedGemma3Attention(keras.layers.Layer):
             )
 
         if attention_mask is not None:
-            attention_mask = attention_mask[:, None, None, :, :]
+            # We add two dimensions at axis 1 and 2 to make it [B, 1, 1, S, S]
+            attention_mask = ops.expand_dims(attention_mask, axis=1)
+            attention_mask = ops.expand_dims(attention_mask, axis=1)
         orig_dtype = attention_logits.dtype
         attention_softmax = self.softmax(attention_logits, mask=attention_mask)
         attention_softmax = ops.cast(attention_softmax, orig_dtype)
@@ -399,9 +401,10 @@ class CachedGemma3Attention(keras.layers.Layer):
         )
 
         # Wipe attn vec if there are no attended tokens.
-        no_attended_tokens = ops.all(
-            ops.equal(attention_mask, 0), axis=-1, keepdims=True
-        )[..., None]
+        no_attended_tokens = ops.expand_dims(
+            ops.all(ops.equal(attention_mask, 0), axis=-1, keepdims=True),
+            axis=-1,
+        )
         attention_vec = ops.where(
             no_attended_tokens, ops.zeros_like(attention_vec), attention_vec
         )
