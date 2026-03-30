@@ -60,7 +60,7 @@ class TestGPT2Export(TestCase):
             intermediate_dim=128,
             max_sequence_length=128,
             layer_norm_epsilon=1e-5,
-            dropout=0,
+            dropout=0.0,
         )
 
         # 3. Create preprocessor & model
