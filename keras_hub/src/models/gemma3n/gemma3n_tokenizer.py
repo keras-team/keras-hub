@@ -79,7 +79,7 @@ class Gemma3nTokenizer(SentencePieceTokenizer):
         self._add_special_token("<eos>", "end_token")
         self._add_special_token("<pad>", "pad_token")
         # Image.
-        self._add_special_token("<img>", "image_placeholder")
+        self._add_special_token("<image_soft_token>", "image_placeholder")
         # Audio.
         self._add_special_token("<audio_soft_token>", "audio_placeholder")
         # Multimodal inputs.

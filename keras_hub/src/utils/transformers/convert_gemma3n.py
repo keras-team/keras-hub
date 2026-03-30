@@ -809,6 +809,39 @@ def convert_weights(backbone, loader, transformers_config):
     return backbone
 
 
+def load_image_converter_config(preset, transformers_config):
+    try:
+        preprocessor_config = load_json(preset, "preprocessor_config.json")
+        image_mean = preprocessor_config.get("image_mean", [0.5, 0.5, 0.5])
+        image_std = preprocessor_config.get("image_std", [0.5, 0.5, 0.5])
+        do_rescale = preprocessor_config.get("do_rescale", True)
+        do_normalize = preprocessor_config.get("do_normalize", False)
+        rescale_factor = preprocessor_config.get("rescale_factor", 1.0 / 255.0)
+        image_size = preprocessor_config.get(
+            "size", {"height": 768, "width": 768}
+        )
+        scale = rescale_factor if do_rescale else None
+        offset = None
+        if do_normalize:
+            # Match HF behavior:
+            # x = (x * rescale_factor - mean) / std when normalize=True
+            if do_rescale:
+                scale = [rescale_factor / s for s in image_std]
+            else:
+                scale = [1.0 / s for s in image_std]
+            offset = [(-m / s) for m, s in zip(image_mean, image_std)]
+        return {
+            "image_size": (
+                image_size.get("height", 768),
+                image_size.get("width", 768),
+            ),
+            "scale": scale,
+            "offset": offset,
+        }
+    except Exception:
+        return None
+
+
 def load_audio_converter_config(preset, transformers_config):
     try:
         preprocessor_config = load_json(preset, "preprocessor_config.json")

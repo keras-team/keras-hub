@@ -1,4 +1,3 @@
-import gc
 import os
 
 import numpy as np
@@ -11,8 +10,16 @@ from transformers import Gemma3nProcessor
 
 import keras_hub
 
+try:
+    import librosa  # pyright: ignore[reportMissingImports]
+except ImportError:
+    raise ImportError(
+        "Gemma3n checkpoint conversion audio tests require librosa. "
+        "Please install it via `pip install librosa`."
+    )
+
 PRESET_MAP = {
-    "gemma3n_e2b": "google/gemma-3n-E2B",
+    "gemma3n_e2b": "google/gemma-3n-E2B-it",
 }
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -24,8 +31,34 @@ flags.DEFINE_string(
 flags.mark_flag_as_required("preset")
 
 
-def validate_output(keras_model, hf_model, hf_processor):
+_TEST_WAV_PATH = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "keras_hub",
+        "src",
+        "tests",
+        "test_data",
+        "audio_transcription_tests",
+        "female_short_voice_clip_17sec.wav",
+    )
+)
+
+
+def _load_test_audio_waveform(hf_processor):
+    if not os.path.exists(_TEST_WAV_PATH):
+        raise FileNotFoundError(
+            f"Expected test WAV file not found at: {_TEST_WAV_PATH}"
+        )
+    sampling_rate = hf_processor.feature_extractor.sampling_rate
+    audio, _ = librosa.load(_TEST_WAV_PATH, sr=sampling_rate, mono=True)
+    return audio.astype(np.float32)
+
+
+def validate_output(keras_model, keras_preprocessor, hf_model, hf_processor):
     keras_params = keras_model.count_params()
+    # count tied embeddings only once for the comparison
     hf_params = sum(
         p.numel() for n, p in hf_model.named_parameters() if "lm_head" not in n
     )
@@ -38,11 +71,7 @@ def validate_output(keras_model, hf_model, hf_processor):
         print("✅ Parameter counts match.")
 
     print("🔶 Validating model outputs (text-only)...")
-    text = (
-        " This gap is likely due to error accumulation across 30 complex "
-        "layers (AltUp, Laurel, per-layer inputs) between JAX and "
-        "PyTorch backends."
-    )
+    text = "What is Keras?"
     text_inputs = hf_processor(
         text=text,
         return_tensors="pt",
@@ -63,28 +92,14 @@ def validate_output(keras_model, hf_model, hf_processor):
         hf_output = hf_output * final_logit_soft_cap
     hf_output = hf_output.detach().cpu().float().numpy()
     print(f"  -> HF output shape: {hf_output.shape}")
-    img_size = hf_processor.image_processor.size
-    dummy_image = np.zeros(
-        (1, 1, img_size["height"], img_size["width"], 3),
-        dtype=np.float32,
+
+    hf_seq_len = text_inputs["input_ids"].shape[1]
+    preprocessed_text_inputs = keras_preprocessor.generate_preprocess(
+        [text], sequence_length=hf_seq_len
     )
-    dummy_audio = np.zeros(
-        (1, 1, 1, 128),
-        dtype=np.float32,
-    )
-    dummy_audio_mask = np.zeros(
-        (1, 1, 1),
-        dtype=bool,
-    )
-    backbone_keras_inputs = {
-        "token_ids": text_inputs["input_ids"].numpy(),
-        "padding_mask": text_inputs["attention_mask"].numpy().astype(bool),
-        "images": dummy_image,
-        "input_features": dummy_audio,
-        "input_features_mask": dummy_audio_mask,
-    }
+
     print("  -> Running Keras model forward pass...")
-    keras_output = keras_model(backbone_keras_inputs)
+    keras_output = keras_model(preprocessed_text_inputs)
     keras_output = keras_model.language_model.token_embedding(
         keras_output, reverse=True
     )
@@ -149,27 +164,23 @@ def validate_output(keras_model, hf_model, hf_processor):
             hf_mm_output = hf_mm_output * final_logit_soft_cap
     hf_mm_output = hf_mm_output.detach().cpu().float().numpy()
     print(f"  -> HF output shape: {hf_mm_output.shape}")
-    mm_keras_inputs = {k: v.numpy() for k, v in hf_mm_inputs.items()}
-    mm_backbone_inputs = {}
-    mm_backbone_inputs["token_ids"] = mm_keras_inputs.pop("input_ids")
-    mm_backbone_inputs["padding_mask"] = mm_keras_inputs.pop(
-        "attention_mask"
-    ).astype(bool)
-    pixel_values = mm_keras_inputs.pop("pixel_values")
-    pixel_values_t = np.transpose(pixel_values, (0, 2, 3, 1))
-    if pixel_values_t.ndim == 4:
-        pixel_values_t = np.expand_dims(pixel_values_t, axis=1)
-    mm_backbone_inputs["images"] = pixel_values_t
-    input_features = mm_keras_inputs.pop("input_features")
-    input_features_mask = mm_keras_inputs.pop("input_features_mask")
-    input_features_mask = ~input_features_mask
-    if input_features.ndim == 3:
-        input_features = np.expand_dims(input_features, axis=1)
-    if input_features_mask.ndim == 2:
-        input_features_mask = np.expand_dims(input_features_mask, axis=1)
-    mm_backbone_inputs["input_features"] = input_features
-    mm_backbone_inputs["input_features_mask"] = input_features_mask
+
+    mm_prompt_kh = (
+        "A cat sat on a mat"
+        f"{keras_preprocessor.start_of_image_token}"
+        "<end_of_turn>\n"
+        f"{keras_preprocessor.start_of_audio_token}"
+    )
+    mm_backbone_inputs = keras_preprocessor.generate_preprocess(
+        {
+            "prompts": [mm_prompt_kh],
+            "images": [np.asarray(image)],
+            "audios": [audio_data],
+        },
+        sequence_length=int(hf_mm_inputs["input_ids"].shape[1]),
+    )
     print("  -> Running Keras multimodal forward pass...")
+
     keras_mm_output = keras_model(mm_backbone_inputs)
     keras_mm_output = keras_model.language_model.token_embedding(
         keras_mm_output, reverse=True
@@ -221,6 +232,57 @@ def validate_output(keras_model, hf_model, hf_processor):
         print("✅ Multimodal logits within 1e-4 tolerance.")
     except AssertionError as err:
         print(err.args[0])
+
+
+def validate_generate(keras_causal_lm, hf_model, hf_processor):
+    prompt_kh = (
+        "<start_of_turn>user\n"
+        "Transcribe this audio: <start_of_audio>"
+        "<end_of_turn>\n"
+        "<start_of_turn>model\n"
+    )
+
+    prompt_hf = (
+        f"<start_of_turn>user\n"
+        f"Transcribe this audio: {hf_processor.audio_token}"
+        f"<end_of_turn>\n"
+        f"<start_of_turn>model\n"
+    )
+
+    audio_data = _load_test_audio_waveform(hf_processor)
+
+    keras_causal_lm.compile(sampler="greedy")
+    keras_text = keras_causal_lm.generate(
+        {"prompts": prompt_kh, "audios": audio_data},
+        max_length=256,
+        strip_prompt=True,
+    )
+
+    hf_inputs = hf_processor(
+        text=prompt_hf,
+        audio=[audio_data],
+        return_tensors="pt",
+        padding="longest",
+    )
+
+    hf_outputs = hf_model.generate(
+        **hf_inputs,
+        max_new_tokens=256,
+        do_sample=False,
+        num_beams=1,
+    )
+    hf_prompt_len = hf_inputs["input_ids"].shape[1]
+    hf_new_tokens = hf_outputs[:, hf_prompt_len:]
+    hf_text = hf_processor.batch_decode(
+        hf_new_tokens, skip_special_tokens=True
+    )[0]
+
+    print("🔶 Keras generate output:", keras_text)
+    print("🔶 HuggingFace generate output:", hf_text)
+    print(
+        "🔶 Generation match:",
+        "✅ Yes" if keras_text == hf_text else "⚠️ No",
+    )
 
 
 def _load_hf_model_and_processor(
@@ -279,20 +341,32 @@ def main(_):
     print("=" * 60)
     print("  FLOAT32 VALIDATION")
     print("=" * 60)
-    hf_model_f32, hf_processor = _load_hf_model_and_processor(
+    hf_model, hf_processor = _load_hf_model_and_processor(
         preset,
         hf_model_name,
         cache_dir,
         torch.float32,
     )
     print("-> Loading Keras model (float32) from HuggingFace preset.")
-    keras_model_f32 = keras_hub.models.Gemma3nBackbone.from_preset(
+    keras_preprocessor = (
+        keras_hub.models.Gemma3nCausalLMPreprocessor.from_preset(
+            f"hf://{hf_model_name}"
+        )
+    )
+    keras_model = keras_hub.models.Gemma3nBackbone.from_preset(
         f"hf://{hf_model_name}", dtype="float32"
     )
     print("\n-> Validating output consistency (float32).")
-    validate_output(keras_model_f32, hf_model_f32, hf_processor)
-    del keras_model_f32, hf_model_f32
-    gc.collect()
+    validate_output(keras_model, keras_preprocessor, hf_model, hf_processor)
+    if hf_model_name.endswith("-it"):
+        # Audio input only works well with instruction-tuned models
+        print("\n-> Validating generation consistency (float32).")
+        keras_causal_lm = keras_hub.models.Gemma3nCausalLM.from_preset(
+            f"hf://{hf_model_name}", dtype="float32"
+        )
+        validate_generate(keras_causal_lm, hf_model, hf_processor)
+        del keras_causal_lm
+    del keras_model, hf_model
 
     print("\n" + "=" * 60)
     print("  SAVING BFLOAT16 PRESET")
@@ -304,8 +378,6 @@ def main(_):
     print(f"💾 Saving Keras preset to ./{save_path}")
     keras_model_bf16.save_to_preset(f"./{save_path}")
     print("🎉 Conversion complete.")
-    del keras_model_bf16
-    gc.collect()
 
 
 if __name__ == "__main__":

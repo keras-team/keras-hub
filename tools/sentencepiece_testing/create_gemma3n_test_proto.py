@@ -22,7 +22,7 @@ def main():
             "<end_of_audio>",
             "<start_of_turn>",
             "<end_of_turn>",
-            "<img>",
+            "<image_soft_token>",
             "<audio_soft_token>",
             "<mask>",
             "[multimodal]",

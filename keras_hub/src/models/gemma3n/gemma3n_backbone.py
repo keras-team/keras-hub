@@ -266,24 +266,34 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
             )
 
         if pixel_values is not None and self.vision_encoder:
-            reshape_target = (-1,) + tuple(self.vision_encoder.image_shape)
-            pixel_values = ops.reshape(pixel_values, reshape_target)
-            vision_features = self.vision_encoder(pixel_values)
-            if self.vision_encoder.data_format == "channels_first":
-                vision_features = ops.transpose(vision_features, (0, 2, 3, 1))
-            shape = ops.shape(vision_features)
-            vision_features = ops.reshape(
-                vision_features, (shape[0], shape[1] * shape[2], shape[3])
-            )
-            vision_features *= ops.sqrt(
-                ops.cast(
-                    self.vision_encoder.num_features, dtype=inputs_embeds.dtype
-                )
-            )
-            vision_embeds = self.embed_vision(vision_features)
             image_token_mask = ops.equal(input_ids, self.image_token_id)
 
-            def scatter_vision_features():
+            def get_vision_embeds():
+                reshape_target = (-1,) + tuple(self.vision_encoder.image_shape)
+                pixels = ops.reshape(pixel_values, reshape_target)
+                # Ensure we don't have an empty batch during tracing
+                # to avoid crashes due to empty convolutions.
+                dummy = ops.zeros(
+                    (1,) + tuple(self.vision_encoder.image_shape),
+                    dtype=pixels.dtype,
+                )
+                pixels = ops.concatenate([pixels, dummy], axis=0)
+                vision_features = self.vision_encoder(pixels)
+                if self.vision_encoder.data_format == "channels_first":
+                    vision_features = ops.transpose(
+                        vision_features, (0, 2, 3, 1)
+                    )
+                shape = ops.shape(vision_features)
+                vision_features = ops.reshape(
+                    vision_features, (shape[0], shape[1] * shape[2], shape[3])
+                )
+                vision_features *= ops.sqrt(
+                    ops.cast(
+                        self.vision_encoder.num_features,
+                        dtype=inputs_embeds.dtype,
+                    )
+                )
+                vision_embeds = self.embed_vision(vision_features)
                 batch_size, seq_len, hidden_size = ops.shape(inputs_embeds)
                 flat_vision_embeds = ops.reshape(
                     vision_embeds, [-1, hidden_size]
@@ -306,7 +316,7 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
 
             inputs_embeds = ops.cond(
                 ops.any(image_token_mask),
-                scatter_vision_features,
+                get_vision_embeds,
                 lambda: inputs_embeds,
             )
 
@@ -315,66 +325,63 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
             and input_features_mask is not None
             and self.audio_encoder
         ):
-            original_shape = ops.shape(input_features)
-            b, n, t, f = (
-                original_shape[0],
-                original_shape[1],
-                original_shape[2],
-                original_shape[3],
-            )
-            input_features = ops.reshape(input_features, (b * n, t, f))
-            input_features_mask = ops.reshape(input_features_mask, (b * n, t))
-            audio_features, _ = self.audio_encoder(
-                (input_features, input_features_mask)
-            )
-            audio_embeds = self.embed_audio(audio_features)
-            audio_embeds_shape = ops.shape(audio_embeds)
-            t_out, h = audio_embeds_shape[1], audio_embeds_shape[2]
-            audio_embeds = ops.reshape(audio_embeds, (b, n, t_out, h))
-            shape = ops.shape(audio_embeds)
-            audio_batch_size, audio_num_clips, audio_seq_len, hidden_size = (
-                shape[0],
-                shape[1],
-                shape[2],
-                shape[3],
-            )
-            target_len = self.audio_soft_tokens_per_image
-            last_audio_token_id = (
-                self.embed_audio.vocab_offset
-                + self.embed_audio.embedding.input_dim
-                - 1
-            )
-            padding_toks = ops.convert_to_tensor(
-                [[last_audio_token_id]], dtype="int64"
-            )
-            padding_embs = self.embed_audio(padding_toks)
-            padding_token = ops.squeeze(padding_embs, axis=[0])
-            flat_audio_embeds = ops.reshape(audio_embeds, [-1, hidden_size])
-            vocab = ops.concatenate([flat_audio_embeds, padding_token], axis=0)
-            pad_token_index = ops.shape(flat_audio_embeds)[0]
-            indices = ops.arange(target_len)
-            is_real_token = indices < audio_seq_len
-            batch_offsets = (
-                ops.arange(audio_batch_size * audio_num_clips) * audio_seq_len
-            )
-            real_indices = ops.expand_dims(indices, 0) + ops.expand_dims(
-                batch_offsets, 1
-            )
-            final_indices = ops.where(
-                ops.expand_dims(is_real_token, 0),
-                real_indices,
-                pad_token_index,
-            )
-            audio_embeds = ops.take(vocab, final_indices, axis=0)
-            audio_embeds = ops.reshape(
-                audio_embeds,
-                (audio_batch_size, audio_num_clips * target_len, hidden_size),
-            )
             audio_token_mask = ops.equal(input_ids, self.audio_token_id)
 
-            def scatter_audio_features():
-                batch_size, seq_len, hidden_size = ops.shape(inputs_embeds)
+            def get_audio_embeds():
+                b, n, t, f = ops.shape(input_features)
+                features = ops.reshape(input_features, (b * n, t, f))
+                mask = ops.reshape(input_features_mask, (b * n, t))
+                audio_features, _ = self.audio_encoder((features, mask))
+                audio_embeds = self.embed_audio(audio_features)
+                t_out, h = ops.shape(audio_embeds)[1:]
+                audio_embeds = ops.reshape(audio_embeds, (b, n, t_out, h))
+                (
+                    audio_batch_size,
+                    audio_num_clips,
+                    audio_seq_len,
+                    hidden_size,
+                ) = ops.shape(audio_embeds)
+                target_len = self.audio_soft_tokens_per_image
+                last_audio_token_id = (
+                    self.embed_audio.vocab_offset
+                    + self.embed_audio.embedding.input_dim
+                    - 1
+                )
+                padding_toks = ops.convert_to_tensor(
+                    [[last_audio_token_id]], dtype="int64"
+                )
+                padding_embs = self.embed_audio(padding_toks)
+                padding_token = ops.squeeze(padding_embs, axis=[0])
                 flat_audio_embeds = ops.reshape(audio_embeds, [-1, hidden_size])
+                vocab = ops.concatenate(
+                    [flat_audio_embeds, padding_token], axis=0
+                )
+                pad_token_index = ops.shape(flat_audio_embeds)[0]
+                indices = ops.arange(target_len)
+                is_real_token = indices < audio_seq_len
+                batch_offsets = (
+                    ops.arange(audio_batch_size * audio_num_clips)
+                    * audio_seq_len
+                )
+                real_indices = ops.expand_dims(indices, 0) + ops.expand_dims(
+                    batch_offsets, 1
+                )
+                final_indices = ops.where(
+                    ops.expand_dims(is_real_token, 0),
+                    real_indices,
+                    pad_token_index,
+                )
+                audio_embeds = ops.take(vocab, final_indices, axis=0)
+                audio_embeds = ops.reshape(
+                    audio_embeds,
+                    (
+                        audio_batch_size,
+                        audio_num_clips * target_len,
+                        hidden_size,
+                    ),
+                )
+                batch_size, seq_len, h_size = ops.shape(inputs_embeds)
+                flat_audio_embeds = ops.reshape(audio_embeds, [-1, h_size])
                 flat_full_mask = ops.reshape(audio_token_mask, [-1])
                 gather_indices = (
                     ops.cumsum(ops.cast(flat_full_mask, "int32")) - 1
@@ -384,7 +391,7 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                     flat_audio_embeds, gather_indices, axis=0
                 )
                 replacement_tensor = ops.reshape(
-                    replacement_values, (batch_size, seq_len, hidden_size)
+                    replacement_values, (batch_size, seq_len, h_size)
                 )
                 expanded_full_mask = ops.expand_dims(audio_token_mask, axis=-1)
                 return ops.where(
@@ -393,7 +400,7 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
 
             inputs_embeds = ops.cond(
                 ops.any(audio_token_mask),
-                scatter_audio_features,
+                get_audio_embeds,
                 lambda: inputs_embeds,
             )
         projected_per_layer_inputs = (

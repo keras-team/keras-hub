@@ -7,6 +7,9 @@ from keras_hub.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
+from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
+    Gemma3nAudioConverter,
+)
 from keras_hub.src.models.gemma3n.gemma3n_backbone import Gemma3nBackbone
 from keras_hub.src.models.gemma3n.gemma3n_image_converter import (
     Gemma3nImageConverter,
@@ -219,6 +222,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
     backbone_cls = Gemma3nBackbone
     tokenizer_cls = Gemma3nTokenizer
     image_converter_cls = Gemma3nImageConverter
+    audio_converter_cls = Gemma3nAudioConverter
 
     def __init__(
         self,
@@ -294,19 +298,12 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         """Computes indices given vision mask, and pads with 0.
 
         If `vision_mask` is
-
         ```
-        [
-            [False, True, True], [False, True, False], [False, False, False]
-        ]
+        [ [False, True, True], [False, True, False], [False, False, False] ]
         ```
-
         , then the output will be:
-
         ```
-        [
-            [1, 2, 0], [1, 0, 0], [0, 0, 0]
-        ]
+        [ [1, 2, 0], [1, 0, 0], [0, 0, 0] ]
         ```
         """
         batch_size, sequence_length = vision_mask.shape
@@ -723,6 +720,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             audios, input_features, input_features_mask = (
                 self._preprocess_audios(audios=audios, batched=batched)
             )
+            input_features_mask = tf.equal(input_features_mask, 0)
             audio_mask = token_ids == self.tokenizer.audio_placeholder_id
         else:
             # No audio converter.
@@ -912,6 +910,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             audios, input_features, input_features_mask = (
                 self._preprocess_audios(audios=audios, batched=batched)
             )
+            input_features_mask = tf.equal(input_features_mask, 0)
             audio_mask = token_ids == self.tokenizer.audio_placeholder_id
         else:
             # No audio converter.
