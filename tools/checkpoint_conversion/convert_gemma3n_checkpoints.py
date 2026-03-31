@@ -11,7 +11,7 @@ from transformers import Gemma3nProcessor
 import keras_hub
 
 try:
-    import librosa  # pyright: ignore[reportMissingImports]
+    import librosa
 except ImportError:
     raise ImportError(
         "Gemma3n checkpoint conversion audio tests require librosa. "
@@ -19,14 +19,14 @@ except ImportError:
     )
 
 PRESET_MAP = {
-    "gemma3n_e2b": "google/gemma-3n-E2B-it",
+    "gemma3n_e2b": "google/gemma-3n-E2B",
+    "gemma3n_e2b_it": "google/gemma-3n-E2B-it",
+    "gemma3n_e4b": "google/gemma-3n-E4B",
+    "gemma3n_e4b_it": "google/gemma-3n-E4B-it",
 }
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
-)
-flags.DEFINE_string(
-    "cache_dir", "./hf_cache", "Directory to cache Hugging Face downloads."
 )
 flags.mark_flag_as_required("preset")
 
@@ -34,13 +34,7 @@ flags.mark_flag_as_required("preset")
 _TEST_WAV_PATH = os.path.abspath(
     os.path.join(
         os.path.dirname(__file__),
-        "..",
-        "..",
-        "keras_hub",
-        "src",
-        "tests",
-        "test_data",
-        "audio_transcription_tests",
+        "../../keras_hub/src/tests/test_data/audio_transcription_tests/"
         "female_short_voice_clip_17sec.wav",
     )
 )
@@ -286,48 +280,17 @@ def validate_generate(keras_causal_lm, hf_model, hf_processor):
 
 
 def _load_hf_model_and_processor(
-    preset,
     hf_model_name,
-    cache_dir,
     torch_dtype,
 ):
     """Load (or download) the HF model and processor."""
-    model_cache_path = os.path.join(cache_dir, f"{preset}_model")
-    processor_cache_path = os.path.join(cache_dir, f"{preset}_processor")
-    hf_model = None
-    hf_processor = None
-    if os.path.exists(model_cache_path) and os.path.exists(
-        processor_cache_path
-    ):
-        print(
-            "  -> Loading cached Hugging Face model and processor"
-            f" from {cache_dir}"
-        )
-        try:
-            hf_model = Gemma3nForConditionalGeneration.from_pretrained(
-                model_cache_path,
-                torch_dtype=torch_dtype,
-                low_cpu_mem_usage=True,
-            )
-            hf_processor = Gemma3nProcessor.from_pretrained(
-                processor_cache_path
-            )
-        except Exception as e:
-            print(f"⚠️ Failed to load from cache: {e}. Downloading again...")
-            hf_model = None
-            hf_processor = None
-    if hf_model is None or hf_processor is None:
-        print(f"  -> Downloading Hugging Face model: {hf_model_name}")
-        hf_model = Gemma3nForConditionalGeneration.from_pretrained(
-            hf_model_name,
-            torch_dtype=torch_dtype,
-            low_cpu_mem_usage=True,
-        )
-        hf_processor = Gemma3nProcessor.from_pretrained(hf_model_name)
-        print(f"💾 Saving model and processor to cache: {cache_dir}")
-        os.makedirs(cache_dir, exist_ok=True)
-        hf_model.save_pretrained(model_cache_path)
-        hf_processor.save_pretrained(processor_cache_path)
+    print(f"  -> Downloading Hugging Face model: {hf_model_name}")
+    hf_model = Gemma3nForConditionalGeneration.from_pretrained(
+        hf_model_name,
+        torch_dtype=torch_dtype,
+        low_cpu_mem_usage=True,
+    )
+    hf_processor = Gemma3nProcessor.from_pretrained(hf_model_name)
     hf_model.eval()
     return hf_model, hf_processor
 
@@ -335,16 +298,13 @@ def _load_hf_model_and_processor(
 def main(_):
     preset = FLAGS.preset
     hf_model_name = PRESET_MAP[preset]
-    cache_dir = FLAGS.cache_dir
     save_path = preset
 
     print("=" * 60)
     print("  FLOAT32 VALIDATION")
     print("=" * 60)
     hf_model, hf_processor = _load_hf_model_and_processor(
-        preset,
         hf_model_name,
-        cache_dir,
         torch.float32,
     )
     print("-> Loading Keras model (float32) from HuggingFace preset.")

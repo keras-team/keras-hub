@@ -810,70 +810,63 @@ def convert_weights(backbone, loader, transformers_config):
 
 
 def load_image_converter_config(preset, transformers_config):
-    try:
-        preprocessor_config = load_json(preset, "preprocessor_config.json")
-        image_mean = preprocessor_config.get("image_mean", [0.5, 0.5, 0.5])
-        image_std = preprocessor_config.get("image_std", [0.5, 0.5, 0.5])
-        do_rescale = preprocessor_config.get("do_rescale", True)
-        do_normalize = preprocessor_config.get("do_normalize", False)
-        rescale_factor = preprocessor_config.get("rescale_factor", 1.0 / 255.0)
-        image_size = preprocessor_config.get(
-            "size", {"height": 768, "width": 768}
-        )
-        scale = rescale_factor if do_rescale else None
-        offset = None
-        if do_normalize:
-            # Match HF behavior:
-            # x = (x * rescale_factor - mean) / std when normalize=True
-            if do_rescale:
-                scale = [rescale_factor / s for s in image_std]
-            else:
-                scale = [1.0 / s for s in image_std]
-            offset = [(-m / s) for m, s in zip(image_mean, image_std)]
-        return {
-            "image_size": (
-                image_size.get("height", 768),
-                image_size.get("width", 768),
-            ),
-            "scale": scale,
-            "offset": offset,
-        }
-    except Exception:
-        return None
+    preprocessor_config = load_json(preset, "preprocessor_config.json")
+    image_mean = preprocessor_config["image_mean"]
+    image_std = preprocessor_config["image_std"]
+    do_rescale = preprocessor_config["do_rescale"]
+    do_normalize = preprocessor_config["do_normalize"]
+    rescale_factor = preprocessor_config["rescale_factor"]
+    image_size = preprocessor_config["size"]
+    scale = rescale_factor if do_rescale else None
+    offset = None
+    if do_normalize:
+        # Match HF behavior:
+        # x = (x * rescale_factor - mean) / std when normalize=True
+        if do_rescale:
+            scale = [rescale_factor / s for s in image_std]
+        else:
+            scale = [1.0 / s for s in image_std]
+        offset = [(-m / s) for m, s in zip(image_mean, image_std)]
+    return {
+        "image_size": (
+            image_size["height"],
+            image_size["width"],
+        ),
+        "scale": scale,
+        "offset": offset,
+    }
 
 
 def load_audio_converter_config(preset, transformers_config):
-    try:
-        preprocessor_config = load_json(preset, "preprocessor_config.json")
-        feature_extractor = preprocessor_config.get("feature_extractor", {})
+    preprocessor_config = load_json(preset, "preprocessor_config.json")
 
-        return {
-            "feature_size": feature_extractor.get("feature_size", 128),
-            "sampling_rate": feature_extractor.get("sampling_rate", 16000),
-            "padding_value": feature_extractor.get("padding_value", 0.0),
-            "return_attention_mask": feature_extractor.get(
-                "return_attention_mask", True
-            ),
-            "frame_length_ms": feature_extractor.get("frame_length_ms", 32.0),
-            "hop_length_ms": feature_extractor.get("hop_length_ms", 10.0),
-            "min_frequency": feature_extractor.get("min_frequency", 125.0),
-            "max_frequency": feature_extractor.get("max_frequency", 7600.0),
-            "preemphasis": feature_extractor.get("preemphasis", 0.97),
-            "preemphasis_htk_flavor": feature_extractor.get(
-                "preemphasis_htk_flavor", True
-            ),
-            "fft_overdrive": feature_extractor.get("fft_overdrive", True),
-            "dither": feature_extractor.get("dither", 0.0),
-            "input_scale_factor": feature_extractor.get(
-                "input_scale_factor", 1.0
-            ),
-            "mel_floor": feature_extractor.get("mel_floor", 1e-5),
-            "per_bin_mean": feature_extractor.get("per_bin_mean"),
-            "per_bin_stddev": feature_extractor.get("per_bin_stddev"),
-            "padding_side": feature_extractor.get("padding_side", "right"),
-        }
-    except Exception:
-        return None
+    return {
+        "feature_size": preprocessor_config["feature_size"],
+        "sampling_rate": preprocessor_config["sampling_rate"],
+        "padding_value": preprocessor_config["padding_value"],
+        "return_attention_mask": preprocessor_config["return_attention_mask"],
+        "frame_length_ms": (
+            preprocessor_config["frame_length"]
+            / preprocessor_config["sampling_rate"]
+            * 1000.0
+        ),
+        "hop_length_ms": (
+            preprocessor_config["hop_length"]
+            / preprocessor_config["sampling_rate"]
+            * 1000.0
+        ),
+        "min_frequency": preprocessor_config["min_frequency"],
+        "max_frequency": preprocessor_config["max_frequency"],
+        "preemphasis": preprocessor_config["preemphasis"],
+        "preemphasis_htk_flavor": preprocessor_config["preemphasis_htk_flavor"],
+        "fft_overdrive": preprocessor_config["fft_overdrive"],
+        "dither": preprocessor_config["dither"],
+        "input_scale_factor": preprocessor_config["input_scale_factor"],
+        "mel_floor": preprocessor_config["mel_floor"],
+        "per_bin_mean": preprocessor_config["per_bin_mean"],
+        "per_bin_stddev": preprocessor_config["per_bin_stddev"],
+        "padding_side": preprocessor_config["padding_side"],
+    }
 
 
 def convert_tokenizer(cls, preset, **kwargs):
