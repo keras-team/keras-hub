@@ -331,8 +331,17 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                 b, n, t, f = ops.shape(input_features)
                 features = ops.reshape(input_features, (b * n, t, f))
                 mask = ops.reshape(input_features_mask, (b * n, t))
+                # Ensure we don't have an empty batch during tracing
+                # to avoid crashes due to empty convolutions on TF GPU/XLA.
+                dummy_features = ops.zeros((1, t, f), dtype=features.dtype)
+                dummy_mask = ops.zeros((1, t), dtype=mask.dtype)
+                features = ops.concatenate([features, dummy_features], axis=0)
+                mask = ops.concatenate([mask, dummy_mask], axis=0)
                 audio_features, _ = self.audio_encoder((features, mask))
                 audio_embeds = self.embed_audio(audio_features)
+                # Discard the dummy clip appended above so the reshape back
+                # to (b, n, t_out, h) gets the exact b*n count it expects.
+                audio_embeds = audio_embeds[:-1]
                 t_out, h = ops.shape(audio_embeds)[1:]
                 audio_embeds = ops.reshape(audio_embeds, (b, n, t_out, h))
                 (
@@ -886,7 +895,9 @@ class Gemma3nBackbone(Backbone):
                 "vision_hidden_size": self.vision_hidden_size,
                 "vision_vocab_size": self.vision_vocab_size,
                 "vision_vocab_offset": self.vision_vocab_offset,
-                "vision_soft_tokens_per_image": self.vision_soft_tokens_per_image,  # noqa: E501
+                "vision_soft_tokens_per_image": (
+                    self.vision_soft_tokens_per_image
+                ),
                 "image_token_id": self.image_token_id,
                 "audio_encoder_config": self.audio_encoder_config,
                 "audio_hidden_size": self.audio_hidden_size,

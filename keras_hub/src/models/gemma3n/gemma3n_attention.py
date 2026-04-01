@@ -138,12 +138,7 @@ class Gemma3nAudioRelativePositionEmbedding(keras.layers.Layer):
                 slice_end = qbs_val * kcs_val
             except TypeError:
                 slice_end = None
-        if slice_end is not None:
-            term_bd_reshaped = ops.slice(
-                term_bd_reshaped,
-                [0, 0, 0, 0],
-                [-1, -1, -1, slice_end],
-            )
+        term_bd_reshaped = term_bd_reshaped[..., :slice_end]
         term_bd_shifted = ops.reshape(
             term_bd_reshaped,
             (
@@ -804,11 +799,7 @@ class Gemma3nAudioAttention(keras.layers.Layer):
                 self.head_dim,
             ),
         )
-        context_vectors = ops.slice(
-            context_vectors,
-            [0, 0, 0, 0],
-            [-1, q_time, self.num_attention_heads, self.head_dim],
-        )
+        context_vectors = context_vectors[:, :q_time]
         return context_vectors
 
     def get_config(self):
