@@ -104,13 +104,40 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
             **kwargs,
         )
 
-    def call_encoder(self, token_ids, padding_mask):
+    def call_encoder(
+        self,
+        token_ids,
+        padding_mask,
+        images=None,
+        vision_indices=None,
+    ):
         """Process inputs through the encoder stack."""
         encoder_embeddings = self.backbone.token_embedding(token_ids)
         encoder_embeddings *= ops.cast(
             ops.sqrt(self.backbone.encoder_hidden_dim),
             encoder_embeddings.dtype,
         )
+
+        if not self.backbone.text_only_model:
+            eoi_mask = ops.cast(
+                ops.expand_dims(
+                    ops.equal(token_ids, self.backbone.eoi_token_index),
+                    axis=-1,
+                ),
+                encoder_embeddings.dtype,
+            )
+            encoder_embeddings = (
+                eoi_mask * self.backbone.encoder_eoi_embedding
+                + (1 - eoi_mask) * encoder_embeddings
+            )
+
+            img_embeddings = self.backbone.vision_encoder(images)
+            encoder_embeddings = self.backbone.interleave_embeddings(
+                image_embeddings=img_embeddings,
+                text_embeddings=encoder_embeddings,
+                vision_indices=vision_indices,
+            )
+
         encoder_hidden_states = self.backbone.encoder_dropout(
             encoder_embeddings, training=False
         )
@@ -212,10 +239,15 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
         encoder_padding_mask,
         decoder_token_ids,
         decoder_padding_mask,
+        images=None,
+        vision_indices=None,
     ):
         """Build an empty cache for use with `call_with_cache()`."""
         encoder_output, encoder_padding_mask = self.call_encoder(
-            encoder_token_ids, encoder_padding_mask
+            encoder_token_ids,
+            encoder_padding_mask,
+            images=images,
+            vision_indices=vision_indices,
         )
         batch_size = ops.shape(decoder_token_ids)[0]
         num_layers = self.backbone.decoder_num_layers
@@ -257,11 +289,15 @@ class T5Gemma2Seq2SeqLM(Seq2SeqLM):
         encoder_padding_mask = inputs["encoder_padding_mask"]
         decoder_token_ids = inputs["decoder_token_ids"]
         decoder_padding_mask = inputs["decoder_padding_mask"]
+        images = inputs.get("images", None)
+        vision_indices = inputs.get("vision_indices", None)
         hidden_states, cache, extra_cache_info = self._build_cache(
             encoder_token_ids=encoder_token_ids,
             encoder_padding_mask=encoder_padding_mask,
             decoder_token_ids=decoder_token_ids,
             decoder_padding_mask=decoder_padding_mask,
+            images=images,
+            vision_indices=vision_indices,
         )
         encoder_output, encoder_padding_mask = extra_cache_info
         row_lengths = ops.sum(ops.cast(decoder_padding_mask, "int32"), axis=-1)

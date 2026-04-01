@@ -345,9 +345,6 @@ def main(_):
     )
 
     # Create preprocessor for verification.
-    keras_hub_tokenizer = keras_hub.models.T5Gemma2Tokenizer.from_preset(
-        f"hf://{hf_model_name}"
-    )
     preprocessor_kwargs = {}
     if keras_hub_model.vision_encoder is not None:
         preprocessor_kwargs.update(
@@ -358,8 +355,8 @@ def main(_):
                 ),
             }
         )
-    preprocessor = T5Gemma2Seq2SeqLMPreprocessor(
-        tokenizer=keras_hub_tokenizer,
+    preprocessor = T5Gemma2Seq2SeqLMPreprocessor.from_preset(
+        f"hf://{hf_model_name}",
         **preprocessor_kwargs,
     )
 
