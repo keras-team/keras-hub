@@ -446,62 +446,58 @@ class Gemma3nAudioConverter(AudioConverter):
         pad_to_multiple_of=128,
         return_attention_mask=True,
     ):
-        # Determine whether input is batched.
+        def _process_in_py(raw_speech_tensor):
+            raw_speech_np = raw_speech_tensor.numpy()
+            is_batched = raw_speech_np.ndim > 1
+            if is_batched:
+                speech_list = [rs.reshape(-1, 1) for rs in raw_speech_np]
+            else:
+                raw_speech_np = np.atleast_1d(raw_speech_np)
+                speech_list = [raw_speech_np.reshape(-1, 1)]
+            input_features_list, attention_mask_list = self.pad(
+                speech_list,
+                padding=padding,
+                max_length=max_length,
+                truncation=truncation,
+                pad_to_multiple_of=pad_to_multiple_of,
+                return_attention_mask=return_attention_mask,
+            )
+            prepared_speech = []
+            prepared_speech_mask = []
+            for speech, mask in zip(input_features_list, attention_mask_list):
+                speech_tensor = tf.constant(speech.T, dtype=self.compute_dtype)
+                mask_tensor = tf.constant(mask, dtype=tf.int32)
+                features, feature_mask = self._extract_spectrogram(
+                    speech_tensor, mask_tensor
+                )
+                prepared_speech.append(features)
+                prepared_speech_mask.append(feature_mask)
+            input_features = tf.stack(prepared_speech)
+            input_features_mask = tf.stack(prepared_speech_mask)
+            if not is_batched:
+                input_features = tf.squeeze(input_features, axis=0)
+                input_features_mask = tf.squeeze(input_features_mask, axis=0)
+            return input_features, input_features_mask
+
         if not isinstance(raw_speech, (tf.Tensor, tf.RaggedTensor)):
             was_batched = isinstance(raw_speech, (list, tuple))
-            if isinstance(raw_speech, (list, tuple)):
-                # Convert each element first, then pad in NumPy land (before
-                # entering graph execution) because padding depends on the
-                # max length of the batch which requires a Python-side pass.
-                raw_speech_np = [
-                    np.atleast_1d(np.array(r, dtype=np.float32))
-                    for r in raw_speech
-                ]
-            else:
-                raw_speech_np = [
-                    np.atleast_1d(np.array(raw_speech, dtype=np.float32))
-                ]
+            raw_speech = tf.convert_to_tensor(
+                raw_speech, dtype=self.compute_dtype
+            )
         else:
-            was_batched = (
-                raw_speech.shape.rank is not None and raw_speech.shape.rank > 1
-            )
-            raw_speech_np = (
-                [r.numpy() for r in raw_speech]
-                if was_batched
-                else [raw_speech.numpy()]
-            )
-
-        # Reshape each 1D clip to (time, 1) for padding helper.
-        speech_list = [r.reshape(-1, 1) for r in raw_speech_np]
-        input_features_list, attention_mask_list = self.pad(
-            speech_list,
-            padding=padding,
-            max_length=max_length,
-            truncation=truncation,
-            pad_to_multiple_of=pad_to_multiple_of,
-            return_attention_mask=return_attention_mask,
+            was_batched = raw_speech.shape.rank > 1
+        input_features, input_features_mask = tf.py_function(
+            _process_in_py,
+            inp=[raw_speech],
+            Tout=[self.compute_dtype, tf.bool],
         )
-
-        # Process each sample fully in TF graph (no .numpy() calls here).
-        prepared_speech = []
-        prepared_speech_mask = []
-        for speech_np, mask_np in zip(input_features_list, attention_mask_list):
-            # speech_np is shape (time, 1), transposed to (1, time) for STFT.
-            speech_tensor = tf.constant(speech_np.T, dtype=self.compute_dtype)
-            mask_tensor = tf.constant(mask_np, dtype=tf.int32)
-            features, feature_mask = self._extract_spectrogram(
-                speech_tensor, mask_tensor
-            )
-            prepared_speech.append(features)
-            prepared_speech_mask.append(feature_mask)
-
-        input_features = tf.stack(prepared_speech)
-        input_features_mask = tf.stack(prepared_speech_mask)
-
-        if not was_batched:
-            input_features = tf.squeeze(input_features, axis=0)
-            input_features_mask = tf.squeeze(input_features_mask, axis=0)
-
+        num_frames = None
+        if was_batched:
+            input_features.set_shape([None, num_frames, self.feature_size])
+            input_features_mask.set_shape([None, num_frames])
+        else:
+            input_features.set_shape([num_frames, self.feature_size])
+            input_features_mask.set_shape([num_frames])
         input_features_mask = tf.cast(input_features_mask, dtype="int32")
         return input_features, input_features_mask
 
