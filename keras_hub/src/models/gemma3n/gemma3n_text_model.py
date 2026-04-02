@@ -361,16 +361,19 @@ class Gemma3nTextModel(keras.layers.Layer):
                 new_caches.append(new_cache)
             cache = ops.stack(new_caches, axis=1)
         else:
+            # Training path: no KV cache to track. We still need a temp
+            # structure so that KV-shared layers can reuse the output from the
+            # last non-shared layer of the same type, but we never stack or
+            # return these caches.
+            last_shared_cache = {}
             for i, decoder_layer in enumerate(self.transformer_layers):
                 is_kv_shared_layer = i >= self.first_kv_shared_layer_idx > 0
                 layer_type = self.layer_types[i]
                 per_layer_input = per_layer_inputs[:, :, i, :]
                 if is_kv_shared_layer:
-                    # For shared layer, use kv cache from last
-                    # non-shared layer of the same type
-                    current_cache = new_caches[
-                        last_nonshared_layer_idx[layer_type]
-                    ]
+                    # For shared layer, reuse the cache tensor produced by the
+                    # last non-shared layer of the same type.
+                    current_cache = last_shared_cache.get(layer_type, None)
                 else:
                     current_cache = None
                     last_nonshared_layer_idx[layer_type] = i
@@ -382,7 +385,9 @@ class Gemma3nTextModel(keras.layers.Layer):
                     ),
                     cache=current_cache,
                 )
-                new_caches.append(new_cache)
+                if not is_kv_shared_layer:
+                    # Store for potential use by subsequent shared layers.
+                    last_shared_cache[layer_type] = new_cache
         target_magnitude = ops.sqrt(
             ops.mean(hidden_states[0] ** 2, axis=-1, keepdims=True)
         )

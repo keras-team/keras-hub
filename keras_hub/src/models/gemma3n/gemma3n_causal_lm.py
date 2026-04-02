@@ -315,7 +315,7 @@ class Gemma3nCausalLM(CausalLM):
         )
         return hidden_states, cache
 
-    def generate_step(self, inputs, stop_token_ids=[106]):
+    def generate_step(self, inputs, stop_token_ids=(106,)):
         """A compilable generation function for a single batch of inputs.
 
         This function represents the inner, XLA-compilable, generation function

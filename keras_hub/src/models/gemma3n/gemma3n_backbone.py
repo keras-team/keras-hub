@@ -1,5 +1,3 @@
-import inspect
-
 import keras
 from keras import ops
 
@@ -279,7 +277,12 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                 )
                 pixels = ops.concatenate([pixels, dummy], axis=0)
                 vision_features = self.vision_encoder(pixels)
-                if self.vision_encoder.data_format == "channels_first":
+                vision_encoder_data_format = getattr(
+                    self.vision_encoder,
+                    "data_format",
+                    keras.backend.image_data_format(),
+                )
+                if vision_encoder_data_format == "channels_first":
                     vision_features = ops.transpose(
                         vision_features, (0, 2, 3, 1)
                     )
@@ -655,19 +658,36 @@ class Gemma3nBackbone(Backbone):
                 self.vision_encoder.build(input_shape)
         self.audio_encoder = None
         if audio_encoder_config:
-            audio_encoder_sig = inspect.signature(Gemma3nAudioEncoder.__init__)
-            audio_encoder_args = {
-                p.name for p in audio_encoder_sig.parameters.values()
+            # Explicit set of valid Gemma3nAudioEncoder init params.
+            # This avoids using inspect.signature (which is non-standard for
+            # Keras components and breaks serialization).
+            _audio_encoder_valid_args = {
+                "hidden_size",
+                "input_feat_size",
+                "sscp_conv_channel_size",
+                "sscp_conv_kernel_size",
+                "sscp_conv_stride_size",
+                "sscp_conv_group_norm_eps",
+                "num_hidden_layers",
+                "rms_norm_eps",
+                "gradient_clipping",
+                "residual_weight",
+                "num_attention_heads",
+                "attention_chunk_size",
+                "num_attention_context_right",
+                "num_attention_context_left",
+                "attention_logit_cap",
+                "conv_kernel_size",
+                "reduction_factor",
+                # Standard keras.layers.Layer kwargs
+                "name",
+                "trainable",
+                "dtype",
             }
-            keras_layer_sig = inspect.signature(keras.layers.Layer.__init__)
-            keras_layer_args = {
-                p.name for p in keras_layer_sig.parameters.values()
-            }
-            valid_args = audio_encoder_args.union(keras_layer_args)
             filtered_kwargs = {
                 key: value
                 for key, value in audio_encoder_config.items()
-                if key in valid_args
+                if key in _audio_encoder_valid_args
             }
             filtered_kwargs.pop("dtype", None)
             self.audio_encoder = Gemma3nAudioEncoder(
@@ -895,9 +915,7 @@ class Gemma3nBackbone(Backbone):
                 "vision_hidden_size": self.vision_hidden_size,
                 "vision_vocab_size": self.vision_vocab_size,
                 "vision_vocab_offset": self.vision_vocab_offset,
-                "vision_soft_tokens_per_image": (
-                    self.vision_soft_tokens_per_image
-                ),
+                "vision_soft_tokens_per_image": self.vision_soft_tokens_per_image,  # noqa: E501
                 "image_token_id": self.image_token_id,
                 "audio_encoder_config": self.audio_encoder_config,
                 "audio_hidden_size": self.audio_hidden_size,

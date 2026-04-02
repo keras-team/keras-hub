@@ -974,7 +974,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         if not self.built:
             self.build(None)
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
-        ids_to_strip = self.tokenizer.special_token_ids
+        ids_to_strip = list(self.tokenizer.special_token_ids)
         if self.tokenizer.start_of_image_token_id in ids_to_strip:
             ids_to_strip.remove(self.tokenizer.start_of_image_token_id)
         if self.tokenizer.start_of_audio_token_id in ids_to_strip:

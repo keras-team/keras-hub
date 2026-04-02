@@ -114,40 +114,26 @@ class Gemma3nAudioRelativePositionEmbedding(keras.layers.Layer):
         U = shape_padded[2]
         W = shape_padded[3]
         C_plus_1 = shape_padded[4]
-        target_shape_1_last_dim = -1
-        if W is not None and C_plus_1 is not None:
-            try:
-                target_shape_1_last_dim = W * C_plus_1
-            except TypeError:
-                target_shape_1_last_dim = -1
+        # Use ops.shape() for dynamic dims to avoid issues where both W and
+        # C_plus_1 could be None (dynamic), which would produce multiple -1 dims
+        # in a reshape call that only supports a single inferred dimension.
         term_bd_reshaped = ops.reshape(
             term_bd_padded,
-            (
-                B if B is not None else -1,
-                H if H is not None else -1,
-                U if U is not None else -1,
-                target_shape_1_last_dim,
-            ),
+            (B, H, U, W * C_plus_1),
         )
-        slice_end = None
+        # Compute slice end using ops.shape for dynamic safety.
         qbs_val = query_block_size
         if not isinstance(qbs_val, int) and hasattr(qbs_val, "shape"):
             qbs_val = ops.shape(qbs_val)[0]
-        if qbs_val is not None and kcs_val is not None:
-            try:
-                slice_end = qbs_val * kcs_val
-            except TypeError:
-                slice_end = None
+        if isinstance(qbs_val, int) and isinstance(kcs_val, int):
+            slice_end = qbs_val * kcs_val
+        else:
+            # qbs_val and/or kcs_val might be tensors; multiply symbolically.
+            slice_end = qbs_val * kcs_val
         term_bd_reshaped = term_bd_reshaped[..., :slice_end]
         term_bd_shifted = ops.reshape(
             term_bd_reshaped,
-            (
-                B if B is not None else -1,
-                H if H is not None else -1,
-                U if U is not None else -1,
-                W if W is not None else -1,
-                kcs_val if kcs_val is not None else -1,
-            ),
+            (B, H, U, W, kcs_val),
         )
         return term_bd_shifted
 
@@ -799,7 +785,13 @@ class Gemma3nAudioAttention(keras.layers.Layer):
                 self.head_dim,
             ),
         )
-        context_vectors = context_vectors[:, :q_time]
+        # Use ops.slice (not [:, :q_time]) to avoid XLA
+        # StridedSliceGrad shape conflicts.
+        context_vectors = ops.slice(
+            context_vectors,
+            [0, 0, 0, 0],
+            [batch_size, q_time, self.num_attention_heads, self.head_dim],
+        )
         return context_vectors
 
     def get_config(self):
