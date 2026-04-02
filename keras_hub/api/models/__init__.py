@@ -775,6 +775,18 @@ from keras_hub.src.models.t5gemma.t5gemma_seq_2_seq_lm_preprocessor import (
 from keras_hub.src.models.t5gemma.t5gemma_tokenizer import (
     T5GemmaTokenizer as T5GemmaTokenizer,
 )
+from keras_hub.src.models.t5gemma2.t5gemma2_backbone import (
+    T5Gemma2Backbone as T5Gemma2Backbone,
+)
+from keras_hub.src.models.t5gemma2.t5gemma2_seq_2_seq_lm import (
+    T5Gemma2Seq2SeqLM as T5Gemma2Seq2SeqLM,
+)
+from keras_hub.src.models.t5gemma2.t5gemma2_seq_2_seq_lm_preprocessor import (
+    T5Gemma2Seq2SeqLMPreprocessor as T5Gemma2Seq2SeqLMPreprocessor,
+)
+from keras_hub.src.models.t5gemma2.t5gemma2_tokenizer import (
+    T5Gemma2Tokenizer as T5Gemma2Tokenizer,
+)
 from keras_hub.src.models.task import Task as Task
 from keras_hub.src.models.text_classifier import TextClassifier as Classifier
 from keras_hub.src.models.text_classifier import (
