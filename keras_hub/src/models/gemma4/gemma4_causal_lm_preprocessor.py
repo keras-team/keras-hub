@@ -794,9 +794,16 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
                 "num_audio_tokens_per_clip": self.num_audio_tokens_per_clip,
                 "max_audio_clips_per_prompt": self.max_audio_clips_per_prompt,
                 "audio_input_feat_size": self.audio_input_feat_size,
-                "audio_converter": self.audio_converter,
             }
         )
+        if self.image_converter:
+            config["image_converter"] = keras.layers.serialize(
+                self.image_converter
+            )
+        if self.audio_converter:
+            config["audio_converter"] = keras.layers.serialize(
+                self.audio_converter
+            )
         return config
 
     @preprocessing_function
