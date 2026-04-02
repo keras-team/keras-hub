@@ -322,6 +322,24 @@ from keras_hub.src.models.gemma3.gemma3_tokenizer import (
 from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
     Gemma3VisionEncoder as Gemma3VisionEncoder,
 )
+from keras_hub.src.models.gemma4.gemma4_audio_encoder import (
+    Gemma4AudioEncoder as Gemma4AudioEncoder,
+)
+from keras_hub.src.models.gemma4.gemma4_backbone import (
+    Gemma4Backbone as Gemma4Backbone,
+)
+from keras_hub.src.models.gemma4.gemma4_causal_lm import (
+    Gemma4CausalLM as Gemma4CausalLM,
+)
+from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
+    Gemma4CausalLMPreprocessor as Gemma4CausalLMPreprocessor,
+)
+from keras_hub.src.models.gemma4.gemma4_tokenizer import (
+    Gemma4Tokenizer as Gemma4Tokenizer,
+)
+from keras_hub.src.models.gemma4.gemma4_vision_encoder import (
+    Gemma4VisionEncoder as Gemma4VisionEncoder,
+)
 from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone as GPT2Backbone
 from keras_hub.src.models.gpt2.gpt2_causal_lm import (
     GPT2CausalLM as GPT2CausalLM,
