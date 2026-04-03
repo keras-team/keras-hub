@@ -3,6 +3,7 @@ import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.preprocessor import Preprocessor
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
@@ -66,7 +67,10 @@ class CausalLMPreprocessor(Preprocessor):
         add_end_token=True,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            _allow_python_workflow=_allow_python_workflow, **kwargs
+        )
         self.tokenizer = tokenizer
         self.packer = None
         self.sequence_length = sequence_length
@@ -85,14 +89,7 @@ class CausalLMPreprocessor(Preprocessor):
         )
         self.built = True
 
-    @preprocessing_function
-    def call(
-        self,
-        x,
-        y=None,
-        sample_weight=None,
-        sequence_length=None,
-    ):
+    def _call(self, x, y=None, sample_weight=None, sequence_length=None):
         sequence_length = sequence_length or self.sequence_length
         x = self.tokenizer(x)
         # Pad with one extra token to account for the truncation below.
@@ -112,22 +109,28 @@ class CausalLMPreprocessor(Preprocessor):
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     @preprocessing_function
-    def generate_preprocess(
-        self,
-        x,
-        sequence_length=None,
-    ):
-        """Convert strings to integer token input for generation.
+    def _call_tf(self, x, y=None, sample_weight=None, sequence_length=None):
+        return self._call(
+            x, y=y, sample_weight=sample_weight, sequence_length=sequence_length
+        )
 
-        Similar to calling the layer for training, this method takes in strings
-        or tensor strings, tokenizes and packs the input, and computes a padding
-        mask masking all inputs not filled in with a padded value.
+    def call(self, x, y=None, sample_weight=None, sequence_length=None):
+        if in_tf_function():
+            return self._call_tf(
+                x,
+                y=y,
+                sample_weight=sample_weight,
+                sequence_length=sequence_length,
+            )
+        else:
+            return self._call(
+                x,
+                y=y,
+                sample_weight=sample_weight,
+                sequence_length=sequence_length,
+            )
 
-        Unlike calling the layer for training, this method does not compute
-        labels and will never append a `tokenizer.end_token_id` to the end of
-        the sequence (as generation is expected to continue at the end of the
-        inputted prompt).
-        """
+    def _generate_preprocess(self, x, sequence_length=None):
         if not self.built:
             self.build(None)
 
@@ -141,16 +144,54 @@ class CausalLMPreprocessor(Preprocessor):
         }
 
     @preprocessing_function
-    def generate_postprocess(
-        self,
-        x,
-    ):
-        """Convert integer token output to strings for generation.
+    def _generate_preprocess_tf(self, x, sequence_length=None):
+        return self._generate_preprocess(x, sequence_length=sequence_length)
 
-        This method reverses `generate_preprocess()`, by first removing all
-        padding and start/end tokens, and then converting the integer sequence
-        back to a string.
+    def generate_preprocess(self, x, sequence_length=None):
+        """Convert strings to integer token input for generation.
+
+        Similar to calling the layer for training, this method takes in strings
+        or tensor strings, tokenizes and packs the input, and computes a padding
+        mask masking all inputs not filled in with a padded value.
+
+        Unlike calling the layer for training, this method does not compute
+        labels and will never append a `tokenizer.end_token_id` to the end of
+        the sequence (as generation is expected to continue at the end of the
+        inputted prompt).
         """
+        if in_tf_function():
+            return self._generate_preprocess_tf(
+                x, sequence_length=sequence_length
+            )
+        else:
+            return self._generate_preprocess(x, sequence_length=sequence_length)
+
+    def _generate_postprocess(self, x):
+        if not self.built:
+            self.build(None)
+
+        def _strip_to_ragged(token_ids, masks, ids_to_strip):
+            """Remove masked and special tokens from a sequence."""
+            for id in ids_to_strip:
+                masks = masks & (token_ids != id)
+            if token_ids.ndim == 1:
+                token_ids = token_ids[masks].tolist()
+            else:
+                ragged_ids = []
+                for i in range(token_ids.shape[0]):
+                    ragged_ids.append(token_ids[i][masks[i]].tolist())
+                token_ids = ragged_ids
+            return token_ids
+
+        token_ids, padding_mask = x["token_ids"], x["padding_mask"]
+        ids_to_strip = self.tokenizer.special_token_ids
+        token_ids = keras.ops.convert_to_numpy(token_ids).astype("int32")
+        padding_mask = keras.ops.convert_to_numpy(padding_mask).astype("bool")
+        token_ids = _strip_to_ragged(token_ids, padding_mask, ids_to_strip)
+        return self.tokenizer.detokenize(token_ids)
+
+    @preprocessing_function
+    def _generate_postprocess_tf(self, x):
         if not self.built:
             self.build(None)
 
@@ -159,6 +200,18 @@ class CausalLMPreprocessor(Preprocessor):
         ids_to_strip = self.tokenizer.special_token_ids
         token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
         return self.tokenizer.detokenize(token_ids)
+
+    def generate_postprocess(self, x):
+        """Convert integer token output to strings for generation.
+
+        This method reverses `generate_preprocess()`, by first removing all
+        padding and start/end tokens, and then converting the integer sequence
+        back to a string.
+        """
+        if in_tf_function():
+            return self._generate_postprocess_tf(x)
+        else:
+            return self._generate_postprocess(x)
 
     def get_config(self):
         config = super().get_config()
