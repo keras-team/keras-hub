@@ -406,9 +406,10 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                     expanded_full_mask, replacement_tensor, inputs_embeds
                 )
 
-            # Unconditional call — ops.cond breaks
-            # XLA dynamic_padder for conv activations.
-            inputs_embeds = get_audio_embeds()
+            # Skip if t=0 (eager/text-only);
+            # shape[2]=None in graph mode → always runs.
+            if input_features.shape[2] is None or input_features.shape[2] > 0:
+                inputs_embeds = get_audio_embeds()
         projected_per_layer_inputs = (
             self.language_model.project_per_layer_inputs(
                 inputs_embeds, per_layer_inputs
