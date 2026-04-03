@@ -15,6 +15,7 @@ from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gemma3
+from keras_hub.src.utils.transformers import convert_gemma3n
 from keras_hub.src.utils.transformers import convert_gemma4
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_gpt_oss
@@ -59,6 +60,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma
         elif model_type in ("gemma3", "gemma3_text"):
             self.converter = convert_gemma3
+        elif model_type == "gemma3n":
+            self.converter = convert_gemma3n
         elif model_type in ("gemma4", "gemma4_text"):
             self.converter = convert_gemma4
         elif model_type == "gpt2":
