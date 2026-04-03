@@ -1,3 +1,4 @@
+import gc
 import os
 
 import numpy as np
@@ -27,6 +28,11 @@ PRESET_MAP = {
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
+)
+flags.DEFINE_string(
+    "save_dtype",
+    "bfloat16",
+    "Dtype to save the model in. Defaults to bfloat16.",
 )
 flags.mark_flag_as_required("preset")
 
@@ -279,10 +285,7 @@ def validate_generate(keras_causal_lm, hf_model, hf_processor):
     )
 
 
-def _load_hf_model_and_processor(
-    hf_model_name,
-    torch_dtype,
-):
+def _load_hf_model_and_processor(hf_model_name, torch_dtype):
     """Load (or download) the HF model and processor."""
     print(f"  -> Downloading Hugging Face model: {hf_model_name}")
     hf_model = Gemma3nForConditionalGeneration.from_pretrained(
@@ -299,6 +302,7 @@ def main(_):
     preset = FLAGS.preset
     hf_model_name = PRESET_MAP[preset]
     save_path = preset
+    save_dtype = FLAGS.save_dtype
 
     print("=" * 60)
     print("  FLOAT32 VALIDATION")
@@ -318,25 +322,39 @@ def main(_):
     )
     print("\n-> Validating output consistency (float32).")
     validate_output(keras_model, keras_preprocessor, hf_model, hf_processor)
+
+    keras_causal_lm = keras_hub.models.Gemma3nCausalLM(
+        backbone=keras_model,
+        preprocessor=keras_preprocessor,
+    )
     if hf_model_name.endswith("-it"):
-        # Audio input only works well with instruction-tuned models
+        # Audio input only works well with instruction-tuned models.
         print("\n-> Validating generation consistency (float32).")
-        keras_causal_lm = keras_hub.models.Gemma3nCausalLM.from_preset(
-            f"hf://{hf_model_name}", dtype="float32"
-        )
         validate_generate(keras_causal_lm, hf_model, hf_processor)
-        del keras_causal_lm
-    del keras_model, hf_model
 
     print("\n" + "=" * 60)
-    print("  SAVING BFLOAT16 PRESET")
+    print("  SAVING PRESET")
     print("=" * 60)
-    print("-> Loading Keras model (bfloat16) from HuggingFace preset.")
-    keras_model_bf16 = keras_hub.models.Gemma3nBackbone.from_preset(
-        f"hf://{hf_model_name}", dtype="bfloat16"
-    )
-    print(f"💾 Saving Keras preset to ./{save_path}")
-    keras_model_bf16.save_to_preset(f"./{save_path}")
+    if save_dtype == "float32":
+        # Already validated in float32 — save directly.
+        print(f"-> Saving Keras preset ({save_dtype}) to ./{save_path}")
+        keras_causal_lm.save_to_preset(f"./{save_path}")
+    else:
+        # Free memory before reloading in the target save dtype.
+        del keras_causal_lm, keras_model, hf_model
+        gc.collect()
+
+        print(f"-> Loading Keras model ({save_dtype}) from HuggingFace preset.")
+        keras_model_save = keras_hub.models.Gemma3nBackbone.from_preset(
+            f"hf://{hf_model_name}", dtype=save_dtype
+        )
+        keras_causal_lm_save = keras_hub.models.Gemma3nCausalLM(
+            backbone=keras_model_save,
+            preprocessor=keras_preprocessor,
+        )
+        print(f"💾 Saving Keras preset ({save_dtype}) to ./{save_path}")
+        keras_causal_lm_save.save_to_preset(f"./{save_path}")
+
     print("🎉 Conversion complete.")
 
 
