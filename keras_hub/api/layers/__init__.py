@@ -108,6 +108,7 @@ from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
 )
 from keras_hub.src.models.gemma3n.gemma3n_image_converter import (
     Gemma3nImageConverter as Gemma3nImageConverter,
+)
 from keras_hub.src.models.gemma4.gemma4_audio_converter import (
     Gemma4AudioConverter as Gemma4AudioConverter,
 )
