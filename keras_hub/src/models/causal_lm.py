@@ -109,7 +109,10 @@ class CausalLM(Task):
         if optimizer == "auto":
             optimizer = keras.optimizers.Adam(2e-5)
         if loss == "auto":
-            loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+            loss = keras.losses.SparseCategoricalCrossentropy(
+                from_logits=True,
+                ignore_class=-1,
+            )
         if weighted_metrics == "auto":
             weighted_metrics = [keras.metrics.SparseCategoricalAccuracy()]
         super().compile(
