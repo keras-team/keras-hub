@@ -317,11 +317,7 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                     expanded_full_mask, replacement_tensor, inputs_embeds
                 )
 
-            inputs_embeds = ops.cond(
-                ops.any(image_token_mask),
-                get_vision_embeds,
-                lambda: inputs_embeds,
-            )
+            inputs_embeds = get_vision_embeds()
 
         if (
             input_features is not None
@@ -410,11 +406,9 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                     expanded_full_mask, replacement_tensor, inputs_embeds
                 )
 
-            inputs_embeds = ops.cond(
-                ops.any(audio_token_mask),
-                get_audio_embeds,
-                lambda: inputs_embeds,
-            )
+            # Unconditional call — ops.cond breaks
+            # XLA dynamic_padder for conv activations.
+            inputs_embeds = get_audio_embeds()
         projected_per_layer_inputs = (
             self.language_model.project_per_layer_inputs(
                 inputs_embeds, per_layer_inputs
