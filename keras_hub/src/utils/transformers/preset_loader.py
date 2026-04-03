@@ -16,6 +16,7 @@ from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gemma3
 from keras_hub.src.utils.transformers import convert_gemma3n
+from keras_hub.src.utils.transformers import convert_gemma4
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
@@ -61,6 +62,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma3
         elif model_type == "gemma3n":
             self.converter = convert_gemma3n
+        elif model_type in ("gemma4", "gemma4_text"):
+            self.converter = convert_gemma4
         elif model_type == "gpt2":
             self.converter = convert_gpt2
         elif model_type == "gpt_oss":
@@ -161,3 +164,14 @@ class TransformersPresetLoader(PresetLoader):
             if config is not None:
                 return cls(**{**config, **kwargs})
         return None
+
+    def load_preprocessor(self, cls, config_file=None, **kwargs):
+        if hasattr(self.converter, "load_preprocessor_config"):
+            extra = self.converter.load_preprocessor_config(
+                self.preset, self.config
+            )
+            if extra:
+                kwargs = {**extra, **kwargs}
+        if config_file is not None:
+            return super().load_preprocessor(cls, config_file, **kwargs)
+        return super().load_preprocessor(cls, **kwargs)
