@@ -280,7 +280,7 @@ class GptOssAttention(keras.layers.Layer):
             else:
                 adder = ops.cast(-1e4, self.compute_dtype)
             attention_scores = ops.where(
-                attention_mask[:, None, :, :], attention_scores, adder
+                ops.expand_dims(attention_mask, axis=1), attention_scores, adder
             )
 
         # Handle sink tokens by concatenating them to the logits.

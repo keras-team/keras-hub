@@ -187,7 +187,9 @@ class CachedMixtralAttention(keras.layers.Layer):
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
         if attention_mask is not None:
-            return self.softmax(attention_scores, attention_mask[:, None, :, :])
+            return self.softmax(
+                attention_scores, ops.expand_dims(attention_mask, axis=1)
+            )
         return self.softmax(attention_scores)
 
     def _use_fused_attention_op(self):
