@@ -47,7 +47,7 @@ class Qwen3_5CausalLMTest(TestCase):
             num_query_heads=4,
             num_key_value_heads=2,
             hidden_dim=8,
-            head_dim=4,
+            head_dim=8,
             intermediate_dim=16,
             layer_types=[
                 "linear_attention",

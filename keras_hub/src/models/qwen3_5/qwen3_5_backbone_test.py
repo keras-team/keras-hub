@@ -12,7 +12,7 @@ class Qwen3_5BackboneTest(TestCase):
             "num_layers": 4,
             "num_query_heads": 4,
             "num_key_value_heads": 2,
-            "head_dim": 4,
+            "head_dim": 8,
             "hidden_dim": 16,
             "intermediate_dim": 32,
             "layer_types": [

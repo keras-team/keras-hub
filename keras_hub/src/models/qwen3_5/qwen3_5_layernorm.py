@@ -30,7 +30,11 @@ class Qwen3_5LayerNorm(keras.layers.Layer):
         x = ops.cast(x, "float32")
         var = ops.mean(ops.power(x, 2), axis=-1, keepdims=True)
         x = x * ops.rsqrt(var + self.epsilon)
-        return ops.cast(x * (1.0 + self.scale), input_dtype)
+        scale = ops.cast(self.scale, "float32")
+        return ops.cast(x * (1.0 + scale), input_dtype)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
     def get_config(self):
         config = super().get_config()

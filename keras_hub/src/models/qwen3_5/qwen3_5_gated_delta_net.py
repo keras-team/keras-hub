@@ -119,13 +119,10 @@ def _chunk_gated_delta_rule(
     else:
         state = ops.cast(initial_state, "float32")
 
-    # Process chunks using a simple loop.
-    # For simplicity, we process the entire sequence in one pass
-    # using the recurrent formulation (equivalent to chunked but
-    # without the chunked optimization for now).
+    keras_backend = keras.config.backend()
 
-    outputs = []
-    for t in range(seq_len):
+    def step(t, inputs):
+        state, out = inputs
         q_t = query[:, :, t, :]
         k_t = key[:, :, t, :]
         v_beta_t = v_beta[:, :, t, :]
@@ -162,9 +159,33 @@ def _chunk_gated_delta_rule(
 
         # Query the state.
         out_t = ops.sum(state * ops.expand_dims(q_t, -1), axis=-2)
-        outputs.append(out_t)
 
-    output = ops.stack(outputs, axis=2)
+        if keras_backend == "tensorflow":
+            out = out.write(t, out_t)
+        elif keras_backend == "torch":
+            out[:, :, t : t + 1, :] = ops.expand_dims(out_t, axis=2)
+        else:
+            out = ops.slice_update(
+                out, [0, 0, t, 0], ops.expand_dims(out_t, axis=2)
+            )
+
+        return [state, out]
+
+    if keras_backend == "tensorflow":
+        import tensorflow as tf
+
+        out = tf.TensorArray(dtype="float32", size=seq_len)
+        for t in range(seq_len):
+            state, out = step(t, [state, out])
+
+        output = out.stack()
+        output = ops.transpose(output, [1, 2, 0, 3])
+    else:
+        out = ops.zeros(
+            (batch_size, num_heads, seq_len, v_head_dim), dtype="float32"
+        )
+        state, out = ops.fori_loop(0, seq_len, step, [state, out])
+        output = out
 
     final_state = state if output_final_state else None
 
@@ -469,11 +490,9 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
             mixed_qkv = ops.transpose(mixed_qkv_t, (0, 2, 1))
 
         # Split QKV.
-        query, key, value = ops.split(
-            mixed_qkv,
-            [self.key_dim, self.key_dim * 2],
-            axis=-1,
-        )
+        query = mixed_qkv[..., : self.key_dim]
+        key = mixed_qkv[..., self.key_dim : self.key_dim * 2]
+        value = mixed_qkv[..., self.key_dim * 2 :]
 
         query = ops.reshape(
             query,
