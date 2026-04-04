@@ -3,6 +3,9 @@
 import numpy as np
 
 from keras_hub.src.models.qwen3_5.qwen3_5_backbone import Qwen3_5Backbone
+from keras_hub.src.models.qwen3_5.qwen3_5_vision_encoder import (
+    Qwen3_5VisionEncoder,
+)
 from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = Qwen3_5Backbone
@@ -11,6 +14,11 @@ backbone_cls = Qwen3_5Backbone
 def convert_backbone_config(transformers_config):
     # tie_word_embeddings is at the top-level config.
     tie_word_embeddings = transformers_config["tie_word_embeddings"]
+
+    # Save top-level fields that live outside text_config.
+    top_level_vision_config = transformers_config.get("vision_config", None)
+    top_level_mrope_section = transformers_config.get("mrope_section", None)
+    top_level_hidden_size = transformers_config.get("hidden_size", None)
 
     # Qwen3.5 text config is nested under "text_config".
     if "text_config" in transformers_config:
@@ -30,7 +38,34 @@ def convert_backbone_config(transformers_config):
             for i in range(num_layers)
         ]
 
-    return {
+    # M-RoPE section configuration (top-level, not inside text_config).
+    mrope_section = top_level_mrope_section
+
+    # Vision encoder configuration (top-level, optional).
+    vision_encoder = None
+    vision_config = top_level_vision_config
+    if vision_config is not None:
+        # out_hidden_size should match the text backbone's hidden_size.
+        text_hidden = transformers_config.get(
+            "hidden_size", top_level_hidden_size
+        )
+        vision_encoder = Qwen3_5VisionEncoder(
+            depth=vision_config.get("depth", 24),
+            hidden_size=vision_config.get("hidden_size", 1280),
+            num_heads=vision_config.get("num_heads", 16),
+            intermediate_size=vision_config.get("intermediate_size", 5120),
+            in_channels=vision_config.get("in_channels", 3),
+            patch_size=vision_config.get("patch_size", 16),
+            temporal_patch_size=vision_config.get("temporal_patch_size", 2),
+            spatial_merge_size=vision_config.get("spatial_merge_size", 2),
+            out_hidden_size=text_hidden
+            or vision_config.get("out_hidden_size", 1280),
+            num_position_embeddings=vision_config.get(
+                "num_position_embeddings", 2304
+            ),
+        )
+
+    result = {
         "vocabulary_size": transformers_config["vocab_size"],
         "head_dim": transformers_config["head_dim"],
         "hidden_dim": transformers_config["hidden_size"],
@@ -49,6 +84,11 @@ def convert_backbone_config(transformers_config):
         "linear_value_head_dim": transformers_config["linear_value_head_dim"],
         "linear_conv_kernel_dim": transformers_config["linear_conv_kernel_dim"],
     }
+    if vision_encoder is not None:
+        result["vision_encoder"] = vision_encoder
+    if mrope_section is not None:
+        result["mrope_section"] = mrope_section
+    return result
 
 
 def convert_weights(backbone, loader, transformers_config):
@@ -215,6 +255,128 @@ def convert_weights(backbone, loader, transformers_config):
         keras_variable=backbone.get_layer("sequence_output_layernorm").scale,
         hf_weight_key="model.norm.weight",
     )
+
+    # === Vision encoder weights (optional) ===
+    if (
+        hasattr(backbone, "vision_encoder")
+        and backbone.vision_encoder is not None
+    ):
+        vis = backbone.vision_encoder
+        vis_prefix = "model.visual"
+
+        # Patch embedding Conv3D.
+        # HF: (hidden_size, in_channels, temporal, patch, patch)
+        # Keras Conv3D: (temporal, patch, patch, in_channels, hidden_size)
+        loader.port_weight(
+            keras_variable=vis.patch_embed.proj.kernel,
+            hf_weight_key=f"{vis_prefix}.patch_embed.proj.weight",
+            hook_fn=lambda hf_tensor, _: np.transpose(
+                hf_tensor, (2, 3, 4, 1, 0)
+            ),
+        )
+        loader.port_weight(
+            keras_variable=vis.patch_embed.proj.bias,
+            hf_weight_key=f"{vis_prefix}.patch_embed.proj.bias",
+        )
+
+        # Absolute position embedding.
+        loader.port_weight(
+            keras_variable=vis.pos_embed.embeddings,
+            hf_weight_key=f"{vis_prefix}.pos_embed.weight",
+        )
+
+        # ViT blocks.
+        for blk_i in range(vis.depth):
+            blk = vis.blocks[blk_i]
+            blk_prefix = f"{vis_prefix}.blocks.{blk_i}"
+
+            # LayerNorm 1 & 2.
+            loader.port_weight(
+                keras_variable=blk.norm1.gamma,
+                hf_weight_key=f"{blk_prefix}.norm1.weight",
+            )
+            loader.port_weight(
+                keras_variable=blk.norm1.beta,
+                hf_weight_key=f"{blk_prefix}.norm1.bias",
+            )
+            loader.port_weight(
+                keras_variable=blk.norm2.gamma,
+                hf_weight_key=f"{blk_prefix}.norm2.weight",
+            )
+            loader.port_weight(
+                keras_variable=blk.norm2.beta,
+                hf_weight_key=f"{blk_prefix}.norm2.bias",
+            )
+
+            # Attention QKV (fused) and output projection.
+            loader.port_weight(
+                keras_variable=blk.attn.qkv.kernel,
+                hf_weight_key=f"{blk_prefix}.attn.qkv.weight",
+                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=blk.attn.qkv.bias,
+                hf_weight_key=f"{blk_prefix}.attn.qkv.bias",
+            )
+            loader.port_weight(
+                keras_variable=blk.attn.proj.kernel,
+                hf_weight_key=f"{blk_prefix}.attn.proj.weight",
+                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=blk.attn.proj.bias,
+                hf_weight_key=f"{blk_prefix}.attn.proj.bias",
+            )
+
+            # MLP fc1 and fc2.
+            loader.port_weight(
+                keras_variable=blk.mlp.fc1.kernel,
+                hf_weight_key=f"{blk_prefix}.mlp.fc1.weight",
+                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=blk.mlp.fc1.bias,
+                hf_weight_key=f"{blk_prefix}.mlp.fc1.bias",
+            )
+            loader.port_weight(
+                keras_variable=blk.mlp.fc2.kernel,
+                hf_weight_key=f"{blk_prefix}.mlp.fc2.weight",
+                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, (1, 0)),
+            )
+            loader.port_weight(
+                keras_variable=blk.mlp.fc2.bias,
+                hf_weight_key=f"{blk_prefix}.mlp.fc2.bias",
+            )
+
+        # Patch merger.
+        merger_prefix = f"{vis_prefix}.merger"
+        loader.port_weight(
+            keras_variable=vis.merger.norm.gamma,
+            hf_weight_key=f"{merger_prefix}.ln_q.weight",
+        )
+        loader.port_weight(
+            keras_variable=vis.merger.norm.beta,
+            hf_weight_key=f"{merger_prefix}.ln_q.bias",
+        )
+        # mlp.0 = fc1, mlp.2 = fc2
+        loader.port_weight(
+            keras_variable=vis.merger.fc1.kernel,
+            hf_weight_key=f"{merger_prefix}.mlp.0.weight",
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, (1, 0)),
+        )
+        loader.port_weight(
+            keras_variable=vis.merger.fc1.bias,
+            hf_weight_key=f"{merger_prefix}.mlp.0.bias",
+        )
+        loader.port_weight(
+            keras_variable=vis.merger.fc2.kernel,
+            hf_weight_key=f"{merger_prefix}.mlp.2.weight",
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, (1, 0)),
+        )
+        loader.port_weight(
+            keras_variable=vis.merger.fc2.bias,
+            hf_weight_key=f"{merger_prefix}.mlp.2.bias",
+        )
 
     return backbone
 

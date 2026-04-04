@@ -16,7 +16,8 @@ class Qwen3_5CausalLM(CausalLM):
 
     This model predicts the next token based on previous tokens using the
     Qwen3.5 hybrid architecture (full attention + GatedDeltaNet linear
-    attention layers).
+    attention layers). It optionally supports multimodal (image + text)
+    inputs when the backbone has a ``vision_encoder`` attached.
 
     This model has a ``generate()`` method for autoregressive text
     generation.
@@ -51,6 +52,9 @@ class Qwen3_5CausalLM(CausalLM):
         cache,
         cache_update_index,
         padding_mask=None,
+        img_embeddings=None,
+        vision_indices=None,
+        position_ids=None,
     ):
         """Forward pass with cache for autoregressive decoding.
 
@@ -60,13 +64,30 @@ class Qwen3_5CausalLM(CausalLM):
 
         Args:
             token_ids: Dense int tensor (batch_size, max_length).
-            cache: Dense float tensor, the KV cache.
+            cache: Tuple of (kv_cache, conv_cache, recurrent_cache).
             cache_update_index: Int or int tensor, current step index.
+            padding_mask: Optional padding mask.
+            img_embeddings: Optional vision embeddings tensor
+                (total_vision_tokens, hidden_dim). Only used on the
+                first (prefill) call to interleave into text embeddings.
+            vision_indices: Optional int tensor (total_vision_tokens,).
+                Flat indices for scattering vision tokens.
+            position_ids: Optional M-RoPE position IDs tensor
+                (batch, 4, seq_len). Only provided for multimodal inputs.
 
         Returns:
             (logits, hidden_states, cache) tuple.
         """
         x = self.backbone.token_embedding(token_ids)
+
+        # Interleave vision embeddings on the prefill step.
+        if img_embeddings is not None and vision_indices is not None:
+            if hasattr(self.backbone, "interleave_embeddings"):
+                x = self.backbone.interleave_embeddings(
+                    image_embeddings=img_embeddings,
+                    text_embeddings=x,
+                    vision_indices=vision_indices,
+                )
 
         # We need three separate lists because XLA requires tensors to
         # have consistent shapes. KV cache, Conv cache, and Recurrent cache
@@ -88,6 +109,7 @@ class Qwen3_5CausalLM(CausalLM):
                     decoder_padding_mask=padding_mask,
                     self_attention_cache=current_kv,
                     self_attention_cache_update_index=cache_update_index,
+                    position_ids=position_ids,
                 )
                 next_kv_cache.append(next_kv)
 
@@ -122,7 +144,14 @@ class Qwen3_5CausalLM(CausalLM):
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, next_cache
 
-    def _build_cache(self, token_ids, padding_mask):
+    def _build_cache(
+        self,
+        token_ids,
+        padding_mask,
+        img_embeddings=None,
+        vision_indices=None,
+        position_ids=None,
+    ):
         """Build an empty cache for use with ``call_with_cache()``."""
         batch_size = ops.shape(token_ids)[0]
         max_length = ops.shape(token_ids)[1]
@@ -168,16 +197,54 @@ class Qwen3_5CausalLM(CausalLM):
         recurrent_cache = ops.zeros(recurrent_shape, dtype="float32")
 
         cache = (kv_cache, conv_cache, recurrent_cache)
+        # Seed the cache with a full forward pass, including vision
+        # embeddings on the first call.
         _, hidden_states, cache = self.call_with_cache(
-            token_ids, cache, 0, padding_mask=padding_mask
+            token_ids,
+            cache,
+            0,
+            padding_mask=padding_mask,
+            img_embeddings=img_embeddings,
+            vision_indices=vision_indices,
+            position_ids=position_ids,
         )
         return hidden_states, cache
 
     def generate_step(self, inputs, stop_token_ids=None):
-        """A compilable generation function for a single batch."""
+        """A compilable generation function for a single batch.
+
+        For multimodal inputs, the preprocessor populates extra keys like
+        ``pixel_values``, ``image_grid_thw``, ``vision_indices``, and
+        ``position_ids``. These are consumed on the first forward pass
+        (cache prefill) and then dropped for subsequent autoregressive
+        steps.
+        """
         token_ids = inputs["token_ids"]
         padding_mask = inputs["padding_mask"]
-        hidden_states, cache = self._build_cache(token_ids, padding_mask)
+
+        # Check for multimodal inputs.
+        pixel_values = inputs.get("pixel_values", None)
+        image_grid_thw = inputs.get("image_grid_thw", None)
+        vision_indices = inputs.get("vision_indices", None)
+        position_ids = inputs.get("position_ids", None)
+
+        # Run vision encoder if present and we have pixel data.
+        img_embeddings = None
+        if (
+            self.backbone.vision_encoder is not None
+            and pixel_values is not None
+        ):
+            img_embeddings = self.backbone.vision_encoder(
+                pixel_values, image_grid_thw
+            )
+
+        hidden_states, cache = self._build_cache(
+            token_ids,
+            padding_mask,
+            img_embeddings=img_embeddings,
+            vision_indices=vision_indices,
+            position_ids=position_ids,
+        )
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         index = ops.min(row_lengths)
 
@@ -185,6 +252,8 @@ class Qwen3_5CausalLM(CausalLM):
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
+            # No vision inputs during autoregressive generation — they
+            # are already baked into the KV cache from the prefill step.
             logits, hidden_states, cache = self.call_with_cache(
                 prompt, cache, cache_update_index, padding_mask=None
             )

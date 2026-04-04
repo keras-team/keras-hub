@@ -9,6 +9,94 @@ from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
+def _apply_mrope(
+    x_rope, rotary_embedding_layer, position_ids, mrope_section, rotary_dim
+):
+    """Apply interleaved Multi-dimensional RoPE (M-RoPE).
+
+    For multimodal inputs, position_ids has shape (batch, 4, seq_len) where
+    the 4 channels are [text, temporal, height, width]. Each channel covers a
+    different slice of the rotary dimensions based on mrope_section.
+
+    Args:
+        x_rope: Tensor (batch, seq, heads, rotary_dim) — the portion of Q or K
+            that receives RoPE.
+        rotary_embedding_layer: RotaryEmbedding instance.
+        position_ids: int32 tensor (batch, 4, seq_len) or None.
+            When None, standard sequential positions are used.
+        mrope_section: list[int] — [s_t, s_h, s_w] sizes (in pairs of dims)
+            for each of the 3 spatial channels. The text channel mirrors
+            the first spatial channel's positions.
+        rotary_dim: int — total rotary dimension.
+    Returns:
+        Tensor (batch, seq, heads, rotary_dim).
+    """
+    if position_ids is None:
+        # Plain 1D RoPE: let RotaryEmbedding handle sequentially.
+        return rotary_embedding_layer(x_rope, start_index=0)
+
+    # position_ids: (batch, 4, seq_len)
+    # channels: 0=text, 1=temporal, 2=height, 3=width
+    # mrope_section: [s_t, s_h, s_w] — number of
+    #  *pairs* of dims per channel
+    # Total pairs = rotary_dim // 2
+    s_t, s_h = mrope_section[0], mrope_section[1]
+
+    # We compute full cos/sin for each of the 3 spatial channels, then pick
+    # the appropriate slices based on mrope_section.  Channel 0 (text) uses
+    # the temporal (ch1) position ids — they coincide for text tokens.
+    device_dtype = x_rope.dtype
+
+    def _get_cos_sin(pos_ids):
+        """pos_ids: (batch, seq_len) → cos/sin: (batch, seq, rotary_dim)."""
+        # Use RotaryEmbedding._compute_cos_sin_embedding via the `positions`
+        # argument so we bypass the sequential position logic.
+        dummy = x_rope[:, :, 0, :]  # (batch, seq, rotary_dim)
+        dummy_moved = ops.moveaxis(dummy, -1, -1)  # noop for shape propagation
+        cos_emb, sin_emb = rotary_embedding_layer._compute_cos_sin_embedding(
+            dummy_moved, start_index=0, positions=ops.cast(pos_ids, "float32")
+        )
+        return cos_emb, sin_emb  # (batch, seq, rotary_dim)
+
+    # Build a combined cos/sin by interleaving sections.
+    # Section layout (pairs of dims):
+    #   [0 : s_t]           → temporal channel (ch 1)
+    #   [s_t : s_t+s_h]     → height  channel (ch 2)
+    #   [s_t+s_h : total]   → width   channel (ch 3)
+    # For text tokens all channels hold the same sequential position id,
+    # so the specific assignment doesn't matter.
+    cos_t, sin_t = _get_cos_sin(position_ids[:, 1, :])  # temporal
+    cos_h, sin_h = _get_cos_sin(position_ids[:, 2, :])  # height
+    cos_w, sin_w = _get_cos_sin(position_ids[:, 3, :])  # width
+
+    # Slice each embedding to its own section (pairs of dims → *2 for actual).
+    t_end = s_t * 2
+    h_end = t_end + s_h * 2
+    # w covers the remainder
+
+    cos_emb = ops.concatenate(
+        [cos_t[..., :t_end], cos_h[..., t_end:h_end], cos_w[..., h_end:]],
+        axis=-1,
+    )  # (batch, seq, rotary_dim)
+    sin_emb = ops.concatenate(
+        [sin_t[..., :t_end], sin_h[..., t_end:h_end], sin_w[..., h_end:]],
+        axis=-1,
+    )  # (batch, seq, rotary_dim)
+
+    # Apply: x_rope is (batch, seq, heads, rotary_dim)
+    # Expand embeddings for heads dim.
+    cos_emb = ops.expand_dims(cos_emb, axis=2)  # (B, seq, 1, rot)
+    sin_emb = ops.expand_dims(sin_emb, axis=2)
+
+    x1, x2 = x_rope[..., : rotary_dim // 2], x_rope[..., rotary_dim // 2 :]
+    rotated = ops.concatenate([-x2, x1], axis=-1)
+    return ops.cast(
+        (ops.cast(x_rope, "float32") * ops.cast(cos_emb, "float32"))
+        + (ops.cast(rotated, "float32") * ops.cast(sin_emb, "float32")),
+        device_dtype,
+    )
+
+
 class Qwen3_5Attention(keras.layers.Layer):
     """Full self-attention layer for Qwen3.5.
 
@@ -44,6 +132,7 @@ class Qwen3_5Attention(keras.layers.Layer):
         dropout=0.0,
         layer_norm_epsilon=1e-6,
         sliding_window_size=None,
+        mrope_section=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -58,6 +147,9 @@ class Qwen3_5Attention(keras.layers.Layer):
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
         self.sliding_window_size = sliding_window_size
+        # mrope_section: [s_t, s_h, s_w] in number of *pairs* of rotary dims.
+        # When None, standard 1D RoPE is used (text-only mode).
+        self.mrope_section = mrope_section
         self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
@@ -153,15 +245,37 @@ class Qwen3_5Attention(keras.layers.Layer):
         self._combine_equation = "buqk,bkuh->bquh"
         self.built = True
 
-    def _apply_partial_rope(self, x, start_index):
-        """Apply RoPE only to the first `rotary_dim` dimensions."""
-        if self.rotary_dim == self.head_dim:
-            return self.rotary_embedding_layer(x, start_index=start_index)
+    def _apply_partial_rope(self, x, start_index, position_ids=None):
+        """Apply RoPE only to the first `rotary_dim` dimensions.
 
-        x_rope = x[..., : self.rotary_dim]
-        x_pass = x[..., self.rotary_dim :]
-        x_rope = self.rotary_embedding_layer(x_rope, start_index=start_index)
-        return ops.concatenate([x_rope, x_pass], axis=-1)
+        When `position_ids` is a 4-channel tensor (M-RoPE), delegates to the
+        `_apply_mrope` function which handles each spatial channel separately.
+        When None, falls back to sequential standard RoPE.
+        """
+        if self.mrope_section is not None and position_ids is not None:
+            # Multimodal path: M-RoPE with 4-channel position IDs.
+            x_rope = x[..., : self.rotary_dim]
+            x_pass = x[..., self.rotary_dim :]
+            x_rope = _apply_mrope(
+                x_rope,
+                self.rotary_embedding_layer,
+                position_ids,
+                self.mrope_section,
+                self.rotary_dim,
+            )
+            if self.rotary_dim == self.head_dim:
+                return x_rope
+            return ops.concatenate([x_rope, x_pass], axis=-1)
+        else:
+            # Standard 1D RoPE path.
+            if self.rotary_dim == self.head_dim:
+                return self.rotary_embedding_layer(x, start_index=start_index)
+            x_rope = x[..., : self.rotary_dim]
+            x_pass = x[..., self.rotary_dim :]
+            x_rope = self.rotary_embedding_layer(
+                x_rope, start_index=start_index
+            )
+            return ops.concatenate([x_rope, x_pass], axis=-1)
 
     def call(
         self,
@@ -169,6 +283,7 @@ class Qwen3_5Attention(keras.layers.Layer):
         attention_mask=None,
         cache=None,
         cache_update_index=None,
+        position_ids=None,
         training=None,
     ):
         start_index = (
@@ -188,12 +303,12 @@ class Qwen3_5Attention(keras.layers.Layer):
         )
 
         query = self._query_norm(query)
-        query = self._apply_partial_rope(query, start_index)
+        query = self._apply_partial_rope(query, start_index, position_ids)
 
         def _compute_key_value(x):
             key = self._key_dense(x)
             key = self._key_norm(key)
-            key = self._apply_partial_rope(key, start_index)
+            key = self._apply_partial_rope(key, start_index, position_ids)
             value = self._value_dense(x)
             return key, value
 
@@ -333,6 +448,7 @@ class Qwen3_5Attention(keras.layers.Layer):
                 "dropout": self.dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "sliding_window_size": self.sliding_window_size,
+                "mrope_section": self.mrope_section,
             }
         )
         return config

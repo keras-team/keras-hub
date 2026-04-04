@@ -62,6 +62,7 @@ class Qwen3_5TransformerDecoder(keras.layers.Layer):
         linear_key_head_dim=128,
         linear_value_head_dim=128,
         linear_conv_kernel_dim=4,
+        mrope_section=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -83,6 +84,7 @@ class Qwen3_5TransformerDecoder(keras.layers.Layer):
         self.linear_key_head_dim = linear_key_head_dim
         self.linear_value_head_dim = linear_value_head_dim
         self.linear_conv_kernel_dim = linear_conv_kernel_dim
+        self.mrope_section = mrope_section
         self.supports_masking = True
 
     def build(self, decoder_sequence_shape):
@@ -116,6 +118,7 @@ class Qwen3_5TransformerDecoder(keras.layers.Layer):
                 dropout=self.dropout,
                 layer_norm_epsilon=self.layer_norm_epsilon,
                 sliding_window_size=self.sliding_window_size,
+                mrope_section=self.mrope_section,
                 dtype=self.dtype_policy,
                 name="self_attention",
             )
@@ -188,6 +191,7 @@ class Qwen3_5TransformerDecoder(keras.layers.Layer):
         decoder_attention_mask=None,
         self_attention_cache=None,
         self_attention_cache_update_index=None,
+        position_ids=None,
         training=None,
     ):
         residual = decoder_sequence
@@ -220,6 +224,7 @@ class Qwen3_5TransformerDecoder(keras.layers.Layer):
                 attention_mask=self_attention_mask,
                 cache=self_attention_cache,
                 cache_update_index=self_attention_cache_update_index,
+                position_ids=position_ids,
             )
             if self_attention_cache is not None:
                 x, self_attention_cache = x
@@ -313,6 +318,7 @@ class Qwen3_5TransformerDecoder(keras.layers.Layer):
                 "linear_key_head_dim": self.linear_key_head_dim,
                 "linear_value_head_dim": self.linear_value_head_dim,
                 "linear_conv_kernel_dim": self.linear_conv_kernel_dim,
+                "mrope_section": self.mrope_section,
             }
         )
         return config
