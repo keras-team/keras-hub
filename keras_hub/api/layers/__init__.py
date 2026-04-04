@@ -103,6 +103,12 @@ from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
 from keras_hub.src.models.gemma3.gemma3_image_converter import (
     Gemma3ImageConverter as Gemma3ImageConverter,
 )
+from keras_hub.src.models.gemma4.gemma4_audio_converter import (
+    Gemma4AudioConverter as Gemma4AudioConverter,
+)
+from keras_hub.src.models.gemma4.gemma4_image_converter import (
+    Gemma4ImageConverter as Gemma4ImageConverter,
+)
 from keras_hub.src.models.hgnetv2.hgnetv2_image_converter import (
     HGNetV2ImageConverter as HGNetV2ImageConverter,
 )
@@ -168,6 +174,9 @@ from keras_hub.src.models.segformer.segformer_image_converter import (
 )
 from keras_hub.src.models.siglip.siglip_image_converter import (
     SigLIPImageConverter as SigLIPImageConverter,
+)
+from keras_hub.src.models.t5gemma2.t5gemma2_image_converter import (
+    T5Gemma2ImageConverter as T5Gemma2ImageConverter,
 )
 from keras_hub.src.models.vgg.vgg_image_converter import (
     VGGImageConverter as VGGImageConverter,
