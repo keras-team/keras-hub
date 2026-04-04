@@ -600,6 +600,9 @@ from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm import (
 from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm_preprocessor import (
     Qwen3_5CausalLMPreprocessor as Qwen3_5CausalLMPreprocessor,
 )
+from keras_hub.src.models.qwen3_5.qwen3_5_image_converter import (
+    Qwen3_5ImageConverter as Qwen3_5ImageConverter,
+)
 from keras_hub.src.models.qwen3_5.qwen3_5_tokenizer import (
     Qwen3_5Tokenizer as Qwen3_5Tokenizer,
 )
