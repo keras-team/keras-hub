@@ -166,19 +166,73 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             batched = False
             prompts = tf.expand_dims(prompts, 0)
 
+        # Process images FIRST to determine the number of vision tokens.
+        vision_out = self._preprocess_images(images, batched)
+
+        # Compute the number of vision tokens per image from grid_thw.
+        # grid_thw is (num_images, 3) where each row is [T, H, W] in
+        # patch units.  The merged token count is
+        #   T * (H / spatial_merge_size) * (W / spatial_merge_size)
+        # The image converter already returns H, W in patch units, so
+        # after the patch merger the token count is T * H * W / merge^2.
+        grid_thw = vision_out["image_grid_thw"]
+        if hasattr(grid_thw, "numpy"):
+            grid_np = grid_thw.numpy()
+        else:
+            grid_np = np.array(grid_thw)
+
+        if self.image_converter is not None:
+            merge_size = self.image_converter.spatial_merge_size
+        else:
+            merge_size = 2
+
+        # For each image, compute the number of vision tokens.
+        num_vision_tokens_per_image = []
+        for i in range(grid_np.shape[0]):
+            t, h, w = int(grid_np[i, 0]), int(grid_np[i, 1]), int(grid_np[i, 2])
+            n_tokens = t * (h // merge_size) * (w // merge_size)
+            num_vision_tokens_per_image.append(n_tokens)
+
+        # Expand the single <|image_pad|> placeholder in each prompt to
+        # the correct number of pad tokens for each image.
+        if isinstance(prompts, tf.Tensor):
+            prompts_list = [p.numpy().decode("utf-8") for p in prompts]
+        elif isinstance(prompts, (list, tuple)):
+            prompts_list = [
+                p.numpy().decode("utf-8") if hasattr(p, "numpy") else str(p)
+                for p in prompts
+            ]
+        else:
+            prompts_list = [str(prompts)]
+
+        expanded = []
+        img_idx = 0
+        for prompt_str in prompts_list:
+            # Count how many <|image_pad|> tokens are in this prompt.
+            count = prompt_str.count(self.image_token)
+            result_str = prompt_str
+            for _ in range(count):
+                if img_idx < len(num_vision_tokens_per_image):
+                    n = num_vision_tokens_per_image[img_idx]
+                    img_idx += 1
+                else:
+                    n = 1
+                # Replace the first occurrence with N copies.
+                result_str = result_str.replace(
+                    self.image_token,
+                    self.image_token * n,
+                    1,
+                )
+            expanded.append(result_str)
+        prompts = expanded
+
         # Tokenize.
         token_ids_ragged = self.tokenizer(prompts)
-        token_ids, _ = self.packer(
-            (token_ids_ragged,),
+        token_ids, padding_mask = self.packer(
+            token_ids_ragged,
             sequence_length=sequence_length,
             add_end_value=False,
         )
-        padding_mask = tf.cast(
-            tf.not_equal(token_ids, self.tokenizer.pad_token_id), "int32"
-        )
-
-        # Process images.
-        vision_out = self._preprocess_images(images, batched)
 
         # Compute vision indices.
         vision_indices = self._compute_vision_indices(token_ids)
@@ -210,14 +264,31 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         Returns:
             dict with ``pixel_values`` and ``image_grid_thw``.
         """
-        # Normalize to list of images.
-        if not isinstance(images, (list, tuple)):
-            images = [images]
+        # Normalize images to a flat python list of individual images.
+        # After convert_preprocessing_inputs, a list of numpy arrays may
+        # become a single batched tensor (B, H, W, C). We need to split
+        # it back into individual (H, W, C) images.
+        if isinstance(images, (list, tuple)):
+            flat_images = []
+            for img in images:
+                if hasattr(img, "shape") and len(img.shape) == 4:
+                    # Batched tensor: iterate over batch dim.
+                    for i in range(img.shape[0]):
+                        flat_images.append(img[i])
+                else:
+                    flat_images.append(img)
+        elif hasattr(images, "shape") and len(images.shape) == 4:
+            # Single batched tensor from convert_preprocessing_inputs.
+            flat_images = [images[i] for i in range(images.shape[0])]
+        elif hasattr(images, "shape") and len(images.shape) == 3:
+            flat_images = [images]
+        else:
+            flat_images = [images]
 
         all_patches = []
         all_grid_thw = []
 
-        for img in images:
+        for img in flat_images:
             if isinstance(img, np.ndarray) and img.ndim == 2:
                 # Grayscale → RGB
                 img = np.stack([img] * 3, axis=-1)
