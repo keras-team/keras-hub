@@ -44,9 +44,6 @@ def _causal_conv1d(x, weight, bias=None):
     w = ops.transpose(weight, (1, 0))
     w = ops.expand_dims(w, -1)
     out = ops.depthwise_conv(x_cl, w, strides=1, padding="valid")
-    # out: (batch, seq_len, channels)
-
-    # Convert back to channels-first.
     out = ops.transpose(out, (0, 2, 1))
 
     if bias is not None:
@@ -60,12 +57,12 @@ def _chunk_gated_delta_rule(
     value,
     g,
     beta,
-    chunk_size=None,
+    chunk_size=64,
     initial_state=None,
     output_final_state=False,
     padding_mask=None,
 ):
-    """Chunked gated delta rule for training (parallel over chunks).
+    """Chunked gated delta rule matching HF's torch_chunk_gated_delta_rule.
 
     Args:
         query: (B, seq, num_heads, head_k_dim)
@@ -73,25 +70,23 @@ def _chunk_gated_delta_rule(
         value: (B, seq, num_heads, head_v_dim)
         g: (B, seq, num_heads) — decay gates (log-space)
         beta: (B, seq, num_heads) — write gates (sigmoid-space)
-        chunk_size: Chunk size for blocked computation.
+        chunk_size: Chunk size for blocked computation (default 64).
         initial_state: Optional initial recurrent state.
         output_final_state: Whether to return final state.
+        padding_mask: Optional (B, seq) mask.
     Returns:
         output: (B, seq, num_heads, head_v_dim)
         final_state: recurrent state or None
     """
-    # L2-normalize Q and K.
     query = _l2norm(query, axis=-1)
     key = _l2norm(key, axis=-1)
 
-    # Transpose to (B, heads, seq, dim).
     query = ops.transpose(query, (0, 2, 1, 3))
     key = ops.transpose(key, (0, 2, 1, 3))
     value = ops.transpose(value, (0, 2, 1, 3))
     beta = ops.transpose(beta, (0, 2, 1))
     g = ops.transpose(g, (0, 2, 1))
 
-    # Cast to float32 for numerical stability.
     input_dtype = query.dtype
     query = ops.cast(query, "float32")
     key = ops.cast(key, "float32")
@@ -105,91 +100,134 @@ def _chunk_gated_delta_rule(
     k_head_dim = ops.shape(key)[3]
     v_head_dim = ops.shape(value)[3]
 
+    pad_size = (chunk_size - seq_len % chunk_size) % chunk_size
+    if pad_size > 0:
+        query = ops.pad(query, [[0, 0], [0, 0], [0, pad_size], [0, 0]])
+        key = ops.pad(key, [[0, 0], [0, 0], [0, pad_size], [0, 0]])
+        value = ops.pad(value, [[0, 0], [0, 0], [0, pad_size], [0, 0]])
+        beta = ops.pad(beta, [[0, 0], [0, 0], [0, pad_size]])
+        g = ops.pad(g, [[0, 0], [0, 0], [0, pad_size]])
+    total_len = seq_len + pad_size
+
     scale = 1.0 / (k_head_dim**0.5)
     query = query * scale
 
     v_beta = value * ops.expand_dims(beta, -1)
+    k_beta = key * ops.expand_dims(beta, -1)
 
-    # Initialize recurrent state.
+    num_chunks = total_len // chunk_size
+    query = ops.reshape(
+        query, (batch_size, num_heads, num_chunks, chunk_size, k_head_dim)
+    )
+    key = ops.reshape(
+        key, (batch_size, num_heads, num_chunks, chunk_size, k_head_dim)
+    )
+    value = ops.reshape(
+        value, (batch_size, num_heads, num_chunks, chunk_size, v_head_dim)
+    )
+    k_beta = ops.reshape(
+        k_beta, (batch_size, num_heads, num_chunks, chunk_size, k_head_dim)
+    )
+    v_beta = ops.reshape(
+        v_beta, (batch_size, num_heads, num_chunks, chunk_size, v_head_dim)
+    )
+    g = ops.reshape(g, (batch_size, num_heads, num_chunks, chunk_size))
+
+    triu_mask = ops.triu(ops.ones((chunk_size, chunk_size)), k=0)
+    triu_mask_bool = ops.cast(triu_mask, "bool")
+
+    g = ops.cumsum(g, axis=-1)
+
+    g_row = ops.expand_dims(g, -1)
+    g_col = ops.expand_dims(g, -2)
+    decay_diff = g_row - g_col
+    tril_incl = ops.transpose(
+        ops.triu(ops.ones((chunk_size, chunk_size)), k=0), (1, 0)
+    )
+    decay_diff = decay_diff * tril_incl
+    decay_mask = ops.exp(decay_diff) * tril_incl
+
+    kbk = ops.einsum("bhcid,bhcjd->bhcij", k_beta, key)
+    attn = -(kbk * decay_mask)
+    attn = ops.where(triu_mask_bool, ops.zeros_like(attn), attn)
+
+    # Iterative correction (Neumann-series) matching HF's in-place loop.
+    for i in range(1, chunk_size):
+        row = attn[..., i : i + 1, :i]
+        sub = attn[..., :i, :i]
+        correction = ops.matmul(row, sub)
+        correction = ops.squeeze(correction, axis=-2)
+        new_row = attn[..., i, :]
+        update = ops.pad(
+            correction, [[0, 0], [0, 0], [0, 0], [0, chunk_size - i]]
+        )
+        new_row = new_row + update
+        before = attn[..., :i, :]
+        after = attn[..., i + 1 :, :]
+        new_row_exp = ops.expand_dims(new_row, axis=-2)
+        attn = ops.concatenate([before, new_row_exp, after], axis=-2)
+
+    attn = attn + ops.eye(chunk_size)
+
+    value = ops.einsum("bhcij,bhcjd->bhcid", attn, v_beta)
+
+    g_exp = ops.exp(g)
+    k_cumdecay = ops.einsum(
+        "bhcij,bhcjd->bhcid", attn, k_beta * ops.expand_dims(g_exp, -1)
+    )
+
     if initial_state is None:
-        state = ops.zeros(
-            (batch_size, num_heads, k_head_dim, v_head_dim),
-            dtype="float32",
+        last_state = ops.zeros(
+            (batch_size, num_heads, k_head_dim, v_head_dim), dtype="float32"
         )
     else:
-        state = ops.cast(initial_state, "float32")
+        last_state = ops.cast(initial_state, "float32")
 
-    keras_backend = keras.config.backend()
+    triu1_mask = ops.triu(ops.ones((chunk_size, chunk_size)), k=1)
+    triu1_bool = ops.cast(triu1_mask, "bool")
 
-    def step(t, inputs):
-        state, out = inputs
-        q_t = query[:, :, t, :]
-        k_t = key[:, :, t, :]
-        v_beta_t = v_beta[:, :, t, :]
-        g_t = g[:, :, t]
+    all_chunks_out = []
+    for ci in range(num_chunks):
+        q_i = query[:, :, ci]
+        k_i = key[:, :, ci]
+        v_i = value[:, :, ci]
+        dm_i = decay_mask[:, :, ci]
+        g_i = g[:, :, ci]
 
-        # Valid token mask. 1.0 for valid, 0.0 for padding.
-        if padding_mask is not None:
-            mask_t = ops.cast(padding_mask[:, t], "float32")
-            # Reshape to (B, 1, 1, 1) for broadcasting.
-            mask_t = ops.reshape(mask_t, (-1, 1, 1, 1))
-        else:
-            mask_t = 1.0
-
-        # Decay the state.
-        decay = ops.exp(ops.expand_dims(ops.expand_dims(g_t, -1), -1))
-
-        # Keep old state if padded, else apply decay
-        state_decayed = state * decay
-        if padding_mask is not None:
-            state = state * (1.0 - mask_t) + state_decayed * mask_t
-        else:
-            state = state_decayed
-
-        # Delta update: compute what the current state predicts
-        # for v given k, then add correction.
-        kv_pred = ops.sum(state * ops.expand_dims(k_t, -1), axis=-2)
-        delta = v_beta_t - kv_pred * ops.expand_dims(beta[:, :, t], -1)
-
-        state_update = ops.expand_dims(k_t, -1) * ops.expand_dims(delta, -2)
-        if padding_mask is not None:
-            state_update = state_update * mask_t
-
-        state = state + state_update
-
-        # Query the state.
-        out_t = ops.sum(state * ops.expand_dims(q_t, -1), axis=-2)
-
-        if keras_backend == "tensorflow":
-            out = out.write(t, out_t)
-        elif keras_backend == "torch":
-            out[:, :, t : t + 1, :] = ops.expand_dims(out_t, axis=2)
-        else:
-            out = ops.slice_update(
-                out, [0, 0, t, 0], ops.expand_dims(out_t, axis=2)
-            )
-
-        return [state, out]
-
-    if keras_backend == "tensorflow":
-        import tensorflow as tf
-
-        out = tf.TensorArray(dtype="float32", size=seq_len)
-        for t in range(seq_len):
-            state, out = step(t, [state, out])
-
-        output = out.stack()
-        output = ops.transpose(output, [1, 2, 0, 3])
-    else:
-        out = ops.zeros(
-            (batch_size, num_heads, seq_len, v_head_dim), dtype="float32"
+        qk = ops.einsum("bhid,bhjd->bhij", q_i, k_i)
+        intra_attn = qk * dm_i
+        intra_attn = ops.where(
+            triu1_bool, ops.zeros_like(intra_attn), intra_attn
         )
-        state, out = ops.fori_loop(0, seq_len, step, [state, out])
-        output = out
 
-    final_state = state if output_final_state else None
+        k_cd_i = k_cumdecay[:, :, ci]
+        v_prime = ops.einsum("bhid,bhdv->bhiv", k_cd_i, last_state)
+        v_new = v_i - v_prime
 
-    # Transpose back to (B, seq, heads, v_dim).
+        attn_inter = ops.einsum(
+            "bhid,bhdv->bhiv",
+            q_i * ops.expand_dims(ops.exp(g_i), -1),
+            last_state,
+        )
+
+        chunk_out = attn_inter + ops.einsum(
+            "bhij,bhjd->bhid", intra_attn, v_new
+        )
+        all_chunks_out.append(ops.expand_dims(chunk_out, axis=2))
+
+        g_last = g_i[..., -1]
+        state_decay = ops.exp(ops.expand_dims(ops.expand_dims(g_last, -1), -1))
+        g_diff = ops.expand_dims(g_last, -1) - g_i
+        k_weighted = k_i * ops.expand_dims(ops.exp(g_diff), -1)
+        state_update = ops.einsum("bhid,bhiv->bhdv", k_weighted, v_new)
+        last_state = last_state * state_decay + state_update
+
+    output = ops.concatenate(all_chunks_out, axis=2)
+    output = ops.reshape(output, (batch_size, num_heads, total_len, v_head_dim))
+    output = output[:, :, :seq_len, :]
+
+    final_state = last_state if output_final_state else None
+
     output = ops.transpose(output, (0, 2, 1, 3))
     output = ops.cast(output, input_dtype)
 
@@ -208,20 +246,92 @@ def _recurrent_gated_delta_rule(
 ):
     """Step-by-step recurrent gated delta rule for inference.
 
-    Same signature as _chunk_gated_delta_rule but processes one step
-    at a time (optimized for autoregressive generation).
+    Matches HF's torch_recurrent_gated_delta_rule. Used for single-step
+    autoregressive generation and short sequences.
     """
-    return _chunk_gated_delta_rule(
-        query,
-        key,
-        value,
-        g,
-        beta,
-        chunk_size=1,
-        initial_state=initial_state,
-        output_final_state=output_final_state,
-        padding_mask=padding_mask,
-    )
+    query = _l2norm(query, axis=-1)
+    key = _l2norm(key, axis=-1)
+
+    query = ops.transpose(query, (0, 2, 1, 3))
+    key = ops.transpose(key, (0, 2, 1, 3))
+    value = ops.transpose(value, (0, 2, 1, 3))
+    beta = ops.transpose(beta, (0, 2, 1))
+    g = ops.transpose(g, (0, 2, 1))
+
+    input_dtype = query.dtype
+    query = ops.cast(query, "float32")
+    key = ops.cast(key, "float32")
+    value = ops.cast(value, "float32")
+    beta = ops.cast(beta, "float32")
+    g = ops.cast(g, "float32")
+
+    batch_size = ops.shape(key)[0]
+    num_heads = ops.shape(key)[1]
+    seq_len = ops.shape(key)[2]
+    k_head_dim = ops.shape(key)[3]
+    v_head_dim = ops.shape(value)[3]
+
+    scale = 1.0 / (k_head_dim**0.5)
+    query = query * scale
+
+    if initial_state is None:
+        state = ops.zeros(
+            (batch_size, num_heads, k_head_dim, v_head_dim), dtype="float32"
+        )
+    else:
+        state = ops.cast(initial_state, "float32")
+
+    keras_backend = keras.config.backend()
+
+    def step(t, inputs):
+        state, out = inputs
+        q_t = query[:, :, t]
+        k_t = key[:, :, t]
+        v_t = value[:, :, t]
+        g_t = g[:, :, t]
+        beta_t = beta[:, :, t]
+
+        g_exp = ops.exp(g_t)
+        state = state * ops.expand_dims(ops.expand_dims(g_exp, -1), -1)
+
+        kv_mem = ops.sum(state * ops.expand_dims(k_t, -1), axis=-2)
+
+        delta = (v_t - kv_mem) * ops.expand_dims(beta_t, -1)
+        state = state + ops.expand_dims(k_t, -1) * ops.expand_dims(delta, -2)
+
+        out_t = ops.sum(state * ops.expand_dims(q_t, -1), axis=-2)
+
+        if keras_backend == "tensorflow":
+            out = out.write(t, out_t)
+        elif keras_backend == "torch":
+            out[:, :, t : t + 1, :] = ops.expand_dims(out_t, axis=2)
+        else:
+            out = ops.slice_update(
+                out, [0, 0, t, 0], ops.expand_dims(out_t, axis=2)
+            )
+        return [state, out]
+
+    if keras_backend == "tensorflow":
+        import tensorflow as tf
+
+        out = tf.TensorArray(dtype="float32", size=seq_len)
+        for t in range(seq_len):
+            state, out = step(t, [state, out])
+        output = out.stack()
+        output = ops.transpose(output, [1, 2, 0, 3])
+    else:
+        out = ops.zeros(
+            (batch_size, num_heads, seq_len, v_head_dim), dtype="float32"
+        )
+        state, out = ops.fori_loop(0, seq_len, step, [state, out])
+        output = out
+
+    final_state = state if output_final_state else None
+
+    output = ops.transpose(output, (0, 2, 1, 3))
+    output = ops.cast(output, input_dtype)
+
+    return output, final_state
 
 
 class Qwen3_5GatedDeltaNet(keras.layers.Layer):
@@ -271,8 +381,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, input_shape):
-        # Qwen3.5 has separate projections for QKV, Z, B, A.
-        # QKV fused projection.
         self.in_proj_qkv = keras.layers.Dense(
             self.key_dim * 2 + self.value_dim,
             use_bias=False,
@@ -282,7 +390,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
         )
         self.in_proj_qkv.build(input_shape)
 
-        # Z (output gate) projection.
         self.in_proj_z = keras.layers.Dense(
             self.value_dim,
             use_bias=False,
@@ -292,7 +399,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
         )
         self.in_proj_z.build(input_shape)
 
-        # Beta (write gate) projection.
         self.in_proj_b = keras.layers.Dense(
             self.num_v_heads,
             use_bias=False,
@@ -302,7 +408,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
         )
         self.in_proj_b.build(input_shape)
 
-        # A (decay gate) projection.
         self.in_proj_a = keras.layers.Dense(
             self.num_v_heads,
             use_bias=False,
@@ -312,7 +417,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
         )
         self.in_proj_a.build(input_shape)
 
-        # Causal conv1d (depthwise). HF uses bias=False.
         conv_dim = self.key_dim * 2 + self.value_dim
         self.conv1d_weight = self.add_weight(
             name="conv1d_kernel",
@@ -321,7 +425,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
             dtype=self.variable_dtype,
         )
 
-        # dt_bias and A_log (learnable parameters for decay).
         self.dt_bias = self.add_weight(
             name="dt_bias",
             shape=(self.num_v_heads,),
@@ -335,7 +438,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
             dtype=self.variable_dtype,
         )
 
-        # Output gated RMSNorm.
         self.norm = Qwen3_5LayerNorm(
             head_dim=self.head_v_dim,
             epsilon=self.layer_norm_epsilon,
@@ -344,7 +446,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
         )
         self.norm.build((None, self.head_v_dim))
 
-        # Output projection.
         self.out_proj = keras.layers.Dense(
             self.hidden_size,
             use_bias=False,
@@ -377,9 +478,7 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
             output: (B, seq_len, hidden_size)
             cache: (optional) Updated tuple of (conv_state, recurrent_state)
         """
-        # Mask padding states.
         if attention_mask is not None:
-            # attention_mask: (B, seq_len) with 1 for valid, 0 for pad.
             if attention_mask.ndim == 2:
                 mask = ops.cast(
                     ops.expand_dims(attention_mask, -1),
@@ -390,24 +489,17 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
         batch_size = ops.shape(hidden_states)[0]
         seq_len = ops.shape(hidden_states)[1]
 
-        # Project QKV.
         mixed_qkv = self.in_proj_qkv(hidden_states)
-
-        # Project gating signals.
         z = self.in_proj_z(hidden_states)
         z = ops.reshape(
             z, (batch_size, seq_len, self.num_v_heads, self.head_v_dim)
         )
-
         b = self.in_proj_b(hidden_states)
         a = self.in_proj_a(hidden_states)
 
-        # Causal conv1d on QKV.
-        # Transpose to (B, channels, seq_len) for conv.
         mixed_qkv_t = ops.transpose(mixed_qkv, (0, 2, 1))
 
         if cache is not None:
-            # Autoregressive generation.
             conv_state, recurrent_state = cache
             if seq_len > 1:
                 combined_state = ops.concatenate(
@@ -421,20 +513,15 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
                     indices = ops.expand_dims(
                         valid_lengths + self.conv_kernel_size - 2, axis=-1
                     )
-                    # We want range(indices - kernel_size + 2, indices + 1)
                     offsets = ops.arange(
                         self.conv_kernel_size - 1, dtype="int32"
                     )
-                    # offsets: (-kernel_size+2, ..., 0)
                     offsets = offsets - (self.conv_kernel_size - 2)
                     gather_indices = indices + ops.expand_dims(offsets, axis=0)
-                    gather_indices = ops.expand_dims(
-                        gather_indices, axis=1
-                    )  # (B, 1, kernel)
+                    gather_indices = ops.expand_dims(gather_indices, axis=1)
                     gather_indices = ops.repeat(
                         gather_indices, ops.shape(combined_state)[1], axis=1
-                    )  # (B, channels, kernel)
-
+                    )
                     conv_state = ops.take_along_axis(
                         combined_state, gather_indices, axis=2
                     )
@@ -450,7 +537,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
                     axis=-1,
                 )
 
-                # Use depthwise_conv to process the padded sequence.
                 padded_input_transposed = ops.transpose(padded_input, (0, 2, 1))
                 conv1d_weight_transposed = ops.transpose(
                     self.conv1d_weight, (1, 0)
@@ -479,17 +565,13 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
                     keepdims=True,
                 )
 
-            # Apply SiLU activation after conv.
             mixed_qkv_t = mixed_qkv_t * ops.sigmoid(mixed_qkv_t)
             mixed_qkv = ops.transpose(mixed_qkv_t, (0, 2, 1))
         else:
-            # Full sequence processing (training or non-cached score mode).
             mixed_qkv_t = _causal_conv1d(mixed_qkv_t, self.conv1d_weight)
-            # Apply SiLU activation after conv.
             mixed_qkv_t = mixed_qkv_t * ops.sigmoid(mixed_qkv_t)
             mixed_qkv = ops.transpose(mixed_qkv_t, (0, 2, 1))
 
-        # Split QKV.
         query = mixed_qkv[..., : self.key_dim]
         key = mixed_qkv[..., self.key_dim : self.key_dim * 2]
         value = mixed_qkv[..., self.key_dim * 2 :]
@@ -507,7 +589,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
             (batch_size, seq_len, self.num_v_heads, self.head_v_dim),
         )
 
-        # Compute decay gate.
         beta = ops.sigmoid(b)
         g = -ops.exp(
             ops.cast(self.A_log, "float32")
@@ -515,7 +596,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
             ops.cast(a, "float32") + ops.cast(self.dt_bias, "float32")
         )
 
-        # Expand K heads to match V heads if needed.
         if self.num_v_heads // self.num_k_heads > 1:
             repeat_factor = self.num_v_heads // self.num_k_heads
             query = ops.repeat(query, repeats=repeat_factor, axis=2)
@@ -523,8 +603,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
 
         if cache is not None:
             if seq_len > 1:
-                # Prompt initialization loop.
-                # Use chunked delta rule but return the final state!
                 core_out, last_recurrent_state = _chunk_gated_delta_rule(
                     query,
                     key,
@@ -537,7 +615,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
                 )
                 cache = (conv_state, last_recurrent_state)
             else:
-                # Step generation using recurrent rule.
                 core_out, last_recurrent_state = _recurrent_gated_delta_rule(
                     query,
                     key,
@@ -550,7 +627,6 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
                 )
                 cache = (conv_state, last_recurrent_state)
         else:
-            # Apply chunked sequence gated delta rule.
             core_out, _ = _chunk_gated_delta_rule(
                 query,
                 key,
@@ -561,14 +637,11 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
                 padding_mask=attention_mask,
             )
 
-        # Output gated normalization.
-        # Reshape to (B * seq * heads, v_dim) for norm.
         core_out_flat = ops.reshape(core_out, (-1, self.head_v_dim))
         z_flat = ops.reshape(z, (-1, self.head_v_dim))
         core_out_flat = self.norm(core_out_flat)
         core_out_flat = core_out_flat * keras.activations.silu(z_flat)
 
-        # Reshape back and project.
         core_out = ops.reshape(core_out_flat, (batch_size, seq_len, -1))
         output = self.out_proj(core_out)
 

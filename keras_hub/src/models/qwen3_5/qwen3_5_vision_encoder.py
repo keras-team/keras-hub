@@ -38,7 +38,7 @@ class Qwen3_5VisionRotaryEmbedding(keras.layers.Layer):
         self._inv_freq_len = len(self._inv_freq_vals)
 
     def get_freq_table(self, max_hw):
-        """Produce a rotary frequency table of shape (max_hw, head_dim // 2).
+        """Produce a rotary frequency table.
 
         Called as a plain method (not a Keras layer call) to avoid input
         validation issues with integer arguments.
@@ -46,16 +46,15 @@ class Qwen3_5VisionRotaryEmbedding(keras.layers.Layer):
         Args:
             max_hw: int - max(H, W) of the image grid.
         Returns:
-            Python list-based ops tensor of shape (max_hw, head_dim // 2).
+            Tensor of shape (max_hw, dim // 2) where dim = head_dim // 2,
+            i.e. (max_hw, head_dim // 4).
         """
         inv_freq = ops.cast(
             ops.array(self._inv_freq_vals), "float32"
-        )  # (dim//2,)
+        )  # (head_dim // 4,)
         positions = ops.cast(ops.arange(max_hw), "float32")  # (max_hw,)
-        # (max_hw, dim//2)
+        # (max_hw, head_dim // 4)
         freqs = ops.einsum("i,j->ij", positions, inv_freq)
-        # Duplicate to fill head_dim // 2: (max_hw, head_dim//2)
-        freqs = ops.concatenate([freqs, freqs], axis=-1)
         return freqs
 
     def get_config(self):
@@ -261,7 +260,7 @@ class Qwen3_5VisionAttention(keras.layers.Layer):
         k = ops.transpose(k, (1, 0, 2))
         v = ops.transpose(v, (1, 0, 2))
 
-        # Scaled dot-product attention (full, no masking inside vision encoder)
+        # Scaled dot-product attention (full, no masking in vision encoder).
         scores = ops.einsum("hid,hjd->hij", q, k) * self._inv_scale
         scores = ops.cast(scores, "float32")
         scores = ops.softmax(scores, axis=-1)
@@ -663,10 +662,10 @@ class Qwen3_5VisionEncoder(keras.Model):
             col_idx = ops.reshape(col_idx, (-1,))
 
             # Lookup frequencies.
-            row_freqs = ops.take(freq_table, row_idx, axis=0)  # (h*w, hd//2)
+            row_freqs = ops.take(freq_table, row_idx, axis=0)  # (h*w, hd//4)
             col_freqs = ops.take(freq_table, col_idx, axis=0)
 
-            # Interleave as (row, col) → (h*w, head_dim)
+            # Stack row + col → (h*w, head_dim // 2).
             spatial_emb = ops.concatenate([row_freqs, col_freqs], axis=-1)
 
             # Repeat for temporal frames.
@@ -680,7 +679,11 @@ class Qwen3_5VisionEncoder(keras.Model):
 
             all_embeds.append(spatial_emb)
 
+        # rotary: (total_tokens, head_dim // 2).
         rotary = ops.concatenate(all_embeds, axis=0)
+        # Duplicate to full head_dim, matching HF:
+        #   emb = cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
+        rotary = ops.concatenate([rotary, rotary], axis=-1)
         cos_emb = ops.cos(rotary)
         sin_emb = ops.sin(rotary)
         return cos_emb, sin_emb

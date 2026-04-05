@@ -4,8 +4,10 @@ Handles:
 - Text-only tokenization (backward compatible).
 - Image + text tokenization: replaces <|image_pad|> placeholder tokens with
   the correct number of vision tokens, computes vision_indices for scatter,
-  and builds 4-channel M-RoPE position IDs.
+  and builds 3-channel M-RoPE position IDs.
 """
+
+import re
 
 import numpy as np
 
@@ -58,6 +60,16 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
     tokenizer_cls = Qwen3_5Tokenizer
     image_converter_cls = Qwen3_5ImageConverter
 
+    # Special tokens that the KerasHub BPE tokenizer may not encode
+    # as single tokens. Map from string → token ID.
+    SPECIAL_TOKEN_MAP = {
+        "<|im_start|>": 248045,
+        "<|im_end|>": 248044,
+        "<|vision_start|>": 248053,
+        "<|vision_end|>": 248054,
+        "<|image_pad|>": 248056,
+    }
+
     def __init__(
         self,
         tokenizer,
@@ -80,52 +92,164 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         self.image_token = image_token
         self.image_token_id = image_token_id
 
-    def _compute_vision_indices(self, token_ids):
-        """Return flat indices where token_ids == image_token_id.
+        # Regex pattern for splitting prompts at special token boundaries.
+        self._special_token_pattern = re.compile(
+            "(" + "|".join(re.escape(t) for t in self.SPECIAL_TOKEN_MAP) + ")"
+        )
+
+    # ------------------------------------------------------------------
+    # Special-token-aware tokenization
+    # ------------------------------------------------------------------
+
+    def _tokenize_with_special_tokens(self, text, num_vision_tokens_per_image):
+        """Tokenize text while correctly handling special tokens.
+
+        The KerasHub BPE tokenizer may not encode Qwen3.5's added special
+        tokens (``<|image_pad|>``, ``<|vision_start|>``, etc.) as single
+        tokens — it can break them into sub-word pieces. This method
+        splits the input by known special tokens, tokenizes only the
+        text segments, and manually inserts the correct token IDs.
+
+        For ``<|image_pad|>`` tokens, each occurrence is expanded to
+        ``N`` copies based on ``num_vision_tokens_per_image``.
 
         Args:
-            token_ids: int32 tensor (batch, seq_len).
+            text: str. The prompt string.
+            num_vision_tokens_per_image: list[int]. Number of vision tokens
+                for each image.
         Returns:
-            vision_indices: int32 tensor (total_vision_tokens,). Flat indices
-                into the batch*seq_len vector.
+            list[int]. The complete token ID sequence.
+        """
+        parts = self._special_token_pattern.split(text)
+
+        all_ids = []
+        img_idx = 0
+        for part in parts:
+            if part in self.SPECIAL_TOKEN_MAP:
+                if part == self.image_token:
+                    # Expand image placeholder to N copies.
+                    if img_idx < len(num_vision_tokens_per_image):
+                        n = num_vision_tokens_per_image[img_idx]
+                        img_idx += 1
+                    else:
+                        n = 1
+                    all_ids.extend([self.image_token_id] * n)
+                else:
+                    all_ids.append(self.SPECIAL_TOKEN_MAP[part])
+            elif part:
+                tokenized = self.tokenizer(part)
+                if hasattr(tokenized, "numpy"):
+                    all_ids.extend(tokenized.numpy().tolist())
+                else:
+                    all_ids.extend(list(tokenized))
+        return all_ids
+
+    # ------------------------------------------------------------------
+    # Vision helpers
+    # ------------------------------------------------------------------
+
+    def _compute_vision_indices(self, token_ids):
+        """Return flat indices where ``token_ids == image_token_id``.
+
+        Args:
+            token_ids: int32 tensor ``(batch, seq_len)``.
+        Returns:
+            int32 tensor ``(total_vision_tokens,)``.
         """
         mask = tf.equal(token_ids, self.image_token_id)
         flat_mask = tf.reshape(mask, [-1])
-        indices = tf.cast(tf.where(flat_mask)[:, 0], "int32")
-        return indices
+        return tf.cast(tf.where(flat_mask)[:, 0], "int32")
 
     def _compute_position_ids(self, token_ids, image_grid_thw):
-        """Build 4-channel M-RoPE position IDs.
+        """Build 4-channel M-RoPE position IDs matching HF's algorithm.
 
         For text tokens all 4 channels have the same sequential position.
         For vision tokens channels 1-3 encode (temporal, height, width)
         grid coordinates. Channel 0 mirrors channel 1 (temporal).
 
+        This matches HF's ``get_rope_index`` / ``get_vision_position_ids``:
+        - temporal: ``full(n_tokens, start_pos)`` (all same for images)
+        - height: ``arange(h_merged).repeat_interleave(w_merged * t)``
+        - width: ``arange(w_merged).repeat(h_merged * t)``
+        - text_pos advances by ``max(h_merged, w_merged)`` after vision span.
+
         Args:
-            token_ids: int32 tensor (batch, seq_len).
-            image_grid_thw: int32 tensor (num_images, 3) - [T, H, W] per image
-                in patch units.
+            token_ids: int32 tensor ``(batch, seq_len)``.
+            image_grid_thw: int32 tensor ``(num_images, 3)`` — ``[T, H, W]``
+                per image in patch units (BEFORE spatial merging).
         Returns:
-            position_ids: int32 tensor (batch, 4, seq_len).
+            int32 tensor ``(batch, 4, seq_len)``.
         """
-        batch_size = token_ids.shape[0] or tf.shape(token_ids)[0]
-        seq_len = token_ids.shape[1] or tf.shape(token_ids)[1]
+        from keras import ops as kops
 
-        # Start with sequential positions for all channels.
-        seq_range = tf.range(seq_len, dtype="int32")
-        pos_ids = tf.tile(
-            tf.reshape(seq_range, (1, 1, -1)),
-            (batch_size, 4, 1),
-        )
+        token_ids_np = kops.convert_to_numpy(token_ids)
+        if hasattr(image_grid_thw, "numpy"):
+            grid_np = kops.convert_to_numpy(image_grid_thw)
+        else:
+            grid_np = np.array(image_grid_thw)
 
-        # For simplicity in this initial implementation, we use uniform
-        # sequential position IDs for all tokens (text and vision).
-        # The full interleaved spatial position IDs for vision tokens
-        # would be computed here in a future refinement. The M-RoPE
-        # attention layer still operates correctly because for text-only
-        # tokens all 4 channels are identical, and the vision encoder
-        # already applies its own 2D rotary embeddings internally.
-        return pos_ids
+        batch_size, seq_len = token_ids_np.shape
+        merge_size = getattr(self.image_converter, "spatial_merge_size", 2)
+
+        all_pos = np.zeros((batch_size, 4, seq_len), dtype=np.int32)
+
+        for b in range(batch_size):
+            ids = token_ids_np[b]
+            t_pos = np.zeros(seq_len, dtype=np.int32)
+            h_pos = np.zeros(seq_len, dtype=np.int32)
+            w_pos = np.zeros(seq_len, dtype=np.int32)
+
+            current_pos = 0
+            img_idx = 0
+            i = 0
+            while i < seq_len:
+                if ids[i] == self.image_token_id and img_idx < grid_np.shape[0]:
+                    t_grid = int(grid_np[img_idx, 0])
+                    h_grid = int(grid_np[img_idx, 1])
+                    w_grid = int(grid_np[img_idx, 2])
+
+                    llm_grid_t = t_grid  # temporal merge = 1 for images
+                    llm_grid_h = h_grid // merge_size
+                    llm_grid_w = w_grid // merge_size
+                    n_tokens = llm_grid_t * llm_grid_h * llm_grid_w
+                    span_end = min(i + n_tokens, seq_len)
+
+                    # Replicate HF's get_vision_position_ids exactly:
+                    #   temporal: all same (current_pos)
+                    #   height: repeat_interleave(w * t)
+                    #   width: repeat(h * t)
+                    for vi in range(span_end - i):
+                        t_pos[i + vi] = current_pos
+                        row = vi // llm_grid_w  # floor div
+                        col = vi % llm_grid_w
+                        h_pos[i + vi] = current_pos + (row % llm_grid_h)
+                        w_pos[i + vi] = current_pos + col
+
+                    # Advance by max(h_merged, w_merged) — HF convention.
+                    current_pos += max(llm_grid_h, llm_grid_w)
+                    i = span_end
+                    img_idx += 1
+                else:
+                    t_pos[i] = current_pos
+                    h_pos[i] = current_pos
+                    w_pos[i] = current_pos
+                    current_pos += 1
+                    i += 1
+
+            # Channel layout: [text, temporal, height, width].
+            # Channel 0 (text) mirrors temporal — for text tokens all
+            # channels are identical; for vision tokens the model's
+            # attention layer only uses channels 1-3.
+            all_pos[b, 0] = t_pos
+            all_pos[b, 1] = t_pos
+            all_pos[b, 2] = h_pos
+            all_pos[b, 3] = w_pos
+
+        return tf.constant(all_pos, dtype="int32")
+
+    # ------------------------------------------------------------------
+    # Main preprocessing entry point
+    # ------------------------------------------------------------------
 
     @preprocessing_function
     def generate_preprocess(self, x, sequence_length=None):
@@ -151,7 +275,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
                 x, sequence_length=sequence_length
             )
 
-        # Multimodal: need custom handling for vision inputs.
+        # Multimodal path.
         if not self.built:
             self.build(None)
 
@@ -166,35 +290,29 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             batched = False
             prompts = tf.expand_dims(prompts, 0)
 
-        # Process images FIRST to determine the number of vision tokens.
+        # 1. Process images to get pixel_values & grid_thw.
         vision_out = self._preprocess_images(images, batched)
 
-        # Compute the number of vision tokens per image from grid_thw.
-        # grid_thw is (num_images, 3) where each row is [T, H, W] in
-        # patch units.  The merged token count is
-        #   T * (H / spatial_merge_size) * (W / spatial_merge_size)
-        # The image converter already returns H, W in patch units, so
-        # after the patch merger the token count is T * H * W / merge^2.
+        # 2. Compute per-image vision token count from grid_thw.
         grid_thw = vision_out["image_grid_thw"]
-        if hasattr(grid_thw, "numpy"):
-            grid_np = grid_thw.numpy()
-        else:
-            grid_np = np.array(grid_thw)
-
-        if self.image_converter is not None:
-            merge_size = self.image_converter.spatial_merge_size
-        else:
-            merge_size = 2
-
-        # For each image, compute the number of vision tokens.
+        grid_np = (
+            grid_thw.numpy()
+            if hasattr(grid_thw, "numpy")
+            else np.array(grid_thw)
+        )
+        merge_size = getattr(self.image_converter, "spatial_merge_size", 2)
         num_vision_tokens_per_image = []
         for i in range(grid_np.shape[0]):
-            t, h, w = int(grid_np[i, 0]), int(grid_np[i, 1]), int(grid_np[i, 2])
-            n_tokens = t * (h // merge_size) * (w // merge_size)
-            num_vision_tokens_per_image.append(n_tokens)
+            t, h, w = (
+                int(grid_np[i, 0]),
+                int(grid_np[i, 1]),
+                int(grid_np[i, 2]),
+            )
+            num_vision_tokens_per_image.append(
+                t * (h // merge_size) * (w // merge_size)
+            )
 
-        # Expand the single <|image_pad|> placeholder in each prompt to
-        # the correct number of pad tokens for each image.
+        # 3. Tokenize with special-token-aware splitting.
         if isinstance(prompts, tf.Tensor):
             prompts_list = [p.numpy().decode("utf-8") for p in prompts]
         elif isinstance(prompts, (list, tuple)):
@@ -205,39 +323,23 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         else:
             prompts_list = [str(prompts)]
 
-        expanded = []
-        img_idx = 0
+        expanded_sequences = []
         for prompt_str in prompts_list:
-            # Count how many <|image_pad|> tokens are in this prompt.
-            count = prompt_str.count(self.image_token)
-            result_str = prompt_str
-            for _ in range(count):
-                if img_idx < len(num_vision_tokens_per_image):
-                    n = num_vision_tokens_per_image[img_idx]
-                    img_idx += 1
-                else:
-                    n = 1
-                # Replace the first occurrence with N copies.
-                result_str = result_str.replace(
-                    self.image_token,
-                    self.image_token * n,
-                    1,
-                )
-            expanded.append(result_str)
-        prompts = expanded
+            ids = self._tokenize_with_special_tokens(
+                prompt_str, num_vision_tokens_per_image
+            )
+            expanded_sequences.append(ids)
 
-        # Tokenize.
-        token_ids_ragged = self.tokenizer(prompts)
+        # 4. Pack to fixed length.
+        token_ids_ragged = tf.ragged.constant(expanded_sequences, dtype="int32")
         token_ids, padding_mask = self.packer(
             token_ids_ragged,
             sequence_length=sequence_length,
             add_end_value=False,
         )
 
-        # Compute vision indices.
+        # 5. Compute vision indices & M-RoPE position IDs.
         vision_indices = self._compute_vision_indices(token_ids)
-
-        # Compute M-RoPE position IDs.
         pos_ids = self._compute_position_ids(
             token_ids, vision_out["image_grid_thw"]
         )
@@ -251,8 +353,11 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         result.update(vision_out)
         result["vision_indices"] = vision_indices
         result["position_ids"] = pos_ids if batched else tf.squeeze(pos_ids, 0)
-
         return result
+
+    # ------------------------------------------------------------------
+    # Image preprocessing
+    # ------------------------------------------------------------------
 
     def _preprocess_images(self, images, batched):
         """Convert raw images to patch tensors using the image converter.
@@ -264,21 +369,16 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         Returns:
             dict with ``pixel_values`` and ``image_grid_thw``.
         """
-        # Normalize images to a flat python list of individual images.
-        # After convert_preprocessing_inputs, a list of numpy arrays may
-        # become a single batched tensor (B, H, W, C). We need to split
-        # it back into individual (H, W, C) images.
+        # Normalize to a flat list of individual 3-D images.
         if isinstance(images, (list, tuple)):
             flat_images = []
             for img in images:
                 if hasattr(img, "shape") and len(img.shape) == 4:
-                    # Batched tensor: iterate over batch dim.
                     for i in range(img.shape[0]):
                         flat_images.append(img[i])
                 else:
                     flat_images.append(img)
         elif hasattr(images, "shape") and len(images.shape) == 4:
-            # Single batched tensor from convert_preprocessing_inputs.
             flat_images = [images[i] for i in range(images.shape[0])]
         elif hasattr(images, "shape") and len(images.shape) == 3:
             flat_images = [images]
@@ -287,18 +387,14 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
 
         all_patches = []
         all_grid_thw = []
-
         for img in flat_images:
             if isinstance(img, np.ndarray) and img.ndim == 2:
-                # Grayscale → RGB
                 img = np.stack([img] * 3, axis=-1)
 
             result = self.image_converter(img)
-
             patches = result["patches"]
             grid_thw = result["grid_thw"]
 
-            # Ensure we have TF tensors.
             if not isinstance(patches, tf.Tensor):
                 if hasattr(patches, "cpu"):
                     patches = patches.cpu().detach().numpy()
@@ -311,14 +407,48 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             all_patches.append(patches)
             all_grid_thw.append(grid_thw)
 
-        # Concatenate patches from all images.
-        pixel_values = tf.concat(all_patches, axis=0)
-        image_grid_thw = tf.stack(all_grid_thw, axis=0)
-
         return {
-            "pixel_values": pixel_values,
-            "image_grid_thw": image_grid_thw,
+            "pixel_values": tf.concat(all_patches, axis=0),
+            "image_grid_thw": tf.stack(all_grid_thw, axis=0),
         }
+
+    # ------------------------------------------------------------------
+    # Post-processing
+    # ------------------------------------------------------------------
+
+    @preprocessing_function
+    def generate_postprocess(self, x):
+        """Convert integer token output to strings for generation.
+
+        Strips all Qwen3.5 special tokens (vision markers, image pad,
+        chat markers) from the output before detokenizing.
+        """
+        if not self.built:
+            self.build(None)
+
+        token_ids = keras.ops.convert_to_numpy(x["token_ids"])
+        padding_mask = keras.ops.convert_to_numpy(x["padding_mask"])
+
+        # Collect all IDs to strip: base special tokens + vision tokens.
+        ids_to_strip = list(self.tokenizer.special_token_ids)
+        for tok_id in self.SPECIAL_TOKEN_MAP.values():
+            if tok_id not in ids_to_strip:
+                ids_to_strip.append(tok_id)
+
+        from keras_hub.src.utils.tensor_utils import strip_to_ragged
+
+        token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
+        output = self.tokenizer.detokenize(token_ids)
+
+        # Safety net: strip residual special token strings that may
+        # survive if the BPE model encodes them as byte-fallback pieces.
+        for tok_str in self.SPECIAL_TOKEN_MAP:
+            output = tf.strings.regex_replace(output, re.escape(tok_str), "")
+        return output
+
+    # ------------------------------------------------------------------
+    # Serialization
+    # ------------------------------------------------------------------
 
     def get_config(self):
         config = super().get_config()

@@ -14,9 +14,12 @@ def _apply_mrope(
 ):
     """Apply interleaved Multi-dimensional RoPE (M-RoPE).
 
-    For multimodal inputs, position_ids has shape (batch, 4, seq_len) where
-    the 4 channels are [text, temporal, height, width]. Each channel covers a
-    different slice of the rotary dimensions based on mrope_section.
+    Matches HF's ``Qwen3_5TextRotaryEmbedding.forward`` +
+    ``apply_interleaved_mrope``.
+
+    HF computes: ``freqs = inv_freq @ position_ids`` per channel (T/H/W),
+    then **interleaves** channels at stride-3 positions using mrope_section,
+    then doubles: ``emb = cat([freqs, freqs])``, then ``cos/sin``.
 
     Args:
         x_rope: Tensor (batch, seq, heads, rotary_dim) — the portion of Q or K
@@ -25,8 +28,7 @@ def _apply_mrope(
         position_ids: int32 tensor (batch, 4, seq_len) or None.
             When None, standard sequential positions are used.
         mrope_section: list[int] — [s_t, s_h, s_w] sizes (in pairs of dims)
-            for each of the 3 spatial channels. The text channel mirrors
-            the first spatial channel's positions.
+            for each of the 3 spatial channels.
         rotary_dim: int — total rotary dimension.
     Returns:
         Tensor (batch, seq, heads, rotary_dim).
@@ -37,54 +39,54 @@ def _apply_mrope(
 
     # position_ids: (batch, 4, seq_len)
     # channels: 0=text, 1=temporal, 2=height, 3=width
-    # mrope_section: [s_t, s_h, s_w] — number of
-    #  *pairs* of dims per channel
-    # Total pairs = rotary_dim // 2
-    s_t, s_h = mrope_section[0], mrope_section[1]
-
-    # We compute full cos/sin for each of the 3 spatial channels, then pick
-    # the appropriate slices based on mrope_section.  Channel 0 (text) uses
-    # the temporal (ch1) position ids — they coincide for text tokens.
     device_dtype = x_rope.dtype
+    half_dim = rotary_dim // 2  # number of frequency pairs
 
-    def _get_cos_sin(pos_ids):
-        """pos_ids: (batch, seq_len) → cos/sin: (batch, seq, rotary_dim)."""
-        # Use RotaryEmbedding._compute_cos_sin_embedding via the `positions`
-        # argument so we bypass the sequential position logic.
-        dummy = x_rope[:, :, 0, :]  # (batch, seq, rotary_dim)
-        dummy_moved = ops.moveaxis(dummy, -1, -1)  # noop for shape propagation
-        cos_emb, sin_emb = rotary_embedding_layer._compute_cos_sin_embedding(
-            dummy_moved, start_index=0, positions=ops.cast(pos_ids, "float32")
-        )
-        return cos_emb, sin_emb  # (batch, seq, rotary_dim)
+    # Get inv_freq from the RotaryEmbedding layer.
+    inv_freq = rotary_embedding_layer._get_inverse_freq(rotary_dim)
+    inv_freq = ops.cast(inv_freq, "float32")  # (half_dim,)
 
-    # Build a combined cos/sin by interleaving sections.
-    # Section layout (pairs of dims):
-    #   [0 : s_t]           → temporal channel (ch 1)
-    #   [s_t : s_t+s_h]     → height  channel (ch 2)
-    #   [s_t+s_h : total]   → width   channel (ch 3)
-    # For text tokens all channels hold the same sequential position id,
-    # so the specific assignment doesn't matter.
-    cos_t, sin_t = _get_cos_sin(position_ids[:, 1, :])  # temporal
-    cos_h, sin_h = _get_cos_sin(position_ids[:, 2, :])  # height
-    cos_w, sin_w = _get_cos_sin(position_ids[:, 3, :])  # width
+    # Compute raw freqs for each spatial channel: freqs = pos @ inv_freq.
+    pos_t = ops.cast(position_ids[:, 1, :], "float32")  # (batch, seq)
+    pos_h = ops.cast(position_ids[:, 2, :], "float32")
+    pos_w = ops.cast(position_ids[:, 3, :], "float32")
 
-    # Slice each embedding to its own section (pairs of dims → *2 for actual).
-    t_end = s_t * 2
-    h_end = t_end + s_h * 2
-    # w covers the remainder
+    # freqs = einsum("bi,j->bij", positions, inv_freq) → (batch, seq, hd/2)
+    freqs_t = ops.einsum("bi,j->bij", pos_t, inv_freq)
+    freqs_h = ops.einsum("bi,j->bij", pos_h, inv_freq)
+    freqs_w = ops.einsum("bi,j->bij", pos_w, inv_freq)
 
-    cos_emb = ops.concatenate(
-        [cos_t[..., :t_end], cos_h[..., t_end:h_end], cos_w[..., h_end:]],
-        axis=-1,
+    # Apply interleaved M-RoPE (matches HF's apply_interleaved_mrope).
+    # Start with temporal freqs, then overwrite stride-3 slots for H and W.
+    #
+    # For mrope_section = [s_t, s_h, s_w]:
+    #   Height: dims [1, 4, 7, ...] up to s_h * 3
+    #   Width:  dims [2, 5, 8, ...] up to s_w * 3
+    # Temporal keeps everything else.
+    s_h_len = mrope_section[1] * 3
+    s_w_len = mrope_section[2] * 3
+
+    # Construct the interleaved frequency tensor by picking from T/H/W.
+    parts = []
+    for i in range(half_dim):
+        if i < s_h_len and i % 3 == 1:
+            parts.append(freqs_h[..., i : i + 1])
+        elif i < s_w_len and i % 3 == 2:
+            parts.append(freqs_w[..., i : i + 1])
+        else:
+            parts.append(freqs_t[..., i : i + 1])
+
+    freqs_interleaved = ops.concatenate(parts, axis=-1)  # (batch, seq, hd/2)
+
+    # Double: emb = cat([freqs, freqs], dim=-1), then cos/sin.
+    emb = ops.concatenate(
+        [freqs_interleaved, freqs_interleaved], axis=-1
     )  # (batch, seq, rotary_dim)
-    sin_emb = ops.concatenate(
-        [sin_t[..., :t_end], sin_h[..., t_end:h_end], sin_w[..., h_end:]],
-        axis=-1,
-    )  # (batch, seq, rotary_dim)
+
+    cos_emb = ops.cos(emb)
+    sin_emb = ops.sin(emb)
 
     # Apply: x_rope is (batch, seq, heads, rotary_dim)
-    # Expand embeddings for heads dim.
     cos_emb = ops.expand_dims(cos_emb, axis=2)  # (B, seq, 1, rot)
     sin_emb = ops.expand_dims(sin_emb, axis=2)
 
