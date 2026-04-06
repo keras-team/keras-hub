@@ -21,8 +21,8 @@ class VGGImageClassifier(ImageClassifier):
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
     labels where `x` is a string and `y` is a integer from `[0, num_classes)`.
 
-    Not that unlike `keras_hub.model.ImageClassifier`, the `VGGImageClassifier`
-    allows and defaults to `pooling="flatten"`, when inputs are flatten and
+    Note that unlike `keras_hub.model.ImageClassifier`, the `VGGImageClassifier`
+    allows `pooling="flatten"`, where the backbone outputs are flattened and
     passed through two intermediate dense layers before the final output
     projection.
 
@@ -33,11 +33,12 @@ class VGGImageClassifier(ImageClassifier):
             a `keras.Layer` instance, or a callable. If `None` no preprocessing
             will be applied to the inputs.
         pooling: `"flatten"`, `"avg"`, or `"max"`. The type of pooling to apply
-            on backbone output. The default is flatten to match the original
-            VGG implementation, where backbone inputs will be flattened and
-            passed through two dense layers with a `"relu"` activation.
-        pooling_hidden_dim: the output feature size of the pooling dense layers.
-            This only applies when `pooling="flatten"`.
+            on the backbone output. The default is `"avg"`.
+        pooling_hidden_dim: the output feature size of the classification head
+            before the last `Dense` layer. Defaults to 4096 to match the
+            original VGG implementation.
+        dropout: float. The dropout rate to apply on the classification head.
+            Defaults to 0.0 (no dropout).
         activation: `None`, str, or callable. The activation function to use on
             the `Dense` layer. Set `activation=None` to return the output
             logits. Defaults to `"softmax"`.
@@ -85,7 +86,7 @@ class VGGImageClassifier(ImageClassifier):
     ```python
     images = np.random.randint(0, 256, size=(2, 224, 224, 3))
     labels = [0, 3]
-    model = keras_hub.models.VGGBackbone(
+    backbone = keras_hub.models.VGGBackbone(
         stackwise_num_repeats = [2, 2, 3, 3, 3],
         stackwise_num_filters = [64, 128, 256, 512, 512],
         image_shape = (224, 224, 3),
@@ -132,53 +133,67 @@ class VGGImageClassifier(ImageClassifier):
                 name="pooler",
             )
         elif pooling == "flatten":
-            self.pooler = keras.Sequential(
-                [
-                    keras.layers.Flatten(name="flatten"),
-                    keras.layers.Dense(pooling_hidden_dim, activation="relu"),
-                    keras.layers.Dense(pooling_hidden_dim, activation="relu"),
-                ],
-                name="pooler",
-            )
+            self.pooler = keras.layers.Flatten(name="flatten")
         else:
             raise ValueError(
-                "Unknown `pooling` type. Polling should be either `'avg'` or "
-                f"`'max'`. Received: pooling={pooling}."
+                "Unknown `pooling` type. Pooling should be either `'avg'`, "
+                f"`'max'` or `'flatten'`. Received: pooling={pooling}."
             )
 
-        self.head = keras.Sequential(
-            [
-                keras.layers.Conv2D(
-                    filters=4096,
-                    kernel_size=7,
-                    name="fc1",
-                    activation=activation,
-                    use_bias=True,
-                    padding="same",
-                ),
-                keras.layers.Dropout(
-                    rate=dropout,
-                    dtype=head_dtype,
-                    name="output_dropout",
-                ),
-                keras.layers.Conv2D(
-                    filters=4096,
-                    kernel_size=1,
-                    name="fc2",
-                    activation=activation,
-                    use_bias=True,
-                    padding="same",
-                ),
-                self.pooler,
-                keras.layers.Dense(
-                    num_classes,
-                    activation=activation,
-                    dtype=head_dtype,
-                    name="predictions",
-                ),
-            ],
-            name="head",
-        )
+        if pooling == "flatten":
+            self.head = keras.Sequential(
+                [
+                    self.pooler,
+                    keras.layers.Dense(
+                        pooling_hidden_dim, activation="relu", name="fc1"
+                    ),
+                    keras.layers.Dropout(
+                        rate=dropout, dtype=head_dtype, name="output_dropout"
+                    ),
+                    keras.layers.Dense(
+                        pooling_hidden_dim, activation="relu", name="fc2"
+                    ),
+                    keras.layers.Dense(
+                        num_classes,
+                        activation=activation,
+                        dtype=head_dtype,
+                        name="predictions",
+                    ),
+                ],
+                name="head",
+            )
+        else:
+            self.head = keras.Sequential(
+                [
+                    keras.layers.Conv2D(
+                        filters=pooling_hidden_dim,
+                        kernel_size=7,
+                        name="fc1",
+                        activation="relu",
+                        use_bias=True,
+                        padding="valid",
+                    ),
+                    keras.layers.Dropout(
+                        rate=dropout, dtype=head_dtype, name="output_dropout"
+                    ),
+                    keras.layers.Conv2D(
+                        filters=pooling_hidden_dim,
+                        kernel_size=1,
+                        name="fc2",
+                        activation="relu",
+                        use_bias=True,
+                        padding="same",
+                    ),
+                    self.pooler,
+                    keras.layers.Dense(
+                        num_classes,
+                        activation=activation,
+                        dtype=head_dtype,
+                        name="predictions",
+                    ),
+                ],
+                name="head",
+            )
 
         # === Functional Model ===
         inputs = self.backbone.input
