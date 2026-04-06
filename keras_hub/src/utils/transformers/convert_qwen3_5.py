@@ -35,6 +35,37 @@ def load_image_converter_config(preset, transformers_config):
     }
 
 
+def load_video_converter_config(preset, transformers_config):
+    """Return kwargs for Qwen3_5VideoConverter, or None for text-only.
+
+    Uses the same vision config as images since HF's ``get_video_features``
+    calls ``get_image_features`` — identical encoder, identical parameters.
+    """
+    if "vision_config" not in transformers_config:
+        return None
+
+    vision_config = transformers_config["vision_config"]
+    preprocessor_config = load_json(preset, "preprocessor_config.json")
+
+    # Video may have separate min/max pixels in the preprocessor config.
+    # Fall back to the same defaults as images.
+    return {
+        "patch_size": vision_config.get("patch_size", 16),
+        "temporal_patch_size": vision_config.get("temporal_patch_size", 2),
+        "spatial_merge_size": vision_config.get("spatial_merge_size", 2),
+        "min_pixels": preprocessor_config.get(
+            "video_min_pixels",
+            preprocessor_config.get("min_pixels", 65536),
+        ),
+        "max_pixels": preprocessor_config.get(
+            "video_max_pixels",
+            preprocessor_config.get("max_pixels", 16777216),
+        ),
+        "image_mean": preprocessor_config.get("image_mean", [0.5, 0.5, 0.5]),
+        "image_std": preprocessor_config.get("image_std", [0.5, 0.5, 0.5]),
+    }
+
+
 def convert_backbone_config(transformers_config):
     # tie_word_embeddings is at the top-level config.
     tie_word_embeddings = transformers_config["tie_word_embeddings"]

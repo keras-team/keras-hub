@@ -82,3 +82,51 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
         preprocessor = Qwen3_5CausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "airplane at airport")
+
+    def test_generate_preprocess_with_videos(self):
+        from keras import ops
+
+        from keras_hub.src.models.qwen3_5.qwen3_5_video_converter import (
+            Qwen3_5VideoConverter,
+        )
+
+        # Add special tokens to vocab
+        vocab = self.vocab.copy()
+        vocab["<|video_pad|>"] = 100
+        tokenizer = Qwen3_5Tokenizer(vocabulary=vocab, merges=self.merges)
+
+        video_converter = Qwen3_5VideoConverter(
+            patch_size=2,
+            temporal_patch_size=2,
+            spatial_merge_size=1,
+            min_pixels=16,
+            max_pixels=100,
+        )
+        preprocessor = Qwen3_5CausalLMPreprocessor(
+            tokenizer=tokenizer,
+            sequence_length=16,
+            video_converter=video_converter,
+            video_token_id=100,
+        )
+
+        # 2 frames, 4x4.
+        # grid_t = 2//2 = 1. grid_h=2, grid_w=2.
+        # num_vision_tokens = 1 * 2 * 2 = 4.
+        video = ops.ones((2, 4, 4, 3))
+        prompt = "<|video_pad|> air"
+
+        out = preprocessor.generate_preprocess(
+            {"prompts": prompt, "videos": [video]}
+        )
+
+        # text tokenizer for " air" is [2] (with space) or [1]...
+        # token_ids should have four 100 tokens followed by the text.
+        token_ids = out["token_ids"]
+        self.assertEqual(list(token_ids.numpy()[:4]), [100, 100, 100, 100])
+
+        self.assertEqual(tuple(out["image_grid_thw"].shape), (1, 3))
+        self.assertEqual(list(out["image_grid_thw"].numpy()[0]), [1, 2, 2])
+        self.assertIn("vision_indices", out)
+
+        # position ids should have 4 channels: [4, 16]
+        self.assertEqual(tuple(out["position_ids"].shape), (4, 16))
