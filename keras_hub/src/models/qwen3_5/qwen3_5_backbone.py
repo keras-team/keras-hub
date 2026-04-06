@@ -7,10 +7,10 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.qwen3_5.qwen3_5_decoder import (
     Qwen3_5TransformerDecoder,
 )
-from keras_hub.src.models.qwen3_5.qwen3_5_layernorm import Qwen3_5LayerNorm
 from keras_hub.src.models.qwen3_5.qwen3_5_layers import (
     Qwen3_5InterleaveEmbeddings,
 )
+from keras_hub.src.models.qwen3_5.qwen3_5_layers import Qwen3_5LayerNorm
 
 
 def _compute_mrope_position_ids(

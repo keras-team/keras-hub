@@ -1,3 +1,5 @@
+"""HF -> KerasHub weight converter for Qwen3.5."""
+
 import numpy as np
 
 from keras_hub.src.models.qwen3_5.qwen3_5_backbone import Qwen3_5Backbone
@@ -246,11 +248,10 @@ def convert_weights(backbone, loader, transformers_config):
                 gdn.A_log,
                 f"{prefix}.linear_attn.A_log",
             )
-            # Output gated RMSNorm.
+            # Output gated RMSNorm (uses direct weight * x, not (1+w)*x).
             _port(
                 gdn.norm.scale,
                 f"{prefix}.linear_attn.norm.weight",
-                hook_fn=lambda hf_tensor, _: hf_tensor - 1.0,
             )
             # Output projection.
             _port(

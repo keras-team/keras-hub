@@ -11,7 +11,7 @@ from keras_hub.src.models.qwen3_5.qwen3_5_attention import Qwen3_5Attention
 from keras_hub.src.models.qwen3_5.qwen3_5_gated_delta_net import (
     Qwen3_5GatedDeltaNet,
 )
-from keras_hub.src.models.qwen3_5.qwen3_5_layernorm import Qwen3_5LayerNorm
+from keras_hub.src.models.qwen3_5.qwen3_5_layers import Qwen3_5LayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 

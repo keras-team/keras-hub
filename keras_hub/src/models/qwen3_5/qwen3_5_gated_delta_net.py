@@ -1,7 +1,7 @@
 import keras
 from keras import ops
 
-from keras_hub.src.models.qwen3_5.qwen3_5_layernorm import Qwen3_5LayerNorm
+from keras_hub.src.models.qwen3_5.qwen3_5_layers import Qwen3_5RMSNormGated
 
 
 def _l2norm(x, axis=-1, eps=1e-6):
@@ -405,7 +405,7 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
             dtype=self.variable_dtype,
         )
 
-        self.norm = Qwen3_5LayerNorm(
+        self.norm = Qwen3_5RMSNormGated(
             head_dim=self.head_v_dim,
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,

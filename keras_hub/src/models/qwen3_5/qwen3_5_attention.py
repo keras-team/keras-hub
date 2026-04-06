@@ -4,7 +4,7 @@ import keras
 from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
-from keras_hub.src.models.qwen3_5.qwen3_5_layernorm import Qwen3_5LayerNorm
+from keras_hub.src.models.qwen3_5.qwen3_5_layers import Qwen3_5LayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
