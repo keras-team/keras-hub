@@ -34,39 +34,28 @@ def _apply_mrope(
         Tensor (batch, seq, heads, rotary_dim).
     """
     if position_ids is None:
-        # Plain 1D RoPE: let RotaryEmbedding handle sequentially.
         return rotary_embedding_layer(x_rope, start_index=0)
 
     # position_ids: (batch, 4, seq_len)
     # channels: 0=text, 1=temporal, 2=height, 3=width
     device_dtype = x_rope.dtype
-    half_dim = rotary_dim // 2  # number of frequency pairs
+    half_dim = rotary_dim // 2
 
-    # Get inv_freq from the RotaryEmbedding layer.
     inv_freq = rotary_embedding_layer._get_inverse_freq(rotary_dim)
-    inv_freq = ops.cast(inv_freq, "float32")  # (half_dim,)
+    inv_freq = ops.cast(inv_freq, "float32")
 
-    # Compute raw freqs for each spatial channel: freqs = pos @ inv_freq.
-    pos_t = ops.cast(position_ids[:, 1, :], "float32")  # (batch, seq)
+    pos_t = ops.cast(position_ids[:, 1, :], "float32")
     pos_h = ops.cast(position_ids[:, 2, :], "float32")
     pos_w = ops.cast(position_ids[:, 3, :], "float32")
 
-    # freqs = einsum("bi,j->bij", positions, inv_freq) → (batch, seq, hd/2)
     freqs_t = ops.einsum("bi,j->bij", pos_t, inv_freq)
     freqs_h = ops.einsum("bi,j->bij", pos_h, inv_freq)
     freqs_w = ops.einsum("bi,j->bij", pos_w, inv_freq)
 
-    # Apply interleaved M-RoPE (matches HF's apply_interleaved_mrope).
-    # Start with temporal freqs, then overwrite stride-3 slots for H and W.
-    #
-    # For mrope_section = [s_t, s_h, s_w]:
-    #   Height: dims [1, 4, 7, ...] up to s_h * 3
-    #   Width:  dims [2, 5, 8, ...] up to s_w * 3
-    # Temporal keeps everything else.
+    # Interleave T/H/W channels at stride-3 positions per mrope_section.
     s_h_len = mrope_section[1] * 3
     s_w_len = mrope_section[2] * 3
 
-    # Construct the interleaved frequency tensor by picking from T/H/W.
     parts = []
     for i in range(half_dim):
         if i < s_h_len and i % 3 == 1:
@@ -76,18 +65,14 @@ def _apply_mrope(
         else:
             parts.append(freqs_t[..., i : i + 1])
 
-    freqs_interleaved = ops.concatenate(parts, axis=-1)  # (batch, seq, hd/2)
+    freqs_interleaved = ops.concatenate(parts, axis=-1)
 
-    # Double: emb = cat([freqs, freqs], dim=-1), then cos/sin.
-    emb = ops.concatenate(
-        [freqs_interleaved, freqs_interleaved], axis=-1
-    )  # (batch, seq, rotary_dim)
+    emb = ops.concatenate([freqs_interleaved, freqs_interleaved], axis=-1)
 
     cos_emb = ops.cos(emb)
     sin_emb = ops.sin(emb)
 
-    # Apply: x_rope is (batch, seq, heads, rotary_dim)
-    cos_emb = ops.expand_dims(cos_emb, axis=2)  # (B, seq, 1, rot)
+    cos_emb = ops.expand_dims(cos_emb, axis=2)
     sin_emb = ops.expand_dims(sin_emb, axis=2)
 
     x1, x2 = x_rope[..., : rotary_dim // 2], x_rope[..., rotary_dim // 2 :]
@@ -110,16 +95,18 @@ class Qwen3_5Attention(keras.layers.Layer):
     - Optional sliding window
 
     Args:
-        num_query_heads: Number of query attention heads.
-        num_key_value_heads: Number of key/value attention heads (GQA).
-        head_dim: Dimension of each attention head.
-        partial_rotary_factor: Fraction of head_dim that gets RoPE.
-        rope_max_wavelength: Maximum wavelength for rotary embeddings.
-        rope_scaling_factor: Scaling factor for rotary embeddings.
-        kernel_initializer: Initializer for projection kernels.
-        dropout: Dropout rate for attention weights.
-        layer_norm_epsilon: Epsilon for Q/K RMSNorm.
-        sliding_window_size: Optional sliding window size.
+        num_query_heads: int. Number of query attention heads.
+        num_key_value_heads: int. Number of key/value attention heads (GQA).
+        head_dim: int. Dimension of each attention head.
+        partial_rotary_factor: float. Fraction of head_dim that gets RoPE.
+        rope_max_wavelength: int. Maximum wavelength for rotary embeddings.
+        rope_scaling_factor: float. Scaling factor for rotary embeddings.
+        kernel_initializer: string or initializer. Initializer for
+            projection kernels.
+        dropout: float. Dropout rate for attention weights.
+        layer_norm_epsilon: float. Epsilon for Q/K RMSNorm.
+        sliding_window_size: int or None. Sliding window size.
+        mrope_section: list or None. M-RoPE section sizes.
     """
 
     def __init__(
@@ -160,7 +147,6 @@ class Qwen3_5Attention(keras.layers.Layer):
         hidden_dim = inputs_shape[-1]
         self._inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
 
-        # Q projects to (num_query_heads, head_dim * 2) to include gate.
         self._query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(
@@ -255,7 +241,6 @@ class Qwen3_5Attention(keras.layers.Layer):
         When None, falls back to sequential standard RoPE.
         """
         if self.mrope_section is not None and position_ids is not None:
-            # Multimodal path: M-RoPE with 4-channel position IDs.
             x_rope = x[..., : self.rotary_dim]
             x_pass = x[..., self.rotary_dim :]
             x_rope = _apply_mrope(
@@ -269,7 +254,6 @@ class Qwen3_5Attention(keras.layers.Layer):
                 return x_rope
             return ops.concatenate([x_rope, x_pass], axis=-1)
         else:
-            # Standard 1D RoPE path.
             if self.rotary_dim == self.head_dim:
                 return self.rotary_embedding_layer(x, start_index=start_index)
             x_rope = x[..., : self.rotary_dim]
@@ -292,12 +276,10 @@ class Qwen3_5Attention(keras.layers.Layer):
             cache_update_index if cache_update_index is not None else 0
         )
 
-        # Query projects to (head_dim * 2), split into query + gate.
         qg = self._query_dense(hidden_states)
         query = qg[..., : self.head_dim]
         gate = qg[..., self.head_dim :]
 
-        # Reshape gate for per-head gating: (B, seq, heads * head_dim)
         gate_shape = ops.shape(gate)
         gate = ops.reshape(
             gate,
@@ -335,7 +317,6 @@ class Qwen3_5Attention(keras.layers.Layer):
                 )
             key, value = _compute_key_value(hidden_states)
 
-        # GQA: repeat K/V heads.
         key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
         value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
 
@@ -350,17 +331,14 @@ class Qwen3_5Attention(keras.layers.Layer):
             attention_output, training=training
         )
 
-        # Reshape to (B, seq, heads * head_dim) for gating.
         out_shape = ops.shape(attention_output)
         attention_output = ops.reshape(
             attention_output,
             (out_shape[0], out_shape[1], -1),
         )
 
-        # Apply sigmoid gate.
         attention_output = attention_output * ops.sigmoid(gate)
 
-        # Reshape back to (B, seq, heads, head_dim) for output proj.
         attention_output = ops.reshape(
             attention_output,
             (out_shape[0], out_shape[1], self.num_query_heads, self.head_dim),

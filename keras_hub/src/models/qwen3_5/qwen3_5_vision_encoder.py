@@ -1,12 +1,3 @@
-"""Qwen3.5 Vision Encoder.
-
-Implements the vision transformer used by Qwen3.5-VL (images only for v1).
-Architecture mirrors the HF Qwen3VLVisionModel:
-  PatchEmbed(Conv3D) → pos_embed + rotary_pos_emb → ViT blocks → PatchMerger
-
-Token count per image: grid_thw.prod() // spatial_merge_size^2
-"""
-
 import math
 
 import keras
@@ -30,10 +21,8 @@ class Qwen3_5VisionRotaryEmbedding(keras.layers.Layer):
         # Pre-compute inverse frequencies (not trainable).
         dim = head_dim // 2  # each spatial axis gets head_dim/2 dims
         idx = list(range(0, dim, 2))
-        import math as _math
-
         self._inv_freq_vals = [
-            1.0 / (_math.pow(theta, i / float(dim))) for i in idx
+            1.0 / (math.pow(theta, i / float(dim))) for i in idx
         ]
         self._inv_freq_len = len(self._inv_freq_vals)
 
@@ -530,6 +519,11 @@ class Qwen3_5VisionEncoder(keras.Model):
         For each image, interpolates the Embedding table to cover an H×W grid,
         then repeats along the temporal axis.
 
+        Note: ``grid_thw`` is always a concrete (non-symbolic) tensor because
+        the vision encoder is called imperatively outside the Keras functional
+        graph (see backbone __init__). The ``int()`` calls below are safe and
+        match the HF reference implementation.
+
         Args:
             grid_thw: int tensor (num_images, 3) with [T, H, W] per image.
         Returns:
@@ -560,10 +554,10 @@ class Qwen3_5VisionEncoder(keras.Model):
             base_hc = h_ceil * gs
 
             # Bilinear weights (h, w)
-            w00 = ops.outer(1.0 - dh, 1.0 - dw)
-            w01 = ops.outer(1.0 - dh, dw)
-            w10 = ops.outer(dh, 1.0 - dw)
-            w11 = ops.outer(dh, dw)
+            w00 = ops.expand_dims(1.0 - dh, -1) * ops.expand_dims(1.0 - dw, 0)
+            w01 = ops.expand_dims(1.0 - dh, -1) * ops.expand_dims(dw, 0)
+            w10 = ops.expand_dims(dh, -1) * ops.expand_dims(1.0 - dw, 0)
+            w11 = ops.expand_dims(dh, -1) * ops.expand_dims(dw, 0)
 
             # Indices (h, w)
             idx00 = ops.cast(
@@ -617,6 +611,10 @@ class Qwen3_5VisionEncoder(keras.Model):
 
     def _rot_pos_emb(self, grid_thw):
         """Produce 2D rotary position embeddings for all image patches.
+
+        Note: ``grid_thw`` is always concrete
+        (see ``_fast_pos_embed_interpolate``docstring).
+        The ``int()`` calls are safe.
 
         Args:
             grid_thw: list/tensor (num_images, 3) with [T, H, W] per image.
@@ -732,8 +730,6 @@ class Qwen3_5VisionEncoder(keras.Model):
             KerasTensor with shape ``(None, out_hidden_size)`` and
             dtype ``float32``.
         """
-        import keras
-
         return keras.KerasTensor(
             shape=(None, self.out_hidden_size),
             dtype="float32",

@@ -1,14 +1,3 @@
-"""Gated Delta Net linear attention layer for Qwen3.5.
-
-This implements a recurrent linear attention mechanism that replaces
-standard softmax attention in some layers. It uses:
-- Causal Conv1d for local context mixing
-- Delta rule recurrence for long-range memory
-- Gating mechanisms (beta for write, g for decay, z for output)
-
-Reference: HF transformers Qwen3NextGatedDeltaNet / Qwen3_5GatedDeltaNet
-"""
-
 import keras
 from keras import ops
 
@@ -281,10 +270,8 @@ def _recurrent_gated_delta_rule(
     else:
         state = ops.cast(initial_state, "float32")
 
-    keras_backend = keras.config.backend()
-
-    def step(t, inputs):
-        state, out = inputs
+    all_outputs = []
+    for t in range(seq_len):
         q_t = query[:, :, t]
         k_t = key[:, :, t]
         v_t = value[:, :, t]
@@ -300,31 +287,11 @@ def _recurrent_gated_delta_rule(
         state = state + ops.expand_dims(k_t, -1) * ops.expand_dims(delta, -2)
 
         out_t = ops.sum(state * ops.expand_dims(q_t, -1), axis=-2)
+        all_outputs.append(out_t)
 
-        if keras_backend == "tensorflow":
-            out = out.write(t, out_t)
-        elif keras_backend == "torch":
-            out[:, :, t : t + 1, :] = ops.expand_dims(out_t, axis=2)
-        else:
-            out = ops.slice_update(
-                out, [0, 0, t, 0], ops.expand_dims(out_t, axis=2)
-            )
-        return [state, out]
-
-    if keras_backend == "tensorflow":
-        import tensorflow as tf
-
-        out = tf.TensorArray(dtype="float32", size=seq_len)
-        for t in range(seq_len):
-            state, out = step(t, [state, out])
-        output = out.stack()
-        output = ops.transpose(output, [1, 2, 0, 3])
-    else:
-        out = ops.zeros(
-            (batch_size, num_heads, seq_len, v_head_dim), dtype="float32"
-        )
-        state, out = ops.fori_loop(0, seq_len, step, [state, out])
-        output = out
+    # (seq_len, batch, heads, v_dim) -> (batch, heads, seq_len, v_dim)
+    output = ops.stack(all_outputs, axis=0)
+    output = ops.transpose(output, (1, 2, 0, 3))
 
     final_state = state if output_final_state else None
 
@@ -661,6 +628,9 @@ class Qwen3_5GatedDeltaNet(keras.layers.Layer):
                 "linear_conv_kernel_dim": self.conv_kernel_size,
                 "hidden_activation": self.hidden_activation,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
             }
         )
         return config

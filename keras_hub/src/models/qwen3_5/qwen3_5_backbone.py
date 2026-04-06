@@ -13,10 +13,6 @@ from keras_hub.src.models.qwen3_5.qwen3_5_layers import (
 )
 
 
-def _qwen3_5_kernel_initializer(stddev=0.02):
-    return keras.initializers.RandomNormal(stddev=stddev)
-
-
 def _compute_mrope_position_ids(
     token_ids, vision_mask, image_grid_thw, mrope_section
 ):
@@ -73,46 +69,46 @@ class Qwen3_5Backbone(Backbone):
     the full-attention layers when ``mrope_section`` is provided.
 
     Args:
-        vocabulary_size (int): The size of the token vocabulary.
-        num_layers (int): The number of transformer layers.
-        num_query_heads (int): The number of query attention heads.
-        num_key_value_heads (int): The number of key and value attention
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_query_heads: int. The number of query attention heads.
+        num_key_value_heads: int. The number of key and value attention
             heads.
-        head_dim (int): Dimension of each attention head.
-        hidden_dim (int): The size of the transformer hidden dimension.
-        intermediate_dim (int): The FFN intermediate dimension.
-        layer_types (list): List of layer types, one per layer.
+        head_dim: int. Dimension of each attention head.
+        hidden_dim: int. The size of the transformer hidden dimension.
+        intermediate_dim: int. The FFN intermediate dimension.
+        layer_types: list. List of layer types, one per layer.
             Each element is ``"full_attention"`` or
             ``"linear_attention"``.
-        partial_rotary_factor (float): Fraction of head_dim that gets
+        partial_rotary_factor: float. Fraction of head_dim that gets
             RoPE. Defaults to ``0.25``.
-        rope_max_wavelength (int): Maximum wavelength for RoPE. Defaults
+        rope_max_wavelength: int. Maximum wavelength for RoPE. Defaults
             to ``10000``.
-        rope_scaling_factor (float): Scaling factor for RoPE. Defaults
+        rope_scaling_factor: float. Scaling factor for RoPE. Defaults
             to ``1.0``.
-        layer_norm_epsilon (float): Epsilon for layer norms. Defaults
+        layer_norm_epsilon: float. Epsilon for layer norms. Defaults
             to ``1e-6``.
-        dropout (float): Dropout rate. Defaults to ``0.0``.
-        tie_word_embeddings (bool): Whether to tie input and output
+        dropout: float. Dropout rate. Defaults to ``0.0``.
+        tie_word_embeddings: bool. Whether to tie input and output
             embeddings. Defaults to ``False``.
-        sliding_window_size (int): Sliding window size for full attention
+        sliding_window_size: int. Sliding window size for full attention
             layers. Defaults to ``32768``.
-        linear_num_key_heads (int): Key heads for linear attention.
+        linear_num_key_heads: int. Key heads for linear attention.
             Defaults to ``16``.
-        linear_num_value_heads (int): Value heads for linear attention.
+        linear_num_value_heads: int. Value heads for linear attention.
             Defaults to ``32``.
-        linear_key_head_dim (int): Key head dim for linear attention.
+        linear_key_head_dim: int. Key head dim for linear attention.
             Defaults to ``128``.
-        linear_value_head_dim (int): Value head dim for linear attention.
+        linear_value_head_dim: int. Value head dim for linear attention.
             Defaults to ``128``.
-        linear_conv_kernel_dim (int): Conv kernel size for linear
+        linear_conv_kernel_dim: int. Conv kernel size for linear
             attention. Defaults to ``4``.
-        vision_encoder: optional ``Qwen3_5VisionEncoder``. When supplied,
+        vision_encoder: ``Qwen3_5VisionEncoder`` or None. When supplied,
             the backbone accepts ``pixel_values``, ``image_grid_thw``, and
             ``vision_indices`` in addition to text inputs.
-        mrope_section (list[int]): [s_t, s_h, s_w] — number of *pairs* of
-            rotary dimensions assigned to temporal, height, and width axes.
-            Required for M-RoPE position encoding in multimodal mode.
+        mrope_section: list or None. ``[s_t, s_h, s_w]`` — number of
+            *pairs* of rotary dimensions assigned to temporal, height,
+            and width axes. Required for M-RoPE in multimodal mode.
             e.g. ``[11, 11, 10]`` for the 27B model. Defaults to ``None``
             (plain 1D RoPE).
         dtype: string or ``keras.mixed_precision.DTypePolicy``. The
@@ -158,7 +154,7 @@ class Qwen3_5Backbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=tie_word_embeddings,
-            embeddings_initializer=_qwen3_5_kernel_initializer(stddev=0.01),
+            embeddings_initializer=keras.initializers.RandomNormal(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
         )
@@ -175,7 +171,7 @@ class Qwen3_5Backbone(Backbone):
                 rope_scaling_factor=rope_scaling_factor,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
-                kernel_initializer=_qwen3_5_kernel_initializer(stddev=0.02),
+                kernel_initializer=keras.initializers.RandomNormal(stddev=0.02),
                 dropout=dropout,
                 sliding_window_size=sliding_window_size,
                 linear_num_key_heads=linear_num_key_heads,

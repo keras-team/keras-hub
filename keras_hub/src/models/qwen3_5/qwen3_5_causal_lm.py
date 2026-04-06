@@ -102,36 +102,18 @@ class Qwen3_5CausalLM(CausalLM):
 
         for i in range(self.backbone.num_layers):
             layer = self.backbone.transformer_layers[i]
-            if layer.layer_type == "full_attention":
-                current_kv = kv_cache[:, i, ...]
-                x, next_kv = layer(
-                    x,
-                    decoder_padding_mask=padding_mask,
-                    self_attention_cache=current_kv,
-                    self_attention_cache_update_index=cache_update_index,
-                    position_ids=position_ids,
-                )
-                next_kv_cache.append(next_kv)
-
-                # Append placeholders for linear attention
-                next_conv_cache.append(conv_cache[:, i, ...])
-                next_recurrent_cache.append(recurrent_cache[:, i, ...])
-            else:
-                # Linear attention (GatedDeltaNet)
-                current_conv = conv_cache[:, i, ...]
-                current_recurrent = recurrent_cache[:, i, ...]
-
-                x, next_conv, next_recurrent = layer(
-                    x,
-                    decoder_padding_mask=padding_mask,
-                    self_attention_cache=(current_conv, current_recurrent),
-                    self_attention_cache_update_index=cache_update_index,
-                )
-                next_conv_cache.append(next_conv)
-                next_recurrent_cache.append(next_recurrent)
-
-                # Append placeholder for full attention
-                next_kv_cache.append(kv_cache[:, i, ...])
+            x, next_kv, next_conv, next_recurrent = layer.call_and_update_cache(
+                x,
+                kv_cache=kv_cache[:, i, ...],
+                conv_cache=conv_cache[:, i, ...],
+                recurrent_cache=recurrent_cache[:, i, ...],
+                cache_update_index=cache_update_index,
+                decoder_padding_mask=padding_mask,
+                position_ids=position_ids,
+            )
+            next_kv_cache.append(next_kv)
+            next_conv_cache.append(next_conv)
+            next_recurrent_cache.append(next_recurrent)
 
         # Stack caches along the layer dimension
         next_cache = (
@@ -299,7 +281,13 @@ class Qwen3_5CausalLM(CausalLM):
         layer_intercept_fn=None,
         target_ids=None,
     ):
-        """Score a generation represented by the provided token ids."""
+        """Score a generation represented by the provided token ids.
+
+        Accepts either a plain ``token_ids`` tensor (text-only) or a dict
+        with ``token_ids``, ``padding_mask``, and optional multimodal keys
+        (``pixel_values``, ``image_grid_thw``, ``vision_indices``,
+        ``position_ids``).
+        """
         if scoring_mode not in ("logits", "loss"):
             raise ValueError(
                 "Unsupported scoring_mode. Must be 'logits' or 'loss'."
@@ -309,6 +297,17 @@ class Qwen3_5CausalLM(CausalLM):
                 "Cannot compute loss without targets. Please provide "
                 "target token ids via the target_ids parameter."
             )
+
+        # Unpack multimodal dict inputs if provided.
+        pixel_values = None
+        image_grid_thw = None
+        vision_indices = None
+        if isinstance(token_ids, dict):
+            padding_mask = token_ids.get("padding_mask", padding_mask)
+            pixel_values = token_ids.get("pixel_values", None)
+            image_grid_thw = token_ids.get("image_grid_thw", None)
+            vision_indices = token_ids.get("vision_indices", None)
+            token_ids = token_ids["token_ids"]
 
         batch_shape = ops.shape(token_ids)[:2]
         assert len(batch_shape) == 2
@@ -324,6 +323,21 @@ class Qwen3_5CausalLM(CausalLM):
             layer_intercept_fn = default_layer_intercept_fn
 
         token_embeddings = self.backbone.token_embedding(token_ids)
+
+        # Interleave vision embeddings if multimodal inputs are present.
+        if (
+            self.backbone.vision_encoder is not None
+            and pixel_values is not None
+        ):
+            img_embeddings = self.backbone.vision_encoder(
+                pixel_values, image_grid_thw
+            )
+            token_embeddings = self.backbone.interleave_embeddings(
+                image_embeddings=img_embeddings,
+                text_embeddings=token_embeddings,
+                vision_indices=vision_indices,
+            )
+
         x = layer_intercept_fn(token_embeddings, -1)
 
         for i, transformer_layer in enumerate(self.backbone.transformer_layers):

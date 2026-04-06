@@ -1,22 +1,9 @@
-"""Qwen3.5 Causal LM Preprocessor with multimodal support.
-
-Handles:
-- Text-only tokenization (backward compatible).
-- Image + text tokenization: replaces <|image_pad|> placeholder tokens with
-  the correct number of vision tokens, computes vision_indices for scatter,
-  and builds 3-channel M-RoPE position IDs.
-"""
-
 import re
 
-import numpy as np
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
-
 import keras
+import numpy as np
+import tensorflow as tf
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
@@ -26,6 +13,7 @@ from keras_hub.src.models.qwen3_5.qwen3_5_image_converter import (
 )
 from keras_hub.src.models.qwen3_5.qwen3_5_tokenizer import Qwen3_5Tokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
 
 @keras_hub_export("keras_hub.models.Qwen3_5CausalLMPreprocessor")
@@ -97,10 +85,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             "(" + "|".join(re.escape(t) for t in self.SPECIAL_TOKEN_MAP) + ")"
         )
 
-    # ------------------------------------------------------------------
-    # Special-token-aware tokenization
-    # ------------------------------------------------------------------
-
     def _tokenize_with_special_tokens(self, text, num_vision_tokens_per_image):
         """Tokenize text while correctly handling special tokens.
 
@@ -144,10 +128,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
                     all_ids.extend(list(tokenized))
         return all_ids
 
-    # ------------------------------------------------------------------
-    # Vision helpers
-    # ------------------------------------------------------------------
-
     def _compute_vision_indices(self, token_ids):
         """Return flat indices where ``token_ids == image_token_id``.
 
@@ -180,11 +160,9 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         Returns:
             int32 tensor ``(batch, 4, seq_len)``.
         """
-        from keras import ops as kops
-
-        token_ids_np = kops.convert_to_numpy(token_ids)
+        token_ids_np = ops.convert_to_numpy(token_ids)
         if hasattr(image_grid_thw, "numpy"):
-            grid_np = kops.convert_to_numpy(image_grid_thw)
+            grid_np = ops.convert_to_numpy(image_grid_thw)
         else:
             grid_np = np.array(image_grid_thw)
 
@@ -247,10 +225,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
 
         return tf.constant(all_pos, dtype="int32")
 
-    # ------------------------------------------------------------------
-    # Main preprocessing entry point
-    # ------------------------------------------------------------------
-
     @preprocessing_function
     def generate_preprocess(self, x, sequence_length=None):
         """Preprocess inputs for generation (prompt-only, no labels).
@@ -286,7 +260,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         if isinstance(prompts, str):
             batched = False
             prompts = [prompts]
-        if tf and isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
+        if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
             batched = False
             prompts = tf.expand_dims(prompts, 0)
 
@@ -355,10 +329,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         result["position_ids"] = pos_ids if batched else tf.squeeze(pos_ids, 0)
         return result
 
-    # ------------------------------------------------------------------
-    # Image preprocessing
-    # ------------------------------------------------------------------
-
     def _preprocess_images(self, images, batched):
         """Convert raw images to patch tensors using the image converter.
 
@@ -412,10 +382,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             "image_grid_thw": tf.stack(all_grid_thw, axis=0),
         }
 
-    # ------------------------------------------------------------------
-    # Post-processing
-    # ------------------------------------------------------------------
-
     @preprocessing_function
     def generate_postprocess(self, x):
         """Convert integer token output to strings for generation.
@@ -435,8 +401,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             if tok_id not in ids_to_strip:
                 ids_to_strip.append(tok_id)
 
-        from keras_hub.src.utils.tensor_utils import strip_to_ragged
-
         token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
         output = self.tokenizer.detokenize(token_ids)
 
@@ -445,10 +409,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         for tok_str in self.SPECIAL_TOKEN_MAP:
             output = tf.strings.regex_replace(output, re.escape(tok_str), "")
         return output
-
-    # ------------------------------------------------------------------
-    # Serialization
-    # ------------------------------------------------------------------
 
     def get_config(self):
         config = super().get_config()

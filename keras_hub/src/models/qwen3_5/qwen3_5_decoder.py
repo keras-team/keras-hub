@@ -256,6 +256,57 @@ class Qwen3_5TransformerDecoder(keras.layers.Layer):
             return decoder_output, self_attention_cache
         return decoder_output
 
+    def call_and_update_cache(
+        self,
+        decoder_sequence,
+        kv_cache,
+        conv_cache,
+        recurrent_cache,
+        cache_update_index,
+        decoder_padding_mask=None,
+        position_ids=None,
+    ):
+        """Forward pass with a uniform cache interface.
+
+        Each layer type updates only its own cache and passes the others
+        through unchanged. This allows the caller to iterate over layers
+        without branching on ``layer_type``.
+
+        Args:
+            decoder_sequence: Hidden states (batch, seq_len, hidden_dim).
+            kv_cache: KV cache slice for this layer
+                (batch, 2, seq_len, num_kv_heads, head_dim).
+            conv_cache: Conv cache slice for this layer
+                (batch, conv_dim, conv_kernel_size - 1).
+            recurrent_cache: Recurrent cache slice for this layer
+                (batch, num_value_heads, key_head_dim, value_head_dim).
+            cache_update_index: Int, current step index.
+            decoder_padding_mask: Optional padding mask.
+            position_ids: Optional M-RoPE position IDs (full_attention
+                only).
+
+        Returns:
+            Tuple of (output, updated_kv_cache, updated_conv_cache,
+            updated_recurrent_cache).
+        """
+        if self.layer_type == "full_attention":
+            output, updated_kv = self(
+                decoder_sequence,
+                decoder_padding_mask=decoder_padding_mask,
+                self_attention_cache=kv_cache,
+                self_attention_cache_update_index=cache_update_index,
+                position_ids=position_ids,
+            )
+            return output, updated_kv, conv_cache, recurrent_cache
+        else:
+            output, updated_conv, updated_recurrent = self(
+                decoder_sequence,
+                decoder_padding_mask=decoder_padding_mask,
+                self_attention_cache=(conv_cache, recurrent_cache),
+                self_attention_cache_update_index=cache_update_index,
+            )
+            return output, kv_cache, updated_conv, updated_recurrent
+
     def _compute_self_attention_mask(
         self,
         decoder_sequence,

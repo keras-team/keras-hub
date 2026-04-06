@@ -1,5 +1,3 @@
-"""HF -> KerasHub weight converter for Qwen3.5."""
-
 import numpy as np
 
 from keras_hub.src.models.qwen3_5.qwen3_5_backbone import Qwen3_5Backbone
@@ -9,6 +7,11 @@ from keras_hub.src.models.qwen3_5.qwen3_5_vision_encoder import (
 from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = Qwen3_5Backbone
+
+
+def _transpose_and_reshape(x, shape):
+    """Transpose a 2-D HF weight and reshape to the target Keras shape."""
+    return np.reshape(np.transpose(x), shape)
 
 
 def load_image_converter_config(preset, transformers_config):
@@ -142,9 +145,6 @@ def convert_weights(backbone, loader, transformers_config):
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
 
-    def transpose_and_reshape(x, shape):
-        return np.reshape(np.transpose(x), shape)
-
     for i in range(backbone.num_layers):
         decoder_layer = backbone.get_layer(f"transformer_layer_{i}")
         layer_type = decoder_layer.layer_type
@@ -163,7 +163,7 @@ def convert_weights(backbone, loader, transformers_config):
             _port(
                 attn._query_dense.kernel,
                 f"{prefix}.self_attn.q_proj.weight",
-                hook_fn=transpose_and_reshape,
+                hook_fn=_transpose_and_reshape,
             )
             # Q norm.
             _port(
@@ -174,7 +174,7 @@ def convert_weights(backbone, loader, transformers_config):
             _port(
                 attn._key_dense.kernel,
                 f"{prefix}.self_attn.k_proj.weight",
-                hook_fn=transpose_and_reshape,
+                hook_fn=_transpose_and_reshape,
             )
             # K norm.
             _port(
@@ -185,13 +185,13 @@ def convert_weights(backbone, loader, transformers_config):
             _port(
                 attn._value_dense.kernel,
                 f"{prefix}.self_attn.v_proj.weight",
-                hook_fn=transpose_and_reshape,
+                hook_fn=_transpose_and_reshape,
             )
             # Output projection.
             _port(
                 attn._output_dense.kernel,
                 f"{prefix}.self_attn.o_proj.weight",
-                hook_fn=transpose_and_reshape,
+                hook_fn=_transpose_and_reshape,
             )
 
         elif layer_type == "linear_attention":

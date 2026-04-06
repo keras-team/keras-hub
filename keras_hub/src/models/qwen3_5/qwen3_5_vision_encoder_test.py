@@ -1,6 +1,5 @@
-"""Tests for Qwen3_5VisionEncoder."""
-
 import numpy as np
+from keras import ops
 
 from keras_hub.src.models.qwen3_5.qwen3_5_vision_encoder import (
     Qwen3_5VisionEncoder,
@@ -70,12 +69,7 @@ class TestQwen3_5VisionEncoder:
         grid_thw = np.array([[1, 4, 4]], dtype="int32")
         pixel_values = _make_pixel_values(1, 4, 4)
         output = encoder(pixel_values, grid_thw)
-        # Handle PyTorch MPS tensors that can't be converted to numpy directly.
-        try:
-            output_np = np.array(output)
-        except TypeError:
-            # PyTorch MPS device: move to CPU first.
-            output_np = np.array(output.cpu().detach())
+        output_np = ops.convert_to_numpy(output)
         assert not np.any(np.isnan(output_np)), "NaN in vision encoder output"
         assert not np.any(np.isinf(output_np)), "Inf in vision encoder output"
 
