@@ -15,9 +15,11 @@ from keras_hub.src.utils.tensor_utils import tensor_to_list
 
 try:
     import tensorflow as tf
-    import tensorflow_text as tf_text
 except ImportError:
     tf = None
+try:
+    import tensorflow_text as tf_text
+except ImportError:
     tf_text = None
 
 VOCAB_FILENAME = "vocabulary.spm"

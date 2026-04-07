@@ -20,12 +20,31 @@ from transformers import AutoTokenizer  # noqa: E402
 import keras_hub  # noqa: E402
 
 PRESET_MAP = {
+    # Qwen 2.5 Models
     "qwen2.5_0.5b_en": "Qwen/Qwen2.5-0.5B",
-    "qwen2.5_7b_en": "Qwen/Qwen2.5-7B",
     "qwen2.5_3b_en": "Qwen/Qwen2.5-3B",
+    "qwen2.5_7b_en": "Qwen/Qwen2.5-7B",
     "qwen2.5_instruct_0.5b_en": "Qwen/Qwen2.5-0.5B-Instruct",
     "qwen2.5_instruct_32b_en": "Qwen/Qwen2.5-32B-Instruct",
     "qwen2.5_instruct_72b_en": "Qwen/Qwen2.5-72B-Instruct",
+    # Qwen 2.5 Coder Models
+    "qwen2.5_coder_0.5b": "Qwen/Qwen2.5-Coder-0.5B",
+    "qwen2.5_coder_1.5b": "Qwen/Qwen2.5-Coder-1.5B",
+    "qwen2.5_coder_3b": "Qwen/Qwen2.5-Coder-3B",
+    "qwen2.5_coder_7b": "Qwen/Qwen2.5-Coder-7B",
+    "qwen2.5_coder_14b": "Qwen/Qwen2.5-Coder-14B",
+    "qwen2.5_coder_32b": "Qwen/Qwen2.5-Coder-32B",
+    "qwen2.5_coder_instruct_0.5b": "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+    "qwen2.5_coder_instruct_1.5b": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+    "qwen2.5_coder_instruct_3b": "Qwen/Qwen2.5-Coder-3B-Instruct",
+    "qwen2.5_coder_instruct_7b": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "qwen2.5_coder_instruct_14b": "Qwen/Qwen2.5-Coder-14B-Instruct",
+    "qwen2.5_coder_instruct_32b": "Qwen/Qwen2.5-Coder-32B-Instruct",
+    # Qwen 2.5 Math Models
+    "qwen2.5_math_1.5b_en": "Qwen/Qwen2.5-Math-1.5B",
+    "qwen2.5_math_instruct_1.5b_en": "Qwen/Qwen2.5-Math-1.5B-Instruct",
+    "qwen2.5_math_7b_en": "Qwen/Qwen2.5-Math-7B",
+    "qwen2.5_math_instruct_7b_en": "Qwen/Qwen2.5-Math-7B-Instruct",
 }
 
 FLAGS = flags.FLAGS
