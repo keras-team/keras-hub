@@ -114,6 +114,9 @@ from keras_hub.src.models.mobilenet.mobilenet_image_converter import (
 from keras_hub.src.models.mobilenetv5.mobilenetv5_image_converter import (
     MobileNetV5ImageConverter as MobileNetV5ImageConverter,
 )
+from keras_hub.src.models.moondream.moondream_image_converter import (
+    MoondreamImageConverter as MoondreamImageConverter,
+)
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter as MoonshineAudioConverter,
 )
