@@ -288,7 +288,11 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             video_grid_np = np.array(expanded, dtype=np.int32)
 
         batch_size, seq_len = token_ids_np.shape
-        merge_size = getattr(self.image_converter, "spatial_merge_size", 2)
+        merge_size = getattr(
+            self.image_converter or self.video_converter,
+            "spatial_merge_size",
+            2,
+        )
 
         all_pos = np.zeros((batch_size, 4, seq_len), dtype=np.int32)
 

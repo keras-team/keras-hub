@@ -47,16 +47,19 @@ PRESET_MAP = {
 }
 
 IMAGE_URL = "http://images.cocodataset.org/val2017/000000039769.jpg"
-VIDEO_URL = "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"
+VIDEO_URL = (
+    "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/"
+    "Big_Buck_Bunny_360_10s_1MB.mp4"
+)
 VIDEO_FPS = 2  # HF default sampling fps for Qwen3.5
 TEXT_PROMPT = "What is Keras?"
 MULTIMODAL_PROMPT = (
     "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>"
-    "Describe this image.<|im_end|>\n<|im_start|>assistant\n<think>\n"
+    "Describe this image.<|im_end|>\n<|im_start|>assistant\n"
 )
 VIDEO_PROMPT = (
     "<|im_start|>user\n<|vision_start|><|video_pad|><|vision_end|>"
-    "Describe this video.<|im_end|>\n<|im_start|>assistant\n<think>\n"
+    "Describe this video.<|im_end|>\n<|im_start|>assistant\n"
 )
 
 
@@ -357,7 +360,7 @@ def validate_text_output(keras_model, hf_results):
 
     # --- End-to-end generation ---
     print("\n  Generating text...")
-    keras_output = keras_model.generate(TEXT_PROMPT, max_length=32)
+    keras_output = keras_model.generate(TEXT_PROMPT, max_length=64)
     print(f"  KerasHub: {_extract_response(keras_output)}")
     print(f"  HF:       {hf_results['text_generated']}")
     print("  ✓ Text generation completed.")
@@ -437,7 +440,7 @@ def validate_multimodal_output(keras_model, hf_results):
     raw_image = hf_results["raw_image"]
     keras_output = keras_model.generate(
         {"prompts": [MULTIMODAL_PROMPT], "images": [np.array(raw_image)]},
-        max_length=2048,
+        max_length=4096,
     )
     keras_text = (
         keras_output[0] if isinstance(keras_output, list) else keras_output
