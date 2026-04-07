@@ -302,11 +302,13 @@ class Qwen3_5CausalLM(CausalLM):
         pixel_values = None
         image_grid_thw = None
         vision_indices = None
+        position_ids = None
         if isinstance(token_ids, dict):
             padding_mask = token_ids.get("padding_mask", padding_mask)
             pixel_values = token_ids.get("pixel_values", None)
             image_grid_thw = token_ids.get("image_grid_thw", None)
             vision_indices = token_ids.get("vision_indices", None)
+            position_ids = token_ids.get("position_ids", None)
             token_ids = token_ids["token_ids"]
 
         batch_shape = ops.shape(token_ids)[:2]
@@ -341,7 +343,11 @@ class Qwen3_5CausalLM(CausalLM):
         x = layer_intercept_fn(token_embeddings, -1)
 
         for i, transformer_layer in enumerate(self.backbone.transformer_layers):
-            x = transformer_layer(x, decoder_padding_mask=padding_mask)
+            x = transformer_layer(
+                x,
+                decoder_padding_mask=padding_mask,
+                position_ids=position_ids,
+            )
             x = layer_intercept_fn(x, i)
 
         x = self.backbone.layer_norm(x)

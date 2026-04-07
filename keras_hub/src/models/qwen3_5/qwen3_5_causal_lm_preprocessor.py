@@ -155,26 +155,24 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         return all_ids
 
     def _compute_vision_indices(self, token_ids):
-        """Return flat indices where ``token_ids`` matches vision token IDs.
+        """Return indices where token_ids matches image or video token IDs.
 
-        Matches ``image_token_id`` or ``video_token_id``. Indices are strictly
-        ordered: all image token indices followed by all video token indices.
-        This matches the concatenated order of `pixel_values`.
+        Indices are strictly ordered: all image token indices followed by all
+        video indices. This matches the concatenated order of `pixel_values`.
 
         Args:
             token_ids: int32 tensor ``(batch, seq_len)``.
         Returns:
             int32 tensor ``(total_vision_tokens,)``.
         """
-        img_mask = tf.equal(token_ids, self.image_token_id)
-        img_flat = tf.reshape(img_mask, [-1])
-        img_indices = tf.cast(tf.where(img_flat)[:, 0], "int32")
+        token_ids_np = np.array(token_ids)
+        img_mask = (token_ids_np == self.image_token_id).reshape(-1)
+        img_indices = np.where(img_mask)[0].astype(np.int32)
 
-        vid_mask = tf.equal(token_ids, self.video_token_id)
-        vid_flat = tf.reshape(vid_mask, [-1])
-        vid_indices = tf.cast(tf.where(vid_flat)[:, 0], "int32")
+        vid_mask = (token_ids_np == self.video_token_id).reshape(-1)
+        vid_indices = np.where(vid_mask)[0].astype(np.int32)
 
-        return tf.concat([img_indices, vid_indices], axis=0)
+        return tf.constant(np.concatenate([img_indices, vid_indices], axis=0))
 
     def _expand_video_prompt(
         self, prompt, video_grid_thws, temporal_patch_size=2
