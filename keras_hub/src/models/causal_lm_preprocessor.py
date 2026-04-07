@@ -154,7 +154,8 @@ class CausalLMPreprocessor(Preprocessor):
         if not self.built:
             self.build(None)
 
-        token_ids, padding_mask = x["token_ids"], x["padding_mask"]
+        token_ids = keras.ops.convert_to_numpy(x["token_ids"])
+        padding_mask = keras.ops.convert_to_numpy(x["padding_mask"])
         ids_to_strip = self.tokenizer.special_token_ids
         token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
         return self.tokenizer.detokenize(token_ids)
