@@ -1,3 +1,4 @@
+import numpy as np
 from keras import ops
 
 from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm_preprocessor import (
@@ -111,7 +112,7 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
         # 2 frames, 4x4.
         # grid_t = 2//2 = 1. grid_h=2, grid_w=2.
         # num_vision_tokens = 1 * 2 * 2 = 4.
-        video = ops.ones((2, 4, 4, 3))
+        video = np.ones((2, 4, 4, 3))
         prompt = "<|video_pad|> air"
 
         out = preprocessor.generate_preprocess(
