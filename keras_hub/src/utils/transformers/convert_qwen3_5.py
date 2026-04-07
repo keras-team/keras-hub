@@ -24,14 +24,16 @@ def load_image_converter_config(preset, transformers_config):
     vision_config = transformers_config["vision_config"]
     preprocessor_config = load_json(preset, "preprocessor_config.json")
 
+    # HF preprocessor_config nests pixel limits under "size".
+    size_config = preprocessor_config["size"]
     return {
-        "patch_size": vision_config.get("patch_size", 16),
-        "temporal_patch_size": vision_config.get("temporal_patch_size", 2),
-        "spatial_merge_size": vision_config.get("spatial_merge_size", 2),
-        "min_pixels": preprocessor_config.get("min_pixels", 65536),
-        "max_pixels": preprocessor_config.get("max_pixels", 16777216),
-        "image_mean": preprocessor_config.get("image_mean", [0.5, 0.5, 0.5]),
-        "image_std": preprocessor_config.get("image_std", [0.5, 0.5, 0.5]),
+        "patch_size": vision_config["patch_size"],
+        "temporal_patch_size": vision_config["temporal_patch_size"],
+        "spatial_merge_size": vision_config["spatial_merge_size"],
+        "min_pixels": size_config["shortest_edge"],
+        "max_pixels": size_config["longest_edge"],
+        "image_mean": preprocessor_config["image_mean"],
+        "image_std": preprocessor_config["image_std"],
     }
 
 
@@ -48,21 +50,18 @@ def load_video_converter_config(preset, transformers_config):
     preprocessor_config = load_json(preset, "preprocessor_config.json")
 
     # Video may have separate min/max pixels in the preprocessor config.
-    # Fall back to the same defaults as images.
+    # Fall back to the image values if video-specific ones don't exist.
+    size_config = preprocessor_config["size"]
+    img_min = size_config["shortest_edge"]
+    img_max = size_config["longest_edge"]
     return {
-        "patch_size": vision_config.get("patch_size", 16),
-        "temporal_patch_size": vision_config.get("temporal_patch_size", 2),
-        "spatial_merge_size": vision_config.get("spatial_merge_size", 2),
-        "min_pixels": preprocessor_config.get(
-            "video_min_pixels",
-            preprocessor_config.get("min_pixels", 65536),
-        ),
-        "max_pixels": preprocessor_config.get(
-            "video_max_pixels",
-            preprocessor_config.get("max_pixels", 16777216),
-        ),
-        "image_mean": preprocessor_config.get("image_mean", [0.5, 0.5, 0.5]),
-        "image_std": preprocessor_config.get("image_std", [0.5, 0.5, 0.5]),
+        "patch_size": vision_config["patch_size"],
+        "temporal_patch_size": vision_config["temporal_patch_size"],
+        "spatial_merge_size": vision_config["spatial_merge_size"],
+        "min_pixels": preprocessor_config.get("video_min_pixels", img_min),
+        "max_pixels": preprocessor_config.get("video_max_pixels", img_max),
+        "image_mean": preprocessor_config["image_mean"],
+        "image_std": preprocessor_config["image_std"],
     }
 
 
@@ -104,19 +103,16 @@ def convert_backbone_config(transformers_config):
             "hidden_size", top_level_hidden_size
         )
         vision_encoder = Qwen3_5VisionEncoder(
-            depth=vision_config.get("depth", 24),
-            hidden_size=vision_config.get("hidden_size", 1280),
-            num_heads=vision_config.get("num_heads", 16),
-            intermediate_size=vision_config.get("intermediate_size", 5120),
-            in_channels=vision_config.get("in_channels", 3),
-            patch_size=vision_config.get("patch_size", 16),
-            temporal_patch_size=vision_config.get("temporal_patch_size", 2),
-            spatial_merge_size=vision_config.get("spatial_merge_size", 2),
-            out_hidden_size=text_hidden
-            or vision_config.get("out_hidden_size", 1280),
-            num_position_embeddings=vision_config.get(
-                "num_position_embeddings", 2304
-            ),
+            depth=vision_config["depth"],
+            hidden_size=vision_config["hidden_size"],
+            num_heads=vision_config["num_heads"],
+            intermediate_size=vision_config["intermediate_size"],
+            in_channels=vision_config["in_channels"],
+            patch_size=vision_config["patch_size"],
+            temporal_patch_size=vision_config["temporal_patch_size"],
+            spatial_merge_size=vision_config["spatial_merge_size"],
+            out_hidden_size=text_hidden or vision_config["out_hidden_size"],
+            num_position_embeddings=vision_config["num_position_embeddings"],
         )
 
     result = {

@@ -165,7 +165,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         Returns:
             int32 tensor ``(total_vision_tokens,)``.
         """
-        token_ids_np = np.array(token_ids)
+        token_ids_np = ops.convert_to_numpy(token_ids)
         img_mask = (token_ids_np == self.image_token_id).reshape(-1)
         img_indices = np.where(img_mask)[0].astype(np.int32)
 

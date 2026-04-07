@@ -397,6 +397,9 @@ class Qwen3_5Attention(keras.layers.Layer):
     def _mask_sliding_window(self, attention_mask, cache_update_index=0):
         _, query_len, key_len = ops.shape(attention_mask)
         all_ones = ops.ones((key_len, key_len), "bool")
+        # TF's ops.triu internally uses tf.linalg.band_part which crashes
+        # when k > matrix rows (e.g., sliding_window=32768 on a 5-row
+        # matrix). We use band_part directly with a clamped band_size.
         if keras.config.backend() == "tensorflow":
             import tensorflow as tf
 

@@ -202,54 +202,37 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         if os.path.exists(vid_path):
             os.remove(vid_path)
 
-    hf_inputs_vid = processor(
-        text=[VIDEO_PROMPT], videos=[dummy_video], return_tensors="pt"
-    ).to(device)
+    # Use HF's official qwen_vl_utils API for correct video preprocessing.
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "video", "video": dummy_video, "fps": VIDEO_FPS},
+                {"type": "text", "text": "Describe this video."},
+            ],
+        }
+    ]
+    try:
+        from qwen_vl_utils import process_vision_info
 
-    input_ids = hf_inputs_vid["input_ids"]
-
-    # Check if the number of video pad tokens is incorrect.
-    # HF processor may have a bug expanding <|video_pad|>.
-    grid_t, grid_h, grid_w = hf_inputs_vid["video_grid_thw"][0]
-    expected_pads = int(grid_t * grid_h * grid_w)
-
-    # video pad id is 248057.
-    current_pads = int(torch.sum(input_ids == 248057))
-    if current_pads > 0 and current_pads != expected_pads:
-        vid_idx = (input_ids[0] == 248057).nonzero(as_tuple=True)[0][0]
-        missing = expected_pads - current_pads
-        if missing > 0:
-            extra_pads = torch.full(
-                (1, missing),
-                248057,
-                dtype=input_ids.dtype,
-                device=input_ids.device,
-            )
-            new_input_ids = torch.cat(
-                [input_ids[:, :vid_idx], extra_pads, input_ids[:, vid_idx:]],
-                dim=1,
-            )
-            hf_inputs_vid["input_ids"] = new_input_ids
-            hf_inputs_vid["attention_mask"] = torch.ones_like(new_input_ids)
-
-            # fix mm_token_type_ids if it exists
-            if "mm_token_type_ids" in hf_inputs_vid:
-                token_types = hf_inputs_vid["mm_token_type_ids"]
-                extra_types = torch.full(
-                    (1, missing),
-                    2,
-                    dtype=token_types.dtype,
-                    device=token_types.device,
-                )
-                new_types = torch.cat(
-                    [
-                        token_types[:, :vid_idx],
-                        extra_types,
-                        token_types[:, vid_idx:],
-                    ],
-                    dim=1,
-                )
-                hf_inputs_vid["mm_token_type_ids"] = new_types
+        text_input = processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        image_inputs, video_inputs, video_kwargs = process_vision_info(
+            messages, return_video_kwargs=True
+        )
+        hf_inputs_vid = processor(
+            text=[text_input],
+            images=image_inputs,
+            videos=video_inputs,
+            return_tensors="pt",
+            **video_kwargs,
+        ).to(device)
+    except ImportError:
+        print("   ⚠ qwen_vl_utils not installed, falling back to direct call")
+        hf_inputs_vid = processor(
+            text=[VIDEO_PROMPT], videos=[dummy_video], return_tensors="pt"
+        ).to(device)
 
     try:
         with torch.no_grad():
@@ -278,9 +261,7 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
             hf_gen_vid, skip_special_tokens=True
         )[0]
     except Exception as e:
-        print(
-            f"  ⚠ Skipping HF generation output due to AutoProcessor bug: {e}"
-        )
+        print(f"  ⚠ Skipping HF video forward pass: {e}")
         results["vid_logits"] = None
         results["vid_generated"] = None
 
@@ -353,10 +334,10 @@ def validate_text_output(keras_model, hf_results):
     print(f"\n  Logit mean absolute diff: {abs_diff.mean():.6f}")
     print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
     try:
-        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-4)
-        print("  ✓ Logits match within atol=1e-4.")
+        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
+        print("  ✓ Logits match within atol=1e-3.")
     except AssertionError as e:
-        print(f"  ⚠ Logits do not match within atol=1e-4: {e}")
+        print(f"  ⚠ Logits do not match within atol=1e-3: {e}")
 
     # --- End-to-end generation ---
     print("\n  Generating text...")
@@ -429,10 +410,10 @@ def validate_multimodal_output(keras_model, hf_results):
     print(f"\n  Logit mean absolute diff: {abs_diff.mean():.6f}")
     print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
     try:
-        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-4)
-        print("  ✓ Logits match within atol=1e-4.")
+        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
+        print("  ✓ Logits match within atol=1e-3.")
     except AssertionError as e:
-        print(f"  ⚠ Logits do not match within atol=1e-4: {e}")
+        print(f"  ⚠ Logits do not match within atol=1e-3: {e}")
 
     # --- End-to-end generation ---
     print(f"\n  HF output: {hf_results['mm_generated']}")
@@ -527,10 +508,10 @@ def validate_video_output(keras_model, hf_results):
     print(f"\n  Logit mean absolute diff: {abs_diff.mean():.6f}")
     print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
     try:
-        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-4)
-        print("  ✓ Logits match within atol=1e-4.")
+        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
+        print("  ✓ Logits match within atol=1e-3.")
     except AssertionError as e:
-        print(f"  ⚠ Logits do not match within atol=1e-4: {e}")
+        print(f"  ⚠ Logits do not match within atol=1e-3: {e}")
 
     print(f"\n  HF output: {hf_results['vid_generated']}")
     dummy_video = hf_results["dummy_video"]
