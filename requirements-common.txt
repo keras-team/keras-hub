@@ -15,6 +15,7 @@ namex
 # Optional deps.
 rouge-score
 sentencepiece
+tokenizers
 tensorflow-datasets
 safetensors
 pillow
