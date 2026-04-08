@@ -10,11 +10,11 @@ from keras_hub.src.models.t5gemma2.t5gemma2_seq_2_seq_lm import (
 from keras_hub.src.tests.test_case import TestCase
 
 
-@pytest.mark.skipif(
-    keras.backend.backend() == "tensorflow",
-    reason="TensorFlow GPU CI OOM (ResourceExhaustedError)",
-)
-class TestTask(TestCase):
+class TestT5Gemma2Converter(TestCase):
+    @pytest.mark.skipif(
+        keras.backend.backend() == "tensorflow",
+        reason="TensorFlow GPU CI OOM (ResourceExhaustedError)",
+    )
     @pytest.mark.extra_large
     def test_convert_tiny_preset(self):
         model = T5Gemma2Seq2SeqLM.from_preset("hf://google/t5gemma-2-270m-270m")
