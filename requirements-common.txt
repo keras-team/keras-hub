@@ -3,6 +3,8 @@ dm-tree
 regex
 rich
 kagglehub
+tokenizers
+sentencepiece
 # Tooling deps.
 pre-commit
 astor
@@ -14,8 +16,6 @@ build
 namex
 # Optional deps.
 rouge-score
-sentencepiece
-tokenizers
 tensorflow-datasets
 safetensors
 pillow
