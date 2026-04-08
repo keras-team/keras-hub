@@ -276,22 +276,22 @@ class TestGemma3Export(TestCase):
         with open(tokenizer_config_path, "r") as f:
             config = json.load(f)
 
-        # After transformers library processes the tokenizer, the structure 
+        # After transformers library processes the tokenizer, the structure
         # may change
         # Check for either the original structure or the transformed structure
-        
+
         # The config should have basic tokenizer info
         self.assertIn("tokenizer_class", config)
-        
-        # Check for added_tokens_decoder (original structure) OR 
+
+        # Check for added_tokens_decoder (original structure) OR
         # model_specific_special_tokens (transformed structure)
         if "added_tokens_decoder" in config:
             # Original structure - verify it's correct
             self.assertIsInstance(config["added_tokens_decoder"], dict)
-            
+
             # If vision tokens exist, verify they're in the config
             if "extra_special_tokens" in config:
-                # Verify vision tokens are in added_tokens_decoder with correct 
+                # Verify vision tokens are in added_tokens_decoder with correct
                 # IDs
                 added_tokens = config["added_tokens_decoder"]
                 self.assertIn("262144", added_tokens)  # <image_soft_token>
@@ -302,7 +302,7 @@ class TestGemma3Export(TestCase):
             # Transformed structure by transformers library
             # Just verify the structure is present - transformers handles rest
             self.assertIsInstance(config["model_specific_special_tokens"], dict)
-        
+
         # These fields should always be present regardless of structure
         self.assertIn("bos_token", config)
         self.assertIn("eos_token", config)
