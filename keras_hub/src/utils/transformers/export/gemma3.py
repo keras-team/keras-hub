@@ -55,12 +55,12 @@ def get_gemma3_config(backbone):
     rope_parameters = {
         "sliding_attention": {
             "factor": backbone.local_rope_scaling_factor,
-            "type": "linear",
+            "rope_type": "linear",
             "rope_theta": rope_theta_local,
         },
         "full_attention": {
             "factor": backbone.global_rope_scaling_factor,
-            "type": "linear",
+            "rope_type": "linear",
             "rope_theta": rope_theta_global,
         },
     }
