@@ -33,8 +33,8 @@ class Qwen3_5BackboneTest(TestCase):
             "linear_conv_kernel_dim": 4,
         }
         self.input_data = {
-            "token_ids": ops.ones((2, 5), dtype="int32"),
-            "padding_mask": ops.ones((2, 5), dtype="int32"),
+            "token_ids": np.ones((2, 5), dtype="int32"),
+            "padding_mask": np.ones((2, 5), dtype="int32"),
         }
 
     def test_backbone_basics(self):
@@ -106,15 +106,32 @@ class Qwen3_5MultimodalBackboneTest(TestCase):
         self.assertIsNotNone(model.vision_encoder)
         self.assertTrue(hasattr(model, "interleave_embeddings"))
 
-    def test_multimodal_backbone_text_only_forward(self):
-        """Multimodal backbone should still work with text-only inputs."""
+    def test_multimodal_backbone_forward(self):
+        """Multimodal backbone forward pass with vision inputs."""
         model = Qwen3_5Backbone(**self.init_kwargs)
+
+        # Build vision inputs: 1 image, 4x4 grid, patch_size=4,
+        # temporal_patch_size=2. After spatial merge (2x2), 4 tokens.
+        grid_thw = np.array([[[1, 4, 4]]], dtype="int32")  # (1, 1, 3)
+        total_patches = 1 * 4 * 4  # 16
+        # Batched pixel_values: (1, total_patches, T, pH, pW, C)
+        pixel_values = np.random.randn(1, total_patches, 2, 4, 4, 3).astype(
+            "float32"
+        )
+
+        seq_len = 10
+        # Place 4 vision tokens at positions 2,3,4,5.
+        vision_indices = np.array([[2, 3, 4, 5]], dtype="int32")
+
         input_data = {
-            "token_ids": ops.ones((2, 5), dtype="int32"),
-            "padding_mask": ops.ones((2, 5), dtype="int32"),
+            "token_ids": np.ones((1, seq_len), dtype="int32"),
+            "padding_mask": np.ones((1, seq_len), dtype="int32"),
+            "pixel_values": pixel_values,
+            "image_grid_thw": grid_thw,
+            "vision_indices": vision_indices,
         }
         output = model(input_data)
-        self.assertEqual(ops.shape(output), (2, 5, 16))
+        self.assertEqual(ops.shape(output), (1, seq_len, 16))
 
     def test_vision_encoder_standalone(self):
         """Test vision encoder produces correct output shape standalone."""
@@ -142,7 +159,7 @@ class Qwen3_5MultimodalBackboneTest(TestCase):
         hidden_dim = 16
 
         text_emb = ops.zeros((batch_size, seq_len, hidden_dim))
-        vision_emb = ops.ones((2, hidden_dim))
+        vision_emb = np.ones((2, hidden_dim), dtype="float32")
         indices = ops.convert_to_tensor([1, 3], dtype="int32")
 
         result = model.interleave_embeddings(

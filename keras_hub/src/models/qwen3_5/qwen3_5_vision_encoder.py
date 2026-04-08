@@ -689,16 +689,41 @@ class Qwen3_5VisionEncoder(keras.Model):
     def call(self, pixel_values, grid_thw):
         """Forward pass through vision encoder.
 
-        Args:
-            pixel_values: Tensor (total_patches, temporal_patch_size,
-                          patch_size, patch_size, in_channels).
-                          Pre-extracted patches for all images concatenated.
-            grid_thw: int tensor or list (num_images, 3) — [T, H, W] per image
-                      **in units of patches after merging** (i.e. after
-                      dividing by patch_size; temporal dim 1 for images).
+        Accepts both batched and unbatched inputs:
+        - Unbatched (from imperative call): pixel_values
+          ``(total_patches, T, pH, pW, C)``, grid_thw ``(num_images, 3)``.
+        - Batched (from backbone functional graph): pixel_values
+          ``(batch, total_patches, T, pH, pW, C)``,
+          grid_thw ``(batch, num_images, 3)``.
+
         Returns:
-            Tensor (total_merged_tokens, out_hidden_size).
+            Unbatched: ``(total_merged_tokens, out_hidden_size)``.
+            Batched: ``(batch, total_merged_tokens, out_hidden_size)``.
         """
+        # Handle batched input from the backbone functional graph.
+        batched = len(ops.shape(pixel_values)) == 6
+        if batched:
+            # Collapse batch: (B, N, T, pH, pW, C) → (B*N, T, pH, pW, C)
+            pixel_values = ops.reshape(
+                pixel_values,
+                (
+                    -1,
+                    self.temporal_patch_size,
+                    self.patch_size,
+                    self.patch_size,
+                    self.in_channels,
+                ),
+            )
+            grid_thw = ops.reshape(grid_thw, (-1, 3))
+
+        # Early return for zero-sized input (text-only on multimodal model).
+        num_patches = ops.shape(pixel_values)[0]
+        if num_patches == 0:
+            empty = ops.zeros((0, self.out_hidden_size))
+            if batched:
+                empty = ops.expand_dims(empty, axis=0)
+            return empty
+
         # 1. Patch embedding.
         hidden_states = self.patch_embed(pixel_values)
         hidden_states = ops.cast(hidden_states, "float32")
@@ -717,6 +742,11 @@ class Qwen3_5VisionEncoder(keras.Model):
 
         # 5. Patch merger.
         merged = self.merger(hidden_states)
+
+        # Restore batch dim if input was batched.
+        if batched:
+            merged = ops.expand_dims(merged, axis=0)
+
         return merged
 
     def compute_output_spec(self, pixel_values, grid_thw=None):
@@ -727,9 +757,15 @@ class Qwen3_5VisionEncoder(keras.Model):
         construction time.
 
         Returns:
-            KerasTensor with shape ``(None, out_hidden_size)`` and
-            dtype ``float32``.
+            KerasTensor with shape ``(None, out_hidden_size)`` (unbatched)
+            or ``(batch, None, out_hidden_size)`` (batched from functional
+            graph).
         """
+        if len(pixel_values.shape) == 6:  # batched
+            return keras.KerasTensor(
+                shape=(pixel_values.shape[0], None, self.out_hidden_size),
+                dtype="float32",
+            )
         return keras.KerasTensor(
             shape=(None, self.out_hidden_size),
             dtype="float32",

@@ -503,23 +503,27 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             pixel_values_list.append(vision_out_videos["patches"])
             grid_list.append(vision_out_videos["grid_thw"])
 
-        combined_pixel_values = (
-            tf.concat(pixel_values_list, axis=0) if pixel_values_list else None
-        )
-        combined_grid_thw = tf.concat(grid_list, axis=0) if grid_list else None
+        if pixel_values_list:
+            combined_pixel_values = tf.concat(pixel_values_list, axis=0)
+            combined_grid_thw = tf.concat(grid_list, axis=0)
+        else:
+            # Text-only input on multimodal model: empty tensors matching
+            # the backbone's expected shapes (Gemma3 pattern).
+            # With 0 on the first axis, no data flows through the
+            # vision encoder, so other dims are not validated.
+            combined_pixel_values = tf.zeros((0,), dtype="float32")
+            combined_grid_thw = tf.zeros((0, 3), dtype="int32")
 
         result = {
             "token_ids": token_ids if batched else tf.squeeze(token_ids, 0),
             "padding_mask": (
                 padding_mask if batched else tf.squeeze(padding_mask, 0)
             ),
+            "pixel_values": combined_pixel_values,
+            "image_grid_thw": combined_grid_thw,
+            "vision_indices": vision_indices,
+            "position_ids": pos_ids if batched else tf.squeeze(pos_ids, 0),
         }
-        if combined_pixel_values is not None:
-            result["pixel_values"] = combined_pixel_values
-            result["image_grid_thw"] = combined_grid_thw
-
-        result["vision_indices"] = vision_indices
-        result["position_ids"] = pos_ids if batched else tf.squeeze(pos_ids, 0)
         return result
 
     def _preprocess_images(self, images, batched):

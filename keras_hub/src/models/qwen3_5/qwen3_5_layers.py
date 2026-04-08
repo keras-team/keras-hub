@@ -24,23 +24,35 @@ class Qwen3_5InterleaveEmbeddings(keras.layers.Layer):
     def call(self, image_embeddings, text_embeddings, vision_indices):
         """Interleave vision tokens into the text embedding sequence.
 
+        Accepts both batched and unbatched image embeddings:
+        - Unbatched (from imperative call):
+            image_embeddings ``(total_vision_tokens, hidden_dim)``,
+            vision_indices ``(total_vision_tokens,)``.
+        - Batched (from backbone functional graph):
+            image_embeddings ``(batch, total_vision_tokens, hidden_dim)``,
+            vision_indices ``(batch, total_vision_tokens)``.
+
         Args:
-            image_embeddings: Tensor (total_vision_tokens, hidden_dim).
-                All visual tokens for all images in the batch, concatenated
-                along axis 0.
-            text_embeddings: Tensor (batch, seq_len, hidden_dim).
-            vision_indices: int32 Tensor (total_vision_tokens,).
-                Flat indices into the *concatenated* (batch × seq_len)
-                sequence indicating where each visual token should be placed.
-                Produced by the preprocessor to be consistent across the batch
-                by treating the sequence as batch×seq_len flat.
+            image_embeddings: Tensor with visual token embeddings.
+            text_embeddings: Tensor ``(batch, seq_len, hidden_dim)``.
+            vision_indices: int32 Tensor with flat indices into the
+                concatenated ``(batch × seq_len)`` sequence.
 
         Returns:
-            Tensor (batch, seq_len, hidden_dim) with visual tokens inserted
-            at the specified positions.
+            Tensor ``(batch, seq_len, hidden_dim)`` with visual tokens
+            inserted at the specified positions.
         """
         batch_size = ops.shape(text_embeddings)[0]
         seq_len = ops.shape(text_embeddings)[1]
+
+        # Handle batched image_embeddings from the functional graph.
+        # Squeeze batch dim: (batch, N, hidden) → (N, hidden)
+        if len(ops.shape(image_embeddings)) == 3:
+            image_embeddings = ops.reshape(
+                image_embeddings, (-1, self.hidden_dim)
+            )
+        if len(ops.shape(vision_indices)) == 2:
+            vision_indices = ops.reshape(vision_indices, (-1,))
 
         # Flatten the text embedding to (batch * seq_len, hidden_dim).
         flat_text = ops.reshape(text_embeddings, (-1, self.hidden_dim))

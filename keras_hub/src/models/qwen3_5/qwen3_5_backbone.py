@@ -193,7 +193,8 @@ class Qwen3_5Backbone(Backbone):
 
         # Vision encoder and interleave layer (optional).
         self.vision_encoder = vision_encoder
-        if vision_encoder is not None:
+        text_only_model = vision_encoder is None
+        if not text_only_model:
             self.interleave_embeddings = Qwen3_5InterleaveEmbeddings(
                 hidden_dim=hidden_dim,
                 dtype=dtype,
@@ -201,10 +202,24 @@ class Qwen3_5Backbone(Backbone):
             )
 
         # === Functional Model ===
-        # The backbone functional model is text-only. The vision encoder and
-        # interleave layer are stored as attributes and called imperatively
-        # from CausalLM.call_with_cache() to avoid shape-inference issues
-        # with dynamic vision tensor shapes.
+        if not text_only_model:
+            pixel_values_input = keras.Input(
+                shape=(
+                    None,
+                    vision_encoder.temporal_patch_size,
+                    vision_encoder.patch_size,
+                    vision_encoder.patch_size,
+                    vision_encoder.in_channels,
+                ),
+                name="pixel_values",
+            )
+            image_grid_thw_input = keras.Input(
+                shape=(None, 3), dtype="int32", name="image_grid_thw"
+            )
+            vision_indices_input = keras.Input(
+                shape=(None,), dtype="int32", name="vision_indices"
+            )
+
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
@@ -213,9 +228,22 @@ class Qwen3_5Backbone(Backbone):
         )
 
         # Text embeddings.
-        x = self.token_embedding(token_id_input)
+        text_embeddings = self.token_embedding(token_id_input)
 
-        # Transformer layers (text-only path in the functional graph).
+        # Vision: encoder → interleave into text embeddings.
+        if not text_only_model:
+            img_embeddings = self.vision_encoder(
+                pixel_values_input, image_grid_thw_input
+            )
+            x = self.interleave_embeddings(
+                image_embeddings=img_embeddings,
+                text_embeddings=text_embeddings,
+                vision_indices=vision_indices_input,
+            )
+        else:
+            x = text_embeddings
+
+        # Transformer layers.
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
 
@@ -225,6 +253,14 @@ class Qwen3_5Backbone(Backbone):
             "token_ids": token_id_input,
             "padding_mask": padding_mask_input,
         }
+        if not text_only_model:
+            inputs.update(
+                {
+                    "pixel_values": pixel_values_input,
+                    "image_grid_thw": image_grid_thw_input,
+                    "vision_indices": vision_indices_input,
+                }
+            )
 
         super().__init__(
             inputs=inputs,
@@ -255,6 +291,42 @@ class Qwen3_5Backbone(Backbone):
         self.linear_value_head_dim = linear_value_head_dim
         self.linear_conv_kernel_dim = linear_conv_kernel_dim
         self.mrope_section = mrope_section
+        self.text_only_model = text_only_model
+
+    def __call__(self, inputs, *args, **kwargs):
+        """Override to inject default empty vision inputs for text-only calls.
+
+        When a multimodal backbone receives text-only inputs (no
+        ``pixel_values``, ``image_grid_thw``, or ``vision_indices``),
+        this injects zero-sized dummy tensors so the functional graph
+        receives all required keys. This follows the Gemma3 pattern
+        and allows users to call the backbone with only ``token_ids``
+        and ``padding_mask``.
+        """
+        if isinstance(inputs, dict) and not self.text_only_model:
+            inputs = dict(inputs)  # shallow copy to avoid mutation
+            batch_size = ops.shape(inputs["token_ids"])[0]
+            ve = self.vision_encoder
+            if "pixel_values" not in inputs:
+                inputs["pixel_values"] = ops.zeros(
+                    (
+                        batch_size,
+                        0,
+                        ve.temporal_patch_size,
+                        ve.patch_size,
+                        ve.patch_size,
+                        ve.in_channels,
+                    ),
+                )
+            if "image_grid_thw" not in inputs:
+                inputs["image_grid_thw"] = ops.zeros(
+                    (batch_size, 0, 3), dtype="int32"
+                )
+            if "vision_indices" not in inputs:
+                inputs["vision_indices"] = ops.zeros(
+                    (batch_size, 0), dtype="int32"
+                )
+        return super().__call__(inputs, *args, **kwargs)
 
     def get_config(self):
         config = super().get_config()
@@ -281,6 +353,20 @@ class Qwen3_5Backbone(Backbone):
                 "linear_value_head_dim": self.linear_value_head_dim,
                 "linear_conv_kernel_dim": self.linear_conv_kernel_dim,
                 "mrope_section": self.mrope_section,
+                "vision_encoder": None
+                if self.vision_encoder is None
+                else keras.layers.serialize(self.vision_encoder),
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        config.update(
+            {
+                "vision_encoder": None
+                if config["vision_encoder"] is None
+                else keras.layers.deserialize(config["vision_encoder"]),
+            }
+        )
+        return super().from_config(config)
