@@ -12,13 +12,13 @@ from keras_hub.src.models.sam3.sam3_pc_image_segmenter import (
 from keras_hub.src.tests.test_case import TestCase
 
 
-class TestTask(TestCase):
+class SAM3ConverterTest(TestCase):
     @pytest.mark.extra_large
     def test_convert_tiny_preset(self):
         model = SAM3PromptableConceptImageSegmenter.from_preset(
             "hf://facebook/sam3",
         )
-        images = np.random.rand(1, 224, 224, 3).astype("float32")
+        images = np.random.rand(1, 32, 32, 3).astype("float32")
         outputs = model.predict(
             {
                 "images": images,
