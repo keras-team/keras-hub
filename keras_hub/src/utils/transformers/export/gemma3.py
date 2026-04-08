@@ -468,3 +468,85 @@ def get_gemma3_tokenizer_config(tokenizer):
 
     tokenizer_config["added_tokens_decoder"] = added_tokens_decoder
     return tokenizer_config
+
+
+def get_gemma3_generation_config(backbone):
+    """Generate generation config for Gemma3 models.
+
+    Args:
+        backbone: The Keras backbone model.
+
+    Returns:
+        dict: Generation configuration.
+    """
+    generation_config = {
+        "_from_model_config": True,
+        "bos_token_id": 2,
+        "eos_token_id": 1,
+        "pad_token_id": 0,
+        "transformers_version": "4.47.1",
+    }
+
+    # Add soft capping if configured
+    if hasattr(backbone, "final_logit_soft_cap") and backbone.final_logit_soft_cap:
+        generation_config["final_logit_soft_cap"] = backbone.final_logit_soft_cap
+
+    return generation_config
+
+
+def get_gemma3_special_tokens_map(tokenizer):
+    """Generate special_tokens_map.json for Gemma3 tokenizer.
+
+    Args:
+        tokenizer: The Keras tokenizer.
+
+    Returns:
+        dict: Special tokens mapping.
+    """
+    special_tokens_map = {
+        "bos_token": {
+            "content": "<bos>",
+            "lstrip": False,
+            "normalized": False,
+            "rstrip": False,
+            "single_word": False,
+        },
+        "eos_token": {
+            "content": "<eos>",
+            "lstrip": False,
+            "normalized": False,
+            "rstrip": False,
+            "single_word": False,
+        },
+        "pad_token": {
+            "content": "<pad>",
+            "lstrip": False,
+            "normalized": False,
+            "rstrip": False,
+            "single_word": False,
+        },
+        "unk_token": {
+            "content": "<unk>",
+            "lstrip": False,
+            "normalized": False,
+            "rstrip": False,
+            "single_word": False,
+        },
+    }
+
+    # Check if this is a vision-enabled tokenizer
+    has_vision_tokens = (
+        tokenizer.token_to_id("<start_of_image>") is not None
+        and tokenizer.token_to_id("<end_of_image>") is not None
+        and tokenizer.token_to_id("<image_soft_token>") is not None
+    )
+
+    # Add vision-specific tokens if present
+    if has_vision_tokens:
+        special_tokens_map["additional_special_tokens"] = [
+            {"content": "<start_of_image>", "lstrip": False, "normalized": False, "rstrip": False, "single_word": False},
+            {"content": "<end_of_image>", "lstrip": False, "normalized": False, "rstrip": False, "single_word": False},
+            {"content": "<image_soft_token>", "lstrip": False, "normalized": False, "rstrip": False, "single_word": False},
+        ]
+
+    return special_tokens_map

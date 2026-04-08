@@ -15,10 +15,16 @@ from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
 # --- Gemma 3 Utils ---
 from keras_hub.src.utils.transformers.export.gemma3 import get_gemma3_config
 from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_generation_config,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
     get_gemma3_image_converter_config,
 )
 from keras_hub.src.utils.transformers.export.gemma3 import (
     get_gemma3_processor_config,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_special_tokens_map,
 )
 from keras_hub.src.utils.transformers.export.gemma3 import (
     get_gemma3_tokenizer_config,
@@ -257,6 +263,12 @@ def export_tokenizer(tokenizer, path):
                 "Ensure 'transformers' is installed with sentencepiece support."
             )
 
+        # Generate special_tokens_map.json for Gemma3
+        special_tokens_map = get_gemma3_special_tokens_map(tokenizer)
+        special_tokens_map_path = os.path.join(path, "special_tokens_map.json")
+        with open(special_tokens_map_path, "w") as f:
+            json.dump(special_tokens_map, f, indent=2)
+
 
 def export_image_converter(backbone, path):
     """Export image converter config for vision models.
@@ -304,6 +316,25 @@ def export_processor_config(backbone, path):
     # Add future vision models here
 
 
+def export_generation_config(backbone, path):
+    """Export generation config for models.
+
+    Args:
+        backbone: The Keras backbone model.
+        path: str. Path to save the exported config.
+    """
+    model_type = backbone.__class__.__name__
+
+    # Handle generation config based on model type
+    if model_type == "Gemma3Backbone":
+        generation_config = get_gemma3_generation_config(backbone)
+        os.makedirs(path, exist_ok=True)
+        generation_config_path = os.path.join(path, "generation_config.json")
+        with open(generation_config_path, "w") as f:
+            json.dump(generation_config, f, indent=2)
+    # Add future models here
+
+
 def export_to_safetensors(keras_model, path):
     """Converts a Keras model to Hugging Face Transformers format.
 
@@ -322,6 +353,9 @@ def export_to_safetensors(keras_model, path):
     # Export image converter and processor configs for vision models
     export_image_converter(backbone, path)
     export_processor_config(backbone, path)
+
+    # Export generation config
+    export_generation_config(backbone, path)
 
     if (
         keras_model.preprocessor is not None
