@@ -12,9 +12,9 @@ from keras_hub.src.tests.test_case import TestCase
     keras.backend.backend() == "tensorflow",
     reason="TensorFlow GPU CI OOM (ResourceExhaustedError)",
 )
-class TestTask(TestCase):
+class TestSmollm3Converter(TestCase):
     @pytest.mark.extra_large
-    def test_convert_tiny_preset(self):
+    def test_convert_preset(self):
         model = SmolLM3CausalLM.from_preset("hf://HuggingFaceTB/SmolLM3-3B")
         prompt = "What is your favorite condiment?"
         model.generate([prompt], max_length=15)
