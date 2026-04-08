@@ -488,8 +488,13 @@ def get_gemma3_generation_config(backbone):
     }
 
     # Add soft capping if configured
-    if hasattr(backbone, "final_logit_soft_cap") and backbone.final_logit_soft_cap:
-        generation_config["final_logit_soft_cap"] = backbone.final_logit_soft_cap
+    if (
+        hasattr(backbone, "final_logit_soft_cap")
+        and backbone.final_logit_soft_cap
+    ):
+        generation_config["final_logit_soft_cap"] = (
+            backbone.final_logit_soft_cap
+        )
 
     return generation_config
 
@@ -544,9 +549,27 @@ def get_gemma3_special_tokens_map(tokenizer):
     # Add vision-specific tokens if present
     if has_vision_tokens:
         special_tokens_map["additional_special_tokens"] = [
-            {"content": "<start_of_image>", "lstrip": False, "normalized": False, "rstrip": False, "single_word": False},
-            {"content": "<end_of_image>", "lstrip": False, "normalized": False, "rstrip": False, "single_word": False},
-            {"content": "<image_soft_token>", "lstrip": False, "normalized": False, "rstrip": False, "single_word": False},
+            {
+                "content": "<start_of_image>",
+                "lstrip": False,
+                "normalized": False,
+                "rstrip": False,
+                "single_word": False,
+            },
+            {
+                "content": "<end_of_image>",
+                "lstrip": False,
+                "normalized": False,
+                "rstrip": False,
+                "single_word": False,
+            },
+            {
+                "content": "<image_soft_token>",
+                "lstrip": False,
+                "normalized": False,
+                "rstrip": False,
+                "single_word": False,
+            },
         ]
 
     return special_tokens_map
