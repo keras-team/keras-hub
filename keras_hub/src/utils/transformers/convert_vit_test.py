@@ -13,13 +13,14 @@ from keras_hub.src.tests.test_case import TestCase
     keras.backend.backend() == "tensorflow",
     reason="TensorFlow GPU CI OOM (ResourceExhaustedError)",
 )
-class TestTask(TestCase):
+class TestViTConverter(TestCase):
     @pytest.mark.extra_large
-    def test_convert_tiny_preset(self):
+    def test_convert_preset(self):
         model = ViTImageClassifier.from_preset(
             "hf://google/vit-base-patch16-224"
         )
-        model.predict({"images": np.ones((1, 224, 224, 3), dtype="float32")})
+        output = model.predict({"images": np.ones((1, 224, 224, 3), dtype="float32")})
+        self.assertEqual(output.shape, (1, 1000))
 
     @pytest.mark.large
     def test_class_detection(self):
