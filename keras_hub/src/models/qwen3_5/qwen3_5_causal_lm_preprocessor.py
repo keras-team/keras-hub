@@ -55,8 +55,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
     image_converter_cls = Qwen3_5ImageConverter
     video_converter_cls = Qwen3_5VideoConverter
 
-    # Special tokens that the KerasHub BPE tokenizer may not encode
-    # as single tokens. Map from string → token ID.
     SPECIAL_TOKEN_MAP = {
         "<|im_start|>": 248045,
         "<|im_end|>": 248044,
@@ -211,9 +209,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             )
             frame_seqlen = (h_grid // merge_size) * (w_grid // merge_size)
 
-            # Compute per-frame timestamps (average of grouped frames).
-            # HF: timestamps[i] = (idx_start + idx_end) / 2 / fps
-            # We approximate with evenly-spaced timestamps.
+            # Compute per-frame timestamps
             timestamps = []
             for frame_idx in range(t_grid):
                 # Each temporal patch groups `temporal_patch_size` raw frames.
@@ -242,14 +238,14 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
 
         This matches HF's ``get_rope_index`` / ``get_vision_position_ids``:
         - temporal: ``full(n_tokens, start_pos)``
-        - height: ``arange(h_merged).repeat_interleave(w_merged * t)``
-        - width: ``arange(w_merged).repeat(h_merged * t)``
-        - text_pos advances by ``max(h_merged, w_merged)`` after vision span.
+        - height: ``arange(start, start + h_m).repeat_interleave(w_m * t_eff)``
+        - width: ``arange(start, start + w_m).repeat(h_m * t_eff)``
+        - text_pos advances by ``max(H, W) // merge_size`` after vision span.
 
-        For **video**, grids are **split per-frame** before processing
-        (matching HF's ``repeat_interleave + set T=1`` pattern), so each
-        per-frame ``<|video_pad|>`` group is treated as a separate vision
-        span with ``T=1``.
+        For **video**, grids are kept as full ``[T, H, W]`` entries (no
+        per-frame splitting). The method auto-detects whether video tokens
+        are contiguous (HF format) or split per-frame with timestamps
+        (KerasHub format) by counting consecutive video tokens.
 
         Args:
             token_ids: int32 tensor ``(batch, seq_len)``.
@@ -273,20 +269,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         else:
             video_grid_np = np.zeros((0, 3), dtype=np.int32)
 
-        # Split video grids per-frame: [T, H, W] → T rows of [1, H, W].
-        # This matches HF's get_rope_index which does:
-        #   video_grid_thw = repeat_interleave(video_grid_thw, T, dim=0)
-        #   video_grid_thw[:, 0] = 1
-        if video_grid_np.shape[0] > 0:
-            expanded = []
-            for i in range(video_grid_np.shape[0]):
-                t = int(video_grid_np[i, 0])
-                for _ in range(t):
-                    expanded.append(
-                        [1, video_grid_np[i, 1], video_grid_np[i, 2]]
-                    )
-            video_grid_np = np.array(expanded, dtype=np.int32)
-
         batch_size, seq_len = token_ids_np.shape
         merge_size = getattr(
             self.image_converter or self.video_converter,
@@ -305,47 +287,82 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             current_pos = 0
             img_idx = 0
             vid_idx = 0
+            # Track how many frames have been consumed from the current
+            # video grid entry
+            vid_frames_consumed = 0
             i = 0
             while i < seq_len:
-                if (
+                is_image = (
                     ids[i] == self.image_token_id
                     and img_idx < image_grid_np.shape[0]
-                ):
-                    t_grid = int(image_grid_np[img_idx, 0])
-                    h_grid = int(image_grid_np[img_idx, 1])
-                    w_grid = int(image_grid_np[img_idx, 2])
-                    img_idx += 1
-                    is_vision = True
-                elif (
+                )
+                is_video = (
                     ids[i] == self.video_token_id
                     and vid_idx < video_grid_np.shape[0]
-                ):
-                    t_grid = int(video_grid_np[vid_idx, 0])
-                    h_grid = int(video_grid_np[vid_idx, 1])
-                    w_grid = int(video_grid_np[vid_idx, 2])
-                    vid_idx += 1
-                    is_vision = True
-                else:
-                    is_vision = False
+                )
 
-                if is_vision:
-                    llm_grid_t = t_grid
+                if is_image or is_video:
+                    if is_image:
+                        t_grid = int(image_grid_np[img_idx, 0])
+                        h_grid = int(image_grid_np[img_idx, 1])
+                        w_grid = int(image_grid_np[img_idx, 2])
+                        img_idx += 1
+                    else:
+                        t_grid = int(video_grid_np[vid_idx, 0])
+                        h_grid = int(video_grid_np[vid_idx, 1])
+                        w_grid = int(video_grid_np[vid_idx, 2])
+
                     llm_grid_h = h_grid // merge_size
                     llm_grid_w = w_grid // merge_size
-                    n_tokens = llm_grid_t * llm_grid_h * llm_grid_w
-                    span_end = min(i + n_tokens, seq_len)
+                    frame_tokens = llm_grid_h * llm_grid_w
 
-                    # Replicate HF's get_vision_position_ids exactly:
-                    for vi in range(span_end - i):
+                    # Count consecutive vision tokens of the same type.
+                    tok_id = ids[i]
+                    j = i
+                    while j < seq_len and ids[j] == tok_id:
+                        j += 1
+                    n_consecutive = j - i
+
+                    if is_video:
+                        full_tokens = t_grid * frame_tokens
+                        remaining = (
+                            full_tokens - vid_frames_consumed * frame_tokens
+                        )
+                        # t_eff: temporal extent of this contiguous block.
+                        t_eff = min(n_consecutive, remaining) // frame_tokens
+                        t_eff = max(t_eff, 1)
+                        n_tokens = t_eff * frame_tokens
+                    else:
+                        # Images always have T=1 in practice.
+                        t_eff = t_grid
+                        n_tokens = t_eff * frame_tokens
+
+                    span_end = min(i + n_tokens, seq_len)
+                    actual_n = span_end - i
+
+                    # HF's get_vision_position_ids:
+                    #   temporal = full(n, start_pos)
+                    #   height = arange(start, start+H_m)
+                    #            .repeat_interleave(W_m * t_eff)
+                    #   width  = arange(start, start+W_m)
+                    #            .repeat(H_m * t_eff)
+                    for vi in range(actual_n):
                         t_pos[i + vi] = current_pos
-                        row = vi // llm_grid_w
-                        col = vi % llm_grid_w
-                        h_pos[i + vi] = current_pos + (row % llm_grid_h)
-                        w_pos[i + vi] = current_pos + col
+                        h_idx = vi // (llm_grid_w * t_eff)
+                        w_idx = vi % llm_grid_w
+                        h_pos[i + vi] = current_pos + h_idx
+                        w_pos[i + vi] = current_pos + w_idx
 
                     # Advance by max(h_merged, w_merged) — HF convention.
                     current_pos += max(llm_grid_h, llm_grid_w)
                     i = span_end
+
+                    # Track video grid consumption.
+                    if is_video:
+                        vid_frames_consumed += t_eff
+                        if vid_frames_consumed >= t_grid:
+                            vid_idx += 1
+                            vid_frames_consumed = 0
                 else:
                     t_pos[i] = current_pos
                     h_pos[i] = current_pos
@@ -507,10 +524,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             combined_pixel_values = tf.concat(pixel_values_list, axis=0)
             combined_grid_thw = tf.concat(grid_list, axis=0)
         else:
-            # Text-only input on multimodal model: empty tensors matching
-            # the backbone's expected shapes (Gemma3 pattern).
-            # With 0 on the first axis, no data flows through the
-            # vision encoder, so other dims are not validated.
             combined_pixel_values = tf.zeros((0,), dtype="float32")
             combined_grid_thw = tf.zeros((0, 3), dtype="int32")
 
@@ -642,8 +655,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
         output = self.tokenizer.detokenize(token_ids)
 
-        # Safety net: strip residual special token strings that may
-        # survive if the BPE model encodes them as byte-fallback pieces.
         for tok_str in self.SPECIAL_TOKEN_MAP:
             output = tf.strings.regex_replace(output, re.escape(tok_str), "")
         return output

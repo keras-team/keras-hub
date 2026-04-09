@@ -1,6 +1,7 @@
 import math
 
 import keras
+import numpy as np
 from keras import ops
 
 
@@ -223,20 +224,21 @@ class Qwen3_5VisionAttention(keras.layers.Layer):
         return (x * cos_emb) + (rotated * sin_emb)
 
     def call(self, x, position_embeddings, cu_seqlens=None):
-        """
+        """Apply multi-head attention with optional windowing.
+
         Args:
-            x: Tensor (seq_len, hidden_size).
-            position_embeddings: tuple of (cos_emb, sin_emb) each
-                (seq_len, head_dim).
-            cu_seqlens: optional cumulative sequence lengths for variable
-                length batching. Currently unused for simplicity; all tokens
-                attend globally within the vision encoder (no causal mask).
+            x: Tensor ``(seq_len, hidden_size)``.
+            position_embeddings: ``(cos, sin)`` each
+                ``(seq_len, head_dim)``.
+            cu_seqlens: int32 cumulative sequence lengths
+                ``(num_chunks + 1,)`` for per-frame
+                attention windowing. ``None`` for full.
         Returns:
-            Tensor (seq_len, hidden_size).
+            Tensor ``(seq_len, hidden_size)``.
         """
         seq_len = ops.shape(x)[0]
 
-        qkv = self.qkv(x)  # (seq, 3 * hidden_size)
+        qkv = self.qkv(x)
         qkv = ops.reshape(qkv, (seq_len, 3, self.num_heads, self.head_dim))
         q, k, v = qkv[:, 0], qkv[:, 1], qkv[:, 2]
 
@@ -244,19 +246,40 @@ class Qwen3_5VisionAttention(keras.layers.Layer):
         q = self._apply_rotary(q, cos_emb, sin_emb)
         k = self._apply_rotary(k, cos_emb, sin_emb)
 
-        # Transpose for attention: (heads, seq, head_dim)
         q = ops.transpose(q, (1, 0, 2))
         k = ops.transpose(k, (1, 0, 2))
         v = ops.transpose(v, (1, 0, 2))
 
-        # Scaled dot-product attention (full, no masking in vision encoder).
-        scores = ops.einsum("hid,hjd->hij", q, k) * self._inv_scale
-        scores = ops.cast(scores, "float32")
-        scores = ops.softmax(scores, axis=-1)
-        scores = ops.cast(scores, self.compute_dtype)
+        if cu_seqlens is not None and len(cu_seqlens) > 2:
+            # Windowed attention: each chunk attends
+            # independently (one window per frame).
+            cu_np = cu_seqlens
+            if hasattr(cu_np, "numpy"):
+                cu_np = cu_np.numpy()
+            else:
+                cu_np = list(cu_np)
+            out_chunks = []
+            for ci in range(len(cu_np) - 1):
+                s, e = int(cu_np[ci]), int(cu_np[ci + 1])
+                q_c = q[:, s:e, :]
+                k_c = k[:, s:e, :]
+                v_c = v[:, s:e, :]
+                sc = ops.einsum("hid,hjd->hij", q_c, k_c) * self._inv_scale
+                sc = ops.cast(sc, "float32")
+                sc = ops.softmax(sc, axis=-1)
+                sc = ops.cast(sc, self.compute_dtype)
+                out_c = ops.einsum("hij,hjd->hid", sc, v_c)
+                out_chunks.append(out_c)
+            out = ops.concatenate(out_chunks, axis=1)
+        else:
+            # Full attention (single image or no cu_seqlens).
+            scores = ops.einsum("hid,hjd->hij", q, k) * self._inv_scale
+            scores = ops.cast(scores, "float32")
+            scores = ops.softmax(scores, axis=-1)
+            scores = ops.cast(scores, self.compute_dtype)
+            out = ops.einsum("hij,hjd->hid", scores, v)
 
-        out = ops.einsum("hij,hjd->hid", scores, v)
-        out = ops.transpose(out, (1, 0, 2))  # (seq, heads, head_dim)
+        out = ops.transpose(out, (1, 0, 2))
         out = ops.reshape(out, (seq_len, self.hidden_size))
         out = self.proj(out)
         return out
@@ -388,7 +411,7 @@ class Qwen3_5VisionPatchMerger(keras.layers.Layer):
         x = ops.reshape(x, (n_merged, ms2 * self.hidden_size))
         x = ops.cast(x, self.compute_dtype)
         x = self.fc1(x)
-        x = ops.gelu(x, approximate=True)
+        x = ops.gelu(x, approximate=False)
         x = self.fc2(x)
         return x
 
@@ -736,9 +759,22 @@ class Qwen3_5VisionEncoder(keras.Model):
         cos_emb, sin_emb = self._rot_pos_emb(grid_thw)
         position_embeddings = (cos_emb, sin_emb)
 
+        # 3b. Compute cu_seqlens for per-frame attention.
+        grid_thw_np = grid_thw
+        if hasattr(grid_thw_np, "numpy"):
+            grid_thw_np = grid_thw_np.numpy()
+        elif not isinstance(grid_thw_np, np.ndarray):
+            grid_thw_np = np.array(grid_thw_np)
+        lengths = []
+        for row_i in range(grid_thw_np.shape[0]):
+            t_ = int(grid_thw_np[row_i, 0])
+            hw_ = int(grid_thw_np[row_i, 1]) * int(grid_thw_np[row_i, 2])
+            lengths.extend([hw_] * t_)
+        cu_seqlens = np.concatenate([[0], np.cumsum(lengths)]).astype(np.int32)
+
         # 4. ViT blocks.
         for blk in self.blocks:
-            hidden_states = blk(hidden_states, position_embeddings)
+            hidden_states = blk(hidden_states, position_embeddings, cu_seqlens)
 
         # 5. Patch merger.
         merged = self.merger(hidden_states)
