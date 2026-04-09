@@ -170,6 +170,8 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
     with open(vid_path, "wb") as f:
         f.write(vid_response.content)
 
+    indices = None
+    video_fps = None
     try:
         from torchvision.io import read_video
 
@@ -180,24 +182,25 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         total_frames = video_tensor.shape[0]
 
         # Sample frames at VIDEO_FPS (HF default = 2 fps).
-        num_sample = max(4, min(int(total_frames / video_fps * VIDEO_FPS), 768))
+        # Cap at 8 to avoid OOM on limited-memory devices.
+        num_sample = max(4, min(int(total_frames / video_fps * VIDEO_FPS), 8))
         indices = (
             np.linspace(0, total_frames - 1, num_sample).round().astype(int)
         )
         sampled_frames = video_tensor[indices]  # (N, H, W, 3) uint8
 
         # Convert to list of PIL images (what HF processor expects).
-        dummy_video = [
+        video_frames = [
             Image.fromarray(sampled_frames[i].numpy())
             for i in range(sampled_frames.shape[0])
         ]
         print(
             f"   Video: {total_frames} total frames @ {video_fps}fps ->"
-            f" sampled {len(dummy_video)} frames"
+            f" sampled {len(video_frames)} frames"
         )
     except ImportError:
-        print("   ⚠ torchvision not available, falling back to dummy video")
-        dummy_video = [Image.new("RGB", (128, 128)) for _ in range(4)]
+        print("   ⚠ torchvision not available, falling back to blank frames")
+        video_frames = [Image.new("RGB", (128, 128)) for _ in range(4)]
     finally:
         if os.path.exists(vid_path):
             os.remove(vid_path)
@@ -207,7 +210,7 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         {
             "role": "user",
             "content": [
-                {"type": "video", "video": dummy_video, "fps": VIDEO_FPS},
+                {"type": "video", "video": video_frames, "fps": VIDEO_FPS},
                 {"type": "text", "text": "Describe this video."},
             ],
         }
@@ -221,6 +224,12 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         image_inputs, video_inputs, video_kwargs = process_vision_info(
             messages, return_video_kwargs=True
         )
+        # Unwrap list-valued kwargs (e.g. fps=[2.0] → fps=2.0)
+        # that qwen_vl_utils returns but the HF processor now
+        # expects as scalars.
+        for k, v in video_kwargs.items():
+            if isinstance(v, list) and len(v) == 1:
+                video_kwargs[k] = v[0]
         hf_inputs_vid = processor(
             text=[text_input],
             images=image_inputs,
@@ -231,12 +240,23 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
     except ImportError:
         print("   ⚠ qwen_vl_utils not installed, falling back to direct call")
         hf_inputs_vid = processor(
-            text=[VIDEO_PROMPT], videos=[dummy_video], return_tensors="pt"
+            text=[VIDEO_PROMPT], videos=[video_frames], return_tensors="pt"
         ).to(device)
 
     try:
+        # Pass the ORIGINAL grid to HF — the model's get_rope_index
+        # internally expands [T,H,W] → T×[1,H,W] for position IDs.
+        # We save the original grid for KerasHub validation, which
+        # handles it via vid_frames_consumed tracking.
+        video_grid_thw = None
+        if "video_grid_thw" in hf_inputs_vid:
+            video_grid_thw = (
+                hf_inputs_vid["video_grid_thw"].cpu().numpy().astype(np.int32)
+            )
+
         with torch.no_grad():
             hf_out_vid = hf_model(**hf_inputs_vid)
+
         results["vid_logits"] = hf_out_vid.logits.detach().cpu().float().numpy()
         results["vid_input_ids"] = (
             hf_inputs_vid["input_ids"].cpu().numpy().astype(np.int32)
@@ -247,9 +267,7 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         results["vid_pixel_values"] = (
             hf_inputs_vid["pixel_values_videos"].cpu().float().numpy()
         )
-        results["vid_image_grid_thw"] = (
-            hf_inputs_vid["video_grid_thw"].cpu().numpy().astype(np.int32)
-        )
+        results["vid_grid_thw"] = video_grid_thw
 
         with torch.no_grad():
             hf_gen_vid = hf_model.generate(
@@ -261,11 +279,18 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
             hf_gen_vid, skip_special_tokens=True
         )[0]
     except Exception as e:
+        import traceback
+
         print(f"  ⚠ Skipping HF video forward pass: {e}")
+        traceback.print_exc()
         results["vid_logits"] = None
         results["vid_generated"] = None
 
-    results["dummy_video"] = dummy_video
+    results["video_frames"] = video_frames
+    results["video_metadata"] = {
+        "frames_indices": indices.tolist() if indices is not None else None,
+        "fps": video_fps if video_fps is not None else 2.0,
+    }
 
     return results
 
@@ -421,13 +446,35 @@ def validate_multimodal_output(keras_model, hf_results):
     raw_image = hf_results["raw_image"]
     keras_output = keras_model.generate(
         {"prompts": [MULTIMODAL_PROMPT], "images": [np.array(raw_image)]},
-        max_length=4096,
+        max_length=8192,
     )
     keras_text = (
         keras_output[0] if isinstance(keras_output, list) else keras_output
     )
     print(f"  KerasHub output: {_extract_response(keras_text)}")
     print("  ✓ Multimodal generation completed.")
+
+
+def _run_keras_video_generation(keras_model, hf_results):
+    """Run KerasHub video generation with metadata."""
+    video_frames = hf_results["video_frames"]
+    video_frames_np = np.stack([np.array(img) for img in video_frames])
+    video_meta = hf_results.get("video_metadata")
+    vm_list = (
+        [video_meta]
+        if video_meta and video_meta.get("frames_indices")
+        else None
+    )
+    keras_model.preprocessor._video_metadata = vm_list
+    keras_output = keras_model.generate(
+        {"prompts": [VIDEO_PROMPT], "videos": [video_frames_np]},
+        max_length=8192,
+    )
+    keras_model.preprocessor._video_metadata = None
+    keras_text = (
+        keras_output[0] if isinstance(keras_output, list) else keras_output
+    )
+    print(f"  KerasHub output: {_extract_response(keras_text)}")
 
 
 # ---------------------------------------------------------------
@@ -443,24 +490,6 @@ def validate_video_output(keras_model, hf_results):
     print("VIDEO VALIDATION")
     print("=" * 50)
 
-    if hf_results["vid_logits"] is None:
-        print(
-            "\n  -> HF reference outputs unavailable. "
-            "Testing KerasHub independent execution...\n"
-        )
-        dummy_video = hf_results["dummy_video"]
-        dummy_video_np = np.stack([np.array(img) for img in dummy_video])
-        keras_output = keras_model.generate(
-            {"prompts": [VIDEO_PROMPT], "videos": [dummy_video_np]},
-            max_length=4096,
-        )
-        keras_text = (
-            keras_output[0] if isinstance(keras_output, list) else keras_output
-        )
-        print(f"\n  KerasHub output: {_extract_response(keras_text)}")
-        print("  ✓ KerasHub Native Video generation successfully executed.")
-        return
-
     backbone = keras_model.backbone
     token_ids_np = hf_results["vid_input_ids"]
     token_ids = ops.convert_to_tensor(token_ids_np)
@@ -473,7 +502,8 @@ def validate_video_output(keras_model, hf_results):
     pixel_values_np = pixel_values_np.reshape(-1, C, T, pH, pW)
     pixel_values_np = np.transpose(pixel_values_np, (0, 2, 3, 4, 1))
     pixel_values = ops.convert_to_tensor(pixel_values_np)
-    video_grid_thw = ops.convert_to_tensor(hf_results["vid_image_grid_thw"])
+
+    video_grid_thw = ops.convert_to_tensor(hf_results["vid_grid_thw"])
 
     video_pad_id = keras_model.preprocessor.video_token_id
     vision_pos = np.where(token_ids_np[0] == video_pad_id)[0]
@@ -514,16 +544,7 @@ def validate_video_output(keras_model, hf_results):
         print(f"  ⚠ Logits do not match within atol=1e-3: {e}")
 
     print(f"\n  HF output: {hf_results['vid_generated']}")
-    dummy_video = hf_results["dummy_video"]
-    dummy_video_np = np.stack([np.array(img) for img in dummy_video])
-    keras_output = keras_model.generate(
-        {"prompts": [VIDEO_PROMPT], "videos": [dummy_video_np]},
-        max_length=4096,
-    )
-    keras_text = (
-        keras_output[0] if isinstance(keras_output, list) else keras_output
-    )
-    print(f"  KerasHub output: {_extract_response(keras_text)}")
+    _run_keras_video_generation(keras_model, hf_results)
     print("  ✓ Video generation completed.")
 
 

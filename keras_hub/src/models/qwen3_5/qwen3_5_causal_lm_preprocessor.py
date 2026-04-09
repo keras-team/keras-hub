@@ -55,6 +55,8 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
     image_converter_cls = Qwen3_5ImageConverter
     video_converter_cls = Qwen3_5VideoConverter
 
+    # Special tokens that the KerasHub BPE tokenizer may not encode
+    # as single tokens. Map from string → token ID.
     SPECIAL_TOKEN_MAP = {
         "<|im_start|>": 248045,
         "<|im_end|>": 248044,
@@ -172,26 +174,63 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
 
         return tf.constant(np.concatenate([img_indices, vid_indices], axis=0))
 
-    def _expand_video_prompt(
-        self, prompt, video_grid_thws, temporal_patch_size=2
-    ):
-        """Expand ``<|vision_start|><|video_pad|><|vision_end|>`` into
-        per-frame sections with timestamps.
+    @staticmethod
+    def _calculate_timestamps(indices, video_fps, merge_size=2):
+        """Compute per-temporal-patch timestamps from frame indices.
 
-        Matches HF's Qwen3.5 processor which produces::
+        Matches HF's ``Qwen3VLProcessor._calculate_timestamps``
+        exactly: timestamps are the average real time (in seconds)
+        of the first and last frame within each temporal patch.
+
+        Args:
+            indices: list[int]. Raw frame indices from the
+                source video.
+            video_fps: float. Original video frame rate.
+            merge_size: int. Temporal patch size (frames per
+                patch).
+        Returns:
+            list[float]. One timestamp per temporal patch.
+        """
+        if not isinstance(indices, list):
+            indices = list(indices)
+        # Pad to a multiple of merge_size.
+        while len(indices) % merge_size != 0:
+            indices.append(indices[-1])
+        timestamps = [idx / video_fps for idx in indices]
+        timestamps = [
+            (timestamps[i] + timestamps[i + merge_size - 1]) / 2
+            for i in range(0, len(timestamps), merge_size)
+        ]
+        return timestamps
+
+    def _expand_video_prompt(
+        self,
+        prompt,
+        video_grid_thws,
+        temporal_patch_size=2,
+        video_metadata=None,
+    ):
+        """Expand ``<|vision_start|><|video_pad|><|vision_end|>``
+        into per-frame sections with timestamps.
+
+        Produces the same token structure as HF's processor::
 
             <0.5 seconds><|vision_start|><|video_pad|>×N<|vision_end|>
             <1.0 seconds><|vision_start|><|video_pad|>×N<|vision_end|>
 
-        Each frame gets its own ``<|vision_start|>...<|vision_end|>``
-        block with a timestamp prefix.
-
         Args:
             prompt: str. The raw prompt string.
-            video_grid_thws: list of (T, H, W) tuples, one per video.
-            temporal_patch_size: int. Frames per temporal patch.
+            video_grid_thws: list of (T, H, W) tuples.
+            temporal_patch_size: int.
+            video_metadata: optional list of dicts with
+                ``frames_indices`` (list[int]) and ``fps``
+                (float) per video. When provided, timestamps
+                are computed from real video metadata matching
+                HF exactly. Otherwise a fallback formula is
+                used.
         Returns:
-            tuple of (expanded_prompt, num_video_tokens_per_frame).
+            tuple of (expanded_prompt,
+            num_video_tokens_per_frame).
         """
         merge_size = getattr(
             self.image_converter or self.video_converter,
@@ -201,27 +240,37 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         video_marker = "<|vision_start|><|video_pad|><|vision_end|>"
         num_video_tokens_per_frame = []
 
-        for grid_thw in video_grid_thws:
-            t_grid, h_grid, w_grid = (
-                int(grid_thw[0]),
-                int(grid_thw[1]),
-                int(grid_thw[2]),
-            )
+        for vid_i, grid_thw in enumerate(video_grid_thws):
+            t_grid = int(grid_thw[0])
+            h_grid = int(grid_thw[1])
+            w_grid = int(grid_thw[2])
             frame_seqlen = (h_grid // merge_size) * (w_grid // merge_size)
 
-            # Compute per-frame timestamps
-            timestamps = []
-            for frame_idx in range(t_grid):
-                # Each temporal patch groups `temporal_patch_size` raw frames.
-                start_raw = frame_idx * temporal_patch_size
-                end_raw = start_raw + temporal_patch_size - 1
-                ts = (start_raw + end_raw) / 2.0 / self.video_fps
-                timestamps.append(ts)
+            # Compute timestamps.
+            if (
+                video_metadata
+                and vid_i < len(video_metadata)
+                and video_metadata[vid_i] is not None
+            ):
+                meta = video_metadata[vid_i]
+                timestamps = self._calculate_timestamps(
+                    meta["frames_indices"],
+                    meta["fps"],
+                    temporal_patch_size,
+                )
+            else:
+                # Fallback: evenly spaced at self.video_fps.
+                n_raw = t_grid * temporal_patch_size
+                indices = list(range(n_raw))
+                timestamps = self._calculate_timestamps(
+                    indices, self.video_fps, temporal_patch_size
+                )
 
-            # Build the per-frame block.
+            # Build per-frame block.
             video_block = ""
             for frame_idx in range(t_grid):
-                video_block += f"<{timestamps[frame_idx]:.1f} seconds>"
+                ts = timestamps[frame_idx]
+                video_block += f"<{ts:.1f} seconds>"
                 video_block += "<|vision_start|><|video_pad|><|vision_end|>"
                 num_video_tokens_per_frame.append(frame_seqlen)
 
@@ -269,6 +318,10 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         else:
             video_grid_np = np.zeros((0, 3), dtype=np.int32)
 
+        # Video grids are NOT expanded per-frame. The full [T, H, W] is
+        # used directly (matching HF's Qwen3_5Model.get_rope_index which
+        # passes the original grid to get_vision_position_ids).
+
         batch_size, seq_len = token_ids_np.shape
         merge_size = getattr(
             self.image_converter or self.video_converter,
@@ -288,7 +341,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             img_idx = 0
             vid_idx = 0
             # Track how many frames have been consumed from the current
-            # video grid entry
+            # video grid entry (for KerasHub per-frame token format).
             vid_frames_consumed = 0
             i = 0
             while i < seq_len:
@@ -384,12 +437,17 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
 
         Accepts either:
         - A plain string / list of strings (text-only).
-        - A dict with ``"prompts"`` and optional ``"images"`` keys.
+        - A dict with ``"prompts"`` and optional ``"images"``,
+          ``"videos"``, and ``"video_metadata"`` keys.
+
+        When ``"video_metadata"`` is provided (a list of dicts
+        with ``"frames_indices"`` and ``"fps"`` per video),
+        timestamps in the video prompt will match HF exactly.
 
         Returns:
-            dict with ``token_ids``, ``padding_mask``, and optionally
-            ``pixel_values``, ``image_grid_thw``, ``vision_indices``,
-            ``position_ids``.
+            dict with ``token_ids``, ``padding_mask``, and
+            optionally ``pixel_values``, ``image_grid_thw``,
+            ``vision_indices``, ``position_ids``.
         """
         # Check whether the input has images/videos.
         images = None
@@ -397,6 +455,12 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         if isinstance(x, dict):
             images = x.get("images", None)
             videos = x.get("videos", None)
+
+        # video_metadata is read from self._video_metadata
+        # (not from x) because the @preprocessing_function
+        # decorator converts all dict values to tensors and
+        # metadata dicts cannot be tensorized.
+        video_metadata = getattr(self, "_video_metadata", None)
 
         # Text-only: delegate to the base class entirely.
         if images is None and videos is None:
@@ -482,6 +546,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
                     prompts_list[idx],
                     video_grid_thws,
                     temporal_patch_size,
+                    video_metadata=video_metadata,
                 )
                 num_video_tokens.extend(per_frame_tokens)
 
@@ -524,6 +589,10 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             combined_pixel_values = tf.concat(pixel_values_list, axis=0)
             combined_grid_thw = tf.concat(grid_list, axis=0)
         else:
+            # Text-only input on multimodal model: empty tensors matching
+            # the backbone's expected shapes (Gemma3 pattern).
+            # With 0 on the first axis, no data flows through the
+            # vision encoder, so other dims are not validated.
             combined_pixel_values = tf.zeros((0,), dtype="float32")
             combined_grid_thw = tf.zeros((0, 3), dtype="int32")
 
@@ -655,6 +724,8 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
         output = self.tokenizer.detokenize(token_ids)
 
+        # Safety net: strip residual special token strings that may
+        # survive if the BPE model encodes them as byte-fallback pieces.
         for tok_str in self.SPECIAL_TOKEN_MAP:
             output = tf.strings.regex_replace(output, re.escape(tok_str), "")
         return output
