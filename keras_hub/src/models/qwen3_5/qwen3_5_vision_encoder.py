@@ -253,11 +253,7 @@ class Qwen3_5VisionAttention(keras.layers.Layer):
         if cu_seqlens is not None and len(cu_seqlens) > 2:
             # Windowed attention: each chunk attends
             # independently (one window per frame).
-            cu_np = cu_seqlens
-            if hasattr(cu_np, "numpy"):
-                cu_np = cu_np.numpy()
-            else:
-                cu_np = list(cu_np)
+            cu_np = ops.convert_to_numpy(cu_seqlens)
             out_chunks = []
             for ci in range(len(cu_np) - 1):
                 s, e = int(cu_np[ci]), int(cu_np[ci + 1])
@@ -760,11 +756,7 @@ class Qwen3_5VisionEncoder(keras.Model):
         position_embeddings = (cos_emb, sin_emb)
 
         # 3b. Compute cu_seqlens for per-frame attention.
-        grid_thw_np = grid_thw
-        if hasattr(grid_thw_np, "numpy"):
-            grid_thw_np = grid_thw_np.numpy()
-        elif not isinstance(grid_thw_np, np.ndarray):
-            grid_thw_np = np.array(grid_thw_np)
+        grid_thw_np = ops.convert_to_numpy(grid_thw)
         lengths = []
         for row_i in range(grid_thw_np.shape[0]):
             t_ = int(grid_thw_np[row_i, 0])
