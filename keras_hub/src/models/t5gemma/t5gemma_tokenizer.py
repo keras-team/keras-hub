@@ -37,7 +37,7 @@ class T5GemmaTokenizer(SentencePieceTokenizer):
     ```python
     import io
     import tensorflow as tf
-    import sentencepiece
+    from sentencepiece import SentencePieceTrainer
 
     # Unbatched input.
     tokenizer = keras_hub.models.T5GemmaTokenizer.from_preset(
@@ -54,7 +54,7 @@ class T5GemmaTokenizer(SentencePieceTokenizer):
     # Custom vocabulary.
     bytes_io = io.BytesIO()
     ds = tf.data.Dataset.from_tensor_slices(["The quick brown fox jumped."])
-    sentencepiece.SentencePieceTrainer.train(
+    SentencePieceTrainer.train(
         sentence_iterator=ds.as_numpy_iterator(),
         model_writer=bytes_io,
         vocab_size=8,

@@ -61,8 +61,9 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     From bytes.
     ```python
     def train_sentence_piece_bytes(ds, size):
+        from sentencepiece import SentencePieceTrainer
         bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
+        SentencePieceTrainer.train(
             sentence_iterator=ds.as_numpy_iterator(),
             model_writer=bytes_io,
             vocab_size=size,
@@ -80,8 +81,9 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     From a file.
     ```python
     def train_sentence_piece_file(ds, path, size):
+        from sentencepiece import SentencePieceTrainer
         with open(path, "wb") as model_file:
-            sentencepiece.SentencePieceTrainer.train(
+            SentencePieceTrainer.train(
                 sentence_iterator=ds.as_numpy_iterator(),
                 model_writer=model_file,
                 vocab_size=size,
