@@ -57,9 +57,9 @@ class Qwen3_5ImageConverter(ImageConverter):
         max_pixels: int. Maximum pixel budget. Images larger than this will
             be downscaled. Default 16777216 (= 4096×4096, `longest_edge`).
         image_mean: list[float]. Per-channel mean for normalisation.
-            Default [0.5, 0.5, 0.5].
+            Loaded from the HF ``preprocessor_config.json``.
         image_std: list[float]. Per-channel std for normalisation.
-            Default [0.5, 0.5, 0.5].
+            Loaded from the HF ``preprocessor_config.json``.
     """
 
     backbone_cls = Qwen3_5Backbone
@@ -81,8 +81,8 @@ class Qwen3_5ImageConverter(ImageConverter):
         self.spatial_merge_size = spatial_merge_size
         self.min_pixels = min_pixels
         self.max_pixels = max_pixels
-        self.image_mean = image_mean or [0.5, 0.5, 0.5]
-        self.image_std = image_std or [0.5, 0.5, 0.5]
+        self.image_mean = image_mean
+        self.image_std = image_std
         # Patch stride: dimensions must be divisible by this.
         self._patch_stride = patch_size * spatial_merge_size
 

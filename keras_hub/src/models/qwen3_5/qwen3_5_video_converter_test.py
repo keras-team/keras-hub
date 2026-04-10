@@ -15,6 +15,8 @@ class Qwen3_5VideoConverterTest(TestCase):
             spatial_merge_size=2,
             min_pixels=1000,
             max_pixels=50000,
+            image_mean=[0.5, 0.5, 0.5],
+            image_std=[0.5, 0.5, 0.5],
         )
 
     def test_call_ops(self):

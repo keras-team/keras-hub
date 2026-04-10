@@ -35,19 +35,17 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
     4. Builds 4-channel M-RoPE ``position_ids`` for spatial awareness.
 
     Args:
-        tokenizer: A ``Qwen3_5Tokenizer`` instance.
+        tokenizer: A ``Qwen3_5Tokenizer`` instance. Vision special token
+            IDs (``image_token``, ``video_token``, etc.) are resolved
+            from the tokenizer's vocabulary automatically.
         image_converter: A ``Qwen3_5ImageConverter`` instance, or ``None``
             for text-only mode.
         video_converter: A ``Qwen3_5VideoConverter`` instance, or ``None``.
         sequence_length: int. Total padded sequence length. Default 1024.
         add_start_token: bool. Prepend BOS token. Default ``False``.
         add_end_token: bool. Append EOS token. Default ``True``.
-        image_token: str. The placeholder token the user inserts in prompts
-            to indicate where an image should go. Default ``"<|image_pad|>"``.
-        image_token_id: int. The token ID of ``image_token``. Default 248056.
-        video_token: str. The placeholder token for videos. Default
-            ``"<|video_pad|>"``.
-        video_token_id: int. The token ID of ``video_token``. Default 248057.
+        video_fps: float. Default video sampling rate for timestamp
+            computation. Default ``2.0``.
     """
 
     backbone_cls = Qwen3_5Backbone
@@ -55,16 +53,14 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
     image_converter_cls = Qwen3_5ImageConverter
     video_converter_cls = Qwen3_5VideoConverter
 
-    # Special tokens that the KerasHub BPE tokenizer may not encode
-    # as single tokens. Map from string → token ID.
-    SPECIAL_TOKEN_MAP = {
-        "<|im_start|>": 248045,
-        "<|im_end|>": 248044,
-        "<|vision_start|>": 248053,
-        "<|vision_end|>": 248054,
-        "<|image_pad|>": 248056,
-        "<|video_pad|>": 248057,
-    }
+    _SPECIAL_TOKEN_ATTRS = [
+        "im_start_token",
+        "end_token",
+        "vision_start_token",
+        "vision_end_token",
+        "image_token",
+        "video_token",
+    ]
 
     def __init__(
         self,
@@ -74,10 +70,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length=1024,
         add_start_token=False,
         add_end_token=True,
-        image_token="<|image_pad|>",
-        image_token_id=248056,
-        video_token="<|video_pad|>",
-        video_token_id=248057,
         video_fps=2.0,
         **kwargs,
     ):
@@ -90,16 +82,52 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         )
         self.image_converter = image_converter
         self.video_converter = video_converter
-        self.image_token = image_token
-        self.image_token_id = image_token_id
-        self.video_token = video_token
-        self.video_token_id = video_token_id
         self.video_fps = video_fps
 
-        # Regex pattern for splitting prompts at special token boundaries.
-        self._special_token_pattern = re.compile(
-            "(" + "|".join(re.escape(t) for t in self.SPECIAL_TOKEN_MAP) + ")"
+        # Token strings — these are static.
+        self.image_token = getattr(
+            self.tokenizer, "image_token", "<|image_pad|>"
         )
+        self.video_token = getattr(
+            self.tokenizer, "video_token", "<|video_pad|>"
+        )
+
+        # Lazily built after the tokenizer's vocabulary is loaded.
+        self._cached_special_token_map = None
+        self._cached_special_token_pattern = None
+
+    @property
+    def image_token_id(self):
+        """Image pad token ID, resolved from the tokenizer."""
+        return getattr(self.tokenizer, "image_token_id", None)
+
+    @property
+    def video_token_id(self):
+        """Video pad token ID, resolved from the tokenizer."""
+        return getattr(self.tokenizer, "video_token_id", None)
+
+    @property
+    def _special_token_map(self):
+        """Lazily build token-string → token-ID map."""
+        if self._cached_special_token_map is None:
+            self._cached_special_token_map = {}
+            for attr in self._SPECIAL_TOKEN_ATTRS:
+                tok_str = getattr(self.tokenizer, attr, None)
+                tok_id = getattr(self.tokenizer, f"{attr}_id", None)
+                if tok_str is not None and tok_id is not None:
+                    self._cached_special_token_map[tok_str] = tok_id
+        return self._cached_special_token_map
+
+    @property
+    def _special_token_pattern(self):
+        """Lazily build regex for splitting at special tokens."""
+        if self._cached_special_token_pattern is None:
+            self._cached_special_token_pattern = re.compile(
+                "("
+                + "|".join(re.escape(t) for t in self._special_token_map)
+                + ")"
+            )
+        return self._cached_special_token_pattern
 
     def _tokenize_with_special_tokens(
         self, text, num_image_tokens, num_video_tokens
@@ -128,7 +156,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         img_idx = 0
         vid_idx = 0
         for part in parts:
-            if part in self.SPECIAL_TOKEN_MAP:
+            if part in self._special_token_map:
                 if part == self.image_token:
                     # Expand image placeholder to N copies.
                     if img_idx < len(num_image_tokens):
@@ -145,7 +173,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
                         n = 1
                     all_ids.extend([self.video_token_id] * n)
                 else:
-                    all_ids.append(self.SPECIAL_TOKEN_MAP[part])
+                    all_ids.append(self._special_token_map[part])
             elif part:
                 tokenized = self.tokenizer(part)
                 if hasattr(tokenized, "numpy"):
@@ -318,9 +346,8 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         else:
             video_grid_np = np.zeros((0, 3), dtype=np.int32)
 
-        # Video grids are NOT expanded per-frame. The full [T, H, W] is
-        # used directly (matching HF's Qwen3_5Model.get_rope_index which
-        # passes the original grid to get_vision_position_ids).
+        # Video grids use the full [T, H, W] directly
+        # matching HF's get_rope_index.
 
         batch_size, seq_len = token_ids_np.shape
         merge_size = getattr(
@@ -393,12 +420,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
                     span_end = min(i + n_tokens, seq_len)
                     actual_n = span_end - i
 
-                    # HF's get_vision_position_ids:
-                    #   temporal = full(n, start_pos)
-                    #   height = arange(start, start+H_m)
-                    #            .repeat_interleave(W_m * t_eff)
-                    #   width  = arange(start, start+W_m)
-                    #            .repeat(H_m * t_eff)
                     for vi in range(actual_n):
                         t_pos[i + vi] = current_pos
                         h_idx = vi // (llm_grid_w * t_eff)
@@ -457,9 +478,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             videos = x.get("videos", None)
 
         # video_metadata is read from self._video_metadata
-        # (not from x) because the @preprocessing_function
-        # decorator converts all dict values to tensors and
-        # metadata dicts cannot be tensorized.
         video_metadata = getattr(self, "_video_metadata", None)
 
         # Text-only: delegate to the base class entirely.
@@ -525,8 +543,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         else:
             prompts_list = [str(prompts)]
 
-        # Expand video prompts: replace <vision_start><video_pad><vision_end>
-        # with per-frame timestamp sections.
+        # Expand video prompts
         num_video_tokens = []
         if vision_out_videos is not None:
             grid_np = (
@@ -589,10 +606,8 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             combined_pixel_values = tf.concat(pixel_values_list, axis=0)
             combined_grid_thw = tf.concat(grid_list, axis=0)
         else:
-            # Text-only input on multimodal model: empty tensors matching
-            # the backbone's expected shapes (Gemma3 pattern).
-            # With 0 on the first axis, no data flows through the
-            # vision encoder, so other dims are not validated.
+            # Text-only: empty tensors so no data flows through
+            # the vision encoder.
             combined_pixel_values = tf.zeros((0,), dtype="float32")
             combined_grid_thw = tf.zeros((0, 3), dtype="int32")
 
@@ -612,7 +627,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         """Convert raw images to patch tensors using the image converter.
 
         Args:
-            images: A single PIL/numpy image, a list of images, or a
+            images: A single numpy image, a list of images, or a
                 batched tensor.
             batched: bool. Whether the input is already batched.
         Returns:
@@ -717,7 +732,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Collect all IDs to strip: base special tokens + vision tokens.
         ids_to_strip = list(self.tokenizer.special_token_ids)
-        for tok_id in self.SPECIAL_TOKEN_MAP.values():
+        for tok_id in self._special_token_map.values():
             if tok_id not in ids_to_strip:
                 ids_to_strip.append(tok_id)
 
@@ -726,7 +741,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Safety net: strip residual special token strings that may
         # survive if the BPE model encodes them as byte-fallback pieces.
-        for tok_str in self.SPECIAL_TOKEN_MAP:
+        for tok_str in self._special_token_map:
             output = tf.strings.regex_replace(output, re.escape(tok_str), "")
         return output
 
@@ -734,10 +749,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         config = super().get_config()
         config.update(
             {
-                "image_token": self.image_token,
-                "image_token_id": self.image_token_id,
-                "video_token": self.video_token,
-                "video_token_id": self.video_token_id,
                 "video_fps": self.video_fps,
             }
         )

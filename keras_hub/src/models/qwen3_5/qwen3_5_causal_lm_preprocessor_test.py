@@ -101,17 +101,15 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
             spatial_merge_size=1,
             min_pixels=16,
             max_pixels=100,
+            image_mean=[0.5, 0.5, 0.5],
+            image_std=[0.5, 0.5, 0.5],
         )
         preprocessor = Qwen3_5CausalLMPreprocessor(
             tokenizer=tokenizer,
             sequence_length=16,
             video_converter=video_converter,
-            video_token_id=100,
         )
 
-        # 2 frames, 4x4.
-        # grid_t = 2//2 = 1. grid_h=2, grid_w=2.
-        # num_vision_tokens = 1 * 2 * 2 = 4.
         video = np.ones((2, 4, 4, 3))
         prompt = "<|video_pad|> air"
 
@@ -119,8 +117,6 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
             {"prompts": prompt, "videos": [video]}
         )
 
-        # text tokenizer for " air" is [2] (with space) or [1]...
-        # token_ids should have four 100 tokens followed by the text.
         token_ids = out["token_ids"]
         self.assertEqual(
             list(ops.convert_to_numpy(token_ids)[:4]), [100, 100, 100, 100]
