@@ -15,6 +15,13 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = ["!", "air", "\u0120air", "plane", "\u0120at", "port"]
         self.vocab += ["<|im_end|>", "<|endoftext|>"]
+        self.vocab += [
+            "<|im_start|>",
+            "<|vision_start|>",
+            "<|vision_end|>",
+            "<|image_pad|>",
+            "<|video_pad|>",
+        ]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = [
             "\u0120 a",
@@ -90,10 +97,7 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x, "airplane at airport")
 
     def test_generate_preprocess_with_videos(self):
-        # Add special tokens to vocab
-        vocab = self.vocab.copy()
-        vocab["<|video_pad|>"] = 100
-        tokenizer = Qwen3_5Tokenizer(vocabulary=vocab, merges=self.merges)
+        tokenizer = Qwen3_5Tokenizer(vocabulary=self.vocab, merges=self.merges)
 
         video_converter = Qwen3_5VideoConverter(
             patch_size=2,
@@ -110,6 +114,9 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
             video_converter=video_converter,
         )
 
+        # 2 frames, 4x4.
+        # grid_t = 2//2 = 1. grid_h=2, grid_w=2.
+        # num_vision_tokens = 1 * 2 * 2 = 4.
         video = np.ones((2, 4, 4, 3))
         prompt = "<|video_pad|> air"
 
@@ -117,9 +124,11 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
             {"prompts": prompt, "videos": [video]}
         )
 
+        # text tokenizer for " air" is [2] (with space) or [1]...
+        # token_ids should have four video_pad tokens followed by text.
         token_ids = out["token_ids"]
         self.assertEqual(
-            list(ops.convert_to_numpy(token_ids)[:4]), [100, 100, 100, 100]
+            list(ops.convert_to_numpy(token_ids)[:4]), [12, 12, 12, 12]
         )
 
         self.assertEqual(tuple(out["image_grid_thw"].shape), (1, 3))
