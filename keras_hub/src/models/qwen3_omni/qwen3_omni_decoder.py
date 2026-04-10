@@ -19,6 +19,55 @@ from keras_hub.src.models.qwen3_omni.qwen3_omni_attention import (
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
+class Qwen3OmniSparseMoeBlock(Qwen3SparseMoeBlock):
+    """Qwen3-Omni MoE block with float32 router softmax.
+
+    Overrides the router softmax to use float32 precision.
+    """
+
+    def call(self, hidden_states, attention_mask=None, training=None):
+        batch_size, seq_len, _ = ops.shape(hidden_states)
+        hidden_states_flattened = ops.reshape(
+            hidden_states, (-1, self.hidden_dim)
+        )
+
+        router_logits = self._sparse_feedforward_gate_dense(
+            hidden_states_flattened
+        )
+
+        router_probs = ops.softmax(ops.cast(router_logits, "float32"), axis=-1)
+
+        top_p, top_i = ops.top_k(router_probs, k=self.top_k)
+        if self.norm_top_k_prob:
+            top_p = top_p / ops.sum(top_p, axis=-1, keepdims=True)
+
+        one_hot = ops.one_hot(top_i, self.num_experts)
+        one_hot = ops.cast(one_hot, top_p.dtype)
+        routing_full = ops.sum(one_hot * top_p[..., None], axis=1)
+        routing_full = ops.transpose(routing_full, (1, 0))
+        routing_full = ops.cast(routing_full, hidden_states_flattened.dtype)
+
+        expert_out = self.expert_bank(hidden_states_flattened)
+
+        weighted_out = expert_out * routing_full[:, :, None]
+        expert_contribution = ops.sum(weighted_out, axis=0)
+
+        out = ops.reshape(
+            expert_contribution, (batch_size, seq_len, self.hidden_dim)
+        )
+
+        if training:
+            aux_loss = compute_load_balancing_loss(
+                router_logits=router_logits,
+                num_experts=self.num_experts,
+                top_k=self.top_k,
+                attention_mask=attention_mask,
+            )
+            self.add_loss(self.router_aux_loss_coefficient * aux_loss)
+
+        return out, router_logits
+
+
 class Qwen3OmniTransformerDecoder(keras.layers.Layer):
     """Qwen3-Omni transformer decoder block with MoE.
 
@@ -141,8 +190,7 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
 
         # MoE or dense FFN
         if self.is_sparse_mlp:
-            # Sparse MoE feedforward reused from Qwen3Moe
-            self.sparse_moe = Qwen3SparseMoeBlock(
+            self.sparse_moe = Qwen3OmniSparseMoeBlock(
                 hidden_dim=hidden_dim,
                 moe_intermediate_dim=self.moe_intermediate_dim,
                 num_experts=self.num_experts,
