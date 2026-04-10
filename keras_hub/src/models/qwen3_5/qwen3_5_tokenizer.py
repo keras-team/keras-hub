@@ -27,9 +27,6 @@ class Qwen3_5Tokenizer(BytePairTokenizer):
         **kwargs,
     ):
         self.has_vision_tokens = has_vision_tokens
-
-        # Base special tokens -- registered before super().__init__()
-        # so BytePairTokenizer can use self.special_tokens.
         self._add_special_token("<|im_end|>", "end_token")
         self._add_special_token("<|endoftext|>", "pad_token")
         self._add_special_token("<|im_start|>", "im_start_token")
@@ -43,16 +40,14 @@ class Qwen3_5Tokenizer(BytePairTokenizer):
             **kwargs,
         )
 
-        # Vision special tokens are registered AFTER super().__init__()
-        # so attributes persist on the torch backend (torch.nn.Module
-        # __init__ can discard attrs set before it runs).
         if has_vision_tokens:
             self._add_special_token("<|vision_start|>", "vision_start_token")
             self._add_special_token("<|vision_end|>", "vision_end_token")
             self._add_special_token("<|image_pad|>", "image_token")
             self._add_special_token("<|video_pad|>", "video_token")
-            # Re-resolve IDs now that the vocabulary is loaded.
-            self._update_special_token_ids()
+
+            if vocabulary is not None:
+                self._update_special_token_ids()
 
     def get_config(self):
         config = super().get_config()
