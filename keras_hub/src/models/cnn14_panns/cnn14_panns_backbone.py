@@ -1,49 +1,7 @@
 import keras
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-
-
-@keras.saving.register_keras_serializable(package="keras_hub")
-class ReduceMean(keras.layers.Layer):
-    """Custom layer for mean reduction across a specific axis.
-
-    Used in PANNs to reduce the frequency dimension and time dimension
-    at different stages of the pooling process.
-    """
-
-    def __init__(self, axis, **kwargs):
-        super().__init__(**kwargs)
-        self.axis = axis
-
-    def call(self, x):
-        return ops.mean(x, axis=self.axis)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({"axis": self.axis})
-        return config
-
-
-@keras.saving.register_keras_serializable(package="keras_hub")
-class ReduceMax(keras.layers.Layer):
-    """Custom layer for max reduction across a specific axis.
-
-    Used in PANNs for global max pooling across the time dimension.
-    """
-
-    def __init__(self, axis, **kwargs):
-        super().__init__(**kwargs)
-        self.axis = axis
-
-    def call(self, x):
-        return ops.max(x, axis=self.axis)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({"axis": self.axis})
-        return config
 
 
 def conv_block(x, filters, name, pool_size=(2, 2), dropout_rate=0.2):
