@@ -19,7 +19,9 @@ class TestViTConverter(TestCase):
         model = ViTImageClassifier.from_preset(
             "hf://google/vit-base-patch16-224"
         )
-        output = model.predict({"images": np.ones((1, 224, 224, 3), dtype="float32")})
+        output = model.predict(
+            {"images": np.ones((1, 224, 224, 3), dtype="float32")}
+        )
         self.assertEqual(output.shape, (1, 1000))
 
     @pytest.mark.large
