@@ -205,7 +205,13 @@ class MultiSegmentPacker(PreprocessingLayer):
             )
         return x, unbatched[0]
 
-    def _trim_inputs(self, inputs, sequence_length=None, add_start_value=True, add_end_value=True):
+    def _trim_inputs(
+        self,
+        inputs,
+        sequence_length=None,
+        add_start_value=True,
+        add_end_value=True,
+    ):
         """Trim inputs to desired length."""
         sequence_length = sequence_length or self.sequence_length
         num_segments = len(inputs)

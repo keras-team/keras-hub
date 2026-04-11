@@ -19,7 +19,6 @@ class Gemma4AspectRatioResizing(keras.layers.Layer):
         self.width = 1  # Dummy value to satisfy ImageConverter checks
         self.image_size = None  # Disable resizing in base class call
 
-
     def call(self, inputs):
         # inputs: (B, H, W, 3) where H, W can be dynamic Tensors or static
         from keras_hub.src.utils.tensor_utils import in_tf_function
@@ -125,6 +124,7 @@ class Gemma4ImageConverter(ImageConverter):
         **kwargs: Additional keyword arguments forwarded to
             `keras_hub.layers.ImageConverter`, e.g. `scale`, `offset`.
     """
+
     backbone_cls = Gemma4Backbone
 
     def __init__(

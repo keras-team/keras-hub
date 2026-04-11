@@ -8,9 +8,11 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
-from keras_hub.src.models.gemma4.gemma4_audio_converter import Gemma4AudioConverter
-from keras_hub.src.models.gemma4.gemma4_audio_encoder import Gemma4AudioEncoder
 
+from keras_hub.src.models.gemma4.gemma4_audio_converter import (
+    Gemma4AudioConverter,
+)
+from keras_hub.src.models.gemma4.gemma4_audio_encoder import Gemma4AudioEncoder
 from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.models.gemma4.gemma4_causal_lm import Gemma4CausalLM
 from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
@@ -74,7 +76,7 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
         self.text_input_data = self.text_preprocessor(*self.text_train_data)[0]
 
         # === Multimodal model (Vision + Audio + Text) ===
-        
+
         self.image_converter = Gemma4ImageConverter(
             image_size=(16, 16),
             patch_size=4,
@@ -250,23 +252,23 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
 
         model = Gemma4CausalLM(**init_kwargs)
         model_output = model(input_data)
-        
+
         path = os.path.join(self.get_temp_dir(), "model.weights.h5")
         model.save_weights(path)
-        
+
         restored_model = Gemma4CausalLM(**init_kwargs)
         # Call restored model to build it!
         _ = restored_model(input_data)
-        
+
         restored_model.load_weights(path)
-        
+
         # Check weights.
         self.assertEqual(len(model.weights), len(restored_model.weights))
         weights = model.get_weights()
         restored_weights = restored_model.get_weights()
         for w1, w2 in zip(weights, restored_weights):
             self.assertAllClose(w1, w2, atol=1e-5, rtol=1e-5)
-            
+
         # Check output.
         restored_output = restored_model(input_data)
         self.assertAllClose(model_output, restored_output, atol=1e-5, rtol=1e-5)

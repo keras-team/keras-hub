@@ -5,11 +5,9 @@ import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.gemma4.gemma4_layers import Gemma4ClippableDense
 from keras_hub.src.models.gemma4.gemma4_layers import Gemma4FrozenNorm
 from keras_hub.src.models.gemma4.gemma4_layers import Gemma4VNorm
-from keras_hub.src.models.gemma4.gemma4_layers import Gemma4ClippableDense
-
-
 
 
 class Gemma4AudioRelativePositionEmbedding(keras.layers.Layer):
@@ -69,7 +67,6 @@ class Gemma4AudioRelativePositionEmbedding(keras.layers.Layer):
         self._inv_timescales = np.reshape(
             inv_timescales, (1, 1, num_timescales)
         ).astype("float32")
-
 
     def build(self, input_shape):
         self.built = True
@@ -342,17 +339,17 @@ class Gemma4AudioAttention(keras.layers.Layer):
         else:
             T = ops.shape(x)[1]
             pad_len = (-T) % W
-            
+
             def pad_fn():
                 zeros_row = ops.zeros_like(x[:, :1, ...])
                 zero_pad = ops.tile(
                     zeros_row, [1, pad_len] + [1] * (x.ndim - 2)
                 )
                 return ops.concatenate([x, zero_pad], axis=1)
-                
+
             def no_pad_fn():
                 return x
-                
+
             x = ops.cond(pad_len > 0, pad_fn, no_pad_fn)
             num_blocks = (T + pad_len) // W
 
@@ -1269,9 +1266,7 @@ class Gemma4AudioConformerBlock(keras.layers.Layer):
         x = self.attention(x, mask, causal_valid_mask)
 
         # Zero out padded positions before the depthwise conv.
-        valid = ops.cast(
-            ops.expand_dims(mask, axis=-1), x.dtype
-        )
+        valid = ops.cast(ops.expand_dims(mask, axis=-1), x.dtype)
         x_for_lconv = x * valid
         x = self.lconv(x_for_lconv)
 
@@ -1279,7 +1274,6 @@ class Gemma4AudioConformerBlock(keras.layers.Layer):
 
         x = ops.clip(x, -self.gradient_clipping, self.gradient_clipping)
         return self.norm(x)
-
 
     def get_config(self):
         config = super().get_config()
@@ -1485,10 +1479,12 @@ class Gemma4AudioEncoder(keras.Model):
         max_past = max(0, context_left - 1)
         max_future = context_right
         C = chunk_size + max_past + max_future
-        upper_diagonal = max_past + max_future
+
         w_idx = np.arange(chunk_size)[:, None]  # (W, 1)
         c_idx = np.arange(C)[None, :]  # (1, C)
-        self._causal_valid_mask_np = (c_idx <= w_idx + max_past) & (c_idx > w_idx)
+        self._causal_valid_mask_np = (c_idx <= w_idx + max_past) & (
+            c_idx > w_idx
+        )
 
     def build(self, input_shape):
         self.built = True

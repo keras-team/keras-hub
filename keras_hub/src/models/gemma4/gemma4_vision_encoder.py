@@ -305,7 +305,7 @@ class Gemma4VisionPatchEmbedder(keras.layers.Layer):
         # Gemma4 applies no normalization and instead scales in model code
         # Inputs are in [0, 1], scale to [-1, 1] to match HF.
         pixel_values = 2.0 * (pixel_values - 0.5)
-        
+
         x = self.input_proj(pixel_values)
 
         # Clamp padding patches (which are -1) to 0 so they don't break take.
@@ -313,7 +313,7 @@ class Gemma4VisionPatchEmbedder(keras.layers.Layer):
 
         x_pos = ops.cast(clamped_positions[..., 0], "int32")
         y_pos = ops.cast(clamped_positions[..., 1], "int32")
-        
+
         x_embeds = ops.take(self.position_embedding_table[0], x_pos, axis=0)
         y_embeds = ops.take(self.position_embedding_table[1], y_pos, axis=0)
         pos_embeds = x_embeds + y_embeds

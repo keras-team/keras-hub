@@ -42,7 +42,12 @@ class Preprocessor(PreprocessingLayer):
 
     def __setattr__(self, name, value):
         # Work around torch setattr for properties.
-        if name in ["tokenizer", "audio_converter", "image_converter", "video_converter"]:
+        if name in [
+            "tokenizer",
+            "audio_converter",
+            "image_converter",
+            "video_converter",
+        ]:
             return object.__setattr__(self, name, value)
         return super().__setattr__(name, value)
 
@@ -228,7 +233,9 @@ class Preprocessor(PreprocessingLayer):
             kwargs["image_converter"] = loader.load_image_converter(
                 cls.image_converter_cls
             )
-        if "video_converter" not in kwargs and getattr(cls, "video_converter_cls", None):
+        if "video_converter" not in kwargs and getattr(
+            cls, "video_converter_cls", None
+        ):
             kwargs["video_converter"] = loader.load_video_converter(
                 cls.video_converter_cls
             )

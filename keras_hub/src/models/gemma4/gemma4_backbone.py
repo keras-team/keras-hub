@@ -433,7 +433,6 @@ class Gemma4Backbone(Backbone):
                 shape=(None,), dtype="int32", name="vision_mask"
             )
 
-
         # Text embeddings.
         text_embeddings = self.token_embedding(token_id_input)
 
@@ -473,7 +472,8 @@ class Gemma4Backbone(Backbone):
                 vision_indices=audio_indices_input,
             )
 
-        # Force connection of audio_mask_input if not used in per-layer embeddings
+        # Force connection of audio_mask_input if not used in per-layer
+        # embeddings
         if audio_encoder is not None and hidden_size_per_layer_input <= 0:
             dummy = ops.cast(audio_mask_input, x.dtype) * 0.0
             dummy = ops.expand_dims(dummy, axis=-1)

@@ -6,6 +6,7 @@ Usage:
         --save_dtype bfloat16
 """
 
+import contextlib
 import gc
 import os
 import random
@@ -71,17 +72,16 @@ PROMPT_IMAGE = (
 PROMPT_AUDIO = (
     "<|turn>user\n"
     "<|audio|>"
-    "Transcribe the following speech segment in its original language. Follow these specific instructions for formatting the answer:\n"
+    "Transcribe the following speech segment in its original language. "
+    "Follow these specific instructions for formatting the answer:\n"
     "* Only output the transcription, with no newlines.\n"
-    "* When transcribing numbers, write the digits, i.e. write 1.7 and not one point seven, and write 3 instead of three.<turn|>\n"
+    "* When transcribing numbers, write the digits, i.e. write 1.7 and not "
+    "one point seven, and write 3 instead of three.<turn|>\n"
     "<|turn>model\n"
 )
 
 PROMPT_VIDEO = (
-    "<|turn>user\n"
-    "<|video|>"
-    "Describe this video.<turn|>\n"
-    "<|turn>model\n"
+    "<|turn>user\n<|video|>Describe this video.<turn|>\n<|turn>model\n"
 )
 
 
@@ -145,16 +145,24 @@ def _download_test_video():
     try:
         import av
     except ImportError:
-        print("Warning: PyAV not installed; skipping video download. Install with `pip install av`.")
+        print(
+            "Warning: PyAV not installed; skipping video download. "
+            "Install with `pip install av`."
+        )
         return None
     try:
         response = requests.get(VIDEO_URL, timeout=60)
         response.raise_for_status()
         container = av.open(BytesIO(response.content))
-        frames = [f.to_ndarray(format="rgb24") for f in container.decode(video=0)]
+        frames = [
+            f.to_ndarray(format="rgb24") for f in container.decode(video=0)
+        ]
         return np.stack(frames)  # (T, H, W, C), channels-last for KH
     except Exception as e:
-        print(f"Warning: could not download test video ({e}); skipping video verification.")
+        print(
+            f"Warning: could not download test video ({e}); "
+            f"skipping video verification."
+        )
         return None
 
 
@@ -176,10 +184,10 @@ def _count_hf_params(hf_model):
                     (".input_min", ".input_max", ".output_min", ".output_max")
                 )
             )
-
             # std_bias / std_scale are registered buffers on the vision tower
             # for 26B-A4B and 31B models (standardize=True).
-            or name in (
+            or name
+            in (
                 "model.vision_tower.std_bias",
                 "model.vision_tower.std_scale",
             )
@@ -196,7 +204,13 @@ def _count_keras_hub_params(backbone):
 
 
 def _precompute_hf_outputs(
-    hf_model, hf_tokenizer, processor, prompt, raw_image, raw_audio=None, raw_video=None
+    hf_model,
+    hf_tokenizer,
+    processor,
+    prompt,
+    raw_image,
+    raw_audio=None,
+    raw_video=None,
 ):
     if raw_video is not None and not isinstance(raw_video, torch.Tensor):
         raw_video = torch.from_numpy(raw_video)
@@ -244,8 +258,10 @@ def _precompute_hf_outputs(
     if _hf_model_inner is not None and raw_video is not None:
         if hasattr(_hf_model_inner, "embed_vision"):
             _video_frame_embeds = []
+
             def _video_hook(mod, inp, out):
                 _video_frame_embeds.append(out.detach().cpu().float().numpy())
+
             _hooks.append(
                 _hf_model_inner.embed_vision.register_forward_hook(_video_hook)
             )
@@ -261,21 +277,26 @@ def _precompute_hf_outputs(
     hf_input_ids = hf_inputs["input_ids"].detach().cpu().numpy()
     hf_attention_mask = hf_inputs["attention_mask"].detach().cpu().numpy()
 
-    # Raw audio mel features are retained for the mel-spectrogram comparison test.
+    # Raw audio mel features are retained for the mel-spectrogram comparison
+    # test.
     hf_audio_features = None
     if "input_features" in hf_inputs:
         with torch.no_grad():
-            if hasattr(hf_model, "model") and hasattr(hf_model.model, "audio_tower"):
+            if hasattr(hf_model, "model") and hasattr(
+                hf_model.model, "audio_tower"
+            ):
                 hf_af = hf_model.model.audio_tower(hf_inputs["input_features"])
                 if hasattr(hf_af, "last_hidden_state"):
                     hf_af = hf_af.last_hidden_state
                 hf_audio_features = hf_af.detach().cpu().float().numpy()
 
-    # Capture video embeddings (after embed_vision projection, at text hidden dim).
+    # Capture video embeddings (after embed_vision projection, at text hidden
+    # dim).
     _vfe = locals().get("_video_frame_embeds")
     if raw_video is not None and _vfe:
-        # embed_vision may be called once for the full batch of frames (returning
-        # (N, T, H) or (N*T, H)) or once per frame (returning (T, H) each time).
+        # embed_vision may be called once for the full batch of frames
+        # (returning (N, T, H) or (N*T, H)) or once per frame (returning (T,
+        # H) each time).
         # Concatenate all captured outputs along axis-0 then force a 3-D shape
         # (1, total_tokens, H) regardless of the original layout.
         stacked = np.concatenate(_vfe, axis=0)  # (N*T, H) or (N, T, H)
@@ -285,7 +306,9 @@ def _precompute_hf_outputs(
             # 3-D: flatten frame/patch dims together
             stacked = stacked.reshape(-1, stacked.shape[-1])
             total_tokens, Hd = stacked.shape
-        hf_video_embeddings = stacked.reshape(1, total_tokens, Hd)  # (1, N*T, H)
+        hf_video_embeddings = stacked.reshape(
+            1, total_tokens, Hd
+        )  # (1, N*T, H)
     else:
         hf_video_embeddings = None
 
@@ -324,9 +347,13 @@ def _precompute_hf_outputs(
     }
 
     if "input_features" in hf_inputs:
-        ret["input_features"] = hf_inputs["input_features"].detach().cpu().numpy()
+        ret["input_features"] = (
+            hf_inputs["input_features"].detach().cpu().numpy()
+        )
     if "mm_token_type_ids" in hf_inputs:
-        ret["mm_token_type_ids"] = hf_inputs["mm_token_type_ids"].detach().cpu().numpy()
+        ret["mm_token_type_ids"] = (
+            hf_inputs["mm_token_type_ids"].detach().cpu().numpy()
+        )
     # For video: record how many frames HF actually sampled.
     # Video processor uses "pixel_values_videos" (not "pixel_values").
     # Its shape is (num_videos, num_frames, max_patches, patch_pixels) → 4D,
@@ -337,8 +364,9 @@ def _precompute_hf_outputs(
     return ret
 
 
-
-def _build_preprocessor_free_inputs(backbone, hf_data, image_placeholder_id, audio_placeholder_id=None):
+def _build_preprocessor_free_inputs(
+    backbone, hf_data, image_placeholder_id, audio_placeholder_id=None
+):
     token_ids = hf_data["input_ids"].astype(np.int32)
     padding_mask = hf_data["attention_mask"].astype(np.int32)
     batch_size = token_ids.shape[0]
@@ -386,8 +414,12 @@ def _build_preprocessor_free_inputs(backbone, hf_data, image_placeholder_id, aud
         keras_hub_inputs["audio_mel"] = ops.convert_to_tensor(audio_mel)
 
         # All frames are valid (HF pads to fixed length).
-        audio_mel_mask = np.ones((batch_size, 1, audio_mel.shape[2]), dtype=bool)
-        keras_hub_inputs["audio_mel_mask"] = ops.convert_to_tensor(audio_mel_mask)
+        audio_mel_mask = np.ones(
+            (batch_size, 1, audio_mel.shape[2]), dtype=bool
+        )
+        keras_hub_inputs["audio_mel_mask"] = ops.convert_to_tensor(
+            audio_mel_mask
+        )
 
         if audio_placeholder_id is not None:
             audio_mask = (token_ids == audio_placeholder_id).astype(np.int32)
@@ -396,10 +428,14 @@ def _build_preprocessor_free_inputs(backbone, hf_data, image_placeholder_id, aud
                 for index in range(batch_size)
             ]
             max_audio_tokens = max((len(row) for row in audio_rows), default=0)
-            audio_indices = np.zeros((batch_size, max_audio_tokens), dtype=np.int32)
+            audio_indices = np.zeros(
+                (batch_size, max_audio_tokens), dtype=np.int32
+            )
             for index, row in enumerate(audio_rows):
                 audio_indices[index, : len(row)] = row
-            keras_hub_inputs["audio_indices"] = ops.convert_to_tensor(audio_indices)
+            keras_hub_inputs["audio_indices"] = ops.convert_to_tensor(
+                audio_indices
+            )
             keras_hub_inputs["audio_mask"] = ops.convert_to_tensor(audio_mask)
     else:
         feat_size = getattr(backbone.audio_encoder, "input_feat_size", 128)
@@ -417,9 +453,6 @@ def _build_preprocessor_free_inputs(backbone, hf_data, image_placeholder_id, aud
         )
 
     return keras_hub_inputs
-
-
-import contextlib
 
 
 @contextlib.contextmanager
@@ -440,7 +473,9 @@ def _mock_encoder_call(encoder, hf_embeddings, n_clips=1):
             (backbone shape: (B, n_clips, T//n_clips, H)).
     """
     B, T, Hd = hf_embeddings.shape
-    hf_4d = hf_embeddings.reshape(B, n_clips, T // n_clips, Hd).astype(np.float32)
+    hf_4d = hf_embeddings.reshape(B, n_clips, T // n_clips, Hd).astype(
+        np.float32
+    )
     hf_t = ops.convert_to_tensor(hf_4d)
     original_call = encoder.call
 
@@ -500,8 +535,15 @@ def _test_numerics(label, backbone, keras_hub_inputs, hf_logits):
         "vision_mask",
     ]
     if getattr(backbone, "audio_encoder", None) is not None:
-        expected_names += ["audio_mel", "audio_mel_mask", "audio_indices", "audio_mask"]
-    keras_hub_inputs = {k: v for k, v in keras_hub_inputs.items() if k in expected_names}
+        expected_names += [
+            "audio_mel",
+            "audio_mel_mask",
+            "audio_indices",
+            "audio_mask",
+        ]
+    keras_hub_inputs = {
+        k: v for k, v in keras_hub_inputs.items() if k in expected_names
+    }
 
     kh_output = backbone(keras_hub_inputs)
     # Trim if KH sequence is longer than HF (e.g. due to padding).
@@ -518,7 +560,10 @@ def _test_numerics(label, backbone, keras_hub_inputs, hf_logits):
 
     try:
         np.testing.assert_allclose(kh_logits, hf_logits, atol=1e-3, rtol=1e-3)
-        print(f"✅ [{label}] Logits within 1e-3 tolerance (max={max_diff:.6f}, mean={mean_diff:.6f}).")
+        print(
+            f"✅ [{label}] Logits within 1e-3 tolerance "
+            f"(max={max_diff:.6f}, mean={mean_diff:.6f})."
+        )
     except AssertionError:
         diff = np.abs(kh_logits - hf_logits)
         tol = 1e-3 + 1e-3 * np.abs(hf_logits)
@@ -526,13 +571,21 @@ def _test_numerics(label, backbone, keras_hub_inputs, hf_logits):
         total = hf_logits.size
         pct = 100.0 * (1.0 - mismatched / total)
         print(
-            f"⚠️  [{label}] Logits exceed 1e-3 tolerance — max={max_diff:.6f}, mean={mean_diff:.6f}, "
+            f"⚠️  [{label}] Logits exceed 1e-3 tolerance — "
+            f"max={max_diff:.6f}, mean={mean_diff:.6f}, "
             f"matching={pct:.2f}% ({total - mismatched}/{total}).\n"
             "    NOTE: Generated text comparison is the authoritative check."
         )
 
 
-def _test_generate(label, kh_model, prompt, hf_generated_text, max_length=2048 + 64, **media_kwargs):
+def _test_generate(
+    label,
+    kh_model,
+    prompt,
+    hf_generated_text,
+    max_length=2048 + 64,
+    **media_kwargs,
+):
     """Run KH .generate() and compare output against HF-generated text.
 
     `max_length` is the total sequence length cap (prompt + response).  For
@@ -551,12 +604,12 @@ def _test_generate(label, kh_model, prompt, hf_generated_text, max_length=2048 +
         # starts with the literal prompt string. Instead, find the last
         # model-turn marker and strip everything up to and including it.
         if kh_text.startswith(prompt):
-            kh_text = kh_text[len(prompt):]
+            kh_text = kh_text[len(prompt) :]
         else:
             for marker in ("<start_of_turn>model\n", "<|turn>model\n"):
                 idx = kh_text.rfind(marker)
                 if idx != -1:
-                    kh_text = kh_text[idx + len(marker):]
+                    kh_text = kh_text[idx + len(marker) :]
                     break
 
     print(f"\n[{label}]🔶 HF generate output:\n  {hf_generated_text}")
@@ -568,19 +621,26 @@ def _load_test_assets():
     raw_image = _load_test_image()
 
     import soundfile as sf
+
     try:
         raw_audio, sr = sf.read(AUDIO_FILE_PATH)
         if sr != 16000:
             from scipy import signal
-            raw_audio = signal.resample(raw_audio, int(len(raw_audio) * 16000 / sr))
+
+            raw_audio = signal.resample(
+                raw_audio, int(len(raw_audio) * 16000 / sr)
+            )
     except Exception as e:
         print(f"Warning: could not read audio ({e}), using silence.")
         raw_audio = np.zeros((16000 * 3,), dtype=np.float32)
 
     if FLAGS.video_path:
         import av
+
         container = av.open(FLAGS.video_path)
-        frames = [f.to_ndarray(format="rgb24") for f in container.decode(video=0)]
+        frames = [
+            f.to_ndarray(format="rgb24") for f in container.decode(video=0)
+        ]
         raw_video = np.stack(frames)  # (T, H, W, C) channels-last for KH
     else:
         # No local path supplied — download the standard Big Buck Bunny clip.
@@ -592,7 +652,10 @@ def _load_test_assets():
 def _load_hf_model(hf_preset):
     """Load HF model/tokenizer/processor and detect modality capabilities."""
     hf_model = AutoModelForMultimodalLM.from_pretrained(
-        hf_preset, device_map="cpu", torch_dtype=torch.float32, force_download=False
+        hf_preset,
+        device_map="cpu",
+        torch_dtype=torch.float32,
+        force_download=False,
     )
     hf_tokenizer = AutoTokenizer.from_pretrained(
         hf_preset, return_tensors="pt", force_download=False
@@ -617,15 +680,28 @@ def _load_hf_model(hf_preset):
         )
     print(f"-> final_logit_softcapping: {final_logit_cap}")
 
-    return hf_model, hf_tokenizer, processor, is_audio_model, is_video_model, final_logit_cap
+    return (
+        hf_model,
+        hf_tokenizer,
+        processor,
+        is_audio_model,
+        is_video_model,
+        final_logit_cap,
+    )
 
 
 def _precompute_all_hf_outputs(
-    hf_model, hf_tokenizer, processor,
-    raw_image, raw_audio, raw_video,
-    is_audio_model, is_video_model,
+    hf_model,
+    hf_tokenizer,
+    processor,
+    raw_image,
+    raw_audio,
+    raw_video,
+    is_audio_model,
+    is_video_model,
 ):
-    """Run HF forward passes for all applicable modalities and return results."""
+    """Run HF forward passes for all applicable modalities and return
+    results."""
     print("-> Precomputing HF outputs for text prompt...")
     hf_data_text = _precompute_hf_outputs(
         hf_model, hf_tokenizer, processor, PROMPT_TEXT, raw_image=None
@@ -640,8 +716,12 @@ def _precompute_all_hf_outputs(
     if is_audio_model:
         print("-> Precomputing HF outputs for audio prompt...")
         hf_data_audio = _precompute_hf_outputs(
-            hf_model, hf_tokenizer, processor, PROMPT_AUDIO,
-            raw_image=None, raw_audio=raw_audio,
+            hf_model,
+            hf_tokenizer,
+            processor,
+            PROMPT_AUDIO,
+            raw_image=None,
+            raw_audio=raw_audio,
         )
 
     hf_data_video = None
@@ -654,15 +734,22 @@ def _precompute_all_hf_outputs(
         hf_num_frames = getattr(processor.video_processor, "num_frames", 32)
         T = raw_video.shape[0]
         if T > hf_num_frames:
-            sub_indices = np.arange(0, T, T / hf_num_frames).astype(int)[:hf_num_frames]
+            sub_indices = np.arange(0, T, T / hf_num_frames).astype(int)[
+                :hf_num_frames
+            ]
             raw_video_sub = raw_video[sub_indices]
         else:
             raw_video_sub = raw_video
         # HF expects channels-first (T, C, H, W).
         raw_video_hf = np.transpose(raw_video_sub, (0, 3, 1, 2))
         hf_data_video = _precompute_hf_outputs(
-            hf_model, hf_tokenizer, processor, PROMPT_VIDEO,
-            raw_image=None, raw_audio=None, raw_video=raw_video_hf,
+            hf_model,
+            hf_tokenizer,
+            processor,
+            PROMPT_VIDEO,
+            raw_image=None,
+            raw_audio=None,
+            raw_video=raw_video_hf,
         )
         # Store subsampled frames (channels-last) for KH verification.
         hf_data_video["raw_video_sub"] = raw_video_sub
@@ -688,12 +775,22 @@ def _load_keras_hub_model(keras_hub_preset, is_audio_model):
 
 
 def _verify_model(
-    backbone, tokenizer, preprocessor,
-    hf_data_text, hf_data_image, hf_data_audio, hf_data_video,
-    raw_image, raw_audio, raw_video,
-    is_audio_model, is_video_model, final_logit_cap,
+    backbone,
+    tokenizer,
+    preprocessor,
+    hf_data_text,
+    hf_data_image,
+    hf_data_audio,
+    hf_data_video,
+    raw_image,
+    raw_audio,
+    raw_video,
+    is_audio_model,
+    is_video_model,
+    final_logit_cap,
 ):
-    """Run all four verification stages and return the assembled Gemma4CausalLM."""
+    """Run all four verification stages and return the assembled
+    Gemma4CausalLM."""
     # ── 1. Parameter count ────────────────────────────────────────────────────
     kh_params = _count_keras_hub_params(backbone)
     hf_params = hf_data_image["param_count"]
@@ -703,7 +800,9 @@ def _verify_model(
     # ── 2. Token ID verification (all modalities) ─────────────────────────────
     print("\n--- Token ID Verification ---")
 
-    _test_token_ids("text", preprocessor, PROMPT_TEXT, hf_data_text["input_ids"])
+    _test_token_ids(
+        "text", preprocessor, PROMPT_TEXT, hf_data_text["input_ids"]
+    )
 
     # Patch num_vision_tokens_per_image to the actual value used by HF so that
     # KH produces the same number of soft image tokens.
@@ -713,15 +812,21 @@ def _verify_model(
     saved_num_tokens = preprocessor.num_vision_tokens_per_image
     preprocessor.num_vision_tokens_per_image = actual_num_tokens
     _test_token_ids(
-        "image", preprocessor, PROMPT_IMAGE,
-        hf_data_image["input_ids"], images=raw_image,
+        "image",
+        preprocessor,
+        PROMPT_IMAGE,
+        hf_data_image["input_ids"],
+        images=raw_image,
     )
     preprocessor.num_vision_tokens_per_image = saved_num_tokens
 
     if is_audio_model and hf_data_audio is not None:
         _test_token_ids(
-            "audio", preprocessor, PROMPT_AUDIO,
-            hf_data_audio["input_ids"], audio=raw_audio,
+            "audio",
+            preprocessor,
+            PROMPT_AUDIO,
+            hf_data_audio["input_ids"],
+            audio=raw_audio,
         )
 
     if is_video_model and hf_data_video is not None:
@@ -734,14 +839,18 @@ def _verify_model(
         hf_video_seq_len = hf_data_video["input_ids"].shape[1]
         saved_num_frames_per_video = preprocessor.num_frames_per_video
         # The packer trims at self.sequence_length before the per-call override
-        # is applied, so we must widen it to accommodate the full video sequence.
+        # is applied, so we must widen it to accommodate the full video
+        # sequence.
         # Use +1 to avoid dropping the final trailing \n token.
         saved_packer_seq_len = preprocessor.packer.sequence_length
         preprocessor.num_frames_per_video = raw_video_sub.shape[0]
         preprocessor.packer.sequence_length = hf_video_seq_len + 1
         _test_token_ids(
-            "video", preprocessor, PROMPT_VIDEO,
-            hf_data_video["input_ids"], videos=raw_video_sub,
+            "video",
+            preprocessor,
+            PROMPT_VIDEO,
+            hf_data_video["input_ids"],
+            videos=raw_video_sub,
         )
         preprocessor.num_frames_per_video = saved_num_frames_per_video
         preprocessor.packer.sequence_length = saved_packer_seq_len
@@ -754,22 +863,37 @@ def _verify_model(
         {"prompts": [PROMPT_TEXT]},
         sequence_length=hf_data_text["logits"].shape[1],
     )
-    _test_numerics("text (KH preproc)", backbone, kh_inputs_text, hf_data_text["logits"])
+    _test_numerics(
+        "text (KH preproc)", backbone, kh_inputs_text, hf_data_text["logits"]
+    )
 
     # Image: use HF-preprocessed pixel values to avoid PIL vs KH resize delta.
     kh_inputs_image = _build_preprocessor_free_inputs(
         backbone, hf_data_image, tokenizer.image_placeholder_id
     )
-    _test_numerics("image (HF preproc)", backbone, kh_inputs_image, hf_data_image["logits"])
+    _test_numerics(
+        "image (HF preproc)", backbone, kh_inputs_image, hf_data_image["logits"]
+    )
 
     # Audio: KH mel pipeline aligns with HF within 1e-3.
     if is_audio_model and hf_data_audio is not None:
-        _test_audio_preprocessor(preprocessor, raw_audio, hf_data_audio["input_features"])
+        _test_audio_preprocessor(
+            preprocessor, raw_audio, hf_data_audio["input_features"]
+        )
         kh_inputs_audio = preprocessor(
-            {"prompts": [PROMPT_AUDIO], "audio": [raw_audio], "responses": [""]},
+            {
+                "prompts": [PROMPT_AUDIO],
+                "audio": [raw_audio],
+                "responses": [""],
+            },
             sequence_length=hf_data_audio["logits"].shape[1] + 1,
         )
-        _test_numerics("audio (KH preproc)", backbone, kh_inputs_audio, hf_data_audio["logits"])
+        _test_numerics(
+            "audio (KH preproc)",
+            backbone,
+            kh_inputs_audio,
+            hf_data_audio["logits"],
+        )
 
     # Video: two numeric checks are run.
     #   1. "video (KH preproc)" — end-to-end using KH's video preprocessor.
@@ -789,19 +913,37 @@ def _verify_model(
         preprocessor.num_frames_per_video = raw_video_sub.shape[0]
         preprocessor.packer.sequence_length = hf_video_seq_len + 1
         kh_inputs_video = preprocessor(
-            {"prompts": [PROMPT_VIDEO], "videos": [raw_video_sub], "responses": [""]},
+            {
+                "prompts": [PROMPT_VIDEO],
+                "videos": [raw_video_sub],
+                "responses": [""],
+            },
             sequence_length=hf_video_seq_len + 1,
         )
         # Test 1: end-to-end with KH preprocessor.
-        _test_numerics("video (KH preproc)", backbone, kh_inputs_video, hf_data_video["logits"])
-        # Test 2: inject HF vision-encoder outputs to verify decoder correctness.
-        # n_clips = number of frames (each frame is processed as a separate image
-        # by the vision encoder, giving shape (B, n_clips, T_per_frame, H)).
+        _test_numerics(
+            "video (KH preproc)",
+            backbone,
+            kh_inputs_video,
+            hf_data_video["logits"],
+        )
+        # Test 2: inject HF vision-encoder outputs to verify decoder
+        # correctness.
+        # n_clips = number of frames (each frame is processed as a separate
+        # image by the vision encoder, giving shape (B, n_clips, T_per_frame,
+        # H)).
         if hf_data_video.get("hf_video_embeddings") is not None:
             n_frames = raw_video_sub.shape[0]
-            with _mock_encoder_call(backbone.vision_encoder, hf_data_video["hf_video_embeddings"], n_clips=n_frames):
+            with _mock_encoder_call(
+                backbone.vision_encoder,
+                hf_data_video["hf_video_embeddings"],
+                n_clips=n_frames,
+            ):
                 _test_numerics(
-                    "video (HF encoder injected)", backbone, kh_inputs_video, hf_data_video["logits"]
+                    "video (HF encoder injected)",
+                    backbone,
+                    kh_inputs_video,
+                    hf_data_video["logits"],
                 )
         preprocessor.num_frames_per_video = saved_num_frames_per_video
         preprocessor.packer.sequence_length = saved_packer_seq_len
@@ -815,17 +957,27 @@ def _verify_model(
     )
 
     print("\n--- Generation Comparison ---")
-    _test_generate("text", gemma4_lm, PROMPT_TEXT, hf_data_text["generated_text"])
+    _test_generate(
+        "text", gemma4_lm, PROMPT_TEXT, hf_data_text["generated_text"]
+    )
 
     preprocessor.num_vision_tokens_per_image = actual_num_tokens
     _test_generate(
-        "image", gemma4_lm, PROMPT_IMAGE, hf_data_image["generated_text"], images=raw_image
+        "image",
+        gemma4_lm,
+        PROMPT_IMAGE,
+        hf_data_image["generated_text"],
+        images=raw_image,
     )
     preprocessor.num_vision_tokens_per_image = saved_num_tokens
 
     if is_audio_model and hf_data_audio is not None:
         _test_generate(
-            "audio", gemma4_lm, PROMPT_AUDIO, hf_data_audio["generated_text"], audio=raw_audio
+            "audio",
+            gemma4_lm,
+            PROMPT_AUDIO,
+            hf_data_audio["generated_text"],
+            audio=raw_audio,
         )
 
     if is_video_model and hf_data_video is not None:
@@ -836,7 +988,10 @@ def _verify_model(
         preprocessor.num_frames_per_video = raw_video_sub.shape[0]
         preprocessor.packer.sequence_length = hf_video_seq_len
         _test_generate(
-            "video", gemma4_lm, PROMPT_VIDEO, hf_data_video["generated_text"],
+            "video",
+            gemma4_lm,
+            PROMPT_VIDEO,
+            hf_data_video["generated_text"],
             max_length=hf_video_seq_len + 64,
             videos=raw_video_sub,
         )
@@ -846,7 +1001,9 @@ def _verify_model(
     return gemma4_lm
 
 
-def _save_preset(gemma4_lm, keras_hub_preset, preset, save_dtype, final_logit_cap):
+def _save_preset(
+    gemma4_lm, keras_hub_preset, preset, save_dtype, final_logit_cap
+):
     """Save the model to a local preset directory in the requested dtype."""
     preset_save_path = f"./{preset}"
     print(f"\n-> Saving model in {save_dtype} to {preset_save_path} ...")
@@ -882,27 +1039,52 @@ def main(_):
 
     raw_image, raw_audio, raw_video = _load_test_assets()
 
-    hf_model, hf_tokenizer, processor, is_audio_model, is_video_model, final_logit_cap = (
-        _load_hf_model(hf_preset)
-    )
-    hf_data_text, hf_data_image, hf_data_audio, hf_data_video = _precompute_all_hf_outputs(
-        hf_model, hf_tokenizer, processor,
-        raw_image, raw_audio, raw_video,
-        is_audio_model, is_video_model,
+    (
+        hf_model,
+        hf_tokenizer,
+        processor,
+        is_audio_model,
+        is_video_model,
+        final_logit_cap,
+    ) = _load_hf_model(hf_preset)
+    hf_data_text, hf_data_image, hf_data_audio, hf_data_video = (
+        _precompute_all_hf_outputs(
+            hf_model,
+            hf_tokenizer,
+            processor,
+            raw_image,
+            raw_audio,
+            raw_video,
+            is_audio_model,
+            is_video_model,
+        )
     )
     del hf_model
     gc.collect()
 
-    backbone, tokenizer, preprocessor = _load_keras_hub_model(keras_hub_preset, is_audio_model)
-
-    gemma4_lm = _verify_model(
-        backbone, tokenizer, preprocessor,
-        hf_data_text, hf_data_image, hf_data_audio, hf_data_video,
-        raw_image, raw_audio, raw_video,
-        is_audio_model, is_video_model, final_logit_cap,
+    backbone, tokenizer, preprocessor = _load_keras_hub_model(
+        keras_hub_preset, is_audio_model
     )
 
-    _save_preset(gemma4_lm, keras_hub_preset, preset, FLAGS.save_dtype, final_logit_cap)
+    gemma4_lm = _verify_model(
+        backbone,
+        tokenizer,
+        preprocessor,
+        hf_data_text,
+        hf_data_image,
+        hf_data_audio,
+        hf_data_video,
+        raw_image,
+        raw_audio,
+        raw_video,
+        is_audio_model,
+        is_video_model,
+        final_logit_cap,
+    )
+
+    _save_preset(
+        gemma4_lm, keras_hub_preset, preset, FLAGS.save_dtype, final_logit_cap
+    )
 
 
 if __name__ == "__main__":

@@ -77,7 +77,9 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
                 dtype="int32",
             ),
             "position_ids": np.tile(
-                np.arange(self.text_sequence_length, dtype="int32")[np.newaxis, :],
+                np.arange(self.text_sequence_length, dtype="int32")[
+                    np.newaxis, :
+                ],
                 (self.batch_size, 1),
             ),
         }

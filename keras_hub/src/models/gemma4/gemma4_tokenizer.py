@@ -78,7 +78,12 @@ class Gemma4Tokenizer(SentencePieceTokenizer):
     backbone_cls = Gemma4Backbone
 
     def __init__(
-        self, proto, has_vision_tokens=True, has_audio_tokens=False, has_video_tokens=True, **kwargs
+        self,
+        proto,
+        has_vision_tokens=True,
+        has_audio_tokens=False,
+        has_video_tokens=True,
+        **kwargs,
     ):
         self.has_vision_tokens = has_vision_tokens
         self.has_audio_tokens = has_audio_tokens
@@ -123,7 +128,9 @@ class Gemma4Tokenizer(SentencePieceTokenizer):
             self.end_of_audio_token_id = -1
 
         if has_video_tokens:
-            self._add_special_token(VIDEO_PLACEHOLDER_TOKEN, "video_placeholder")
+            self._add_special_token(
+                VIDEO_PLACEHOLDER_TOKEN, "video_placeholder"
+            )
             self.start_of_video_token_id = -1
             self.end_of_video_token_id = -1
         else:

@@ -8,9 +8,11 @@ from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
 from keras_hub.src.models.gemma4.gemma4_image_converter import (
     Gemma4ImageConverter,
 )
+from keras_hub.src.models.gemma4.gemma4_video_converter import (
+    Gemma4VideoConverter,
+)
 from keras_hub.src.tests.mocks.mock_gemma4_tokenizer import MockGemma4Tokenizer
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.models.gemma4.gemma4_video_converter import Gemma4VideoConverter
 
 
 class Gemma4CausalLMPreprocessorTest(TestCase):
@@ -53,9 +55,9 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         }
         preprocessor = Gemma4CausalLMPreprocessor(**self.init_text_kwargs)
         self.run_serialization_test(preprocessor)
-        
+
         output = preprocessor(input_data)
-        
+
         expected_output_batched = (
             {
                 "token_ids": [[1, 9, 14, 10, 12, 15, 2, 0]],
@@ -65,10 +67,8 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
             [[9, 14, 10, 12, 15, 2, 0, 0]],  # Labels shifted.
             [[0, 0, 0, 0, 1, 1, 0, 0]],  # Zero out unlabeled examples.
         )
-        
-        self.assertAllClose(output, expected_output_batched)
-        
 
+        self.assertAllClose(output, expected_output_batched)
 
     def test_preprocessor_basics(self):
         input_data = {
@@ -208,8 +208,32 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
                 "responses": ["hello", "", ""],
             }
             self.text_preprocessor(input_data)
+
+    def test_text_input_dummy_pixel_values_shape(self):
+        # When an image-capable preprocessor receives text-only input (no
+        # images / pixel_values), it must produce dummy pixel_values whose
+        # last dimension equals 3 * patch_size ** 2 (derived from the
+        # image_converter.
+        preprocessor = Gemma4CausalLMPreprocessor(**self.init_kwargs)
+        patch_size = self.image_converter.patch_size  # 4 in the test fixture
+        expected_patch_dim = 3 * patch_size**2  # 48
+
+        input_data = {
+            "prompts": ["the quick brown fox"],
+            "responses": ["round"],
+        }
+        output = preprocessor(input_data)
+        pixel_values = output[0]["pixel_values"]
+        pixel_position_ids = output[0]["pixel_position_ids"]
+
+        # Shape: (batch=1, num_images=0, num_patches=1, patch_dim)
+        self.assertEqual(pixel_values.shape[1], 0)
+        self.assertEqual(pixel_values.shape[3], expected_patch_dim)
+        # pixel_position_ids last dim is always 2 (row, col coordinates).
+        self.assertEqual(pixel_position_ids.shape[1], 0)
+        self.assertEqual(pixel_position_ids.shape[3], 2)
+
     def test_video_preprocessor_basics(self):
-        
         video_converter = Gemma4VideoConverter(
             patch_size=4,
             num_frames=2,
@@ -222,22 +246,23 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
             "num_frames_per_video": 2,
             "num_vision_tokens_per_frame": 2,
         }
-        
+
         input_data = {
             "prompts": ["the quick brown fox <|video|>"],
             "responses": ["round"],
             "videos": np.ones((1, 2, 4, 4, 3), dtype="float32"),
         }
-        
+
         preprocessor = Gemma4CausalLMPreprocessor(**init_video_kwargs)
-        
+
         output = preprocessor(input_data)
-        
+
         self.assertIn("pixel_values", output[0])
         self.assertIn("pixel_position_ids", output[0])
         self.assertIn("vision_mask", output[0])
-        
+
         import keras
+
         vision_mask = output[0]["vision_mask"]
         # 2 frames × 1 token per frame: a 4×4 frame with patch_size=4 and
         # max_soft_tokens=2 produces 1 visible token per frame.
@@ -272,9 +297,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
 
         # === With video_metadata: frames_indices=[0, 60], fps=1.0 ===
         # Frame 0 → 0.0 s → "00:00", frame 60 → 60.0 s → "01:00".
-        preprocessor.video_metadata = [
-            {"frames_indices": [0, 60], "fps": 1.0}
-        ]
+        preprocessor.video_metadata = [{"frames_indices": [0, 60], "fps": 1.0}]
         expanded_meta = preprocessor._expand_video_prompt(prompts, None)
         expanded_meta_str = expanded_meta.numpy()[0].decode("utf-8")
         self.assertIn("00:00", expanded_meta_str)

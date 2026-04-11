@@ -210,7 +210,9 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         # The preprocessor and model are "text-only" if no converters are
         # passed.
         self.text_only_model = (
-            self.image_converter is None and self.audio_converter is None and self.video_converter is None
+            self.image_converter is None
+            and self.audio_converter is None
+            and self.video_converter is None
         )
 
         if self.image_converter is None:
@@ -408,9 +410,16 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
             )
 
         if pixel_values is None:
-            pixel_values = tf.zeros((batch_size, 0, 16, 48), dtype="float32")
+            patch_dim = (
+                3 * self.image_converter.patch_size**2
+                if self.image_converter is not None
+                else 48
+            )
+            pixel_values = tf.zeros(
+                (batch_size, 0, 1, patch_dim), dtype="float32"
+            )
         if pixel_position_ids is None:
-            pixel_position_ids = tf.zeros((batch_size, 0, 16, 2), dtype="int32")
+            pixel_position_ids = tf.zeros((batch_size, 0, 1, 2), dtype="int32")
 
         x = {
             "pixel_values": pixel_values
@@ -438,7 +447,6 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
                 position_ids if batched else tf.squeeze(position_ids, axis=0)
             ),
         }
-
 
         if audio_mel is not None:
             x["audio_mel"] = (
@@ -623,10 +631,10 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
                 "`videos` should be a list, ragged tensor, or dense tensor."
                 f" Received: `type(videos)` = {type(videos)}"
             )
-        
+
         if len(videos.shape) == 4:
             videos = tf.expand_dims(videos, axis=0)
-        
+
         videos_dict = self.video_converter.call(videos)
         pixel_values = videos_dict["pixel_values"]
         pixel_position_ids = videos_dict["pixel_position_ids"]
@@ -831,22 +839,30 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
 
         if self.audio_converter is not None:
             if audio is not None and audio_mel is None:
-                audio_mel, audio_mel_mask = self._preprocess_audio(audio, batched)
+                audio_mel, audio_mel_mask = self._preprocess_audio(
+                    audio, batched
+                )
                 output_lengths = tf.reduce_sum(audio_mel_mask, axis=[1, 2])
                 exact_tokens = (output_lengths + 3) // 4
                 num_audio_tokens = tf.reduce_max(exact_tokens)
                 num_audio_tokens = tf.maximum(num_audio_tokens, 1)
-                
-                repeated_placeholders = tf.repeat(self.audio_placeholder, num_audio_tokens)
-                joined_placeholders = tf.strings.reduce_join(repeated_placeholders, axis=0)
-                replacement = tf.strings.join([
-                    self.start_of_audio_token,
-                    joined_placeholders,
-                    self.end_of_audio_token
-                ])
+
+                repeated_placeholders = tf.repeat(
+                    self.audio_placeholder, num_audio_tokens
+                )
+                joined_placeholders = tf.strings.reduce_join(
+                    repeated_placeholders, axis=0
+                )
+                replacement = tf.strings.join(
+                    [
+                        self.start_of_audio_token,
+                        joined_placeholders,
+                        self.end_of_audio_token,
+                    ]
+                )
             else:
                 replacement = self.audio_placeholder
-                
+
             prompts = tf.strings.regex_replace(
                 prompts,
                 re.escape(self.audio_placeholder),
@@ -869,39 +885,49 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         audio_indices = None
         audio_mask = None
 
-        if (audio is not None or audio_mel is not None) and self.audio_converter is not None:
+        if (
+            audio is not None or audio_mel is not None
+        ) and self.audio_converter is not None:
             # audio_mel and audio_mel_mask were calculated earlier!
-            
+
             # Clip audio_mel to match the number of available placeholders.
             placeholder_id = self._audio_placeholder_id
             is_placeholder = token_ids == placeholder_id
-            num_placeholders = tf.reduce_sum(tf.cast(is_placeholder, tf.int32), axis=1)
-            
+            num_placeholders = tf.reduce_sum(
+                tf.cast(is_placeholder, tf.int32), axis=1
+            )
+
             # Max frames needed: 4 * num_placeholders
             max_frames = tf.reduce_max(num_placeholders) * 4
-            
+
             # Clip audio_mel to max_frames
             audio_mel = audio_mel[:, :, :max_frames, :]
             audio_mel_mask = audio_mel_mask[:, :, :max_frames]
-            
+
             # Dynamically clip unused placeholders to remove the gap!
             # Use ceil division to match audio encoder subsampling (stride 4)
             exact_tokens = (tf.reduce_sum(audio_mel_mask, axis=[1, 2]) + 3) // 4
-            
-            placeholder_counts = tf.cumsum(tf.cast(is_placeholder, tf.int32), axis=1)
+
+            placeholder_counts = tf.cumsum(
+                tf.cast(is_placeholder, tf.int32), axis=1
+            )
             placeholder_counts = tf.where(is_placeholder, placeholder_counts, 0)
-            
-            exact_tokens_expanded = tf.expand_dims(tf.cast(exact_tokens, tf.int32), axis=1)
-            is_unused = is_placeholder & (placeholder_counts > exact_tokens_expanded)
+
+            exact_tokens_expanded = tf.expand_dims(
+                tf.cast(exact_tokens, tf.int32), axis=1
+            )
+            is_unused = is_placeholder & (
+                placeholder_counts > exact_tokens_expanded
+            )
             keep_mask = ~is_unused
-            
+
             ragged_t_ids = tf.ragged.boolean_mask(token_ids, keep_mask)
             ragged_p_mask = tf.ragged.boolean_mask(padding_mask, keep_mask)
             ragged_s_ids = tf.ragged.boolean_mask(segment_ids, keep_mask)
-            
+
             batch_size = tf.shape(token_ids)[0]
             seq_len = tf.shape(token_ids)[1]
-            
+
             token_ids = ragged_t_ids.to_tensor(
                 default_value=self.tokenizer.pad_token_id,
                 shape=[batch_size, seq_len],
@@ -914,7 +940,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
                 default_value=0,
                 shape=[batch_size, seq_len],
             )
-            
+
             response_mask = segment_ids == 1
             audio_mask = token_ids == self._audio_placeholder_id
             audio_indices = self._get_audio_indices(audio_mask)
@@ -1059,24 +1085,30 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         audio_mel = None
         audio_mel_mask = None
         replacement = self.audio_placeholder
-        
+
         if audio is not None and self.audio_converter is not None:
             audio_mel, audio_mel_mask = self._preprocess_audio(audio, batched)
             # audio_mel_mask is (B, 1, Seq)
             output_lengths = tf.reduce_sum(audio_mel_mask, axis=[1, 2])
             exact_tokens = (output_lengths + 3) // 4
-            
+
             num_audio_tokens = tf.reduce_max(exact_tokens)
             num_audio_tokens = tf.maximum(num_audio_tokens, 1)
-            
-            repeated_placeholders = tf.repeat(self.audio_placeholder, num_audio_tokens)
-            joined_placeholders = tf.strings.reduce_join(repeated_placeholders, axis=0)
-            
-            replacement = tf.strings.join([
-                self.start_of_audio_token,
-                joined_placeholders,
-                self.end_of_audio_token
-            ])
+
+            repeated_placeholders = tf.repeat(
+                self.audio_placeholder, num_audio_tokens
+            )
+            joined_placeholders = tf.strings.reduce_join(
+                repeated_placeholders, axis=0
+            )
+
+            replacement = tf.strings.join(
+                [
+                    self.start_of_audio_token,
+                    joined_placeholders,
+                    self.end_of_audio_token,
+                ]
+            )
 
         if self.audio_converter is not None:
             # Replace a single <|audio|> placeholder with the full expanded
@@ -1158,24 +1190,59 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         audio_mask = None
 
         if audio is not None and self.audio_converter is not None:
-            # audio_mel and audio_mel_mask were calculated earlier in generate_preprocess.
-            placeholder_id = tf.cast(self._audio_placeholder_id, token_ids.dtype)
-            
+            # audio_mel and audio_mel_mask were calculated earlier in
+            # generate_preprocess.
+            placeholder_id = tf.cast(
+                self._audio_placeholder_id, token_ids.dtype
+            )
+
             # Identify all audio placeholder positions.
             is_placeholder = tf.equal(token_ids, placeholder_id)
-            
+
             # Use cumsum to rank placeholders per sample.
-            placeholder_counts = tf.cumsum(tf.cast(is_placeholder, tf.int32), axis=1)
+            placeholder_counts = tf.cumsum(
+                tf.cast(is_placeholder, tf.int32), axis=1
+            )
             placeholder_counts = tf.where(is_placeholder, placeholder_counts, 0)
-            
+
             # Create a mask to identify unused placeholders.
-            exact_tokens_expanded = tf.expand_dims(tf.cast(exact_tokens, tf.int32), axis=1)
-            is_unused = is_placeholder & (placeholder_counts > exact_tokens_expanded)
-            
-            # Set padding mask to False for unused placeholders.
-            padding_mask = tf.where(is_unused, False, padding_mask)
-            
-            audio_mask = is_placeholder
+            exact_tokens_expanded = tf.expand_dims(
+                tf.cast(exact_tokens, tf.int32), axis=1
+            )
+            is_unused = is_placeholder & (
+                placeholder_counts > exact_tokens_expanded
+            )
+
+            # Remove unused placeholders to keep the sequence compact,
+            # consistent with the training (call) path.
+            keep_mask = ~is_unused
+            batch_size = tf.shape(token_ids)[0]
+            seq_len = tf.shape(token_ids)[1]
+
+            ragged_t_ids = tf.ragged.boolean_mask(token_ids, keep_mask)
+            ragged_p_mask = tf.ragged.boolean_mask(padding_mask, keep_mask)
+            ragged_v_mask = tf.ragged.boolean_mask(vision_mask, keep_mask)
+            ragged_s_ids = tf.ragged.boolean_mask(segment_ids, keep_mask)
+
+            token_ids = ragged_t_ids.to_tensor(
+                default_value=self.tokenizer.pad_token_id,
+                shape=[batch_size, seq_len],
+            )
+            padding_mask = ragged_p_mask.to_tensor(
+                default_value=False,
+                shape=[batch_size, seq_len],
+            )
+            vision_mask = ragged_v_mask.to_tensor(
+                default_value=False,
+                shape=[batch_size, seq_len],
+            )
+            segment_ids = ragged_s_ids.to_tensor(
+                default_value=0,
+                shape=[batch_size, seq_len],
+            )
+            response_mask = segment_ids == 1
+
+            audio_mask = tf.equal(token_ids, placeholder_id)
             audio_indices = self._get_audio_indices(audio_mask)
 
         return self._format_output(

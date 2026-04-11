@@ -114,11 +114,16 @@ class Gemma4TextAttention(keras.layers.Layer):
             )
             self.key_dense.build(inputs_shape)
 
-            # When attention_k_eq_v, V reuses K's projection — no separate weight.
+            # When attention_k_eq_v, V reuses K's projection — no separate
+            # weight.
             if not self.attention_k_eq_v:
                 self.value_dense = keras.layers.EinsumDense(
                     "bsd,kdh->bskh",
-                    output_shape=(None, self.effective_num_kv_heads, self.head_dim),
+                    output_shape=(
+                        None,
+                        self.effective_num_kv_heads,
+                        self.head_dim,
+                    ),
                     kernel_initializer=self._kernel_initializer,
                     dtype=self.dtype_policy,
                     name="value",
@@ -137,7 +142,12 @@ class Gemma4TextAttention(keras.layers.Layer):
 
             # V norm: pure L2 normalization (no learnable scale).
             # When attention_k_eq_v, value comes from key_dense so same shape.
-            kv_norm_shape = (None, None, self.effective_num_kv_heads, self.head_dim)
+            kv_norm_shape = (
+                None,
+                None,
+                self.effective_num_kv_heads,
+                self.head_dim,
+            )
             self.value_norm = Gemma4VNorm(
                 epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
@@ -219,7 +229,6 @@ class Gemma4TextAttention(keras.layers.Layer):
             return ops.concatenate([y1, y2], axis=-1)
         return self.rope_layer(x, start_index=start_index, positions=positions)
 
-
     def _use_fused_attention_op(self):
         if not fused_attention_op_available():
             return False
@@ -292,7 +301,9 @@ class Gemma4TextAttention(keras.layers.Layer):
         q_transposed = ops.transpose(q, (0, 2, 3, 1, 4))  # (b, k, g, t, h)
         k_transposed = ops.transpose(k, (0, 2, 3, 1))  # (b, k, h, s)
         k_expanded = ops.expand_dims(k_transposed, 2)  # (b, k, 1, h, s)
-        attention_logits = ops.matmul(q_transposed, k_expanded)  # (b, k, g, t, s)
+        attention_logits = ops.matmul(
+            q_transposed, k_expanded
+        )  # (b, k, g, t, s)
 
         if self.logit_soft_cap is not None:
             attention_logits = ops.divide(attention_logits, self.logit_soft_cap)
@@ -380,7 +391,6 @@ class Gemma4TextAttention(keras.layers.Layer):
         query = self.query_dense(x)
         query = self.query_norm(query)
         query = self._apply_rope(query, cache_update_index, positions=positions)
-
 
         if cache is not None:
             key_cache = cache[:, 0, ...]
@@ -711,7 +721,9 @@ class Gemma4VisionAttention(keras.layers.Layer):
         k_permuted = ops.transpose(k, (0, 2, 1, 3))  # (B, K, S, H)
         k_transposed = ops.transpose(k_permuted, (0, 1, 3, 2))  # (B, K, H, S)
         k_transposed = ops.expand_dims(k_transposed, axis=2)  # (B, K, 1, H, S)
-        attention_logits = ops.matmul(q_permuted, k_transposed)  # (B, K, G, T, S)
+        attention_logits = ops.matmul(
+            q_permuted, k_transposed
+        )  # (B, K, G, T, S)
         if self.logit_soft_cap is not None:
             attention_logits = ops.divide(attention_logits, self.logit_soft_cap)
             attention_logits = ops.multiply(

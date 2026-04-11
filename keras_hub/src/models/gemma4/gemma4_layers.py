@@ -98,7 +98,6 @@ class Gemma4FrozenNorm(keras.layers.Layer):
     def compute_output_shape(self, input_shape):
         return input_shape
 
-
     def get_config(self):
         config = super().get_config()
         config.update({"epsilon": self.epsilon})
@@ -195,7 +194,9 @@ class Gemma4InterleaveEmbeddings(keras.layers.Layer):
         num_patches = ops.shape(image_embeddings)[2]
 
         # Keep inputs connected even if empty to avoid Keras errors
-        dummy = ops.sum(image_embeddings) + ops.sum(ops.cast(vision_indices, image_embeddings.dtype))
+        dummy = ops.sum(image_embeddings) + ops.sum(
+            ops.cast(vision_indices, image_embeddings.dtype)
+        )
         text_embeddings = text_embeddings + dummy * 0.0
 
         flat_text_embeddings = ops.reshape(
@@ -220,8 +221,10 @@ class Gemma4InterleaveEmbeddings(keras.layers.Layer):
         if num_actual is None:  # fallback when shape is not static
             num_actual = ops.shape(valid_vision_indices)[1]
         # For video, each frame might produce more tokens than needed.
-        # We must slice EACH frame to the correct number of tokens before flattening!
-        # `num_actual` is the total number of valid soft tokens across all images.
+        # We must slice EACH frame to the correct number of tokens before
+        # flattening!
+        # `num_actual` is the total number of valid soft tokens across all
+        # images.
         num_patches_per_image = num_actual // max_images
         sliced_img = image_embeddings[:, :, :num_patches_per_image, :]
         flat_image_embeddings = ops.reshape(

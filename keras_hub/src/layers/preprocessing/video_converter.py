@@ -1,13 +1,16 @@
-import keras
 from keras import ops
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
-from keras_hub.src.layers.preprocessing.preprocessing_layer import PreprocessingLayer
+from keras_hub.src.layers.preprocessing.preprocessing_layer import (
+    PreprocessingLayer,
+)
 from keras_hub.src.utils.preset_utils import builtin_presets
 from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
+
 
 @keras_hub_export("keras_hub.layers.VideoConverter")
 class VideoConverter(PreprocessingLayer):
@@ -114,7 +117,9 @@ class VideoConverter(PreprocessingLayer):
             h, w, c = shape[2], shape[3], shape[4]
 
             # Flatten batch and temporal dims
-            flat_inputs = ops.reshape(inputs, (batch_size * num_frames, h, w, c))
+            flat_inputs = ops.reshape(
+                inputs, (batch_size * num_frames, h, w, c)
+            )
 
             # Process frames as images
             flat_outputs = self.image_converter(flat_inputs)
@@ -123,7 +128,13 @@ class VideoConverter(PreprocessingLayer):
             output_shape = ops.shape(flat_outputs)
             outputs = ops.reshape(
                 flat_outputs,
-                (batch_size, num_frames, output_shape[1], output_shape[2], output_shape[3]),
+                (
+                    batch_size,
+                    num_frames,
+                    output_shape[1],
+                    output_shape[2],
+                    output_shape[3],
+                ),
             )
             return outputs
 

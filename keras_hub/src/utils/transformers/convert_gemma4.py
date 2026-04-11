@@ -326,9 +326,8 @@ def convert_weights(backbone, loader, transformers_config):
     )
 
     # Per-layer token conditioning (E4B / E2B models).
-    print(f"DEBUG convert_gemma4: backbone.hidden_size_per_layer_input = {backbone.hidden_size_per_layer_input}")
+
     if backbone.hidden_size_per_layer_input > 0:
-        print("DEBUG convert_gemma4: Porting per-layer token embedding")
         loader.port_weight(
             keras_variable=backbone.get_layer(
                 "per_layer_token_embedding"
@@ -382,7 +381,6 @@ def _convert_audio_encoder(audio_encoder, loader, transformers_config):
                 keras_variable=getattr(keras_layer, w),
                 hf_weight_key=f"{hf_name}.{w}",
             )
-
 
     for conv_block, hf_attr in [
         (sscp.conv_0, "layer0"),
@@ -441,8 +439,6 @@ def _convert_audio_encoder(audio_encoder, loader, transformers_config):
             )
             port_clips(keras_dense, f"{hf_attn}.{proj_name}")
 
-
-
         loader.port_weight(
             keras_variable=attn.per_dim_scale,
             hf_weight_key=f"{hf_attn}.per_dim_scale",
@@ -459,8 +455,6 @@ def _convert_audio_encoder(audio_encoder, loader, transformers_config):
         )
         port_clips(block.attention.out_proj, f"{hf_blk}.self_attn.post")
 
-
-
         lconv = block.lconv
         hf_lconv = f"{hf_blk}.lconv1d"
         loader.port_weight(
@@ -469,7 +463,6 @@ def _convert_audio_encoder(audio_encoder, loader, transformers_config):
             hook_fn=lambda x, _: np.transpose(x),
         )
         port_clips(lconv.linear_start, f"{hf_lconv}.linear_start")
-
 
         loader.port_weight(
             keras_variable=lconv.depthwise_conv.kernel,
@@ -482,8 +475,6 @@ def _convert_audio_encoder(audio_encoder, loader, transformers_config):
             hook_fn=lambda x, _: np.transpose(x),
         )
         port_clips(lconv.linear_end, f"{hf_lconv}.linear_end")
-
-
 
         for hf_ffw_name, keras_ffw in [
             ("feed_forward1", block.ffw_start),
@@ -908,10 +899,7 @@ def convert_tokenizer(cls, preset, **kwargs):
         IMAGE_PLACEHOLDER_TOKEN in vocab
         or IMAGE_PLACEHOLDER_TOKEN in added_contents
     )
-    has_audio_tokens = (
-        "<|audio|>" in vocab
-        or "<|audio|>" in added_contents
-    )
+    has_audio_tokens = "<|audio|>" in vocab or "<|audio|>" in added_contents
     return cls(
         proto=proto,
         has_vision_tokens=has_vision_tokens,

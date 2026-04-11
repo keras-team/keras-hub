@@ -169,7 +169,6 @@ class Gemma4AudioConverter(AudioConverter):
         upper = slopes[:, 2:] / freq_diff[1:]
         filters = np.maximum(0.0, np.minimum(lower, upper))  # (n_fft, n)
 
-
         return filters.astype(np.float32)
 
     def _extract_audio_features(self, audio):
@@ -190,7 +189,9 @@ class Gemma4AudioConverter(AudioConverter):
 
         def true_fn():
             max_idx = ops.shape(audio)[1]
-            safe_indices = ops.minimum(self.indices, ops.maximum(max_idx - 1, 0))
+            safe_indices = ops.minimum(
+                self.indices, ops.maximum(max_idx - 1, 0)
+            )
             frames = ops.take(audio, safe_indices, axis=1)
             out_of_bounds = self.indices >= max_idx
             out_of_bounds = ops.expand_dims(out_of_bounds, axis=0)
@@ -199,7 +200,9 @@ class Gemma4AudioConverter(AudioConverter):
         def false_fn():
             batch_size = ops.shape(audio)[0]
             num_frames = self.num_samples // self.stride
-            return ops.zeros((batch_size, num_frames, self.frame_length), dtype=audio.dtype)
+            return ops.zeros(
+                (batch_size, num_frames, self.frame_length), dtype=audio.dtype
+            )
 
         max_idx = ops.shape(audio)[1]
         frames = ops.cond(max_idx > 0, true_fn, false_fn)

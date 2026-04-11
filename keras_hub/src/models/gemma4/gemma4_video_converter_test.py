@@ -18,7 +18,9 @@ class Gemma4VideoConverterTest(tf.test.TestCase):
 
         # Create a random video with values in [0, 255]
         # Shape: (batch, frames, height, width, channels)
-        video = np.random.randint(0, 256, size=(1, 10, 224, 224, 3)).astype("float32")
+        video = np.random.randint(0, 256, size=(1, 10, 224, 224, 3)).astype(
+            "float32"
+        )
 
         # Process video
         outputs = converter(video)
@@ -36,7 +38,9 @@ class Gemma4VideoConverterTest(tf.test.TestCase):
         )
 
         # Shape: (batch, frames, height, width, channels)
-        video = np.random.randint(0, 256, size=(2, 10, 224, 224, 3)).astype("float32")
+        video = np.random.randint(0, 256, size=(2, 10, 224, 224, 3)).astype(
+            "float32"
+        )
 
         outputs = converter(video)
 
@@ -47,7 +51,9 @@ class Gemma4VideoConverterTest(tf.test.TestCase):
         # Max patches = 70 * 9 = 630
         # Patch pixels = 16 * 16 * 3 = 768
         self.assertEqual(ops.shape(outputs["pixel_values"]), (2, 4, 630, 768))
-        self.assertEqual(ops.shape(outputs["pixel_position_ids"]), (2, 4, 630, 2))
+        self.assertEqual(
+            ops.shape(outputs["pixel_position_ids"]), (2, 4, 630, 2)
+        )
 
     def test_video_converter_list_input(self):
         converter = Gemma4VideoConverter(
@@ -57,18 +63,26 @@ class Gemma4VideoConverterTest(tf.test.TestCase):
         )
 
         # List of videos
-        video1 = np.random.randint(0, 256, size=(10, 224, 224, 3)).astype("float32")
-        video2 = np.random.randint(0, 256, size=(8, 224, 224, 3)).astype("float32")
+        video1 = np.random.randint(0, 256, size=(10, 224, 224, 3)).astype(
+            "float32"
+        )
+        video2 = np.random.randint(0, 256, size=(8, 224, 224, 3)).astype(
+            "float32"
+        )
         videos = [video1, video2]
 
         outputs = converter(videos)
 
         self.assertIsInstance(outputs, list)
         self.assertEqual(len(outputs), 2)
-        
+
         # Check shapes of first video in list
-        self.assertEqual(ops.shape(outputs[0]["pixel_values"]), (1, 4, 630, 768))
-        self.assertEqual(ops.shape(outputs[0]["pixel_position_ids"]), (1, 4, 630, 2))
+        self.assertEqual(
+            ops.shape(outputs[0]["pixel_values"]), (1, 4, 630, 768)
+        )
+        self.assertEqual(
+            ops.shape(outputs[0]["pixel_position_ids"]), (1, 4, 630, 2)
+        )
 
 
 if __name__ == "__main__":
