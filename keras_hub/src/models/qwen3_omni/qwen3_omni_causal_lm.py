@@ -167,12 +167,22 @@ class Qwen3OmniCausalLM(CausalLM):
             the decoding cache.
         """
         x = self.backbone.token_embedding(token_ids)
+        batch_size = ops.shape(token_ids)[0]
+        seq_len = ops.shape(token_ids)[1]
+        # Build position_ids starting from cache_update_index so that each
+        # token (including single-token decode steps) gets its correct absolute
+        # position.
+        positions = ops.arange(seq_len, dtype="int32") + cache_update_index
+        positions = ops.expand_dims(positions, axis=0)
+        positions = ops.repeat(positions, batch_size, axis=0)
+        position_ids = ops.stack([positions, positions, positions], axis=0)
         # Each decoder layer has a cache; we update them separately.
         updated_cache = []
         for i in range(self.backbone.num_layers):
             current_cache = cache[:, i, ...]
             x, next_cache = self.backbone.transformer_layers[i](
                 x,
+                position_ids=position_ids,
                 cache=current_cache,
                 cache_update_index=cache_update_index,
             )
