@@ -196,6 +196,13 @@ class Gemma3nAudioConverter(AudioConverter):
         all_freqs = tf.cast(tf.range(n_freqs), dtype=self.compute_dtype) * (
             sample_rate / fft_length
         )
+        # HTK mel-scale formula:
+        #   mel  = 2595 * log10(1 + f / 700)
+        #   freq = 700 * (10^(mel / 2595) - 1)
+        # The constants 2595.0 and 700.0 define the linear-to-logarithmic
+        # crossover that models human auditory perception. They are the
+        # standard values used by HTK, Kaldi, and librosa.
+        # Ref: https://en.wikipedia.org/wiki/Mel_scale#Formula
         m_min = 2595.0 * math.log10(1.0 + (f_min / 700.0))
         m_max = 2595.0 * math.log10(1.0 + (f_max / 700.0))
         m_pts = np.linspace(m_min, m_max, n_mels + 2, dtype=np.float32)

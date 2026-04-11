@@ -464,14 +464,10 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         elif isinstance(images, tf.Tensor):
             images = tf.RaggedTensor.from_tensor(images)
         else:
-            # Attempt to convert anyway.
-            try:
-                images = tf.RaggedTensor.from_tensor(images)
-            except:  # noqa: E722
-                raise ValueError(
-                    "`images` should be a list, ragged tensor, dense tensor. "
-                    f"Received: `type(images)` = {type(images)}"
-                )
+            # Convert other tensor-like inputs (e.g. torch tensors)
+            # to tf.Tensor first, then wrap in a RaggedTensor.
+            images = tf.convert_to_tensor(images)
+            images = tf.RaggedTensor.from_tensor(images)
         if not batched:
             images = tf.expand_dims(images, axis=0)
         # If the input is a list of images, instead of list of lists of images.
@@ -531,20 +527,15 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
                     tf.expand_dims(audios, axis=0)
                 )
         else:
-            # Attempt to convert anyway.
-            try:
-                audios = tf.convert_to_tensor(audios, dtype=tf.float32)
-                if len(audios.shape) == 1:
-                    audios = tf.RaggedTensor.from_tensor(
-                        tf.expand_dims(audios, axis=0)
-                    )
-                else:
-                    audios = tf.RaggedTensor.from_tensor(audios)
-            except:  # noqa: E722
-                raise ValueError(
-                    "`audios` should be a list, ragged tensor, dense tensor. "
-                    f"Received: `type(audios)` = {type(audios)}"
+            # Convert other tensor-like inputs (e.g. torch tensors)
+            # to tf.Tensor first, then wrap in a RaggedTensor.
+            audios = tf.convert_to_tensor(audios, dtype=tf.float32)
+            if len(audios.shape) == 1:
+                audios = tf.RaggedTensor.from_tensor(
+                    tf.expand_dims(audios, axis=0)
                 )
+            else:
+                audios = tf.RaggedTensor.from_tensor(audios)
         if not batched:
             audios = tf.expand_dims(audios, axis=0)
         # If the input is a list of audio arrays, instead of list of lists.
