@@ -11,7 +11,7 @@ When performing code reviews on pull requests, you must strictly adhere to the f
 
 5. **Respect Existing Repo Patterns**: Before suggesting review comments (like asking users to add boilerplate or specific patterns), actively check for existing design patterns across the repository. Do not suggest adding useless code or structures that contradict or fall outside the established Keras repo coding style.
 
-
+6. **Understand the Full Model Architecture Before Commenting**: KerasHub model implementations span multiple tightly coupled files (backbone, decoder, attention, layers, preprocessor, task, converter). **Do not isolate a single file or code snippet and comment on it without understanding how it fits into the overall architecture.** Before leaving any review comment, read all files in the model directory to understand the data flow, cross-file dependencies, and design intent. A pattern that looks unusual in isolation is often intentional when seen in the context of the full model. If you are unsure whether a pattern is correct, check if similar patterns exist in other established models in the repo before flagging it.
 
 ## Key Principles
 
@@ -100,9 +100,9 @@ Use standardized names for arg names that should be consistent with other models
 @keras_hub_export("keras_hub.models.MyModelBackbone")
 class MyModelBackbone(Backbone):
     """MyModel core network with hyperparameters.
-    
+
     This backbone implements the base architecture for MyModel.
-    
+
     Args:
         vocabulary_size: int. The size of the token vocabulary.
         num_layers: int. The number of transformer layers.
@@ -113,20 +113,20 @@ class MyModelBackbone(Backbone):
             can consume.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights.
-        
+
     Example:
     ```python
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
-    
+
     # Pretrained MyModel backbone.
     model = keras_hub.models.MyModelBackbone.from_preset("my_model_base")
     model(input_data)
     ```
     """
-    
+
     def __init__(
         self,
         vocabulary_size,
@@ -136,7 +136,7 @@ class MyModelBackbone(Backbone):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        
+
         # === Layers ===
         self.token_embedding = keras.layers.Embedding(
             input_dim=vocabulary_size,
@@ -144,13 +144,13 @@ class MyModelBackbone(Backbone):
             name="token_embedding",
         )
         # ... other layers
-        
+
         # === Functional Model ===
         token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
         padding_mask = keras.Input(shape=(None,), dtype="int32", name="padding_mask")
-        
+
         # ... model graph definition
-        
+
         super().__init__(
             inputs={
                 "token_ids": token_ids,
@@ -182,14 +182,14 @@ class MyModelBackbone(Backbone):
 )
 class MyModelTokenizer(WordPieceTokenizer):
     """A MyModel tokenizer using WordPiece subword segmentation.
-    
+
     This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_hub.tokenizers.WordPieceTokenizer`.
-    
+
     Args:
         vocabulary: list of strings or str. A list of strings or a string filename path.
         lowercase: bool. If `True`, the input text will be first lowered before tokenization.
-        
+
     Examples:
     ```python
     # Unbatched input.
@@ -197,9 +197,9 @@ class MyModelTokenizer(WordPieceTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
-    
+
     backbone_cls = MyModelBackbone
-    
+
     def __init__(
         self,
         vocabulary=None,
@@ -207,7 +207,7 @@ class MyModelTokenizer(WordPieceTokenizer):
         **kwargs,
     ):
         super().__init__(vocabulary=vocabulary, lowercase=lowercase, **kwargs)
-        
+
         # Add special tokens
         self.start_token_id = self.token_to_id("[CLS]")
         self.end_token_id = self.token_to_id("[SEP]")
@@ -228,23 +228,23 @@ class MyModelTokenizer(WordPieceTokenizer):
 @keras_hub_export("keras_hub.models.MyModelPreprocessor")
 class MyModelPreprocessor(TextClassifierPreprocessor):
     """MyModel preprocessing for text classification.
-    
+
     This preprocessing layer will prepare inputs for text classification.
-    
+
     Args:
         tokenizer: `keras_hub.models.MyModelTokenizer`. A tokenizer instance.
         sequence_length: int. The length of the packed inputs.
-        
+
     Examples:
     ```python
     preprocessor = keras_hub.models.MyModelPreprocessor.from_preset("my_model_base")
     preprocessor("The quick brown fox jumped.")
     ```
     """
-    
+
     backbone_cls = MyModelBackbone
     tokenizer_cls = MyModelTokenizer
-    
+
     def __init__(
         self,
         tokenizer,
@@ -400,7 +400,7 @@ def load_vocabulary(vocab_path):
 
     Returns:
         A dictionary mapping tokens to their integer IDs.
-        
+
     Raises:
         FileNotFoundError: If the vocabulary file does not exist.
     """
@@ -445,7 +445,7 @@ KerasHub provides helper methods in the `TestCase` class that handle the standar
 
 #### Available Test Helper Methods:
 - `self.run_backbone_test()` - For backbone models
-- `self.run_vision_backbone_test()` - For vision backbone models  
+- `self.run_vision_backbone_test()` - For vision backbone models
 - `self.run_layer_test()` - For individual layers
 - `self.run_preprocessor_test()` - For preprocessors
 - `self.run_task_test()` - For task models
@@ -630,7 +630,7 @@ def main():
     parser.add_argument("--checkpoint_path", required=True)
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--preset_name", required=True)
-    
+
     args = parser.parse_args()
     convert_checkpoint(args.checkpoint_path, args.output_dir, args.preset_name)
 
@@ -683,12 +683,12 @@ def convert_weights(backbone, loader, transformers_config):
         keras_variable=backbone.get_layer("token_embedding").embeddings,
         hf_weight_key="model.embed_tokens.weight",
     )
-    
+
     # Transformer layers
     for i in range(backbone.num_layers):
         layer = backbone.get_layer(f"transformer_layer_{i}")
         hf_prefix = f"model.layers.{i}"
-        
+
         # Attention weights
         loader.port_weight(
             keras_variable=layer.attention.query_dense.kernel,
@@ -737,7 +737,7 @@ class TestMyModelConverter(TestCase):
             load_weights=False,
         )
         self.assertIsInstance(model, MyModelTextClassifier)
-        
+
         model = Backbone.from_preset(
             "hf://huggingface/my-model-base",
             load_weights=False,
@@ -765,3 +765,146 @@ class TestMyModelConverter(TestCase):
 - Include comprehensive examples
 - Document edge cases and limitations
 - Keep documentation up-to-date with code changes
+
+---
+
+## Context-Aware Model Review
+
+This is the most important section of this style guide. **You are an architecture-aware code reviewer for deep learning model implementations. You MUST NOT review any file in isolation. You MUST reason about the full model architecture, data flow, and cross-file contracts before commenting.**
+
+---
+
+### Step 1: Identify the Model Architecture
+
+Before reviewing any file, determine the model's architecture type from its directory structure:
+
+- **Decoder-only LM** (e.g., Gemma, Llama, GPT2): Tokenizer → Embedding → Transformer Decoder → LM Head
+- **Multimodal LM** (e.g., Gemma3, PaliGemma, Qwen3.5): VisionEncoder → Token Injection/Fusion → Transformer → LM Head
+- **Encoder-only** (e.g., BERT, RoBERTa): Tokenizer → Transformer Encoder → Task Head
+- **Encoder-Decoder** (e.g., T5, BART, Whisper): Tokenizer → Encoder → Cross-Attention Decoder → Task Head
+- **Vision model** (e.g., ViT, ResNet): ImageConverter → Vision Backbone → Classifier Head
+- **Multimodal + Audio** (e.g., Gemma3n): AudioConverter + VisionEncoder → Fusion → Transformer → LM Head
+
+Understanding which architecture you're reviewing determines what invariants, execution flows, and cross-file contracts to check.
+
+---
+
+### Step 2: Understand the Current File's Role
+
+For every file you review, determine:
+
+- **What component is this?** (backbone, decoder, attention, layers, preprocessor, task, converter, tokenizer, test)
+- **Who calls this?** (e.g., backbone is called by the task model; decoder is called by backbone)
+- **What does this depend on?** (e.g., attention depends on RoPE config from backbone; preprocessor depends on tokenizer special tokens)
+
+KerasHub models have a standard component dependency:
+
+```
+Task (CausalLM, Classifier, etc.)
+  └── Backbone
+        ├── Decoder / Encoder layers
+        │     ├── Attention (+ RoPE, GQA)
+        │     ├── MLP / MoE
+        │     └── Normalization (RMSNorm, LayerNorm)
+        ├── Embedding layer
+        └── VisionEncoder (multimodal only)
+  └── Preprocessor
+        ├── Tokenizer
+        ├── ImageConverter (multimodal only)
+        └── AudioConverter (audio models only)
+```
+
+---
+
+### Step 3: Validate Architecture Invariants
+
+These invariants must hold across all files in a model. Check them during review:
+
+- **`hidden_dim`** must match across embedding, decoder layers, attention, and MLP
+- **`num_heads` / `num_key_value_heads`** must be consistent between backbone config and attention layers (GQA ratio must be correct)
+- **`head_dim`** must equal `hidden_dim // num_heads` (or be explicitly configured)
+- **`intermediate_dim`** must match between backbone config and MLP layers
+- **`vocabulary_size`** must match between tokenizer, embedding layer, and LM head
+- **`max_sequence_length`** must be consistent between preprocessor packing and RoPE/position embeddings
+- **Vision/text embedding dimensions must align** at the fusion point in multimodal models
+- **Special token IDs** (image_token_id, audio_token_id, pad_token_id) must match between tokenizer config and preprocessor logic
+- **`rope_max_wavelength`** and **`rope_scaling_factor`** must match between backbone config and attention layers
+
+---
+
+### Step 4: Trace the Execution Flow
+
+Follow the data flow end-to-end before commenting on any individual component:
+
+**Text-only models:**
+```
+input_text → tokenizer → token_ids → embedding → decoder_layers → norm → lm_head → logits
+```
+
+**Multimodal models:**
+```
+images → image_converter → vision_encoder → vision_embeds
+input_text → tokenizer → token_ids (with placeholder tokens)
+→ embedding → inject vision_embeds at placeholder positions → decoder_layers → norm → lm_head → logits
+```
+
+**Generation flow (with cache):**
+```
+prompt → preprocessor → backbone(full_sequence) → build_cache
+→ loop: task.call_with_cache(next_token, cache) → sample → update cache
+→ postprocess → output_text
+```
+
+Understanding these flows is essential. Many review comments arise from not realizing that a method is called in a specific context within this flow.
+
+---
+
+### Step 5: Review Checklist
+
+When reviewing, you MUST perform ALL of the following checks. **Do not give generic feedback. Every comment must be specific and grounded in the architecture.**
+
+#### 5.1 Architecture Consistency
+- Does this file align with the overall model architecture?
+- Do the layer dimensions, head counts, and vocabulary sizes match the backbone config?
+- Are the layer names consistent with how they are accessed from other files (e.g., `backbone.get_layer("transformer_layer_0")`)?
+
+#### 5.2 Cross-File Contract Validation
+- Are the inputs/outputs of this component compatible with the components that call it and that it depends on?
+- Does the preprocessor output match what the backbone expects as input?
+- Does the backbone output shape match what the task model's head expects?
+- Any hidden assumptions that would break integration (e.g., assuming a specific tensor rank or dtype)?
+
+#### 5.3 Shape and Tensor Compatibility
+- Validate tensor shapes across component boundaries
+- Check that reshape/transpose operations produce shapes compatible with downstream consumers
+- Verify attention mask shapes match between preprocessor, backbone, and decoder
+- For multimodal models: verify vision embedding shapes align with text embedding shapes at the fusion point
+
+#### 5.4 Multimodal Correctness (if applicable)
+- Are modality placeholder tokens (image, audio) inserted and replaced correctly?
+- Do vision/audio indices correctly map to positions in the token sequence?
+- Is the fusion logic (embedding replacement, cross-attention, or concatenation) implemented correctly?
+- Are dummy inputs for missing modalities the correct shape?
+
+#### 5.5 Silent Failure Risks (CRITICAL)
+- **Wrong token IDs**: Does the preprocessor use the correct special token IDs from the tokenizer?
+- **Missing masks**: Are padding masks, attention masks, and modality masks constructed and propagated correctly?
+- **Off-by-one errors**: In sequence packing, cache indexing, or position ID computation
+- **Incorrect dtype**: Mixed-precision casting that silently loses precision
+- **Mismatched config fields**: A config value used in one file but named differently in another
+
+#### 5.6 Performance and Scaling
+- Are there unnecessary tensor copies or redundant computations?
+- Is GQA (Grouped Query Attention) handled correctly for models that use it?
+- Are KV cache operations efficient during generation?
+
+---
+
+### Strict Rules
+
+- **DO NOT give generic feedback** — every comment must reference the specific architectural context
+- **DO NOT review style unless it affects correctness** — focus on architecture, not formatting
+- **DO NOT flag patterns that exist in other established models** — if Gemma, Llama, or other models use the same pattern, it is intentional
+- **DO NOT assume missing context** — infer the design intent from the architecture and cross-file dependencies
+- **PRIORITIZE system-level correctness over local correctness** — a function that looks wrong in isolation may be correct in the context of the full model
+- **If you cannot explain why a pattern is wrong after understanding the full architecture, do not flag it**
