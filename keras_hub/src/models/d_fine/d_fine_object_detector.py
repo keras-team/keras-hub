@@ -416,7 +416,7 @@ class DFineObjectDetector(ObjectDetector):
         if num_classes != backbone.num_labels:
             config = backbone.get_config()
             config["num_labels"] = num_classes
-            backbone = DFineBackbone.from_config(config)
+            backbone = backbone.__class__.from_config(config)
 
         # === Functional Model ===
         image_input = keras.layers.Input(
