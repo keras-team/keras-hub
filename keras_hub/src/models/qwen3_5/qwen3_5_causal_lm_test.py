@@ -81,7 +81,7 @@ class Qwen3_5CausalLMTest(TestCase):
             cls=Qwen3_5CausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 7, 8),
+            expected_output_shape=(2, 7, 13),
         )
 
     def test_generate(self):
