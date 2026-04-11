@@ -152,15 +152,6 @@ class TransformersPresetLoader(PresetLoader):
     def load_tokenizer(self, cls, config_name="tokenizer.json", **kwargs):
         return self.converter.convert_tokenizer(cls, self.preset, **kwargs)
 
-    def load_audio_converter(self, cls, **kwargs):
-        if hasattr(self.converter, "load_audio_converter_config"):
-            config = self.converter.load_audio_converter_config(
-                self.preset, self.config
-            )
-            if config is not None:
-                return cls(**{**config, **kwargs})
-        return None
-
     def load_image_converter(self, cls, **kwargs):
         if hasattr(self.converter, "load_image_converter_config"):
             config = self.converter.load_image_converter_config(
@@ -171,6 +162,15 @@ class TransformersPresetLoader(PresetLoader):
         # TODO: set image size for pali gemma checkpoints.
         return None
 
+    def load_audio_converter(self, cls, **kwargs):
+        if hasattr(self.converter, "load_audio_converter_config"):
+            config = self.converter.load_audio_converter_config(
+                self.preset, self.config
+            )
+            if config is not None:
+                return cls(**{**config, **kwargs})
+        return None
+
     def load_video_converter(self, cls, **kwargs):
         if hasattr(self.converter, "load_video_converter_config"):
             config = self.converter.load_video_converter_config(
@@ -179,7 +179,6 @@ class TransformersPresetLoader(PresetLoader):
             if config is not None:
                 return cls(**{**config, **kwargs})
         return None
-
 
     def load_preprocessor(self, cls, config_file=None, **kwargs):
         if hasattr(self.converter, "load_preprocessor_config"):
