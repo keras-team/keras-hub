@@ -41,6 +41,9 @@ from keras_hub.src.models.gemma.gemma_tokenizer import (
 from keras_hub.src.models.gemma3.gemma3_tokenizer import (
     Gemma3Tokenizer as Gemma3Tokenizer,
 )
+from keras_hub.src.models.gemma4.gemma4_tokenizer import (
+    Gemma4Tokenizer as Gemma4Tokenizer,
+)
 from keras_hub.src.models.gpt2.gpt2_tokenizer import (
     GPT2Tokenizer as GPT2Tokenizer,
 )
@@ -114,6 +117,9 @@ from keras_hub.src.models.smollm3.smollm3_tokenizer import (
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer as T5Tokenizer
 from keras_hub.src.models.t5gemma.t5gemma_tokenizer import (
     T5GemmaTokenizer as T5GemmaTokenizer,
+)
+from keras_hub.src.models.t5gemma2.t5gemma2_tokenizer import (
+    T5Gemma2Tokenizer as T5Gemma2Tokenizer,
 )
 from keras_hub.src.models.video_prism.video_prism_tokenizer import (
     VideoPrismTokenizer as VideoPrismTokenizer,

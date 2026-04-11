@@ -88,6 +88,7 @@ class RotaryEmbedding(keras.layers.Layer):
         truncate=False,
         sequence_axis=1,
         feature_axis=-1,
+        denominator_dim=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -102,6 +103,7 @@ class RotaryEmbedding(keras.layers.Layer):
         self.beta_slow = beta_slow
         self.original_max_position_embeddings = original_max_position_embeddings
         self.truncate = truncate
+        self.denominator_dim = denominator_dim
         self.built = True
 
     def _normalize_axes(self, input_shape):
@@ -236,7 +238,12 @@ class RotaryEmbedding(keras.layers.Layer):
     def _get_inverse_freq(self, rotary_dim):
         """Return inverse frequencies."""
         idx = ops.arange(0, rotary_dim, 2, dtype="float32")
-        denom = ops.cast(rotary_dim, "float32")
+        denom = ops.cast(
+            self.denominator_dim
+            if self.denominator_dim is not None
+            else rotary_dim,
+            "float32",
+        )
         freq_range = idx / denom
         inv = ops.power(ops.cast(self.max_wavelength, "float32"), -freq_range)
 
@@ -332,6 +339,7 @@ class RotaryEmbedding(keras.layers.Layer):
                 "truncate": self.truncate,
                 "sequence_axis": self.sequence_axis,
                 "feature_axis": self.feature_axis,
+                "denominator_dim": self.denominator_dim,
             }
         )
         return config
