@@ -779,11 +779,11 @@ This is the most important section of this style guide. **You are an architectur
 Before reviewing any file, determine the model's architecture type from its directory structure:
 
 - **Decoder-only LM** (e.g., Gemma, Llama, GPT2): Tokenizer → Embedding → Transformer Decoder → LM Head
-- **Multimodal LM** (e.g., Gemma3, PaliGemma, Qwen3.5): VisionEncoder → Token Injection/Fusion → Transformer → LM Head
+- **Multimodal LM** (e.g., Gemma3, PaliGemma, Gemma4): VisionEncoder → Token Injection/Fusion → Transformer → LM Head
 - **Encoder-only** (e.g., BERT, RoBERTa): Tokenizer → Transformer Encoder → Task Head
 - **Encoder-Decoder** (e.g., T5, BART, Whisper): Tokenizer → Encoder → Cross-Attention Decoder → Task Head
 - **Vision model** (e.g., ViT, ResNet): ImageConverter → Vision Backbone → Classifier Head
-- **Multimodal + Audio** (e.g., Gemma3n): AudioConverter + VisionEncoder → Fusion → Transformer → LM Head
+- **Multimodal + Audio** (e.g., Gemma4): AudioConverter + VisionEncoder → Fusion → Transformer → LM Head
 
 Understanding which architecture you're reviewing determines what invariants, execution flows, and cross-file contracts to check.
 
@@ -818,17 +818,16 @@ Task (CausalLM, Classifier, etc.)
 
 ### Step 3: Validate Architecture Invariants
 
-These invariants must hold across all files in a model. Check them during review:
+Config values must be consistent across all files in a model. Before flagging a mismatch, check that the values used in each component (backbone, decoder, attention, preprocessor, tokenizer) are consistent with what the backbone config defines.
 
-- **`hidden_dim`** must match across embedding, decoder layers, attention, and MLP
-- **`num_heads` / `num_key_value_heads`** must be consistent between backbone config and attention layers (GQA ratio must be correct)
-- **`head_dim`** must equal `hidden_dim // num_heads` (or be explicitly configured)
-- **`intermediate_dim`** must match between backbone config and MLP layers
-- **`vocabulary_size`** must match between tokenizer, embedding layer, and LM head
-- **`max_sequence_length`** must be consistent between preprocessor packing and RoPE/position embeddings
-- **Vision/text embedding dimensions must align** at the fusion point in multimodal models
-- **Special token IDs** (image_token_id, audio_token_id, pad_token_id) must match between tokenizer config and preprocessor logic
-- **`rope_max_wavelength`** and **`rope_scaling_factor`** must match between backbone config and attention layers
+Common things to verify (where applicable to the model type):
+
+- Dimension sizes (embedding, hidden, intermediate) match across components that share them
+- Head counts and key-value head counts are consistent between backbone config and attention layers
+- Vocabulary size matches between tokenizer, embedding layer, and output head
+- Sequence length limits are consistent between preprocessor and positional encoding
+- Special token IDs used in the preprocessor match those defined in the tokenizer
+- For multimodal models: embedding dimensions align at modality fusion points
 
 ---
 
@@ -865,7 +864,6 @@ When reviewing, you MUST perform ALL of the following checks. **Do not give gene
 
 #### 5.1 Architecture Consistency
 - Does this file align with the overall model architecture?
-- Do the layer dimensions, head counts, and vocabulary sizes match the backbone config?
 - Are the layer names consistent with how they are accessed from other files (e.g., `backbone.get_layer("transformer_layer_0")`)?
 
 #### 5.2 Cross-File Contract Validation
@@ -892,6 +890,7 @@ When reviewing, you MUST perform ALL of the following checks. **Do not give gene
 - **Off-by-one errors**: In sequence packing, cache indexing, or position ID computation
 - **Incorrect dtype**: Mixed-precision casting that silently loses precision
 - **Mismatched config fields**: A config value used in one file but named differently in another
+- **`.get()` with default values in converter files**: Avoid using `.get(key, default)` in converter/config code — if a config key is missing, it should raise an error, not silently fall back to a default that may be wrong for future checkpoints
 
 #### 5.6 Performance and Scaling
 - Are there unnecessary tensor copies or redundant computations?
@@ -900,11 +899,91 @@ When reviewing, you MUST perform ALL of the following checks. **Do not give gene
 
 ---
 
-### Strict Rules
+### Step 6: Advanced Review Checks
 
-- **DO NOT give generic feedback** — every comment must reference the specific architectural context
-- **DO NOT review style unless it affects correctness** — focus on architecture, not formatting
-- **DO NOT flag patterns that exist in other established models** — if Gemma, Llama, or other models use the same pattern, it is intentional
-- **DO NOT assume missing context** — infer the design intent from the architecture and cross-file dependencies
-- **PRIORITIZE system-level correctness over local correctness** — a function that looks wrong in isolation may be correct in the context of the full model
-- **If you cannot explain why a pattern is wrong after understanding the full architecture, do not flag it**
+These checks go beyond standard code review and catch the most common sources of silent bugs in deep learning model implementations.
+
+#### 6.1 Parity Regression Detection
+
+When reviewing changes to an **existing model** (not a new model), classify every edit as:
+
+- **Parity-critical**: Any change inside the forward pass — `call()`, `call_with_cache()`, attention computation, normalization, embedding, activation functions, or weight reshaping in converters. Even minor refactors in these paths (reordering ops, changing dtypes, swapping equivalent math) can break numerical parity with the HuggingFace reference.
+- **Non-parity-critical**: Tests, docstrings, presets, formatting, imports.
+
+Parity-critical changes require extra scrutiny. Ask: *"Has this change been verified to maintain numerical parity with the reference implementation?"*
+
+#### 6.2 Serialization Round-Trip Check
+
+Verify that every `__init__` argument appears in `get_config()` and that `get_config()` returns only values that can reconstruct the layer. Specifically:
+
+- Every parameter in `__init__` should be stored as `self.<param_name>` with the same name
+- `get_config()` must include all `__init__` params so that `from_config(config)` produces an identical layer
+- No derived/computed values should be stored as config (e.g., don't store `self.head_dim = hidden_dim // num_heads` in config — store `hidden_dim` and `num_heads`)
+- This is critical because broken `get_config()` silently breaks model saving and loading
+
+#### 6.3 Generation Path Coverage
+
+Most bugs in KerasHub models appear in the **generation path**, not the training path, because:
+
+- `call()` (training) processes full sequences in one pass
+- `call_with_cache()` (generation) processes one token at a time with stateful caches
+
+When reviewing, specifically trace the generation flow and check:
+
+- Cache shapes: Are they allocated with the correct dimensions (`batch_size`, `num_kv_heads`, `max_seq_len`, `head_dim`)?
+- Cache updates: Does `slice_update` use the correct `cache_update_index`?
+- Attention masks: Are they correctly shaped for single-token queries against full-length key/value caches?
+- Are sliding window attention masks applied correctly during generation (not just during training)?
+
+#### 6.4 Backend Compatibility Verification
+
+KerasHub code must run on TensorFlow, JAX, and PyTorch backends. Verify the correct ops are used in the correct context:
+
+- **Inside `call()` and `call_with_cache()`**: Only `keras.ops` / `ops.*` — no raw `tf.*`, `torch.*`, or `jax.*` calls
+- **Inside preprocessor methods** (decorated with `@preprocessing_function`): `tf.*` and `numpy` are allowed because preprocessing runs eagerly
+- **Inside `__init__` or `build()`**: `numpy` is fine for computing static constants (e.g., mel filterbanks, causal masks)
+- **Red flag**: Any `tf.*` call inside a `call()` method that is not behind a `keras.config.backend() == "tensorflow"` guard
+
+#### 6.5 Test Coverage Gap Detection
+
+For every new or modified file in the PR, verify test coverage:
+
+- Every new component file (`<model>_backbone.py`, `<model>_tokenizer.py`, etc.) must have a corresponding `_test.py` file
+- Tests must cover both **training path** (`call()` via `run_backbone_test`, `run_task_test`) and **generation path** (`generate()` via integration tests)
+- Tests must cover **serialization** (`run_model_saving_test`)
+- Converter files must have converter tests that verify `from_preset()` loads correctly
+- If a PR modifies an existing model but adds no test changes, ask: *"How was this change tested?"*
+
+#### 6.6 Weight Mapping Completeness (for converter PRs)
+
+When reviewing HuggingFace converter files (`keras_hub/src/utils/transformers/convert_*.py`), verify:
+
+- Every HuggingFace weight key is mapped to exactly one KerasHub variable — unmapped weights mean a layer will have random (untrained) values, which silently produces garbage outputs
+- No duplicate mappings — a single HF weight mapped to multiple KerasHub variables is almost always a bug
+- Weight reshape/transpose `hook_fn` functions produce the correct output shape — verify that the target `keras_shape` matches what the KerasHub layer expects
+- For models with tied embeddings (e.g., shared `token_embedding` and `lm_head`), verify the tying is handled correctly and not double-counted
+
+#### 6.7 dtype_policy Propagation
+
+Sub-layers must propagate `dtype=self.dtype_policy` when creating child layers (e.g., `Dense`, `Embedding`, custom layers). This is a repo-wide convention used across 130+ files. Missing this causes silent mixed-precision bugs:
+
+- A layer intended to compute in `bfloat16` (for performance) silently runs in `float32` — wasting memory and slowing inference
+- Or worse, a layer runs in `float16` when the parent expects `float32`, causing numerical divergence
+
+When reviewing, check that every sub-layer created in `__init__` or `build()` passes `dtype=self.dtype_policy`. Example:
+```python
+# Correct
+self.query_dense = keras.layers.Dense(..., dtype=self.dtype_policy)
+
+# Bug — inherits Keras default dtype, not the model's policy
+self.query_dense = keras.layers.Dense(...)
+```
+
+#### 6.8 Functional API Graph Construction
+
+KerasHub backbones use `keras.Input()` to build a Keras Functional graph in `__init__`. When reviewing backbone files, verify:
+
+- Every `keras.Input()` corresponds to a real output from the preprocessor — extra or missing inputs will cause runtime errors
+- For multimodal backbones: vision/audio inputs should be conditionally added only when the model is not in `text_only_model` mode
+- The input names used in `keras.Input(name=...)` must match the dictionary keys produced by the preprocessor's `call()` method
+- The functional graph's output shape must match what the task model (e.g., `CausalLM`) expects when it accesses `self.backbone(...)` outputs
