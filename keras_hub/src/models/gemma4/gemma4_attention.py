@@ -102,29 +102,56 @@ class Gemma4TextAttention(keras.layers.Layer):
         )
         self.query_dense.build(inputs_shape)
 
-        self.key_dense = keras.layers.EinsumDense(
-            "bsd,kdh->bskh",
-            output_shape=(None, self.effective_num_kv_heads, self.head_dim),
-            kernel_initializer=self._kernel_initializer,
-            dtype=self.dtype_policy,
-            name="key",
-        )
-        self.key_dense.build(inputs_shape)
-
-        # When attention_k_eq_v, V reuses K's projection — no separate weight.
-        if not self.attention_k_eq_v:
-            self.value_dense = keras.layers.EinsumDense(
+        # KV-shared layers borrow K/V from the source layer at runtime and do
+        # not own their own projections.
+        if not self.is_kv_shared_layer:
+            self.key_dense = keras.layers.EinsumDense(
                 "bsd,kdh->bskh",
                 output_shape=(None, self.effective_num_kv_heads, self.head_dim),
                 kernel_initializer=self._kernel_initializer,
                 dtype=self.dtype_policy,
-                name="value",
+                name="key",
             )
-            self.value_dense.build(inputs_shape)
-        else:
-            self.value_dense = None
+            self.key_dense.build(inputs_shape)
 
-        # Always apply Q/K norms in Gemma4.
+            # When attention_k_eq_v, V reuses K's projection — no separate weight.
+            if not self.attention_k_eq_v:
+                self.value_dense = keras.layers.EinsumDense(
+                    "bsd,kdh->bskh",
+                    output_shape=(None, self.effective_num_kv_heads, self.head_dim),
+                    kernel_initializer=self._kernel_initializer,
+                    dtype=self.dtype_policy,
+                    name="value",
+                )
+                self.value_dense.build(inputs_shape)
+            else:
+                self.value_dense = None
+
+            key_shape = self.key_dense.compute_output_shape(inputs_shape)
+            self.key_norm = RMSNormalization(
+                epsilon=self.layer_norm_epsilon,
+                dtype=self.dtype_policy,
+                name="key_norm",
+            )
+            self.key_norm.build(key_shape)
+
+            # V norm: pure L2 normalization (no learnable scale).
+            # When attention_k_eq_v, value comes from key_dense so same shape.
+            kv_norm_shape = (None, None, self.effective_num_kv_heads, self.head_dim)
+            self.value_norm = Gemma4VNorm(
+                epsilon=self.layer_norm_epsilon,
+                dtype=self.dtype_policy,
+                name="value_norm",
+            )
+            self.value_norm.build(kv_norm_shape)
+        else:
+            # KV-shared layer: K/V are borrowed from the source layer's output.
+            self.key_dense = None
+            self.value_dense = None
+            self.key_norm = None
+            self.value_norm = None
+
+        # Always apply Q norm in Gemma4.
         query_shape = self.query_dense.compute_output_shape(inputs_shape)
         self.query_norm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
@@ -132,24 +159,6 @@ class Gemma4TextAttention(keras.layers.Layer):
             name="query_norm",
         )
         self.query_norm.build(query_shape)
-
-        key_shape = self.key_dense.compute_output_shape(inputs_shape)
-        self.key_norm = RMSNormalization(
-            epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
-            name="key_norm",
-        )
-        self.key_norm.build(key_shape)
-
-        # V norm: pure L2 normalization (no learnable scale).
-        # When attention_k_eq_v, value comes from key_dense so same shape.
-        kv_norm_shape = (None, None, self.effective_num_kv_heads, self.head_dim)
-        self.value_norm = Gemma4VNorm(
-            epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
-            name="value_norm",
-        )
-        self.value_norm.build(kv_norm_shape)
 
         self.dropout_layer = keras.layers.Dropout(
             rate=self.dropout,
@@ -177,7 +186,7 @@ class Gemma4TextAttention(keras.layers.Layer):
 
         self.built = True
 
-    def _apply_rope(self, x, start_index):
+    def _apply_rope(self, x, start_index, positions=None):
         """Apply RoPE, with optional partial (proportional) rotation.
 
         In Gemma 4, global attention uses partial proportionate rotation where
@@ -198,7 +207,9 @@ class Gemma4TextAttention(keras.layers.Layer):
             x2_nope = x2[..., half_rotary:]
 
             x_rot = ops.concatenate([x1_rot, x2_rot], axis=-1)
-            x_rot = self.rope_layer(x_rot, start_index=start_index)
+            x_rot = self.rope_layer(
+                x_rot, start_index=start_index, positions=positions
+            )
 
             x1_rot, x2_rot = ops.split(x_rot, 2, axis=-1)
 
@@ -206,7 +217,8 @@ class Gemma4TextAttention(keras.layers.Layer):
             y2 = ops.concatenate([x2_rot, x2_nope], axis=-1)
 
             return ops.concatenate([y1, y2], axis=-1)
-        return self.rope_layer(x, start_index=start_index)
+        return self.rope_layer(x, start_index=start_index, positions=positions)
+
 
     def _use_fused_attention_op(self):
         if not fused_attention_op_available():
@@ -277,7 +289,11 @@ class Gemma4TextAttention(keras.layers.Layer):
         b, q_len, _, _, h = ops.shape(q)
 
         # Compute attention logits.
-        attention_logits = ops.einsum("btkgh,bskh->bkgts", q, k)
+        q_transposed = ops.transpose(q, (0, 2, 3, 1, 4))  # (b, k, g, t, h)
+        k_transposed = ops.transpose(k, (0, 2, 3, 1))  # (b, k, h, s)
+        k_expanded = ops.expand_dims(k_transposed, 2)  # (b, k, 1, h, s)
+        attention_logits = ops.matmul(q_transposed, k_expanded)  # (b, k, g, t, s)
+
         if self.logit_soft_cap is not None:
             attention_logits = ops.divide(attention_logits, self.logit_soft_cap)
             attention_logits = ops.multiply(
@@ -295,7 +311,10 @@ class Gemma4TextAttention(keras.layers.Layer):
                 attention_softmax, training=training
             )
 
-        results = ops.einsum("bkgts,bskh->btkgh", attention_softmax, v)
+        v_transposed = ops.transpose(v, (0, 2, 1, 3))  # (b, k, s, h)
+        v_expanded = ops.expand_dims(v_transposed, 2)  # (b, k, 1, s, h)
+        results = ops.matmul(attention_softmax, v_expanded)  # (b, k, g, t, h)
+        results = ops.transpose(results, (0, 3, 1, 2, 4))  # (b, t, k, g, h)
         return ops.reshape(results, (b, q_len, self.num_query_heads, h))
 
     def _compute_bidirectional_sliding_mask(self, batch_size, sequence_length):
@@ -356,10 +375,12 @@ class Gemma4TextAttention(keras.layers.Layer):
         cache_update_mask=None,
         shared_kv=None,
         training=False,
+        positions=None,
     ):
         query = self.query_dense(x)
         query = self.query_norm(query)
-        query = self._apply_rope(query, cache_update_index)
+        query = self._apply_rope(query, cache_update_index, positions=positions)
+
 
         if cache is not None:
             key_cache = cache[:, 0, ...]
@@ -373,9 +394,17 @@ class Gemma4TextAttention(keras.layers.Layer):
                 value = shared_kv[:, 1, ...]
                 new_cache = cache
             else:
+                if self.is_kv_shared_layer:
+                    raise ValueError(
+                        f"KV-shared layer {self.name!r} was called without "
+                        "shared_kv. Check backbone KV-sharing configuration."
+                    )
                 key_update = self.key_dense(x)
                 key_update = self.key_norm(key_update)
-                key_update = self._apply_rope(key_update, cache_update_index)
+                key_update = self._apply_rope(
+                    key_update, cache_update_index, positions=positions
+                )
+
                 if self.attention_k_eq_v:
                     # K=V: value projection reuses the key_dense computation.
                     value_update = self.value_norm(self.key_dense(x))
@@ -414,18 +443,28 @@ class Gemma4TextAttention(keras.layers.Layer):
                 key = shared_kv[:, 0, ...]
                 value = shared_kv[:, 1, ...]
             else:
+                if self.is_kv_shared_layer:
+                    raise ValueError(
+                        f"KV-shared layer {self.name!r} was called without "
+                        "shared_kv. Check backbone KV-sharing configuration."
+                    )
                 if self.attention_k_eq_v:
                     # K=V: value projection reuses key_dense weights.
                     raw_kv = self.key_dense(x)
                     key = self.key_norm(raw_kv)
-                    key = self._apply_rope(key, cache_update_index)
+                    key = self._apply_rope(
+                        key, cache_update_index, positions=positions
+                    )
                     value = self.value_norm(raw_kv)
                 else:
                     key = self.key_dense(x)
                     key = self.key_norm(key)
-                    key = self._apply_rope(key, cache_update_index)
+                    key = self._apply_rope(
+                        key, cache_update_index, positions=positions
+                    )
                     value = self.value_dense(x)
                     value = self.value_norm(value)
+
             new_cache = ops.stack((key, value), axis=1)
 
         # When global attention layers use global_head_dim > head_dim, the
@@ -668,7 +707,11 @@ class Gemma4VisionAttention(keras.layers.Layer):
         )
         b, q_len, _, _, h = ops.shape(q)
 
-        attention_logits = ops.einsum("btkgh,bskh->bkgts", q, k)
+        q_permuted = ops.transpose(q, (0, 2, 3, 1, 4))  # (B, K, G, T, H)
+        k_permuted = ops.transpose(k, (0, 2, 1, 3))  # (B, K, S, H)
+        k_transposed = ops.transpose(k_permuted, (0, 1, 3, 2))  # (B, K, H, S)
+        k_transposed = ops.expand_dims(k_transposed, axis=2)  # (B, K, 1, H, S)
+        attention_logits = ops.matmul(q_permuted, k_transposed)  # (B, K, G, T, S)
         if self.logit_soft_cap is not None:
             attention_logits = ops.divide(attention_logits, self.logit_soft_cap)
             attention_logits = ops.multiply(
@@ -677,16 +720,18 @@ class Gemma4VisionAttention(keras.layers.Layer):
 
         if attention_mask is not None:
             attention_mask = attention_mask[:, None, None, None, :]
-        orig_dtype = attention_logits.dtype
         attention_softmax = self.softmax(attention_logits, mask=attention_mask)
-        attention_softmax = ops.cast(attention_softmax, orig_dtype)
+        attention_softmax = ops.cast(attention_softmax, v.dtype)
 
         if self.dropout:
             attention_softmax = self.dropout_layer(
                 attention_softmax, training=training
             )
 
-        results = ops.einsum("bkgts,bskh->btkgh", attention_softmax, v)
+        v_permuted = ops.transpose(v, (0, 2, 1, 3))  # (B, K, S, H)
+        v_permuted = ops.expand_dims(v_permuted, axis=2)  # (B, K, 1, S, H)
+        results = ops.matmul(attention_softmax, v_permuted)  # (B, K, G, T, H)
+        results = ops.transpose(results, (0, 3, 1, 2, 4))  # (B, T, K, G, H)
         return ops.reshape(results, (b, q_len, self.num_query_heads, h))
 
     def call(self, x, attention_mask=None, position_ids=None, training=False):

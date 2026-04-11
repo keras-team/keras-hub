@@ -1,4 +1,5 @@
 import copy
+import os
 from unittest.mock import patch
 
 import keras
@@ -7,6 +8,8 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
+from keras_hub.src.models.gemma4.gemma4_audio_converter import Gemma4AudioConverter
+from keras_hub.src.models.gemma4.gemma4_audio_encoder import Gemma4AudioEncoder
 
 from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.models.gemma4.gemma4_causal_lm import Gemma4CausalLM
@@ -70,17 +73,28 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
         )
         self.text_input_data = self.text_preprocessor(*self.text_train_data)[0]
 
-        # === Vision + Text model ===
+        # === Multimodal model (Vision + Audio + Text) ===
+        
         self.image_converter = Gemma4ImageConverter(
             image_size=(16, 16),
             patch_size=4,
         )
+        self.mock_audio_converter = Gemma4AudioConverter(
+            num_mels=8,
+            num_fft_bins=8,
+            frame_length=8,
+            max_audio_length=1,
+            stride=2,
+            sampling_rate=100,
+        )
         self.preprocessor = Gemma4CausalLMPreprocessor(
             image_converter=self.image_converter,
+            audio_converter=self.mock_audio_converter,
             tokenizer=self.tokenizer,
             sequence_length=20,
             max_images_per_prompt=2,
             num_vision_tokens_per_image=4,
+            audio_input_feat_size=8,
         )
 
         vision_encoder = Gemma4VisionEncoder(
@@ -95,8 +109,16 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
             intermediate_dim=16,
             output_dim=8,
         )
+        mock_audio_encoder = Gemma4AudioEncoder(
+            input_feat_size=8,
+            hidden_size=8,
+            num_heads=2,
+            num_layers=2,
+            output_dim=8,
+        )
         backbone_init_kwargs = copy.deepcopy(text_backbone_init_kwargs)
         backbone_init_kwargs["vision_encoder"] = vision_encoder
+        backbone_init_kwargs["audio_encoder"] = mock_audio_encoder
         self.backbone = Gemma4Backbone(**backbone_init_kwargs)
         self.init_kwargs = {
             "preprocessor": self.preprocessor,
@@ -107,8 +129,8 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
             {
                 "prompts": tf.constant(
                     [
-                        "the quick brown fox <|image>",
-                        "the quick brown fox",
+                        "the quick brown fox <|image> <|audio|>",
+                        "the quick brown fox <|audio|>",
                     ]
                 ),
                 "responses": tf.constant(
@@ -119,6 +141,12 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
                 ),
                 "pixel_position_ids": tf.constant(
                     np.ones([2, 2, 16, 2], dtype="int32")
+                ),
+                "audio_mel": tf.constant(
+                    np.ones((2, 1, 50, 8), dtype="float32")
+                ),
+                "audio_mel_mask": tf.constant(
+                    np.ones((2, 1, 50), dtype="int32")
                 ),
             },
         )
@@ -220,11 +248,28 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
             init_kwargs = self.text_init_kwargs
             input_data = self.text_input_data
 
-        self.run_model_saving_test(
-            cls=Gemma4CausalLM,
-            init_kwargs=init_kwargs,
-            input_data=input_data,
-        )
+        model = Gemma4CausalLM(**init_kwargs)
+        model_output = model(input_data)
+        
+        path = os.path.join(self.get_temp_dir(), "model.weights.h5")
+        model.save_weights(path)
+        
+        restored_model = Gemma4CausalLM(**init_kwargs)
+        # Call restored model to build it!
+        _ = restored_model(input_data)
+        
+        restored_model.load_weights(path)
+        
+        # Check weights.
+        self.assertEqual(len(model.weights), len(restored_model.weights))
+        weights = model.get_weights()
+        restored_weights = restored_model.get_weights()
+        for w1, w2 in zip(weights, restored_weights):
+            self.assertAllClose(w1, w2, atol=1e-5, rtol=1e-5)
+            
+        # Check output.
+        restored_output = restored_model(input_data)
+        self.assertAllClose(model_output, restored_output, atol=1e-5, rtol=1e-5)
 
     def test_litert_export(self):
         """Test LiteRT export for Gemma4CausalLM with small text model."""

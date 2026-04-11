@@ -162,6 +162,15 @@ class TransformersPresetLoader(PresetLoader):
                 return cls(**{**config, **kwargs})
         return None
 
+    def load_video_converter(self, cls, **kwargs):
+        if hasattr(self.converter, "load_video_converter_config"):
+            config = self.converter.load_video_converter_config(
+                self.preset, self.config
+            )
+            if config is not None:
+                return cls(**{**config, **kwargs})
+        return None
+
     def load_preprocessor(self, cls, config_file=None, **kwargs):
         if hasattr(self.converter, "load_preprocessor_config"):
             extra = self.converter.load_preprocessor_config(

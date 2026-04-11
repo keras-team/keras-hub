@@ -35,6 +35,7 @@ class Gemma4LoraTest(TestCase):
         input_data = {
             "token_ids": np.ones((2, 5), dtype="int32"),
             "padding_mask": np.ones((2, 5), dtype="int32"),
+            "position_ids": np.tile(np.arange(5, dtype="int32")[None, :], (2, 1)),
         }
         targets = np.random.normal(
             size=(2, 5, self.text_init_kwargs["hidden_dim"])
@@ -66,6 +67,7 @@ class Gemma4LoraTest(TestCase):
         input_data = {
             "token_ids": np.ones((2, 5), dtype="int32"),
             "padding_mask": np.ones((2, 5), dtype="int32"),
+            "position_ids": np.tile(np.arange(5, dtype="int32")[None, :], (2, 1)),
         }
         targets = np.random.normal(
             size=(2, 5, self.text_init_kwargs["hidden_dim"])

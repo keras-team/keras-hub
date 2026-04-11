@@ -31,7 +31,7 @@ class Gemma4AudioConverter(AudioConverter):
             Defaults to ``16000``.
         max_audio_length: int. Maximum audio clip length in seconds. Inputs
             longer than this are trimmed; shorter inputs are zero-padded.
-            Defaults to ``300``.
+            Defaults to ``30``.
         min_frequency: float. Lower frequency bound for the mel filterbank in
             Hz. Defaults to ``0.0``.
         max_frequency: float. Upper frequency bound for the mel filterbank in
@@ -81,7 +81,7 @@ class Gemma4AudioConverter(AudioConverter):
     def __init__(
         self,
         num_mels=128,
-        num_fft_bins=400,
+        num_fft_bins=512,
         stride=160,
         sampling_rate=16000,
         max_audio_length=30,
@@ -90,6 +90,7 @@ class Gemma4AudioConverter(AudioConverter):
         mel_floor=1e-5,
         per_bin_mean=None,
         per_bin_stddev=None,
+        frame_length=320,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -105,6 +106,7 @@ class Gemma4AudioConverter(AudioConverter):
         self.min_frequency = min_frequency
         self.max_frequency = max_frequency
         self.mel_floor = float(mel_floor)
+        self.frame_length = frame_length or num_fft_bins
         # Store as Python lists so they round-trip through get_config().
         self.per_bin_mean = (
             list(per_bin_mean) if per_bin_mean is not None else None
@@ -118,6 +120,18 @@ class Gemma4AudioConverter(AudioConverter):
 
         # HTK mel filterbank: shape (num_fft_bins // 2 + 1, num_mels).
         self.mel_filters = self._get_mel_filters()
+
+        # Periodic Hann window matching HF
+        length = self.frame_length + 1
+        window = np.hanning(length)
+        self.window = ops.convert_to_tensor(window[:-1], dtype="float32")
+
+        # Precompute indices for manual framing
+        num_frames = self.num_samples // self.stride
+        one_frame_indices = np.arange(self.frame_length)
+        start_indices = np.arange(num_frames) * self.stride
+        indices = start_indices[:, None] + one_frame_indices[None, :]
+        self.indices = ops.convert_to_tensor(indices, dtype="int32")
 
         self.built = True
 
@@ -155,9 +169,6 @@ class Gemma4AudioConverter(AudioConverter):
         upper = slopes[:, 2:] / freq_diff[1:]
         filters = np.maximum(0.0, np.minimum(lower, upper))  # (n_fft, n)
 
-        # Slaney normalisation.
-        enorm = 2.0 / (freqs[2 : n + 2] - freqs[:n])
-        filters *= enorm[np.newaxis, :]
 
         return filters.astype(np.float32)
 
@@ -172,21 +183,46 @@ class Gemma4AudioConverter(AudioConverter):
         """
         audio = ops.cast(audio, self.compute_dtype)
 
-        # STFT → complex spectrum: (batch, time_frames, fft_bins).
-        real, imag = ops.stft(
-            audio,
-            sequence_length=self.num_fft_bins,
-            sequence_stride=self.stride,
-            fft_length=self.num_fft_bins,
-            window="hann",
-            center=True,
-        )
+        # Pad left by frame_length // 2 for semicausal padding
+        pad_left = self.frame_length // 2
+        paddings = [[0, 0], [pad_left, 0]]
+        audio = ops.pad(audio, paddings, mode="constant")
 
-        # Power spectrum – drop the last time frame to get a round frame
-        # count of num_samples // stride.
-        magnitudes = ops.square(real[:, :-1, :]) + ops.square(
-            imag[:, :-1, :]
-        )  # (batch, num_frames, fft_bins)
+        def true_fn():
+            max_idx = ops.shape(audio)[1]
+            safe_indices = ops.minimum(self.indices, ops.maximum(max_idx - 1, 0))
+            frames = ops.take(audio, safe_indices, axis=1)
+            out_of_bounds = self.indices >= max_idx
+            out_of_bounds = ops.expand_dims(out_of_bounds, axis=0)
+            return ops.where(out_of_bounds, ops.cast(0.0, frames.dtype), frames)
+
+        def false_fn():
+            batch_size = ops.shape(audio)[0]
+            num_frames = self.num_samples // self.stride
+            return ops.zeros((batch_size, num_frames, self.frame_length), dtype=audio.dtype)
+
+        max_idx = ops.shape(audio)[1]
+        frames = ops.cond(max_idx > 0, true_fn, false_fn)
+
+        # Apply window
+        frames = frames * self.window
+
+        # Zero-pad to fft_length
+        padding = self.num_fft_bins - self.frame_length
+        if padding > 0:
+            frames_padded = ops.pad(frames, [[0, 0], [0, 0], [0, padding]])
+        else:
+            frames_padded = frames[..., : self.num_fft_bins]
+
+        # FFT
+        real, imag = ops.fft((frames_padded, ops.zeros_like(frames_padded)))
+
+        # Truncate to first half of bins (rfft equivalent)
+        real = real[..., : self.num_fft_bins // 2 + 1]
+        imag = imag[..., : self.num_fft_bins // 2 + 1]
+
+        # Magnitude spectrum
+        magnitudes = ops.sqrt(ops.square(real) + ops.square(imag))
 
         # Mel filterbank matmul: (batch, num_frames, fft_bins) @
         #   (fft_bins, num_mels) → (batch, num_frames, num_mels)
@@ -197,7 +233,7 @@ class Gemma4AudioConverter(AudioConverter):
 
         # Log compression.
         mel_floor = ops.cast(self.mel_floor, self.compute_dtype)
-        log_spec = ops.log(ops.maximum(mel_spec, mel_floor))
+        log_spec = ops.log(mel_spec + mel_floor)
 
         # Optional per-bin mean / stddev normalisation.
         if self.per_bin_mean is not None:
@@ -271,6 +307,7 @@ class Gemma4AudioConverter(AudioConverter):
                 "mel_floor": self.mel_floor,
                 "per_bin_mean": self.per_bin_mean,
                 "per_bin_stddev": self.per_bin_stddev,
+                "frame_length": self.frame_length,
             }
         )
         return config

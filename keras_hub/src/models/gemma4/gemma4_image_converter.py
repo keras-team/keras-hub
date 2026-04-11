@@ -17,6 +17,8 @@ class Gemma4AspectRatioResizing(keras.layers.Layer):
         self.pooling_kernel_size = pooling_kernel_size
         self.height = 1  # Dummy value to satisfy ImageConverter checks
         self.width = 1  # Dummy value to satisfy ImageConverter checks
+        self.image_size = None  # Disable resizing in base class call
+
 
     def call(self, inputs):
         # inputs: (B, H, W, 3) where H, W can be dynamic Tensors or static
@@ -55,7 +57,8 @@ class Gemma4AspectRatioResizing(keras.layers.Layer):
                 method=tf.image.ResizeMethod.BICUBIC,
                 antialias=True,
             )
-            return tf.clip_by_value(resized, 0.0, 255.0)
+            clipped = tf.clip_by_value(resized, 0.0, 255.0)
+            return clipped
         else:
             # Eager mode: use backend-agnostic ops (works with concrete
             # numpy/torch/jax arrays).
@@ -91,15 +94,37 @@ class Gemma4AspectRatioResizing(keras.layers.Layer):
             # tf.function and GPU execution.
             resized = ops.image.resize(
                 float_inputs,
-                size=(target_height, target_width),
+                size=(int(target_height), int(target_width)),
                 interpolation="bicubic",
                 antialias=True,
             )
-            return ops.clip(resized, 0.0, 255.0)
+            clipped = ops.clip(resized, 0.0, 255.0)
+            return clipped
 
 
 @keras_hub_export("keras_hub.layers.Gemma4ImageConverter")
 class Gemma4ImageConverter(ImageConverter):
+    """Preprocess raw images for Gemma4 vision inputs.
+
+    Resizes images using aspect-ratio-preserving scaling to the nearest
+    valid resolution (a multiple of `patch_size * pooling_kernel_size`),
+    then applies optional per-channel rescaling and offset. The output is a
+    dict with keys `"pixel_values"` (the flattened patch tensor) and
+    `"pixel_position_ids"` (2-D (x, y) position indices for each patch).
+
+    Args:
+        patch_size: int. Size of each square patch in pixels. Defaults to
+            `16`.
+        max_soft_tokens: int. Maximum number of pooled soft tokens per image.
+            Controls the target resolution: the image is scaled so that the
+            total number of patches after pooling does not exceed this value.
+            Defaults to `280`.
+        pooling_kernel_size: int. Spatial pooling kernel size applied after
+            the vision encoder. Used together with `patch_size` to compute
+            valid target dimensions. Defaults to `3`.
+        **kwargs: Additional keyword arguments forwarded to
+            `keras_hub.layers.ImageConverter`, e.g. `scale`, `offset`.
+    """
     backbone_cls = Gemma4Backbone
 
     def __init__(
