@@ -420,7 +420,14 @@ class Gemma4AudioAttention(keras.layers.Layer):
         k = ops.cast(self.k_proj(hs), "float32")
         v = ops.cast(self.v_proj(hs), "float32")
 
-        B, T, _ = ops.shape(hidden_states)
+        B = ops.shape(hidden_states)[0]
+        # Prefer static T (Python int) to preserve static shape info across
+        # conformer blocks — ensures _convert_to_block takes the static branch
+        # and avoids ops.cond with different-shaped branches, which breaks
+        # XLA gradient compilation on the TF backend.
+        T = hidden_states.shape[1]
+        if not isinstance(T, int):
+            T = ops.shape(hidden_states)[1]
 
         # Reshape to (B, T, N, H).
         q = ops.reshape(q, [B, T, self.num_heads, self.head_dim])
@@ -622,7 +629,11 @@ class Gemma4AudioConformerAttention(keras.layers.Layer):
         attn_out = self.attn(x, mask, causal_valid_mask)
 
         # Reshape (B, T, N, H) → (B, T, N*H).
-        B, T = ops.shape(x)[0], ops.shape(x)[1]
+        # Use static T when available to propagate shape info across conformer
+        # blocks, preventing ops.cond with different-shaped branches in
+        # _convert_to_block (which breaks XLA gradient compilation).
+        B = ops.shape(x)[0]
+        T = x.shape[1] if isinstance(x.shape[1], int) else ops.shape(x)[1]
         attn_out = ops.reshape(attn_out, [B, T, self.hidden_size])
         attn_out = ops.cast(attn_out, self.compute_dtype)
 
