@@ -277,17 +277,11 @@ class Qwen3OmniTransformerDecoder(keras.layers.Layer):
 
         x = self.post_attention_layernorm(x)
         if self.is_sparse_mlp:
-            x, router_logits = self.sparse_moe(x)
-
-            # Compute auxiliary loss for load balancing
-            if training:
-                aux_loss = compute_load_balancing_loss(
-                    router_logits,
-                    self.num_experts,
-                    self.top_k,
-                    self_attention_mask,
-                )
-                self.add_loss(self.router_aux_loss_coefficient * aux_loss)
+            x, router_logits = self.sparse_moe(
+                x,
+                attention_mask=self_attention_mask,
+                training=training,
+            )
         else:
             x = self.dense_mlp(x)
 

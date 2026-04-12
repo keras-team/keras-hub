@@ -66,7 +66,7 @@ class Qwen3OmniAudioConverter(AudioConverter):
 
     def audio_shape(self):
         """Returns the preprocessed size of a single audio sample."""
-        return (self.max_audio_length, self.num_mels)
+        return (self.num_samples // self.stride, self.num_mels)
 
     def _get_mel_filters(self):
         """Computes the Mel filter bank weights.
