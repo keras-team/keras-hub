@@ -302,7 +302,7 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         input_features_spec = input_spec["input_features"]
         batch_size = input_features_spec.shape[0]
         seq_len = (
-            input_features_spec.shape[1] // 8
+            (input_features_spec.shape[1] + 7) // 8
             if input_features_spec.shape[1]
             else None
         )

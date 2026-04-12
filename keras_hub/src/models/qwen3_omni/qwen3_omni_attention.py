@@ -32,6 +32,8 @@ class Qwen3OmniAttention(keras.layers.Layer):
         rope_max_wavelength: int. Maximum wavelength for M-RoPE.
             Defaults to 1000000.
         rope_scaling_factor: float. Scaling factor for M-RoPE. Defaults to 1.0.
+        rope_attention_scaling: float. Post-RoPE scaling applied to
+            cos/sin embeddings. Defaults to 1.0.
         kernel_initializer: Initializer for kernel weights.
         dropout: float. Dropout rate for attention weights.
         layer_norm_epsilon: float. Epsilon for layer normalization.
