@@ -384,17 +384,9 @@ class Qwen3OmniAttention(keras.layers.Layer):
         _, query_len, key_len = ops.shape(attention_mask)
         all_ones = ops.ones((key_len, key_len), "bool")
 
-        if keras.config.backend() == "tensorflow":
-            # TODO carried over from qwen3moe
-            import tensorflow as tf
-
-            band_size = ops.minimum(key_len, self.sliding_window_size - 1)
-            band_size = ops.cast(band_size, "int32")
-            sliding_mask = tf.linalg.band_part(all_ones, band_size, band_size)
-        else:
-            sliding_mask = ops.triu(
-                all_ones, -1 * self.sliding_window_size + 1
-            ) * ops.tril(all_ones, self.sliding_window_size - 1)
+        sliding_mask = ops.triu(
+            all_ones, -1 * self.sliding_window_size + 1
+        ) * ops.tril(all_ones, self.sliding_window_size - 1)
 
         start = (cache_update_index, 0)
         sliding_mask = ops.slice(sliding_mask, start, (query_len, key_len))
