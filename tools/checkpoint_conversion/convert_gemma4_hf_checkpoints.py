@@ -545,14 +545,18 @@ def _test_numerics(label, backbone, keras_hub_inputs, hf_logits):
         k: v for k, v in keras_hub_inputs.items() if k in expected_names
     }
 
-    kh_output = backbone(keras_hub_inputs)
-    # Trim if KH sequence is longer than HF (e.g. due to padding).
-    if kh_output.shape[1] > hf_logits.shape[1]:
-        kh_output = kh_output[:, : hf_logits.shape[1], :]
+    # torch.no_grad() prevents PyTorch from storing intermediate activations
+    # for autograd. Without it, a 26B+ model accumulates hundreds of GB of
+    # activation tensors across all layers and exhausts RAM.
+    with torch.no_grad():
+        kh_output = backbone(keras_hub_inputs)
+        # Trim if KH sequence is longer than HF (e.g. due to padding).
+        if kh_output.shape[1] > hf_logits.shape[1]:
+            kh_output = kh_output[:, : hf_logits.shape[1], :]
 
-    kh_logits = ops.convert_to_numpy(
-        backbone.token_embedding(kh_output, reverse=True)
-    ).astype(np.float32)
+        kh_logits = ops.convert_to_numpy(
+            backbone.token_embedding(kh_output, reverse=True)
+        ).astype(np.float32)
 
     abs_diff = np.abs(kh_logits - hf_logits)
     max_diff = float(np.max(abs_diff))
