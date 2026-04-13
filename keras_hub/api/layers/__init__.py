@@ -106,6 +106,12 @@ from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
 from keras_hub.src.models.gemma3.gemma3_image_converter import (
     Gemma3ImageConverter as Gemma3ImageConverter,
 )
+from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
+    Gemma3nAudioConverter as Gemma3nAudioConverter,
+)
+from keras_hub.src.models.gemma3n.gemma3n_image_converter import (
+    Gemma3nImageConverter as Gemma3nImageConverter,
+)
 from keras_hub.src.models.gemma4.gemma4_audio_converter import (
     Gemma4AudioConverter as Gemma4AudioConverter,
 )
