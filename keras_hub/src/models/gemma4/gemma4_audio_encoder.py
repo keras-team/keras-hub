@@ -428,7 +428,7 @@ class Gemma4AudioAttention(keras.layers.Layer):
             causal_valid_mask: bool tensor `(W, C)`. True = causally valid.
 
         Returns:
-            float tensor `(B, T, N, H)`.
+            float tensor `(B, T, hidden_size)`.
         """
         # Cast to float32 for numerical stability (matches HF).
         hs = ops.cast(hidden_states, "float32")
@@ -519,16 +519,24 @@ class Gemma4AudioAttention(keras.layers.Layer):
         v_t = ops.transpose(v_ctx, (0, 3, 1, 2, 4))  # (B, N, U, C, H)
         # probs: (B, N, U, W, C)  ×  v_t: (B, N, U, C, H)  → (B, N, U, W, H)
         ctx = ops.einsum("bnuwc,bnuch->bnuwh", probs, v_t)
-        # (B, N, U, W, H) → (B, U, W, N, H) → (B, U*W, N, H) → (B, T, N, H)
+        # (B, N, U, W, H) → (B, U, W, N, H) → (B, U*W, N, H) → (B, T, D)
         ctx = ops.transpose(ctx, (0, 2, 3, 1, 4))  # (B, U, W, N, H)
 
         b = ops.shape(probs)[0]
         ctx = ops.reshape(ctx, [b, -1, n, h])  # (B, U*W, N, H)
-        ctx = ctx[:, :T, :, :]  # (B, T, N, H)
-
-        # Reshape with -1 for T so XLA never bakes T=1 into the backward.
-        ctx = ops.reshape(ctx, [b, -1, self.num_heads, self.head_dim])
-        return ops.cast(ctx, self.compute_dtype)
+        # Merge head dims (N, H are both static Python ints) BEFORE the
+        # T-truncation slice.  The backward of this reshape uses
+        # tf.shape(ctx_above) where ctx_above came from einsum+transpose —
+        # NOT from a StridedSlice — so XLA infers U*W correctly via
+        # GetDimensionSize arithmetic.  If we merged AFTER the slice, the
+        # backward would query tf.shape on the StridedSlice output, and
+        # XLA/tf2xla cannot evaluate GetDimensionSize(stridedslice, 1)
+        # when the slice end is a dynamic tensor → T baked as 1 → crash.
+        ctx = ops.reshape(ctx, [b, -1, n * h])  # (B, U*W, hidden_size)
+        ctx = ctx[:, :T, :]  # (B, T, hidden_size)
+        # StridedSliceGrad handles the backward without any reshape,
+        # so no further reshape on ctx is needed here.
+        return ops.cast(ctx, self.compute_dtype)  # (B, T, hidden_size)
 
     def get_config(self):
         config = super().get_config()
@@ -647,13 +655,12 @@ class Gemma4AudioConformerAttention(keras.layers.Layer):
         x = ops.clip(x, -self.gradient_clipping, self.gradient_clipping)
         x = self.pre_attn_norm(x)
 
-        # Attention output: (B, T, N, H)
+        # Attention output: (B, T, hidden_size).  Gemma4AudioAttention now
+        # merges N*H before the T-slice so the backward reshape avoids
+        # querying tf.shape on a StridedSlice with a dynamic end (XLA
+        # tf2xla cannot evaluate GetDimensionSize through such slices and
+        # falls back to the static shape, baking T=1 into the backward).
         attn_out = self.attn(x, mask, causal_valid_mask)
-
-        # Reshape (B, T, N, H) → (B, T, N*H) using -1 for T so XLA never
-        # bakes T=1 (from symbolic tracing) into the backward reshape.
-        B = ops.shape(x)[0]
-        attn_out = ops.reshape(attn_out, [B, -1, self.hidden_size])
         attn_out = ops.cast(attn_out, self.compute_dtype)
 
         projected = self.out_proj(attn_out)
