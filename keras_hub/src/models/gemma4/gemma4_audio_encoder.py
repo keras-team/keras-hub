@@ -112,19 +112,21 @@ class Gemma4AudioRelativePositionEmbedding(keras.layers.Layer):
         term_bd_padded = ops.pad(
             term_bd, [(0, 0), (0, 0), (0, 0), (0, 0), (0, pad_amount)]
         )  # (B, N, U, W, C+1)
+        # Use -1 for U so XLA infers it at runtime rather than baking a wrong
+        # static value from symbolic tracing (where U is None).
         term_bd_reshaped = ops.reshape(
             term_bd_padded,
             [
                 batch_size,
                 num_heads,
-                num_blocks,
+                -1,
                 block_size * (context_size + 1),
             ],
         )
         term_bd_sliced = term_bd_reshaped[:, :, :, : block_size * context_size]
         return ops.reshape(
             term_bd_sliced,
-            [batch_size, num_heads, num_blocks, block_size, context_size],
+            [batch_size, num_heads, -1, block_size, context_size],
         )
 
     def call(self, queries, keys):
@@ -187,22 +189,24 @@ class Gemma4AudioRelativePositionEmbedding(keras.layers.Layer):
         # queries_perm: (B, N, U, W, H)
         # sin_emb: (F_span, N, H) → permute to (N, H, F_span)
         s_perm = ops.transpose(sin_emb, (1, 2, 0))  # (N, H, F_span)
+        # Flatten U*W with -1 so XLA infers the product at runtime.
         q_flat = ops.reshape(
             queries_perm,
             [
                 batch_size,
                 self.num_heads,
-                num_blocks * block_size,
+                -1,
                 self.head_dim,
             ],
         )  # (B, N, U*W, H)
         term_bd_flat = ops.matmul(q_flat, s_perm)  # (B, N, U*W, F_span)
+        # Unflatten U*W → (U, W) using -1 for U.
         term_bd_raw = ops.reshape(
             term_bd_flat,
             [
                 batch_size,
                 self.num_heads,
-                num_blocks,
+                -1,
                 block_size,
                 max_span_plus_1,
             ],
@@ -350,7 +354,6 @@ class Gemma4AudioAttention(keras.layers.Layer):
                     zeros_row, [1, pad_len] + [1] * (x.ndim - 2)
                 )
                 x = ops.concatenate([x, zero_pad], axis=1)
-            num_blocks = (static_T + pad_len) // W
         else:
             T = ops.shape(x)[1]
             pad_len = (-T) % W
@@ -366,15 +369,14 @@ class Gemma4AudioAttention(keras.layers.Layer):
                 return x
 
             x = ops.cond(pad_len > 0, pad_fn, no_pad_fn)
-            num_blocks = (T + pad_len) // W
 
         ndim = len(x.shape)
         if ndim == 2:
-            return ops.reshape(x, [B, num_blocks, W])
+            return ops.reshape(x, [B, -1, W])
         elif ndim == 3:
-            return ops.reshape(x, [B, num_blocks, W, x.shape[2]])
+            return ops.reshape(x, [B, -1, W, x.shape[2]])
         else:  # ndim == 4
-            return ops.reshape(x, [B, num_blocks, W, x.shape[2], x.shape[3]])
+            return ops.reshape(x, [B, -1, W, x.shape[2], x.shape[3]])
 
     def _extract_block_context(self, x, num_blocks):
         """Extract overlapping context windows.
@@ -444,10 +446,11 @@ class Gemma4AudioAttention(keras.layers.Layer):
         if not isinstance(T, int):
             T = ops.shape(hidden_states)[1]
 
-        # Reshape to (B, T, N, H).
-        q = ops.reshape(q, [B, T, self.num_heads, self.head_dim])
-        k = ops.reshape(k, [B, T, self.num_heads, self.head_dim])
-        v = ops.reshape(v, [B, T, self.num_heads, self.head_dim])
+        # Reshape to (B, T, N, H) using -1 for T so XLA never needs to know T
+        # statically in the backward graph.
+        q = ops.reshape(q, [B, -1, self.num_heads, self.head_dim])
+        k = ops.reshape(k, [B, -1, self.num_heads, self.head_dim])
+        v = ops.reshape(v, [B, -1, self.num_heads, self.head_dim])
 
         # Apply per-dimension scale via softplus.
         pds = ops.reshape(
@@ -523,8 +526,8 @@ class Gemma4AudioAttention(keras.layers.Layer):
         ctx = ops.reshape(ctx, [b, -1, n, h])  # (B, U*W, N, H)
         ctx = ctx[:, :T, :, :]  # (B, T, N, H)
 
-        # Re-assert static shape of T so downstream conformer blocks can use it.
-        ctx = ops.reshape(ctx, [b, T, self.num_heads, self.head_dim])
+        # Reshape with -1 for T so XLA never bakes T=1 into the backward.
+        ctx = ops.reshape(ctx, [b, -1, self.num_heads, self.head_dim])
         return ops.cast(ctx, self.compute_dtype)
 
     def get_config(self):
@@ -647,13 +650,10 @@ class Gemma4AudioConformerAttention(keras.layers.Layer):
         # Attention output: (B, T, N, H)
         attn_out = self.attn(x, mask, causal_valid_mask)
 
-        # Reshape (B, T, N, H) → (B, T, N*H).
-        # Use static T when available to propagate shape info across conformer
-        # blocks, preventing ops.cond with different-shaped branches in
-        # _convert_to_block (which breaks XLA gradient compilation).
+        # Reshape (B, T, N, H) → (B, T, N*H) using -1 for T so XLA never
+        # bakes T=1 (from symbolic tracing) into the backward reshape.
         B = ops.shape(x)[0]
-        T = x.shape[1] if isinstance(x.shape[1], int) else ops.shape(x)[1]
-        attn_out = ops.reshape(attn_out, [B, T, self.hidden_size])
+        attn_out = ops.reshape(attn_out, [B, -1, self.hidden_size])
         attn_out = ops.cast(attn_out, self.compute_dtype)
 
         projected = self.out_proj(attn_out)
@@ -786,15 +786,12 @@ class Gemma4AudioSSCPConvBlock(keras.layers.Layer):
         x = self.conv(x)  # (B, T_out, F_out, C_out)
 
         # Downsample mask along time by the conv stride and trim length.
-        # Prefer static shape[1] (Python int) when available — Conv2D output
-        # size is statically inferrable from a static input, and preserving it
-        # here allows static shape propagation into the conformer blocks.
         t_out = x.shape[1] if isinstance(x.shape[1], int) else ops.shape(x)[1]
         new_mask = mask[:, :: self.stride_t][:, :t_out]
 
-        # Force shape to avoid symbolic mismatch during tracing
+        # Force mask to 2D; use -1 for T so XLA never bakes T=1 into backward.
         B = ops.shape(x)[0]
-        new_mask = ops.reshape(new_mask, (B, t_out))
+        new_mask = ops.reshape(new_mask, (B, -1))
 
         x = self.norm(x)  # LayerNorm over channels
         x = ops.relu(x)
@@ -938,13 +935,9 @@ class Gemma4AudioSubSampleConvProjection(keras.layers.Layer):
         x, mask = self.conv_1(x, mask)  # (B, T//4, F//4, C1)
 
         B = ops.shape(x)[0]
-        # Prefer static shape[1] when available to preserve static shape
-        # propagation from the Conv2D outputs into the conformer blocks.
-        T_out = x.shape[1] if isinstance(x.shape[1], int) else ops.shape(x)[1]
         # Flatten F and C: (B, T//4, F//4 * C1).
-        x = ops.reshape(
-            x, [B, T_out, self.freq_dims[1] * self.conv_channels[1]]
-        )
+        # Use -1 for T so XLA never bakes T=1 into backward reshapes.
+        x = ops.reshape(x, [B, -1, self.freq_dims[1] * self.conv_channels[1]])
         x = self.input_proj(x)  # (B, T//4, hidden_size)
         return x, mask
 
@@ -1563,20 +1556,13 @@ class Gemma4AudioEncoder(keras.Model):
                 if isinstance(audio_mel.shape[1], int)
                 else ops.shape(audio_mel)[1]
             )
-            t_mel = (
-                audio_mel.shape[2]
-                if isinstance(audio_mel.shape[2], int)
-                else ops.shape(audio_mel)[2]
-            )
             f_mel = (
                 audio_mel.shape[3]
                 if isinstance(audio_mel.shape[3], int)
                 else ops.shape(audio_mel)[3]
             )
-            audio_mel = ops.reshape(audio_mel, [b_in * n_clips, t_mel, f_mel])
-            audio_mel_mask = ops.reshape(
-                audio_mel_mask, [b_in * n_clips, t_mel]
-            )
+            audio_mel = ops.reshape(audio_mel, [b_in * n_clips, -1, f_mel])
+            audio_mel_mask = ops.reshape(audio_mel_mask, [b_in * n_clips, -1])
 
         # 1. Subsample: (B, T, F) → (B, T//4, hidden_size).
         x, mask = self.subsample_conv_projection(audio_mel, audio_mel_mask)
@@ -1618,10 +1604,7 @@ class Gemma4AudioEncoder(keras.Model):
 
         # 8. Un-flatten if original input was 4-D
         if is_4d:
-            t_fin = (
-                x.shape[1] if isinstance(x.shape[1], int) else ops.shape(x)[1]
-            )
-            x = ops.reshape(x, [b_in, n_clips, t_fin, self.output_dim])
+            x = ops.reshape(x, [b_in, n_clips, -1, self.output_dim])
 
         return x
 
