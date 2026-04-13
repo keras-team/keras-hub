@@ -67,34 +67,42 @@ class Gemma4MoEBlock(keras.layers.Layer):
         )
         self.built = True
 
-    def call(self, x):
-        """Compute all expert outputs for every token.
+    def call(self, x, dispatch_weights):
+        """Compute all expert outputs and combine with routing weights.
+
+        All ``E`` expert FFNs are computed as a single batched matrix
+        multiplication (one cuBLAS kernel), which maximises GPU utilisation.
+        The sparse routing is applied at the combine step: only the k
+        non-zero entries of ``dispatch_weights`` per token contribute.
 
         Args:
             x: Float tensor of shape ``[T, H]`` (flattened tokens).
+            dispatch_weights: Float tensor of shape ``[T, E]``.  Each row
+                has at most ``k`` non-zero entries (the selected experts)
+                and those entries sum to 1.
 
         Returns:
-            Float tensor of shape ``[E, T, H]`` — one output per
-            (expert, token) pair.
+            Float tensor of shape ``[T, H]``.
         """
         dtype = x.dtype
-        # gate/up: [T, H] x [E, H, I] -> [E, T, I]
+        # gate/up: [T, H] x [E, H, I] -> [E, T, I]  (single batched GEMM)
         gate = ops.einsum("th,ehi->eti", x, ops.cast(self.gate_proj, dtype))
         up_out = ops.einsum("th,ehi->eti", x, ops.cast(self.up_proj, dtype))
-        # GELU activation in float32 for numerical precision.
-        gate = keras.activations.gelu(
-            ops.cast(gate, "float32"), approximate=True
+        gate = ops.cast(
+            keras.activations.gelu(ops.cast(gate, "float32"), approximate=True),
+            dtype,
         )
-        gate = ops.cast(gate, dtype)
         hidden = gate * up_out  # [E, T, I]
-        # down: [E, T, I] x [E, I, H] -> [E, T, H]
+        # down: [E, T, I] x [E, I, H] -> [E, T, H]  (single batched GEMM)
         out = ops.einsum(
             "eti,eih->eth", hidden, ops.cast(self.down_proj, dtype)
         )
-        # Apply per-expert output scale: [E] -> [E, 1, 1]
+        # Per-expert output scale.
         scale = ops.cast(self.per_expert_scale, dtype)
-        scale = ops.reshape(scale, (self.num_experts, 1, 1))
-        return out * scale  # [E, T, H]
+        out = out * ops.reshape(scale, (self.num_experts, 1, 1))  # [E, T, H]
+        # Weighted sparse combine: dispatch_weights [T, E] -> [E, T].
+        dw = ops.transpose(ops.cast(dispatch_weights, dtype), (1, 0))  # [E, T]
+        return ops.sum(out * dw[:, :, None], axis=0)  # [T, H]
 
     def get_config(self):
         config = super().get_config()
@@ -168,15 +176,18 @@ class Gemma4Router(keras.layers.Layer):
         self.built = True
 
     def call(self, x):
-        """Compute dispatch weights for routing.
+        """Compute top-k expert assignments for each token.
 
         Args:
             x: Float tensor of shape ``[B, S, H]`` (raw hidden states,
                before any pre-FFW normalization).
 
         Returns:
-            dispatch_weights: Float tensor of shape ``[T, E]`` where
-               ``T = B * S``.  Top-k entries per row are non-zero and sum to 1.
+            top_k_indices: Int32 tensor of shape ``[T, k]`` where
+               ``T = B * S``.  Each row holds the indices of the ``k``
+               selected experts (sorted by descending probability).
+            top_k_probs: Float tensor of shape ``[T, k]`` — the
+               renormalised routing probabilities for each selected expert.
         """
         shape = ops.shape(x)
         x_flat = ops.reshape(x, (-1, shape[-1]))  # [T, H]
@@ -196,20 +207,22 @@ class Gemma4Router(keras.layers.Layer):
         # Top-k selection.
         _, top_k_indices = ops.top_k(
             router_probs, k=self.num_experts_per_token
-        )  # [T, top_k]
+        )  # [T, k]
         top_k_probs = ops.take_along_axis(
             router_probs, top_k_indices, axis=-1
-        )  # [T, top_k]
+        )  # [T, k]
 
         # Renormalise so selected expert probabilities sum to 1.
         denom = ops.maximum(
             ops.sum(top_k_probs, axis=-1, keepdims=True),
             ops.cast(1e-9, top_k_probs.dtype),
         )
-        top_k_probs = top_k_probs / denom  # [T, top_k]
+        top_k_probs = top_k_probs / denom  # [T, k]
 
-        # Build sparse dispatch-weight matrix: [T, E] via one-hot sum.
-        one_hot = ops.one_hot(top_k_indices, self.num_experts)  # [T, top_k, E]
+        # Build sparse dispatch-weight matrix [T, E] — only k entries per
+        # row are non-zero.  This avoids re-doing top_k inside the expert
+        # bank and keeps the combine step as a single einsum.
+        one_hot = ops.one_hot(top_k_indices, self.num_experts)  # [T, k, E]
         one_hot = ops.cast(one_hot, top_k_probs.dtype)
         dispatch_weights = ops.sum(
             one_hot * ops.expand_dims(top_k_probs, axis=-1), axis=1

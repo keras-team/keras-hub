@@ -21,9 +21,10 @@ class Gemma4CausalLM(CausalLM):
 
     A causal language model (LM) predicts the next token based on previous
     tokens. This task setup can be used to train the model unsupervised on
-    images and plain text inputs, or to autoregressively generate plain text
-    similar to the data used for training. Note that the model is
-    image-text in, text out.
+    multimodal inputs (text, images, audio, and video) or to autoregressively
+    generate plain text similar to the data used for training. The model
+    accepts multimodal inputs (text, image, audio, video) and produces text
+    output.
 
     This model has a `generate()` method, which generates text based on a
     prompt. The generation strategy used is controlled by an additional
@@ -41,6 +42,53 @@ class Gemma4CausalLM(CausalLM):
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
         backbone: A `keras_hub.models.Gemma4Backbone` instance.
+
+    Examples:
+
+    Text generation from a text prompt.
+    ```python
+    # All Gemma4 presets support text generation.
+    gemma4_lm = keras_hub.models.Gemma4CausalLM.from_preset(
+        "gemma4_instruct_2b",
+    )
+    gemma4_lm.generate("What is the capital of France?")
+    ```
+
+    Image + text generation.
+    ```python
+    # All Gemma4 presets support image inputs.
+    gemma4_lm = keras_hub.models.Gemma4CausalLM.from_preset(
+        "gemma4_instruct_2b",
+    )
+    gemma4_lm.generate({
+        "prompts": "Describe this image: <|image|>",
+        "images": image_array,  # np.ndarray of shape (H, W, 3)
+    })
+    ```
+
+    Audio + text generation.
+    ```python
+    # Only the E2B (2b) and E4B (4b) presets include an audio encoder.
+    gemma4_lm = keras_hub.models.Gemma4CausalLM.from_preset(
+        "gemma4_instruct_2b",
+    )
+    gemma4_lm.generate({
+        "prompts": "Transcribe this audio: <|audio|>",
+        "audio": waveform,  # np.ndarray of shape (num_samples,) at 16 kHz
+    })
+    ```
+
+    Video + text generation.
+    ```python
+    # All Gemma4 presets support video inputs (processed as frame sequences).
+    gemma4_lm = keras_hub.models.Gemma4CausalLM.from_preset(
+        "gemma4_instruct_2b",
+    )
+    gemma4_lm.generate({
+        "prompts": "Describe this video: <|video|>",
+        "videos": frames,  # np.ndarray of shape (N_frames, H, W, 3)
+    })
+    ```
     """
 
     backbone_cls = Gemma4Backbone
@@ -50,11 +98,13 @@ class Gemma4CausalLM(CausalLM):
         self,
         preprocessor,
         backbone,
+        final_logit_cap=None,
         **kwargs,
     ):
         # === Layers ===
         self.preprocessor = preprocessor
         self.backbone = backbone
+        self.final_logit_cap = final_logit_cap
 
         # === Functional Model ===
         # This must be "backbone.input" i.e. the full input structure,
@@ -62,6 +112,11 @@ class Gemma4CausalLM(CausalLM):
         inputs = backbone.input
         hidden_state = backbone(inputs=inputs)
         outputs = backbone.token_embedding(hidden_state, reverse=True)
+
+        if final_logit_cap is not None:
+            outputs = outputs / final_logit_cap
+            outputs = ops.tanh(outputs)
+            outputs = outputs * final_logit_cap
 
         super().__init__(
             inputs=inputs,
@@ -297,6 +352,10 @@ class Gemma4CausalLM(CausalLM):
         cache = ops.stack(caches, axis=1)
         hidden_states = x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
+        if self.final_logit_cap is not None:
+            logits = logits / self.final_logit_cap
+            logits = ops.tanh(logits)
+            logits = logits * self.final_logit_cap
         return logits, hidden_states, cache
 
     def _build_cache(
@@ -341,6 +400,15 @@ class Gemma4CausalLM(CausalLM):
             cache_update_mask=None,
         )
         return hidden_states, cache
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "final_logit_cap": self.final_logit_cap,
+            }
+        )
+        return config
 
     def generate_step(self, inputs, stop_token_ids=[106]):
         """A compilable generation function for a single batch of inputs.
@@ -406,6 +474,7 @@ class Gemma4CausalLM(CausalLM):
                 vision_mask = ops.expand_dims(vision_mask, axis=0)
             if len(ops.shape(vision_indices)) == 1:
                 vision_indices = ops.expand_dims(vision_indices, axis=0)
+
             img_embeddings = self.backbone.vision_encoder(
                 {
                     "pixel_values": pixel_values,
@@ -511,11 +580,6 @@ class Gemma4CausalLM(CausalLM):
         return {
             "token_ids": token_ids,
             "padding_mask": padding_mask,
-            "pixel_values": pixel_values,
-            "pixel_position_ids": pixel_position_ids,
-            "audio_mel": audio_mel,
-            "audio_mel_mask": audio_mel_mask,
-            "audio_indices": audio_indices,
         }
 
     def generate(
