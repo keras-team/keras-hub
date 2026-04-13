@@ -30,6 +30,7 @@ class Preprocessor(PreprocessingLayer):
     tokenizer_cls = None
     audio_converter_cls = None
     image_converter_cls = None
+    video_converter_cls = None
 
     def __init__(self, *args, **kwargs):
         self.config_file = kwargs.pop("config_file", PREPROCESSOR_CONFIG_FILE)
@@ -37,10 +38,16 @@ class Preprocessor(PreprocessingLayer):
         self._tokenizer = None
         self._image_converter = None
         self._audio_converter = None
+        self._video_converter = None
 
     def __setattr__(self, name, value):
         # Work around torch setattr for properties.
-        if name in ["tokenizer", "audio_converter", "image_converter"]:
+        if name in [
+            "tokenizer",
+            "audio_converter",
+            "image_converter",
+            "video_converter",
+        ]:
             return object.__setattr__(self, name, value)
         return super().__setattr__(name, value)
 
@@ -72,6 +79,15 @@ class Preprocessor(PreprocessingLayer):
         self._image_converter = value
 
     @property
+    def video_converter(self):
+        """The video converter used to preprocess video data."""
+        return self._video_converter
+
+    @video_converter.setter
+    def video_converter(self, value):
+        self._video_converter = value
+
+    @property
     def image_size(self):
         """Shortcut to get/set the image size of the image converter."""
         if self.image_converter is None:
@@ -99,6 +115,10 @@ class Preprocessor(PreprocessingLayer):
             config["image_converter"] = keras.layers.serialize(
                 self.image_converter
             )
+        if self.video_converter:
+            config["video_converter"] = keras.layers.serialize(
+                self.video_converter
+            )
         config.update(
             {
                 "config_file": self.config_file,
@@ -121,6 +141,12 @@ class Preprocessor(PreprocessingLayer):
         ):
             config["image_converter"] = keras.layers.deserialize(
                 config["image_converter"]
+            )
+        if "video_converter" in config and isinstance(
+            config["video_converter"], dict
+        ):
+            config["video_converter"] = keras.layers.deserialize(
+                config["video_converter"]
             )
         return cls(**config)
 
@@ -206,6 +232,12 @@ class Preprocessor(PreprocessingLayer):
         if "image_converter" not in kwargs and cls.image_converter_cls:
             kwargs["image_converter"] = loader.load_image_converter(
                 cls.image_converter_cls
+            )
+        if "video_converter" not in kwargs and getattr(
+            cls, "video_converter_cls", None
+        ):
+            kwargs["video_converter"] = loader.load_video_converter(
+                cls.video_converter_cls
             )
         return kwargs
 

@@ -45,6 +45,7 @@ CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
 AUDIO_CONVERTER_CONFIG_FILE = "audio_converter.json"
 IMAGE_CONVERTER_CONFIG_FILE = "image_converter.json"
+VIDEO_CONVERTER_CONFIG_FILE = "video_converter.json"
 TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
@@ -620,6 +621,10 @@ class PresetLoader:
         """Load an image converter layer from the preset."""
         raise NotImplementedError
 
+    def load_video_converter(self, cls, **kwargs):
+        """Load a video converter layer from the preset."""
+        raise NotImplementedError
+
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         """Load a task model from the preset.
 
@@ -679,6 +684,10 @@ class KerasPresetLoader(PresetLoader):
 
     def load_image_converter(self, cls, **kwargs):
         converter_config = load_json(self.preset, IMAGE_CONVERTER_CONFIG_FILE)
+        return self._load_serialized_object(converter_config, **kwargs)
+
+    def load_video_converter(self, cls, **kwargs):
+        converter_config = load_json(self.preset, VIDEO_CONVERTER_CONFIG_FILE)
         return self._load_serialized_object(converter_config, **kwargs)
 
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
@@ -873,6 +882,9 @@ class KerasPresetSaver:
 
     def save_image_converter(self, converter):
         self._save_serialized_object(converter, IMAGE_CONVERTER_CONFIG_FILE)
+
+    def save_video_converter(self, converter):
+        self._save_serialized_object(converter, VIDEO_CONVERTER_CONFIG_FILE)
 
     def save_task(self, task, max_shard_size=10):
         # Save task specific config and weights.
