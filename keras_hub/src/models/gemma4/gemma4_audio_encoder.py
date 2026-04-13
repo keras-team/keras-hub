@@ -501,35 +501,29 @@ class Gemma4AudioAttention(keras.layers.Layer):
 
         # Weighted sum over context values.
         # probs: (B, N, U, W, C), v_ctx: (B, U, C, N, H)
-        # → context_vectors: (B, U, W, N, H)
-        # Use static shape attributes for all non-batch dims so XLA can
-        # compile gradients through the reshapes below.
-        b = ops.shape(probs)[0]
+        # → context_vectors: (B, T, N, H)
+        #
+        # XLA-safe aggregation via einsum: avoids any ops.reshape with dynamic
+        # dims containing U.  When T is unknown at Keras functional-model
+        # tracing time (backbone uses keras.Input with shape=(None,...)), U is
+        # also unknown; putting U inside ops.reshape causes XLA/tf2xla to bake
+        # a wrong static size into the backward graph → Reshape dimension
+        # mismatch at GPU training time.  einsum lets XLA infer all dims from
+        # the operand shapes at runtime.
         n = self.num_heads
-        u = (
-            probs.shape[2]
-            if isinstance(probs.shape[2], int)
-            else ops.shape(probs)[2]
-        )
-        w = self.chunk_size
-        c = self.context_size
         h = self.head_dim
-        # Reshape for bmm: (B*N*U, W, C) @ (B*N*U, C, H)
-        probs_flat = ops.reshape(
-            ops.transpose(probs, (0, 2, 1, 3, 4)), [-1, w, c]
-        )
-        v_flat = ops.reshape(ops.transpose(v_ctx, (0, 1, 3, 2, 4)), [-1, c, h])
-        ctx_flat = ops.matmul(probs_flat, v_flat)  # (B*U*N, W, H)
-        ctx = ops.reshape(ctx_flat, [b, u, n, w, h])
-        ctx = ops.transpose(ctx, (0, 1, 3, 2, 4))  # (B, U, W, N, H)
+        # v_ctx: (B, U, C, N, H) → (B, N, U, C, H) for einsum
+        v_t = ops.transpose(v_ctx, (0, 3, 1, 2, 4))  # (B, N, U, C, H)
+        # probs: (B, N, U, W, C)  ×  v_t: (B, N, U, C, H)  → (B, N, U, W, H)
+        ctx = ops.einsum("bnuwc,bnuch->bnuwh", probs, v_t)
+        # (B, N, U, W, H) → (B, U, W, N, H) → (B, U*W, N, H) → (B, T, N, H)
+        ctx = ops.transpose(ctx, (0, 2, 3, 1, 4))  # (B, U, W, N, H)
 
-        # Merge blocks and truncate to original sequence length.
-        ctx = ops.reshape(
-            ctx, [b, u * self.chunk_size, self.num_heads, self.head_dim]
-        )
+        b = ops.shape(probs)[0]
+        ctx = ops.reshape(ctx, [b, -1, n, h])  # (B, U*W, N, H)
         ctx = ctx[:, :T, :, :]  # (B, T, N, H)
 
-        # Force shape to T to avoid symbolic mismatch during tracing
+        # Re-assert static shape of T so downstream conformer blocks can use it.
         ctx = ops.reshape(ctx, [b, T, self.num_heads, self.head_dim])
         return ops.cast(ctx, self.compute_dtype)
 
