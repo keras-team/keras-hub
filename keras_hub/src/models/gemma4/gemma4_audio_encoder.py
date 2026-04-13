@@ -767,7 +767,10 @@ class Gemma4AudioSSCPConvBlock(keras.layers.Layer):
         x = self.conv(x)  # (B, T_out, F_out, C_out)
 
         # Downsample mask along time by the conv stride and trim length.
-        t_out = ops.shape(x)[1]
+        # Prefer static shape[1] (Python int) when available — Conv2D output
+        # size is statically inferrable from a static input, and preserving it
+        # here allows static shape propagation into the conformer blocks.
+        t_out = x.shape[1] if isinstance(x.shape[1], int) else ops.shape(x)[1]
         new_mask = mask[:, :: self.stride_t][:, :t_out]
 
         # Force shape to avoid symbolic mismatch during tracing
@@ -916,7 +919,9 @@ class Gemma4AudioSubSampleConvProjection(keras.layers.Layer):
         x, mask = self.conv_1(x, mask)  # (B, T//4, F//4, C1)
 
         B = ops.shape(x)[0]
-        T_out = ops.shape(x)[1]
+        # Prefer static shape[1] when available to preserve static shape
+        # propagation from the Conv2D outputs into the conformer blocks.
+        T_out = x.shape[1] if isinstance(x.shape[1], int) else ops.shape(x)[1]
         # Flatten F and C: (B, T//4, F//4 * C1).
         x = ops.reshape(
             x, [B, T_out, self.freq_dims[1] * self.conv_channels[1]]
