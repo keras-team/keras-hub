@@ -1,17 +1,17 @@
 import math
 
-import keras
 import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.preprocessing.video_converter import VideoConverter
 from keras_hub.src.models.qwen3_5.qwen3_5_backbone import Qwen3_5Backbone
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
-@keras_hub_export("keras_hub.models.Qwen3_5VideoConverter")
-class Qwen3_5VideoConverter(keras.layers.Layer):
+@keras_hub_export("keras_hub.layers.Qwen3_5VideoConverter")
+class Qwen3_5VideoConverter(VideoConverter):
     """Video pre-processor for Qwen3.5-VL.
 
     Converts videos to the patch tensor format expected by

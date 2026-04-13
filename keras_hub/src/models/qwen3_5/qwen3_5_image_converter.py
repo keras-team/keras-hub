@@ -39,7 +39,7 @@ def _compute_target_size(h, w, min_pixels, max_pixels, patch_stride):
     return target_h, target_w
 
 
-@keras_hub_export("keras_hub.models.Qwen3_5ImageConverter")
+@keras_hub_export("keras_hub.layers.Qwen3_5ImageConverter")
 class Qwen3_5ImageConverter(ImageConverter):
     """Image pre-processor for Qwen3.5-VL (image-only v1).
 

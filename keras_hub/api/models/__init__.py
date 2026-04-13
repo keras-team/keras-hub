@@ -600,14 +600,8 @@ from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm import (
 from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm_preprocessor import (
     Qwen3_5CausalLMPreprocessor as Qwen3_5CausalLMPreprocessor,
 )
-from keras_hub.src.models.qwen3_5.qwen3_5_image_converter import (
-    Qwen3_5ImageConverter as Qwen3_5ImageConverter,
-)
 from keras_hub.src.models.qwen3_5.qwen3_5_tokenizer import (
     Qwen3_5Tokenizer as Qwen3_5Tokenizer,
-)
-from keras_hub.src.models.qwen3_5.qwen3_5_video_converter import (
-    Qwen3_5VideoConverter as Qwen3_5VideoConverter,
 )
 from keras_hub.src.models.qwen3_moe.qwen3_moe_backbone import (
     Qwen3MoeBackbone as Qwen3MoeBackbone,
