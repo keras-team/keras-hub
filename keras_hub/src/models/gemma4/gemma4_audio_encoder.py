@@ -358,17 +358,9 @@ class Gemma4AudioAttention(keras.layers.Layer):
             T = ops.shape(x)[1]
             pad_len = (-T) % W
 
-            def pad_fn():
-                zeros_row = ops.zeros_like(x[:, :1, ...])
-                zero_pad = ops.tile(
-                    zeros_row, [1, pad_len] + [1] * (x.ndim - 2)
-                )
-                return ops.concatenate([x, zero_pad], axis=1)
-
-            def no_pad_fn():
-                return x
-
-            x = ops.cond(pad_len > 0, pad_fn, no_pad_fn)
+            zeros_row = ops.zeros_like(x[:, :1, ...])
+            zero_pad = ops.tile(zeros_row, [1, pad_len] + [1] * (x.ndim - 2))
+            x = ops.concatenate([x, zero_pad], axis=1)
 
         ndim = len(x.shape)
         if ndim == 2:
