@@ -138,9 +138,24 @@ class Gemma4AudioRelativePositionEmbedding(keras.layers.Layer):
             float tensor `(B, N, U, W, C)`.
         """
         batch_size = ops.shape(queries)[0]
-        num_blocks = ops.shape(queries)[1]
-        block_size = ops.shape(queries)[2]
-        context_size = ops.shape(keys)[2]
+        # Use static shape attributes where available so that downstream
+        # ops.reshape calls have static dimensions — required for XLA to
+        # compile gradients on the TF GPU backend.
+        num_blocks = (
+            queries.shape[1]
+            if isinstance(queries.shape[1], int)
+            else ops.shape(queries)[1]
+        )
+        block_size = (
+            queries.shape[2]
+            if isinstance(queries.shape[2], int)
+            else ops.shape(queries)[2]
+        )
+        context_size = (
+            keys.shape[2]
+            if isinstance(keys.shape[2], int)
+            else ops.shape(keys)[2]
+        )
         max_span_plus_1 = self.max_backward + self.max_forward + 1
 
         # Relative position indices: [max_backward, ..., -max_forward].
@@ -487,7 +502,17 @@ class Gemma4AudioAttention(keras.layers.Layer):
         # Weighted sum over context values.
         # probs: (B, N, U, W, C), v_ctx: (B, U, C, N, H)
         # → context_vectors: (B, U, W, N, H)
-        b, n, u, w, c = ops.shape(probs)
+        # Use static shape attributes for all non-batch dims so XLA can
+        # compile gradients through the reshapes below.
+        b = ops.shape(probs)[0]
+        n = self.num_heads
+        u = (
+            probs.shape[2]
+            if isinstance(probs.shape[2], int)
+            else ops.shape(probs)[2]
+        )
+        w = self.chunk_size
+        c = self.context_size
         h = self.head_dim
         # Reshape for bmm: (B*N*U, W, C) @ (B*N*U, C, H)
         probs_flat = ops.reshape(
