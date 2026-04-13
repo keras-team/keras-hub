@@ -50,14 +50,14 @@ class Gemma3nCausalLM(CausalLM):
 
     # === Text-only usage ===
     # Load a text-only Gemma3n model from preset.
-    causal_lm = Gemma3nCausalLM.from_preset("gemma3n_instruct_1b")
+    causal_lm = Gemma3nCausalLM.from_preset("gemma3n_2b_it")
 
     # Generate text.
     causal_lm.generate("What is the capital of France?", max_length=128)
 
     # === Vision + Text usage ===
     # Load a vision-text Gemma3n model from preset.
-    causal_lm = Gemma3nCausalLM.from_preset("gemma3n_instruct_4b")
+    causal_lm = Gemma3nCausalLM.from_preset("gemma3n_2b_it")
 
     # Generate with image input.
     image = np.ones((768, 768, 3), dtype="float32")
@@ -68,7 +68,7 @@ class Gemma3nCausalLM(CausalLM):
 
     # === Audio + Text usage ===
     # Load an audio-text Gemma3n model from preset.
-    causal_lm = Gemma3nCausalLM.from_preset("gemma3n_instruct_4b_audio")
+    causal_lm = Gemma3nCausalLM.from_preset("gemma3n_2b_it")
 
     # Generate with audio input.
     audio = np.ones((16000,), dtype="float32")

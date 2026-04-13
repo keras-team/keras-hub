@@ -92,7 +92,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
     # === Language ===
     # Load the preprocessor from a preset.
     preprocessor = keras_hub.models.Gemma3nCausalLMPreprocessor.from_preset(
-        "gemma3n_instruct_1b"
+        "gemma3n_2b_it"
     )
 
     # Unbatched inputs.
@@ -138,7 +138,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
     # === Vision and Language ===
     # Load the preprocessor from a preset.
     preprocessor = keras_hub.models.Gemma3nCausalLMPreprocessor.from_preset(
-        "gemma3n_instruct_4b"
+        "gemma3n_2b_it"
     )
 
     # Text-only inputs (unbatched).

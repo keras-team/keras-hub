@@ -29,8 +29,8 @@ backbone_presets = {
     "gemma3n_e4b": {
         "metadata": {
             "description": (
-                "Gemma 3n E4B model with 8B total (4B effective) "
-                "parameters, supporting multimodal inputs and "
+                "Gemma 3n E4B multimodal with ( ~8B total ~4B effective "
+                "parameters ), supporting multimodal inputs and "
                 "optimized for on-device deployment."
             ),
             "params": 7850135376,
@@ -41,8 +41,8 @@ backbone_presets = {
     "gemma3n_e4b_it": {
         "metadata": {
             "description": (
-                "Instruction-tunedGemma 3n E4B model with 8B total "
-                "(4B effective) parameters, supporting multimodal "
+                "Instruction-tuned Gemma 3n E4B multimodal with ~8B total "
+                "(~4B effective parameters ), supporting multimodal "
                 "inputs and optimized for on-device deployment."
             ),
             "params": 7850135376,
