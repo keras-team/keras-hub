@@ -47,9 +47,17 @@ class Gemma4VisionEncoder(keras.Model):
         position_embedding_size: int. Number of learnable entries in each
             (x or y) position embedding table. Should be at least
             `image_size // patch_size`. Defaults to `1024`.
+        rope_max_wavelength: float. Maximum wavelength used for rotary
+            position embeddings inside vision transformer blocks. Defaults
+            to `100.0`.
         layer_norm_epsilon: float. Epsilon for layer normalisations. Defaults
             to `1e-6`.
         dropout: float. Dropout probability. Defaults to `0`.
+        use_clipped_linears: bool. If `True`, use clipped linear activations
+            in the vision feed-forward layers to match the reference
+            implementation. Defaults to `True`.
+        standardize: bool. If `True`, standardize patch features before
+            encoding. Defaults to `False`.
         dtype: Compute dtype. Defaults to `None` (uses Keras global policy).
 
     Example:
@@ -297,20 +305,18 @@ class Gemma4VisionPatchEmbedder(keras.layers.Layer):
         # Gemma4 applies no normalization and instead scales in model code
         # Inputs are in [0, 1], scale to [-1, 1] to match HF.
         pixel_values = 2.0 * (pixel_values - 0.5)
+
         x = self.input_proj(pixel_values)
 
-        # Clamp padding patches (which are -1) to 0 so they don't break one_hot.
+        # Clamp padding patches (which are -1) to 0 so they don't break take.
         clamped_positions = ops.maximum(pixel_position_ids, 0)
 
-        # Create one-hot for positions
-        one_hot = ops.one_hot(
-            clamped_positions, num_classes=self.position_embedding_size
-        )  # (B, T, 2, P)
+        x_pos = ops.cast(clamped_positions[..., 0], "int32")
+        y_pos = ops.cast(clamped_positions[..., 1], "int32")
 
-        # Equation: btip (B, T, 2, P) and iph (2, P, H) -> bth (B, T, H)
-        pos_embeds = ops.einsum(
-            "btip,iph->bth", one_hot, self.position_embedding_table
-        )
+        x_embeds = ops.take(self.position_embedding_table[0], x_pos, axis=0)
+        y_embeds = ops.take(self.position_embedding_table[1], y_pos, axis=0)
+        pos_embeds = x_embeds + y_embeds
 
         # Zero out position embeddings for padding patches (-1)
         is_padding = ops.all(

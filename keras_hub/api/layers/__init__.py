@@ -67,6 +67,9 @@ from keras_hub.src.layers.preprocessing.random_swap import (
 from keras_hub.src.layers.preprocessing.start_end_packer import (
     StartEndPacker as StartEndPacker,
 )
+from keras_hub.src.layers.preprocessing.video_converter import (
+    VideoConverter as VideoConverter,
+)
 from keras_hub.src.models.basnet.basnet_image_converter import (
     BASNetImageConverter as BASNetImageConverter,
 )
@@ -114,6 +117,9 @@ from keras_hub.src.models.gemma4.gemma4_audio_converter import (
 )
 from keras_hub.src.models.gemma4.gemma4_image_converter import (
     Gemma4ImageConverter as Gemma4ImageConverter,
+)
+from keras_hub.src.models.gemma4.gemma4_video_converter import (
+    Gemma4VideoConverter as Gemma4VideoConverter,
 )
 from keras_hub.src.models.hgnetv2.hgnetv2_image_converter import (
     HGNetV2ImageConverter as HGNetV2ImageConverter,

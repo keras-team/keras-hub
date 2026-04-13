@@ -205,21 +205,28 @@ class MultiSegmentPacker(PreprocessingLayer):
             )
         return x, unbatched[0]
 
-    def _trim_inputs(self, inputs):
+    def _trim_inputs(
+        self,
+        inputs,
+        sequence_length=None,
+        add_start_value=True,
+        add_end_value=True,
+    ):
         """Trim inputs to desired length."""
+        sequence_length = sequence_length or self.sequence_length
         num_segments = len(inputs)
         num_special_tokens = (
-            len(self.start_value)
+            (len(self.start_value) if add_start_value else 0)
             + (num_segments - 1) * len(self.sep_value)
-            + len(self.end_value)
+            + (len(self.end_value) if add_end_value else 0)
         )
         if self.truncate == "round_robin":
             return tf_text.RoundRobinTrimmer(
-                self.sequence_length - num_special_tokens
+                sequence_length - num_special_tokens
             ).trim(inputs)
         elif self.truncate == "waterfall":
             return tf_text.WaterfallTrimmer(
-                self.sequence_length - num_special_tokens
+                sequence_length - num_special_tokens
             ).trim(inputs)
         else:
             raise ValueError("Unsupported truncate: %s" % self.truncate)
@@ -286,14 +293,19 @@ class MultiSegmentPacker(PreprocessingLayer):
     ):
         inputs, unbatched = self._sanitize_inputs(inputs)
 
-        segments = self._trim_inputs(inputs)
+        sequence_length = sequence_length or self.sequence_length
+        segments = self._trim_inputs(
+            inputs,
+            sequence_length=sequence_length,
+            add_start_value=add_start_value,
+            add_end_value=add_end_value,
+        )
         token_ids, segment_ids = self._combine_inputs(
             segments,
             add_start_value=add_start_value,
             add_end_value=add_end_value,
         )
         # Pad to dense tensor output.
-        sequence_length = sequence_length or self.sequence_length
         shape = tf.cast([-1, sequence_length], "int64")
         token_ids = pad(
             token_ids,

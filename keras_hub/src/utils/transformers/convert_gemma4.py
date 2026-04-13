@@ -13,27 +13,67 @@ from keras_hub.src.utils.preset_utils import load_json
 backbone_cls = Gemma4Backbone
 
 
+def _compute_scale_offset(proc_cfg, section_name):
+    """Compute KH scale/offset from HF processor do_rescale/do_normalize flags.
+
+    KH applies: output = input * scale + offset
+    HF applies:
+        1. Rescale (if do_rescale): x = x * rescale_factor
+        2. Normalize (if do_normalize): x = (x - mean) / std
+    Combined:   scale = rescale_factor / std,  offset = -mean / std
+
+    If neither flag is set the transform is identity (scale=None, offset=None).
+    If do_resize=False an error is raised because Gemma4ImageConverter always
+    resizes; this configuration is not supported.
+    """
+    do_rescale = proc_cfg["do_rescale"]
+    do_normalize = proc_cfg["do_normalize"]
+    do_resize = proc_cfg["do_resize"]
+
+    if not do_resize:
+        raise ValueError(
+            f"{section_name}: do_resize=False is not supported by "
+            "Gemma4ImageConverter, which always applies aspect-ratio-"
+            "preserving resize."
+        )
+
+    if not do_rescale and not do_normalize:
+        return None, None
+
+    effective_rescale = proc_cfg["rescale_factor"] if do_rescale else 1.0
+    effective_mean = proc_cfg["image_mean"] if do_normalize else [0.0, 0.0, 0.0]
+    effective_std = proc_cfg["image_std"] if do_normalize else [1.0, 1.0, 1.0]
+
+    scale = [(effective_rescale / s) for s in effective_std]
+    offset = [(-m / s) for m, s in zip(effective_mean, effective_std)]
+    return scale, offset
+
+
 def load_image_converter_config(preset, transformers_config):
     """Return kwargs for Gemma4ImageConverter, or None for text-only models."""
     if "vision_config" not in transformers_config:
         return None
 
     processor_config = load_json(preset, "processor_config.json")
-    image_processor = processor_config.get("image_processor", processor_config)
-    mean = image_processor["image_mean"]
-    std = image_processor["image_std"]
-    rescale_factor = image_processor.get("rescale_factor", 1.0 / 255.0)
-
-    offset = [(-m / s) for m, s in zip(mean, std)]
-    scale = [(rescale_factor / s) for s in std]
+    image_processor = processor_config["image_processor"]
+    scale, offset = _compute_scale_offset(image_processor, "image_processor")
 
     vision_config = transformers_config["vision_config"]
-    image_size = vision_config.get("image_size", 896)
-    patch_size = vision_config.get("patch_size", 14)
+    # image_size is not present in the HF vision_config; 896 is the fixed
+    # positional-embedding size used across all Gemma4 vision checkpoints
+    # (matches the hardcoded value in convert_backbone_config).
+    image_size = 896
+    patch_size = vision_config["patch_size"]
+    # max_soft_tokens lives in the image_processor section of processor_config;
+    # vision_soft_tokens_per_image in the model config is the authoritative cap.
+    max_soft_tokens = image_processor["max_soft_tokens"]
+    pooling_kernel_size = vision_config["pooling_kernel_size"]
 
     return {
         "image_size": (image_size, image_size),
         "patch_size": patch_size,
+        "max_soft_tokens": max_soft_tokens,
+        "pooling_kernel_size": pooling_kernel_size,
         "scale": scale,
         "offset": offset,
     }
@@ -41,34 +81,62 @@ def load_image_converter_config(preset, transformers_config):
 
 def load_audio_converter_config(preset, transformers_config):
     """Return Gemma4AudioConverter kwargs, or None for text/vision models."""
-    if "audio_config" not in transformers_config:
+    if not transformers_config.get("audio_config"):
         return None
-    return {}
+
+    processor_config = load_json(preset, "processor_config.json")
+    feature_extractor = processor_config["feature_extractor"]
+
+    # Map HF keys to KerasHub keys
+    return {
+        "num_mels": feature_extractor["feature_size"],
+        "num_fft_bins": feature_extractor["fft_length"],
+        "stride": feature_extractor["hop_length"],
+        "sampling_rate": feature_extractor["sampling_rate"],
+        "frame_length": feature_extractor["frame_length"],
+        "max_frequency": feature_extractor["max_frequency"],
+        "min_frequency": feature_extractor["min_frequency"],
+        "mel_floor": feature_extractor["mel_floor"],
+    }
+
+
+def load_video_converter_config(preset, transformers_config):
+    """Return Gemma4VideoConverter kwargs, or None if not a video model."""
+    processor_config = load_json(preset, "processor_config.json")
+    if "video_processor" not in processor_config:
+        return None
+
+    video_proc = processor_config["video_processor"]
+    scale, offset = _compute_scale_offset(video_proc, "video_processor")
+
+    return {
+        "num_frames": video_proc["num_frames"],
+        "max_soft_tokens": video_proc["max_soft_tokens"],
+        "patch_size": video_proc["patch_size"],
+        "pooling_kernel_size": video_proc["pooling_kernel_size"],
+        "scale": scale,
+        "offset": offset,
+    }
 
 
 def load_preprocessor_config(preset, transformers_config):
-    """Return extra kwargs for Gemma4CausalLMPreprocessor from HF config.
+    """Return extra Gemma4CausalLMPreprocessor kwargs from processor_config."""
+    processor_config = load_json(preset, "processor_config.json")
+    if "video_processor" not in processor_config:
+        return {}
 
-    For audio-capable models (E2B/E4B), this wires `audio_input_feat_size`
-    from the HF `audio_config` into the preprocessor so that it emits the
-    correct audio dummy keys expected by the backbone.
-    """
-    config = {}
-    if "vision_config" in transformers_config:
-        vis_cfg = transformers_config["vision_config"]
-        # Use the authoritative token count from the config rather than
-        # recomputing it from image_size (which may not be present and
-        # differs per-image for dynamic-resolution models).
-        config["num_vision_tokens_per_image"] = vis_cfg["default_output_length"]
-
-    audio_cfg = transformers_config.get("audio_config")
-    if audio_cfg is not None:
-        config["audio_input_feat_size"] = audio_cfg.get("input_feat_size", 128)
-        config["num_audio_tokens_per_clip"] = audio_cfg.get(
-            "num_audio_tokens_per_clip",
-            750 // audio_cfg.get("reduction_factor", 1),
-        )
-    return config
+    video_proc = processor_config["video_processor"]
+    # do_sample_frames=True means the processor samples num_frames from the
+    # full video. KH's VideoConverter always samples; if this flag is ever
+    # False, frames are expected to be pre-sampled by the caller and num_frames
+    # is ignored at runtime (the converter still linspaces over whatever it
+    # receives, but total_frames == num_frames so the result is identical).
+    return {
+        "num_frames_per_video": video_proc["num_frames"],
+        "num_vision_tokens_per_frame": video_proc["max_soft_tokens"],
+        # video_fps is not stored in HF configs; 24.0 matches the HF default.
+        "video_fps": 24.0,
+    }
 
 
 def convert_backbone_config(transformers_config):
@@ -80,7 +148,6 @@ def convert_backbone_config(transformers_config):
         text_cfg = transformers_config
         vision_encoder = None
         audio_encoder = None
-        num_audio_tokens_per_clip = None
         image_size = None
     else:
         text_cfg = transformers_config["text_config"]
@@ -118,54 +185,26 @@ def convert_backbone_config(transformers_config):
         # Audio encoder — key may be present but null for vision-only models.
         if transformers_config.get("audio_config") is not None:
             aud_cfg = transformers_config["audio_config"]
-            output_proj_dims = aud_cfg.get("output_proj_dims", 1536)
             audio_encoder = Gemma4AudioEncoder(
-                input_feat_size=aud_cfg.get("input_feat_size", 128),
-                hidden_size=aud_cfg.get("hidden_size", 1024),
-                num_heads=aud_cfg.get("num_attention_heads", 8),
-                num_layers=aud_cfg.get("num_hidden_layers", 12),
-                chunk_size=aud_cfg.get("attention_chunk_size", 12),
-                context_left=aud_cfg.get("attention_context_left", 13),
-                context_right=aud_cfg.get("attention_context_right", 0),
-                logit_cap=aud_cfg.get("attention_logit_cap", 50.0),
-                invalid_logit_value=aud_cfg.get(
-                    "attention_invalid_logits_value", -1e9
-                ),
-                conv_kernel_size=aud_cfg.get("conv_kernel_size", 5),
-                reduction_factor=aud_cfg.get("reduction_factor", 1),
-                residual_weight=aud_cfg.get("residual_weight", 0.5),
-                gradient_clipping=aud_cfg.get("gradient_clipping", 1e10),
-                sscp_conv_channels=tuple(
-                    aud_cfg.get("subsampling_conv_channels", (128, 32))
-                ),
-                sscp_kernel_sizes=tuple(
-                    tuple(k)
-                    for k in aud_cfg.get(
-                        "sscp_conv_kernel_size", ((3, 3), (3, 3))
-                    )
-                ),
-                sscp_stride_sizes=tuple(
-                    tuple(s)
-                    for s in aud_cfg.get(
-                        "sscp_conv_stride_size", ((2, 2), (2, 2))
-                    )
-                ),
-                output_proj_dims=output_proj_dims,
+                hidden_size=aud_cfg["hidden_size"],
+                num_heads=aud_cfg["num_attention_heads"],
+                num_layers=aud_cfg["num_hidden_layers"],
+                chunk_size=aud_cfg["attention_chunk_size"],
+                context_left=aud_cfg["attention_context_left"],
+                context_right=aud_cfg["attention_context_right"],
+                logit_cap=aud_cfg["attention_logit_cap"],
+                invalid_logit_value=aud_cfg["attention_invalid_logits_value"],
+                conv_kernel_size=aud_cfg["conv_kernel_size"],
+                residual_weight=aud_cfg["residual_weight"],
+                gradient_clipping=aud_cfg["gradient_clipping"],
+                sscp_conv_channels=tuple(aud_cfg["subsampling_conv_channels"]),
+                output_proj_dims=aud_cfg["output_proj_dims"],
                 output_dim=text_cfg["hidden_size"],
-                norm_eps=aud_cfg.get("rms_norm_eps", 1e-6),
-                # HF uses rms_norm_eps for the SSCP LayerNorm too; there is
-                # no separate sscp_conv_eps field in Gemma4AudioConfig.
-                sscp_norm_eps=aud_cfg.get(
-                    "sscp_conv_eps", aud_cfg.get("rms_norm_eps", 1e-6)
-                ),
-            )
-            num_audio_tokens_per_clip = aud_cfg.get(
-                "num_audio_tokens_per_clip",
-                750 // aud_cfg.get("reduction_factor", 1),
+                norm_eps=aud_cfg["rms_norm_eps"],
+                sscp_norm_eps=aud_cfg["rms_norm_eps"],
             )
         else:
             audio_encoder = None
-            num_audio_tokens_per_clip = None
 
     # Config stores the pattern as "_sliding_window_pattern" (underscore
     # prefix).
@@ -236,7 +275,6 @@ def convert_backbone_config(transformers_config):
         "layer_norm_epsilon": text_cfg.get("rms_norm_eps", 1e-6),
         "vision_encoder": vision_encoder,
         "audio_encoder": audio_encoder,
-        "num_audio_tokens_per_clip": num_audio_tokens_per_clip,
         "num_kv_shared_layers": text_cfg.get("num_kv_shared_layers", 0),
         "num_global_key_value_heads": text_cfg.get(
             "num_global_key_value_heads", None
@@ -288,6 +326,7 @@ def convert_weights(backbone, loader, transformers_config):
     )
 
     # Per-layer token conditioning (E4B / E2B models).
+
     if backbone.hidden_size_per_layer_input > 0:
         loader.port_weight(
             keras_variable=backbone.get_layer(
@@ -334,6 +373,15 @@ def _convert_audio_encoder(audio_encoder, loader, transformers_config):
     aud_prefix = "model.audio_tower"
     sscp = audio_encoder.subsample_conv_projection
 
+    def port_clips(keras_layer, hf_name):
+        if not getattr(keras_layer, "use_clipped_linears", False):
+            return
+        for w in ["input_min", "input_max", "output_min", "output_max"]:
+            loader.port_weight(
+                keras_variable=getattr(keras_layer, w),
+                hf_weight_key=f"{hf_name}.{w}",
+            )
+
     for conv_block, hf_attr in [
         (sscp.conv_0, "layer0"),
         (sscp.conv_1, "layer1"),
@@ -363,15 +411,19 @@ def _convert_audio_encoder(audio_encoder, loader, transformers_config):
             ("feed_forward2", block.ffw_end),
         ]:
             loader.port_weight(
-                keras_variable=keras_ffw.ffw_1.kernel,
+                keras_variable=keras_ffw.ffw_1.dense.kernel,
                 hf_weight_key=f"{hf_blk}.{hf_ffw_name}.ffw_layer_1.linear.weight",
                 hook_fn=lambda x, _: np.transpose(x),
             )
+
             loader.port_weight(
-                keras_variable=keras_ffw.ffw_2.kernel,
+                keras_variable=keras_ffw.ffw_2.dense.kernel,
                 hf_weight_key=f"{hf_blk}.{hf_ffw_name}.ffw_layer_2.linear.weight",
                 hook_fn=lambda x, _: np.transpose(x),
             )
+
+            port_clips(keras_ffw.ffw_1, f"{hf_blk}.{hf_ffw_name}.ffw_layer_1")
+            port_clips(keras_ffw.ffw_2, f"{hf_blk}.{hf_ffw_name}.ffw_layer_2")
 
         attn = block.attention.attn
         hf_attn = f"{hf_blk}.self_attn"
@@ -381,10 +433,11 @@ def _convert_audio_encoder(audio_encoder, loader, transformers_config):
             ("v_proj", attn.v_proj),
         ]:
             loader.port_weight(
-                keras_variable=keras_dense.kernel,
+                keras_variable=keras_dense.dense.kernel,
                 hf_weight_key=f"{hf_attn}.{proj_name}.linear.weight",
                 hook_fn=lambda x, _: np.transpose(x),
             )
+            port_clips(keras_dense, f"{hf_attn}.{proj_name}")
 
         loader.port_weight(
             keras_variable=attn.per_dim_scale,
@@ -396,28 +449,32 @@ def _convert_audio_encoder(audio_encoder, loader, transformers_config):
             hook_fn=lambda x, _: np.transpose(x),
         )
         loader.port_weight(
-            keras_variable=block.attention.out_proj.kernel,
+            keras_variable=block.attention.out_proj.dense.kernel,
             hf_weight_key=f"{hf_blk}.self_attn.post.linear.weight",
             hook_fn=lambda x, _: np.transpose(x),
         )
+        port_clips(block.attention.out_proj, f"{hf_blk}.self_attn.post")
 
         lconv = block.lconv
         hf_lconv = f"{hf_blk}.lconv1d"
         loader.port_weight(
-            keras_variable=lconv.linear_start.kernel,
+            keras_variable=lconv.linear_start.dense.kernel,
             hf_weight_key=f"{hf_lconv}.linear_start.linear.weight",
             hook_fn=lambda x, _: np.transpose(x),
         )
+        port_clips(lconv.linear_start, f"{hf_lconv}.linear_start")
+
         loader.port_weight(
             keras_variable=lconv.depthwise_conv.kernel,
             hf_weight_key=f"{hf_lconv}.depthwise_conv1d.weight",
             hook_fn=lambda x, _: np.transpose(x, (2, 0, 1)),
         )
         loader.port_weight(
-            keras_variable=lconv.linear_end.kernel,
+            keras_variable=lconv.linear_end.dense.kernel,
             hf_weight_key=f"{hf_lconv}.linear_end.linear.weight",
             hook_fn=lambda x, _: np.transpose(x),
         )
+        port_clips(lconv.linear_end, f"{hf_lconv}.linear_end")
 
         for hf_ffw_name, keras_ffw in [
             ("feed_forward1", block.ffw_start),
@@ -575,27 +632,11 @@ def _convert_decoder_block(decoder_layer, layer_idx, loader, hf_key_fn):
         keras_variable=decoder_layer.attention.query_norm.scale,
         hf_weight_key=layer_key("self_attn.q_norm.weight"),
     )
-    loader.port_weight(
-        keras_variable=decoder_layer.attention.key_dense.kernel,
-        hf_weight_key=kv_layer_key("self_attn.k_proj.weight"),
-        hook_fn=lambda hf_tensor, keras_shape: np.transpose(
-            np.reshape(
-                hf_tensor,
-                (keras_shape[0], keras_shape[2], keras_shape[1]),
-            ),
-            axes=(0, 2, 1),
-        ),
-    )
-    loader.port_weight(
-        keras_variable=decoder_layer.attention.key_norm.scale,
-        hf_weight_key=kv_layer_key("self_attn.k_norm.weight"),
-    )
-    # v_proj is absent on global-attention layers when attention_k_eq_v=True
-    # (26B-A4B, 31B): value reuses the key projection, so value_dense=None.
-    if decoder_layer.attention.value_dense is not None:
+    # KV-shared layers have no k/v weights of their own (HF PR #45336).
+    if not decoder_layer.attention.is_kv_shared_layer:
         loader.port_weight(
-            keras_variable=decoder_layer.attention.value_dense.kernel,
-            hf_weight_key=kv_layer_key("self_attn.v_proj.weight"),
+            keras_variable=decoder_layer.attention.key_dense.kernel,
+            hf_weight_key=kv_layer_key("self_attn.k_proj.weight"),
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
                 np.reshape(
                     hf_tensor,
@@ -604,6 +645,24 @@ def _convert_decoder_block(decoder_layer, layer_idx, loader, hf_key_fn):
                 axes=(0, 2, 1),
             ),
         )
+        loader.port_weight(
+            keras_variable=decoder_layer.attention.key_norm.scale,
+            hf_weight_key=kv_layer_key("self_attn.k_norm.weight"),
+        )
+        # v_proj is absent on global-attention layers when attention_k_eq_v=True
+        # (26B-A4B, 31B): value reuses the key projection, so value_dense=None.
+        if decoder_layer.attention.value_dense is not None:
+            loader.port_weight(
+                keras_variable=decoder_layer.attention.value_dense.kernel,
+                hf_weight_key=kv_layer_key("self_attn.v_proj.weight"),
+                hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+                    np.reshape(
+                        hf_tensor,
+                        (keras_shape[0], keras_shape[2], keras_shape[1]),
+                    ),
+                    axes=(0, 2, 1),
+                ),
+            )
     # v_norm (Gemma4VNorm) is parameter-free — no weight to port.
     loader.port_weight(
         keras_variable=decoder_layer.attention.output_dense.kernel,
@@ -845,6 +904,7 @@ def convert_tokenizer(cls, preset, **kwargs):
         proto=proto,
         has_vision_tokens=has_vision_tokens,
         has_audio_tokens=has_audio_tokens,
+        has_video_tokens=True,
         **kwargs,
     )
 
@@ -879,6 +939,11 @@ def _build_sentencepiece_proto(tokenizer_config):
         added_token_strings.add(content)
         if token_info.get("special", False):
             special_token_strings.add(content)
+
+    # Manually add video token if missing (needed for Gemma4 video models)
+    if "<|video|>" not in vocab and "<|video|>" not in added_token_strings:
+        vocab["<|video|>"] = 258884
+        added_token_strings.add("<|video|>")
 
     # Map each merge result → rank so we can assign piece scores.
     merge_result_rank = {}
