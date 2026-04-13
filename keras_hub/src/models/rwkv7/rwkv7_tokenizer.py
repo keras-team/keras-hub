@@ -1,3 +1,4 @@
+import ast
 import os
 
 import keras
@@ -114,7 +115,7 @@ class RWKVTokenizerBase:
         self.idx2token = {}
         for line in vocabs:
             idx = int(line[: line.index(" ")])
-            x = eval(line[line.index(" ") : line.rindex(" ")])
+            x = ast.literal_eval(line[line.index(" ") : line.rindex(" ")])
             x = x.encode("utf-8") if isinstance(x, str) else x
             assert isinstance(x, bytes)
             assert len(x) == int(line[line.rindex(" ") :])
@@ -272,7 +273,9 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         if self.end_token_id is None or self.end_token_id == self.pad_token_id:
             for line in vocabulary:
                 idx = int(line[: line.index(" ")])
-                repr_str = eval(line[line.index(" ") : line.rindex(" ")])
+                repr_str = ast.literal_eval(
+                    line[line.index(" ") : line.rindex(" ")]
+                )
                 if repr_str == "\n\n":
                     self.end_token_id = idx
                     break
