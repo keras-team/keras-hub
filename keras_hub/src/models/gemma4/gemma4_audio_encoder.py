@@ -1558,14 +1558,30 @@ class Gemma4AudioEncoder(keras.Model):
                 return ops.zeros((0, 0, 0, self.output_dim)), ops.cast(
                     ops.zeros((0, 0)), "bool"
                 )
-            s_input = ops.shape(audio_mel)
-            audio_mel = ops.reshape(
-                audio_mel, [s_input[0] * s_input[1], s_input[2], s_input[3]]
+            # Use static Python ints for T and F where available so that
+            # downstream Conv2D outputs also have static T, which allows
+            # _convert_to_block to take the static branch and avoids
+            # ops.cond with different-shaped branches — required for XLA
+            # to compile backward passes on the TF GPU backend.
+            b_in = ops.shape(audio_mel)[0]  # always dynamic (batch)
+            n_clips = (
+                audio_mel.shape[1]
+                if isinstance(audio_mel.shape[1], int)
+                else ops.shape(audio_mel)[1]
             )
-            s_mask_input = ops.shape(audio_mel_mask)
+            t_mel = (
+                audio_mel.shape[2]
+                if isinstance(audio_mel.shape[2], int)
+                else ops.shape(audio_mel)[2]
+            )
+            f_mel = (
+                audio_mel.shape[3]
+                if isinstance(audio_mel.shape[3], int)
+                else ops.shape(audio_mel)[3]
+            )
+            audio_mel = ops.reshape(audio_mel, [b_in * n_clips, t_mel, f_mel])
             audio_mel_mask = ops.reshape(
-                audio_mel_mask,
-                [s_mask_input[0] * s_mask_input[1], s_mask_input[2]],
+                audio_mel_mask, [b_in * n_clips, t_mel]
             )
 
         # 1. Subsample: (B, T, F) → (B, T//4, hidden_size).
@@ -1608,8 +1624,10 @@ class Gemma4AudioEncoder(keras.Model):
 
         # 8. Un-flatten if original input was 4-D
         if is_4d:
-            s_out = ops.shape(x)
-            x = ops.reshape(x, [s_input[0], s_input[1], s_out[1], s_out[2]])
+            t_fin = (
+                x.shape[1] if isinstance(x.shape[1], int) else ops.shape(x)[1]
+            )
+            x = ops.reshape(x, [b_in, n_clips, t_fin, self.output_dim])
 
         return x
 
