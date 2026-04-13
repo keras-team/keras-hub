@@ -271,12 +271,8 @@ class RWKVTokenizer(tokenizer.Tokenizer):
         self.vocabulary = vocabulary
         self._tokenizer = RWKVTokenizerBase(vocabulary)
         if self.end_token_id is None or self.end_token_id == self.pad_token_id:
-            for line in vocabulary:
-                idx = int(line[: line.index(" ")])
-                repr_str = ast.literal_eval(
-                    line[line.index(" ") : line.rindex(" ")]
-                )
-                if repr_str == "\n\n":
+            for idx, token in self._tokenizer.idx2token.items():
+                if token.decode("utf-8", errors="replace") == "\n\n":
                     self.end_token_id = idx
                     break
 
