@@ -102,6 +102,13 @@ flags.DEFINE_string(
     "Path to a video file for video verification (optional).",
 )
 
+flags.DEFINE_boolean(
+    "skip_generate",
+    False,
+    "Skip the generation comparison step. Useful for large models where "
+    "generation is slow or unnecessary (numerics verification is sufficient).",
+)
+
 
 def _evict_hf_cache(repo_id):
     """Delete all cached revisions for `repo_id` from the HF hub cache.
@@ -211,6 +218,7 @@ def _precompute_hf_outputs(
     raw_image,
     raw_audio=None,
     raw_video=None,
+    skip_generate=False,
 ):
     if raw_video is not None and not isinstance(raw_video, torch.Tensor):
         raw_video = torch.from_numpy(raw_video)
@@ -323,16 +331,19 @@ def _precompute_hf_outputs(
         else None
     )
 
-    with torch.no_grad():
-        generated_ids = hf_model.generate(
-            **hf_inputs,
-            max_new_tokens=64,
-            do_sample=False,
+    if not skip_generate:
+        with torch.no_grad():
+            generated_ids = hf_model.generate(
+                **hf_inputs,
+                max_new_tokens=64,
+                do_sample=False,
+            )
+        prompt_length = hf_inputs["input_ids"].shape[1]
+        hf_generated_text = hf_tokenizer.decode(
+            generated_ids[0, prompt_length:], skip_special_tokens=True
         )
-    prompt_length = hf_inputs["input_ids"].shape[1]
-    hf_generated_text = hf_tokenizer.decode(
-        generated_ids[0, prompt_length:], skip_special_tokens=True
-    )
+    else:
+        hf_generated_text = "(skipped)"
 
     ret = {
         "logits": hf_logits,
@@ -545,9 +556,6 @@ def _test_numerics(label, backbone, keras_hub_inputs, hf_logits):
         k: v for k, v in keras_hub_inputs.items() if k in expected_names
     }
 
-    # torch.no_grad() prevents PyTorch from storing intermediate activations
-    # for autograd. Without it, a 26B+ model accumulates hundreds of GB of
-    # activation tensors across all layers and exhausts RAM.
     with torch.no_grad():
         kh_output = backbone(keras_hub_inputs)
         # Trim if KH sequence is longer than HF (e.g. due to padding).
@@ -703,17 +711,28 @@ def _precompute_all_hf_outputs(
     raw_video,
     is_audio_model,
     is_video_model,
+    skip_generate=False,
 ):
     """Run HF forward passes for all applicable modalities and return
     results."""
     print("-> Precomputing HF outputs for text prompt...")
     hf_data_text = _precompute_hf_outputs(
-        hf_model, hf_tokenizer, processor, PROMPT_TEXT, raw_image=None
+        hf_model,
+        hf_tokenizer,
+        processor,
+        PROMPT_TEXT,
+        raw_image=None,
+        skip_generate=skip_generate,
     )
 
     print("-> Precomputing HF outputs for image prompt...")
     hf_data_image = _precompute_hf_outputs(
-        hf_model, hf_tokenizer, processor, PROMPT_IMAGE, raw_image
+        hf_model,
+        hf_tokenizer,
+        processor,
+        PROMPT_IMAGE,
+        raw_image,
+        skip_generate=skip_generate,
     )
 
     hf_data_audio = None
@@ -726,6 +745,7 @@ def _precompute_all_hf_outputs(
             PROMPT_AUDIO,
             raw_image=None,
             raw_audio=raw_audio,
+            skip_generate=skip_generate,
         )
 
     hf_data_video = None
@@ -754,6 +774,7 @@ def _precompute_all_hf_outputs(
             raw_image=None,
             raw_audio=None,
             raw_video=raw_video_hf,
+            skip_generate=skip_generate,
         )
         # Store subsampled frames (channels-last) for KH verification.
         hf_data_video["raw_video_sub"] = raw_video_sub
@@ -960,6 +981,10 @@ def _verify_model(
         final_logit_cap=final_logit_cap,
     )
 
+    if FLAGS.skip_generate:
+        print("\n--- Generation Comparison: SKIPPED (--skip_generate) ---")
+        return gemma4_lm
+
     print("\n--- Generation Comparison ---")
     _test_generate(
         "text", gemma4_lm, PROMPT_TEXT, hf_data_text["generated_text"]
@@ -1013,13 +1038,15 @@ def _save_preset(
     print(f"\n-> Saving model in {save_dtype} to {preset_save_path} ...")
 
     if save_dtype == "bfloat16":
+        preprocessor_ref = gemma4_lm.preprocessor
+        del gemma4_lm
+        gc.collect()
         backbone_bf16 = keras_hub.models.Gemma4Backbone.from_preset(
             keras_hub_preset, dtype="bfloat16"
         )
-        backbone_bf16.set_weights(gemma4_lm.backbone.get_weights())
         gemma4_lm_bf16 = keras_hub.models.Gemma4CausalLM(
             backbone=backbone_bf16,
-            preprocessor=gemma4_lm.preprocessor,
+            preprocessor=preprocessor_ref,
             sampler="greedy",
             final_logit_cap=final_logit_cap,
         )
@@ -1061,6 +1088,7 @@ def main(_):
             raw_video,
             is_audio_model,
             is_video_model,
+            skip_generate=FLAGS.skip_generate,
         )
     )
     del hf_model
@@ -1085,6 +1113,9 @@ def main(_):
         is_video_model,
         final_logit_cap,
     )
+
+    del hf_data_text, hf_data_image, hf_data_audio, hf_data_video
+    gc.collect()
 
     _save_preset(
         gemma4_lm, keras_hub_preset, preset, FLAGS.save_dtype, final_logit_cap
