@@ -1,10 +1,8 @@
 import keras
 from keras import ops
+from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.reversible_embedding import (
-    ReversibleEmbedding,
-)
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
 from keras_hub.src.models.qwen3_omni.qwen3_omni_decoder import (
@@ -242,16 +240,20 @@ class Qwen3OmniBackbone(Backbone):
         pixel_values = inputs.get("pixel_values", None)
         grid_thw = inputs.get("grid_thw", None)
 
-        x = self._compute_embeddings(
+        x, deepstack_features, visual_pos_mask = self._compute_embeddings(
             token_ids, audio_features, pixel_values, grid_thw
         )
-        for transformer_layer in self.transformer_layers:
+        for i, transformer_layer in enumerate(self.transformer_layers):
             x = transformer_layer(
                 x,
                 position_ids=None,
                 decoder_padding_mask=padding_mask,
                 training=training,
             )
+            if deepstack_features is not None and i < len(deepstack_features):
+                x = self._deepstack_process(
+                    x, visual_pos_mask, deepstack_features[i]
+                )
         return self.layer_norm(x)
 
     def get_config(self):
@@ -321,8 +323,15 @@ class Qwen3OmniBackbone(Backbone):
         grid_thw=None,
     ):
         inputs_embeds = self.token_embedding(token_ids)
+        deepstack_features = None
+        visual_mask = None
 
         if audio_features is not None and self.audio_encoder is not None:
+            if self.audio_token_id is None:
+                raise ValueError(
+                    "`audio_token_id` must be set on the backbone when "
+                    "`audio_encoder` is provided and audio features are passed."
+                )
             audio_embeds = self.audio_encoder(
                 {"input_features": audio_features}
             )
@@ -334,10 +343,17 @@ class Qwen3OmniBackbone(Backbone):
             )
 
         if pixel_values is not None and self.vision_encoder is not None:
+            if self.image_token_id is None or self.video_token_id is None:
+                raise ValueError(
+                    "`image_token_id` and `video_token_id` must both be set on "
+                    "the backbone when `vision_encoder` is provided and pixel "
+                    "values are passed."
+                )
             vision_outputs = self.vision_encoder(
                 {"pixel_values": pixel_values, "grid_thw": grid_thw}
             )
             visual_embeds = vision_outputs["pooler_output"]
+            deepstack_features = vision_outputs.get("deepstack_features", None)
             image_mask = ops.equal(
                 ops.cast(token_ids, "int32"), self.image_token_id
             )
@@ -349,17 +365,75 @@ class Qwen3OmniBackbone(Backbone):
                 inputs_embeds, visual_mask, visual_embeds
             )
 
-        return inputs_embeds
+        return inputs_embeds, deepstack_features, visual_mask
+
+    def _deepstack_process(
+        self, hidden_states, visual_pos_masks, visual_embeds
+    ):
+        """Add DeepStack vision features to decoder hidden states.
+
+        Implements ``_deepstack_process``: at every position flagged by
+        ``visual_pos_masks``, adds the corresponding slice of
+        ``visual_embeds`` to ``hidden_states``.
+
+        Args:
+            hidden_states: ``(batch, seq, hidden)`` decoder hidden states.
+            visual_pos_masks: ``(batch, seq)`` bool mask of visual positions.
+            visual_embeds: ``(1, total_visual_tokens, hidden)`` features from
+                one DeepStack layer of the vision encoder.
+        """
+        mask_int = ops.cast(visual_pos_masks, "int32")
+        per_row_cumsum = ops.cumsum(mask_int, axis=1)
+        tokens_per_item = ops.sum(mask_int, axis=1)
+        batch_offset = ops.cumsum(tokens_per_item, axis=0) - tokens_per_item
+        source_indices = ops.maximum(
+            per_row_cumsum + ops.expand_dims(batch_offset, axis=1) - 1,
+            0,
+        )
+        source_indices_expanded = ops.expand_dims(source_indices, -1)
+        visual_values = ops.take_along_axis(
+            visual_embeds, source_indices_expanded, axis=1
+        )
+        mask_expanded = ops.cast(
+            ops.expand_dims(visual_pos_masks, -1), hidden_states.dtype
+        )
+        return (
+            hidden_states
+            + ops.cast(visual_values, hidden_states.dtype) * mask_expanded
+        )
 
     def _masked_scatter(self, target, mask, source):
-        """Replace embeddings at masked positions with source embeddings."""
+        """Replace embeddings at masked positions with source embeddings.
+
+        Handles two distinct source layouts:
+
+        - **Vision** ``source.shape[0] == 1``: flat packed tensor of shape
+          ``(1, total_tokens, hidden)`` where tokens from all batch items are
+          stored sequentially.  A batch-level cumulative offset is added so
+          that batch item *i* reads from the correct slice of the flat source.
+
+        - **Audio** ``source.shape[0] != 1``: tensor of shape
+          ``(batch, audio_seq, hidden)`` where each batch row already contains
+          only that item's audio tokens.  Per-row local indices suffice.
+        """
         mask_expanded = ops.cast(ops.expand_dims(mask, -1), target.dtype)
         mask_int = ops.cast(mask, "int32")
-        cumsum = ops.cumsum(mask_int, axis=1)
-        source_indices = ops.maximum(cumsum - 1, 0)
+        per_row_cumsum = ops.cumsum(mask_int, axis=1)
+
+        if source.shape[0] == 1:
+            # Vision path: source is (1, total_tokens, hidden).
+            tokens_per_item = ops.sum(mask_int, axis=1)
+            batch_offset = ops.cumsum(tokens_per_item, axis=0) - tokens_per_item
+            source_indices = ops.maximum(
+                per_row_cumsum + ops.expand_dims(batch_offset, axis=1) - 1,
+                0,
+            )
+        else:
+            # Audio path: source is (batch, audio_seq, hidden).
+            source_indices = ops.maximum(per_row_cumsum - 1, 0)
+
         source_indices_expanded = ops.expand_dims(source_indices, -1)
         scattered_values = ops.take_along_axis(
             source, source_indices_expanded, axis=1
         )
-        result = target * (1 - mask_expanded) + scattered_values * mask_expanded
-        return result
+        return target * (1 - mask_expanded) + scattered_values * mask_expanded
