@@ -41,7 +41,7 @@ def _compute_target_size(h, w, min_pixels, max_pixels, patch_stride):
 
 @keras_hub_export("keras_hub.layers.Qwen3_5ImageConverter")
 class Qwen3_5ImageConverter(ImageConverter):
-    """Image pre-processor for Qwen3.5-VL (image-only v1).
+    """Image pre-processor for Qwen3.5.
 
     Converts images to the patch tensor format expected by
     `Qwen3_5VisionEncoder` and also returns `grid_thw` metadata.
@@ -57,10 +57,8 @@ class Qwen3_5ImageConverter(ImageConverter):
         max_pixels: int. Maximum pixel budget. Images larger than this will
             be downscaled. Default 16777216 (= 4096×4096, `longest_edge`).
         scale: float or list of floats. Per-channel scale for normalisation.
-            Pre-computed as ``rescale_factor / std`` in the conversion
-            script.
         offset: float or list of floats. Per-channel offset for
-            normalisation. Pre-computed as ``-mean / std``.
+            normalisation.
     """
 
     backbone_cls = Qwen3_5Backbone
@@ -194,7 +192,7 @@ class Qwen3_5ImageConverter(ImageConverter):
         return {"patches": image, "grid_thw": grid_thw}
 
     def _call_ops(self, inputs):
-        """Backend-agnostic eager path (works with TF, JAX, PyTorch)."""
+        """Backend-agnostic eager path."""
         image = ops.cast(inputs, "float32")
         orig_h = ops.shape(image)[0]
         orig_w = ops.shape(image)[1]

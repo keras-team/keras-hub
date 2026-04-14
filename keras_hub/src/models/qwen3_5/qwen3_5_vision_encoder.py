@@ -424,7 +424,7 @@ class Qwen3_5VisionPatchMerger(keras.layers.Layer):
 
 
 class Qwen3_5VisionEncoder(keras.Model):
-    """Vision encoder for Qwen3.5-VL (image-only, v1).
+    """Vision encoder for Qwen3.5.
 
     Processes pre-extracted image patches through:
     1. Conv3D patch embedding

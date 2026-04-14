@@ -12,7 +12,7 @@ from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 @keras_hub_export("keras_hub.layers.Qwen3_5VideoConverter")
 class Qwen3_5VideoConverter(VideoConverter):
-    """Video pre-processor for Qwen3.5-VL.
+    """Video pre-processor for Qwen3.5.
 
     Converts videos to the patch tensor format expected by
     `Qwen3_5VisionEncoder` and also returns `grid_thw` metadata.
@@ -30,10 +30,8 @@ class Qwen3_5VideoConverter(VideoConverter):
         antialias: bool. Whether to apply antialiasing when resizing.
             Defaults to `True`.
         scale: float or list of floats. Per-channel scale for normalisation.
-            Pre-computed as ``rescale_factor / std`` in the conversion
-            script.
         offset: float or list of floats. Per-channel offset for
-            normalisation. Pre-computed as ``-mean / std``.
+            normalisation.
     """
 
     backbone_cls = Qwen3_5Backbone
@@ -233,7 +231,7 @@ class Qwen3_5VideoConverter(VideoConverter):
         return {"patches": patches, "grid_thw": grid_thw}
 
     def _call_ops(self, inputs):
-        """Backend-agnostic eager path (works with TF, JAX, PyTorch).
+        """Backend-agnostic eager path.
 
         Uses HF-compatible ``smart_resize`` that accounts for the temporal
         dimension when checking the pixel budget: ``T * H * W`` is compared
