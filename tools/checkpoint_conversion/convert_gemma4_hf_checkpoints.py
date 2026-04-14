@@ -1039,6 +1039,8 @@ def _save_preset(
 
     if save_dtype == "bfloat16":
         preprocessor_ref = gemma4_lm.preprocessor
+        # gemma4_lm is the only remaining reference to the float32 model
+        # (backbone/tokenizer/preprocessor were already deleted in main).
         del gemma4_lm
         gc.collect()
         backbone_bf16 = keras_hub.models.Gemma4Backbone.from_preset(
@@ -1114,7 +1116,9 @@ def main(_):
         final_logit_cap,
     )
 
+    # Free all float32 model references before _save_preset loads bfloat16.
     del hf_data_text, hf_data_image, hf_data_audio, hf_data_video
+    del backbone, tokenizer, preprocessor
     gc.collect()
 
     _save_preset(
