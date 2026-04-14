@@ -1,8 +1,10 @@
 from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 
 
+@keras_hub_export("keras_hub.layers.MultimodalRotaryEmbedding")
 class MultimodalRotaryEmbedding(RotaryEmbedding):
     """Multimodal Rotary Position Embedding (M-RoPE) for vision-language models.
 
@@ -19,25 +21,24 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
     Args:
         mrope_section: tuple of 3 ints. Dimension allocation for
             (text, temporal, spatial).
-            For example, [24, 20, 20] means:
-            - 24 dims for text positions
-            - 20 dims for temporal positions
-            - 20 dims for spatial positions
-            Total must equal head_dim // 2 (since RoPE uses pairs).
+            For example, `(24, 20, 20)` means 24 dims for text positions,
+            20 dims for temporal positions, and 20 dims for spatial positions.
+            The total must equal `head_dim // 2` (since RoPE uses pairs).
         max_wavelength: int. The maximum angular wavelength. Defaults to 10000.
         scaling_factor: float. Scaling factor for positions. Defaults to 1.0.
+        attention_scaling: float. Post-RoPE scaling applied to cos/sin
+            embeddings. Defaults to 1.0.
         sequence_axis: int. Sequence axis in input tensor. Defaults to 1.
         feature_axis: int. Feature axis in input tensor. Defaults to -1.
-        **kwargs: Additional arguments passed to parent RotaryEmbedding.
+        **kwargs: Additional arguments passed to parent `RotaryEmbedding`.
 
     Examples:
     ```python
     import numpy as np
     import keras
 
-    # Initialize M-RoPE with section [24, 20, 20] for 128-dim heads
-    mrope = MultimodalRotaryEmbedding(
-        mrope_section=[24, 20, 20],
+    mrope = keras_hub.layers.MultimodalRotaryEmbedding(
+        mrope_section=(24, 20, 20),
         max_wavelength=1000000,
     )
 
@@ -45,19 +46,12 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
     k = keras.random.normal((2, 10, 32, 128))
 
     text_pos = np.arange(10)
-    position_ids = np.stack([
-        text_pos,
-        text_pos,
-        text_pos,
-    ], axis=0)
+    position_ids = np.stack([text_pos, text_pos, text_pos], axis=0)
     position_ids = np.expand_dims(position_ids, 1).repeat(2, axis=1)
 
     q_embed, k_embed = mrope.apply_multimodal_rotary_embedding(
         q, k, position_ids
     )
-
-    # Vision tokens: different positions per section
-    # For image patches: text_pos=constant, temporal_pos=0, spatial_pos varies
     ```
     """
 
@@ -94,17 +88,16 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
         """Apply M-RoPE to query and key tensors.
 
         Args:
-            query: Query tensor of shape (batch, seq_len, num_heads, head_dim)
-            key: Key tensor of shape (batch, seq_len, num_heads, head_dim)
-            position_ids: Position IDs of shape (3, batch, seq_len) where:
-                position_ids[0] = text positions
-                position_ids[1] = temporal positions
-                position_ids[2] = spatial positions
+            query: Query tensor of shape
+                `(batch, seq_len, num_heads, head_dim)`.
+            key: Key tensor of shape `(batch, seq_len, num_heads, head_dim)`.
+            position_ids: Position IDs of shape `(3, batch, seq_len)` where
+                `position_ids[0]` = text positions, `position_ids[1]` =
+                temporal positions, `position_ids[2]` = spatial positions.
 
         Returns:
-            Tuple of (query_embed, key_embed) with M-RoPE applied.
+            Tuple of `(query_embed, key_embed)` with M-RoPE applied.
         """
-        # Compute inverse frequencies for the full head dimension
         head_dim_half = sum(self.mrope_section)
         idx = ops.arange(0, head_dim_half * 2, 2, dtype="float32")
         denom = ops.cast(head_dim_half * 2, "float32")
@@ -116,7 +109,6 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
 
         position_ids_float = ops.cast(position_ids, "float32")
 
-        # Expand for broadcasting:
         # position_ids (3, batch, seq_len) -> (3, batch, seq_len, 1)
         # inverse_freq (head_dim_half,) -> (1, 1, 1, head_dim_half)
         position_ids_expanded = ops.expand_dims(position_ids_float, axis=-1)
@@ -124,10 +116,9 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
             inverse_freq, (1, 1, 1, head_dim_half)
         )
 
-        # Compute frequencies: (3, batch, seq_len, head_dim_half)
+        # (3, batch, seq_len, head_dim_half)
         freqs_stacked = position_ids_expanded * inverse_freq_expanded
 
-        # Apply interleaved M-RoPE to reorganize frequency layout
         freqs_interleaved = self._apply_interleaved_mrope(
             freqs_stacked, self.mrope_section
         )
@@ -136,19 +127,15 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
             [freqs_interleaved, freqs_interleaved], axis=-1
         )
 
-        # Apply attention scaling to cos/sin embeddings
         cos_full = ops.cos(embedding) * self.attention_scaling
         sin_full = ops.sin(embedding) * self.attention_scaling
         cos_full = ops.cast(cos_full, self.compute_dtype)
         sin_full = ops.cast(sin_full, self.compute_dtype)
 
         # Expand for broadcasting with (batch, seq_len, num_heads, head_dim)
-        cos_full = ops.expand_dims(
-            cos_full, axis=2
-        )  # (batch, seq_len, 1, head_dim)
+        cos_full = ops.expand_dims(cos_full, axis=2)
         sin_full = ops.expand_dims(sin_full, axis=2)
 
-        # Apply rotary embedding
         query_embed = self._apply_rotary_pos_emb_single(
             query, cos_full, sin_full
         )
@@ -157,22 +144,20 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
         return query_embed, key_embed
 
     def _apply_interleaved_mrope(self, freqs, mrope_section):
-        """Apply interleaved M-RoPE to reorganize frequency layout.
+        """Reorganize frequency layout from chunked to interleaved M-RoPE.
 
-        Reorganizes frequency layout from chunked [TTT...HHH...WWW] to
-        interleaved [THWTHWTHW...TT], preserving frequency continuity.
+        Converts from chunked `[TTT...HHH...WWW]` to interleaved
+        `[THWTHWTHW...TT]`, preserving frequency continuity across sections.
 
         Args:
-            freqs: Frequency matrices of shape
-                (3, batch, seq_len, head_dim_half) where dim 0
-                corresponds to [text, temporal, spatial]
-                All 3 matrices have the same dimension but were computed with
-                different position IDs.
-            mrope_section: Tuple of (text_dim, temporal_dim, spatial_dim)
+            freqs: Frequency tensor of shape
+                `(3, batch, seq_len, head_dim_half)`. Dimension 0 indexes
+                `[text, temporal, spatial]`.
+            mrope_section: Tuple of `(text_dim, temporal_dim, spatial_dim)`.
 
         Returns:
             Interleaved frequencies of shape
-            (batch, seq_len, sum(mrope_section))
+            `(batch, seq_len, sum(mrope_section))`.
         """
         head_dim_half = sum(mrope_section)
         indices_list = []
@@ -191,9 +176,12 @@ class MultimodalRotaryEmbedding(RotaryEmbedding):
         """Apply rotary position embedding to a single tensor.
 
         Args:
-            tensor: Input tensor of shape (batch, seq_len, num_heads, head_dim)
-            cos_emb: Cosine embedding of shape (batch, seq_len, 1, head_dim)
-            sin_emb: Sine embedding of shape (batch, seq_len, 1, head_dim)
+            tensor: Input tensor of shape
+                `(batch, seq_len, num_heads, head_dim)`.
+            cos_emb: Cosine embedding of shape
+                `(batch, seq_len, 1, head_dim)`.
+            sin_emb: Sine embedding of shape
+                `(batch, seq_len, 1, head_dim)`.
 
         Returns:
             Tensor with rotary embedding applied.

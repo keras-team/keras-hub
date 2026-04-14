@@ -3,10 +3,10 @@ import math
 import keras
 from keras import ops
 
-from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
-from keras_hub.src.models.qwen3_omni.qwen3_omni_rope import (
+from keras_hub.src.layers.modeling.multimodal_rotary_embedding import (
     MultimodalRotaryEmbedding,
 )
+from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 

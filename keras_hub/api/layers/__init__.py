@@ -19,6 +19,9 @@ from keras_hub.src.layers.modeling.f_net_encoder import (
 from keras_hub.src.layers.modeling.masked_lm_head import (
     MaskedLMHead as MaskedLMHead,
 )
+from keras_hub.src.layers.modeling.multimodal_rotary_embedding import (
+    MultimodalRotaryEmbedding as MultimodalRotaryEmbedding,
+)
 from keras_hub.src.layers.modeling.non_max_supression import (
     NonMaxSuppression as NonMaxSuppression,
 )
