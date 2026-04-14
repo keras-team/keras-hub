@@ -1,6 +1,5 @@
 import math
 
-import numpy as np
 import tensorflow as tf
 from keras import ops
 
@@ -172,17 +171,15 @@ class Qwen3_5VideoConverter(VideoConverter):
         )
         video = tf.clip_by_value(video, 0.0, 255.0)
 
-        # Apply scale/offset normalisation (Gemma4 pattern).
+        # Apply scale/offset normalisation.
         if self.scale is not None:
-            scale = np.expand_dims(
-                np.array(self.scale, dtype="float32"), (0, 1, 2)
-            )
-            video = tf.cast(video, "float32") * tf.constant(scale)
+            scale = tf.constant(self.scale, dtype="float32")
+            scale = tf.reshape(scale, (1, 1, 1, -1))
+            video = tf.cast(video, "float32") * scale
         if self.offset is not None:
-            offset = np.expand_dims(
-                np.array(self.offset, dtype="float32"), (0, 1, 2)
-            )
-            video = video + tf.constant(offset)
+            offset = tf.constant(self.offset, dtype="float32")
+            offset = tf.reshape(offset, (1, 1, 1, -1))
+            video = video + offset
 
         # Pad temporal dimension if needed by repeating the last frame.
         remainder = frame_count % self.temporal_patch_size
@@ -285,15 +282,17 @@ class Qwen3_5VideoConverter(VideoConverter):
         )
         video = ops.clip(video, 0.0, 255.0)
 
-        # Apply scale/offset normalisation (Gemma4 pattern).
+        # Apply scale/offset normalisation.
         if self.scale is not None:
-            scale = np.expand_dims(
-                np.array(self.scale, dtype="float32"), (0, 1, 2)
+            scale = ops.reshape(
+                ops.convert_to_tensor(self.scale, dtype="float32"),
+                (1, 1, 1, -1),
             )
             video = ops.cast(video, "float32") * scale
         if self.offset is not None:
-            offset = np.expand_dims(
-                np.array(self.offset, dtype="float32"), (0, 1, 2)
+            offset = ops.reshape(
+                ops.convert_to_tensor(self.offset, dtype="float32"),
+                (1, 1, 1, -1),
             )
             video = video + offset
 
