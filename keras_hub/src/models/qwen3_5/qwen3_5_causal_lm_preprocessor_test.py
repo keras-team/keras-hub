@@ -105,8 +105,8 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
             spatial_merge_size=1,
             min_pixels=16,
             max_pixels=100,
-            image_mean=[0.5, 0.5, 0.5],
-            image_std=[0.5, 0.5, 0.5],
+            scale=[1.0 / (0.5 * 255)] * 3,
+            offset=[-0.5 / 0.5] * 3,
         )
         preprocessor = Qwen3_5CausalLMPreprocessor(
             tokenizer=tokenizer,

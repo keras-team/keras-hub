@@ -16,6 +16,20 @@ def _transpose_and_reshape(x, shape):
     return np.reshape(np.transpose(x), shape)
 
 
+def _compute_scale_offset(image_mean, image_std, rescale_factor=1.0 / 255):
+    """Compute KH scale/offset from HF image_mean and image_std.
+
+    KH applies:  output = input * scale + offset
+    HF applies:
+        1. Rescale: x = x * rescale_factor   (e.g. 1/255)
+        2. Normalize: x = (x - mean) / std
+    Combined:  scale = rescale_factor / std,  offset = -mean / std
+    """
+    scale = [rescale_factor / s for s in image_std]
+    offset = [-m / s for m, s in zip(image_mean, image_std)]
+    return scale, offset
+
+
 def load_image_converter_config(preset, transformers_config):
     """Return kwargs for Qwen3_5ImageConverter, or None for text-only."""
     if "vision_config" not in transformers_config:
@@ -23,6 +37,11 @@ def load_image_converter_config(preset, transformers_config):
 
     vision_config = transformers_config["vision_config"]
     preprocessor_config = load_json(preset, "preprocessor_config.json")
+
+    scale, offset = _compute_scale_offset(
+        preprocessor_config["image_mean"],
+        preprocessor_config["image_std"],
+    )
 
     # HF preprocessor_config nests pixel limits under "size".
     size_config = preprocessor_config["size"]
@@ -32,36 +51,48 @@ def load_image_converter_config(preset, transformers_config):
         "spatial_merge_size": vision_config["spatial_merge_size"],
         "min_pixels": size_config["shortest_edge"],
         "max_pixels": size_config["longest_edge"],
-        "image_mean": preprocessor_config["image_mean"],
-        "image_std": preprocessor_config["image_std"],
+        "scale": scale,
+        "offset": offset,
+        "interpolation": "bicubic",
+        "antialias": True,
     }
 
 
 def load_video_converter_config(preset, transformers_config):
     """Return kwargs for Qwen3_5VideoConverter, or None for text-only.
 
-    Uses the same vision config as images since HF's ``get_video_features``
-    calls ``get_image_features`` — identical encoder, identical parameters.
+    Loads ``video_preprocessor_config.json`` which has video-specific
+    pixel budgets that differ from the image preprocessor config.
     """
     if "vision_config" not in transformers_config:
         return None
 
     vision_config = transformers_config["vision_config"]
-    preprocessor_config = load_json(preset, "preprocessor_config.json")
+    video_config = load_json(preset, "video_preprocessor_config.json")
 
-    # Video may have separate min/max pixels in the preprocessor config.
-    # Fall back to the image values if video-specific ones don't exist.
-    size_config = preprocessor_config["size"]
-    img_min = size_config["shortest_edge"]
-    img_max = size_config["longest_edge"]
+    scale, offset = _compute_scale_offset(
+        video_config["image_mean"],
+        video_config["image_std"],
+    )
+
+    size_config = video_config["size"]
     return {
-        "patch_size": vision_config["patch_size"],
-        "temporal_patch_size": vision_config["temporal_patch_size"],
-        "spatial_merge_size": vision_config["spatial_merge_size"],
-        "min_pixels": preprocessor_config.get("video_min_pixels", img_min),
-        "max_pixels": preprocessor_config.get("video_max_pixels", img_max),
-        "image_mean": preprocessor_config["image_mean"],
-        "image_std": preprocessor_config["image_std"],
+        "patch_size": video_config.get(
+            "patch_size", vision_config["patch_size"]
+        ),
+        "temporal_patch_size": video_config.get(
+            "temporal_patch_size",
+            vision_config["temporal_patch_size"],
+        ),
+        "spatial_merge_size": video_config.get(
+            "merge_size", vision_config["spatial_merge_size"]
+        ),
+        "min_pixels": size_config["shortest_edge"],
+        "max_pixels": size_config["longest_edge"],
+        "scale": scale,
+        "offset": offset,
+        "interpolation": "bicubic",
+        "antialias": True,
     }
 
 

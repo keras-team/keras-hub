@@ -1,5 +1,6 @@
 import math
 
+import numpy as np
 import tensorflow as tf
 from keras import ops
 
@@ -25,10 +26,15 @@ class Qwen3_5VideoConverter(VideoConverter):
             Frames smaller than this will be upscaled. Default 65536.
         max_pixels: int. Maximum pixel budget. Frames larger than this will
             be downscaled. Default 16777216 (= 4096×4096).
-        image_mean: list[float]. Per-channel mean for normalisation.
-            Loaded from the HF ``preprocessor_config.json``.
-        image_std: list[float]. Per-channel std for normalisation.
-            Loaded from the HF ``preprocessor_config.json``.
+        interpolation: str. Interpolation method for resizing.
+            Defaults to `"bicubic"`.
+        antialias: bool. Whether to apply antialiasing when resizing.
+            Defaults to `True`.
+        scale: float or list of floats. Per-channel scale for normalisation.
+            Pre-computed as ``rescale_factor / std`` in the conversion
+            script.
+        offset: float or list of floats. Per-channel offset for
+            normalisation. Pre-computed as ``-mean / std``.
     """
 
     backbone_cls = Qwen3_5Backbone
@@ -40,8 +46,8 @@ class Qwen3_5VideoConverter(VideoConverter):
         spatial_merge_size=2,
         min_pixels=65536,
         max_pixels=16777216,
-        image_mean=None,
-        image_std=None,
+        interpolation="bicubic",
+        antialias=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -50,8 +56,8 @@ class Qwen3_5VideoConverter(VideoConverter):
         self.spatial_merge_size = spatial_merge_size
         self.min_pixels = min_pixels
         self.max_pixels = max_pixels
-        self.image_mean = image_mean
-        self.image_std = image_std
+        self.interpolation = interpolation
+        self.antialias = antialias
         # Patch stride: dimensions must be divisible by this.
         self._patch_stride = patch_size * spatial_merge_size
 
@@ -161,15 +167,22 @@ class Qwen3_5VideoConverter(VideoConverter):
         video = tf.image.resize(
             video,
             (target_h, target_w),
-            method=tf.image.ResizeMethod.BICUBIC,
-            antialias=True,
+            method=self.interpolation,
+            antialias=self.antialias,
         )
         video = tf.clip_by_value(video, 0.0, 255.0)
 
-        # Normalise to [-1, 1].
-        mean = tf.constant(self.image_mean, dtype="float32") * 255.0
-        std = tf.constant(self.image_std, dtype="float32") * 255.0
-        video = (video - mean) / std
+        # Apply scale/offset normalisation (Gemma4 pattern).
+        if self.scale is not None:
+            scale = np.expand_dims(
+                np.array(self.scale, dtype="float32"), (0, 1, 2)
+            )
+            video = tf.cast(video, "float32") * tf.constant(scale)
+        if self.offset is not None:
+            offset = np.expand_dims(
+                np.array(self.offset, dtype="float32"), (0, 1, 2)
+            )
+            video = video + tf.constant(offset)
 
         # Pad temporal dimension if needed by repeating the last frame.
         remainder = frame_count % self.temporal_patch_size
@@ -267,14 +280,22 @@ class Qwen3_5VideoConverter(VideoConverter):
         video = ops.image.resize(
             video,
             size=(target_h, target_w),
-            interpolation="bicubic",
-            antialias=True,
+            interpolation=self.interpolation,
+            antialias=self.antialias,
         )
         video = ops.clip(video, 0.0, 255.0)
 
-        mean = ops.array(self.image_mean, dtype="float32") * 255.0
-        std = ops.array(self.image_std, dtype="float32") * 255.0
-        video = (video - mean) / std
+        # Apply scale/offset normalisation (Gemma4 pattern).
+        if self.scale is not None:
+            scale = np.expand_dims(
+                np.array(self.scale, dtype="float32"), (0, 1, 2)
+            )
+            video = ops.cast(video, "float32") * scale
+        if self.offset is not None:
+            offset = np.expand_dims(
+                np.array(self.offset, dtype="float32"), (0, 1, 2)
+            )
+            video = video + offset
 
         # Pad temporal dimension to temporal_patch_size multiple.
         remainder = frame_count % self.temporal_patch_size
@@ -333,8 +354,8 @@ class Qwen3_5VideoConverter(VideoConverter):
                 "spatial_merge_size": self.spatial_merge_size,
                 "min_pixels": self.min_pixels,
                 "max_pixels": self.max_pixels,
-                "image_mean": self.image_mean,
-                "image_std": self.image_std,
+                "interpolation": self.interpolation,
+                "antialias": self.antialias,
             }
         )
         return config

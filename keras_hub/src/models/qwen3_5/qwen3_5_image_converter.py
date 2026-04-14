@@ -56,10 +56,11 @@ class Qwen3_5ImageConverter(ImageConverter):
             (= 256×256, from HF preprocessor_config.json `shortest_edge`).
         max_pixels: int. Maximum pixel budget. Images larger than this will
             be downscaled. Default 16777216 (= 4096×4096, `longest_edge`).
-        image_mean: list[float]. Per-channel mean for normalisation.
-            Loaded from the HF ``preprocessor_config.json``.
-        image_std: list[float]. Per-channel std for normalisation.
-            Loaded from the HF ``preprocessor_config.json``.
+        scale: float or list of floats. Per-channel scale for normalisation.
+            Pre-computed as ``rescale_factor / std`` in the conversion
+            script.
+        offset: float or list of floats. Per-channel offset for
+            normalisation. Pre-computed as ``-mean / std``.
     """
 
     backbone_cls = Qwen3_5Backbone
@@ -71,8 +72,6 @@ class Qwen3_5ImageConverter(ImageConverter):
         spatial_merge_size=2,
         min_pixels=65536,
         max_pixels=16777216,
-        image_mean=None,
-        image_std=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -81,8 +80,6 @@ class Qwen3_5ImageConverter(ImageConverter):
         self.spatial_merge_size = spatial_merge_size
         self.min_pixels = min_pixels
         self.max_pixels = max_pixels
-        self.image_mean = image_mean
-        self.image_std = image_std
         # Patch stride: dimensions must be divisible by this.
         self._patch_stride = patch_size * spatial_merge_size
 
@@ -144,19 +141,27 @@ class Qwen3_5ImageConverter(ImageConverter):
             "int32",
         )
 
-        # Resize with bicubic to exact target dims.
+        # Resize with aspect-ratio-aware target dims.
         image = tf.image.resize(
             image[tf.newaxis],
             (target_h, target_w),
-            method=tf.image.ResizeMethod.BICUBIC,
-            antialias=True,
+            method=self.interpolation,
+            antialias=self.antialias,
         )[0]
         image = tf.clip_by_value(image, 0.0, 255.0)
 
-        # Normalise to [-1, 1].
-        mean = tf.constant(self.image_mean, dtype="float32") * 255.0
-        std = tf.constant(self.image_std, dtype="float32") * 255.0
-        image = (image - mean) / std  # (H, W, 3)
+        # Apply scale/offset from the parent ImageConverter
+        # (normalization). This replicates what super().call() would do,
+        # without going through Keras __call__ which fails on symbolic
+        # TF tensors in graph mode.
+        if self.scale is not None:
+            scale = self._expand_non_channel_dims(self.scale, image)
+            image, scale = self._convert_types(image, scale, self.compute_dtype)
+            image = image * scale
+        if self.offset is not None:
+            offset = self._expand_non_channel_dims(self.offset, image)
+            image, offset = self._convert_types(image, offset, image.dtype)
+            image = image + offset
 
         # Grid metadata.
         grid_h = target_h // self.patch_size
@@ -226,19 +231,25 @@ class Qwen3_5ImageConverter(ImageConverter):
             "int32",
         )
 
-        # Resize with bicubic to exact target dims.
+        # Resize with aspect-ratio-aware target dims.
         image = ops.image.resize(
             ops.expand_dims(image, 0),
             size=(target_h, target_w),
-            interpolation="bicubic",
-            antialias=True,
+            interpolation=self.interpolation,
+            antialias=self.antialias,
         )[0]
         image = ops.clip(image, 0.0, 255.0)
 
-        # Normalise to [-1, 1].
-        mean = ops.array(self.image_mean, dtype="float32") * 255.0
-        std = ops.array(self.image_std, dtype="float32") * 255.0
-        image = (image - mean) / std  # (H, W, 3)
+        # Apply scale/offset from the parent ImageConverter
+        # (normalization).
+        if self.scale is not None:
+            scale = self._expand_non_channel_dims(self.scale, image)
+            image, scale = self._convert_types(image, scale, self.compute_dtype)
+            image = image * scale
+        if self.offset is not None:
+            offset = self._expand_non_channel_dims(self.offset, image)
+            image, offset = self._convert_types(image, offset, image.dtype)
+            image = image + offset
 
         # Grid metadata.
         grid_h = target_h // self.patch_size
@@ -279,8 +290,6 @@ class Qwen3_5ImageConverter(ImageConverter):
                 "spatial_merge_size": self.spatial_merge_size,
                 "min_pixels": self.min_pixels,
                 "max_pixels": self.max_pixels,
-                "image_mean": self.image_mean,
-                "image_std": self.image_std,
             }
         )
         return config
