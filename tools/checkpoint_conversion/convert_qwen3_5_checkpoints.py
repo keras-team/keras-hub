@@ -82,6 +82,12 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
+flags.DEFINE_bool(
+    "skip_generation",
+    False,
+    "If True, skip all text generation steps and only run "
+    "numerical logit validation.",
+)
 
 
 def _load_test_image():
@@ -117,15 +123,16 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         )
     results["text_logits"] = hf_out.logits.detach().cpu().float().numpy()
 
-    with torch.no_grad():
-        hf_gen = hf_model.generate(
-            input_ids=torch.tensor(hf_ids, dtype=torch.long).to(device),
-            max_new_tokens=32,
-            do_sample=False,
+    if not FLAGS.skip_generation:
+        with torch.no_grad():
+            hf_gen = hf_model.generate(
+                input_ids=torch.tensor(hf_ids, dtype=torch.long).to(device),
+                max_new_tokens=32,
+                do_sample=False,
+            )
+        results["text_generated"] = hf_tokenizer.decode(
+            hf_gen[0], skip_special_tokens=True
         )
-    results["text_generated"] = hf_tokenizer.decode(
-        hf_gen[0], skip_special_tokens=True
-    )
 
     # --- Multimodal outputs ---
     raw_image = _load_test_image()
@@ -151,15 +158,16 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         hf_inputs["image_grid_thw"].cpu().numpy().astype(np.int32)
     )
 
-    with torch.no_grad():
-        hf_gen = hf_model.generate(
-            **hf_inputs,
-            max_new_tokens=32,
-            do_sample=False,
-        )
-    results["mm_generated"] = processor.batch_decode(
-        hf_gen, skip_special_tokens=True
-    )[0]
+    if not FLAGS.skip_generation:
+        with torch.no_grad():
+            hf_gen = hf_model.generate(
+                **hf_inputs,
+                max_new_tokens=32,
+                do_sample=False,
+            )
+        results["mm_generated"] = processor.batch_decode(
+            hf_gen, skip_special_tokens=True
+        )[0]
     results["raw_image"] = raw_image
 
     # --- Video Multimodal outputs ---
@@ -269,15 +277,16 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         )
         results["vid_grid_thw"] = video_grid_thw
 
-        with torch.no_grad():
-            hf_gen_vid = hf_model.generate(
-                **hf_inputs_vid,
-                max_new_tokens=16,
-                do_sample=False,
-            )
-        results["vid_generated"] = processor.batch_decode(
-            hf_gen_vid, skip_special_tokens=True
-        )[0]
+        if not FLAGS.skip_generation:
+            with torch.no_grad():
+                hf_gen_vid = hf_model.generate(
+                    **hf_inputs_vid,
+                    max_new_tokens=16,
+                    do_sample=False,
+                )
+            results["vid_generated"] = processor.batch_decode(
+                hf_gen_vid, skip_special_tokens=True
+            )[0]
     except Exception as e:
         import traceback
 
@@ -364,12 +373,13 @@ def validate_text_output(keras_model, hf_results):
     except AssertionError as e:
         print(f"  ⚠ Logits do not match within atol=1e-3: {e}")
 
-    # --- End-to-end generation ---
-    print("\n  Generating text...")
-    keras_output = keras_model.generate(TEXT_PROMPT, max_length=64)
-    print(f"  KerasHub: {_extract_response(keras_output)}")
-    print(f"  HF:       {hf_results['text_generated']}")
-    print("  ✓ Text generation completed.")
+    if not FLAGS.skip_generation:
+        # --- End-to-end generation ---
+        print("\n  Generating text...")
+        keras_output = keras_model.generate(TEXT_PROMPT, max_length=64)
+        print(f"  KerasHub: {_extract_response(keras_output)}")
+        print(f"  HF:       {hf_results.get('text_generated', 'N/A')}")
+        print("  ✓ Text generation completed.")
 
 
 # ---------------------------------------------------------------
@@ -440,19 +450,23 @@ def validate_multimodal_output(keras_model, hf_results):
     except AssertionError as e:
         print(f"  ⚠ Logits do not match within atol=1e-3: {e}")
 
-    # --- End-to-end generation ---
-    print(f"\n  HF output: {hf_results['mm_generated']}")
+    if not FLAGS.skip_generation:
+        # --- End-to-end generation ---
+        print(f"\n  HF output: {hf_results.get('mm_generated', 'N/A')}")
 
-    raw_image = hf_results["raw_image"]
-    keras_output = keras_model.generate(
-        {"prompts": [MULTIMODAL_PROMPT], "images": [np.array(raw_image)]},
-        max_length=8192,
-    )
-    keras_text = (
-        keras_output[0] if isinstance(keras_output, list) else keras_output
-    )
-    print(f"  KerasHub output: {_extract_response(keras_text)}")
-    print("  ✓ Multimodal generation completed.")
+        raw_image = hf_results["raw_image"]
+        keras_output = keras_model.generate(
+            {
+                "prompts": [MULTIMODAL_PROMPT],
+                "images": [np.array(raw_image)],
+            },
+            max_length=8192,
+        )
+        keras_text = (
+            keras_output[0] if isinstance(keras_output, list) else keras_output
+        )
+        print(f"  KerasHub output: {_extract_response(keras_text)}")
+        print("  ✓ Multimodal generation completed.")
 
 
 def _run_keras_video_generation(keras_model, hf_results):
@@ -543,9 +557,10 @@ def validate_video_output(keras_model, hf_results):
     except AssertionError as e:
         print(f"  ⚠ Logits do not match within atol=1e-3: {e}")
 
-    print(f"\n  HF output: {hf_results['vid_generated']}")
-    _run_keras_video_generation(keras_model, hf_results)
-    print("  ✓ Video generation completed.")
+    if not FLAGS.skip_generation:
+        print(f"\n  HF output: {hf_results.get('vid_generated', 'N/A')}")
+        _run_keras_video_generation(keras_model, hf_results)
+        print("  ✓ Video generation completed.")
 
 
 # ---------------------------------------------------------------
