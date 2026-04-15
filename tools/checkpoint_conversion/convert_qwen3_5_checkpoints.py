@@ -84,7 +84,7 @@ flags.DEFINE_string(
 )
 flags.DEFINE_bool(
     "skip_generation",
-    True,
+    False,
     "If True, skip all text generation steps and only run "
     "numerical logit validation.",
 )

@@ -19,7 +19,7 @@ backbone_presets = {
                 "Instruction-tuned ultra-lightweight model. "
                 "Best for simple chat and basic NLP tasks on "
                 "resource-constrained devices. Supports Text, "
-                "Multimodal,video processing tasks."
+                "Multimodal, video processing tasks."
             ),
             "params": 852985920,
             "path": "qwen3_5",
@@ -69,7 +69,7 @@ backbone_presets = {
             "description": (
                 "Instruction-tuned mid-small model. A capable "
                 "assistant for general text generation and "
-                "conversational tasks on standard GPUs. Supports"
+                "conversational tasks on standard GPUs. Supports "
                 "Multimodal, video processing tasks."
             ),
             "params": 4539265536,
@@ -83,7 +83,7 @@ backbone_presets = {
                 "Mid-sized foundation model. Delivers strong "
                 "reasoning, coding, and math baseline "
                 "capabilities for advanced fine-tuning. "
-                "Supports Multimodal , video processing tasks."
+                "Supports Multimodal, video processing tasks."
             ),
             "params": 9409813744,
             "path": "qwen3_5",
@@ -96,7 +96,7 @@ backbone_presets = {
                 "Instruction-tuned mid-sized model. Highly "
                 "capable chatbot offering strong logic, coding "
                 "assistance, and multi-lingual support. "
-                "Supports Multimodal , video processing tasks."
+                "Supports Multimodal, video processing tasks."
             ),
             "params": 9409813744,
             "path": "qwen3_5",
@@ -109,7 +109,7 @@ backbone_presets = {
                 "Instruction-tuned large model. Delivers "
                 "high-tier performance for complex reasoning, "
                 "coding, and extensive contextual tasks. "
-                "Supports Multimodal , video processing tasks."
+                "Supports Multimodal, video processing tasks."
             ),
             "params": 27356728560,
             "path": "qwen3_5",
