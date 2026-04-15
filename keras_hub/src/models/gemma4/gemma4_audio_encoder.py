@@ -1001,7 +1001,7 @@ class Gemma4AudioConformerFeedForward(keras.layers.Layer):
             self.intermediate_dim,
             use_bias=False,
             dtype=self.dtype_policy,
-            name="ffw_1",
+            name=self.name + "_ffw_1",
         )
         self.ffw_1.build(input_shape)
 
@@ -1009,7 +1009,7 @@ class Gemma4AudioConformerFeedForward(keras.layers.Layer):
             self.hidden_size,
             use_bias=False,
             dtype=self.dtype_policy,
-            name="ffw_2",
+            name=self.name + "_ffw_2",
         )
 
         self.ffw_2.build(input_shape[:-1] + (self.intermediate_dim,))
@@ -1501,6 +1501,7 @@ class Gemma4AudioEncoder(keras.Model):
             dtype=dtype,
             name="output_norm",
         )
+        self.output_norm.build((None, None, _audio_proj_in))
 
         # Precompute the causal valid mask (numpy, shape [W, C]).
         max_past = max(0, context_left - 1)
