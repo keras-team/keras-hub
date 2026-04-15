@@ -174,6 +174,15 @@ class DFineObjectDetectorTest(TestCase):
             input_data=self.images,
         )
 
+    @pytest.mark.xfail(
+        strict=False,
+        reason=(
+            "Upstream torch.export limitation: D-FINE's multi-scale feature "
+            "computation triggers a data-dependent shape guard "
+            "(Ne(Mod(u2, 16), 0)), preventing successful torch.export. "
+            "Will pass once torch.export supports this pattern."
+        ),
+    )
     def test_litert_export(self):
         backbone = DFineBackbone(**self.base_backbone_kwargs)
         init_kwargs = {
