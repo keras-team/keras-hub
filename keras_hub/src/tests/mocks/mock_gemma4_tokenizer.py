@@ -47,6 +47,12 @@ class MockGemma4Tokenizer(Tokenizer):
             "\n\n",
             "<|turn>",
             "<turn|>",
+            "<|audio|>",
+            "<|audio>",
+            "<audio|>",
+            "<|video|>",
+            "<|video>",
+            "<video|>",
         ]
         self.string_to_id = tf.lookup.StaticHashTable(
             tf.lookup.KeyValueTensorInitializer(
@@ -73,9 +79,15 @@ class MockGemma4Tokenizer(Tokenizer):
         self._add_special_token("<|image>", "start_of_image_token")
         self._add_special_token("<image|>", "end_of_image_token")
 
+        # Video tokens.
+        self._add_special_token("<|video|>", "video_placeholder")
+        self._add_special_token("<|video>", "start_of_video_token")
+        self._add_special_token("<video|>", "end_of_video_token")
+
         self.sequence_length = sequence_length
         self.add_bos = add_bos
         self.add_eos = add_eos
+        self.audio_placeholder_id = -1
 
     def vocabulary_size(self):
         return len(self.vocabulary)
@@ -110,6 +122,36 @@ class MockGemma4Tokenizer(Tokenizer):
             inputs,
             re.escape(self.image_placeholder),
             f" {self.image_placeholder} ",
+        )
+        inputs = tf.strings.regex_replace(
+            inputs,
+            re.escape("<|audio>"),
+            " <|audio> ",
+        )
+        inputs = tf.strings.regex_replace(
+            inputs,
+            re.escape("<audio|>"),
+            " <audio|> ",
+        )
+        inputs = tf.strings.regex_replace(
+            inputs,
+            re.escape("<|audio|>"),
+            " <|audio|> ",
+        )
+        inputs = tf.strings.regex_replace(
+            inputs,
+            re.escape("<|video>"),
+            " <|video> ",
+        )
+        inputs = tf.strings.regex_replace(
+            inputs,
+            re.escape("<video|>"),
+            " <video|> ",
+        )
+        inputs = tf.strings.regex_replace(
+            inputs,
+            re.escape("<|video|>"),
+            " <|video|> ",
         )
         inputs = tf.strings.regex_replace(inputs, "  ", " ")
         inputs = tf.strings.strip(inputs)

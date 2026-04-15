@@ -76,6 +76,12 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
                 (self.batch_size, self.text_sequence_length),
                 dtype="int32",
             ),
+            "position_ids": np.tile(
+                np.arange(self.text_sequence_length, dtype="int32")[
+                    np.newaxis, :
+                ],
+                (self.batch_size, 1),
+            ),
         }
         # 4 vision tokens per image; 3 images per sample => 12 vision tokens
         vision_mask_0 = (
@@ -153,6 +159,10 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
                 (self.batch_size, num_clips * num_audio_tokens_per_clip),
                 dtype="int32",
             ),
+            "audio_mask": np.zeros(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
         }
         backbone = Gemma4Backbone(**audio_init_kwargs)
         output = backbone(audio_input_data)
@@ -170,6 +180,10 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
             ),
             "audio_mel_mask": np.zeros((self.batch_size, 0, 1), dtype="int32"),
             "audio_indices": np.zeros((self.batch_size, 0), dtype="int32"),
+            "audio_mask": np.zeros(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
         }
         output_dummy = backbone(dummy_audio_data)
         self.assertEqual(
@@ -229,8 +243,8 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
         )
 
     @parameterized.named_parameters(
-        ("text_and_vision", "text_and_vision", 24006, 16),
-        ("text_only", "text_only", 5758, 10),
+        ("text_and_vision", "text_and_vision", 24006, 17),
+        ("text_only", "text_only", 5758, 11),
     )
     def test_architecture_characteristics(
         self, backbone_type, num_params, num_layers

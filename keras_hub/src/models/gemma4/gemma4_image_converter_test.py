@@ -10,13 +10,14 @@ from keras_hub.src.models.gemma4.gemma4_image_converter import (
 class Gemma4ImageConverterTest(tf.test.TestCase):
     def test_image_converter_range(self):
         converter = Gemma4ImageConverter(
-            patch_size=16,
+            patch_size=4,
+            max_soft_tokens=1,
             scale=[1 / 255.0, 1 / 255.0, 1 / 255.0],
             offset=[0.0, 0.0, 0.0],
         )
 
-        # Create a random image with values in [0, 255]
-        img = np.random.randint(0, 256, size=(1, 224, 224, 3)).astype("float32")
+        # Minimum valid size: patch_size * pooling_kernel_size = 4 * 3 = 12
+        img = np.random.randint(0, 256, size=(1, 12, 12, 3)).astype("float32")
 
         # Process image
         outputs = converter(img)
@@ -28,10 +29,11 @@ class Gemma4ImageConverterTest(tf.test.TestCase):
         self.assertAllInRange(pixel_values, 0.0, 1.0)
 
     def test_aspect_ratio_resizing(self):
-        converter = Gemma4ImageConverter(patch_size=16)
+        converter = Gemma4ImageConverter(patch_size=4, max_soft_tokens=1)
 
-        # Test image with unequal dimensions
-        img = np.random.randint(0, 256, size=(1, 400, 200, 3)).astype("float32")
+        # Non-square input: 2:1 aspect ratio, dimensions are multiples of
+        # patch_size (4) so the aspect-ratio resizer has room to adjust.
+        img = np.random.randint(0, 256, size=(1, 24, 12, 3)).astype("float32")
 
         outputs = converter(img)
 

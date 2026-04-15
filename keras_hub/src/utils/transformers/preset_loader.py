@@ -15,6 +15,7 @@ from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gemma3
+from keras_hub.src.utils.transformers import convert_gemma3n
 from keras_hub.src.utils.transformers import convert_gemma4
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_gpt_oss
@@ -25,6 +26,7 @@ from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
+from keras_hub.src.utils.transformers import convert_qwen3_5
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_sam3
@@ -59,6 +61,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma
         elif model_type in ("gemma3", "gemma3_text"):
             self.converter = convert_gemma3
+        elif model_type == "gemma3n":
+            self.converter = convert_gemma3n
         elif model_type in ("gemma4", "gemma4_text"):
             self.converter = convert_gemma4
         elif model_type == "gpt2":
@@ -86,6 +90,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen3_moe
         elif model_type == "qwen3":
             self.converter = convert_qwen3
+        elif model_type == "qwen3_5":
+            self.converter = convert_qwen3_5
         elif model_type == "sam3_video":
             self.converter = convert_sam3
         elif model_type == "smollm3":
@@ -156,6 +162,15 @@ class TransformersPresetLoader(PresetLoader):
     def load_audio_converter(self, cls, **kwargs):
         if hasattr(self.converter, "load_audio_converter_config"):
             config = self.converter.load_audio_converter_config(
+                self.preset, self.config
+            )
+            if config is not None:
+                return cls(**{**config, **kwargs})
+        return None
+
+    def load_video_converter(self, cls, **kwargs):
+        if hasattr(self.converter, "load_video_converter_config"):
+            config = self.converter.load_video_converter_config(
                 self.preset, self.config
             )
             if config is not None:
