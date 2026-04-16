@@ -696,6 +696,8 @@ class Gemma4VisionAttention(keras.layers.Layer):
             # rotate_half (split into halves)
             x1, x2 = ops.split(part, 2, axis=-1)
             half_rot = ops.concatenate([-x2, x1], axis=-1)
+            cos = ops.cast(cos, part.dtype)
+            sin = ops.cast(sin, part.dtype)
             return (part * cos) + (half_rot * sin)
 
         x_rot = get_rope(x_part, x_ids)

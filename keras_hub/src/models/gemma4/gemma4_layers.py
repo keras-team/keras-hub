@@ -408,7 +408,7 @@ class Gemma4ClippableDense(keras.layers.Layer):
             use_bias=use_bias,
             kernel_initializer=kernel_initializer,
             dtype=self.dtype_policy,
-            name="dense",
+            name=self.name + "_dense",
         )
 
     def build(self, input_shape):

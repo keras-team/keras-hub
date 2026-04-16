@@ -292,19 +292,19 @@ class Gemma4AudioAttention(keras.layers.Layer):
             self.num_heads * self.head_dim,
             use_bias=False,
             dtype=self.dtype_policy,
-            name="q_proj",
+            name=self.name + "_q_proj",
         )
         self.k_proj = Gemma4ClippableDense(
             self.num_heads * self.head_dim,
             use_bias=False,
             dtype=self.dtype_policy,
-            name="k_proj",
+            name=self.name + "_k_proj",
         )
         self.v_proj = Gemma4ClippableDense(
             self.num_heads * self.head_dim,
             use_bias=False,
             dtype=self.dtype_policy,
-            name="v_proj",
+            name=self.name + "_v_proj",
         )
 
         self.q_proj.build(input_shape)
@@ -609,7 +609,7 @@ class Gemma4AudioConformerAttention(keras.layers.Layer):
             invalid_logit_value=self.invalid_logit_value,
             norm_eps=self.norm_eps,
             dtype=self.dtype_policy,
-            name="attn",
+            name=self.name + "_attn",
         )
         self.attn.build(input_shape)
 
@@ -617,7 +617,7 @@ class Gemma4AudioConformerAttention(keras.layers.Layer):
             self.hidden_size,
             use_bias=False,
             dtype=self.dtype_policy,
-            name="out_proj",
+            name=self.name + "_out_proj",
         )
 
         self.out_proj.build(input_shape)
@@ -1001,7 +1001,7 @@ class Gemma4AudioConformerFeedForward(keras.layers.Layer):
             self.intermediate_dim,
             use_bias=False,
             dtype=self.dtype_policy,
-            name="ffw_1",
+            name=self.name + "_ffw_1",
         )
         self.ffw_1.build(input_shape)
 
@@ -1009,7 +1009,7 @@ class Gemma4AudioConformerFeedForward(keras.layers.Layer):
             self.hidden_size,
             use_bias=False,
             dtype=self.dtype_policy,
-            name="ffw_2",
+            name=self.name + "_ffw_2",
         )
 
         self.ffw_2.build(input_shape[:-1] + (self.intermediate_dim,))
@@ -1098,7 +1098,7 @@ class Gemma4AudioConformerLightConv1d(keras.layers.Layer):
             self.hidden_size * 2,
             use_bias=False,
             dtype=self.dtype_policy,
-            name="linear_start",
+            name=self.name + "_linear_start",
         )
 
         self.linear_start.build(input_shape)
@@ -1125,7 +1125,7 @@ class Gemma4AudioConformerLightConv1d(keras.layers.Layer):
             self.hidden_size,
             use_bias=False,
             dtype=self.dtype_policy,
-            name="linear_end",
+            name=self.name + "_linear_end",
         )
 
         self.linear_end.build(input_shape[:-1] + (self.hidden_size,))
@@ -1227,7 +1227,7 @@ class Gemma4AudioConformerBlock(keras.layers.Layer):
             gradient_clipping=self.gradient_clipping,
             norm_eps=self.norm_eps,
             dtype=self.dtype_policy,
-            name="ffw_start",
+            name=self.name + "_ffw_start",
         )
         self.ffw_start.build(input_shape)
 
@@ -1242,7 +1242,7 @@ class Gemma4AudioConformerBlock(keras.layers.Layer):
             gradient_clipping=self.gradient_clipping,
             norm_eps=self.norm_eps,
             dtype=self.dtype_policy,
-            name="attention",
+            name=self.name + "_attention",
         )
         self.attention.build(input_shape)
 
@@ -1252,7 +1252,7 @@ class Gemma4AudioConformerBlock(keras.layers.Layer):
             gradient_clipping=self.gradient_clipping,
             norm_eps=self.norm_eps,
             dtype=self.dtype_policy,
-            name="lconv",
+            name=self.name + "_lconv",
         )
         self.lconv.build(input_shape)
 
@@ -1262,7 +1262,7 @@ class Gemma4AudioConformerBlock(keras.layers.Layer):
             gradient_clipping=self.gradient_clipping,
             norm_eps=self.norm_eps,
             dtype=self.dtype_policy,
-            name="ffw_end",
+            name=self.name + "_ffw_end",
         )
         self.ffw_end.build(input_shape)
 
@@ -1501,6 +1501,7 @@ class Gemma4AudioEncoder(keras.Model):
             dtype=dtype,
             name="output_norm",
         )
+        self.output_norm.build((None, None, _audio_proj_in))
 
         # Precompute the causal valid mask (numpy, shape [W, C]).
         max_past = max(0, context_left - 1)
