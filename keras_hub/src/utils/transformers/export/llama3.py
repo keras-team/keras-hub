@@ -159,3 +159,79 @@ def get_llama3_tokenizer_config(tokenizer):
         "model_max_length": 131072,
     }
     return tokenizer_config
+
+
+def build_llama3_tokenizer_json(tokenizer):
+    """Build the tokenizer.json needed by PreTrainedTokenizerFast.
+
+    HuggingFace's fast tokenizer requires a ``tokenizer.json`` in the
+    tokenizers-library format.  This function constructs that JSON dict
+    directly from the vocab and merges held by the KerasHub tokenizer,
+    so no extra dependency beyond the standard ``json`` module is needed.
+
+    Args:
+        tokenizer: A `keras_hub.models.Llama3Tokenizer` instance.
+
+    Returns:
+        A dict suitable for serialising as ``tokenizer.json``.
+    """
+    vocab = dict(tokenizer.vocabulary)  # {str: int}
+    merges = list(tokenizer.merges)  # ["tok1 tok2", ...]
+
+    # Collect special/added tokens from the tokenizer's registered attrs.
+    added_tokens = []
+    if hasattr(tokenizer, "_special_token_attrs"):
+        seen_ids = set()
+        for attr in tokenizer._special_token_attrs:
+            token = getattr(tokenizer, attr, None)
+            if token is None:
+                continue
+            token_id = vocab.get(token)
+            if token_id is not None and token_id not in seen_ids:
+                added_tokens.append(
+                    {
+                        "id": token_id,
+                        "content": token,
+                        "single_word": False,
+                        "lstrip": False,
+                        "rstrip": False,
+                        "normalized": False,
+                        "special": True,
+                    }
+                )
+                seen_ids.add(token_id)
+    added_tokens.sort(key=lambda x: x["id"])
+
+    return {
+        "version": "1.0",
+        "truncation": None,
+        "padding": None,
+        "added_tokens": added_tokens,
+        "normalizer": None,
+        # Llama3 uses byte-level BPE with no prefix space and tiktoken-style
+        # regex splitting.
+        "pre_tokenizer": {
+            "type": "ByteLevel",
+            "add_prefix_space": False,
+            "trim_offsets": True,
+            "use_regex": True,
+        },
+        "post_processor": None,
+        "decoder": {
+            "type": "ByteLevel",
+            "add_prefix_space": True,
+            "trim_offsets": True,
+            "use_regex": True,
+        },
+        "model": {
+            "type": "BPE",
+            "dropout": None,
+            "unk_token": None,
+            "continuing_subword_prefix": None,
+            "end_of_word_suffix": None,
+            "fuse_unk": False,
+            "byte_fallback": False,
+            "vocab": vocab,
+            "merges": merges,
+        },
+    }
