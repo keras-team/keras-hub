@@ -1,4 +1,3 @@
-import json
 import os
 
 import keras.ops as ops
@@ -26,30 +25,68 @@ class TestLlama3Export(TestCase):
         # in the vocabulary, so all intermediate tokens must be present.
         vocab_tokens = [
             # base characters
-            "Ġ", "a", "t", "i", "b", "p", "l", "n", "e", "o", "r", "h", "!",
+            "Ġ",
+            "a",
+            "t",
+            "i",
+            "b",
+            "p",
+            "l",
+            "n",
+            "e",
+            "o",
+            "r",
+            "h",
+            "!",
             # intermediate merged tokens (produced by earlier merges)
-            "Ġa", "Ġt", "Ġi", "Ġb",
-            "ai", "pl", "ne",
-            "Ġat", "po", "rt", "Ġth",
-            "air", "pla", "port",
+            "Ġa",
+            "Ġt",
+            "Ġi",
+            "Ġb",
+            "ai",
+            "pl",
+            "ne",
+            "Ġat",
+            "po",
+            "rt",
+            "Ġth",
+            "air",
+            "pla",
+            "port",
             "Ġai",
-            "Ġair", "plane",
+            "Ġair",
+            "plane",
             # Llama3 special tokens
-            "<|end_of_text|>", "<|begin_of_text|>",
-            "<|start_header_id|>", "<|end_header_id|>", "<|eot_id|>",
+            "<|end_of_text|>",
+            "<|begin_of_text|>",
+            "<|start_header_id|>",
+            "<|end_header_id|>",
+            "<|eot_id|>",
         ]
         self.vocab = {t: i for i, t in enumerate(vocab_tokens)}
         self.merges = [
-            "Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e",
-            "Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt",
-            "Ġai r", "Ġa i", "pla ne",
+            "Ġ a",
+            "Ġ t",
+            "Ġ i",
+            "Ġ b",
+            "a i",
+            "p l",
+            "n e",
+            "Ġa t",
+            "p o",
+            "r t",
+            "Ġt h",
+            "ai r",
+            "pl a",
+            "po rt",
+            "Ġai r",
+            "Ġa i",
+            "pla ne",
         ]
 
     def test_export_to_hf(self):
         # 1. Create tokenizer
-        tokenizer = Llama3Tokenizer(
-            vocabulary=self.vocab, merges=self.merges
-        )
+        tokenizer = Llama3Tokenizer(vocabulary=self.vocab, merges=self.merges)
 
         # 2. Create a small backbone
         backbone = Llama3Backbone(
@@ -162,6 +199,4 @@ class TestLlama3Export(TestCase):
         keras_logits_np = ops.convert_to_numpy(keras_logits)
         hf_logits_np = hf_logits.detach().cpu().numpy()
 
-        self.assertAllClose(
-            keras_logits_np, hf_logits_np, atol=1e-3, rtol=1e-3
-        )
+        self.assertAllClose(keras_logits_np, hf_logits_np, atol=1e-3, rtol=1e-3)

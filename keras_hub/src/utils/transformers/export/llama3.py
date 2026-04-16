@@ -2,7 +2,7 @@ import keras.ops as ops
 
 
 def get_llama3_config(backbone):
-    """Convert Keras Llama3 backbone config to Hugging Face config dictionary."""
+    """Convert Keras Llama3 backbone config to Hugging Face dictionary."""
     head_dim = backbone.hidden_dim // backbone.num_query_heads
 
     hf_config = {
