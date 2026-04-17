@@ -69,10 +69,10 @@ class Gemma4VNorm(keras.layers.Layer):
 class Gemma4FrozenNorm(keras.layers.Layer):
     """RMS normalization with a frozen (non-trainable) scale.
 
-    Matches HuggingFace's ``Gemma4RMSNorm(requires_grad=False,
-    scale_shift=0.0)``: forward is ``normed * scale`` where *scale*
-    is a non-trainable weight initialized to zeros (loaded from
-    checkpoint).  Used in the audio conformer blocks.
+    Matches HuggingFace's ``Gemma4RMSNorm(requires_grad=True)`` but frozen
+    for inference: forward is ``normed * scale`` where *scale*
+    is a non-trainable weight initialized to ones (loaded from
+    checkpoint). Used in the audio conformer blocks.
     """
 
     def __init__(self, epsilon=1e-6, **kwargs):
@@ -84,7 +84,7 @@ class Gemma4FrozenNorm(keras.layers.Layer):
             name="scale",
             trainable=False,
             shape=(input_shape[-1],),
-            initializer="zeros",
+            initializer="ones",
         )
         self.built = True
 
@@ -188,12 +188,16 @@ class Gemma4InterleaveEmbeddings(keras.layers.Layer):
 
         batch_size, seq_length, embedding_dim = ops.shape(text_embeddings)
         max_images = ops.shape(image_embeddings)[1]
+        if max_images == 0:
+            return text_embeddings
 
         num_patches = ops.shape(image_embeddings)[2]
 
-        # Fast path for text-only generation where max_images is 0
-        if max_images == 0:
-            return text_embeddings
+        # Keep inputs connected even if empty to avoid Keras errors
+        dummy = ops.sum(image_embeddings) + ops.sum(
+            ops.cast(vision_indices, image_embeddings.dtype)
+        )
+        text_embeddings = text_embeddings + dummy * 0.0
 
         flat_text_embeddings = ops.reshape(
             text_embeddings, (batch_size * seq_length, embedding_dim)
@@ -216,13 +220,15 @@ class Gemma4InterleaveEmbeddings(keras.layers.Layer):
         num_actual = valid_vision_indices.shape[1]
         if num_actual is None:  # fallback when shape is not static
             num_actual = ops.shape(valid_vision_indices)[1]
-        # Reshape to (B, all_tokens, H), clip, then flatten.
-        all_img = ops.reshape(
-            image_embeddings,
-            (batch_size, max_images * num_patches, embedding_dim),
-        )
+        # For video, each frame might produce more tokens than needed.
+        # We must slice EACH frame to the correct number of tokens before
+        # flattening!
+        # `num_actual` is the total number of valid soft tokens across all
+        # images.
+        num_patches_per_image = num_actual // max_images
+        sliced_img = image_embeddings[:, :, :num_patches_per_image, :]
         flat_image_embeddings = ops.reshape(
-            all_img[:, :num_actual, :],
+            sliced_img,
             (-1, embedding_dim),
         )
         vision_indices = ops.add(valid_vision_indices, to_add)
@@ -351,7 +357,7 @@ class Gemma4ClippableEinsumDense(keras.layers.Layer):
                 ops.cast(self.input_min, x.dtype),
                 ops.cast(self.input_max, x.dtype),
             )
-        x = self.dense(x)
+        x = ops.einsum(self.equation, x, self.dense.kernel)
         if self.use_clipped_linears:
             x = ops.clip(
                 x,
@@ -369,6 +375,96 @@ class Gemma4ClippableEinsumDense(keras.layers.Layer):
             {
                 "equation": self.equation,
                 "output_shape": self.output_shape,
+                "use_clipped_linears": self.use_clipped_linears,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+            }
+        )
+        return config
+
+
+class Gemma4ClippableDense(keras.layers.Layer):
+    """Dense layer with clipping for inputs and outputs.
+
+    Matches HF's `Gemma4ClippableLinear` when `use_clipped_linears=True`.
+    """
+
+    def __init__(
+        self,
+        units,
+        use_bias=False,
+        use_clipped_linears=True,
+        kernel_initializer="glorot_uniform",
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.units = units
+        self.use_bias = use_bias
+        self.use_clipped_linears = use_clipped_linears
+        self.kernel_initializer = kernel_initializer
+        self.dense = keras.layers.Dense(
+            units,
+            use_bias=use_bias,
+            kernel_initializer=kernel_initializer,
+            dtype=self.dtype_policy,
+            name=self.name + "_dense",
+        )
+
+    def build(self, input_shape):
+        self.dense.build(input_shape)
+        if self.use_clipped_linears:
+            self.input_min = self.add_weight(
+                name="input_min",
+                shape=(),
+                initializer=keras.initializers.Constant(-65504.0),
+                trainable=False,
+            )
+            self.input_max = self.add_weight(
+                name="input_max",
+                shape=(),
+                initializer=keras.initializers.Constant(65504.0),
+                trainable=False,
+            )
+            self.output_min = self.add_weight(
+                name="output_min",
+                shape=(),
+                initializer=keras.initializers.Constant(-65504.0),
+                trainable=False,
+            )
+            self.output_max = self.add_weight(
+                name="output_max",
+                shape=(),
+                initializer=keras.initializers.Constant(65504.0),
+                trainable=False,
+            )
+        self.built = True
+
+    def call(self, x):
+        if self.use_clipped_linears:
+            x = ops.clip(
+                x,
+                ops.cast(self.input_min, x.dtype),
+                ops.cast(self.input_max, x.dtype),
+            )
+        x = self.dense(x)
+        if self.use_clipped_linears:
+            x = ops.clip(
+                x,
+                ops.cast(self.output_min, x.dtype),
+                ops.cast(self.output_max, x.dtype),
+            )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return self.dense.compute_output_shape(input_shape)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "units": self.units,
+                "use_bias": self.use_bias,
                 "use_clipped_linears": self.use_clipped_linears,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer

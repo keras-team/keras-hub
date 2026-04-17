@@ -41,6 +41,9 @@ from keras_hub.src.models.gemma.gemma_tokenizer import (
 from keras_hub.src.models.gemma3.gemma3_tokenizer import (
     Gemma3Tokenizer as Gemma3Tokenizer,
 )
+from keras_hub.src.models.gemma3n.gemma3n_tokenizer import (
+    Gemma3nTokenizer as Gemma3nTokenizer,
+)
 from keras_hub.src.models.gemma4.gemma4_tokenizer import (
     Gemma4Tokenizer as Gemma4Tokenizer,
 )

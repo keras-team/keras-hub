@@ -14,7 +14,7 @@ backbone_presets = {
             "params": 5100000000,
             "path": "gemma4",
         },
-        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_2b/1",
+        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_2b/2",
     },
     "gemma4_instruct_2b": {
         "metadata": {
@@ -29,7 +29,7 @@ backbone_presets = {
             "params": 5100000000,
             "path": "gemma4",
         },
-        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_2b/1",
+        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_2b/2",
     },
     "gemma4_4b": {
         "metadata": {
@@ -43,7 +43,7 @@ backbone_presets = {
             "params": 7900000000,
             "path": "gemma4",
         },
-        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_4b/1",
+        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_4b/2",
     },
     "gemma4_instruct_4b": {
         "metadata": {
@@ -58,7 +58,7 @@ backbone_presets = {
             "params": 7900000000,
             "path": "gemma4",
         },
-        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_4b/1",
+        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_4b/2",
     },
     "gemma4_26b_a4b": {
         "metadata": {
@@ -73,7 +73,7 @@ backbone_presets = {
             "params": 26000000000,
             "path": "gemma4",
         },
-        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_26b_a4b/1",
+        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_26b_a4b/2",
     },
     "gemma4_instruct_26b_a4b": {
         "metadata": {
@@ -88,7 +88,7 @@ backbone_presets = {
             "params": 26000000000,
             "path": "gemma4",
         },
-        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_26b_a4b/1",
+        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_26b_a4b/2",
     },
     "gemma4_31b": {
         "metadata": {
@@ -101,7 +101,7 @@ backbone_presets = {
             "params": 31000000000,
             "path": "gemma4",
         },
-        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_31b/1",
+        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_31b/2",
     },
     "gemma4_instruct_31b": {
         "metadata": {
@@ -114,6 +114,6 @@ backbone_presets = {
             "params": 31000000000,
             "path": "gemma4",
         },
-        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_31b/1",
+        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_31b/2",
     },
 }
