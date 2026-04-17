@@ -77,3 +77,24 @@ class RWKVTokenizerTest(TestCase):
             input_data=["hello world", "def function", "pythoncodereturn"],
             expected_output=[[5, 1, 6], [3, 1, 9], [7, 4, 8]],
         )
+
+    def test_rejects_non_literal_vocab_entries(self):
+        malicious_vocab = [
+            "0 __import__('os').system('echo pwned') 1",
+        ]
+        with self.assertRaises((ValueError, SyntaxError)):
+            RWKVTokenizer(
+                vocabulary=malicious_vocab,
+                pad_token_id=0,
+            )
+
+    def test_bytes_literal_vocab(self):
+        vocab = [
+            r"0 b'\x00' 1",
+            r"1 b'\x01' 1",
+        ]
+        tok = RWKVTokenizer(
+            vocabulary=vocab,
+            pad_token_id=0,
+        )
+        self.assertEqual(tok.vocabulary_size(), 2)
