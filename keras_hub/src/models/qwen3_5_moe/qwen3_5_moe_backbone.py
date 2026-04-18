@@ -125,7 +125,7 @@ class Qwen3_5MoeBackbone(Backbone):
     ):
         if layer_types is None:
             layer_types = [
-                ("linear_attention" if bool((i + 1) % 4) else "full_attention")
+                ("linear_attention" if (i + 1) % 4 != 0 else "full_attention")
                 for i in range(num_layers)
             ]
 
