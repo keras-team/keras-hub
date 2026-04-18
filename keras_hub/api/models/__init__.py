@@ -624,6 +624,9 @@ from keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm import (
 from keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm_preprocessor import (
     Qwen3MoeCausalLMPreprocessor as Qwen3MoeCausalLMPreprocessor,
 )
+from keras_hub.src.models.qwen3_moe.qwen3_moe_tokenizer import (
+    Qwen3MoeTokenizer as Qwen3MoeTokenizer,
+)
 from keras_hub.src.models.qwen_moe.qwen_moe_backbone import (
     QwenMoeBackbone as QwenMoeBackbone,
 )
@@ -632,6 +635,9 @@ from keras_hub.src.models.qwen_moe.qwen_moe_causal_lm import (
 )
 from keras_hub.src.models.qwen_moe.qwen_moe_causal_lm_preprocessor import (
     QwenMoeCausalLMPreprocessor as QwenMoeCausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen_moe.qwen_moe_tokenizer import (
+    QwenMoeTokenizer as QwenMoeTokenizer,
 )
 from keras_hub.src.models.resnet.resnet_backbone import (
     ResNetBackbone as ResNetBackbone,
@@ -701,6 +707,9 @@ from keras_hub.src.models.rwkv7.rwkv7_causal_lm import (
 )
 from keras_hub.src.models.rwkv7.rwkv7_causal_lm_preprocessor import (
     RWKV7CausalLMPreprocessor as RWKV7CausalLMPreprocessor,
+)
+from keras_hub.src.models.rwkv7.rwkv7_tokenizer import (
+    RWKVTokenizer as RWKVTokenizer,
 )
 from keras_hub.src.models.sam.sam_backbone import SAMBackbone as SAMBackbone
 from keras_hub.src.models.sam.sam_image_segmenter import (
