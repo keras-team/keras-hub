@@ -24,6 +24,7 @@ class Gemma4AudioConverterTest(TestCase):
         self.init_kwargs = {
             "num_mels": 8,
             "num_fft_bins": 8,
+            "frame_length": 8,
             "stride": 2,
             "sampling_rate": 100,
             "max_audio_length": 1,
@@ -162,7 +163,7 @@ class Gemma4AudioConverterTest(TestCase):
         """Verify the default parameter values."""
         converter = Gemma4AudioConverter()
         self.assertEqual(converter.num_mels, 128)
-        self.assertEqual(converter.num_fft_bins, 400)
+        self.assertEqual(converter.num_fft_bins, 512)
         self.assertEqual(converter.stride, 160)
         self.assertEqual(converter.sampling_rate, 16000)
         self.assertEqual(converter.max_audio_length, 30)
