@@ -987,3 +987,19 @@ KerasHub backbones use `keras.Input()` to build a Keras Functional graph in `__i
 - For multimodal backbones: vision/audio inputs should be conditionally added only when the model is not in `text_only_model` mode
 - The input names used in `keras.Input(name=...)` must match the dictionary keys produced by the preprocessor's `call()` method
 - The functional graph's output shape must match what the task model (e.g., `CausalLM`) expects when it accesses `self.backbone(...)` outputs
+
+---
+
+## Mandatory Pre-Review Checklist
+
+Before leaving ANY review comment, you MUST:
+
+1. **Search for precedent first**: Search for the same pattern in at least 3 other model directories in `keras_hub/src/models/`. If the pattern exists in multiple merged models, it is an established convention — do not flag it. The codebase has 75+ models; new models should follow existing patterns, not invent new ones.
+
+2. **Check the parent model**: If the PR adds a variant model (e.g., MoE version of a dense model), compare every flagged pattern against the parent model first. If the parent uses the same code, the variant should too.
+
+3. **Verify your suggested fix compiles**: If you suggest a code change, verify the Python syntax is correct. Do not suggest ternary expressions, import restructuring, or API calls without confirming they work.
+
+4. **Do not flag the same issue twice**: If you identify a pattern concern, flag it once with a single comment. Do not repeat the same suggestion on multiple instances in the same PR.
+
+5. **Distinguish bugs from style preferences**: Only flag issues that would cause incorrect behavior, data loss, or test failures. Do not flag working code that could theoretically be written differently unless it violates an explicit rule in this guide.
