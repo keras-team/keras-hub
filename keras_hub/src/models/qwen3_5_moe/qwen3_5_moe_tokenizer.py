@@ -1,18 +1,21 @@
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.qwen3_5.qwen3_5_backbone import Qwen3_5Backbone
+from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_backbone import (
+    Qwen3_5MoeBackbone,
+)
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
 @keras_hub_export(
     [
-        "keras_hub.tokenizers.Qwen3_5Tokenizer",
-        "keras_hub.models.Qwen3_5Tokenizer",
+        "keras_hub.tokenizers.Qwen3_5MoeTokenizer",
+        "keras_hub.models.Qwen3_5MoeTokenizer",
     ]
 )
-class Qwen3_5Tokenizer(BytePairTokenizer):
-    """Tokenizer for Qwen3.5 models.
+class Qwen3_5MoeTokenizer(BytePairTokenizer):
+    """Tokenizer for Qwen3.5 MoE models.
 
-    This tokenizer implements byte-pair encoding (BPE) for Qwen3.5 models.
+    This tokenizer implements byte-pair encoding (BPE) for Qwen3.5 MoE
+    models.
 
     Args:
         vocabulary: Dictionary mapping tokens to token IDs, or path to
@@ -22,7 +25,7 @@ class Qwen3_5Tokenizer(BytePairTokenizer):
             special tokens. Default ``True``.
     """
 
-    backbone_cls = Qwen3_5Backbone
+    backbone_cls = Qwen3_5MoeBackbone
 
     def __init__(
         self,
@@ -32,6 +35,7 @@ class Qwen3_5Tokenizer(BytePairTokenizer):
         **kwargs,
     ):
         self.has_vision_tokens = has_vision_tokens
+
         self._add_special_token("<|im_end|>", "end_token")
         self._add_special_token("<|endoftext|>", "pad_token")
         self._add_special_token("<|im_start|>", "im_start_token")
@@ -50,7 +54,6 @@ class Qwen3_5Tokenizer(BytePairTokenizer):
             self._add_special_token("<|vision_end|>", "vision_end_token")
             self._add_special_token("<|image_pad|>", "image_token")
             self._add_special_token("<|video_pad|>", "video_token")
-
             if vocabulary is not None:
                 self._update_special_token_ids()
 
