@@ -160,6 +160,9 @@ from keras_hub.src.models.qwen3_omni.qwen3_omni_audio_converter import (
 from keras_hub.src.models.qwen3_omni.qwen3_omni_image_converter import (
     Qwen3OmniImageConverter as Qwen3OmniImageConverter,
 )
+from keras_hub.src.models.qwen3_omni.qwen3_omni_video_converter import (
+    Qwen3OmniVideoConverter as Qwen3OmniVideoConverter,
+)
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter as ResNetImageConverter,
 )
