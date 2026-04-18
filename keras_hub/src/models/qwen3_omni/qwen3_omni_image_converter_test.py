@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.qwen3_omni.qwen3_omni_image_converter import (
     Qwen3OmniImageConverter,
@@ -10,8 +11,11 @@ from keras_hub.src.tests.test_case import TestCase
 class Qwen3OmniImageConverterTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "height": 224,
-            "width": 224,
+            "patch_size": 16,
+            "temporal_patch_size": 2,
+            "spatial_merge_size": 2,
+            "min_pixels": 256 * 256,
+            "max_pixels": 1024 * 1024,
         }
 
     def test_converter_basics(self):
@@ -19,33 +23,35 @@ class Qwen3OmniImageConverterTest(TestCase):
         # Create dummy image
         image = np.ones((512, 512, 3), dtype=np.uint8) * 128
         output = converter(image)
-        # Single image returns unbatched (height, width, channels)
-        self.assertEqual(len(output.shape), 3)
-        self.assertEqual(output.shape[0], 224)
-        self.assertEqual(output.shape[1], 224)
-        self.assertEqual(output.shape[2], 3)
+        self.assertIn("patches", output)
+        self.assertIn("grid_thw", output)
+        patches = ops.convert_to_numpy(output["patches"])
+        grid_thw = ops.convert_to_numpy(output["grid_thw"])
+        # patches: (num_patches, temporal_patch_size, patch, patch, 3)
+        self.assertEqual(patches.ndim, 5)
+        self.assertEqual(patches.shape[1], 2)
+        self.assertEqual(patches.shape[2], 16)
+        self.assertEqual(patches.shape[3], 16)
+        self.assertEqual(patches.shape[4], 3)
+        # grid_thw: [T=1, H_grid, W_grid]
+        self.assertEqual(grid_thw.shape, (3,))
+        self.assertEqual(int(grid_thw[0]), 1)
+        # num_patches must equal H_grid * W_grid.
+        self.assertEqual(patches.shape[0], int(grid_thw[1]) * int(grid_thw[2]))
 
-    def test_batch_processing(self):
+    def test_patch_stride_divisibility(self):
         converter = Qwen3OmniImageConverter(**self.init_kwargs)
-        # Create batch of dummy images with uniform shape
-        batch_size = 2
-        images = np.ones((batch_size, 512, 512, 3), dtype=np.uint8) * 128
-        output = converter(images)
-        # Batch returns (batch, height, width, channels)
-        self.assertEqual(output.shape[0], batch_size)
-        self.assertEqual(output.shape[1], 224)
-        self.assertEqual(output.shape[2], 224)
-        self.assertEqual(output.shape[3], 3)
-
-    def test_single_image(self):
-        converter = Qwen3OmniImageConverter(**self.init_kwargs)
-        # Create single image
         image = np.random.randint(0, 255, (384, 384, 3), dtype=np.uint8)
         output = converter(image)
-        # Single image returns unbatched (height, width, channels)
-        self.assertEqual(output.shape[0], 224)
-        self.assertEqual(output.shape[1], 224)
-        self.assertEqual(output.shape[2], 3)
+        grid_thw = ops.convert_to_numpy(output["grid_thw"])
+        # Grid dims must be a multiple of spatial_merge_size so the merger
+        # can downsample cleanly.
+        self.assertEqual(
+            int(grid_thw[1]) % self.init_kwargs["spatial_merge_size"], 0
+        )
+        self.assertEqual(
+            int(grid_thw[2]) % self.init_kwargs["spatial_merge_size"], 0
+        )
 
     @pytest.mark.extra_large
     def test_all_presets(self):
