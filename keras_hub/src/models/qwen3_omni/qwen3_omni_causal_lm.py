@@ -42,7 +42,7 @@ class Qwen3OmniCausalLM(CausalLM):
             inputs should be preprocessed before calling the model.
 
     Examples:
-
+    TODO: Update once presets registered
     Use `generate()` to do text generation.
     ```python
     qwen3_omni_lm = keras_hub.models.Qwen3OmniCausalLM.from_preset(
@@ -146,32 +146,55 @@ class Qwen3OmniCausalLM(CausalLM):
         token_ids,
         cache,
         cache_update_index,
+        audio_features=None,
+        pixel_values=None,
+        grid_thw=None,
     ):
         """Forward pass of `Qwen3OmniCausalLM` with cache.
 
         `call_with_cache` adds an additional forward pass for the model for
-        autoregressive inference. Unlike calling the model directly, this method
-        allows caching previous key/value Tensors in multi-head attention layer,
-        and avoids recomputing the outputs of seen tokens.
+        autoregressive inference. Unlike calling the model directly, this
+        method allows caching previous key/value Tensors in multi-head
+        attention layer, and avoids recomputing the outputs of seen tokens.
+
+        When ``audio_features`` or ``pixel_values`` is provided, this method
+        runs the audio/vision encoders and scatters their embeddings at the
+        corresponding placeholder positions in ``token_ids``. This is only
+        meaningful on the initial (prompt) pass, and subsequent decode steps
+        produce a single new token whose embedding is read directly from the
+        text token embedding table.
 
         Args:
-            token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
-            cache: a dense float Tensor, the cache of key and value.
-            cache_update_index: int, or int Tensor. The index of current inputs
-            in the whole sequence.
+            token_ids: dense int Tensor, shape `(batch_size, max_length)`.
+            cache: dense float Tensor, the key/value cache.
+            cache_update_index: int or int Tensor. The index of the current
+                inputs in the full sequence.
+            audio_features: optional float Tensor of log-mel features to
+                inject at audio placeholder positions.
+            pixel_values: optional float Tensor of image/video patches to
+                inject at vision placeholder positions.
+            grid_thw: optional int Tensor describing the patch grid for each
+                image/video fed through ``pixel_values``.
 
         Returns:
-            A (logits, hidden_states, cache) tuple. Where `logits` is the
-            language model logits for the input token_ids, `hidden_states` is
-            the final hidden representation of the input tokens, and `cache` is
-            the decoding cache.
+            A `(logits, hidden_states, cache)` tuple.
         """
-        x = self.backbone.token_embedding(token_ids)
+        if audio_features is not None or pixel_values is not None:
+            x, deepstack_features, visual_pos_mask = (
+                self.backbone._compute_embeddings(
+                    token_ids, audio_features, pixel_values, grid_thw
+                )
+            )
+        else:
+            x = self.backbone.token_embedding(token_ids)
+            deepstack_features = None
+            visual_pos_mask = None
+
         batch_size = ops.shape(token_ids)[0]
         seq_len = ops.shape(token_ids)[1]
         # Build position_ids starting from cache_update_index so that each
-        # token (including single-token decode steps) gets its correct absolute
-        # position.
+        # token (including single-token decode steps) gets its correct
+        # absolute position.
         positions = ops.arange(seq_len, dtype="int32") + cache_update_index
         positions = ops.expand_dims(positions, axis=0)
         positions = ops.repeat(positions, batch_size, axis=0)
@@ -187,6 +210,11 @@ class Qwen3OmniCausalLM(CausalLM):
                 cache_update_index=cache_update_index,
             )
             updated_cache.append(next_cache)
+            # DeepStack injection at vision-encoder-specified layers.
+            if deepstack_features is not None and i < len(deepstack_features):
+                x = self.backbone._deepstack_process(
+                    x, visual_pos_mask, deepstack_features[i]
+                )
 
         # Stack updated caches back into single tensor
         cache = ops.stack(updated_cache, axis=1)
@@ -196,18 +224,28 @@ class Qwen3OmniCausalLM(CausalLM):
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
-    def _build_cache(self, token_ids):
+    def _build_cache(
+        self,
+        token_ids,
+        audio_features=None,
+        pixel_values=None,
+        grid_thw=None,
+    ):
         """Initialize KV cache and perform initial forward pass.
 
         Creates a zero-initialized cache tensor and seeds it with the initial
-        prompt tokens. This is called once at the start of generation.
+        prompt tokens. If multimodal inputs are provided, they are injected
+        into the prompt embeddings before the first forward pass.
 
         Args:
             token_ids: Initial prompt tokens, shape
                 `(batch_size, prompt_length)`.
+            audio_features: optional audio features for injection.
+            pixel_values: optional image/video patches for injection.
+            grid_thw: optional patch grid metadata for ``pixel_values``.
 
         Returns:
-            Tuple of (hidden_states, cache) from the initial forward pass.
+            Tuple of `(hidden_states, cache)` from the initial forward pass.
         """
         # Determine cache dimensions from input and model config
         batch_size = ops.shape(token_ids)[0]
@@ -226,7 +264,14 @@ class Qwen3OmniCausalLM(CausalLM):
         cache = ops.zeros(shape, dtype=self.compute_dtype)
 
         # Seed cache with initial forward pass
-        _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
+        _, hidden_states, cache = self.call_with_cache(
+            token_ids,
+            cache,
+            0,
+            audio_features=audio_features,
+            pixel_values=pixel_values,
+            grid_thw=grid_thw,
+        )
         return hidden_states, cache
 
     def generate_step(
@@ -236,20 +281,29 @@ class Qwen3OmniCausalLM(CausalLM):
     ):
         """A compilable generation function for a single batch of inputs.
 
-        This function represents the inner, XLA-compilable, generation function
-        for a single batch of inputs. Inputs should have the same structure as
-        model inputs, a dictionary with keys `"token_ids"` and `"padding_mask"`.
+        This function represents the inner, XLA-compilable, generation
+        function for a single batch of inputs. Inputs should have the same
+        structure as model inputs, a dictionary with keys `"token_ids"` and
+        `"padding_mask"`, and optionally `"audio_features"`,
+        `"pixel_values"`, and `"grid_thw"` for multimodal generation.
 
         Args:
-            inputs: A dictionary with two keys `"token_ids"` and
-                `"padding_mask"` and batched tensor values.
+            inputs: A dictionary of batched input tensors.
             stop_token_ids: Tuple of id's of the end token to stop on. If all
                 sequences have produced a new stop token, generation
                 will stop.
         """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
+        audio_features = inputs.get("audio_features", None)
+        pixel_values = inputs.get("pixel_values", None)
+        grid_thw = inputs.get("grid_thw", None)
         # Create and seed cache with a single forward pass.
-        hidden_states, cache = self._build_cache(token_ids)
+        hidden_states, cache = self._build_cache(
+            token_ids,
+            audio_features=audio_features,
+            pixel_values=pixel_values,
+            grid_thw=grid_thw,
+        )
         # Compute the lengths of all user inputted tokens ids.
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         # Start at the first index that has no user inputted id.

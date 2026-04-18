@@ -13,6 +13,9 @@ from keras_hub.src.models.qwen3_omni.qwen3_omni_image_converter import (
 from keras_hub.src.models.qwen3_omni.qwen3_omni_tokenizer import (
     Qwen3OmniTokenizer,
 )
+from keras_hub.src.models.qwen3_omni.qwen3_omni_video_converter import (
+    Qwen3OmniVideoConverter,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -96,7 +99,9 @@ class Qwen3OmniCausalLMPreprocessorTest(TestCase):
         self.assertIn("padding_mask", x)
 
     def test_with_image_converter(self):
-        image_converter = Qwen3OmniImageConverter()
+        image_converter = Qwen3OmniImageConverter(
+            min_pixels=224 * 224, max_pixels=512 * 512
+        )
         preprocessor = Qwen3OmniCausalLMPreprocessor(
             tokenizer=self.tokenizer,
             image_converter=image_converter,
@@ -109,12 +114,35 @@ class Qwen3OmniCausalLMPreprocessorTest(TestCase):
         }
         x, y, sw = preprocessor(input_data)
         self.assertIn("pixel_values", x)
+        self.assertIn("grid_thw", x)
+        self.assertIn("token_ids", x)
+        self.assertIn("padding_mask", x)
+
+    def test_with_video_converter(self):
+        video_converter = Qwen3OmniVideoConverter(
+            min_pixels=224 * 224, max_pixels=512 * 512
+        )
+        preprocessor = Qwen3OmniCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            video_converter=video_converter,
+            sequence_length=8,
+        )
+        input_data = {
+            "prompts": "airplane at airport",
+            "responses": "airplane",
+            "video": np.ones((4, 224, 224, 3), dtype=np.uint8) * 128,
+        }
+        x, y, sw = preprocessor(input_data)
+        self.assertIn("pixel_values", x)
+        self.assertIn("grid_thw", x)
         self.assertIn("token_ids", x)
         self.assertIn("padding_mask", x)
 
     def test_multimodal_generate_preprocess(self):
         audio_converter = Qwen3OmniAudioConverter(max_audio_length=2)
-        image_converter = Qwen3OmniImageConverter()
+        image_converter = Qwen3OmniImageConverter(
+            min_pixels=224 * 224, max_pixels=512 * 512
+        )
         preprocessor = Qwen3OmniCausalLMPreprocessor(
             tokenizer=self.tokenizer,
             audio_converter=audio_converter,
@@ -131,6 +159,7 @@ class Qwen3OmniCausalLMPreprocessorTest(TestCase):
         self.assertIn("padding_mask", x)
         self.assertIn("audio_features", x)
         self.assertIn("pixel_values", x)
+        self.assertIn("grid_thw", x)
 
     @pytest.mark.extra_large
     def test_all_presets(self):

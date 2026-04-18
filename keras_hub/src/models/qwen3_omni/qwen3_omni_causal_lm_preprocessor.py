@@ -1,4 +1,5 @@
 import keras
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
@@ -17,6 +18,9 @@ from keras_hub.src.models.qwen3_omni.qwen3_omni_image_converter import (
 from keras_hub.src.models.qwen3_omni.qwen3_omni_tokenizer import (
     Qwen3OmniTokenizer,
 )
+from keras_hub.src.models.qwen3_omni.qwen3_omni_video_converter import (
+    Qwen3OmniVideoConverter,
+)
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -26,12 +30,13 @@ from keras_hub.src.utils.tensor_utils import preprocessing_function
 class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
     """Multimodal preprocessor for Qwen3-Omni CausalLM.
 
-    Handles preprocessing for text, audio, and vision inputs.
+    Handles preprocessing for text, audio, image, and video inputs.
 
     Args:
         tokenizer: Qwen3OmniTokenizer instance.
         audio_converter: Qwen3OmniAudioConverter instance (optional).
         image_converter: Qwen3OmniImageConverter instance (optional).
+        video_converter: Qwen3OmniVideoConverter instance (optional).
         sequence_length: int. Maximum sequence length. Defaults to 1024.
         add_start_token: bool. Whether to add start token. Defaults to True.
         add_end_token: bool. Whether to add end token. Defaults to True.
@@ -52,6 +57,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         "responses": "A cat",
         "images": image_array,
         "audio": audio_array,
+        "video": video_frames_array,
     }
     output = preprocessor(x)
     ```
@@ -61,12 +67,14 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
     tokenizer_cls = Qwen3OmniTokenizer
     audio_converter_cls = Qwen3OmniAudioConverter
     image_converter_cls = Qwen3OmniImageConverter
+    video_converter_cls = Qwen3OmniVideoConverter
 
     def __init__(
         self,
         tokenizer,
         audio_converter=None,
         image_converter=None,
+        video_converter=None,
         sequence_length=1024,
         add_start_token=True,
         add_end_token=True,
@@ -81,6 +89,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         )
         self.audio_converter = audio_converter
         self.image_converter = image_converter
+        self.video_converter = video_converter
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -95,21 +104,52 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         )
 
     def _process_multimodal_inputs(self, x):
-        """Extract and convert audio/image inputs from a dict."""
+        """Extract and convert audio, image, and video inputs from a dict.
+
+        Image and video patches/grids are concatenated along the visual
+        axis — the backbone's ``_masked_scatter`` uses a combined
+        image+video token mask and the vision encoder handles both in
+        one pass.
+        """
         audio_features = None
         if "audio" in x and self.audio_converter:
             audio_features = self.audio_converter(x["audio"])
-        pixel_values = None
-        if "images" in x and self.image_converter:
-            pixel_values = self.image_converter(x["images"])
-        return audio_features, pixel_values
 
-    def _add_multimodal_to_output(self, output, audio_features, pixel_values):
+        image_out = None
+        if "images" in x and self.image_converter:
+            image_out = self.image_converter(x["images"])
+        video_out = None
+        if "video" in x and self.video_converter:
+            video_out = self.video_converter(x["video"])
+
+        pixel_values = None
+        grid_thw = None
+        if image_out is not None and video_out is not None:
+            pixel_values = ops.concatenate(
+                [image_out["patches"], video_out["patches"]], axis=0
+            )
+            grid_thw = ops.stack(
+                [image_out["grid_thw"], video_out["grid_thw"]], axis=0
+            )
+        elif image_out is not None:
+            pixel_values = image_out["patches"]
+            grid_thw = ops.expand_dims(image_out["grid_thw"], axis=0)
+        elif video_out is not None:
+            pixel_values = video_out["patches"]
+            grid_thw = ops.expand_dims(video_out["grid_thw"], axis=0)
+
+        return audio_features, pixel_values, grid_thw
+
+    def _add_multimodal_to_output(
+        self, output, audio_features, pixel_values, grid_thw
+    ):
         """Attach multimodal features to the output dict if present."""
         if audio_features is not None:
             output["audio_features"] = audio_features
         if pixel_values is not None:
             output["pixel_values"] = pixel_values
+        if grid_thw is not None:
+            output["grid_thw"] = grid_thw
 
     @preprocessing_function
     def call(
@@ -139,7 +179,9 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
 
         # Multimodal dict input
         prompts = self.tokenizer(x["prompts"])
-        audio_features, pixel_values = self._process_multimodal_inputs(x)
+        audio_features, pixel_values, grid_thw = (
+            self._process_multimodal_inputs(x)
+        )
         responses_text = x.get("responses", None)
 
         if responses_text is not None:
@@ -159,7 +201,9 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
                 "token_ids": token_ids[..., :-1],
                 "padding_mask": padding_mask[..., :-1],
             }
-            self._add_multimodal_to_output(x, audio_features, pixel_values)
+            self._add_multimodal_to_output(
+                x, audio_features, pixel_values, grid_thw
+            )
 
             y = token_ids[..., 1:]
             sample_weight = response_mask[..., 1:]
@@ -175,7 +219,9 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
                 "token_ids": token_ids[..., :-1],
                 "padding_mask": padding_mask[..., :-1],
             }
-            self._add_multimodal_to_output(x, audio_features, pixel_values)
+            self._add_multimodal_to_output(
+                x, audio_features, pixel_values, grid_thw
+            )
 
             y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
 
@@ -210,7 +256,9 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
 
         # Multimodal dict input
         prompts = self.tokenizer(x["prompts"])
-        audio_features, pixel_values = self._process_multimodal_inputs(x)
+        audio_features, pixel_values, grid_thw = (
+            self._process_multimodal_inputs(x)
+        )
 
         if "responses" in x:
             segments = (prompts, self.tokenizer(x["responses"]))
@@ -229,5 +277,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             "token_ids": token_ids,
             "padding_mask": padding_mask,
         }
-        self._add_multimodal_to_output(result, audio_features, pixel_values)
+        self._add_multimodal_to_output(
+            result, audio_features, pixel_values, grid_thw
+        )
         return result
