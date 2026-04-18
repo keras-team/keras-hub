@@ -272,9 +272,7 @@ class Qwen3_5MoeSparseMoeBlock(keras.layers.Layer):
         hidden_states_flat = ops.reshape(hidden_states, (-1, self.hidden_dim))
 
         shared_expert_output = self.shared_expert(hidden_states_flat)
-        shared_gate = ops.sigmoid(
-            self._shared_expert_gate(hidden_states_flat)
-        )
+        shared_gate = ops.sigmoid(self._shared_expert_gate(hidden_states_flat))
         shared_expert_output = shared_gate * shared_expert_output
 
         router_logits = self._router_gate(hidden_states_flat)

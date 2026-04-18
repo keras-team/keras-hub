@@ -100,12 +100,8 @@ def load_video_converter_config(preset, transformers_config):
 def convert_backbone_config(transformers_config):
     tie_word_embeddings = transformers_config["tie_word_embeddings"]
 
-    top_level_vision_config = transformers_config.get(
-        "vision_config", None
-    )
-    top_level_hidden_size = transformers_config.get(
-        "hidden_size", None
-    )
+    top_level_vision_config = transformers_config.get("vision_config", None)
+    top_level_hidden_size = transformers_config.get("hidden_size", None)
 
     if "text_config" in transformers_config:
         transformers_config = transformers_config["text_config"]
@@ -160,14 +156,10 @@ def convert_backbone_config(transformers_config):
         "tie_word_embeddings": tie_word_embeddings,
         "layer_types": layer_types,
         "linear_num_key_heads": transformers_config["linear_num_key_heads"],
-        "linear_num_value_heads": transformers_config[
-            "linear_num_value_heads"
-        ],
+        "linear_num_value_heads": transformers_config["linear_num_value_heads"],
         "linear_key_head_dim": transformers_config["linear_key_head_dim"],
         "linear_value_head_dim": transformers_config["linear_value_head_dim"],
-        "linear_conv_kernel_dim": transformers_config[
-            "linear_conv_kernel_dim"
-        ],
+        "linear_conv_kernel_dim": transformers_config["linear_conv_kernel_dim"],
         "router_aux_loss_coefficient": transformers_config.get(
             "router_aux_loss_coef", 0.001
         ),
@@ -298,61 +290,43 @@ def convert_weights(backbone, loader, transformers_config):
         _port(
             moe_block._router_gate.kernel,
             f"{prefix}.mlp.gate.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
 
         _port(
             moe_block.shared_expert._feedforward_gate_dense.kernel,
             f"{prefix}.mlp.shared_expert.gate_proj.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         _port(
             moe_block.shared_expert._feedforward_intermediate_dense.kernel,
             f"{prefix}.mlp.shared_expert.up_proj.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         _port(
             moe_block.shared_expert._feedforward_output_dense.kernel,
             f"{prefix}.mlp.shared_expert.down_proj.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
 
         _port(
             moe_block._shared_expert_gate.kernel,
             f"{prefix}.mlp.shared_expert_gate.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor, axes=(1, 0)
-            ),
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
 
         num_experts = backbone.num_experts
         try:
-            gate_up = loader.get_tensor(
-                f"{prefix}.mlp.experts.gate_up_proj"
-            )
-            down = loader.get_tensor(
-                f"{prefix}.mlp.experts.down_proj"
-            )
+            gate_up = loader.get_tensor(f"{prefix}.mlp.experts.gate_up_proj")
+            down = loader.get_tensor(f"{prefix}.mlp.experts.down_proj")
             ported_hf_keys.add(f"{prefix}.mlp.experts.gate_up_proj")
             ported_hf_keys.add(f"{prefix}.mlp.experts.down_proj")
 
             gate_up = np.transpose(gate_up, axes=(0, 2, 1))
             down = np.transpose(down, axes=(0, 2, 1))
 
-            moe_block.expert_bank._expert_feedforward_gate_dense.assign(
-                gate_up
-            )
-            moe_block.expert_bank._expert_feedforward_output_dense.assign(
-                down
-            )
+            moe_block.expert_bank._expert_feedforward_gate_dense.assign(gate_up)
+            moe_block.expert_bank._expert_feedforward_output_dense.assign(down)
         except Exception:
             gate_up_proj_list = []
             down_proj_list = []
@@ -365,9 +339,7 @@ def convert_weights(backbone, loader, transformers_config):
                 )
                 gate_proj = np.transpose(gate_proj, axes=(1, 0))
                 up_proj = np.transpose(up_proj, axes=(1, 0))
-                gate_up_proj = np.concatenate(
-                    [gate_proj, up_proj], axis=-1
-                )
+                gate_up_proj = np.concatenate([gate_proj, up_proj], axis=-1)
                 gate_up_proj_list.append(gate_up_proj)
 
                 down_proj = loader.get_tensor(
@@ -461,34 +433,26 @@ def convert_weights(backbone, loader, transformers_config):
             _port(
                 blk.attn.qkv.kernel,
                 f"{blk_prefix}.attn.qkv.weight",
-                hook_fn=lambda hf_tensor, _: np.transpose(
-                    hf_tensor, (1, 0)
-                ),
+                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, (1, 0)),
             )
             _port(blk.attn.qkv.bias, f"{blk_prefix}.attn.qkv.bias")
             _port(
                 blk.attn.proj.kernel,
                 f"{blk_prefix}.attn.proj.weight",
-                hook_fn=lambda hf_tensor, _: np.transpose(
-                    hf_tensor, (1, 0)
-                ),
+                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, (1, 0)),
             )
             _port(blk.attn.proj.bias, f"{blk_prefix}.attn.proj.bias")
 
             _port(
                 blk.mlp.fc1.kernel,
                 f"{blk_prefix}.mlp.linear_fc1.weight",
-                hook_fn=lambda hf_tensor, _: np.transpose(
-                    hf_tensor, (1, 0)
-                ),
+                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, (1, 0)),
             )
             _port(blk.mlp.fc1.bias, f"{blk_prefix}.mlp.linear_fc1.bias")
             _port(
                 blk.mlp.fc2.kernel,
                 f"{blk_prefix}.mlp.linear_fc2.weight",
-                hook_fn=lambda hf_tensor, _: np.transpose(
-                    hf_tensor, (1, 0)
-                ),
+                hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, (1, 0)),
             )
             _port(blk.mlp.fc2.bias, f"{blk_prefix}.mlp.linear_fc2.bias")
 
@@ -542,9 +506,7 @@ def _audit_weights(backbone, loader, ported_hf_keys):
 
     unported = expected_keys - normalized_ported
     if unported:
-        print(
-            f"\n  [AUDIT] WARNING: {len(unported)} HF weight(s) NOT ported:"
-        )
+        print(f"\n  [AUDIT] WARNING: {len(unported)} HF weight(s) NOT ported:")
         for key in sorted(unported):
             print(f"    - {key}")
     else:

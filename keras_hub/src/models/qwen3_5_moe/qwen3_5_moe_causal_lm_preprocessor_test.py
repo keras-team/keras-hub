@@ -11,7 +11,13 @@ class Qwen3_5MoeCausalLMPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = ["!", "air", "\u0120air", "plane", "\u0120at", "port"]
         self.vocab += ["<|im_end|>", "<|endoftext|>"]
-        self.vocab += ["<|im_start|>", "<|vision_start|>", "<|vision_end|>", "<|image_pad|>", "<|video_pad|>"]
+        self.vocab += [
+            "<|im_start|>",
+            "<|vision_start|>",
+            "<|vision_end|>",
+            "<|image_pad|>",
+            "<|video_pad|>",
+        ]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = [
             "\u0120 a",
@@ -85,4 +91,3 @@ class Qwen3_5MoeCausalLMPreprocessorTest(TestCase):
         preprocessor = Qwen3_5MoeCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "airplane at airport")
-

@@ -90,6 +90,9 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
 )
+from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_tokenizer import (
+    Qwen3_5MoeTokenizer as Qwen3_5MoeTokenizer,
+)
 from keras_hub.src.models.qwen3_moe.qwen3_moe_tokenizer import (
     Qwen3MoeTokenizer as Qwen3MoeTokenizer,
 )

@@ -125,11 +125,7 @@ class Qwen3_5MoeBackbone(Backbone):
     ):
         if layer_types is None:
             layer_types = [
-                (
-                    "linear_attention"
-                    if bool((i + 1) % 4)
-                    else "full_attention"
-                )
+                ("linear_attention" if bool((i + 1) % 4) else "full_attention")
                 for i in range(num_layers)
             ]
 
@@ -301,8 +297,14 @@ class Qwen3_5MoeBackbone(Backbone):
             ve = self.vision_encoder
             if "pixel_values" not in inputs:
                 inputs["pixel_values"] = ops.zeros(
-                    (batch_size, 0, ve.temporal_patch_size, ve.patch_size,
-                     ve.patch_size, ve.in_channels),
+                    (
+                        batch_size,
+                        0,
+                        ve.temporal_patch_size,
+                        ve.patch_size,
+                        ve.patch_size,
+                        ve.in_channels,
+                    ),
                 )
             if "image_grid_thw" not in inputs:
                 inputs["image_grid_thw"] = ops.zeros(

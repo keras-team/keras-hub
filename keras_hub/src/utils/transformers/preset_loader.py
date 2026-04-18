@@ -26,8 +26,8 @@ from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
-from keras_hub.src.utils.transformers import convert_qwen3_5_moe
 from keras_hub.src.utils.transformers import convert_qwen3_5
+from keras_hub.src.utils.transformers import convert_qwen3_5_moe
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_sam3

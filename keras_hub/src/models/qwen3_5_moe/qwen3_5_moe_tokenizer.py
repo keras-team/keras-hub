@@ -9,7 +9,7 @@ from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
     [
         "keras_hub.tokenizers.Qwen3_5MoeTokenizer",
         "keras_hub.models.Qwen3_5MoeTokenizer",
-    ] 
+    ]
 )
 class Qwen3_5MoeTokenizer(BytePairTokenizer):
     """Tokenizer for Qwen3.5 MoE models.
@@ -50,24 +50,14 @@ class Qwen3_5MoeTokenizer(BytePairTokenizer):
         )
 
         if has_vision_tokens:
-            self._add_special_token(
-                "<|vision_start|>", "vision_start_token"
-            )
-            self._add_special_token(
-                "<|vision_end|>", "vision_end_token"
-            )
-            self._add_special_token(
-                "<|image_pad|>", "image_token"
-            )
-            self._add_special_token(
-                "<|video_pad|>", "video_token"
-            )
+            self._add_special_token("<|vision_start|>", "vision_start_token")
+            self._add_special_token("<|vision_end|>", "vision_end_token")
+            self._add_special_token("<|image_pad|>", "image_token")
+            self._add_special_token("<|video_pad|>", "video_token")
             if vocabulary is not None:
                 self._update_special_token_ids()
 
     def get_config(self):
         config = super().get_config()
-        config.update(
-            {"has_vision_tokens": self.has_vision_tokens}
-        )
+        config.update({"has_vision_tokens": self.has_vision_tokens})
         return config
