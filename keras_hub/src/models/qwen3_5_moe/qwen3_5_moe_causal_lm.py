@@ -3,10 +3,13 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_backbone import (
+    Qwen3_5MoeBackbone,
+)
+from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_causal_lm_preprocessor import (
+    Qwen3_5MoeCausalLMPreprocessor,
+)
 from keras_hub.src.utils.tensor_utils import any_equal
-
-from .qwen3_5_moe_backbone import Qwen3_5MoeBackbone
-from .qwen3_5_moe_causal_lm_preprocessor import Qwen3_5MoeCausalLMPreprocessor
 
 
 @keras_hub_export("keras_hub.models.Qwen3_5MoeCausalLM")

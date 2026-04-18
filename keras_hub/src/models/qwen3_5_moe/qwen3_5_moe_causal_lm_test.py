@@ -3,18 +3,26 @@ from unittest.mock import patch
 import pytest
 from keras import ops
 
+from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_backbone import (
+    Qwen3_5MoeBackbone,
+)
+from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_causal_lm import (
+    Qwen3_5MoeCausalLM,
+)
+from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_causal_lm_preprocessor import (
+    Qwen3_5MoeCausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_tokenizer import (
+    Qwen3_5MoeTokenizer,
+)
 from keras_hub.src.tests.test_case import TestCase
-
-from .qwen3_5_moe_backbone import Qwen3_5MoeBackbone
-from .qwen3_5_moe_causal_lm import Qwen3_5MoeCausalLM
-from .qwen3_5_moe_causal_lm_preprocessor import Qwen3_5MoeCausalLMPreprocessor
-from .qwen3_5_moe_tokenizer import Qwen3_5MoeTokenizer
 
 
 class Qwen3_5MoeCausalLMTest(TestCase):
     def setUp(self):
         self.vocab = ["!", "air", "\u0120air", "plane", "\u0120at", "port"]
         self.vocab += ["<|endoftext|>"]
+        self.vocab += ["<|im_start|>", "<|vision_start|>", "<|vision_end|>", "<|image_pad|>", "<|video_pad|>"]
         self.vocab += ["<|im_end|>"]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = [
@@ -77,7 +85,7 @@ class Qwen3_5MoeCausalLMTest(TestCase):
             cls=Qwen3_5MoeCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 7, 8),
+            expected_output_shape=(2, 7, 13),
         )
 
     def test_generate(self):
