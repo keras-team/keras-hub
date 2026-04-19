@@ -11,7 +11,7 @@ When performing code reviews on pull requests, you must strictly adhere to the f
 
 5. **Respect Existing Repo Patterns**: Before suggesting review comments (like asking users to add boilerplate or specific patterns), actively check for existing design patterns across the repository. Do not suggest adding useless code or structures that contradict or fall outside the established Keras repo coding style.
 
-
+6. **Understand the Full Model Architecture Before Commenting**: KerasHub model implementations span multiple tightly coupled files (backbone, decoder, attention, layers, preprocessor, task, converter). **Do not isolate a single file or code snippet and comment on it without understanding how it fits into the overall architecture.** Before leaving any review comment, read all files in the model directory to understand the data flow, cross-file dependencies, and design intent. A pattern that looks unusual in isolation is often intentional when seen in the context of the full model. If you are unsure whether a pattern is correct, check if similar patterns exist in other established models in the repo before flagging it.
 
 ## Key Principles
 
@@ -100,9 +100,9 @@ Use standardized names for arg names that should be consistent with other models
 @keras_hub_export("keras_hub.models.MyModelBackbone")
 class MyModelBackbone(Backbone):
     """MyModel core network with hyperparameters.
-    
+
     This backbone implements the base architecture for MyModel.
-    
+
     Args:
         vocabulary_size: int. The size of the token vocabulary.
         num_layers: int. The number of transformer layers.
@@ -113,20 +113,20 @@ class MyModelBackbone(Backbone):
             can consume.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights.
-        
+
     Example:
     ```python
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
-    
+
     # Pretrained MyModel backbone.
     model = keras_hub.models.MyModelBackbone.from_preset("my_model_base")
     model(input_data)
     ```
     """
-    
+
     def __init__(
         self,
         vocabulary_size,
@@ -136,7 +136,7 @@ class MyModelBackbone(Backbone):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
-        
+
         # === Layers ===
         self.token_embedding = keras.layers.Embedding(
             input_dim=vocabulary_size,
@@ -144,13 +144,13 @@ class MyModelBackbone(Backbone):
             name="token_embedding",
         )
         # ... other layers
-        
+
         # === Functional Model ===
         token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
         padding_mask = keras.Input(shape=(None,), dtype="int32", name="padding_mask")
-        
+
         # ... model graph definition
-        
+
         super().__init__(
             inputs={
                 "token_ids": token_ids,
@@ -182,14 +182,14 @@ class MyModelBackbone(Backbone):
 )
 class MyModelTokenizer(WordPieceTokenizer):
     """A MyModel tokenizer using WordPiece subword segmentation.
-    
+
     This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_hub.tokenizers.WordPieceTokenizer`.
-    
+
     Args:
         vocabulary: list of strings or str. A list of strings or a string filename path.
         lowercase: bool. If `True`, the input text will be first lowered before tokenization.
-        
+
     Examples:
     ```python
     # Unbatched input.
@@ -197,9 +197,9 @@ class MyModelTokenizer(WordPieceTokenizer):
     tokenizer("The quick brown fox jumped.")
     ```
     """
-    
+
     backbone_cls = MyModelBackbone
-    
+
     def __init__(
         self,
         vocabulary=None,
@@ -207,7 +207,7 @@ class MyModelTokenizer(WordPieceTokenizer):
         **kwargs,
     ):
         super().__init__(vocabulary=vocabulary, lowercase=lowercase, **kwargs)
-        
+
         # Add special tokens
         self.start_token_id = self.token_to_id("[CLS]")
         self.end_token_id = self.token_to_id("[SEP]")
@@ -228,23 +228,23 @@ class MyModelTokenizer(WordPieceTokenizer):
 @keras_hub_export("keras_hub.models.MyModelPreprocessor")
 class MyModelPreprocessor(TextClassifierPreprocessor):
     """MyModel preprocessing for text classification.
-    
+
     This preprocessing layer will prepare inputs for text classification.
-    
+
     Args:
         tokenizer: `keras_hub.models.MyModelTokenizer`. A tokenizer instance.
         sequence_length: int. The length of the packed inputs.
-        
+
     Examples:
     ```python
     preprocessor = keras_hub.models.MyModelPreprocessor.from_preset("my_model_base")
     preprocessor("The quick brown fox jumped.")
     ```
     """
-    
+
     backbone_cls = MyModelBackbone
     tokenizer_cls = MyModelTokenizer
-    
+
     def __init__(
         self,
         tokenizer,
@@ -400,7 +400,7 @@ def load_vocabulary(vocab_path):
 
     Returns:
         A dictionary mapping tokens to their integer IDs.
-        
+
     Raises:
         FileNotFoundError: If the vocabulary file does not exist.
     """
@@ -445,7 +445,7 @@ KerasHub provides helper methods in the `TestCase` class that handle the standar
 
 #### Available Test Helper Methods:
 - `self.run_backbone_test()` - For backbone models
-- `self.run_vision_backbone_test()` - For vision backbone models  
+- `self.run_vision_backbone_test()` - For vision backbone models
 - `self.run_layer_test()` - For individual layers
 - `self.run_preprocessor_test()` - For preprocessors
 - `self.run_task_test()` - For task models
@@ -630,7 +630,7 @@ def main():
     parser.add_argument("--checkpoint_path", required=True)
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--preset_name", required=True)
-    
+
     args = parser.parse_args()
     convert_checkpoint(args.checkpoint_path, args.output_dir, args.preset_name)
 
@@ -683,12 +683,12 @@ def convert_weights(backbone, loader, transformers_config):
         keras_variable=backbone.get_layer("token_embedding").embeddings,
         hf_weight_key="model.embed_tokens.weight",
     )
-    
+
     # Transformer layers
     for i in range(backbone.num_layers):
         layer = backbone.get_layer(f"transformer_layer_{i}")
         hf_prefix = f"model.layers.{i}"
-        
+
         # Attention weights
         loader.port_weight(
             keras_variable=layer.attention.query_dense.kernel,
@@ -737,7 +737,7 @@ class TestMyModelConverter(TestCase):
             load_weights=False,
         )
         self.assertIsInstance(model, MyModelTextClassifier)
-        
+
         model = Backbone.from_preset(
             "hf://huggingface/my-model-base",
             load_weights=False,
@@ -765,3 +765,241 @@ class TestMyModelConverter(TestCase):
 - Include comprehensive examples
 - Document edge cases and limitations
 - Keep documentation up-to-date with code changes
+
+---
+
+## Context-Aware Model Review
+
+This is the most important section of this style guide. **You are an architecture-aware code reviewer for deep learning model implementations. You MUST NOT review any file in isolation. You MUST reason about the full model architecture, data flow, and cross-file contracts before commenting.**
+
+---
+
+### Step 1: Identify the Model Architecture
+
+Before reviewing any file, determine the model's architecture type from its directory structure:
+
+- **Decoder-only LM** (e.g., Gemma, Llama, GPT2): Tokenizer → Embedding → Transformer Decoder → LM Head
+- **Multimodal LM** (e.g., Gemma3, PaliGemma, Gemma4): VisionEncoder → Token Injection/Fusion → Transformer → LM Head
+- **Encoder-only** (e.g., BERT, RoBERTa): Tokenizer → Transformer Encoder → Task Head
+- **Encoder-Decoder** (e.g., T5, BART, Whisper): Tokenizer → Encoder → Cross-Attention Decoder → Task Head
+- **Vision model** (e.g., ViT, ResNet): ImageConverter → Vision Backbone → Classifier Head
+- **Multimodal + Audio** (e.g., Gemma4): AudioConverter + VisionEncoder → Fusion → Transformer → LM Head
+
+Understanding which architecture you're reviewing determines what invariants, execution flows, and cross-file contracts to check.
+
+---
+
+### Step 2: Understand the Current File's Role
+
+For every file you review, determine:
+
+- **What component is this?** (backbone, decoder, attention, layers, preprocessor, task, converter, tokenizer, test)
+- **Who calls this?** (e.g., backbone is called by the task model; decoder is called by backbone)
+- **What does this depend on?** (e.g., attention depends on RoPE config from backbone; preprocessor depends on tokenizer special tokens)
+
+KerasHub models have a standard component dependency:
+
+```
+Task (CausalLM, Classifier, etc.)
+  └── Backbone
+        ├── Decoder / Encoder layers
+        │     ├── Attention (+ RoPE, GQA)
+        │     ├── MLP / MoE
+        │     └── Normalization (RMSNorm, LayerNorm)
+        ├── Embedding layer
+        └── VisionEncoder (multimodal only)
+  └── Preprocessor
+        ├── Tokenizer
+        ├── ImageConverter (multimodal only)
+        └── AudioConverter (audio models only)
+```
+
+---
+
+### Step 3: Validate Architecture Invariants
+
+Config values must be consistent across all files in a model. Before flagging a mismatch, check that the values used in each component (backbone, decoder, attention, preprocessor, tokenizer) are consistent with what the backbone config defines.
+
+Common things to verify (where applicable to the model type):
+
+- Dimension sizes (embedding, hidden, intermediate) match across components that share them
+- Head counts and key-value head counts are consistent between backbone config and attention layers
+- Vocabulary size matches between tokenizer, embedding layer, and output head
+- Sequence length limits are consistent between preprocessor and positional encoding
+- Special token IDs used in the preprocessor match those defined in the tokenizer
+- For multimodal models: embedding dimensions align at modality fusion points
+
+---
+
+### Step 4: Trace the Execution Flow
+
+Follow the data flow end-to-end before commenting on any individual component:
+
+**Text-only models:**
+```
+input_text → tokenizer → token_ids → embedding → decoder_layers → norm → lm_head → logits
+```
+
+**Multimodal models:**
+```
+images → image_converter → vision_encoder → vision_embeds
+input_text → tokenizer → token_ids (with placeholder tokens)
+→ embedding → inject vision_embeds at placeholder positions → decoder_layers → norm → lm_head → logits
+```
+
+**Generation flow (with cache):**
+```
+prompt → preprocessor → backbone(full_sequence) → build_cache
+→ loop: task.call_with_cache(next_token, cache) → sample → update cache
+→ postprocess → output_text
+```
+
+Understanding these flows is essential. Many review comments arise from not realizing that a method is called in a specific context within this flow.
+
+---
+
+### Step 5: Review Checklist
+
+When reviewing, you MUST perform ALL of the following checks. **Do not give generic feedback. Every comment must be specific and grounded in the architecture.**
+
+#### 5.1 Architecture Consistency
+- Does this file align with the overall model architecture?
+- Are the layer names consistent with how they are accessed from other files (e.g., `backbone.get_layer("transformer_layer_0")`)?
+
+#### 5.2 Cross-File Contract Validation
+- Are the inputs/outputs of this component compatible with the components that call it and that it depends on?
+- Does the preprocessor output match what the backbone expects as input?
+- Does the backbone output shape match what the task model's head expects?
+- Any hidden assumptions that would break integration (e.g., assuming a specific tensor rank or dtype)?
+
+#### 5.3 Shape and Tensor Compatibility
+- Validate tensor shapes across component boundaries
+- Check that reshape/transpose operations produce shapes compatible with downstream consumers
+- Verify attention mask shapes match between preprocessor, backbone, and decoder
+- For multimodal models: verify vision embedding shapes align with text embedding shapes at the fusion point
+
+#### 5.4 Multimodal Correctness (if applicable)
+- Are modality placeholder tokens (image, audio) inserted and replaced correctly?
+- Do vision/audio indices correctly map to positions in the token sequence?
+- Is the fusion logic (embedding replacement, cross-attention, or concatenation) implemented correctly?
+- Are dummy inputs for missing modalities the correct shape?
+
+#### 5.5 Silent Failure Risks (CRITICAL)
+- **Wrong token IDs**: Does the preprocessor use the correct special token IDs from the tokenizer?
+- **Missing masks**: Are padding masks, attention masks, and modality masks constructed and propagated correctly?
+- **Off-by-one errors**: In sequence packing, cache indexing, or position ID computation
+- **Incorrect dtype**: Mixed-precision casting that silently loses precision
+- **Mismatched config fields**: A config value used in one file but named differently in another
+- **`.get()` with default values in converter files**: Avoid using `.get(key, default)` in converter/config code — if a config key is missing, it should raise an error, not silently fall back to a default that may be wrong for future checkpoints
+
+#### 5.6 Performance and Scaling
+- Are there unnecessary tensor copies or redundant computations?
+- Is GQA (Grouped Query Attention) handled correctly for models that use it?
+- Are KV cache operations efficient during generation?
+
+---
+
+### Step 6: Advanced Review Checks
+
+These checks go beyond standard code review and catch the most common sources of silent bugs in deep learning model implementations.
+
+#### 6.1 Parity Regression Detection
+
+When reviewing changes to an **existing model** (not a new model), classify every edit as:
+
+- **Parity-critical**: Any change inside the forward pass — `call()`, `call_with_cache()`, attention computation, normalization, embedding, activation functions, or weight reshaping in converters. Even minor refactors in these paths (reordering ops, changing dtypes, swapping equivalent math) can break numerical parity with the HuggingFace reference.
+- **Non-parity-critical**: Tests, docstrings, presets, formatting, imports.
+
+Parity-critical changes require extra scrutiny. Ask: *"Has this change been verified to maintain numerical parity with the reference implementation?"*
+
+#### 6.2 Serialization Round-Trip Check
+
+Verify that every `__init__` argument appears in `get_config()` and that `get_config()` returns only values that can reconstruct the layer. Specifically:
+
+- Every parameter in `__init__` should be stored as `self.<param_name>` with the same name
+- `get_config()` must include all `__init__` params so that `from_config(config)` produces an identical layer
+- No derived/computed values should be stored as config (e.g., don't store `self.head_dim = hidden_dim // num_heads` in config — store `hidden_dim` and `num_heads`)
+- This is critical because broken `get_config()` silently breaks model saving and loading
+
+#### 6.3 Generation Path Coverage
+
+Most bugs in KerasHub models appear in the **generation path**, not the training path, because:
+
+- `call()` (training) processes full sequences in one pass
+- `call_with_cache()` (generation) processes one token at a time with stateful caches
+
+When reviewing, specifically trace the generation flow and check:
+
+- Cache shapes: Are they allocated with the correct dimensions (`batch_size`, `num_kv_heads`, `max_seq_len`, `head_dim`)?
+- Cache updates: Does `slice_update` use the correct `cache_update_index`?
+- Attention masks: Are they correctly shaped for single-token queries against full-length key/value caches?
+- Are sliding window attention masks applied correctly during generation (not just during training)?
+
+#### 6.4 Backend Compatibility Verification
+
+KerasHub code must run on TensorFlow, JAX, and PyTorch backends. Verify the correct ops are used in the correct context:
+
+- **Inside `call()` and `call_with_cache()`**: Only `keras.ops` / `ops.*` — no raw `tf.*`, `torch.*`, or `jax.*` calls
+- **Inside preprocessor methods** (decorated with `@preprocessing_function`): `tf.*` and `numpy` are allowed because preprocessing runs eagerly
+- **Inside `__init__` or `build()`**: `numpy` is fine for computing static constants (e.g., mel filterbanks, causal masks)
+- **Red flag**: Any `tf.*` call inside a `call()` method that is not behind a `keras.config.backend() == "tensorflow"` guard
+
+#### 6.5 Test Coverage Gap Detection
+
+For every new or modified file in the PR, verify test coverage:
+
+- Every new component file (`<model>_backbone.py`, `<model>_tokenizer.py`, etc.) must have a corresponding `_test.py` file
+- Tests must cover both **training path** (`call()` via `run_backbone_test`, `run_task_test`) and **generation path** (`generate()` via integration tests)
+- Tests must cover **serialization** (`run_model_saving_test`)
+- Converter files must have converter tests that verify `from_preset()` loads correctly
+- If a PR modifies an existing model but adds no test changes, ask: *"How was this change tested?"*
+
+#### 6.6 Weight Mapping Completeness (for converter PRs)
+
+When reviewing HuggingFace converter files (`keras_hub/src/utils/transformers/convert_*.py`), verify:
+
+- Every HuggingFace weight key is mapped to exactly one KerasHub variable — unmapped weights mean a layer will have random (untrained) values, which silently produces garbage outputs
+- No duplicate mappings — a single HF weight mapped to multiple KerasHub variables is almost always a bug
+- Weight reshape/transpose `hook_fn` functions produce the correct output shape — verify that the target `keras_shape` matches what the KerasHub layer expects
+- For models with tied embeddings (e.g., shared `token_embedding` and `lm_head`), verify the tying is handled correctly and not double-counted
+
+#### 6.7 dtype_policy Propagation
+
+Sub-layers must propagate `dtype=self.dtype_policy` when creating child layers (e.g., `Dense`, `Embedding`, custom layers). This is a repo-wide convention used across 130+ files. Missing this causes silent mixed-precision bugs:
+
+- A layer intended to compute in `bfloat16` (for performance) silently runs in `float32` — wasting memory and slowing inference
+- Or worse, a layer runs in `float16` when the parent expects `float32`, causing numerical divergence
+
+When reviewing, check that every sub-layer created in `__init__` or `build()` passes `dtype=self.dtype_policy`. Example:
+```python
+# Correct
+self.query_dense = keras.layers.Dense(..., dtype=self.dtype_policy)
+
+# Bug — inherits Keras default dtype, not the model's policy
+self.query_dense = keras.layers.Dense(...)
+```
+
+#### 6.8 Functional API Graph Construction
+
+KerasHub backbones use `keras.Input()` to build a Keras Functional graph in `__init__`. When reviewing backbone files, verify:
+
+- Every `keras.Input()` corresponds to a real output from the preprocessor — extra or missing inputs will cause runtime errors
+- For multimodal backbones: vision/audio inputs should be conditionally added only when the model is not in `text_only_model` mode
+- The input names used in `keras.Input(name=...)` must match the dictionary keys produced by the preprocessor's `call()` method
+- The functional graph's output shape must match what the task model (e.g., `CausalLM`) expects when it accesses `self.backbone(...)` outputs
+
+---
+
+## Mandatory Pre-Review Checklist
+
+Before leaving ANY review comment, you MUST:
+
+1. **Search for precedent first**: Search for the same pattern in at least 3 other model directories in `keras_hub/src/models/`. If the pattern exists in multiple merged models, it is an established convention — do not flag it. The codebase has 75+ models; new models should follow existing patterns, not invent new ones.
+
+2. **Check the parent model**: If the PR adds a variant model (e.g., MoE version of a dense model), compare every flagged pattern against the parent model first. If the parent uses the same code, the variant should too.
+
+3. **Verify your suggested fix compiles**: If you suggest a code change, verify the Python syntax is correct. Do not suggest ternary expressions, import restructuring, or API calls without confirming they work.
+
+4. **Do not flag the same issue twice**: If you identify a pattern concern, flag it once with a single comment. Do not repeat the same suggestion on multiple instances in the same PR.
+
+5. **Distinguish bugs from style preferences**: Only flag issues that would cause incorrect behavior, data loss, or test failures. Do not flag working code that could theoretically be written differently unless it violates an explicit rule in this guide.
