@@ -203,7 +203,12 @@ class RWKVTokenizerBase:
         print()
 
 
-@keras_hub_export("keras_hub.tokenizers.RWKVTokenizer")
+@keras_hub_export(
+    [
+        "keras_hub.tokenizers.RWKVTokenizer",
+        "keras_hub.models.RWKVTokenizer",
+    ]
+)
 class RWKVTokenizer(tokenizer.Tokenizer):
     """RWKV byte-level tokenizer with longest-match trie search.
 
