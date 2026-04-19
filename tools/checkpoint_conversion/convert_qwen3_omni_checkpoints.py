@@ -208,9 +208,9 @@ def precompute_hf_outputs(hf_thinker, hf_processor):
     audio_np = _generate_test_audio()
     hf_audio_inputs = hf_processor(
         text=[AUDIO_PROMPT],
-        audios=[audio_np],
-        sampling_rate=AUDIO_SAMPLING_RATE,
+        audio=[audio_np],
         return_tensors="pt",
+        padding=True,
     ).to(device)
 
     with torch.no_grad():
