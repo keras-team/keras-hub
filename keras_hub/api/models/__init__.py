@@ -797,6 +797,15 @@ from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image im
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
     StableDiffusion3TextToImagePreprocessor as StableDiffusion3TextToImagePreprocessor,
 )
+from keras_hub.src.models.swin_transformer.swin_transformer_backbone import (
+    SwinTransformerBackbone as SwinTransformerBackbone,
+)
+from keras_hub.src.models.swin_transformer.swin_transformer_image_classifier import (
+    SwinTransformerImageClassifier as SwinTransformerImageClassifier,
+)
+from keras_hub.src.models.swin_transformer.swin_transformer_image_classifier_preprocessor import (
+    SwinTransformerImageClassifierPreprocessor as SwinTransformerImageClassifierPreprocessor,
+)
 from keras_hub.src.models.t5.t5_backbone import T5Backbone as T5Backbone
 from keras_hub.src.models.t5.t5_preprocessor import (
     T5Preprocessor as T5Preprocessor,
