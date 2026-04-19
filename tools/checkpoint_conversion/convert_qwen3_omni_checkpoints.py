@@ -48,8 +48,8 @@ PRESET_MAP = {
 
 IMAGE_URL = "http://images.cocodataset.org/val2017/000000039769.jpg"
 VIDEO_URL = (
-    "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/"
-    "Big_Buck_Bunny_360_10s_1MB.mp4"
+    "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen3-Omni/cookbook/"
+    "video1.mp4"
 )
 # Sample at a very low fps on CPU to avoid OOM.
 VIDEO_FPS = 1
