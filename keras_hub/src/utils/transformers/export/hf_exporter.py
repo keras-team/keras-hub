@@ -28,6 +28,18 @@ from keras_hub.src.utils.transformers.export.gpt2 import (
 )
 from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_weights_map
 
+# --- Llama3 Utils ---
+from keras_hub.src.utils.transformers.export.llama3 import (
+    build_llama3_tokenizer_json,
+)
+from keras_hub.src.utils.transformers.export.llama3 import get_llama3_config
+from keras_hub.src.utils.transformers.export.llama3 import (
+    get_llama3_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.llama3 import (
+    get_llama3_weights_map,
+)
+
 # --- Qwen Utils ---
 from keras_hub.src.utils.transformers.export.qwen import get_qwen_config
 from keras_hub.src.utils.transformers.export.qwen import (
@@ -38,6 +50,7 @@ from keras_hub.src.utils.transformers.export.qwen import get_qwen_weights_map
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
     "Gemma3Backbone": get_gemma3_config,
+    "Llama3Backbone": get_llama3_config,
     "QwenBackbone": get_qwen_config,
     "GPT2Backbone": get_gpt2_config,
 }
@@ -45,6 +58,7 @@ MODEL_CONFIGS = {
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
     "Gemma3Backbone": get_gemma3_weights_map,
+    "Llama3Backbone": get_llama3_weights_map,
     "QwenBackbone": get_qwen_weights_map,
     "GPT2Backbone": get_gpt2_weights_map,
 }
@@ -52,6 +66,7 @@ MODEL_EXPORTERS = {
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
     "Gemma3Tokenizer": get_gemma3_tokenizer_config,
+    "Llama3Tokenizer": get_llama3_tokenizer_config,
     "QwenTokenizer": get_qwen_tokenizer_config,
     "GPT2Tokenizer": get_gpt2_tokenizer_config,
 }
@@ -230,6 +245,20 @@ def export_tokenizer(tokenizer, path):
             warnings.warn(
                 f"{vocab_json_path} not found.Tokenizer may not load correctly."
             )
+
+    # 3. For Llama3 specifically, write tokenizer.json so that
+    #    PreTrainedTokenizerFast can load without sentencepiece / tiktoken.
+    #    vocab and merges are embedded inside tokenizer.json, so the loose
+    #    vocabulary.json and merges.txt written by save_assets() are removed.
+    if tokenizer_type == "Llama3Tokenizer":
+        tokenizer_json = build_llama3_tokenizer_json(tokenizer)
+        tokenizer_json_path = os.path.join(path, "tokenizer.json")
+        with open(tokenizer_json_path, "w", encoding="utf-8") as f:
+            json.dump(tokenizer_json, f, indent=2, ensure_ascii=False)
+        for leftover in ("vocabulary.json", "merges.txt"):
+            leftover_path = os.path.join(path, leftover)
+            if os.path.exists(leftover_path):
+                os.remove(leftover_path)
 
 
 def export_to_safetensors(keras_model, path):
