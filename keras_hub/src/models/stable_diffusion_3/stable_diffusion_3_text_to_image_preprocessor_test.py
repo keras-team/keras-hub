@@ -10,11 +10,15 @@ from keras_hub.src.tests.test_case import TestCase
 
 class StableDiffusion3TextToImagePreprocessorTest(TestCase):
     def setUp(self):
-        vocab = ["air", "plane</w>", "port</w>"]
-        vocab += ["<|endoftext|>", "<|startoftext|>"]
-        vocab = dict([(token, i) for i, token in enumerate(vocab)])
         merges = ["a i", "p l", "n e</w>", "p o", "r t</w>", "ai r", "pl a"]
         merges += ["po rt</w>", "pla ne</w>"]
+        vocab = []
+        for merge in merges:
+            a, b = merge.split(" ")
+            vocab.extend([a, b, a + b])
+        vocab = sorted(set(vocab))  # Remove duplicates
+        vocab += ["<|endoftext|>", "<|startoftext|>"]
+        vocab = dict([(token, i) for i, token in enumerate(vocab)])
         clip_l_tokenizer = CLIPTokenizer(
             vocabulary=vocab, merges=merges, pad_with_end_token=True
         )
@@ -56,5 +60,5 @@ class StableDiffusion3TextToImagePreprocessorTest(TestCase):
         x = preprocessor.generate_preprocess(self.input_data)
         self.assertIn("clip_l", x)
         self.assertIn("clip_g", x)
-        self.assertAllEqual(x["clip_l"][0], [4, 0, 1, 3, 3, 3, 3, 3])
-        self.assertAllEqual(x["clip_g"][0], [4, 0, 1, 3, 0, 0, 0, 0])
+        self.assertAllEqual(x["clip_l"][0], [19, 2, 12, 18, 18, 18, 18, 18])
+        self.assertAllEqual(x["clip_g"][0], [19, 2, 12, 18, 0, 0, 0, 0])

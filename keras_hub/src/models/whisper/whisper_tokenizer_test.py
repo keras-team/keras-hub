@@ -6,22 +6,26 @@ from keras_hub.src.tests.test_case import TestCase
 
 class WhisperTokenizerTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab += ["<|endoftext|>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab += ["!", "<|endoftext|>"]
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.special_tokens = {
-            "<|startoftranscript|>": 9,
-            "<|endoftext|>": 10,
-            "<|notimestamps|>": 11,
-            "<|transcribe|>": 12,
-            "<|translate|>": 13,
+            "<|startoftranscript|>": 31,  # len(self.vocab) == 31 at this point
+            "<|endoftext|>": 32,
+            "<|notimestamps|>": 33,
+            "<|transcribe|>": 34,
+            "<|translate|>": 35,
         }
         self.language_tokens = {
-            "<|en|>": 14,
-            "<|fr|>": 15,
+            "<|en|>": 36,
+            "<|fr|>": 37,
         }
         self.init_kwargs = {
             "vocabulary": self.vocab,
@@ -39,17 +43,24 @@ class WhisperTokenizerTest(TestCase):
             cls=WhisperTokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[[2, 3, 4, 2, 5, 10], [2, 3, 2, 5]],
+            expected_output=[
+                [23, 14, 24, 23, 16, 32],
+                [23, 14, 23, 16],
+            ],
+            expected_detokenize_output=[
+                " airplane at airport<|endoftext|>",
+                " airplane airport",
+            ],
         )
 
     def test_special_tokens(self):
         tokenizer = WhisperTokenizer(**self.init_kwargs)
-        self.assertEqual(tokenizer.bos_token_id, 9)
-        self.assertEqual(tokenizer.eos_token_id, 10)
-        self.assertEqual(tokenizer.pad_token_id, 10)
-        self.assertEqual(tokenizer.no_timestamps_token_id, 11)
-        self.assertEqual(tokenizer.translate_token_id, 13)
-        self.assertEqual(tokenizer.transcribe_token_id, 12)
+        self.assertEqual(tokenizer.bos_token_id, 31)
+        self.assertEqual(tokenizer.eos_token_id, 32)
+        self.assertEqual(tokenizer.pad_token_id, 32)
+        self.assertEqual(tokenizer.no_timestamps_token_id, 33)
+        self.assertEqual(tokenizer.transcribe_token_id, 34)
+        self.assertEqual(tokenizer.translate_token_id, 35)
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
