@@ -35,7 +35,7 @@ class FNetEncoderTest(TestCase):
         x = random.uniform(shape=(2, 4, 6))
         layer = FNetEncoder(
             intermediate_dim=4,
-            dropout=0.99999,  # Zeros out the outputs after the dropout layer
+            dropout=1.0,  # Zeros out the outputs after the dropout layer
         )
         outputs = layer(x, training=True)
 
