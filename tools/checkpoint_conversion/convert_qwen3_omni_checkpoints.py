@@ -152,6 +152,15 @@ def _atol_str(dtype_str):
     return f"{_logit_tolerance(dtype_str):.0e}"
 
 
+def _cast_inputs_to_model_dtype(inputs, model):
+    """Cast float tensors in a processor dict to the model's parameter dtype."""
+    model_dtype = next(model.parameters()).dtype
+    for k, v in list(inputs.items()):
+        if isinstance(v, torch.Tensor) and v.is_floating_point():
+            inputs[k] = v.to(model_dtype)
+    return inputs
+
+
 # ---------------------------------------------------------------
 # Disk cache helpers
 # ---------------------------------------------------------------
@@ -238,6 +247,7 @@ def _hf_image(hf_thinker, hf_processor, cache_dir):
         images=[raw],
         return_tensors="pt",
     ).to(device)
+    _cast_inputs_to_model_dtype(inputs, hf_thinker)
     print(f"   HF pixel_values shape: {inputs['pixel_values'].shape}")
     del raw
 
@@ -283,6 +293,7 @@ def _hf_audio(hf_thinker, hf_processor, cache_dir):
         return_tensors="pt",
         padding=True,
     ).to(device)
+    _cast_inputs_to_model_dtype(inputs, hf_thinker)
     print(f"   HF input_features shape: {inputs['input_features'].shape}")
     del audio_np
 
@@ -403,6 +414,7 @@ def _hf_video(hf_thinker, hf_processor, cache_dir):
             videos=[video_frames],
             return_tensors="pt",
         ).to(device)
+    _cast_inputs_to_model_dtype(inputs, hf_thinker)
 
     del video_frames
     _free()
