@@ -1,11 +1,12 @@
 """Convert Qwen3-Omni HuggingFace checkpoints to KerasHub preset format.
 
-Validates text, image, audio, and video modalities against HF reference
-outputs before saving.
-
 Usage:
     python tools/checkpoint_conversion/convert_qwen3_omni_checkpoints.py \\
         --preset qwen3_omni_30b_a3b_thinking_en
+
+    # Halve peak RAM (runs HF and Keras in bfloat16):
+    python tools/checkpoint_conversion/convert_qwen3_omni_checkpoints.py \\
+        --preset qwen3_omni_30b_a3b_thinking_en --dtype bfloat16
 
     # Skip slow generation steps (logit-only validation):
     python tools/checkpoint_conversion/convert_qwen3_omni_checkpoints.py \\
@@ -13,8 +14,10 @@ Usage:
 """
 
 import gc
+import json
 import os
 import random
+import shutil
 import tempfile
 from io import BytesIO
 
@@ -44,6 +47,11 @@ PRESET_MAP = {
     "qwen3_omni_30b_a3b_en": "Qwen/Qwen3-Omni-30B-A3B-Instruct",
     "qwen3_omni_30b_a3b_captioner_en": "Qwen/Qwen3-Omni-30B-A3B-Captioner",
     "qwen3_omni_30b_a3b_thinking_en": "Qwen/Qwen3-Omni-30B-A3B-Thinking",
+}
+
+DTYPE_MAP = {
+    "float32": torch.float32,
+    "bfloat16": torch.bfloat16,
 }
 
 IMAGE_URL = "http://images.cocodataset.org/val2017/000000039769.jpg"
@@ -83,10 +91,18 @@ flags.DEFINE_bool(
     False,
     "If True, skip all generate() calls and only run logit validation.",
 )
+flags.DEFINE_enum(
+    "dtype",
+    "float32",
+    list(DTYPE_MAP.keys()),
+    "Precision for both HF and Keras models. bfloat16 halves peak RAM "
+    "vs float32 at the cost of a small numerical tolerance in the logit "
+    "comparison.",
+)
 
 
 # ---------------------------------------------------------------
-# Helpers
+# Generic helpers
 # ---------------------------------------------------------------
 
 
@@ -127,135 +143,182 @@ def _pixel_values_hf_to_keras(pixel_values_np, vision_encoder):
     return np.transpose(flat, (0, 2, 3, 4, 1))
 
 
+def _logit_tolerance(dtype_str):
+    """Loose atol for bfloat16, tight for float32."""
+    return 5e-2 if dtype_str == "bfloat16" else 1e-3
+
+
+def _atol_str(dtype_str):
+    return f"{_logit_tolerance(dtype_str):.0e}"
+
+
 # ---------------------------------------------------------------
-# Phase 1: Precompute all HF outputs (before freeing HF model)
+# Disk cache helpers
 # ---------------------------------------------------------------
-def precompute_hf_outputs(hf_thinker, hf_processor):
-    """Run all HF forward passes and return numpy results.
+# Each modality is persisted as <modality>.npz (numpy arrays) +
+# <modality>.json (string metadata, e.g. generated text). Raw inputs
+# needed to re-run Keras generate() (raw PNG image, audio .npy, video
+# frame PNGs) are also written here.
 
-    The HF model is only used here so it can be freed afterward.
-    """
-    results = {}
 
-    # ------------------------------------------------------------------
-    # Text-only
-    # ------------------------------------------------------------------
-    hf_ids = hf_processor.tokenizer(TEXT_PROMPT, return_tensors="np")[
-        "input_ids"
-    ]
-    results["text_token_ids"] = hf_ids
+def _save_arrays(cache_dir, name, arrays, meta=None):
+    path = os.path.join(cache_dir, f"{name}.npz")
+    np.savez(path, **arrays)
+    if meta is not None:
+        with open(os.path.join(cache_dir, f"{name}.json"), "w") as f:
+            json.dump(meta, f)
 
+
+def _load_arrays(cache_dir, name):
+    with np.load(os.path.join(cache_dir, f"{name}.npz")) as npz:
+        arrays = {k: npz[k] for k in npz.files}
+    meta_path = os.path.join(cache_dir, f"{name}.json")
+    meta = {}
+    if os.path.exists(meta_path):
+        with open(meta_path) as f:
+            meta = json.load(f)
+    return arrays, meta
+
+
+def _free():
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+# ---------------------------------------------------------------
+# Phase A: HF output computation (one modality at a time, persisted
+# to disk, freed immediately)
+# ---------------------------------------------------------------
+
+
+def _hf_text(hf_thinker, hf_processor, cache_dir):
+    print("\n-> HF text...")
+    ids = hf_processor.tokenizer(TEXT_PROMPT, return_tensors="np")["input_ids"]
     with torch.no_grad():
-        hf_out = hf_thinker(
-            input_ids=torch.tensor(hf_ids, dtype=torch.long).to(device)
+        out = hf_thinker(
+            input_ids=torch.tensor(ids, dtype=torch.long).to(device)
         )
-    results["text_logits"] = hf_out.logits.detach().cpu().float().numpy()
+    logits_np = out.logits.detach().cpu().float().numpy()
+    del out
+    _free()
 
+    meta = {}
     if not FLAGS.skip_generation:
         with torch.no_grad():
-            hf_gen = hf_thinker.generate(
-                input_ids=torch.tensor(hf_ids, dtype=torch.long).to(device),
+            gen = hf_thinker.generate(
+                input_ids=torch.tensor(ids, dtype=torch.long).to(device),
                 max_new_tokens=32,
                 do_sample=False,
             )
-        results["text_generated"] = hf_processor.tokenizer.decode(
-            hf_gen[0], skip_special_tokens=True
+        meta["generated"] = hf_processor.tokenizer.decode(
+            gen[0], skip_special_tokens=True
         )
+        del gen
+        _free()
 
-    # ------------------------------------------------------------------
-    # Image (vision)
-    # ------------------------------------------------------------------
-    raw_image = _load_test_image()
-    hf_img_inputs = hf_processor(
+    _save_arrays(
+        cache_dir,
+        "text",
+        {"token_ids": ids.astype(np.int32), "logits": logits_np},
+        meta,
+    )
+    del logits_np
+    _free()
+
+
+def _hf_image(hf_thinker, hf_processor, cache_dir):
+    print("\n-> HF image...")
+    raw = _load_test_image()
+    # Save raw image for Keras generate() reload later.
+    raw.save(os.path.join(cache_dir, "image.png"))
+
+    inputs = hf_processor(
         text=[IMAGE_PROMPT],
-        images=[raw_image],
+        images=[raw],
         return_tensors="pt",
     ).to(device)
+    print(f"   HF pixel_values shape: {inputs['pixel_values'].shape}")
+    del raw
 
     with torch.no_grad():
-        hf_out = hf_thinker(**hf_img_inputs)
-    results["img_logits"] = hf_out.logits.detach().cpu().float().numpy()
-    results["img_input_ids"] = (
-        hf_img_inputs["input_ids"].cpu().numpy().astype(np.int32)
-    )
-    results["img_attention_mask"] = (
-        hf_img_inputs["attention_mask"].cpu().numpy().astype(np.int32)
-    )
-    results["img_pixel_values"] = (
-        hf_img_inputs["pixel_values"].cpu().float().numpy()
-    )
-    results["img_grid_thw"] = (
-        hf_img_inputs["image_grid_thw"].cpu().numpy().astype(np.int32)
-    )
-    print(f"   HF pixel_values shape: {hf_img_inputs['pixel_values'].shape}")
+        out = hf_thinker(**inputs)
+    arrays = {
+        "logits": out.logits.detach().cpu().float().numpy(),
+        "input_ids": inputs["input_ids"].cpu().numpy().astype(np.int32),
+        "attention_mask": (
+            inputs["attention_mask"].cpu().numpy().astype(np.int32)
+        ),
+        "pixel_values": inputs["pixel_values"].cpu().float().numpy(),
+        "grid_thw": (inputs["image_grid_thw"].cpu().numpy().astype(np.int32)),
+    }
+    del out
+    _free()
 
+    meta = {}
     if not FLAGS.skip_generation:
         with torch.no_grad():
-            hf_gen = hf_thinker.generate(
-                **hf_img_inputs,
-                max_new_tokens=32,
-                do_sample=False,
+            gen = hf_thinker.generate(
+                **inputs, max_new_tokens=32, do_sample=False
             )
-        results["img_generated"] = hf_processor.batch_decode(
-            hf_gen, skip_special_tokens=True
+        meta["generated"] = hf_processor.batch_decode(
+            gen, skip_special_tokens=True
         )[0]
+        del gen
+        _free()
 
-    results["raw_image"] = raw_image
+    _save_arrays(cache_dir, "image", arrays, meta)
+    del inputs, arrays
+    _free()
 
-    # ------------------------------------------------------------------
-    # Audio
-    # ------------------------------------------------------------------
+
+def _hf_audio(hf_thinker, hf_processor, cache_dir):
+    print("\n-> HF audio...")
     audio_np = _generate_test_audio()
-    hf_audio_inputs = hf_processor(
+    np.save(os.path.join(cache_dir, "audio.npy"), audio_np)
+
+    inputs = hf_processor(
         text=[AUDIO_PROMPT],
         audio=[audio_np],
         return_tensors="pt",
         padding=True,
     ).to(device)
+    print(f"   HF input_features shape: {inputs['input_features'].shape}")
+    del audio_np
 
     with torch.no_grad():
-        hf_out = hf_thinker(**hf_audio_inputs)
-    results["audio_logits"] = hf_out.logits.detach().cpu().float().numpy()
-    results["audio_input_ids"] = (
-        hf_audio_inputs["input_ids"].cpu().numpy().astype(np.int32)
-    )
-    results["audio_attention_mask"] = (
-        hf_audio_inputs["attention_mask"].cpu().numpy().astype(np.int32)
-    )
-    # input_features: (1, num_mels, time) — the mel-spectrogram
-    results["audio_input_features"] = (
-        hf_audio_inputs["input_features"].cpu().float().numpy()
-    )
-    if "feature_attention_mask" in hf_audio_inputs:
-        results["audio_feature_mask"] = (
-            hf_audio_inputs["feature_attention_mask"]
-            .cpu()
-            .numpy()
-            .astype(np.int32)
-        )
-    if "audio_feature_lengths" in hf_audio_inputs:
-        results["audio_feature_lengths"] = (
-            hf_audio_inputs["audio_feature_lengths"].cpu().numpy()
-        )
-    results["audio_np"] = audio_np
-    print(
-        f"   HF input_features shape: {hf_audio_inputs['input_features'].shape}"
-    )
+        out = hf_thinker(**inputs)
+    arrays = {
+        "logits": out.logits.detach().cpu().float().numpy(),
+        "input_ids": inputs["input_ids"].cpu().numpy().astype(np.int32),
+        "attention_mask": (
+            inputs["attention_mask"].cpu().numpy().astype(np.int32)
+        ),
+        # input_features: (1, num_mels, time) — the mel-spectrogram.
+        "input_features": inputs["input_features"].cpu().float().numpy(),
+    }
+    del out
+    _free()
 
+    meta = {}
     if not FLAGS.skip_generation:
         with torch.no_grad():
-            hf_gen = hf_thinker.generate(
-                **hf_audio_inputs,
-                max_new_tokens=32,
-                do_sample=False,
+            gen = hf_thinker.generate(
+                **inputs, max_new_tokens=32, do_sample=False
             )
-        results["audio_generated"] = hf_processor.batch_decode(
-            hf_gen, skip_special_tokens=True
+        meta["generated"] = hf_processor.batch_decode(
+            gen, skip_special_tokens=True
         )[0]
+        del gen
+        _free()
 
-    # ------------------------------------------------------------------
-    # Video
-    # ------------------------------------------------------------------
+    _save_arrays(cache_dir, "audio", arrays, meta)
+    del inputs, arrays
+    _free()
+
+
+def _hf_video(hf_thinker, hf_processor, cache_dir):
+    print("\n-> HF video...")
     vid_path = os.path.join(tempfile.gettempdir(), "qwen3_omni_test_vid.mp4")
     vid_resp = requests.get(VIDEO_URL, timeout=60)
     vid_resp.raise_for_status()
@@ -263,8 +326,8 @@ def precompute_hf_outputs(hf_thinker, hf_processor):
         f.write(vid_resp.content)
 
     video_frames = None
-    indices = None
     video_fps = None
+    indices = None
     try:
         from torchvision.io import read_video
 
@@ -284,12 +347,22 @@ def precompute_hf_outputs(hf_thinker, hf_processor):
             f"   Video: {total_frames} frames @ {video_fps:.1f}fps"
             f" → sampled {len(video_frames)} frames"
         )
+        del video_tensor
     except ImportError:
         print("   torchvision not available — using blank frames")
         video_frames = [Image.new("RGB", (128, 128)) for _ in range(2)]
     finally:
         if os.path.exists(vid_path):
             os.remove(vid_path)
+
+    # Persist frames as PNGs so Keras generate() can reload them.
+    frames_dir = os.path.join(cache_dir, "video_frames")
+    os.makedirs(frames_dir, exist_ok=True)
+    frame_names = []
+    for i, frame in enumerate(video_frames):
+        name = f"frame_{i:04d}.png"
+        frame.save(os.path.join(frames_dir, name))
+        frame_names.append(name)
 
     try:
         from qwen_vl_utils import process_vision_info
@@ -316,7 +389,7 @@ def precompute_hf_outputs(hf_thinker, hf_processor):
         for k, v in video_kwargs.items():
             if isinstance(v, list) and len(v) == 1:
                 video_kwargs[k] = v[0]
-        hf_vid_inputs = hf_processor(
+        inputs = hf_processor(
             text=[text_input],
             images=image_inputs,
             videos=video_inputs,
@@ -325,67 +398,84 @@ def precompute_hf_outputs(hf_thinker, hf_processor):
         ).to(device)
     except ImportError:
         print("   qwen_vl_utils not installed — direct video call")
-        hf_vid_inputs = hf_processor(
+        inputs = hf_processor(
             text=[VIDEO_PROMPT],
             videos=[video_frames],
             return_tensors="pt",
         ).to(device)
 
+    del video_frames
+    _free()
+
+    meta = {"frames": frame_names, "fps": float(VIDEO_FPS)}
+
     try:
         with torch.no_grad():
-            hf_out_vid = hf_thinker(**hf_vid_inputs)
-        results["vid_logits"] = hf_out_vid.logits.detach().cpu().float().numpy()
-        results["vid_input_ids"] = (
-            hf_vid_inputs["input_ids"].cpu().numpy().astype(np.int32)
-        )
-        results["vid_attention_mask"] = (
-            hf_vid_inputs["attention_mask"].cpu().numpy().astype(np.int32)
-        )
+            out = hf_thinker(**inputs)
         vid_px_key = (
             "pixel_values_videos"
-            if "pixel_values_videos" in hf_vid_inputs
+            if "pixel_values_videos" in inputs
             else "pixel_values"
         )
-        results["vid_pixel_values"] = (
-            hf_vid_inputs[vid_px_key].cpu().float().numpy()
-        )
         vid_grid_key = (
-            "video_grid_thw"
-            if "video_grid_thw" in hf_vid_inputs
-            else "image_grid_thw"
+            "video_grid_thw" if "video_grid_thw" in inputs else "image_grid_thw"
         )
-        results["vid_grid_thw"] = (
-            hf_vid_inputs[vid_grid_key].cpu().numpy().astype(np.int32)
-        )
+        arrays = {
+            "logits": out.logits.detach().cpu().float().numpy(),
+            "input_ids": inputs["input_ids"].cpu().numpy().astype(np.int32),
+            "attention_mask": (
+                inputs["attention_mask"].cpu().numpy().astype(np.int32)
+            ),
+            "pixel_values": inputs[vid_px_key].cpu().float().numpy(),
+            "grid_thw": inputs[vid_grid_key].cpu().numpy().astype(np.int32),
+        }
+        del out
+        _free()
+
         if not FLAGS.skip_generation:
             with torch.no_grad():
-                hf_gen_vid = hf_thinker.generate(
-                    **hf_vid_inputs,
-                    max_new_tokens=16,
-                    do_sample=False,
+                gen = hf_thinker.generate(
+                    **inputs, max_new_tokens=16, do_sample=False
                 )
-            results["vid_generated"] = hf_processor.batch_decode(
-                hf_gen_vid, skip_special_tokens=True
+            meta["generated"] = hf_processor.batch_decode(
+                gen, skip_special_tokens=True
             )[0]
+            del gen
+            _free()
+
+        _save_arrays(cache_dir, "video", arrays, meta)
+        del arrays
     except Exception as e:
         import traceback
 
         print(f"   Skipping HF video forward pass: {e}")
         traceback.print_exc()
-        results["vid_logits"] = None
+        # Sentinel: write only meta so Keras phase can skip cleanly.
+        meta["skipped"] = True
+        with open(os.path.join(cache_dir, "video.json"), "w") as f:
+            json.dump(meta, f)
 
-    results["video_frames"] = video_frames
-    results["video_metadata"] = {
-        "frames_indices": indices.tolist() if indices is not None else None,
-        "fps": video_fps if video_fps is not None else float(VIDEO_FPS),
-    }
-
-    return results
+    del inputs
+    _free()
 
 
 # ---------------------------------------------------------------
-# Phase 2: Parameter count
+# Phase B: KerasHub validation (one modality at a time, loaded from
+# disk, freed after comparison)
 # ---------------------------------------------------------------
+
+
+def _print_logit_diff(keras_logits, hf_logits, label, atol):
+    abs_diff = np.abs(keras_logits - hf_logits)
+    print(f"\n  {label} logit mean abs diff: {abs_diff.mean():.6f}")
+    print(f"  {label} logit max abs diff:  {abs_diff.max():.6f}")
+    try:
+        np.testing.assert_allclose(keras_logits, hf_logits, atol=atol)
+        print(f"  ✓ {label} logits match within atol={atol:.0e}.")
+    except AssertionError as e:
+        print(f"  ⚠ {e}")
+
+
 def test_parameter_count(keras_backbone, hf_param_count):
     print("\n" + "=" * 50)
     print("PARAMETER COUNT COMPARISON")
@@ -405,15 +495,14 @@ def test_parameter_count(keras_backbone, hf_param_count):
         )
 
 
-# ---------------------------------------------------------------
-# Phase 3: Text-only validation
-# ---------------------------------------------------------------
-def validate_text_output(keras_model, hf_results):
+def validate_text_output(keras_model, cache_dir, dtype_str):
     print("\n" + "=" * 50)
     print("TEXT-ONLY VALIDATION")
     print("=" * 50)
 
-    hf_ids = hf_results["text_token_ids"]
+    arrays, meta = _load_arrays(cache_dir, "text")
+    hf_ids = arrays["token_ids"]
+    hf_logits = arrays["logits"]
 
     # Token ID parity
     keras_preprocessed = keras_model.preprocessor.generate_preprocess(
@@ -428,7 +517,6 @@ def validate_text_output(keras_model, hf_results):
     np.testing.assert_array_equal(keras_valid, hf_ids[0])
     print("  ✓ Token IDs match.")
 
-    # Logit comparison
     token_ids = ops.convert_to_tensor(hf_ids.astype(np.int32))
     padding_mask = ops.ones_like(token_ids)
     keras_hidden = keras_model.backbone(
@@ -438,32 +526,29 @@ def validate_text_output(keras_model, hf_results):
         keras_hidden, reverse=True
     )
     keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
+    del keras_hidden
 
-    hf_logits = hf_results["text_logits"]
-    abs_diff = np.abs(keras_logits - hf_logits)
-    print(f"\n  Logit mean abs diff: {abs_diff.mean():.6f}")
-    print(f"  Logit max abs diff:  {abs_diff.max():.6f}")
-    try:
-        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
-        print("  ✓ Logits match within atol=1e-3.")
-    except AssertionError as e:
-        print(f"  ⚠ {e}")
+    _print_logit_diff(
+        keras_logits, hf_logits, "Text", _logit_tolerance(dtype_str)
+    )
+    del keras_logits, hf_logits, arrays
+    _free()
 
     if not FLAGS.skip_generation:
         print("\n  Generating...")
         out = keras_model.generate(TEXT_PROMPT, max_length=64)
-
         print(f"  KerasHub: {_extract_response(out)}")
-        print(f"  HF:       {hf_results.get('text_generated', 'N/A')}")
+        print(f"  HF:       {meta.get('generated', 'N/A')}")
         print("  ✓ Text generation done.")
+        _free()
 
 
-# ---------------------------------------------------------------
-# Phase 4: Image validation
-# ---------------------------------------------------------------
-def validate_image_output(keras_model, hf_results):
+def validate_image_output(keras_model, cache_dir, dtype_str):
     if keras_model.backbone.vision_encoder is None:
         print("\n-> Skipping image validation (no vision encoder).")
+        return
+    if not os.path.exists(os.path.join(cache_dir, "image.npz")):
+        print("\n-> Skipping image validation (no cached HF output).")
         return
 
     print("\n" + "=" * 50)
@@ -472,17 +557,16 @@ def validate_image_output(keras_model, hf_results):
 
     backbone = keras_model.backbone
     ve = backbone.vision_encoder
-    token_ids_np = hf_results["img_input_ids"]
-    token_ids = ops.convert_to_tensor(token_ids_np)
-    padding_mask = ops.convert_to_tensor(hf_results["img_attention_mask"])
+    arrays, meta = _load_arrays(cache_dir, "image")
 
-    pixel_values_np = _pixel_values_hf_to_keras(
-        hf_results["img_pixel_values"], ve
-    )
+    token_ids = ops.convert_to_tensor(arrays["input_ids"])
+    padding_mask = ops.convert_to_tensor(arrays["attention_mask"])
+    pixel_values_np = _pixel_values_hf_to_keras(arrays["pixel_values"], ve)
     pixel_values = ops.convert_to_tensor(pixel_values_np)
-    grid_thw = ops.convert_to_tensor(hf_results["img_grid_thw"])
-
+    grid_thw = ops.convert_to_tensor(arrays["grid_thw"])
+    hf_logits = arrays["logits"]
     print(f"\n  KerasHub pixel_values shape: {pixel_values_np.shape}")
+    del pixel_values_np
 
     keras_hidden = backbone(
         {
@@ -494,97 +578,97 @@ def validate_image_output(keras_model, hf_results):
     )
     keras_logits = backbone.token_embedding(keras_hidden, reverse=True)
     keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
-    hf_logits = hf_results["img_logits"]
+    del keras_hidden, token_ids, padding_mask, pixel_values, grid_thw
 
-    abs_diff = np.abs(keras_logits - hf_logits)
-    print(f"\n  Logit mean abs diff: {abs_diff.mean():.6f}")
-    print(f"  Logit max abs diff:  {abs_diff.max():.6f}")
-    try:
-        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
-        print("  ✓ Logits match within atol=1e-3.")
-    except AssertionError as e:
-        print(f"  ⚠ {e}")
+    _print_logit_diff(
+        keras_logits, hf_logits, "Image", _logit_tolerance(dtype_str)
+    )
+    del keras_logits, hf_logits, arrays
+    _free()
 
     if not FLAGS.skip_generation:
-        print(f"\n  HF: {hf_results.get('img_generated', 'N/A')}")
-
-        raw_image = hf_results["raw_image"]
+        print(f"\n  HF: {meta.get('generated', 'N/A')}")
+        raw_image = np.array(
+            Image.open(os.path.join(cache_dir, "image.png")).convert("RGB")
+        )
         out = keras_model.generate(
-            {"prompts": [IMAGE_PROMPT], "images": [np.array(raw_image)]},
+            {"prompts": [IMAGE_PROMPT], "images": [raw_image]},
             max_length=8192,
         )
         keras_text = out[0] if isinstance(out, list) else out
         print(f"  KerasHub: {_extract_response(keras_text)}")
         print("  ✓ Image generation done.")
+        del raw_image
+        _free()
 
 
-# ---------------------------------------------------------------
-# Phase 5: Audio validation (Omni-specific)
-# ---------------------------------------------------------------
-def validate_audio_output(keras_model, hf_results):
+def validate_audio_output(keras_model, cache_dir, dtype_str):
     if keras_model.backbone.audio_encoder is None:
         print("\n-> Skipping audio validation (no audio encoder).")
+        return
+    if not os.path.exists(os.path.join(cache_dir, "audio.npz")):
+        print("\n-> Skipping audio validation (no cached HF output).")
         return
 
     print("\n" + "=" * 50)
     print("AUDIO VALIDATION")
     print("=" * 50)
 
-    backbone = keras_model.backbone
-    token_ids_np = hf_results["audio_input_ids"]
-    token_ids = ops.convert_to_tensor(token_ids_np)
-    padding_mask = ops.convert_to_tensor(hf_results["audio_attention_mask"])
+    arrays, meta = _load_arrays(cache_dir, "audio")
+    token_ids = ops.convert_to_tensor(arrays["input_ids"])
+    padding_mask = ops.convert_to_tensor(arrays["attention_mask"])
+    audio_features = ops.convert_to_tensor(arrays["input_features"])
+    hf_logits = arrays["logits"]
+    print(f"\n  audio_features shape: {arrays['input_features'].shape}")
 
-    # HF input_features: (1, num_mels, time) — pass directly as audio_features
-    audio_features_np = hf_results["audio_input_features"]
-    audio_features = ops.convert_to_tensor(audio_features_np)
-
-    print(f"\n  audio_features shape: {audio_features_np.shape}")
-
-    keras_hidden = backbone(
+    keras_hidden = keras_model.backbone(
         {
             "token_ids": token_ids,
             "padding_mask": padding_mask,
             "audio_features": audio_features,
         }
     )
-    keras_logits = backbone.token_embedding(keras_hidden, reverse=True)
+    keras_logits = keras_model.backbone.token_embedding(
+        keras_hidden, reverse=True
+    )
     keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
-    hf_logits = hf_results["audio_logits"]
+    del keras_hidden, token_ids, padding_mask, audio_features
 
-    abs_diff = np.abs(keras_logits - hf_logits)
-    print(f"\n  Logit mean abs diff: {abs_diff.mean():.6f}")
-    print(f"  Logit max abs diff:  {abs_diff.max():.6f}")
-    try:
-        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
-        print("  ✓ Audio logits match within atol=1e-3.")
-    except AssertionError as e:
-        print(f"  ⚠ {e}")
+    _print_logit_diff(
+        keras_logits, hf_logits, "Audio", _logit_tolerance(dtype_str)
+    )
+    del keras_logits, hf_logits, arrays
+    _free()
 
     if not FLAGS.skip_generation:
-        print(f"\n  HF: {hf_results.get('audio_generated', 'N/A')}")
-        audio_np = hf_results["audio_np"]
+        print(f"\n  HF: {meta.get('generated', 'N/A')}")
+        audio_np = np.load(os.path.join(cache_dir, "audio.npy"))
         out = keras_model.generate(
-            {
-                "prompts": [AUDIO_PROMPT],
-                "audio": [audio_np],
-            },
+            {"prompts": [AUDIO_PROMPT], "audio": [audio_np]},
             max_length=64,
         )
         keras_text = out[0] if isinstance(out, list) else out
         print(f"  KerasHub: {_extract_response(keras_text)}")
         print("  ✓ Audio generation done.")
+        del audio_np
+        _free()
 
 
-# ---------------------------------------------------------------
-# Phase 6: Video validation
-# ---------------------------------------------------------------
-def validate_video_output(keras_model, hf_results):
+def validate_video_output(keras_model, cache_dir, dtype_str):
     if keras_model.backbone.vision_encoder is None:
         print("\n-> Skipping video validation (no vision encoder).")
         return
-    if hf_results.get("vid_logits") is None:
-        print("\n-> Skipping video validation (HF forward pass failed).")
+    if not os.path.exists(os.path.join(cache_dir, "video.npz")):
+        meta_path = os.path.join(cache_dir, "video.json")
+        if os.path.exists(meta_path):
+            with open(meta_path) as f:
+                meta = json.load(f)
+            if meta.get("skipped"):
+                print(
+                    "\n-> Skipping video validation (HF forward pass failed)."
+                )
+                return
+        print("\n-> Skipping video validation (no cached HF output).")
         return
 
     print("\n" + "=" * 50)
@@ -593,17 +677,16 @@ def validate_video_output(keras_model, hf_results):
 
     backbone = keras_model.backbone
     ve = backbone.vision_encoder
-    token_ids_np = hf_results["vid_input_ids"]
-    token_ids = ops.convert_to_tensor(token_ids_np)
-    padding_mask = ops.convert_to_tensor(hf_results["vid_attention_mask"])
+    arrays, meta = _load_arrays(cache_dir, "video")
 
-    pixel_values_np = _pixel_values_hf_to_keras(
-        hf_results["vid_pixel_values"], ve
-    )
+    token_ids = ops.convert_to_tensor(arrays["input_ids"])
+    padding_mask = ops.convert_to_tensor(arrays["attention_mask"])
+    pixel_values_np = _pixel_values_hf_to_keras(arrays["pixel_values"], ve)
     pixel_values = ops.convert_to_tensor(pixel_values_np)
-    grid_thw = ops.convert_to_tensor(hf_results["vid_grid_thw"])
-
+    grid_thw = ops.convert_to_tensor(arrays["grid_thw"])
+    hf_logits = arrays["logits"]
     print(f"\n  KerasHub video pixel_values shape: {pixel_values_np.shape}")
+    del pixel_values_np
 
     keras_hidden = backbone(
         {
@@ -615,28 +698,34 @@ def validate_video_output(keras_model, hf_results):
     )
     keras_logits = backbone.token_embedding(keras_hidden, reverse=True)
     keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
-    hf_logits = hf_results["vid_logits"]
+    del keras_hidden, token_ids, padding_mask, pixel_values, grid_thw
 
-    abs_diff = np.abs(keras_logits - hf_logits)
-    print(f"\n  Logit mean abs diff: {abs_diff.mean():.6f}")
-    print(f"  Logit max abs diff:  {abs_diff.max():.6f}")
-    try:
-        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
-        print("  ✓ Video logits match within atol=1e-3.")
-    except AssertionError as e:
-        print(f"  ⚠ {e}")
+    _print_logit_diff(
+        keras_logits, hf_logits, "Video", _logit_tolerance(dtype_str)
+    )
+    del keras_logits, hf_logits, arrays
+    _free()
 
     if not FLAGS.skip_generation:
-        print(f"\n  HF: {hf_results.get('vid_generated', 'N/A')}")
-        video_frames = hf_results["video_frames"]
-        video_frames_np = np.stack([np.array(f) for f in video_frames])
-        out = keras_model.generate(
-            {"prompts": [VIDEO_PROMPT], "video": [video_frames_np]},
-            max_length=8192,
-        )
-        keras_text = out[0] if isinstance(out, list) else out
-        print(f"  KerasHub: {_extract_response(keras_text)}")
-        print("  ✓ Video generation done.")
+        print(f"\n  HF: {meta.get('generated', 'N/A')}")
+        frames_dir = os.path.join(cache_dir, "video_frames")
+        frame_names = meta.get("frames", [])
+        frames = [
+            np.array(Image.open(os.path.join(frames_dir, n)).convert("RGB"))
+            for n in frame_names
+        ]
+        if frames:
+            video_frames_np = np.stack(frames)
+            out = keras_model.generate(
+                {"prompts": [VIDEO_PROMPT], "video": [video_frames_np]},
+                max_length=8192,
+            )
+            keras_text = out[0] if isinstance(out, list) else out
+            print(f"  KerasHub: {_extract_response(keras_text)}")
+            print("  ✓ Video generation done.")
+            del video_frames_np
+        del frames
+        _free()
 
 
 # ---------------------------------------------------------------
@@ -659,56 +748,75 @@ def main(_):
             f"{', '.join(PRESET_MAP.keys())}"
         )
     hf_preset = PRESET_MAP[preset]
+    dtype_str = FLAGS.dtype
+    torch_dtype = DTYPE_MAP[dtype_str]
 
-    # --- Phase 1: Load HF model and precompute all outputs ---
-    print("-> Loading HF model (Thinker)...")
-    hf_full = AutoModelForMultimodalLM.from_pretrained(
-        hf_preset,
-        device_map="cpu",
-        torch_dtype=torch.float32,
-        trust_remote_code=True,
-    )
-    hf_thinker = hf_full.thinker
-    hf_params = sum(p.numel() for p in hf_thinker.parameters())
-    del hf_full  # drop Talker weights immediately
-    hf_thinker.eval()
-    hf_processor = AutoProcessor.from_pretrained(
-        hf_preset, trust_remote_code=True
-    )
-    print(f"   Thinker loaded: {hf_params:,} params")
+    cache_dir = tempfile.mkdtemp(prefix="qwen3_omni_xfer_")
+    print(f"-> Cache dir: {cache_dir}")
+    print(f"-> dtype:     {dtype_str}")
 
-    print("\n-> Precomputing all HF outputs...")
-    hf_results = precompute_hf_outputs(hf_thinker, hf_processor)
-    hf_results["hf_param_count"] = hf_params
-    print("   Done!")
+    try:
+        # =================================================================
+        # Phase A: Load HF, compute + persist outputs per modality, free HF.
+        # =================================================================
+        print("\n-> Loading HF model (Thinker)...")
+        hf_full = AutoModelForMultimodalLM.from_pretrained(
+            hf_preset,
+            device_map="cpu",
+            torch_dtype=torch_dtype,
+            trust_remote_code=True,
+        )
+        hf_thinker = hf_full.thinker
+        hf_params = sum(p.numel() for p in hf_thinker.parameters())
+        del hf_full  # drop Talker weights immediately
+        _free()
+        hf_thinker.eval()
+        hf_processor = AutoProcessor.from_pretrained(
+            hf_preset, trust_remote_code=True
+        )
+        print(f"   Thinker loaded: {hf_params:,} params")
 
-    # --- Phase 2: Free HF model to reclaim memory ---
-    print("\n-> Releasing HF model...")
-    del hf_thinker
-    del hf_processor
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    print("   Released.")
+        _hf_text(hf_thinker, hf_processor, cache_dir)
+        _hf_image(hf_thinker, hf_processor, cache_dir)
+        _hf_audio(hf_thinker, hf_processor, cache_dir)
+        _hf_video(hf_thinker, hf_processor, cache_dir)
 
-    # --- Phase 3: Load KerasHub model ---
-    print("\n-> Loading KerasHub model from HF preset...")
-    keras_model = keras_hub.models.Qwen3OmniCausalLM.from_preset(
-        f"hf://{hf_preset}", dtype="float32"
-    )
-    print("   KerasHub model loaded!")
+        with open(os.path.join(cache_dir, "meta.json"), "w") as f:
+            json.dump({"hf_params": hf_params, "dtype": dtype_str}, f)
 
-    # --- Phase 4: Validate against precomputed HF outputs ---
-    test_parameter_count(keras_model.backbone, hf_results["hf_param_count"])
-    validate_text_output(keras_model, hf_results)
-    validate_image_output(keras_model, hf_results)
-    validate_audio_output(keras_model, hf_results)
-    validate_video_output(keras_model, hf_results)
+        print("\n-> Releasing HF model...")
+        del hf_thinker
+        del hf_processor
+        _free()
+        print("   Released.")
 
-    # --- Phase 5: Save preset ---
-    save_preset(keras_model, preset)
+        # =================================================================
+        # Phase B: Load KerasHub, validate each modality from disk.
+        # =================================================================
+        print("\n-> Loading KerasHub model from HF preset...")
+        keras_model = keras_hub.models.Qwen3OmniCausalLM.from_preset(
+            f"hf://{hf_preset}", dtype=dtype_str
+        )
+        _free()
+        print("   KerasHub model loaded!")
 
-    print("\n=== Done! ===")
+        with open(os.path.join(cache_dir, "meta.json")) as f:
+            run_meta = json.load(f)
+
+        test_parameter_count(keras_model.backbone, run_meta["hf_params"])
+        validate_text_output(keras_model, cache_dir, dtype_str)
+        validate_image_output(keras_model, cache_dir, dtype_str)
+        validate_audio_output(keras_model, cache_dir, dtype_str)
+        validate_video_output(keras_model, cache_dir, dtype_str)
+
+        # =================================================================
+        # Phase C: Save preset.
+        # =================================================================
+        save_preset(keras_model, preset)
+
+        print("\n=== Done! ===")
+    finally:
+        shutil.rmtree(cache_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":
