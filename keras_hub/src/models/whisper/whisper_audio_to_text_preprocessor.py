@@ -1,5 +1,10 @@
 import keras
 
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.audio_to_text_preprocessor import (
@@ -139,23 +144,20 @@ class WhisperAudioToTextPreprocessor(AudioToTextPreprocessor):
             or self.decoder_sequence_length
         )
         encoder_features = self.audio_converter(x["audio"])
-        audio_batch_size = keras.ops.shape(encoder_features)[0]
+        audio_batch_size = tf.shape(encoder_features)[0]
         decoder_text = x.get("text", None) if isinstance(x, dict) else None
-        # Use Keras ops for the batch dimension so this works under graph
-        # tracing (e.g. `tf.data.Dataset.map`), where `audio_batch_size` is a
-        # symbolic tensor and `int(...)` would fail.
+        # Use `tf` ops directly for the batch dimension so this works under
+        # `tf.data.Dataset.map` graph tracing regardless of the active Keras
+        # backend. (`keras.ops.*` would dispatch to the current backend, which
+        # cannot participate in a tf graph on non-tf backends.)
         if decoder_text is None:
-            decoder_token_ids = keras.ops.full(
-                (audio_batch_size, 1),
-                self.tokenizer.bos_token_id,
-                dtype="int32",
+            decoder_token_ids = tf.fill(
+                (audio_batch_size, 1), self.tokenizer.bos_token_id
             )
         elif isinstance(decoder_text, str):
             # Broadcast a scalar string prompt to every audio in the batch.
             tokenized = self.tokenizer([decoder_text])
-            decoder_token_ids = keras.ops.repeat(
-                tokenized, audio_batch_size, axis=0
-            )
+            decoder_token_ids = tf.repeat(tokenized, audio_batch_size, axis=0)
         else:
             decoder_token_ids = self.tokenizer(decoder_text)
         decoder_token_ids, decoder_padding_mask = self.decoder_packer(
