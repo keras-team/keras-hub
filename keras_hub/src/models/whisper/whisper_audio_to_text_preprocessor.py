@@ -141,20 +141,22 @@ class WhisperAudioToTextPreprocessor(AudioToTextPreprocessor):
         encoder_features = self.audio_converter(x["audio"])
         audio_batch_size = keras.ops.shape(encoder_features)[0]
         decoder_text = x.get("text", None) if isinstance(x, dict) else None
+        # Use Keras ops for the batch dimension so this works under graph
+        # tracing (e.g. `tf.data.Dataset.map`), where `audio_batch_size` is a
+        # symbolic tensor and `int(...)` would fail.
         if decoder_text is None:
-            # Use Keras ops here so this works under graph tracing (e.g.
-            # `tf.data.Dataset.map`), where `audio_batch_size` is a symbolic
-            # tensor and `int(...)` would fail.
             decoder_token_ids = keras.ops.full(
                 (audio_batch_size, 1),
                 self.tokenizer.bos_token_id,
                 dtype="int32",
             )
+        elif isinstance(decoder_text, str):
+            # Broadcast a scalar string prompt to every audio in the batch.
+            tokenized = self.tokenizer([decoder_text])
+            decoder_token_ids = keras.ops.repeat(
+                tokenized, audio_batch_size, axis=0
+            )
         else:
-            if isinstance(decoder_text, str):
-                # A scalar string is a Python-side convenience only reachable
-                # in eager mode; broadcasting it is a Python list op.
-                decoder_text = [decoder_text] * int(audio_batch_size)
             decoder_token_ids = self.tokenizer(decoder_text)
         decoder_token_ids, decoder_padding_mask = self.decoder_packer(
             decoder_token_ids,
