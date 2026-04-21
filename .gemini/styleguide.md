@@ -11,7 +11,7 @@ When performing code reviews on pull requests, you must strictly adhere to the f
 
 5. **Respect Existing Repo Patterns**: Before suggesting review comments (like asking users to add boilerplate or specific patterns), actively check for existing design patterns across the repository. Do not suggest adding useless code or structures that contradict or fall outside the established Keras repo coding style.
 
-6. **Understand the Full Model Architecture Before Commenting**: KerasHub model implementations span multiple tightly coupled files (backbone, decoder, attention, layers, preprocessor, task, converter). **Do not isolate a single file or code snippet and comment on it without understanding how it fits into the overall architecture.** Before leaving any review comment, read all files in the model directory to understand the data flow, cross-file dependencies, and design intent. A pattern that looks unusual in isolation is often intentional when seen in the context of the full model. If you are unsure whether a pattern is correct, check if similar patterns exist in other established models in the repo before flagging it.
+6. **Understand the Full Model Architecture Before Commenting**: KerasHub model implementations span multiple tightly coupled files (backbone, decoder, attention, layers, preprocessor, task, converter). **Do not isolate a single file or code snippet and comment on it without understanding how it fits into the overall architecture.** Before leaving any review comment, read all files in the model directory to understand the data flow, cross-file dependencies, and design intent. If you are unsure whether a pattern is correct, check if similar patterns exist in other established models in the repo before flagging it.
 
 ## Key Principles
 
@@ -770,13 +770,13 @@ class TestMyModelConverter(TestCase):
 
 ## Context-Aware Model Review
 
-This is the most important section of this style guide. **You are an architecture-aware code reviewer for deep learning model implementations. You MUST NOT review any file in isolation. You MUST reason about the full model architecture, data flow, and cross-file contracts before commenting.**
+This is the most important section of this style guide. **You are an architecture-aware code reviewer for deep learning model implementations. You MUST reason about the full model architecture, data flow, and cross-file contracts before commenting.**
 
 ---
 
 ### Step 1: Identify the Model Architecture
 
-Before reviewing any file, determine the model's architecture type from its directory structure:
+Before reviewing any file, understand the model's architecture type from its directory structure:
 
 - **Decoder-only LM** (e.g., Gemma, Llama, GPT2): Tokenizer → Embedding → Transformer Decoder → LM Head
 - **Multimodal LM** (e.g., Gemma3, PaliGemma, Gemma4): VisionEncoder → Token Injection/Fusion → Transformer → LM Head
@@ -791,34 +791,52 @@ Understanding which architecture you're reviewing determines what invariants, ex
 
 ### Step 2: Understand the Current File's Role
 
-For every file you review, determine:
+For every file you review, understand:
 
 - **What component is this?** (backbone, decoder, attention, layers, preprocessor, task, converter, tokenizer, test)
 - **Who calls this?** (e.g., backbone is called by the task model; decoder is called by backbone)
 - **What does this depend on?** (e.g., attention depends on RoPE config from backbone; preprocessor depends on tokenizer special tokens)
 
-KerasHub models have a standard component dependency:
+KerasHub models have a standard component dependency (not all components apply to every model):
 
 ```
-Task (CausalLM, Classifier, etc.)
+Task (CausalLM, Classifier, TextClassifier, ImageClassifier,
+      ImageSegmenter, DepthEstimator, ObjectDetector,
+      MaskedLM, Seq2SeqLM, AudioToText, TextToImage,
+      ImageToImage, etc.)
   └── Backbone
-        ├── Decoder / Encoder layers
-        │     ├── Attention (+ RoPE, GQA)
-        │     ├── MLP / MoE
-        │     └── Normalization (RMSNorm, LayerNorm)
-        ├── Embedding layer
-        └── VisionEncoder (multimodal only)
+  │     ├── Decoder / Encoder layers
+  │     │     ├── Attention (+ RoPE, GQA, Sliding Window)
+  │     │     ├── MLP / MoE (Mixture of Experts)
+  │     │     └── Normalization (RMSNorm, LayerNorm)
+  │     ├── Embedding layer (ReversibleEmbedding)
+  │     ├── VisionEncoder (multimodal only)
+  │     ├── AudioEncoder (audio models only)
+  │     └── FeaturePyramidBackbone (detection/segmentation)
   └── Preprocessor
-        ├── Tokenizer
-        ├── ImageConverter (multimodal only)
-        └── AudioConverter (audio models only)
+  │     ├── Tokenizer (SentencePiece, WordPiece, BPE)
+  │     ├── ImageConverter (vision/multimodal models)
+  │     ├── AudioConverter (audio models)
+  │     └── VideoConverter (video models)
+  └── Presets (*_presets.py — config, metadata, kaggle_handle)
+
+Shared reusable layers (keras_hub.layers):
+  ├── RotaryEmbedding, PositionEmbedding, SinePositionEncoding
+  ├── CachedMultiHeadAttention, TransformerEncoder, TransformerDecoder
+  ├── FNetEncoder, MaskedLMHead
+  └── AnchorGenerator, NonMaxSuppression, BoxMatcher (detection)
+
+External conversion utilities:
+  ├── HuggingFace converters (keras_hub/src/utils/transformers/)
+  ├── Timm converters (keras_hub/src/utils/timm/)
+  └── Checkpoint conversion scripts (tools/checkpoint_conversion/)
 ```
 
 ---
 
 ### Step 3: Validate Architecture Invariants
 
-Config values must be consistent across all files in a model. Before flagging a mismatch, check that the values used in each component (backbone, decoder, attention, preprocessor, tokenizer) are consistent with what the backbone config defines.
+Constructor arguments and init parameters must be consistent across all files in a model. Before flagging a mismatch, check that the values used in each component (backbone, decoder, attention, preprocessor, tokenizer) are consistent with what the backbone's `__init__` defines.
 
 Common things to verify (where applicable to the model type):
 
@@ -835,19 +853,64 @@ Common things to verify (where applicable to the model type):
 
 Follow the data flow end-to-end before commenting on any individual component:
 
-**Text-only models:**
+**Text-only (decoder) models (e.g., Gemma, Llama, GPT2):**
 ```
 input_text → tokenizer → token_ids → embedding → decoder_layers → norm → lm_head → logits
 ```
 
-**Multimodal models:**
+**Encoder-only models (e.g., BERT, RoBERTa, ALBERT):**
+```
+input_text → tokenizer → token_ids + segment_ids → embedding + position_embedding
+→ encoder_layers → pooled_output / sequence_output → task_head (classifier, masked_lm)
+```
+
+**Encoder-decoder models (e.g., T5, BART, Whisper):**
+```
+input_text → tokenizer → encoder_token_ids → encoder_layers → encoder_output
+decoder_input → tokenizer → decoder_token_ids → decoder_embedding
+→ decoder_layers (with cross-attention to encoder_output) → lm_head → logits
+```
+
+**Vision-only models (e.g., ViT, ResNet, EfficientNet):**
+```
+input_image → image_converter (resize, normalize) → backbone (patch_embed / conv_layers)
+→ feature_maps / cls_token → task_head (classifier, segmenter, depth_estimator)
+```
+
+**Multimodal vision+text models (e.g., Gemma3, Gemma4, PaliGemma):**
 ```
 images → image_converter → vision_encoder → vision_embeds
 input_text → tokenizer → token_ids (with placeholder tokens)
 → embedding → inject vision_embeds at placeholder positions → decoder_layers → norm → lm_head → logits
 ```
 
-**Generation flow (with cache):**
+**Multimodal audio+text models (e.g., Whisper, Gemma3n, Gemma4):**
+```
+audio → audio_converter (mel spectrogram) → audio_encoder → audio_embeds
+input_text → tokenizer → token_ids (with placeholder tokens)
+→ embedding → inject audio_embeds at placeholder positions → decoder_layers → norm → lm_head → logits
+```
+
+**Multimodal video+text models (e.g., Qwen3.5):**
+```
+video → video_converter (frame sampling, resize) → vision_encoder (per-frame) → video_embeds
+input_text → tokenizer → token_ids (with placeholder tokens)
+→ embedding → inject video_embeds → decoder_layers → norm → lm_head → logits
+```
+
+**Detection/segmentation models (e.g., RetinaNet, DeepLabV3, SAM):**
+```
+input_image → image_converter → backbone → feature_pyramid
+→ detection_head (anchors, box_regression, classification) → NMS → detections
+```
+
+**Diffusion models (e.g., Stable Diffusion 3, Flux):**
+```
+text_prompt → tokenizer → text_encoder → text_embeds
+→ noise_scheduler + denoiser (U-Net/DiT) iterative loop → latents → VAE decoder → output_image
+```
+
+**Generation flow (with KV cache):**
 ```
 prompt → preprocessor → backbone(full_sequence) → build_cache
 → loop: task.call_with_cache(next_token, cache) → sample → update cache
@@ -867,7 +930,7 @@ When reviewing, you MUST perform ALL of the following checks. **Do not give gene
 - Are the layer names consistent with how they are accessed from other files (e.g., `backbone.get_layer("transformer_layer_0")`)?
 
 #### 5.2 Cross-File Contract Validation
-- Are the inputs/outputs of this component compatible with the components that call it and that it depends on?
+- Are the inputs/outputs of a component compatible with the components that call it and that it depends on?
 - Does the preprocessor output match what the backbone expects as input?
 - Does the backbone output shape match what the task model's head expects?
 - Any hidden assumptions that would break integration (e.g., assuming a specific tensor rank or dtype)?
@@ -990,16 +1053,11 @@ KerasHub backbones use `keras.Input()` to build a Keras Functional graph in `__i
 
 ---
 
-## Mandatory Pre-Review Checklist
+## Review Anti-Patterns — DO NOT Flag These
 
-Before leaving ANY review comment, you MUST:
+Before leaving a review comment, you MUST check whether the pattern already exists in at least 2 other merged models in the repository. If it does, the pattern is an established convention and MUST NOT be flagged.
 
-1. **Search for precedent first**: Search for the same pattern in at least 3 other model directories in `keras_hub/src/models/`. If the pattern exists in multiple merged models, it is an established convention — do not flag it. The codebase has 75+ models; new models should follow existing patterns, not invent new ones.
-
-2. **Check the parent model**: If the PR adds a variant model (e.g., MoE version of a dense model), compare every flagged pattern against the parent model first. If the parent uses the same code, the variant should too.
-
-3. **Verify your suggested fix compiles**: If you suggest a code change, verify the Python syntax is correct. Do not suggest ternary expressions, import restructuring, or API calls without confirming they work.
-
-4. **Do not flag the same issue twice**: If you identify a pattern concern, flag it once with a single comment. Do not repeat the same suggestion on multiple instances in the same PR.
-
-5. **Distinguish bugs from style preferences**: Only flag issues that would cause incorrect behavior, data loss, or test failures. Do not flag working code that could theoretically be written differently unless it violates an explicit rule in this guide.
+### Before Commenting, Always:
+- Search for the same pattern in at least 3 peer model directories
+- Check if the parent/dense model uses the identical code
+- Verify your suggested fix actually compiles (check Python syntax)
