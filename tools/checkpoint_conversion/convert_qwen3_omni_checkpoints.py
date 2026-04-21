@@ -99,6 +99,36 @@ flags.DEFINE_enum(
     "vs float32 at the cost of a small numerical tolerance in the logit "
     "comparison.",
 )
+flags.DEFINE_string(
+    "cache_dir",
+    None,
+    "Directory to persist HF reference outputs to. If unset, a temp dir "
+    "is created and deleted on exit. Set this to a durable path to enable "
+    "resuming Phase B (Keras validation) without rerunning Phase A (HF "
+    "forward passes).",
+)
+flags.DEFINE_bool(
+    "skip_hf",
+    False,
+    "Skip Phase A entirely and reuse the HF outputs already present in "
+    "--cache_dir. Use this to iterate on Keras-side validation without "
+    "redoing slow HF forward passes.",
+)
+flags.DEFINE_bool("skip_text", False, "Skip text validation.")
+flags.DEFINE_bool("skip_image", False, "Skip image validation.")
+flags.DEFINE_bool("skip_audio", False, "Skip audio validation.")
+flags.DEFINE_bool("skip_video", False, "Skip video validation.")
+flags.DEFINE_bool(
+    "skip_save",
+    False,
+    "Skip saving the KerasHub preset to disk (Phase C).",
+)
+flags.DEFINE_bool(
+    "keep_cache",
+    False,
+    "If True, do not delete the cache_dir on exit (implied when "
+    "--cache_dir is set by the user).",
+)
 
 
 # ---------------------------------------------------------------
@@ -159,6 +189,25 @@ def _cast_inputs_to_model_dtype(inputs, model):
         if isinstance(v, torch.Tensor) and v.is_floating_point():
             inputs[k] = v.to(model_dtype)
     return inputs
+
+
+def _freeze_keras_model(keras_model):
+    """Disable gradient tracking on every Keras variable.
+
+    Without this, Keras's torch backend leaves `requires_grad=True` on all
+    ~30 B parameters. Every forward pass through the MoE decoder then builds
+    a full autograd graph.
+    """
+    keras_model.trainable = False
+    for var in keras_model.variables:
+        t = getattr(var, "value", var)
+        if hasattr(t, "requires_grad_"):
+            t.requires_grad_(False)
+
+
+def _inference_mode():
+    """Context manager that disables autograd for the wrapped Keras call."""
+    return torch.inference_mode()
 
 
 # ---------------------------------------------------------------
@@ -531,13 +580,14 @@ def validate_text_output(keras_model, cache_dir, dtype_str):
 
     token_ids = ops.convert_to_tensor(hf_ids.astype(np.int32))
     padding_mask = ops.ones_like(token_ids)
-    keras_hidden = keras_model.backbone(
-        {"token_ids": token_ids, "padding_mask": padding_mask}
-    )
-    keras_logits = keras_model.backbone.token_embedding(
-        keras_hidden, reverse=True
-    )
-    keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
+    with _inference_mode():
+        keras_hidden = keras_model.backbone(
+            {"token_ids": token_ids, "padding_mask": padding_mask}
+        )
+        keras_logits = keras_model.backbone.token_embedding(
+            keras_hidden, reverse=True
+        )
+        keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
     del keras_hidden
 
     _print_logit_diff(
@@ -548,7 +598,8 @@ def validate_text_output(keras_model, cache_dir, dtype_str):
 
     if not FLAGS.skip_generation:
         print("\n  Generating...")
-        out = keras_model.generate(TEXT_PROMPT, max_length=64)
+        with _inference_mode():
+            out = keras_model.generate(TEXT_PROMPT, max_length=64)
         print(f"  KerasHub: {_extract_response(out)}")
         print(f"  HF:       {meta.get('generated', 'N/A')}")
         print("  ✓ Text generation done.")
@@ -580,21 +631,23 @@ def validate_image_output(keras_model, cache_dir, dtype_str):
     print(f"\n  KerasHub pixel_values shape: {pixel_values_np.shape}")
     del pixel_values_np
 
-    keras_hidden = backbone(
-        {
-            "token_ids": token_ids,
-            "padding_mask": padding_mask,
-            "pixel_values": pixel_values,
-            "grid_thw": grid_thw,
-        }
-    )
-    keras_logits = backbone.token_embedding(keras_hidden, reverse=True)
-    keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
+    with _inference_mode():
+        keras_hidden = backbone(
+            {
+                "token_ids": token_ids,
+                "padding_mask": padding_mask,
+                "pixel_values": pixel_values,
+                "grid_thw": grid_thw,
+            }
+        )
+        keras_logits = backbone.token_embedding(keras_hidden, reverse=True)
+        keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
     del keras_hidden, token_ids, padding_mask, pixel_values, grid_thw
 
     _print_logit_diff(
         keras_logits, hf_logits, "Image", _logit_tolerance(dtype_str)
     )
+    prompt_len = int(arrays["input_ids"].shape[1])
     del keras_logits, hf_logits, arrays
     _free()
 
@@ -603,10 +656,11 @@ def validate_image_output(keras_model, cache_dir, dtype_str):
         raw_image = np.array(
             Image.open(os.path.join(cache_dir, "image.png")).convert("RGB")
         )
-        out = keras_model.generate(
-            {"prompts": [IMAGE_PROMPT], "images": [raw_image]},
-            max_length=8192,
-        )
+        with _inference_mode():
+            out = keras_model.generate(
+                {"prompts": [IMAGE_PROMPT], "images": [raw_image]},
+                max_length=prompt_len + 32,
+            )
         keras_text = out[0] if isinstance(out, list) else out
         print(f"  KerasHub: {_extract_response(keras_text)}")
         print("  ✓ Image generation done.")
@@ -633,32 +687,35 @@ def validate_audio_output(keras_model, cache_dir, dtype_str):
     hf_logits = arrays["logits"]
     print(f"\n  audio_features shape: {arrays['input_features'].shape}")
 
-    keras_hidden = keras_model.backbone(
-        {
-            "token_ids": token_ids,
-            "padding_mask": padding_mask,
-            "audio_features": audio_features,
-        }
-    )
-    keras_logits = keras_model.backbone.token_embedding(
-        keras_hidden, reverse=True
-    )
-    keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
+    with _inference_mode():
+        keras_hidden = keras_model.backbone(
+            {
+                "token_ids": token_ids,
+                "padding_mask": padding_mask,
+                "audio_features": audio_features,
+            }
+        )
+        keras_logits = keras_model.backbone.token_embedding(
+            keras_hidden, reverse=True
+        )
+        keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
     del keras_hidden, token_ids, padding_mask, audio_features
 
     _print_logit_diff(
         keras_logits, hf_logits, "Audio", _logit_tolerance(dtype_str)
     )
+    prompt_len = int(arrays["input_ids"].shape[1])
     del keras_logits, hf_logits, arrays
     _free()
 
     if not FLAGS.skip_generation:
         print(f"\n  HF: {meta.get('generated', 'N/A')}")
         audio_np = np.load(os.path.join(cache_dir, "audio.npy"))
-        out = keras_model.generate(
-            {"prompts": [AUDIO_PROMPT], "audio": [audio_np]},
-            max_length=64,
-        )
+        with _inference_mode():
+            out = keras_model.generate(
+                {"prompts": [AUDIO_PROMPT], "audio": [audio_np]},
+                max_length=prompt_len + 32,
+            )
         keras_text = out[0] if isinstance(out, list) else out
         print(f"  KerasHub: {_extract_response(keras_text)}")
         print("  ✓ Audio generation done.")
@@ -700,21 +757,23 @@ def validate_video_output(keras_model, cache_dir, dtype_str):
     print(f"\n  KerasHub video pixel_values shape: {pixel_values_np.shape}")
     del pixel_values_np
 
-    keras_hidden = backbone(
-        {
-            "token_ids": token_ids,
-            "padding_mask": padding_mask,
-            "pixel_values": pixel_values,
-            "grid_thw": grid_thw,
-        }
-    )
-    keras_logits = backbone.token_embedding(keras_hidden, reverse=True)
-    keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
+    with _inference_mode():
+        keras_hidden = backbone(
+            {
+                "token_ids": token_ids,
+                "padding_mask": padding_mask,
+                "pixel_values": pixel_values,
+                "grid_thw": grid_thw,
+            }
+        )
+        keras_logits = backbone.token_embedding(keras_hidden, reverse=True)
+        keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
     del keras_hidden, token_ids, padding_mask, pixel_values, grid_thw
 
     _print_logit_diff(
         keras_logits, hf_logits, "Video", _logit_tolerance(dtype_str)
     )
+    prompt_len = int(arrays["input_ids"].shape[1])
     del keras_logits, hf_logits, arrays
     _free()
 
@@ -728,10 +787,11 @@ def validate_video_output(keras_model, cache_dir, dtype_str):
         ]
         if frames:
             video_frames_np = np.stack(frames)
-            out = keras_model.generate(
-                {"prompts": [VIDEO_PROMPT], "video": [video_frames_np]},
-                max_length=8192,
-            )
+            with _inference_mode():
+                out = keras_model.generate(
+                    {"prompts": [VIDEO_PROMPT], "video": [video_frames_np]},
+                    max_length=prompt_len + 32,
+                )
             keras_text = out[0] if isinstance(out, list) else out
             print(f"  KerasHub: {_extract_response(keras_text)}")
             print("  ✓ Video generation done.")
@@ -763,44 +823,61 @@ def main(_):
     dtype_str = FLAGS.dtype
     torch_dtype = DTYPE_MAP[dtype_str]
 
-    cache_dir = tempfile.mkdtemp(prefix="qwen3_omni_xfer_")
-    print(f"-> Cache dir: {cache_dir}")
+    user_cache = FLAGS.cache_dir
+    if user_cache:
+        cache_dir = os.path.abspath(user_cache)
+        os.makedirs(cache_dir, exist_ok=True)
+        keep_cache = True  # never auto-delete a path the user chose
+    else:
+        cache_dir = tempfile.mkdtemp(prefix="qwen3_omni_xfer_")
+        keep_cache = FLAGS.keep_cache
+    print(f"-> Cache dir: {cache_dir}  (keep={keep_cache})")
     print(f"-> dtype:     {dtype_str}")
 
     try:
         # =================================================================
         # Phase A: Load HF, compute + persist outputs per modality, free HF.
         # =================================================================
-        print("\n-> Loading HF model (Thinker)...")
-        hf_full = AutoModelForMultimodalLM.from_pretrained(
-            hf_preset,
-            device_map="cpu",
-            torch_dtype=torch_dtype,
-            trust_remote_code=True,
-        )
-        hf_thinker = hf_full.thinker
-        hf_params = sum(p.numel() for p in hf_thinker.parameters())
-        del hf_full  # drop Talker weights immediately
-        _free()
-        hf_thinker.eval()
-        hf_processor = AutoProcessor.from_pretrained(
-            hf_preset, trust_remote_code=True
-        )
-        print(f"   Thinker loaded: {hf_params:,} params")
+        if FLAGS.skip_hf:
+            meta_path = os.path.join(cache_dir, "meta.json")
+            if not os.path.exists(meta_path):
+                raise FileNotFoundError(
+                    f"--skip_hf was set but {meta_path} does not exist. "
+                    "Run Phase A first (without --skip_hf) to populate the "
+                    "cache."
+                )
+            print("\n-> Skipping Phase A (using cached HF outputs).")
+        else:
+            print("\n-> Loading HF model (Thinker)...")
+            hf_full = AutoModelForMultimodalLM.from_pretrained(
+                hf_preset,
+                device_map="cpu",
+                torch_dtype=torch_dtype,
+                trust_remote_code=True,
+            )
+            hf_thinker = hf_full.thinker
+            hf_params = sum(p.numel() for p in hf_thinker.parameters())
+            del hf_full  # drop Talker weights immediately
+            _free()
+            hf_thinker.eval()
+            hf_processor = AutoProcessor.from_pretrained(
+                hf_preset, trust_remote_code=True
+            )
+            print(f"   Thinker loaded: {hf_params:,} params")
 
-        _hf_text(hf_thinker, hf_processor, cache_dir)
-        _hf_image(hf_thinker, hf_processor, cache_dir)
-        _hf_audio(hf_thinker, hf_processor, cache_dir)
-        _hf_video(hf_thinker, hf_processor, cache_dir)
+            _hf_text(hf_thinker, hf_processor, cache_dir)
+            _hf_image(hf_thinker, hf_processor, cache_dir)
+            _hf_audio(hf_thinker, hf_processor, cache_dir)
+            _hf_video(hf_thinker, hf_processor, cache_dir)
 
-        with open(os.path.join(cache_dir, "meta.json"), "w") as f:
-            json.dump({"hf_params": hf_params, "dtype": dtype_str}, f)
+            with open(os.path.join(cache_dir, "meta.json"), "w") as f:
+                json.dump({"hf_params": hf_params, "dtype": dtype_str}, f)
 
-        print("\n-> Releasing HF model...")
-        del hf_thinker
-        del hf_processor
-        _free()
-        print("   Released.")
+            print("\n-> Releasing HF model...")
+            del hf_thinker
+            del hf_processor
+            _free()
+            print("   Released.")
 
         # =================================================================
         # Phase B: Load KerasHub, validate each modality from disk.
@@ -809,26 +886,46 @@ def main(_):
         keras_model = keras_hub.models.Qwen3OmniCausalLM.from_preset(
             f"hf://{hf_preset}", dtype=dtype_str
         )
+        _freeze_keras_model(keras_model)
         _free()
-        print("   KerasHub model loaded!")
+        print("   KerasHub model loaded (autograd disabled, params frozen)!")
 
         with open(os.path.join(cache_dir, "meta.json")) as f:
             run_meta = json.load(f)
 
         test_parameter_count(keras_model.backbone, run_meta["hf_params"])
-        validate_text_output(keras_model, cache_dir, dtype_str)
-        validate_image_output(keras_model, cache_dir, dtype_str)
-        validate_audio_output(keras_model, cache_dir, dtype_str)
-        validate_video_output(keras_model, cache_dir, dtype_str)
+
+        if FLAGS.skip_text:
+            print("\n-> Skipping text validation.")
+        else:
+            validate_text_output(keras_model, cache_dir, dtype_str)
+        if FLAGS.skip_image:
+            print("\n-> Skipping image validation.")
+        else:
+            validate_image_output(keras_model, cache_dir, dtype_str)
+        if FLAGS.skip_audio:
+            print("\n-> Skipping audio validation.")
+        else:
+            validate_audio_output(keras_model, cache_dir, dtype_str)
+        if FLAGS.skip_video:
+            print("\n-> Skipping video validation.")
+        else:
+            validate_video_output(keras_model, cache_dir, dtype_str)
 
         # =================================================================
         # Phase C: Save preset.
         # =================================================================
-        save_preset(keras_model, preset)
+        if FLAGS.skip_save:
+            print("\n-> Skipping preset save (--skip_save).")
+        else:
+            save_preset(keras_model, preset)
 
         print("\n=== Done! ===")
     finally:
-        shutil.rmtree(cache_dir, ignore_errors=True)
+        if not keep_cache:
+            shutil.rmtree(cache_dir, ignore_errors=True)
+        else:
+            print(f"\n-> Cache retained at: {cache_dir}")
 
 
 if __name__ == "__main__":
