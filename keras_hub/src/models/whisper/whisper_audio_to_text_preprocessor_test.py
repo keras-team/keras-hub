@@ -97,6 +97,25 @@ class WhisperAudioToTextPreprocessorTest(TestCase):
         # With no prompt, the first slot should hold the bos token.
         self.assertEqual(int(token_ids[0, 0]), self.tokenizer.bos_token_id)
 
+    def test_generate_preprocess_in_tf_data(self):
+        # Under `tf.data.Dataset.map`, `generate_preprocess` is traced in graph
+        # mode and the batch dimension is symbolic. Using `int(batch_size)`
+        # here would fail; verify the Keras-ops path works.
+        import tensorflow as tf
+
+        preprocessor = WhisperAudioToTextPreprocessor(**self.init_kwargs)
+        audio = np.random.normal(size=(3, 16000)).astype("float32")
+        ds = tf.data.Dataset.from_tensor_slices({"audio": audio}).batch(3)
+        ds = ds.map(preprocessor.generate_preprocess)
+        output = next(iter(ds))
+        self.assertAllEqual(
+            keras.ops.shape(output["encoder_features"]), (3, 100, 80)
+        )
+        # Every sequence should start with the bos token.
+        token_ids = keras.ops.convert_to_numpy(output["decoder_token_ids"])
+        for i in range(3):
+            self.assertEqual(int(token_ids[i, 0]), self.tokenizer.bos_token_id)
+
     def test_generate_postprocess(self):
         preprocessor = WhisperAudioToTextPreprocessor(**self.init_kwargs)
         input_data = {
