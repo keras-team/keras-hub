@@ -215,10 +215,9 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
         self._check_vocabulary()
-        id = self._token_to_id_map.get(token)
-        if id is None:
-            raise ValueError(f"Token '{token}' not found in the vocabulary.")
-        return id
+        # Return 0 (UNK id) for unknown tokens, matching the original
+        # SentencePiece `string_to_id()` behavior.
+        return self._token_to_id_map.get(token, 0)
 
     def get_config(self):
         config = super().get_config()
