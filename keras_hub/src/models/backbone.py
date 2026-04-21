@@ -29,9 +29,7 @@ def _dorafy_einsum_dense_layer(layer, rank, lora_alpha):
     # Column norms of the pretrained kernel. The last axis of the kernel is
     # the output dim; all other axes collapse into the "row" direction.
     reduce_axes = tuple(range(len(base_kernel.shape) - 1))
-    initial_magnitude = ops.sqrt(
-        ops.sum(ops.square(base_kernel), axis=reduce_axes)
-    )
+    initial_magnitude = ops.norm(base_kernel, axis=reduce_axes)
     layer._tracker.unlock()
     layer.dora_magnitude = layer.add_weight(
         name="dora_magnitude",
@@ -55,14 +53,11 @@ def _install_dora_call(layer):
     def dora_call(inputs, training=None):
         # `layer.kernel` already includes the LoRA update.
         merged = layer.kernel
-        norms = ops.sqrt(
-            ops.sum(
-                ops.square(merged),
-                axis=reduce_axes,
-                keepdims=True,
-            )
-        )
-        effective = (layer.dora_magnitude / (ops.squeeze(norms) + eps)) * merged
+        norms = ops.norm(merged, axis=reduce_axes, keepdims=True)
+        # `norms` has shape `(1, ..., 1, output_dim)`, which broadcasts with
+        # `merged` `(..., output_dim)` and `dora_magnitude` `(output_dim,)`
+        # without needing a squeeze.
+        effective = (layer.dora_magnitude / (norms + eps)) * merged
         x = ops.einsum(equation, inputs, effective)
         if layer.bias is not None:
             x = ops.add(x, layer.bias)
@@ -382,18 +377,16 @@ class Backbone(keras.Model):
         self._dora_enabled_layers = []
         self._dora_rank = rank
         self._dora_lora_alpha = lora_alpha if lora_alpha is not None else rank
-        for layer in self._flatten_layers(include_self=False):
+        all_layers = list(self._flatten_layers(include_self=False))
+        for layer in all_layers:
             layer.trainable = False
-        all_layers = self._flatten_layers(include_self=False)
         all_layers = [lyr for lyr in all_layers if lyr.weights]
+        target_names = set(target_layer_names)
         for i, layer in enumerate(all_layers):
-            for name in target_layer_names:
-                if layer.name == name and hasattr(layer, "enable_lora"):
-                    layer.trainable = True
-                    _dorafy_einsum_dense_layer(
-                        layer, rank, self._dora_lora_alpha
-                    )
-                    self._dora_enabled_layers.append(i)
+            if layer.name in target_names and hasattr(layer, "enable_lora"):
+                layer.trainable = True
+                _dorafy_einsum_dense_layer(layer, rank, self._dora_lora_alpha)
+                self._dora_enabled_layers.append(i)
 
     def save_dora_weights(self, filepath):
         """Save DoRA factors and magnitudes to `filepath`.

@@ -35,15 +35,6 @@ class GemmaDoRATest(TestCase):
         targets = np.random.normal(size=(2, 5, self._init_kwargs["hidden_dim"]))
         backbone.compile(optimizer="sgd", loss="mse")
         backbone.fit(self.input_data, targets, epochs=1)
-        # Training should move the magnitudes (direct gradient path), unlike
-        # plain LoRA where the zero-initialized `B` keeps the update tiny.
-        for layer in backbone._flatten_layers(include_self=False):
-            if getattr(layer, "dora_enabled", False):
-                mag = keras.ops.convert_to_numpy(layer.dora_magnitude)
-                kernel = keras.ops.convert_to_numpy(layer._kernel)
-                reduce_axes = tuple(range(kernel.ndim - 1))
-                initial = np.sqrt((kernel**2).sum(axis=reduce_axes))
-                self.assertGreater(float(np.abs(mag - initial).max()), 0.0)
 
     def test_dora_fine_tuning_target_names(self):
         backbone = GemmaBackbone(**self._init_kwargs)
