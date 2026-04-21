@@ -27,6 +27,7 @@ class CachedMistralAttention(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         sliding_window=512,
         dropout=0,
+        head_dim=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -34,6 +35,7 @@ class CachedMistralAttention(keras.layers.Layer):
         self._num_key_value_heads = num_key_value_heads
         self._sliding_window = sliding_window
         self._dropout = dropout
+        self._configured_head_dim = head_dim
 
         self._num_key_value_groups = num_query_heads // num_key_value_heads
         self._rope_max_wavelength = rope_max_wavelength
@@ -54,7 +56,10 @@ class CachedMistralAttention(keras.layers.Layer):
         # v = num key/value heads
         # h = head dim
         self._hidden_dim = inputs_shape[-1]
-        self._head_dim = self._hidden_dim // self._num_query_heads
+        if self._configured_head_dim is not None:
+            self._head_dim = self._configured_head_dim
+        else:
+            self._head_dim = self._hidden_dim // self._num_query_heads
         self._inv_norm_factor = 1.0 / math.sqrt(self._head_dim)
 
         self._query_dense = keras.layers.EinsumDense(
@@ -239,6 +244,7 @@ class CachedMistralAttention(keras.layers.Layer):
                 ),
                 "sliding_window": self._sliding_window,
                 "dropout": self._dropout,
+                "head_dim": self._configured_head_dim,
             }
         )
         return config
