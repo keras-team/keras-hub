@@ -200,7 +200,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     def get_vocabulary(self):
         """Get the tokenizer vocabulary."""
         self._check_vocabulary()
-        return self._vocabulary
+        return list(self._vocabulary)
 
     def id_to_token(self, id):
         """Convert an integer id to a string token."""
