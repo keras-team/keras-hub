@@ -109,28 +109,37 @@ class Qwen3OmniImageConverter(ImageConverter):
         max_pix = tf.cast(self.max_pixels, "float32")
         stride = tf.cast(self._patch_stride, "float32")
 
+        upscale = total_pixels < min_pix
+        downscale = total_pixels > max_pix
         scale = tf.cond(
-            total_pixels < min_pix,
+            upscale,
             lambda: tf.sqrt(min_pix / total_pixels),
             lambda: tf.cond(
-                total_pixels > max_pix,
+                downscale,
                 lambda: tf.sqrt(max_pix / total_pixels),
                 lambda: tf.constant(1.0),
             ),
         )
 
+        scaled_h = tf.cast(orig_h, "float32") * scale
+        scaled_w = tf.cast(orig_w, "float32") * scale
+        scaled_h = tf.where(
+            upscale,
+            tf.math.ceil(scaled_h),
+            tf.where(downscale, tf.math.floor(scaled_h), scaled_h),
+        )
+        scaled_w = tf.where(
+            upscale,
+            tf.math.ceil(scaled_w),
+            tf.where(downscale, tf.math.floor(scaled_w), scaled_w),
+        )
+
         target_h = tf.cast(
-            tf.maximum(
-                tf.round(tf.cast(orig_h, "float32") * scale / stride) * stride,
-                stride,
-            ),
+            tf.maximum(tf.round(scaled_h / stride) * stride, stride),
             "int32",
         )
         target_w = tf.cast(
-            tf.maximum(
-                tf.round(tf.cast(orig_w, "float32") * scale / stride) * stride,
-                stride,
-            ),
+            tf.maximum(tf.round(scaled_w / stride) * stride, stride),
             "int32",
         )
 
