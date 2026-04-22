@@ -71,6 +71,27 @@ from keras_hub.src.models.bert.bert_text_classifier_preprocessor import (
 from keras_hub.src.models.bert.bert_tokenizer import (
     BertTokenizer as BertTokenizer,
 )
+from keras_hub.src.models.blip2.blip2_backbone import (
+    BLIP2Backbone as BLIP2Backbone,
+)
+from keras_hub.src.models.blip2.blip2_causal_lm import (
+    BLIP2CausalLM as BLIP2CausalLM,
+)
+from keras_hub.src.models.blip2.blip2_causal_lm_preprocessor import (
+    BLIP2CausalLMPreprocessor as BLIP2CausalLMPreprocessor,
+)
+from keras_hub.src.models.blip2.blip2_custom_opt import (
+    BLIP2CustomOPT as BLIP2CustomOPT,
+)
+from keras_hub.src.models.blip2.blip2_qformer import (
+    BLIP2QFormer as BLIP2QFormer,
+)
+from keras_hub.src.models.blip2.blip2_tokenizer import (
+    BLIP2Tokenizer as BLIP2Tokenizer,
+)
+from keras_hub.src.models.blip2.blip2_vision_encoder import (
+    BLIP2VisionEncoder as BLIP2VisionEncoder,
+)
 from keras_hub.src.models.bloom.bloom_backbone import (
     BloomBackbone as BloomBackbone,
 )
