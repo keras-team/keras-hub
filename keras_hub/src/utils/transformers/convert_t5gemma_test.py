@@ -24,7 +24,7 @@ class TestTask(TestCase):
         prompt = "What is the capital of France?"
         model.generate([prompt], max_length=15)
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_class_detection(self):
         preset_name = "hf://harshaljanjani/tiny-t5gemma-test"
         model = Seq2SeqLM.from_preset(
