@@ -24,7 +24,7 @@ class TestViTConverter(TestCase):
         )
         self.assertEqual(output.shape, (1, 1000))
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_class_detection(self):
         model = ImageClassifier.from_preset(
             "hf://google/vit-base-patch16-224",

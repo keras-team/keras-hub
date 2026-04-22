@@ -21,7 +21,7 @@ class TestT5Gemma2Converter(TestCase):
         prompt = "What is the capital of France?"
         model.generate([prompt], max_length=15)
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_class_detection(self):
         preset_name = "hf://google/t5gemma-2-270m-270m"
         model = Seq2SeqLM.from_preset(
