@@ -2,9 +2,6 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.reversible_embedding import (
-    ReversibleEmbedding,
-)
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.blip2.blip2_opt_decoder import OPTDecoderBlock
 
@@ -31,12 +28,13 @@ class Blip2OPTEmbeddings(keras.layers.Layer):
         self.position_offset = position_offset
         self.initializer_range = initializer_range
 
-        self.token_embedding = ReversibleEmbedding(
-            input_dim=vocabulary_size,
-            output_dim=hidden_dim,
-            embeddings_initializer=opt_kernel_initializer(initializer_range),
-            dtype=dtype,
-            name="token_embedding",
+        self.token_embedding = keras.layers.ReversibleEmbedding(
+        input_dim=vocabulary_size,
+        output_dim=hidden_dim,
+        tie_weights=True,
+        embeddings_initializer=opt_kernel_initializer(initializer_range),
+        dtype=dtype,
+        name="token_embedding",
         )
         self.position_embedding = keras.layers.Embedding(
             input_dim=max_sequence_length + 2,
