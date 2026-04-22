@@ -1540,6 +1540,19 @@ class Gemma4AudioEncoder(keras.Model):
         # resolved correctly, exactly like Gemma4VisionEncoder does for
         # (B, N_images, H, W, C) → (B*N_images, H, W, C).
         is_4d = len(audio_mel.shape) == 4
+
+        t_axis = 2 if is_4d else 1
+        t_mel = audio_mel.shape[t_axis]
+        t_mask = audio_mel_mask.shape[t_axis]
+        if isinstance(t_mel, int) and isinstance(t_mask, int):
+            if t_mel != t_mask:
+                raise ValueError(
+                    "`audio_mel_mask` length must match `audio_mel` "
+                    "sequence length. "
+                    f"Received: audio_mel_mask.shape[{t_axis}]={t_mask} "
+                    f"and audio_mel.shape[{t_axis}]={t_mel}"
+                )
+
         if is_4d:
             if audio_mel.shape[1] == 0:
                 return ops.zeros((0, 0, 0, self.output_dim)), ops.cast(
