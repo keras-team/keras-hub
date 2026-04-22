@@ -136,6 +136,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             self._vocabulary = None
             self._vocabulary_size = None
             self._token_to_id_map = None
+            self._unk_token_id = None
             return
 
         if isinstance(proto, str):
@@ -190,6 +191,9 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         self._token_to_id_map = {
             token: id for id, token in enumerate(self._vocabulary)
         }
+        self._unk_token_id = int(
+            self._sentence_piece.string_to_id("<unk>").numpy()
+        )
         self._update_special_token_ids()
 
     def vocabulary_size(self):
@@ -215,9 +219,13 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
         self._check_vocabulary()
-        # Return 0 (UNK id) for unknown tokens, matching the original
+        if hasattr(token, "numpy"):
+            token = token.numpy()
+        if isinstance(token, bytes):
+            token = token.decode("utf-8")
+        # Return unk_id for unknown tokens, matching the original
         # SentencePiece `string_to_id()` behavior.
-        return self._token_to_id_map.get(token, 0)
+        return self._token_to_id_map.get(token, self._unk_token_id)
 
     def get_config(self):
         config = super().get_config()
