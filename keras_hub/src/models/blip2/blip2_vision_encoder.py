@@ -63,24 +63,20 @@ class Blip2VisionEncoder(keras.Model):
         use_mlp_bias,
         dropout_rate,
         layer_norm_epsilon,
-        initializer_range=0.02,
+        initializer_range,
         dtype=None,
         **kwargs,
     ):
-        if image_size % patch_size != 0:
-            raise ValueError(
-                f"`image_size` must be divisible by `patch_size`. "
-                f"Received: image_size={image_size}, patch_size={patch_size}."
-            )
-
+        h, w = (image_size, image_size) if isinstance(image_size, int) else image_size
+        ph, pw = (patch_size, patch_size) if isinstance(patch_size, int) else patch_size
         # === Functional graph ===
         image_input = keras.Input(
-            shape=(image_size, image_size, 3), name="images"
+            shape=(h, w, 3), name="images"
         )
 
         x = ViTPatchingAndEmbedding(
-            image_size=(image_size, image_size),
-            patch_size=(patch_size, patch_size),
+            image_size=(h, w),
+            patch_size=(ph, pw),
             hidden_dim=hidden_dim,
             num_channels=3,
             use_class_token=use_class_token,
@@ -123,9 +119,13 @@ class Blip2VisionEncoder(keras.Model):
         self.dropout_rate = dropout_rate
         self.layer_norm_epsilon = layer_norm_epsilon
         self.initializer_range = initializer_range
-        self.num_vision_tokens_per_image = (image_size // patch_size) ** 2 + (
-            1 if use_class_token else 0
-        )
+        # works for both square and non-square
+        image_size = (image_size, image_size) if isinstance(image_size, int) else image_size
+        patch_size = (patch_size, patch_size) if isinstance(patch_size, int) else patch_size
+
+        self.num_vision_tokens_per_image = (
+            (image_size[0] // patch_size[0]) * (image_size[1] // patch_size[1])
+        ) + (1 if use_class_token else 0)
 
     def get_config(self):
         config = super().get_config()
@@ -147,7 +147,3 @@ class Blip2VisionEncoder(keras.Model):
             }
         )
         return config
-
-    @classmethod
-    def from_config(cls, config):
-        return cls(**config)

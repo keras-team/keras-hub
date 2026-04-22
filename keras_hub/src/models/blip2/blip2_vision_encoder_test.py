@@ -23,6 +23,7 @@ class Blip2VisionEncoderTest(TestCase):
             "use_mlp_bias": True,
             "dropout_rate": 0.0,
             "layer_norm_epsilon": 1e-6,
+            "initializer_range": 0.02,
         }
         self.input_data = np.ones(
             (2, self.image_size, self.image_size, 3), dtype="float32"
@@ -33,6 +34,15 @@ class Blip2VisionEncoderTest(TestCase):
         self.run_serialization_test(encoder)
         output = encoder(self.input_data)
         num_patches = (self.image_size // self.patch_size) ** 2
+        self.assertEqual(output.shape, (2, num_patches + 1, 8))
+        
+    def test_non_square_image(self):
+        # and keras.Input shape=(H, W, 3) instead of (S, S, 3)
+        kwargs = {**self.init_kwargs, "image_size": (32, 64)}
+        encoder = Blip2VisionEncoder(**kwargs)
+        input_data = np.ones((2, 32, 64, 3), dtype="float32")
+        output = encoder(input_data)
+        num_patches = (32 // self.patch_size) * (64 // self.patch_size)
         self.assertEqual(output.shape, (2, num_patches + 1, 8))
 
     def test_no_class_token(self):
@@ -50,6 +60,3 @@ class Blip2VisionEncoderTest(TestCase):
         num_patches = (self.image_size // patch_size) ** 2
         self.assertEqual(output.shape, (2, num_patches + 1, 8))
 
-    def test_invalid_image_size_raises(self):
-        with self.assertRaises(ValueError):
-            Blip2VisionEncoder(**{**self.init_kwargs, "image_size": 33})
