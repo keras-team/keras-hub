@@ -1541,13 +1541,22 @@ class Gemma4AudioEncoder(keras.Model):
         # (B, N_images, H, W, C) → (B*N_images, H, W, C).
         is_4d = len(audio_mel.shape) == 4
 
+        if len(audio_mel_mask.shape) != len(audio_mel.shape) - 1:
+            raise ValueError(
+                "The rank of `audio_mel_mask` must be exactly "
+                "one less than the rank of `audio_mel`. "
+                f"Received: audio_mel_mask.shape="
+                f"{audio_mel_mask.shape} and "
+                f"audio_mel.shape={audio_mel.shape}"
+            )
+
         t_axis = 2 if is_4d else 1
         t_mel = audio_mel.shape[t_axis]
         t_mask = audio_mel_mask.shape[t_axis]
         if isinstance(t_mel, int) and isinstance(t_mask, int):
             if t_mel != t_mask:
                 raise ValueError(
-                    "`audio_mel_mask` length must match `audio_mel` "
+                    "`audio_mel_mask` sequence length must match `audio_mel` "
                     "sequence length. "
                     f"Received: audio_mel_mask.shape[{t_axis}]={t_mask} "
                     f"and audio_mel.shape[{t_axis}]={t_mel}"
