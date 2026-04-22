@@ -16,9 +16,10 @@ class Blip2ImageConverterTest(TestCase):
         self.input_data = np.ones((2, 100, 100, 3), dtype="float32") * 128
 
     def test_image_converter_basics(self):
+        kwargs = {**self.init_kwargs, "interpolation": "bilinear"}
         self.run_preprocessing_layer_test(
             cls=Blip2ImageConverter,
-            init_kwargs=self.init_kwargs,
+            init_kwargs=kwargs,
             input_data=self.input_data,
         )
 

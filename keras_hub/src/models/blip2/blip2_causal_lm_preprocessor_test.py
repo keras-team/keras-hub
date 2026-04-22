@@ -14,7 +14,6 @@ from keras_hub.src.tests.test_case import TestCase
 class Blip2CausalLMPreprocessorTest(TestCase):
     def setUp(self):
         vocab = {
-            "<s>": 0,
             "<pad>": 1,
             "</s>": 2,
             "<image>": 3,
@@ -27,19 +26,18 @@ class Blip2CausalLMPreprocessorTest(TestCase):
             "u": 10,
             "i": 11,
             "k": 12,
+            "he": 13,
+            "Ġt": 14,
         }
-        merges = ["Ġ t", "h e", "q u", "i c", "k"]
+        merges = ["h e", "Ġ t"]
         self.tokenizer = Blip2Tokenizer(vocabulary=vocab, merges=merges)
         self.image_converter = Blip2ImageConverter(image_size=(4, 4))
 
-        # === Text-only preprocessor ===
         self.init_text_kwargs = {
             "tokenizer": self.tokenizer,
             "image_converter": None,
             "sequence_length": 10,
         }
-
-        # === Text + image preprocessor ===
         self.init_kwargs = {
             "tokenizer": self.tokenizer,
             "image_converter": self.image_converter,
@@ -51,11 +49,10 @@ class Blip2CausalLMPreprocessorTest(TestCase):
         }
 
     def test_text_preprocessor_basics(self):
-        input_data = {"text": ["the quick", "the"]}
         self.run_preprocessing_layer_test(
             cls=Blip2CausalLMPreprocessor,
             init_kwargs=self.init_text_kwargs,
-            input_data=input_data,
+            input_data={"text": ["the quick", "the"]},
         )
 
     def test_preprocessor_basics(self):
@@ -64,6 +61,21 @@ class Blip2CausalLMPreprocessorTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    def test_text_output_shapes(self):
+        preprocessor = Blip2CausalLMPreprocessor(**self.init_text_kwargs)
+        x, y, sw = preprocessor({"text": ["the quick", "the"]})
+        self.assertEqual(x["token_ids"].shape, (2, 10))
+        self.assertEqual(x["padding_mask"].shape, (2, 10))
+        self.assertEqual(y.shape, (2, 10))
+        self.assertEqual(sw.shape, (2, 10))
+
+    def test_vision_output_shapes(self):
+        preprocessor = Blip2CausalLMPreprocessor(**self.init_kwargs)
+        x, y, sw = preprocessor(self.input_data)
+        self.assertEqual(x["token_ids"].shape, (2, 10))
+        self.assertEqual(x["padding_mask"].shape, (2, 10))
+        self.assertAllEqual(x["images"].shape, (2, 4, 4, 3))
 
     def test_text_no_start_end_token(self):
         preprocessor = Blip2CausalLMPreprocessor(
@@ -94,12 +106,10 @@ class Blip2CausalLMPreprocessorTest(TestCase):
 
     def test_generate_preprocess(self):
         preprocessor = Blip2CausalLMPreprocessor(**self.init_kwargs)
-        x = preprocessor.generate_preprocess(
-            {
-                "images": np.ones((32, 32, 3), dtype="float32"),
-                "text": "the",
-            }
-        )
+        x = preprocessor.generate_preprocess({
+            "images": np.ones((32, 32, 3), dtype="float32"),
+            "text": "the",
+        })
         self.assertIn("token_ids", x)
         self.assertIn("padding_mask", x)
         self.assertIn("images", x)
@@ -109,6 +119,15 @@ class Blip2CausalLMPreprocessorTest(TestCase):
     def test_text_generate_postprocess(self):
         preprocessor = Blip2CausalLMPreprocessor(**self.init_text_kwargs)
         preprocessed = preprocessor.generate_preprocess({"text": "the"})
+        result = preprocessor.generate_postprocess(preprocessed)
+        self.assertIsInstance(result, (str, list))
+
+    def test_vision_generate_postprocess(self):
+        preprocessor = Blip2CausalLMPreprocessor(**self.init_kwargs)
+        preprocessed = preprocessor.generate_preprocess({
+            "images": np.ones((32, 32, 3), dtype="float32"),
+            "text": "the",
+        })
         result = preprocessor.generate_postprocess(preprocessed)
         self.assertIsInstance(result, (str, list))
 
@@ -129,18 +148,16 @@ class Blip2CausalLMPreprocessorTest(TestCase):
             "text": ["the quick", "the"],
         }
         x, y, sw = preprocessor(input_data)
-        self.assertIn("token_ids", x)
-        self.assertIn("padding_mask", x)
+        self.assertAllEqual(x["images"].shape, (2, 4, 4, 3))
 
-    def test_invalid_shape(self):
+    def test_images_in_text_only_mode_raises(self):
         preprocessor = Blip2CausalLMPreprocessor(**self.init_text_kwargs)
-        with self.assertRaises((ValueError, Exception)):
-            preprocessor(
-                {
-                    "images": [np.ones((32, 32, 3))],
-                    "text": ["the quick", "the"],
-                }
-            )
+        with self.assertRaises(ValueError):
+            preprocessor({
+                "images": np.ones((2, 32, 32, 3), dtype="float32"),
+                "text": ["the quick", "the"],
+            })
+
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large

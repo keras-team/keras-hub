@@ -5,12 +5,7 @@ from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.blip2.blip2_backbone import Blip2Backbone
 
 
-@keras_hub_export(
-    [
-        "keras_hub.layers.Blip2ImageConverter",
-        "keras_hub.models.Blip2ImageConverter",
-    ]
-)
+@keras_hub_export("keras_hub.layers.Blip2ImageConverter",)
 class Blip2ImageConverter(ImageConverter):
     """A preprocessing layer for images used by the BLIP-2 model.
 

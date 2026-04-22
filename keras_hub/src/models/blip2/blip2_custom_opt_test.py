@@ -19,6 +19,8 @@ class Blip2CustomOPTTest(TestCase):
             "max_sequence_length": 15,
             "qformer_hidden_dim": 64,
             "num_query_tokens": 2,
+            "dropout": 0.0,
+            "language_projection": None,
         }
         self.input_data = {
             "qformer_features": np.random.uniform(size=(2, 2, 64)).astype(

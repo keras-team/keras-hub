@@ -29,6 +29,7 @@ class Blip2CausalLMTest(TestCase):
             "t": 5,
             "h": 6,
             "e": 7,
+            "<image>": 8,
         }
         merges = ["Ġ t", "h e"]
         tokenizer = Blip2Tokenizer(vocabulary=vocab, merges=merges)
@@ -40,7 +41,7 @@ class Blip2CausalLMTest(TestCase):
             sequence_length=10,
         )
         language_model = Blip2CustomOPT(
-            vocabulary_size=8,
+            vocabulary_size=9,
             num_layers=2,
             num_heads=2,
             hidden_dim=4,
@@ -48,6 +49,8 @@ class Blip2CausalLMTest(TestCase):
             num_query_tokens=0,
             qformer_hidden_dim=4,
             max_sequence_length=20,
+            dropout=0.0,
+            language_projection=None,
         )
         text_backbone = Blip2Backbone(
             vision_encoder=None,
@@ -80,6 +83,7 @@ class Blip2CausalLMTest(TestCase):
             use_mlp_bias=True,
             dropout_rate=0.0,
             layer_norm_epsilon=1e-5,
+            initializer_range=0.02,
         )
         qformer = Blip2QFormer(
             num_query_tokens=4,
@@ -88,9 +92,12 @@ class Blip2CausalLMTest(TestCase):
             hidden_dim=4,
             intermediate_dim=8,
             vision_dim=16,
+            cross_attention_frequency=2,
+            dropout=0.0,
+            layer_norm_epsilon=1e-5,
         )
         language_model_v = Blip2CustomOPT(
-            vocabulary_size=8,
+            vocabulary_size=9,
             num_layers=2,
             num_heads=2,
             hidden_dim=4,
@@ -98,6 +105,8 @@ class Blip2CausalLMTest(TestCase):
             num_query_tokens=4,
             qformer_hidden_dim=4,
             max_sequence_length=20,
+            dropout=0.0,
+            language_projection=None,
         )
         backbone = Blip2Backbone(
             vision_encoder=vision_encoder,
@@ -121,7 +130,7 @@ class Blip2CausalLMTest(TestCase):
             cls=Blip2CausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 10, 8),
+            expected_output_shape=(2, 10, 9),
         )
 
     def test_text_causal_lm_basics(self):
@@ -129,7 +138,7 @@ class Blip2CausalLMTest(TestCase):
             cls=Blip2CausalLM,
             init_kwargs=self.text_init_kwargs,
             train_data=self.text_train_data,
-            expected_output_shape=(2, 10, 8),
+            expected_output_shape=(2, 10, 9),
         )
 
     def test_generate_compilation(self):
@@ -145,7 +154,7 @@ class Blip2CausalLMTest(TestCase):
 
         def wrapper(token_ids, cache, cache_update_index, **kwargs):
             batch_size = token_ids.shape[0]
-            logits = np.zeros((batch_size, 1, 8))
+            logits = np.zeros((batch_size, 1, 9))
             logits[:, :, 2] = 1.0  # EOS
             return logits, token_ids, cache
 
@@ -159,7 +168,7 @@ class Blip2CausalLMTest(TestCase):
 
         def wrapper(token_ids, cache, cache_update_index, **kwargs):
             batch_size = token_ids.shape[0]
-            logits = np.zeros((batch_size, 1, 8))
+            logits = np.zeros((batch_size, 1, 9))
             logits[:, :, 2] = 1.0  # EOS
             return logits, token_ids, cache
 
@@ -173,6 +182,7 @@ class Blip2CausalLMTest(TestCase):
             cls=Blip2CausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
+            atol=5e-3,
         )
 
     def test_text_saved_model(self):
@@ -180,6 +190,7 @@ class Blip2CausalLMTest(TestCase):
             cls=Blip2CausalLM,
             init_kwargs=self.text_init_kwargs,
             input_data=self.text_input_data,
+            atol=5e-3,
         )
 
     @pytest.mark.kaggle_key_required

@@ -10,7 +10,6 @@ class Blip2TokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "vocabulary": {
-                "<s>": 0,
                 "<pad>": 1,
                 "</s>": 2,
                 "<image>": 3,
@@ -41,12 +40,13 @@ class Blip2TokenizerTest(TestCase):
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             Blip2Tokenizer(
-                vocabulary={
-                    "<s>": 0,
-                    "</s>": 1,
-                    "<pad>": 2,
-                    "a": 3,
-                },
+                vocabulary={"<pad>": 1, "</s>": 2, "a": 3},
+                merges=["a b"],
+            )
+
+        with self.assertRaises(ValueError):
+            Blip2Tokenizer(
+                vocabulary={"<pad>": 1, "</s>": 2, "\u010a": 3, "a": 4},
                 merges=["a b"],
             )
 

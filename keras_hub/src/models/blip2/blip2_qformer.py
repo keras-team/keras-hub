@@ -12,9 +12,9 @@ class QFormerAttention(keras.layers.Layer):
         self,
         num_heads,
         hidden_dim,
-        kv_dim=None,
-        layer_norm_epsilon=1e-12,
-        dropout=0.1,
+        kv_dim,
+        layer_norm_epsilon,
+        dropout,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -79,9 +79,9 @@ class QFormerLayer(keras.layers.Layer):
         num_heads,
         hidden_dim,
         intermediate_dim,
-        vision_dim=1408,
-        layer_norm_epsilon=1e-12,
-        dropout=0.1,
+        vision_dim,
+        layer_norm_epsilon,
+        dropout,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -205,15 +205,15 @@ class Blip2QFormer(keras.Model):
     def __init__(
         self,
         num_query_tokens,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        vision_dim=1408,
-        cross_attention_frequency=2,
-        dropout=0.1,
-        layer_norm_epsilon=1e-12,
-        name="qformer",
+        num_layers,
+        num_heads,
+        hidden_dim,
+        intermediate_dim,
+        vision_dim,
+        cross_attention_frequency,
+        dropout,
+        layer_norm_epsilon,
+        name=None,
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)

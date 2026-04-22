@@ -14,15 +14,14 @@ def opt_kernel_initializer(stddev=0.02):
 
 
 class Blip2OPTEmbeddings(keras.layers.Layer):
-    """OPT token + position embeddings with HF-compatible position offset."""
-
     def __init__(
         self,
         vocabulary_size,
         hidden_dim,
         max_sequence_length,
-        position_offset=0,
-        dtype=None,
+        position_offset,
+        initializer_range,
+        dtype,
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
@@ -30,18 +29,19 @@ class Blip2OPTEmbeddings(keras.layers.Layer):
         self.hidden_dim = hidden_dim
         self.max_sequence_length = max_sequence_length
         self.position_offset = position_offset
+        self.initializer_range = initializer_range
 
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            embeddings_initializer=opt_kernel_initializer(),
+            embeddings_initializer=opt_kernel_initializer(initializer_range),
             dtype=dtype,
             name="token_embedding",
         )
         self.position_embedding = keras.layers.Embedding(
             input_dim=max_sequence_length + 2,
             output_dim=hidden_dim,
-            embeddings_initializer=opt_kernel_initializer(),
+            embeddings_initializer=opt_kernel_initializer(initializer_range),
             dtype=dtype,
             name="position_embedding",
         )
@@ -52,7 +52,6 @@ class Blip2OPTEmbeddings(keras.layers.Layer):
         self.built = True
 
     def call(self, token_ids, position_ids=None, training=None):
-        """Embed token IDs and add position embeddings."""
         token_embeds = self.token_embedding(token_ids, training=training)
         if position_ids is None:
             seq_len = ops.shape(token_ids)[-1]
@@ -75,6 +74,7 @@ class Blip2OPTEmbeddings(keras.layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "max_sequence_length": self.max_sequence_length,
                 "position_offset": self.position_offset,
+                "initializer_range": self.initializer_range,
             }
         )
         return config
@@ -82,13 +82,6 @@ class Blip2OPTEmbeddings(keras.layers.Layer):
 
 @keras_hub_export("keras_hub.models.Blip2CustomOPT")
 class Blip2CustomOPT(Backbone):
-    """BLIP-2 OPT language model with KV-cache support.
-
-    This model is a specialized version of the OPT decoder used in BLIP-2.
-    It can optionally prepends Q-Former visual features to the text embedding
-    sequence.
-    """
-
     def __init__(
         self,
         vocabulary_size,
@@ -96,21 +89,23 @@ class Blip2CustomOPT(Backbone):
         num_heads,
         hidden_dim,
         intermediate_dim,
-        num_query_tokens=32,
-        dropout=0.1,
-        max_sequence_length=2048,
-        qformer_hidden_dim=768,
-        language_projection=None,
+        num_query_tokens,
+        dropout,
+        max_sequence_length,
+        qformer_hidden_dim,
+        language_projection,
+        initializer_range=0.02,
+        layer_norm_epsilon=1e-5,
         dtype=None,
-        name="language_model",
+        name=None,
         **kwargs,
     ):
-        # === Layers ===
         self.embeddings_layer = Blip2OPTEmbeddings(
             vocabulary_size=vocabulary_size,
             hidden_dim=hidden_dim,
             max_sequence_length=max_sequence_length,
             position_offset=num_query_tokens + 2,
+            initializer_range=initializer_range,
             dtype=dtype,
             name="embeddings_layer",
         )
@@ -123,7 +118,7 @@ class Blip2CustomOPT(Backbone):
                     hidden_dim=hidden_dim,
                     intermediate_dim=intermediate_dim,
                     dropout=dropout,
-                    layer_norm_epsilon=1e-5,
+                    layer_norm_epsilon=layer_norm_epsilon,
                     dtype=dtype,
                     name=f"transformer_layer_{i}",
                 )
@@ -131,7 +126,7 @@ class Blip2CustomOPT(Backbone):
 
         self.layer_norm = keras.layers.LayerNormalization(
             axis=-1,
-            epsilon=1e-5,
+            epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="layer_norm",
         )
@@ -151,7 +146,6 @@ class Blip2CustomOPT(Backbone):
         else:
             self.language_projection = language_projection
 
-        # === Functional Model ===
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
@@ -160,7 +154,6 @@ class Blip2CustomOPT(Backbone):
         )
 
         x = self.embeddings_layer(token_id_input)
-
         inputs = {
             "token_ids": token_id_input,
             "padding_mask": padding_mask_input,
@@ -173,10 +166,8 @@ class Blip2CustomOPT(Backbone):
             )
             inputs["qformer_features"] = qf_input
 
-            # 1. Project Q-Former features to the LLM hidden dimension.
             projected_qf = self.language_projection(qf_input)
 
-            # 2. Add position embeddings to visual tokens (rows 2..N+1).
             pos_ids = ops.expand_dims(
                 ops.arange(2, 2 + num_query_tokens, dtype="int32"), axis=0
             )
@@ -185,10 +176,8 @@ class Blip2CustomOPT(Backbone):
                 pos_embeds, projected_qf.dtype
             )
 
-            # 3. Concatenate visual + text.
             x = ops.concatenate([projected_qf, x], axis=1)
 
-            # 4. Prepend valid mask bits for the visual tokens.
             vis_mask = ops.cast(
                 ops.ones_like(projected_qf[:, :, 0]), dtype="bool"
             )
@@ -221,13 +210,14 @@ class Blip2CustomOPT(Backbone):
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.qformer_hidden_dim = qformer_hidden_dim
+        self.initializer_range = initializer_range
+        self.layer_norm_epsilon = layer_norm_epsilon
 
     @property
     def token_embedding(self):
         return self.embeddings_layer.token_embedding
 
     def call_with_cache(self, x, padding_mask, cache, cache_update_index):
-        """Transformer forward pass with KV cache."""
         updated_caches = []
         for i, layer in enumerate(self.transformer_layers):
             per_layer_cache = cache[:, i]
@@ -256,6 +246,8 @@ class Blip2CustomOPT(Backbone):
                 "dropout": self.dropout,
                 "max_sequence_length": self.max_sequence_length,
                 "qformer_hidden_dim": self.qformer_hidden_dim,
+                "initializer_range": self.initializer_range,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
                 "language_projection": keras.layers.serialize(
                     self.language_projection
                 ),

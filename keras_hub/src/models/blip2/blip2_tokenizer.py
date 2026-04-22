@@ -64,15 +64,12 @@ class Blip2Tokenizer(BytePairTokenizer):
         add_prefix_space=False,
         **kwargs,
     ):
-        # Register special tokens before super().__init__() so they are
-        # available as soon as the tokenizer is built — same ordering as
-        # Gemma3Tokenizer._add_special_token() calls.
-        #
         # OPT uses `</s>` as BOS and overrides EOS to `\n` (Ċ / U+010A),
         # matching the official LAVIS BLIP-2 implementation.
         self._add_special_token("</s>", "start_token")
         self._add_special_token("\u010a", "end_token")
         self._add_special_token("<pad>", "pad_token")
+        self._add_special_token("<image>", "image_token")
 
         if unsplittable_tokens is None:
             unsplittable_tokens = ["<pad>", "</s>", "<image>"]
