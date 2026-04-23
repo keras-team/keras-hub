@@ -491,12 +491,12 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
     pt_state = pt_dec.state_dict()
 
     keras_opt.embeddings_layer.token_embedding.weights[0].assign(
-    to_np(pt_dec.embed_tokens.weight)
+        to_np(pt_dec.embed_tokens.weight)
     )
 
 
     keras_opt.embeddings_layer.position_embedding.weights[0].assign(
-    to_np(pt_dec.embed_positions.weight)
+        to_np(pt_dec.embed_positions.weight)
     )
 
 
@@ -554,7 +554,7 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
         ),
         (
             "position_embedding (row 34 = first text pos)",
-            keras_opt.embeddings_layer.position_embedding.embeddings,
+            keras_opt.embeddings_layer.position_embedding.weights[0],
             to_np(pt_dec.embed_positions.weight),
         ),
         (
@@ -685,13 +685,13 @@ def main(_) -> None:
         "qformer_hidden_dim": 768,
     }
     opt = BLIP2CustomOPT(**opt_config)
-    opt.build(
-        {
-            "qformer_features": (None, _NUM_QUERY_TOKENS, 768),
-            "token_ids": (None, 10),
-            "padding_mask": (None, 10),
-        }
-    )
+
+    dummy_opt_inputs = {
+        "qformer_features": np.zeros((1, _NUM_QUERY_TOKENS, 768), dtype="float32"),
+        "token_ids": np.zeros((1, 10), dtype="int32"),
+        "padding_mask": np.ones((1, 10), dtype="bool"),
+    }
+    _ = opt(dummy_opt_inputs)
     transfer_opt_weights(opt, hf_model.language_model)
     transfer_projection_weights(opt.language_projection, hf_model.language_projection)
 
