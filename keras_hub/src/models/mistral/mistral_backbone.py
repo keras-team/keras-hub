@@ -56,8 +56,8 @@ class MistralBackbone(Backbone):
             window attention entirely (e.g. Magistral).
         head_dim (int, optional): The size of each attention head. When
             `None` (the default), falls back to `hidden_dim // num_query_heads`.
-            Set explicitly when the model's head size is not a multiple of
-            `hidden_dim / num_query_heads` — e.g. Magistral uses
+            Set explicitly when the model's head size is not equal to
+            `hidden_dim // num_query_heads` — e.g. Magistral uses
             `head_dim=128` with `hidden_dim=5120` and `num_query_heads=32`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,

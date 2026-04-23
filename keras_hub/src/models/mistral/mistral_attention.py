@@ -35,7 +35,7 @@ class CachedMistralAttention(keras.layers.Layer):
         self._num_key_value_heads = num_key_value_heads
         self._sliding_window = sliding_window
         self._dropout = dropout
-        self._configured_head_dim = head_dim
+        self._head_dim = head_dim
 
         self._num_key_value_groups = num_query_heads // num_key_value_heads
         self._rope_max_wavelength = rope_max_wavelength
@@ -56,9 +56,7 @@ class CachedMistralAttention(keras.layers.Layer):
         # v = num key/value heads
         # h = head dim
         self._hidden_dim = inputs_shape[-1]
-        if self._configured_head_dim is not None:
-            self._head_dim = self._configured_head_dim
-        else:
+        if self._head_dim is None:
             self._head_dim = self._hidden_dim // self._num_query_heads
         self._inv_norm_factor = 1.0 / math.sqrt(self._head_dim)
 
@@ -244,7 +242,7 @@ class CachedMistralAttention(keras.layers.Layer):
                 ),
                 "sliding_window": self._sliding_window,
                 "dropout": self._dropout,
-                "head_dim": self._configured_head_dim,
+                "head_dim": self._head_dim,
             }
         )
         return config
