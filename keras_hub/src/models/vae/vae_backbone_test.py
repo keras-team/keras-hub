@@ -1,4 +1,5 @@
 import pytest
+from keras import backend
 from keras import ops
 
 from keras_hub.src.models.vae.vae_backbone import VAEBackbone
@@ -35,6 +36,7 @@ class VAEBackboneTest(TestCase):
         )
 
     @pytest.mark.xfail(
+        condition=backend.backend() == "torch",
         strict=False,
         reason=(
             "Upstream litert-torch limitation: VAE uses pow ops which fail "

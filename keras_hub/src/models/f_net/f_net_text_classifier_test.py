@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from keras import backend
 
 from keras_hub.src.models.f_net.f_net_backbone import FNetBackbone
 from keras_hub.src.models.f_net.f_net_text_classifier import FNetTextClassifier
@@ -58,6 +59,7 @@ class FNetTextClassifierTest(TestCase):
         )
 
     @pytest.mark.xfail(
+        condition=backend.backend() == "torch",
         strict=False,
         reason=(
             "Upstream litert-torch limitation: FNet uses ops.fft2 which "

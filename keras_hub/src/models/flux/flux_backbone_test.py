@@ -1,4 +1,5 @@
 import pytest
+from keras import backend
 from keras import ops
 
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
@@ -85,6 +86,7 @@ class FluxBackboneTest(TestCase):
         )
 
     @pytest.mark.xfail(
+        condition=backend.backend() == "torch",
         strict=False,
         reason=(
             "Upstream torch.export limitation: Flux's attention reshape uses "

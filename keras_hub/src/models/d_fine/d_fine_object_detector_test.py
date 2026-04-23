@@ -175,6 +175,7 @@ class DFineObjectDetectorTest(TestCase):
         )
 
     @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
         strict=False,
         reason=(
             "Upstream torch.export limitation: D-FINE's multi-scale feature "

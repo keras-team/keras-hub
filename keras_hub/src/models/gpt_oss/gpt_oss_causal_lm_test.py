@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pytest
+from keras import backend
 from keras import ops
 
 from keras_hub.src.models.gpt_oss.gpt_oss_backbone import GptOssBackbone
@@ -109,6 +110,7 @@ class GptOssCausalLMTest(TestCase):
         )
 
     @pytest.mark.xfail(
+        condition=backend.backend() == "torch",
         strict=False,
         reason=(
             "Upstream litert-torch limitation: the NHWC layout rewriter does "
