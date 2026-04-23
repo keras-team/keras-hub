@@ -146,6 +146,11 @@ class BLIP2CustomOPT(keras.Model):
             name="language_projection",
             dtype=dtype,
         )
+    def compute_output_shape(self, input_shape):
+        token_ids_shape = input_shape["token_ids"]
+        batch = token_ids_shape[0]
+        seq_len = token_ids_shape[1]
+        return (batch, seq_len, self.hidden_dim)
 
     def call(self, inputs, training=None):
         token_ids = inputs["token_ids"]
