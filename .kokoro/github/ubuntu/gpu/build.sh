@@ -17,9 +17,17 @@ set -x
 cd "${KOKORO_ROOT}/"
 
 export DEBIAN_FRONTEND=noninteractive
+if ! command -v python3.11 >/dev/null 2>&1; then
+    sudo apt-get update
+    sudo apt-get install -y software-properties-common
+    sudo add-apt-repository ppa:deadsnakes/ppa -y
+    sudo apt-get update
+    sudo apt-get install -y python3.11 python3.11-venv
+    sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 2
+fi
 cd "${KOKORO_ROOT}/"
 
-PYTHON_BINARY="/usr/bin/python3.10"
+PYTHON_BINARY="/usr/bin/python3.11"
 
 "${PYTHON_BINARY}" -m venv venv
 source venv/bin/activate
@@ -54,8 +62,6 @@ then
 fi
 
 
-# Temporarily relax Config to allow 3.10 for GPU tests.
-sed -i 's/requires-python = ">=3.11"/requires-python = ">=3.10"/' pyproject.toml
 
 pip install --no-deps -e "." --progress-bar off
 pip install huggingface_hub
