@@ -168,6 +168,14 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
                 },
             )
 
+    @pytest.mark.xfail(
+        strict=False,
+        reason=(
+            "Upstream litert-torch limitation: SAM3 uses torchvision::nms "
+            "which is not registered in the torch.export op set and cannot "
+            "be lowered by litert-torch."
+        ),
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=SAM3PromptableConceptImageSegmenter,
