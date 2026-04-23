@@ -120,7 +120,7 @@ class HieraBackbone(Backbone):
         for count in stages:
             stage_starts.append(cumulative)
             cumulative += count
-        global_attention_blocks = set(global_attention_blocks)
+        global_attention_blocks = set(global_attention_blocks or [])
 
         self.blocks = []
         current_dim = embed_dim
@@ -163,8 +163,14 @@ class HieraBackbone(Backbone):
             current_dim = dim_out
             current_heads = heads_out
 
-        stage0_height = image_shape[0] // patch_stride[0]
-        stage0_width = image_shape[1] // patch_stride[1]
+        # Match `Conv2D(padding="same")` ceil-division semantics so
+        # `feature_map_size` lines up with the patch-embedding output even
+        # when `image_shape` is not an exact multiple of `patch_stride`.
+        def _ceil_div(a, b):
+            return (a + b - 1) // b
+
+        stage0_height = _ceil_div(image_shape[0], patch_stride[0])
+        stage0_width = _ceil_div(image_shape[1], patch_stride[1])
         self.pos_embed_layer = HieraAbsolutePositionEmbedding(
             embed_dim=embed_dim,
             background_size=window_pos_embed_bkg_spatial_size,

@@ -133,6 +133,16 @@ class HieraAbsolutePositionEmbedding(keras.layers.Layer):
         pos_embed_window_full = ops.tile(
             pos_embed_window, (1, tile_h, tile_w, 1)
         )
+        # If `feature_map_size` is not an exact multiple of `window_size`,
+        # the tiled grid is smaller than the feature map; right-pad so the
+        # add against `inputs` broadcasts cleanly.
+        pad_h = self.feature_map_size[0] - tile_h * self.window_size
+        pad_w = self.feature_map_size[1] - tile_w * self.window_size
+        if pad_h > 0 or pad_w > 0:
+            pos_embed_window_full = ops.pad(
+                pos_embed_window_full,
+                [[0, 0], [0, pad_h], [0, pad_w], [0, 0]],
+            )
         # Position-embedding variables are stored at variable_dtype (fp32
         # under mixed precision); cast to the block's compute dtype before
         # adding so the residual path does not introduce a dtype mismatch.
@@ -249,6 +259,11 @@ class HieraMultiScaleAttention(keras.layers.Layer):
 
     def __init__(self, dim_in, dim_out, num_heads, q_stride=None, **kwargs):
         super().__init__(**kwargs)
+        if dim_out % num_heads != 0:
+            raise ValueError(
+                f"`dim_out` ({dim_out}) must be divisible by `num_heads` "
+                f"({num_heads})."
+            )
         self.dim_in = dim_in
         self.dim_out = dim_out
         self.num_heads = num_heads
