@@ -32,6 +32,10 @@ class MistralTransformerDecoder(keras.layers.Layer):
         sliding_window=512,
         dropout=0,
         head_dim=None,
+        rope_type="linear",
+        rope_beta_fast=32.0,
+        rope_beta_slow=1.0,
+        rope_original_max_position_embeddings=4096,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -41,6 +45,12 @@ class MistralTransformerDecoder(keras.layers.Layer):
 
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.rope_type = rope_type
+        self.rope_beta_fast = rope_beta_fast
+        self.rope_beta_slow = rope_beta_slow
+        self.rope_original_max_position_embeddings = (
+            rope_original_max_position_embeddings
+        )
 
         self.dropout = dropout
 
@@ -64,6 +74,12 @@ class MistralTransformerDecoder(keras.layers.Layer):
             rope_scaling_factor=self.rope_scaling_factor,
             sliding_window=self.sliding_window,
             head_dim=self.head_dim,
+            rope_type=self.rope_type,
+            rope_beta_fast=self.rope_beta_fast,
+            rope_beta_slow=self.rope_beta_slow,
+            rope_original_max_position_embeddings=(
+                self.rope_original_max_position_embeddings
+            ),
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
             dtype=self.dtype_policy,
@@ -246,6 +262,12 @@ class MistralTransformerDecoder(keras.layers.Layer):
                 "num_key_value_heads": self.num_key_value_heads,
                 "sliding_window": self.sliding_window,
                 "head_dim": self.head_dim,
+                "rope_type": self.rope_type,
+                "rope_beta_fast": self.rope_beta_fast,
+                "rope_beta_slow": self.rope_beta_slow,
+                "rope_original_max_position_embeddings": (
+                    self.rope_original_max_position_embeddings
+                ),
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "kernel_initializer": keras.initializers.serialize(
