@@ -486,6 +486,18 @@ from keras_hub.src.models.mixtral.mixtral_causal_lm_preprocessor import (
 from keras_hub.src.models.mixtral.mixtral_tokenizer import (
     MixtralTokenizer as MixtralTokenizer,
 )
+from keras_hub.src.models.moondream.moondream_backbone import (
+    MoondreamBackbone as MoondreamBackbone,
+)
+from keras_hub.src.models.moondream.moondream_causal_lm import (
+    MoondreamCausalLM as MoondreamCausalLM,
+)
+from keras_hub.src.models.moondream.moondream_causal_lm_preprocessor import (
+    MoondreamCausalLMPreprocessor as MoondreamCausalLMPreprocessor,
+)
+from keras_hub.src.models.moondream.moondream_tokenizer import (
+    MoondreamTokenizer as MoondreamTokenizer,
+)
 from keras_hub.src.models.mobilenet.mobilenet_backbone import (
     MobileNetBackbone as MobileNetBackbone,
 )
@@ -503,6 +515,15 @@ from keras_hub.src.models.mobilenetv5.mobilenetv5_image_classifier import (
 )
 from keras_hub.src.models.mobilenetv5.mobilenetv5_image_classifier_preprocessor import (
     MobileNetV5ImageClassifierPreprocessor as MobileNetV5ImageClassifierPreprocessor,
+)
+from keras_hub.src.models.moondream.moondream_backbone import (
+    MoondreamBackbone as MoondreamBackbone,
+)
+from keras_hub.src.models.moondream.moondream_causal_lm import (
+    MoondreamCausalLM as MoondreamCausalLM,
+)
+from keras_hub.src.models.moondream.moondream_preprocessor import (
+    MoondreamPreprocessor as MoondreamPreprocessor,
 )
 from keras_hub.src.models.moonshine.moonshine_audio_to_text import (
     MoonshineAudioToText as MoonshineAudioToText,
