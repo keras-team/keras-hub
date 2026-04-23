@@ -79,7 +79,7 @@ class Blip2OPTEmbeddings(keras.layers.Layer):
 
 
 @keras_hub_export("keras_hub.models.BLIP2CustomOPT")
-class BLIP2CustomOPT(keras.layers.Layer): 
+class BLIP2CustomOPT(keras.Model):
     def __init__(
         self,
         vocabulary_size,
@@ -91,7 +91,7 @@ class BLIP2CustomOPT(keras.layers.Layer):
         dropout,
         max_sequence_length,
         qformer_hidden_dim,
-        language_projection=None, 
+        language_projection=None,
         initializer_range=0.02,
         layer_norm_epsilon=1e-5,
         dtype=None,
@@ -100,7 +100,6 @@ class BLIP2CustomOPT(keras.layers.Layer):
     ):
         super().__init__(dtype=dtype, name=name, **kwargs)
 
-        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -112,59 +111,46 @@ class BLIP2CustomOPT(keras.layers.Layer):
         self.qformer_hidden_dim = qformer_hidden_dim
         self.initializer_range = initializer_range
         self.layer_norm_epsilon = layer_norm_epsilon
-        self._language_projection_arg = language_projection
 
         self.embeddings_layer = Blip2OPTEmbeddings(
-            vocabulary_size=self.vocabulary_size,
-            hidden_dim=self.hidden_dim,
-            max_sequence_length=self.max_sequence_length,
-            position_offset=self.num_query_tokens + 2,
-            initializer_range=self.initializer_range,
-            dtype=self.dtype_policy,
+            vocabulary_size=vocabulary_size,
+            hidden_dim=hidden_dim,
+            max_sequence_length=max_sequence_length,
+            position_offset=num_query_tokens + 2,
+            initializer_range=initializer_range,
+            dtype=dtype,
             name="embeddings_layer",
         )
-
-    def build(self, input_shape):
-        token_ids_shape = input_shape["token_ids"]
-
-        # === Build embeddings ===
-        self.embeddings_layer.build(token_ids_shape)
-
-        # === Construct AND build transformer layers  ===
-        self.transformer_layers = []
-        for i in range(self.num_layers):
-            block = OPTDecoderBlock(
-                num_heads=self.num_heads,
-                hidden_dim=self.hidden_dim,
-                intermediate_dim=self.intermediate_dim,
-                dropout=self.dropout,
-                layer_norm_epsilon=self.layer_norm_epsilon,
-                dtype=self.dtype_policy,
+        self.transformer_layers = [
+            OPTDecoderBlock(
+                num_heads=num_heads,
+                hidden_dim=hidden_dim,
+                intermediate_dim=intermediate_dim,
+                dropout=dropout,
+                layer_norm_epsilon=layer_norm_epsilon,
+                dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
-            block.build((None, None, self.hidden_dim))
-            self.transformer_layers.append(block)
-
-        # === Construct AND build layer norm ===
+            for i in range(num_layers)
+        ]
         self.layer_norm = keras.layers.LayerNormalization(
             axis=-1,
-            epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
+            epsilon=layer_norm_epsilon,
+            dtype=dtype,
             name="layer_norm",
         )
-        self.layer_norm.build((None, None, self.hidden_dim))
-
-        # === Construct AND build projection ===
-        self.projection_layer = keras.layers.EinsumDense(
+        self.language_projection = keras.layers.EinsumDense(
             equation="btd,df->btf",
-            output_shape=(None, self.hidden_dim),
+            output_shape=(None, hidden_dim),
             bias_axes="f",
             name="language_projection",
-            dtype=self.dtype_policy,
+            dtype=dtype,
         )
-        self.projection_layer.build((None, None, self.qformer_hidden_dim))
-
-        self.built = True
+    def compute_output_shape(self, input_shape):
+        token_ids_shape = input_shape["token_ids"]
+        batch = token_ids_shape[0]
+        seq_len = token_ids_shape[1]
+        return (batch, seq_len, self.hidden_dim)
 
     def call(self, inputs, training=None):
         token_ids = inputs["token_ids"]
@@ -174,12 +160,10 @@ class BLIP2CustomOPT(keras.layers.Layer):
         x = self.embeddings_layer(token_ids, training=training)
 
         if qformer_features is not None:
-            projected_qf = self.projection_layer(qformer_features)
+            projected_qf = self.language_projection(qformer_features)
 
             nq = ops.shape(qformer_features)[1]
-            pos_ids = ops.expand_dims(
-                ops.arange(2, 2 + nq, dtype="int32"), axis=0
-            )
+            pos_ids = ops.expand_dims(ops.arange(2, 2 + nq, dtype="int32"), axis=0)
             pos_embeds = self.embeddings_layer.position_embedding(pos_ids)
             projected_qf = projected_qf + ops.cast(pos_embeds, projected_qf.dtype)
 
@@ -194,10 +178,6 @@ class BLIP2CustomOPT(keras.layers.Layer):
             x = layer(x, padding_mask=full_padding_mask, training=training)
 
         return self.layer_norm(x)
-
-    def compute_output_shape(self, input_shape):
-        token_ids_shape = input_shape["token_ids"]
-        return (token_ids_shape[0], token_ids_shape[1], self.hidden_dim)
 
     def call_with_cache(self, x, padding_mask, cache, cache_update_index):
         updated_caches = []
@@ -233,7 +213,6 @@ class BLIP2CustomOPT(keras.layers.Layer):
                 "qformer_hidden_dim": self.qformer_hidden_dim,
                 "initializer_range": self.initializer_range,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "language_projection": self._language_projection_arg,
             }
         )
         return config
