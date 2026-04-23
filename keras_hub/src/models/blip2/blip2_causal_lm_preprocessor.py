@@ -123,13 +123,6 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
         )
         x_text, y_label, sw = processed
         
-        if y_label is not None and sw is not None:
-            y_label = tf.where(
-                tf.cast(sw, "bool"),
-                y_label,      
-                tf.zeros_like(y_label),
-            )
-
         x_out = {
             "token_ids": x_text["token_ids"],
             "padding_mask": x_text["padding_mask"],
