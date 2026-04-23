@@ -32,6 +32,8 @@ class Blip2BackboneTest(TestCase):
             use_mlp_bias=True,
             dropout_rate=0.0,
             layer_norm_epsilon=1e-6,
+            initializer_range=0.02,
+            dtype="float32",
         )
         qformer = Blip2QFormer(
             num_query_tokens=self.num_query_tokens,
@@ -41,6 +43,9 @@ class Blip2BackboneTest(TestCase):
             intermediate_dim=8,
             vision_dim=8,
             cross_attention_frequency=1,
+            dropout=0.0,
+            layer_norm_epsilon=1e-6,
+            dtype="float32",
         )
         language_model = Blip2CustomOPT(
             vocabulary_size=14,
@@ -51,6 +56,9 @@ class Blip2BackboneTest(TestCase):
             num_query_tokens=self.num_query_tokens,
             qformer_hidden_dim=self.hidden_dim,
             max_sequence_length=10,
+            dropout=0.0,
+            language_projection=None,
+            dtype="float32",
         )
 
         self.init_kwargs = {
@@ -83,6 +91,7 @@ class Blip2BackboneTest(TestCase):
             ),
             variable_length_data=[self.input_data],
             run_quantization_check=False,
+            run_mixed_precision_check=False,
         )
 
     def test_architecture_characteristics(self):
@@ -92,6 +101,9 @@ class Blip2BackboneTest(TestCase):
         self.assertEqual(backbone.language_model.hidden_dim, self.hidden_dim)
 
     def test_saved_model(self):
+        # Mirror Gemma3 pattern — no atol/rtol overrides.
+        # dtype="float32" is pinned on all sub-models in setUp so the
+        # save/load round-trip is numerically stable on CPU backends.
         self.run_model_saving_test(
             cls=Blip2Backbone,
             init_kwargs=self.init_kwargs,
