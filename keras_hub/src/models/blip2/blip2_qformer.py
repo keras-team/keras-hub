@@ -326,7 +326,7 @@ class BLIP2QFormer(keras.Model):
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
         self.query_tokens_layer = query_tokens_layer
-        self.layer_norm_layer = layer_norm
+        self.layer_norm = layer_norm
         self.transformer_layers = transformer_layers
 
     @property
