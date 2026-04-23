@@ -446,11 +446,11 @@ def transfer_qformer_weights(keras_qformer, hf_model) -> None:
                 is_cross=True,
             )
 
+        keras_layer.intermediate_dense.weights[0].assign(
+            to_np(pt_state[f"{pt_prefix}intermediate_query.dense.weight"]).T
+        )
         keras_layer.intermediate_dense.weights[1].assign(
             to_np(pt_state[f"{pt_prefix}intermediate_query.dense.bias"])
-        )
-        keras_layer.output_dense.weights[0].assign(
-            to_np(pt_state[f"{pt_prefix}output_query.dense.weight"]).T
         )
         keras_layer.output_dense.weights[1].assign(
             to_np(pt_state[f"{pt_prefix}output_query.dense.bias"])
@@ -490,13 +490,15 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
     pt_dec = hf_opt.model.decoder
     pt_state = pt_dec.state_dict()
 
-    keras_opt.embeddings_layer.token_embedding.embeddings.assign(
-        to_np(pt_dec.embed_tokens.weight)
+    keras_opt.embeddings_layer.token_embedding.weights[0].assign(
+    to_np(pt_dec.embed_tokens.weight)
     )
 
-    keras_opt.embeddings_layer.position_embedding.embeddings.assign(
-        to_np(pt_dec.embed_positions.weight)
+
+    keras_opt.embeddings_layer.position_embedding.weights[0].assign(
+    to_np(pt_dec.embed_positions.weight)
     )
+
 
     for i in range(keras_opt.num_layers):
         p = f"layers.{i}."
@@ -546,9 +548,9 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
     layer0 = keras_opt.transformer_layers[0]
     _spot = [
         (
-            "token_embedding",
-            keras_opt.embeddings_layer.token_embedding.embeddings,
-            to_np(pt_dec.embed_tokens.weight),
+        "token_embedding",
+        keras_opt.embeddings_layer.token_embedding.weights[0],
+        to_np(pt_dec.embed_tokens.weight),
         ),
         (
             "position_embedding (row 34 = first text pos)",
