@@ -122,16 +122,13 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
             sequence_length=sequence_length,
         )
         x_text, y_label, sw = processed
-
-        if keras.config.backend() == "torch":
+        
+        if y_label is not None and sw is not None:
             y_label = tf.where(
-                tf.equal(y_label, -1),
-                tf.cast(-100, y_label.dtype),
-                y_label,
+                tf.cast(sw, "bool"),
+                y_label,      
+                tf.zeros_like(y_label),
             )
-
-
-
 
         x_out = {
             "token_ids": x_text["token_ids"],

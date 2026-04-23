@@ -78,8 +78,8 @@ class Blip2OPTEmbeddings(keras.layers.Layer):
         return config
 
 
-@keras_hub_export("keras_hub.models.Blip2CustomOPT")
-class Blip2CustomOPT(keras.Model):
+@keras_hub_export("keras_hub.models.BLIP2CustomOPT")
+class BLIP2CustomOPT(keras.Model):
     def __init__(
         self,
         vocabulary_size,
@@ -98,10 +98,8 @@ class Blip2CustomOPT(keras.Model):
         name=None,
         **kwargs,
     ):
-        # ✅ super().__init__() first — same as QFormer
         super().__init__(dtype=dtype, name=name, **kwargs)
 
-        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -114,7 +112,6 @@ class Blip2CustomOPT(keras.Model):
         self.initializer_range = initializer_range
         self.layer_norm_epsilon = layer_norm_epsilon
 
-        # === Layers ===
         self.embeddings_layer = Blip2OPTEmbeddings(
             vocabulary_size=vocabulary_size,
             hidden_dim=hidden_dim,
@@ -150,38 +147,25 @@ class Blip2CustomOPT(keras.Model):
             dtype=dtype,
         )
 
-    # ---------------------------------------------------------------
-    # call() replaces the functional graph
-    # ---------------------------------------------------------------
     def call(self, inputs, training=None):
-        token_ids = inputs["token_ids"]        # (B, T)
-        padding_mask = inputs["padding_mask"]  # (B, T)
+        token_ids = inputs["token_ids"]
+        padding_mask = inputs["padding_mask"]
         qformer_features = inputs.get("qformer_features", None)
 
-        x = self.embeddings_layer(token_ids, training=training)  # (B, T, D)
+        x = self.embeddings_layer(token_ids, training=training)
 
         if qformer_features is not None:
-            # Project Q-Former output → OPT hidden dim
-            projected_qf = self.language_projection(qformer_features)  # (B, Q, D)
+            projected_qf = self.language_projection(qformer_features)
 
-            # Positional embeddings for visual slots (positions 2 … Q+1)
             nq = ops.shape(qformer_features)[1]
-            pos_ids = ops.expand_dims(
-                ops.arange(2, 2 + nq, dtype="int32"), axis=0
-            )
+            pos_ids = ops.expand_dims(ops.arange(2, 2 + nq, dtype="int32"), axis=0)
             pos_embeds = self.embeddings_layer.position_embedding(pos_ids)
             projected_qf = projected_qf + ops.cast(pos_embeds, projected_qf.dtype)
 
-            # Prepend visual tokens
-            x = ops.concatenate([projected_qf, x], axis=1)  # (B, Q+T, D)
+            x = ops.concatenate([projected_qf, x], axis=1)
 
-            # Visual tokens are never masked out
-            vis_mask = ops.ones(
-                (ops.shape(token_ids)[0], nq), dtype="bool"
-            )
-            full_padding_mask = ops.concatenate(
-                [vis_mask, padding_mask], axis=1
-            )
+            vis_mask = ops.ones((ops.shape(token_ids)[0], nq), dtype="bool")
+            full_padding_mask = ops.concatenate([vis_mask, padding_mask], axis=1)
         else:
             full_padding_mask = padding_mask
 
@@ -190,9 +174,6 @@ class Blip2CustomOPT(keras.Model):
 
         return self.layer_norm(x)
 
-    # ---------------------------------------------------------------
-    # KV-cache path (used by the causal LM head during generation)
-    # ---------------------------------------------------------------
     def call_with_cache(self, x, padding_mask, cache, cache_update_index):
         updated_caches = []
         for i, layer in enumerate(self.transformer_layers):
@@ -230,6 +211,3 @@ class Blip2CustomOPT(keras.Model):
             }
         )
         return config
-
-    def default_lora_layer_names(self):
-        return ["q_proj", "v_proj"]

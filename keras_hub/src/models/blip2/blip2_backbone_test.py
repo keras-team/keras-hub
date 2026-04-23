@@ -2,16 +2,15 @@
 
 import numpy as np
 import pytest
-import keras
 
-from keras_hub.src.models.blip2.blip2_backbone import Blip2Backbone
-from keras_hub.src.models.blip2.blip2_custom_opt import Blip2CustomOPT
-from keras_hub.src.models.blip2.blip2_qformer import Blip2QFormer
-from keras_hub.src.models.blip2.blip2_vision_encoder import Blip2VisionEncoder
+from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
+from keras_hub.src.models.blip2.blip2_custom_opt import BLIP2CustomOPT
+from keras_hub.src.models.blip2.blip2_qformer import BLIP2QFormer
+from keras_hub.src.models.blip2.blip2_vision_encoder import BLIP2VisionEncoder
 from keras_hub.src.tests.test_case import TestCase
 
 
-class Blip2BackboneTest(TestCase):
+class BLIP2BackboneTest(TestCase):
     def setUp(self):
         self.batch_size = 2
         self.image_size = 32
@@ -19,7 +18,7 @@ class Blip2BackboneTest(TestCase):
         self.num_query_tokens = 2
         self.hidden_dim = 4
 
-        vision_encoder = Blip2VisionEncoder(
+        vision_encoder = BLIP2VisionEncoder(
             image_size=self.image_size,
             patch_size=4,
             num_layers=2,
@@ -35,7 +34,7 @@ class Blip2BackboneTest(TestCase):
             initializer_range=0.02,
             dtype="float32",
         )
-        qformer = Blip2QFormer(
+        qformer = BLIP2QFormer(
             num_query_tokens=self.num_query_tokens,
             num_layers=2,
             num_heads=2,
@@ -47,7 +46,7 @@ class Blip2BackboneTest(TestCase):
             layer_norm_epsilon=1e-6,
             dtype="float32",
         )
-        language_model = Blip2CustomOPT(
+        language_model = BLIP2CustomOPT(
             vocabulary_size=14,
             num_layers=2,
             num_heads=2,
@@ -71,17 +70,13 @@ class Blip2BackboneTest(TestCase):
                 (self.batch_size, self.image_size, self.image_size, 3),
                 dtype="float32",
             ),
-            "token_ids": np.ones(
-                (self.batch_size, self.seq_length), dtype="int32"
-            ),
-            "padding_mask": np.ones(
-                (self.batch_size, self.seq_length), dtype="bool"
-            ),
+            "token_ids": np.ones((self.batch_size, self.seq_length), dtype="int32"),
+            "padding_mask": np.ones((self.batch_size, self.seq_length), dtype="bool"),
         }
 
     def test_backbone_basics(self):
         self.run_backbone_test(
-            cls=Blip2Backbone,
+            cls=BLIP2Backbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(
@@ -95,17 +90,14 @@ class Blip2BackboneTest(TestCase):
         )
 
     def test_architecture_characteristics(self):
-        backbone = Blip2Backbone(**self.init_kwargs)
+        backbone = BLIP2Backbone(**self.init_kwargs)
         self.assertEqual(backbone.num_query_tokens, self.num_query_tokens)
         self.assertEqual(backbone.qformer.hidden_dim, self.hidden_dim)
         self.assertEqual(backbone.language_model.hidden_dim, self.hidden_dim)
 
     def test_saved_model(self):
-        # Mirror Gemma3 pattern — no atol/rtol overrides.
-        # dtype="float32" is pinned on all sub-models in setUp so the
-        # save/load round-trip is numerically stable on CPU backends.
         self.run_model_saving_test(
-            cls=Blip2Backbone,
+            cls=BLIP2Backbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
@@ -114,7 +106,7 @@ class Blip2BackboneTest(TestCase):
     @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
-            cls=Blip2Backbone,
+            cls=BLIP2Backbone,
             preset="blip2_base",
             input_data=self.input_data,
         )
@@ -122,9 +114,9 @@ class Blip2BackboneTest(TestCase):
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in Blip2Backbone.presets:
+        for preset in BLIP2Backbone.presets:
             self.run_preset_test(
-                cls=Blip2Backbone,
+                cls=BLIP2Backbone,
                 preset=preset,
                 input_data=self.input_data,
             )

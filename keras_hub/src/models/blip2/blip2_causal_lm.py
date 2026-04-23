@@ -4,16 +4,16 @@ import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.blip2.blip2_backbone import Blip2Backbone
+from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
 from keras_hub.src.models.blip2.blip2_causal_lm_preprocessor import (
-    Blip2CausalLMPreprocessor,
+    BLIP2CausalLMPreprocessor,
 )
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.utils.tensor_utils import any_equal
 
 
-@keras_hub_export("keras_hub.models.Blip2CausalLM")
-class Blip2CausalLM(CausalLM):
+@keras_hub_export("keras_hub.models.BLIP2CausalLM")
+class BLIP2CausalLM(CausalLM):
     """An end-to-end multimodal BLIP-2 model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous
@@ -34,14 +34,14 @@ class Blip2CausalLM(CausalLM):
     when creating the model with `from_preset()`.
 
     Args:
-        preprocessor: A `keras_hub.models.Blip2CausalLMPreprocessor` or
+        preprocessor: A `keras_hub.models.BLIP2CausalLMPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
-        backbone: A `keras_hub.models.Blip2Backbone` instance.
+        backbone: A `keras_hub.models.BLIP2Backbone` instance.
     """
 
-    backbone_cls = Blip2Backbone
-    preprocessor_cls = Blip2CausalLMPreprocessor
+    backbone_cls = BLIP2Backbone
+    preprocessor_cls = BLIP2CausalLMPreprocessor
 
     def __init__(
         self,
@@ -114,9 +114,7 @@ class Blip2CausalLM(CausalLM):
             images = ops.expand_dims(images, axis=0)
         vision_features = self.backbone.vision_encoder(images)
         qformer_features = self.backbone.qformer(vision_features)
-        return self.backbone.language_model.language_projection(
-            qformer_features
-        )
+        return self.backbone.language_model.language_projection(qformer_features)
 
     def call_with_cache(
         self,
@@ -136,9 +134,7 @@ class Blip2CausalLM(CausalLM):
             visual_pos_ids = ops.expand_dims(
                 ops.arange(2, 2 + num_visual, dtype="int32"), axis=0
             )
-            visual_pos_embeds = lm.embeddings_layer.position_embedding(
-                visual_pos_ids
-            )
+            visual_pos_embeds = lm.embeddings_layer.position_embedding(visual_pos_ids)
             projected_features = projected_features + ops.cast(
                 visual_pos_embeds, projected_features.dtype
             )
@@ -154,17 +150,13 @@ class Blip2CausalLM(CausalLM):
             else:
                 text_len = ops.shape(token_ids)[1]
                 text_mask = ops.ones((batch_size, text_len), dtype="bool")
-                full_padding_mask = ops.concatenate(
-                    [visual_mask, text_mask], axis=1
-                )
+                full_padding_mask = ops.concatenate([visual_mask, text_mask], axis=1)
 
         else:
             position_ids = ops.reshape(
                 ops.cast(cache_update_index + 2, "int32"), (1, 1)
             )
-            token_embeds = lm.embeddings_layer(
-                token_ids, position_ids=position_ids
-            )
+            token_embeds = lm.embeddings_layer(token_ids, position_ids=position_ids)
             x = token_embeds
             full_padding_mask = None
 
@@ -172,9 +164,7 @@ class Blip2CausalLM(CausalLM):
             x, full_padding_mask, cache, cache_update_index
         )
 
-        logits = lm.embeddings_layer.token_embedding(
-            hidden_states, reverse=True
-        )
+        logits = lm.embeddings_layer.token_embedding(hidden_states, reverse=True)
 
         if projected_features is not None:
             logits = logits[:, num_visual:, :]

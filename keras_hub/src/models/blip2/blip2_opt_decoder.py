@@ -1,7 +1,7 @@
 """Cached OPT decoder layers for BLIP-2.
 
 Provides ``CachedOPTAttention`` and ``OPTDecoderBlock`` — the attention and
-transformer block used by ``Blip2CustomOPT``.  Both support an optional
+transformer block used by ``Blip2CustomOPT``. Both support an optional
 KV-cache path for autoregressive generation.
 """
 
@@ -27,7 +27,6 @@ class CachedOPTAttention(keras.layers.Layer):
         self.head_dim = hidden_dim // num_heads
         self.dropout_rate = dropout
 
-        # Use EinsumDense for LoRA support.
         self.q_proj = keras.layers.EinsumDense(
             equation="btd,df->btf",
             output_shape=(None, hidden_dim),
@@ -62,7 +61,7 @@ class CachedOPTAttention(keras.layers.Layer):
             )
 
     def _split_heads(self, x):
-        """``(B, T, D)`` → ``(B, H, T, head_dim)``."""
+        """``(B, T, D)`` -> ``(B, H, T, head_dim)``."""
         b, t = ops.shape(x)[0], ops.shape(x)[1]
         return ops.transpose(
             ops.reshape(x, (b, t, self.num_heads, self.head_dim)),
@@ -70,7 +69,7 @@ class CachedOPTAttention(keras.layers.Layer):
         )
 
     def _merge_heads(self, x):
-        """``(B, H, T, head_dim)`` → ``(B, T, D)``."""
+        """``(B, H, T, head_dim)`` -> ``(B, T, D)``."""
         b, t = ops.shape(x)[0], ops.shape(x)[2]
         return ops.reshape(
             ops.transpose(x, (0, 2, 1, 3)),
@@ -108,9 +107,7 @@ class CachedOPTAttention(keras.layers.Layer):
         attn_weights = ops.matmul(q, ops.transpose(k, (0, 1, 3, 2))) * scale
 
         if attention_mask is not None:
-            attn_weights = attn_weights + ops.cast(
-                attention_mask, attn_weights.dtype
-            )
+            attn_weights = attn_weights + ops.cast(attention_mask, attn_weights.dtype)
 
         attn_weights = ops.softmax(attn_weights, axis=-1)
         if self.dropout_rate > 0:
@@ -179,7 +176,6 @@ class OPTDecoderBlock(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="fc1",
         )
-        # ReLU is applied externally in call.
         self.fc2 = keras.layers.EinsumDense(
             equation="btf,fd->btd",
             output_shape=(None, hidden_dim),
@@ -192,14 +188,10 @@ class OPTDecoderBlock(keras.layers.Layer):
                 dropout, dtype=self.dtype_policy, name="residual_dropout"
             )
 
-    def _compute_attention_mask(
-        self, x, padding_mask, cache, cache_update_index
-    ):
+    def _compute_attention_mask(self, x, padding_mask, cache, cache_update_index):
         batch_size = ops.shape(x)[0]
         output_length = ops.shape(x)[1]
-        input_length = (
-            ops.shape(cache)[2] if cache is not None else output_length
-        )
+        input_length = ops.shape(cache)[2] if cache is not None else output_length
 
         causal_mask = compute_causal_mask(
             batch_size=batch_size,
@@ -213,9 +205,7 @@ class OPTDecoderBlock(keras.layers.Layer):
         )
 
         if decoder_mask is not None:
-            bool_mask = ops.logical_and(
-                causal_mask, ops.cast(decoder_mask, "bool")
-            )
+            bool_mask = ops.logical_and(causal_mask, ops.cast(decoder_mask, "bool"))
         else:
             bool_mask = causal_mask
 
@@ -234,7 +224,6 @@ class OPTDecoderBlock(keras.layers.Layer):
             x, padding_mask, cache, cache_update_index
         )
 
-        # === Self-attention block ===
         residual = x
         x = self.self_attn_layer_norm(x)
         if cache is not None:
@@ -246,15 +235,12 @@ class OPTDecoderBlock(keras.layers.Layer):
                 training=training,
             )
         else:
-            x = self.self_attn(
-                x, attention_mask=attention_mask, training=training
-            )
+            x = self.self_attn(x, attention_mask=attention_mask, training=training)
             new_cache = None
         if self.dropout_rate > 0:
             x = self.residual_dropout(x, training=training)
         x = residual + ops.cast(x, residual.dtype)
 
-        # === Feed-forward block ===
         residual = x
         x = self.final_layer_norm(x)
         x = self.fc1(x)

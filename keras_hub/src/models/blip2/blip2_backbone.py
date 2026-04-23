@@ -1,14 +1,11 @@
 import keras
-keras.utils.set_random_seed(42)
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.blip2.blip2_custom_opt import Blip2CustomOPT
-from keras_hub.src.models.blip2.blip2_qformer import Blip2QFormer
-from keras_hub.src.models.blip2.blip2_vision_encoder import Blip2VisionEncoder
 
 
-@keras_hub_export("keras_hub.models.Blip2Backbone")
-class Blip2Backbone(Backbone):
+@keras_hub_export("keras_hub.models.BLIP2Backbone")
+class BLIP2Backbone(Backbone):
     """BLIP-2 core network.
 
     BLIP-2 is a vision-language model that connects a frozen image encoder
@@ -18,24 +15,24 @@ class Blip2Backbone(Backbone):
     prompt to the language model.
 
     The forward pass follows three stages:
-      1. A `Blip2VisionEncoder` (ViT) maps raw images to patch features.
-      2. A `Blip2QFormer` cross-attends learned query tokens against those
+      1. A `BLIP2VisionEncoder` (ViT) maps raw images to patch features.
+      2. A `BLIP2QFormer` cross-attends learned query tokens against those
          patch features and produces a compact set of visual embeddings.
-      3. A `Blip2CustomOPT` language model receives the query embeddings
+      3. A `BLIP2CustomOPT` language model receives the query embeddings
          prepended to its token sequence and autoregressively generates text.
 
     When `vision_encoder` is `None` the backbone operates in text-only mode:
     the Q-Former is bypassed and the language model receives only token ids.
 
     For a higher-level text-generation interface see
-    `keras_hub.models.Blip2CausalLM`.
+    `keras_hub.models.BLIP2CausalLM`.
 
     Args:
-        vision_encoder: A `Blip2VisionEncoder` instance. Pass `None` for a
-            text-only backbone.
-        qformer: A `Blip2QFormer` instance. Pass `None` when `vision_encoder`
-            is `None`.
-        language_model: A `Blip2CustomOPT` instance.
+        vision_encoder: A `keras_hub.models.BLIP2VisionEncoder` instance. Pass
+            `None` for a text-only backbone.
+        qformer: A `keras_hub.models.BLIP2QFormer` instance. Pass `None` when
+            `vision_encoder` is `None`.
+        language_model: A `keras_hub.models.BLIP2CustomOPT` instance.
         dtype: string or `keras.mixed_precision.DTypePolicy`. Dtype used for
             model computations and weights. Defaults to `None` (Keras global
             default).
@@ -43,9 +40,9 @@ class Blip2Backbone(Backbone):
             `Backbone` / `keras.Model`.
 
     Example:
-```python
+    ```python
     # Text-only (no vision encoder)
-    backbone = Blip2Backbone(
+    backbone = keras_hub.models.BLIP2Backbone(
         vision_encoder=None,
         qformer=None,
         language_model=my_opt,
@@ -53,13 +50,13 @@ class Blip2Backbone(Backbone):
     output = backbone({"token_ids": token_ids, "padding_mask": mask})
 
     # Full vision-language backbone
-    backbone = Blip2Backbone.from_preset("blip2_opt_2.7b")
+    backbone = keras_hub.models.BLIP2Backbone.from_preset("blip2_opt_2.7b")
     output = backbone({
         "images": images,           # (B, H, W, 3)
         "token_ids": token_ids,     # (B, seq_len)
         "padding_mask": mask,       # (B, seq_len)
     })
-```
+    ```
     """
 
     def __init__(
@@ -78,9 +75,7 @@ class Blip2Backbone(Backbone):
         multimodal = self.vision_encoder is not None
 
         # === Inputs ===
-        token_ids_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
-        )
+        token_ids_input = keras.Input(shape=(None,), dtype="int32", name="token_ids")
         padding_mask_input = keras.Input(
             shape=(None,), dtype="bool", name="padding_mask"
         )
@@ -126,8 +121,6 @@ class Blip2Backbone(Backbone):
         )
 
         # === Config ===
-        # Explicitly store multimodal flag so get_config/from_config
-        # round-trips cleanly, matching the pattern used by Gemma3Backbone.
         self.multimodal = multimodal
 
     # === Public properties for downstream task heads ===
@@ -174,7 +167,5 @@ class Blip2Backbone(Backbone):
         for key in ("vision_encoder", "qformer"):
             if config.get(key) is not None:
                 config[key] = keras.layers.deserialize(config[key])
-        config["language_model"] = keras.layers.deserialize(
-            config["language_model"]
-        )
+        config["language_model"] = keras.layers.deserialize(config["language_model"])
         return cls(**config)

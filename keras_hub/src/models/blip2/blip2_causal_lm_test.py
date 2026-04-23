@@ -5,20 +5,20 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from keras_hub.src.models.blip2.blip2_backbone import Blip2Backbone
-from keras_hub.src.models.blip2.blip2_causal_lm import Blip2CausalLM
+from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
+from keras_hub.src.models.blip2.blip2_causal_lm import BLIP2CausalLM
 from keras_hub.src.models.blip2.blip2_causal_lm_preprocessor import (
-    Blip2CausalLMPreprocessor,
+    BLIP2CausalLMPreprocessor,
 )
-from keras_hub.src.models.blip2.blip2_custom_opt import Blip2CustomOPT
-from keras_hub.src.models.blip2.blip2_image_converter import Blip2ImageConverter
-from keras_hub.src.models.blip2.blip2_qformer import Blip2QFormer
-from keras_hub.src.models.blip2.blip2_tokenizer import Blip2Tokenizer
-from keras_hub.src.models.blip2.blip2_vision_encoder import Blip2VisionEncoder
+from keras_hub.src.models.blip2.blip2_custom_opt import BLIP2CustomOPT
+from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter
+from keras_hub.src.models.blip2.blip2_qformer import BLIP2QFormer
+from keras_hub.src.models.blip2.blip2_tokenizer import BLIP2Tokenizer
+from keras_hub.src.models.blip2.blip2_vision_encoder import BLIP2VisionEncoder
 from keras_hub.src.tests.test_case import TestCase
 
 
-class Blip2CausalLMTest(TestCase):
+class BLIP2CausalLMTest(TestCase):
     def setUp(self):
         vocab = {
             "<s>": 0,
@@ -30,18 +30,20 @@ class Blip2CausalLMTest(TestCase):
             "h": 6,
             "e": 7,
             "<image>": 8,
+            "Ġt": 9,   
+            "he": 10, 
         }
         merges = ["Ġ t", "h e"]
-        tokenizer = Blip2Tokenizer(vocabulary=vocab, merges=merges)
+        tokenizer = BLIP2Tokenizer(vocabulary=vocab, merges=merges)
 
         # === Text model ===
-        self.text_preprocessor = Blip2CausalLMPreprocessor(
+        self.text_preprocessor = BLIP2CausalLMPreprocessor(
             tokenizer=tokenizer,
             image_converter=None,
             sequence_length=10,
         )
-        language_model = Blip2CustomOPT(
-            vocabulary_size=9,
+        language_model = BLIP2CustomOPT(
+            vocabulary_size=11,
             num_layers=2,
             num_heads=2,
             hidden_dim=4,
@@ -52,7 +54,7 @@ class Blip2CausalLMTest(TestCase):
             dropout=0.0,
             language_projection=None,
         )
-        text_backbone = Blip2Backbone(
+        text_backbone = BLIP2Backbone(
             vision_encoder=None,
             qformer=None,
             language_model=language_model,
@@ -65,12 +67,12 @@ class Blip2CausalLMTest(TestCase):
         self.text_input_data = self.text_preprocessor(*self.text_train_data)[0]
 
         # === Vision + Text model ===
-        self.preprocessor = Blip2CausalLMPreprocessor(
+        self.preprocessor = BLIP2CausalLMPreprocessor(
             tokenizer=tokenizer,
-            image_converter=Blip2ImageConverter(image_size=(32, 32)),
+            image_converter=BLIP2ImageConverter(image_size=(32, 32)),
             sequence_length=10,
         )
-        vision_encoder = Blip2VisionEncoder(
+        vision_encoder = BLIP2VisionEncoder(
             image_size=32,
             patch_size=8,
             num_layers=2,
@@ -85,7 +87,7 @@ class Blip2CausalLMTest(TestCase):
             layer_norm_epsilon=1e-5,
             initializer_range=0.02,
         )
-        qformer = Blip2QFormer(
+        qformer = BLIP2QFormer(
             num_query_tokens=4,
             num_layers=2,
             num_heads=2,
@@ -96,8 +98,8 @@ class Blip2CausalLMTest(TestCase):
             dropout=0.0,
             layer_norm_epsilon=1e-5,
         )
-        language_model_v = Blip2CustomOPT(
-            vocabulary_size=9,
+        language_model_v = BLIP2CustomOPT(
+            vocabulary_size=11,
             num_layers=2,
             num_heads=2,
             hidden_dim=4,
@@ -108,7 +110,7 @@ class Blip2CausalLMTest(TestCase):
             dropout=0.0,
             language_projection=None,
         )
-        backbone = Blip2Backbone(
+        backbone = BLIP2Backbone(
             vision_encoder=vision_encoder,
             qformer=qformer,
             language_model=language_model_v,
@@ -127,22 +129,22 @@ class Blip2CausalLMTest(TestCase):
 
     def test_causal_lm_basics(self):
         self.run_task_test(
-            cls=Blip2CausalLM,
+            cls=BLIP2CausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 10, 9),
+            expected_output_shape=(2, 10, 11),
         )
 
     def test_text_causal_lm_basics(self):
         self.run_task_test(
-            cls=Blip2CausalLM,
+            cls=BLIP2CausalLM,
             init_kwargs=self.text_init_kwargs,
             train_data=self.text_train_data,
-            expected_output_shape=(2, 10, 9),
+            expected_output_shape=(2, 10, 11),
         )
 
     def test_generate_compilation(self):
-        causal_lm = Blip2CausalLM(**self.init_kwargs)
+        causal_lm = BLIP2CausalLM(**self.init_kwargs)
         # Check generate with default compile
         causal_lm.generate(self.input_data)
         # Check generate with custom sampler
@@ -150,7 +152,7 @@ class Blip2CausalLMTest(TestCase):
         causal_lm.generate(self.input_data)
 
     def test_early_stopping(self):
-        causal_lm = Blip2CausalLM(**self.init_kwargs)
+        causal_lm = BLIP2CausalLM(**self.init_kwargs)
 
         def wrapper(token_ids, cache, cache_update_index, **kwargs):
             batch_size = token_ids.shape[0]
@@ -164,7 +166,7 @@ class Blip2CausalLMTest(TestCase):
             self.assertEqual(["t", "t"], output)
 
     def test_text_early_stopping(self):
-        causal_lm = Blip2CausalLM(**self.text_init_kwargs)
+        causal_lm = BLIP2CausalLM(**self.text_init_kwargs)
 
         def wrapper(token_ids, cache, cache_update_index, **kwargs):
             batch_size = token_ids.shape[0]
@@ -179,7 +181,7 @@ class Blip2CausalLMTest(TestCase):
 
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=Blip2CausalLM,
+            cls=BLIP2CausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             atol=5e-3,
@@ -187,7 +189,7 @@ class Blip2CausalLMTest(TestCase):
 
     def test_text_saved_model(self):
         self.run_model_saving_test(
-            cls=Blip2CausalLM,
+            cls=BLIP2CausalLM,
             init_kwargs=self.text_init_kwargs,
             input_data=self.text_input_data,
             atol=5e-3,
@@ -196,9 +198,9 @@ class Blip2CausalLMTest(TestCase):
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
-        for preset in Blip2CausalLM.presets:
+        for preset in BLIP2CausalLM.presets:
             self.run_preset_test(
-                cls=Blip2CausalLM,
+                cls=BLIP2CausalLM,
                 preset=preset,
                 input_data=self.input_data,
             )
