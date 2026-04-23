@@ -27,10 +27,15 @@ class SmolVLM2BackboneTest(TestCase):
             "layer_norm_epsilon": 1e-5,
             "vision_layer_norm_epsilon": 1e-6,
         }
-        # Text-only input — the __call__ override injects dummy vision.
+        # Provide all four required functional-model inputs so that both
+        # eager __call__ *and* jit-traced predict() paths work correctly.
+        # (predict → stateless_call bypasses the __call__ override that
+        # would otherwise inject dummy vision tensors.)
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),
             "padding_mask": ops.ones((2, 5), dtype="int32"),
+            "pixel_values": ops.zeros((2, 32, 32, 3), dtype="float32"),
+            "vision_indices": ops.zeros((2, 0), dtype="int32"),
         }
 
     def test_backbone_basics(self):
@@ -39,6 +44,9 @@ class SmolVLM2BackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 5, 64),
+            # Prevent default sequence-axis slicing which would corrupt
+            # the 4D pixel_values tensor.
+            variable_length_data=[self.input_data],
             run_mixed_precision_check=False,
             run_quantization_check=False,
         )
