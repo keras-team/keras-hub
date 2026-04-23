@@ -671,7 +671,7 @@ def main(_) -> None:
         vision_dim=1408,
         cross_attention_frequency=2,
         dropout=0.1,
-        layer_norm_epsilon=1e-5,
+        layer_norm_epsilon=1e-12,
     )
     qf.build((None, 257, 1408))
     transfer_qformer_weights(qf, hf_model)
