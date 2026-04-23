@@ -398,6 +398,9 @@ from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier import (
 from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier_preprocessor import (
     HGNetV2ImageClassifierPreprocessor as HGNetV2ImageClassifierPreprocessor,
 )
+from keras_hub.src.models.hiera.hiera_backbone import (
+    HieraBackbone as HieraBackbone,
+)
 from keras_hub.src.models.image_classifier import (
     ImageClassifier as ImageClassifier,
 )
