@@ -2,11 +2,11 @@
 
 import numpy as np
 
-from keras_hub.src.models.blip2.blip2_vision_encoder import Blip2VisionEncoder
+from keras_hub.src.models.blip2.blip2_vision_encoder import BLIP2VisionEncoder
 from keras_hub.src.tests.test_case import TestCase
 
 
-class Blip2VisionEncoderTest(TestCase):
+class BLIP2VisionEncoderTest(TestCase):
     def setUp(self):
         self.image_size = 32
         self.patch_size = 8
@@ -30,16 +30,16 @@ class Blip2VisionEncoderTest(TestCase):
         )
 
     def test_vision_encoder_basics(self):
-        encoder = Blip2VisionEncoder(**self.init_kwargs)
+        encoder = BLIP2VisionEncoder(**self.init_kwargs)
         self.run_serialization_test(encoder)
         output = encoder(self.input_data)
         num_patches = (self.image_size // self.patch_size) ** 2
         self.assertEqual(output.shape, (2, num_patches + 1, 8))
-        
+
     def test_non_square_image(self):
         # and keras.Input shape=(H, W, 3) instead of (S, S, 3)
         kwargs = {**self.init_kwargs, "image_size": (32, 64)}
-        encoder = Blip2VisionEncoder(**kwargs)
+        encoder = BLIP2VisionEncoder(**kwargs)
         input_data = np.ones((2, 32, 64, 3), dtype="float32")
         output = encoder(input_data)
         num_patches = (32 // self.patch_size) * (64 // self.patch_size)
@@ -47,7 +47,7 @@ class Blip2VisionEncoderTest(TestCase):
 
     def test_no_class_token(self):
         kwargs = {**self.init_kwargs, "use_class_token": False}
-        encoder = Blip2VisionEncoder(**kwargs)
+        encoder = BLIP2VisionEncoder(**kwargs)
         output = encoder(self.input_data)
         num_patches = (self.image_size // self.patch_size) ** 2
         self.assertEqual(output.shape, (2, num_patches, 8))
@@ -55,8 +55,7 @@ class Blip2VisionEncoderTest(TestCase):
     def test_patch_size_controls_sequence_length(self):
         patch_size = 4
         kwargs = {**self.init_kwargs, "patch_size": patch_size}
-        encoder = Blip2VisionEncoder(**kwargs)
+        encoder = BLIP2VisionEncoder(**kwargs)
         output = encoder(self.input_data)
         num_patches = (self.image_size // patch_size) ** 2
         self.assertEqual(output.shape, (2, num_patches + 1, 8))
-

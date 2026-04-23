@@ -5,8 +5,8 @@ from keras_hub.src.models.vit.vit_layers import ViTEncoder
 from keras_hub.src.models.vit.vit_layers import ViTPatchingAndEmbedding
 
 
-@keras_hub_export("keras_hub.models.Blip2VisionEncoder")
-class Blip2VisionEncoder(keras.Model):
+@keras_hub_export("keras_hub.models.BLIP2VisionEncoder")
+class BLIP2VisionEncoder(keras.Model):
     """EVA-CLIP vision encoder for BLIP-2.
 
     A Vision Transformer (ViT) that encodes images into patch-level feature
@@ -37,7 +37,7 @@ class Blip2VisionEncoder(keras.Model):
 
     Example:
     ```python
-    encoder = Blip2VisionEncoder(
+    encoder = keras_hub.models.BLIP2VisionEncoder(
         image_size=224, patch_size=14, num_layers=39, num_heads=16,
         hidden_dim=1408, intermediate_dim=6144,
         use_patch_bias=True, use_class_token=True,
@@ -70,9 +70,7 @@ class Blip2VisionEncoder(keras.Model):
         h, w = (image_size, image_size) if isinstance(image_size, int) else image_size
         ph, pw = (patch_size, patch_size) if isinstance(patch_size, int) else patch_size
         # === Functional graph ===
-        image_input = keras.Input(
-            shape=(h, w, 3), name="images"
-        )
+        image_input = keras.Input(shape=(h, w, 3), name="images")
 
         x = ViTPatchingAndEmbedding(
             image_size=(h, w),
@@ -120,8 +118,12 @@ class Blip2VisionEncoder(keras.Model):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.initializer_range = initializer_range
         # works for both square and non-square
-        image_size = (image_size, image_size) if isinstance(image_size, int) else image_size
-        patch_size = (patch_size, patch_size) if isinstance(patch_size, int) else patch_size
+        image_size = (
+            (image_size, image_size) if isinstance(image_size, int) else image_size
+        )
+        patch_size = (
+            (patch_size, patch_size) if isinstance(patch_size, int) else patch_size
+        )
 
         self.num_vision_tokens_per_image = (
             (image_size[0] // patch_size[0]) * (image_size[1] // patch_size[1])
