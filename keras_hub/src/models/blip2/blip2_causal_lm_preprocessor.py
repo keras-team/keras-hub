@@ -1,21 +1,21 @@
 """BLIP-2 causal LM preprocessor."""
 
 import keras
-
+import tensorflow as tf
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.blip2.blip2_backbone import Blip2Backbone
-from keras_hub.src.models.blip2.blip2_image_converter import Blip2ImageConverter
-from keras_hub.src.models.blip2.blip2_tokenizer import Blip2Tokenizer
+from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
+from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter
+from keras_hub.src.models.blip2.blip2_tokenizer import BLIP2Tokenizer
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
-@keras_hub_export("keras_hub.models.Blip2CausalLMPreprocessor")
-class Blip2CausalLMPreprocessor(CausalLMPreprocessor):
+@keras_hub_export("keras_hub.models.BLIP2CausalLMPreprocessor")
+class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
     """Multimodal preprocessor for the BLIP-2 Causal LM.
 
     This preprocessing layer is meant for use with
-    `keras_hub.models.Blip2CausalLM`. It can be configured in two ways:
+    `keras_hub.models.BLIP2CausalLM`. It can be configured in two ways:
     text-only and text + vision, based on whether the passed value of
     `image_converter` is `None`. For the former, it takes in batches of
     strings. For the latter, it takes in batches of images and strings.
@@ -24,14 +24,14 @@ class Blip2CausalLMPreprocessor(CausalLMPreprocessor):
 
     For use with generation, the layer also exposes two methods
     `generate_preprocess()` and `generate_postprocess()`. When this
-    preprocessor is attached to a `keras_hub.models.Blip2CausalLM` instance,
+    preprocessor is attached to a `keras_hub.models.BLIP2CausalLM` instance,
     these methods will be called implicitly in `generate()`. They can also be
     called standalone (e.g. to precompute preprocessing inputs for generation
     in a separate process).
 
     Args:
-        tokenizer: A `keras_hub.models.Blip2Tokenizer` instance.
-        image_converter: A `keras_hub.models.Blip2ImageConverter` instance, or
+        tokenizer: A `keras_hub.models.BLIP2Tokenizer` instance.
+        image_converter: A `keras_hub.models.BLIP2ImageConverter` instance, or
             `None`. If `None`, the preprocessor operates in text-only mode.
         sequence_length: int. The maximum length of the packed token sequence.
             Defaults to `512`.
@@ -43,7 +43,7 @@ class Blip2CausalLMPreprocessor(CausalLMPreprocessor):
     Examples:
     ```python
     # Load from a preset.
-    preprocessor = keras_hub.models.Blip2CausalLMPreprocessor.from_preset(
+    preprocessor = keras_hub.models.BLIP2CausalLMPreprocessor.from_preset(
         "blip2_opt_2_7b"
     )
 
@@ -73,9 +73,9 @@ class Blip2CausalLMPreprocessor(CausalLMPreprocessor):
         - [Li et al., 2023](https://arxiv.org/abs/2301.12597)
     """
 
-    backbone_cls = Blip2Backbone
-    tokenizer_cls = Blip2Tokenizer
-    image_converter_cls = Blip2ImageConverter
+    backbone_cls = BLIP2Backbone
+    tokenizer_cls = BLIP2Tokenizer
+    image_converter_cls = BLIP2ImageConverter
 
     def __init__(
         self,
@@ -123,6 +123,16 @@ class Blip2CausalLMPreprocessor(CausalLMPreprocessor):
         )
         x_text, y_label, sw = processed
 
+        if keras.config.backend() == "torch":
+            y_label = tf.where(
+                tf.equal(y_label, -1),
+                tf.cast(-100, y_label.dtype),
+                y_label,
+            )
+
+
+
+
         x_out = {
             "token_ids": x_text["token_ids"],
             "padding_mask": x_text["padding_mask"],
@@ -167,9 +177,7 @@ class Blip2CausalLMPreprocessor(CausalLMPreprocessor):
                 "not `None`. Pass `image_converter` to enable vision inputs."
             )
 
-        x_text = super().generate_preprocess(
-            text, sequence_length=sequence_length
-        )
+        x_text = super().generate_preprocess(text, sequence_length=sequence_length)
 
         x_out = {
             "token_ids": x_text["token_ids"],
