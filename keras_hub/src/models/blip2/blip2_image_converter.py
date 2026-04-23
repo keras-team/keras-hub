@@ -2,11 +2,13 @@
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
-from keras_hub.src.models.blip2.blip2_backbone import Blip2Backbone
+from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
 
 
-@keras_hub_export("keras_hub.layers.Blip2ImageConverter",)
-class Blip2ImageConverter(ImageConverter):
+@keras_hub_export(
+    "keras_hub.layers.BLIP2ImageConverter",
+)
+class BLIP2ImageConverter(ImageConverter):
     """A preprocessing layer for images used by the BLIP-2 model.
 
     This converter resizes, normalizes, and rescales images to the format
@@ -31,7 +33,7 @@ class Blip2ImageConverter(ImageConverter):
 
     Example:
     ```python
-    converter = keras_hub.models.Blip2ImageConverter()
+    converter = keras_hub.layers.BLIP2ImageConverter()
     images = np.random.randint(0, 256, (1, 500, 500, 3))
     processed = converter(images)  # shape: (1, 224, 224, 3)
     ```
@@ -40,7 +42,7 @@ class Blip2ImageConverter(ImageConverter):
         - [Li et al., 2023](https://arxiv.org/abs/2301.12597)
     """
 
-    backbone_cls = Blip2Backbone
+    backbone_cls = BLIP2Backbone
 
     # EVA-CLIP normalization statistics (mean and std per RGB channel).
     # scale  = 1 / std,  offset = -mean / std
