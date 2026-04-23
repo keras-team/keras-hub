@@ -171,8 +171,8 @@ class QFormerLayer(keras.layers.Layer):
         return config
 
 
-@keras_hub_export("keras_hub.models.Blip2QFormer")
-class Blip2QFormer(keras.Model):
+@keras_hub_export("keras_hub.models.BLIP2QFormer")
+class BLIP2QFormer(keras.Model):
     """Querying Transformer (Q-Former) for BLIP-2.
 
     The Q-Former is a lightweight transformer that bridges the gap between a
