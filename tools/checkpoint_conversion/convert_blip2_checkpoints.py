@@ -434,15 +434,18 @@ def transfer_qformer_weights(keras_qformer, hf_model) -> None:
     for i, keras_layer in enumerate(keras_qformer.transformer_layers):
         pt_prefix = f"encoder.layer.{i}."
         copy_attention(keras_layer.self_attention, f"{pt_prefix}attention.")
-        if keras_layer.has_cross_attention:
+
+        has_cross_attention = (
+            keras_layer.has_cross_attention
+            and f"{pt_prefix}crossattention.attention.query.weight" in pt_state
+        )
+        if has_cross_attention:
             copy_attention(
                 keras_layer.cross_attention,
                 f"{pt_prefix}crossattention.",
                 is_cross=True,
             )
-        keras_layer.intermediate_dense.weights[0].assign(
-            to_np(pt_state[f"{pt_prefix}intermediate_query.dense.weight"]).T
-        )
+
         keras_layer.intermediate_dense.weights[1].assign(
             to_np(pt_state[f"{pt_prefix}intermediate_query.dense.bias"])
         )
@@ -661,7 +664,7 @@ def main(_) -> None:
         hidden_dim=768,
         intermediate_dim=3072,
         vision_dim=1408,
-        cross_attention_frequency=1,
+        cross_attention_frequency=2,
         dropout=0.1,
         layer_norm_epsilon=1e-5,
     )
