@@ -53,8 +53,15 @@ class SafetensorLoader(contextlib.ExitStack):
         Returns:
             str: The full key including the prefix (if any).
         """
+        # Check for exact matches first to handle mixed
+        # root/nested weight maps.
+        if hf_weight_key in dict_like.keys():
+            return hf_weight_key
+
         if self.prefix is not None:
-            return self.prefix + hf_weight_key
+            full_key = self.prefix + hf_weight_key
+            if full_key in dict_like.keys():
+                return full_key
 
         for full_key in dict_like.keys():
             if full_key.endswith(hf_weight_key) and full_key != hf_weight_key:

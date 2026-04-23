@@ -15,6 +15,8 @@ from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gemma3
+from keras_hub.src.utils.transformers import convert_gemma3n
+from keras_hub.src.utils.transformers import convert_gemma4
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
@@ -24,11 +26,13 @@ from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
+from keras_hub.src.utils.transformers import convert_qwen3_5
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_sam3
 from keras_hub.src.utils.transformers import convert_smollm3
 from keras_hub.src.utils.transformers import convert_t5gemma
+from keras_hub.src.utils.transformers import convert_t5gemma2
 from keras_hub.src.utils.transformers import convert_vit
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
@@ -57,6 +61,10 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma
         elif model_type in ("gemma3", "gemma3_text"):
             self.converter = convert_gemma3
+        elif model_type == "gemma3n":
+            self.converter = convert_gemma3n
+        elif model_type in ("gemma4", "gemma4_text"):
+            self.converter = convert_gemma4
         elif model_type == "gpt2":
             self.converter = convert_gpt2
         elif model_type == "gpt_oss":
@@ -82,12 +90,16 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen3_moe
         elif model_type == "qwen3":
             self.converter = convert_qwen3
+        elif model_type == "qwen3_5":
+            self.converter = convert_qwen3_5
         elif model_type == "sam3_video":
             self.converter = convert_sam3
         elif model_type == "smollm3":
             self.converter = convert_smollm3
         elif model_type == "t5gemma":
             self.converter = convert_t5gemma
+        elif model_type == "t5gemma2":
+            self.converter = convert_t5gemma2
         else:
             raise ValueError(
                 "KerasHub has no converter for huggingface/transformers models "
@@ -146,3 +158,32 @@ class TransformersPresetLoader(PresetLoader):
                 return cls(**{**config, **kwargs})
         # TODO: set image size for pali gemma checkpoints.
         return None
+
+    def load_audio_converter(self, cls, **kwargs):
+        if hasattr(self.converter, "load_audio_converter_config"):
+            config = self.converter.load_audio_converter_config(
+                self.preset, self.config
+            )
+            if config is not None:
+                return cls(**{**config, **kwargs})
+        return None
+
+    def load_video_converter(self, cls, **kwargs):
+        if hasattr(self.converter, "load_video_converter_config"):
+            config = self.converter.load_video_converter_config(
+                self.preset, self.config
+            )
+            if config is not None:
+                return cls(**{**config, **kwargs})
+        return None
+
+    def load_preprocessor(self, cls, config_file=None, **kwargs):
+        if hasattr(self.converter, "load_preprocessor_config"):
+            extra = self.converter.load_preprocessor_config(
+                self.preset, self.config
+            )
+            if extra:
+                kwargs = {**extra, **kwargs}
+        if config_file is not None:
+            return super().load_preprocessor(cls, config_file, **kwargs)
+        return super().load_preprocessor(cls, **kwargs)
