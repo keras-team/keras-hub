@@ -452,6 +452,9 @@ def transfer_qformer_weights(keras_qformer, hf_model) -> None:
         keras_layer.intermediate_dense.weights[1].assign(
             to_np(pt_state[f"{pt_prefix}intermediate_query.dense.bias"])
         )
+        keras_layer.output_dense.weights[0].assign(
+            to_np(pt_state[f"{pt_prefix}output_query.dense.weight"]).T
+        )
         keras_layer.output_dense.weights[1].assign(
             to_np(pt_state[f"{pt_prefix}output_query.dense.bias"])
         )
