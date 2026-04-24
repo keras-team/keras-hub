@@ -299,6 +299,17 @@ class BLIP2CustomOPT(keras.Model):
                 "qformer_hidden_dim": self.qformer_hidden_dim,
                 "initializer_range": self.initializer_range,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
+                "language_projection": keras.layers.serialize(
+                    self.language_projection
+                ),
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        if config.get("language_projection") is not None:
+            config["language_projection"] = keras.layers.deserialize(
+                config["language_projection"]
+            )
+        return cls(**config)

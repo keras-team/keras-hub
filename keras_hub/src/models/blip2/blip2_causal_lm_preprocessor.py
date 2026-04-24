@@ -100,8 +100,8 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
         """Run the image converter on a batch of raw images."""
         return self.image_converter(images)
 
-    @preprocessing_function
-    def call(self, x, y=None, sample_weight=None, sequence_length=None):
+    def _parse_inputs(self, x):
+        """Parse multimodal inputs (images and text) from x."""
         if isinstance(x, dict):
             images = x.get("images")
             text = x.get("text")
@@ -114,6 +114,11 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
                 "The initialized preprocessor is text-only, but `images` is "
                 "not `None`. Pass `image_converter` to enable vision inputs."
             )
+        return images, text
+
+    @preprocessing_function
+    def call(self, x, y=None, sample_weight=None, sequence_length=None):
+        images, text = self._parse_inputs(x)
 
         processed = super().call(
             text,
@@ -154,18 +159,7 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
         if isinstance(x, dict) and "token_ids" in x:
             return x
 
-        if isinstance(x, dict):
-            images = x.get("images")
-            text = x.get("text")
-        else:
-            images = None
-            text = x
-
-        if images is not None and self.text_only_model:
-            raise ValueError(
-                "The initialized preprocessor is text-only, but `images` is "
-                "not `None`. Pass `image_converter` to enable vision inputs."
-            )
+        images, text = self._parse_inputs(x)
 
         x_text = super().generate_preprocess(
             text, sequence_length=sequence_length
