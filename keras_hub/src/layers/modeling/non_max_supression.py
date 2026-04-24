@@ -238,7 +238,7 @@ def non_max_suppression(
     num_boxes = boxes.shape[-2]
     boxes = ops.reshape(boxes, [-1, num_boxes, 4])
     scores = ops.reshape(scores, [-1, num_boxes])
-    batch_size = boxes.shape[0]
+    batch_size = ops.shape(boxes)[0]
     if score_threshold != float("-inf"):
         score_mask = ops.cast(scores > score_threshold, scores.dtype)
         scores *= score_mask
@@ -469,7 +469,7 @@ def _suppression_loop_body(boxes, iou_threshold, output_size, idx, tile_size):
         idx: the updated induction variable.
     """
     num_tiles = boxes.shape[1] // tile_size
-    batch_size = boxes.shape[0]
+    batch_size = ops.shape(boxes)[0]
 
     def cross_suppression_func(boxes, box_slice, iou_threshold, inner_idx):
         return _cross_suppression(

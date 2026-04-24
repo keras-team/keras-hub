@@ -451,9 +451,9 @@ def target_gather(
 
         def assign_when_rows_empty():
             if len(labels.shape) > 1:
-                mask_shape = [match_indices.shape[0], labels.shape[-1]]
+                mask_shape = [ops.shape(match_indices)[0], labels.shape[-1]]
             else:
-                mask_shape = [match_indices.shape[0]]
+                mask_shape = [ops.shape(match_indices)[0]]
             return ops.cast(mask_val, labels.dtype) * ops.ones(
                 mask_shape, dtype=labels.dtype
             )
