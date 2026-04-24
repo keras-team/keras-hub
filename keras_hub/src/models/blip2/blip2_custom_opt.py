@@ -227,7 +227,7 @@ class BLIP2CustomOPT(keras.Model):
                 ops.ones_like(qformer_features_input[..., 0]), "bool"
             )
             full_padding_mask = ops.concatenate(
-                [vis_mask, padding_mask_input], axis=1
+                [vis_mask, ops.cast(padding_mask_input, "bool")], axis=1
             )
         else:
             x = embeddings_layer(token_ids_input)  # only called once now
