@@ -1,3 +1,5 @@
+"""Convert SmolVLM2 weights from Hugging Face to KerasHub."""
+
 import numpy as np
 
 from keras_hub.src.models.smolvlm2.smolvlm2_backbone import SmolVLM2Backbone
@@ -16,21 +18,34 @@ def convert_backbone_config(transformers_config):
     text_config = transformers_config["text_config"]
     vision_config = transformers_config["vision_config"]
 
+    # Some presets (e.g. 2.2B) omit num_attention_heads from text_config,
+    # providing head_dim instead.  Compute it as hidden_size / head_dim,
+    # matching HF LlamaConfig's resolution logic.
+    if "num_attention_heads" in text_config:
+        num_query_heads = text_config["num_attention_heads"]
+    else:
+        num_query_heads = text_config["hidden_size"] // text_config["head_dim"]
+
+    # num_key_value_heads for the LLM decoder may also be absent
+    # (note: perceiver_config.num_key_value_heads is for the resampler,
+    #  NOT the decoder).  HF LlamaConfig defaults it to num_attention_heads.
+    num_kv_heads = text_config.get("num_key_value_heads", num_query_heads)
+
     return {
         "vocabulary_size": text_config["vocab_size"],
         "image_size": vision_config["image_size"],
         "patch_size": vision_config["patch_size"],
-        "vision_hidden_dim": vision_config["hidden_size"],
-        # 256M/500M presets omit these two keys from their raw JSON;
-        # HF resolves them via SmolVLMVisionConfig class defaults.
+        # Keys omitted from some presets (e.g. 2.2B); defaults match
+        # HF SmolVLMVisionConfig class defaults.
+        "vision_hidden_dim": vision_config.get("hidden_size", 1152),
         "vision_intermediate_dim": vision_config.get("intermediate_size", 3072),
         "vision_num_layers": vision_config.get("num_hidden_layers", 12),
-        "vision_num_heads": vision_config["num_attention_heads"],
+        "vision_num_heads": vision_config.get("num_attention_heads", 16),
         "hidden_dim": text_config["hidden_size"],
         "intermediate_dim": text_config["intermediate_size"],
         "num_layers": text_config["num_hidden_layers"],
-        "num_query_heads": text_config["num_attention_heads"],
-        "num_key_value_heads": text_config["num_key_value_heads"],
+        "num_query_heads": num_query_heads,
+        "num_key_value_heads": num_kv_heads,
         "scale_factor": transformers_config["scale_factor"],
         "image_token_id": transformers_config["image_token_id"],
         "rope_max_wavelength": text_config["rope_theta"],
@@ -295,36 +310,58 @@ def _load_preprocessor_config(preset):
     return load_json(preset, "preprocessor_config.json")
 
 
-def load_image_converter_config(preset, transformers_config):
-    """Return kwargs for SmolVLM2ImageConverter."""
-    preprocessor_config = _load_preprocessor_config(preset)
+def _load_vision_normalization_config(preset):
+    """Load shared normalization, interpolation, and max_image_size config.
 
-    max_image_size_dict = preprocessor_config["max_image_size"]
-    size_dict = preprocessor_config["size"]
+    Returns a dict with ``scale``, ``offset``, ``interpolation``,
+    ``antialias``, ``max_image_size``, and the raw
+    ``preprocessor_config`` for caller-specific fields.
+    """
+    preprocessor_config = _load_preprocessor_config(preset)
 
     image_mean = preprocessor_config["image_mean"]
     image_std = preprocessor_config["image_std"]
     rescale_factor = preprocessor_config["rescale_factor"]
 
-    do_image_splitting = preprocessor_config["do_image_splitting"]
-
-    # Map PIL resample enum to Keras interpolation string.
-    # PIL: 0=NEAREST, 1=LANCZOS, 2=BILINEAR, 3=BICUBIC.
-    # PyTorch doesn't support lanczos; use bicubic as closest match.
-    _pil_to_keras = {0: "nearest", 1: "bicubic", 2: "bilinear", 3: "bicubic"}
-    resample = preprocessor_config.get("resample", 1)
-    interpolation = _pil_to_keras.get(resample, "bicubic")
-
     scale, offset = _compute_scale_offset(image_mean, image_std, rescale_factor)
 
     return {
-        # Disable base class resizing — our converter handles it.
-        "image_size": None,
-        "max_image_size": max_image_size_dict["longest_edge"],
-        "size": size_dict["longest_edge"],
-        "do_image_splitting": do_image_splitting,
         "scale": scale,
         "offset": offset,
-        "interpolation": interpolation,
+        "interpolation": "bicubic",
         "antialias": True,
+        "max_image_size": preprocessor_config["max_image_size"]["longest_edge"],
+        "_preprocessor_config": preprocessor_config,
     }
+
+
+def load_image_converter_config(preset, transformers_config):
+    """Return kwargs for SmolVLM2ImageConverter."""
+    shared = _load_vision_normalization_config(preset)
+    cfg = shared.pop("_preprocessor_config")
+
+    shared.update(
+        {
+            # Disable base class resizing — our converter handles it.
+            "image_size": None,
+            "size": cfg["size"]["longest_edge"],
+            "do_image_splitting": cfg["do_image_splitting"],
+        }
+    )
+    return shared
+
+
+def load_video_converter_config(preset, transformers_config):
+    """Return kwargs for SmolVLM2VideoConverter."""
+    shared = _load_vision_normalization_config(preset)
+    cfg = shared.pop("_preprocessor_config")
+
+    video_sampling = cfg["video_sampling"]
+    shared.update(
+        {
+            "size": video_sampling["video_size"]["longest_edge"],
+            "num_frames": video_sampling["max_frames"],
+            "fps": video_sampling["fps"],
+        }
+    )
+    return shared

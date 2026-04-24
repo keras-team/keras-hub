@@ -1,14 +1,21 @@
+"""Tests for SmolVLM2CausalLMPreprocessor."""
+
 import numpy as np
 from keras import ops
 
-from keras_hub.src.models.smolvlm2 import smolvlm2_causal_lm_preprocessor
 from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor import (
     SmolVLM2CausalLMPreprocessor,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor import (
+    _get_image_prompt_string,
 )
 from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
     SmolVLM2ImageConverter,
 )
 from keras_hub.src.models.smolvlm2.smolvlm2_tokenizer import SmolVLM2Tokenizer
+from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
+    SmolVLM2VideoConverter,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -135,10 +142,6 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
 
     def test_prompt_expansion_unsplit(self):
         """Unsplit image produces <fake><global-img><image>×N<fake> format."""
-        _get_image_prompt_string = (
-            smolvlm2_causal_lm_preprocessor._get_image_prompt_string
-        )
-
         result = _get_image_prompt_string(
             image_seq_len=3,
             image_rows=0,
@@ -154,10 +157,6 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
 
     def test_prompt_expansion_split(self):
         """Split image produces per-patch <row_R_col_C> + global view."""
-        _get_image_prompt_string = (
-            smolvlm2_causal_lm_preprocessor._get_image_prompt_string
-        )
-
         result = _get_image_prompt_string(
             image_seq_len=2,
             image_rows=2,
@@ -191,3 +190,78 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
         eou_id = self.tokenizer.end_of_utterance_token_id
         self.assertEqual(ids[0], start_id)
         self.assertEqual(ids[-1], eou_id)
+
+    def test_generate_preprocess_with_video(self):
+        """Video prompt with <video> produces vision keys."""
+        video_converter = SmolVLM2VideoConverter(
+            max_image_size=32,
+            size=64,
+            num_frames=3,
+            fps=1,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+            interpolation="bicubic",
+        )
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            video_converter=video_converter,
+            sequence_length=512,
+            image_seq_len=4,
+        )
+
+        # Fake video: 6 frames of 48x64.
+        video = np.random.randint(0, 256, size=(6, 48, 64, 3)).astype("uint8")
+        prompt = (
+            "<|im_start|>User:<video>describe<end_of_utterance>\nAssistant:"
+        )
+
+        x = preprocessor.generate_preprocess(
+            {"prompts": prompt, "videos": video}
+        )
+
+        self.assertIn("token_ids", x)
+        self.assertIn("padding_mask", x)
+        self.assertIn("pixel_values", x)
+        self.assertIn("vision_indices", x)
+
+        # pixel_values should be (3, 32, 32, 3) — 3 sampled frames.
+        pixel_values = ops.convert_to_numpy(x["pixel_values"])
+        self.assertEqual(pixel_values.shape[0], 3)
+        self.assertEqual(pixel_values.shape[1], 32)
+        self.assertEqual(pixel_values.shape[2], 32)
+        self.assertEqual(pixel_values.shape[3], 3)
+
+        # vision_indices should contain <image> token positions.
+        vision_indices = ops.convert_to_numpy(x["vision_indices"])
+        self.assertGreater(len(vision_indices), 0)
+
+    def test_video_prompt_expansion(self):
+        """Video prompt string has per-frame timestamps."""
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            sequence_length=32,
+            image_seq_len=2,
+        )
+        if not preprocessor.built:
+            preprocessor.build(None)
+
+        prompt = preprocessor._get_video_prompt_string(
+            num_frames=3,
+            metadata={"fps": 1, "duration": 3},
+        )
+
+        # Should contain video intro.
+        self.assertIn("3 frames", prompt)
+        self.assertIn("[H:MM:SS]", prompt)
+
+        # Should have per-frame timestamps.
+        self.assertIn("Frame from 00:00:", prompt)
+        self.assertIn("Frame from 00:01:", prompt)
+        self.assertIn("Frame from 00:02:", prompt)
+
+        # Each frame gets image_seq_len=2 <image> tokens.
+        self.assertEqual(prompt.count("<image>"), 6)  # 3 frames × 2
+
+        # Each frame wrapped with <fake_token_around_image>.
+        self.assertIn("<fake_token_around_image>", prompt)
+        self.assertIn("<global-img>", prompt)

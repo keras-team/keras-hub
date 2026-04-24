@@ -1,3 +1,5 @@
+"""CausalLM preprocessor for SmolVLM2 models."""
+
 import re
 
 import keras
@@ -15,7 +17,18 @@ from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
     SmolVLM2ImageConverter,
 )
 from keras_hub.src.models.smolvlm2.smolvlm2_tokenizer import SmolVLM2Tokenizer
+from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
+    SmolVLM2VideoConverter,
+)
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+
+# HF-compatible video prompt templates.
+DEFAULT_VIDEO_INTRO = (
+    "You are provided the following series of {frame_count} frames "
+    "from a {video_duration} [H:MM:SS] video.\n"
+)
+DEFAULT_MEDIA_OUTTRO = "\n\n"
+FRAME_TIMESTAMP_MESSAGE = "\nFrame from {timestamp}:"
 
 
 def _get_image_prompt_string(
@@ -98,6 +111,7 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
     Args:
         tokenizer: A ``SmolVLM2Tokenizer`` instance.
         image_converter: A ``SmolVLM2ImageConverter`` instance or ``None``.
+        video_converter: A ``SmolVLM2VideoConverter`` instance or ``None``.
         sequence_length: int. Maximum sequence length. Default ``1024``.
         add_start_token: bool. Whether to prepend BOS. Default ``False``
             (matching HF's ``add_bos_token``).
@@ -110,11 +124,13 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
     backbone_cls = SmolVLM2Backbone
     tokenizer_cls = SmolVLM2Tokenizer
     image_converter_cls = SmolVLM2ImageConverter
+    video_converter_cls = SmolVLM2VideoConverter
 
     def __init__(
         self,
         tokenizer,
         image_converter=None,
+        video_converter=None,
         sequence_length=1024,
         add_start_token=False,
         add_end_token=True,
@@ -129,7 +145,12 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             **kwargs,
         )
         self.image_converter = image_converter
+        self.video_converter = video_converter
         self.image_seq_len = image_seq_len
+        # Per-video metadata: list of dicts with "fps" and optionally
+        # "duration" and "frames_indices". Set before calling
+        # generate_preprocess for accurate timestamps.
+        self.video_metadata = None
 
     def build(self, input_shape):
         self.packer = MultiSegmentPacker(
@@ -387,6 +408,124 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         return {"pixel_values": pixel_values, "rows": rows, "cols": cols}
 
     # ------------------------------------------------------------------
+    # Video preprocessing
+    # ------------------------------------------------------------------
+    def _preprocess_video(self, videos):
+        """Process video through the video converter.
+
+        Handles lists, 4-D tensors (T, H, W, 3), and 5-D batched
+        tensors.  Currently supports one video per prompt.
+
+        Args:
+            videos: A single video (4-D), or a list of videos.
+        Returns:
+            dict with ``pixel_values`` (num_frames, ms, ms, 3) and
+            ``num_frames`` int.
+        """
+        if isinstance(videos, (list, tuple)):
+            video = videos[0]
+            if hasattr(video, "shape") and len(video.shape) == 5:
+                video = video[0]
+        elif hasattr(videos, "shape") and len(videos.shape) == 5:
+            video = videos[0]
+        elif hasattr(videos, "shape") and len(videos.shape) == 4:
+            video = videos
+        else:
+            video = videos
+
+        if self.video_converter is not None:
+            result = self.video_converter(video)
+            pixel_values = result["pixel_values"]
+            num_frames = int(result["num_frames"])
+        else:
+            # Fallback: treat each frame as an unsplit image.
+            pixel_values = video
+            num_frames = int(ops.shape(video)[0])
+
+        if not isinstance(pixel_values, np.ndarray):
+            pixel_values = ops.convert_to_numpy(pixel_values)
+
+        return {"pixel_values": pixel_values, "num_frames": num_frames}
+
+    def _get_video_prompt_string(
+        self,
+        num_frames,
+        metadata=None,
+    ):
+        """Build the expanded video prompt string.
+
+        Replicates HF's ``expand_text_with_video_tokens``.
+
+        Each frame is wrapped with a timestamp and uses the same
+        single-image prompt as an unsplit image.
+
+        Args:
+            num_frames: int. Number of frames.
+            metadata: dict or None. If provided, should contain
+                ``"fps"`` and optionally ``"duration"``.
+        Returns:
+            str. The expanded prompt fragment.
+        """
+        from datetime import timedelta
+
+        image_token_str = getattr(self.tokenizer, "image_token", "<image>")
+        fake_image_str = getattr(
+            self.tokenizer,
+            "fake_image_token",
+            "<fake_token_around_image>",
+        )
+        global_image_str = getattr(
+            self.tokenizer, "global_image_token", "<global-img>"
+        )
+
+        # Determine per-frame timestamps.
+        fps = 1.0
+        if metadata is not None and "fps" in metadata:
+            fps = metadata["fps"]
+
+        if metadata is not None and "frames_indices" in metadata and fps > 0:
+            timestamps_secs = [idx / fps for idx in metadata["frames_indices"]]
+        else:
+            # Default: sequential frames at given fps.
+            timestamps_secs = [i / fps for i in range(num_frames)]
+
+        # Duration.
+        if metadata is not None and "duration" in metadata:
+            duration_secs = int(metadata["duration"])
+        elif timestamps_secs:
+            duration_secs = int(timestamps_secs[-1])
+        else:
+            duration_secs = 0
+
+        duration_td = timedelta(seconds=duration_secs)
+
+        # Build prompt.
+        prompt = DEFAULT_VIDEO_INTRO.format(
+            frame_count=str(num_frames),
+            video_duration=str(duration_td),
+        )
+
+        for ts in timestamps_secs:
+            minutes = int(ts) // 60
+            seconds = int(ts) % 60
+            timestamp_str = f"{minutes:02d}:{seconds:02d}"
+            frame_prompt = _get_image_prompt_string(
+                image_seq_len=self.image_seq_len,
+                image_rows=0,
+                image_cols=0,
+                fake_token_around_image=fake_image_str,
+                image_token=image_token_str,
+                global_image_token=global_image_str,
+            )
+            prompt += (
+                FRAME_TIMESTAMP_MESSAGE.format(timestamp=timestamp_str)
+                + frame_prompt
+            )
+
+        prompt += DEFAULT_MEDIA_OUTTRO
+        return prompt
+
+    # ------------------------------------------------------------------
     # generate_preprocess
     # ------------------------------------------------------------------
     @preprocessing_function
@@ -414,13 +553,15 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         # Handle both dict and string inputs.
         if isinstance(x, dict):
             images = x.get("images", None)
+            videos = x.get("videos", None)
             prompts = x["prompts"]
         else:
             images = None
+            videos = None
             prompts = x
 
         # ------ Text-only path ------
-        if images is None:
+        if images is None and videos is None:
             prompts = self.tokenizer(prompts)
             token_ids, segment_ids = self.packer(
                 (prompts,),
@@ -434,38 +575,67 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
                 "padding_mask": padding_mask,
             }
 
-        # ------ Multimodal path ------
-        # Process image through the converter (Qwen3.5 pattern).
-        image_output = self._preprocess_images(images)
-        pixel_values = image_output["pixel_values"]
-        image_rows = int(image_output["rows"])
-        image_cols = int(image_output["cols"])
+        # ------ Image path ------
+        if images is not None:
+            image_output = self._preprocess_images(images)
+            pixel_values = image_output["pixel_values"]
+            image_rows = int(image_output["rows"])
+            image_cols = int(image_output["cols"])
 
-        # Extract prompt string.
-        prompt_str = self._extract_prompt_string(prompts)
+            prompt_str = self._extract_prompt_string(prompts)
 
-        # Get special token strings.
-        image_token_str = getattr(self.tokenizer, "image_token", "<image>")
-        fake_image_str = getattr(
-            self.tokenizer,
-            "fake_image_token",
-            "<fake_token_around_image>",
-        )
-        global_image_str = getattr(
-            self.tokenizer, "global_image_token", "<global-img>"
-        )
+            image_token_str = getattr(self.tokenizer, "image_token", "<image>")
+            fake_image_str = getattr(
+                self.tokenizer,
+                "fake_image_token",
+                "<fake_token_around_image>",
+            )
+            global_image_str = getattr(
+                self.tokenizer, "global_image_token", "<global-img>"
+            )
 
-        # Expand each <image> placeholder with HF's format.
-        image_prompt = _get_image_prompt_string(
-            image_seq_len=self.image_seq_len,
-            image_rows=image_rows,
-            image_cols=image_cols,
-            fake_token_around_image=fake_image_str,
-            image_token=image_token_str,
-            global_image_token=global_image_str,
-        )
-        # Replace the first <image> in the prompt.
-        expanded_prompt = prompt_str.replace(image_token_str, image_prompt, 1)
+            image_prompt = _get_image_prompt_string(
+                image_seq_len=self.image_seq_len,
+                image_rows=image_rows,
+                image_cols=image_cols,
+                fake_token_around_image=fake_image_str,
+                image_token=image_token_str,
+                global_image_token=global_image_str,
+            )
+            expanded_prompt = prompt_str.replace(
+                image_token_str, image_prompt, 1
+            )
+
+        # ------ Video path ------
+        elif videos is not None:
+            video_output = self._preprocess_video(videos)
+            pixel_values = video_output["pixel_values"]
+            num_frames = video_output["num_frames"]
+
+            prompt_str = self._extract_prompt_string(prompts)
+
+            # Get per-video metadata.
+            metadata = None
+            if self.video_metadata is not None:
+                if isinstance(self.video_metadata, (list, tuple)):
+                    metadata = self.video_metadata[0]
+                else:
+                    metadata = self.video_metadata
+
+            # <video> is a chat-template marker, not a vocab token.
+            video_token_str = "<video>"
+            video_prompt = self._get_video_prompt_string(
+                num_frames=num_frames,
+                metadata=metadata,
+            )
+            expanded_prompt = prompt_str.replace(
+                video_token_str, video_prompt, 1
+            )
+        else:
+            raise ValueError(
+                "generate_preprocess received dict without 'images' or "
+                "'videos' key."
+            )
 
         # Tokenize with special token handling.
         special_map = self._build_special_token_map()
