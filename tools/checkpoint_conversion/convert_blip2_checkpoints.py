@@ -497,11 +497,9 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
         to_np(pt_dec.embed_tokens.weight)
     )
 
-
     keras_opt.embeddings_layer.position_embedding.weights[0].assign(
         to_np(pt_dec.embed_positions.weight)
     )
-
 
     for i in range(keras_opt.num_layers):
         p = f"layers.{i}."
@@ -551,9 +549,9 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
     layer0 = keras_opt.transformer_layers[0]
     _spot = [
         (
-        "token_embedding",
-        keras_opt.embeddings_layer.token_embedding.weights[0],
-        to_np(pt_dec.embed_tokens.weight),
+            "token_embedding",
+            keras_opt.embeddings_layer.token_embedding.weights[0],
+            to_np(pt_dec.embed_tokens.weight),
         ),
         (
             "position_embedding (row 34 = first text pos)",

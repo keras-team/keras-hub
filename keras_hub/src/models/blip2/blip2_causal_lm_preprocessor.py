@@ -1,7 +1,6 @@
 """BLIP-2 causal LM preprocessor."""
 
 import keras
-import tensorflow as tf
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
 from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter
@@ -122,7 +121,7 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
             sequence_length=sequence_length,
         )
         x_text, y_label, sw = processed
-        
+
         x_out = {
             "token_ids": x_text["token_ids"],
             "padding_mask": x_text["padding_mask"],

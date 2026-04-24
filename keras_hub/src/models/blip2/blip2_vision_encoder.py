@@ -1,4 +1,4 @@
-"""BLIP-2 Vision Encoder"""
+"""BLIP-2 vision encoder."""
 
 import keras
 

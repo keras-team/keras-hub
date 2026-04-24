@@ -30,8 +30,8 @@ class BLIP2CausalLMTest(TestCase):
             "h": 6,
             "e": 7,
             "<image>": 8,
-            "Ġt": 9,   
-            "he": 10, 
+            "Ġt": 9,
+            "he": 10,
         }
         merges = ["Ġ t", "h e"]
         tokenizer = BLIP2Tokenizer(vocabulary=vocab, merges=merges)

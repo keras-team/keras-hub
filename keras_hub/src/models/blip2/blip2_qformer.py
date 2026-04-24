@@ -10,7 +10,9 @@ from keras_hub.src.api_export import keras_hub_export
 class QFormerAttention(keras.layers.Layer):
     """Single attention block (self or cross) with post-LN residual."""
 
-    def __init__(self, num_heads, hidden_dim, kv_dim, layer_norm_epsilon, dropout, **kwargs):
+    def __init__(
+        self, num_heads, hidden_dim, kv_dim, layer_norm_epsilon, dropout, **kwargs
+    ):
         super().__init__(**kwargs)
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
@@ -38,7 +40,9 @@ class QFormerAttention(keras.layers.Layer):
 
     def build(self, inputs_shape):
         # inputs_shape is either a single shape or [query_shape, kv_shape]
-        if isinstance(inputs_shape, (list, tuple)) and isinstance(inputs_shape[0], (list, tuple)):
+        if isinstance(inputs_shape, (list, tuple)) and isinstance(
+            inputs_shape[0], (list, tuple)
+        ):
             query_shape, kv_shape = inputs_shape[0], inputs_shape[1]
         else:
             query_shape = inputs_shape
@@ -145,7 +149,9 @@ class QFormerLayer(keras.layers.Layer):
     def build(self, inputs_shape):
         # When called from the functional graph with [query_tokens, vision_input],
         # Keras passes inputs_shape as a list of two shapes.
-        if isinstance(inputs_shape, (list, tuple)) and isinstance(inputs_shape[0], (list, tuple)):
+        if isinstance(inputs_shape, (list, tuple)) and isinstance(
+            inputs_shape[0], (list, tuple)
+        ):
             query_shape = inputs_shape[0]
             vision_shape = inputs_shape[1] if len(inputs_shape) > 1 else None
         else:
@@ -298,9 +304,7 @@ class BLIP2QFormer(keras.Model):
             for i in range(num_layers)
         ]
 
-        vision_input = keras.Input(
-            shape=(None, vision_dim), name="vision_features"
-        )
+        vision_input = keras.Input(shape=(None, vision_dim), name="vision_features")
 
         query_tokens = query_tokens_layer(vision_input)
         query_tokens = layer_norm(query_tokens)
