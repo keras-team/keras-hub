@@ -86,27 +86,33 @@ class BLIP2CausalLM(CausalLM):
     def _normalize_generate_inputs(self, inputs):
         """Normalizes raw inputs into a batched list for generation."""
         if self.preprocessor is None:
-            return [inputs], False
+            return [inputs], False  # `return inputs, False`
 
-        def normalize(x):
+        def normalize_text(x):
             if isinstance(x, str):
                 return [x], True
             return x, False
 
+        # Single string
+        if isinstance(inputs, str):
+            return [inputs], True
+
+        # Dict sample
         if isinstance(inputs, dict):
             if "text" in inputs:
-                inputs["text"], input_is_scalar = normalize(inputs["text"])
+                inputs["text"], input_is_scalar = normalize_text(inputs["text"])
             else:
                 input_is_scalar = False
 
             if input_is_scalar and "images" in inputs:
                 x = inputs["images"]
                 if isinstance(x, np.ndarray) and x.ndim == 3:
-                    inputs["images"] = [x]
-        else:
-            inputs, input_is_scalar = normalize(inputs)
+                    inputs["images"] = x[None, ...]
 
-        return [inputs], input_is_scalar
+            return [inputs], input_is_scalar
+
+        # Already a list of samples — don't wrap
+        return [inputs], False
 
     def _encode_images(self, images):
         """Run vision encoder → Q-Former → language projection."""
@@ -292,9 +298,6 @@ class BLIP2CausalLM(CausalLM):
             )
         elif stop_token_ids == "auto":
             stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
-
-        if not isinstance(inputs, dict):
-            inputs = {"text": inputs}
 
         return super().generate(
             inputs,
