@@ -1,3 +1,5 @@
+"""Tokenizer for SmolVLM2 models."""
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.smolvlm2.smolvlm2_backbone import SmolVLM2Backbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
@@ -53,9 +55,12 @@ class SmolVLM2Tokenizer(BytePairTokenizer):
         image_token = "<image>"
         self._add_special_token(image_token, "image_token")
 
-        # End of utterance token.
+        # End of utterance token — also acts as a second stop token
+        # for generation (SmolVLM2 chat format ends assistant turns
+        # with <end_of_utterance>, not <|im_end|>).
         eou_token = "<end_of_utterance>"
         self._add_special_token(eou_token, "end_of_utterance_token")
+        self._add_special_token(eou_token, "end_token2")
 
         # Fake token around image (sentinel wrapping expanded image
         # sequences).
