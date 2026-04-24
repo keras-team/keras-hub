@@ -191,7 +191,7 @@ class BLIP2CustomOPT(keras.Model):
         # === Functional Model ===
         token_ids_input = keras.Input(shape=(None,), dtype="int32", name="token_ids")
         padding_mask_input = keras.Input(
-            shape=(None,), dtype="bool", name="padding_mask"
+            shape=(None,), dtype="int32", name="padding_mask"
         )
         inputs = {
             "token_ids": token_ids_input,
