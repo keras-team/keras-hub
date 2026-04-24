@@ -101,7 +101,7 @@ class BLIP2CausalLM(CausalLM):
 
             if input_is_scalar and "images" in inputs:
                 x = inputs["images"]
-                if isinstance(x, (np.ndarray, list)) and len(np.shape(x)) == 3:
+                if isinstance(x, np.ndarray) and x.ndim == 3:
                     inputs["images"] = [x]
         else:
             inputs, input_is_scalar = normalize(inputs)
