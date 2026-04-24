@@ -94,7 +94,7 @@ class BLIP2Backbone(Backbone):
             images_input = keras.Input(
                 shape=(image_size, image_size, 3),
                 dtype="float32",
-                name="images",
+                name="pixel_values",
             )
             inputs["images"] = images_input
 
