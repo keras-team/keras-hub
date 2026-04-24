@@ -76,6 +76,27 @@ class CachedOPTAttention(keras.layers.Layer):
             (b, t, self.hidden_dim),
         )
 
+    # ── FIX: Keras cannot infer output shape when call() has a conditional
+    #         return (tensor vs tuple). compute_output_spec() short-circuits
+    #         symbolic tracing so variables are never double-initialized.
+    def compute_output_spec(
+        self,
+        x,
+        attention_mask=None,
+        cache=None,
+        cache_update_index=0,
+        training=None,
+    ):
+        # Output always mirrors input shape (B, T, hidden_dim)
+        output = keras.KerasTensor(x.shape, dtype=x.dtype)
+
+        # Use explicit None check — KerasTensor truthiness is unreliable
+        if cache is not None:
+            new_cache = keras.KerasTensor(cache.shape, dtype=cache.dtype)
+            return output, new_cache
+
+        return output
+
     def call(
         self,
         x,
@@ -219,6 +240,28 @@ class OPTDecoderBlock(keras.layers.Layer):
 
         bool_mask = ops.expand_dims(bool_mask, axis=1)
         return ops.cast(ops.logical_not(bool_mask), x.dtype) * -1e9
+
+    # ── FIX: Same conditional-return problem as CachedOPTAttention.
+    #         Declaring compute_output_spec() prevents Keras from re-tracing
+    #         call() symbolically after variables are already initialized,
+    #         which is what caused "Variable ... is already initialized".
+    def compute_output_spec(
+        self,
+        x,
+        padding_mask=None,
+        cache=None,
+        cache_update_index=0,
+        training=None,
+    ):
+        # Output shape always matches input shape (B, T, hidden_dim)
+        output = keras.KerasTensor(x.shape, dtype=x.dtype)
+
+        # Explicit None check — never rely on KerasTensor truthiness
+        if cache is not None:
+            new_cache = keras.KerasTensor(cache.shape, dtype=cache.dtype)
+            return output, new_cache
+
+        return output
 
     def call(
         self,
