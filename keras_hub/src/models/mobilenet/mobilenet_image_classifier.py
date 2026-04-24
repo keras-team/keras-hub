@@ -70,6 +70,7 @@ class MobileNetImageClassifier(ImageClassifier):
 
         # === Config ===
         self.num_classes = num_classes
+        self.head_dtype = head_dtype
         self.num_features = num_features
 
     def get_config(self):
@@ -79,6 +80,7 @@ class MobileNetImageClassifier(ImageClassifier):
             {
                 "num_classes": self.num_classes,
                 "num_features": self.num_features,
+                "head_dtype": keras.dtype_policies.serialize(self.head_dtype),
             }
         )
         return config
