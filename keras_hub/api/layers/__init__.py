@@ -198,6 +198,9 @@ from keras_hub.src.models.siglip.siglip_image_converter import (
 from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
     SmolVLM2ImageConverter as SmolVLM2ImageConverter,
 )
+from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
+    SmolVLM2VideoConverter as SmolVLM2VideoConverter,
+)
 from keras_hub.src.models.swin_transformer.swin_transformer_image_converter import (
     SwinTransformerImageConverter as SwinTransformerImageConverter,
 )
