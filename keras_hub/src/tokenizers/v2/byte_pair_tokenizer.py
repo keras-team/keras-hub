@@ -5,11 +5,16 @@ from typing import Iterable
 
 import keras
 import numpy as np
-import tokenizers
+try:
+    import tokenizers
+    from tokenizers import decoders
+    from tokenizers import models
+    from tokenizers import pre_tokenizers
+except ImportError:
+    tokenizers = None
 from keras.src.saving import serialization_lib
-from tokenizers import decoders
-from tokenizers import models
-from tokenizers import pre_tokenizers
+
+
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
@@ -107,6 +112,11 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         dtype="int32",
         **kwargs,
     ):
+        if tokenizers is None:
+            raise ImportError(
+                "BytePairTokenizer requires the `tokenizers` library. "
+                "Please install it with `pip install tokenizers`."
+            )
         if not is_int_dtype(dtype) and not is_string_dtype(dtype):
             raise ValueError(
                 "Output dtype must be an integer type or a string. "
