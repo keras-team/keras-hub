@@ -153,8 +153,9 @@ class BLIP2CausalLM(CausalLM):
                 full_padding_mask = ops.concatenate([visual_mask, text_mask], axis=1)
 
         else:
-            position_ids = ops.reshape(
-                ops.cast(cache_update_index + 2, "int32"), (1, 1)
+            batch_size = ops.shape(token_ids)[0]
+            position_ids = ops.broadcast_to(
+                ops.cast(cache_update_index + 2, "int32"), (batch_size, 1)
             )
             token_embeds = lm.embeddings_layer(token_ids, position_ids=position_ids)
             x = token_embeds
