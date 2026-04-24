@@ -1,6 +1,7 @@
 """BLIP-2 causal LM preprocessor."""
 
 import keras
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
 from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter
@@ -166,7 +167,9 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
                 "not `None`. Pass `image_converter` to enable vision inputs."
             )
 
-        x_text = super().generate_preprocess(text, sequence_length=sequence_length)
+        x_text = super().generate_preprocess(
+            text, sequence_length=sequence_length
+        )
 
         x_out = {
             "token_ids": x_text["token_ids"],

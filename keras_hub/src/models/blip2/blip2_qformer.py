@@ -11,7 +11,13 @@ class QFormerAttention(keras.layers.Layer):
     """Single attention block (self or cross) with post-LN residual."""
 
     def __init__(
-        self, num_heads, hidden_dim, kv_dim, layer_norm_epsilon, dropout, **kwargs
+        self,
+        num_heads,
+        hidden_dim,
+        kv_dim,
+        layer_norm_epsilon,
+        dropout,
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.num_heads = num_heads
@@ -147,8 +153,9 @@ class QFormerLayer(keras.layers.Layer):
         )
 
     def build(self, inputs_shape):
-        # When called from the functional graph with [query_tokens, vision_input],
-        # Keras passes inputs_shape as a list of two shapes.
+        # When called from the functional graph with
+        # [query_tokens, vision_input], Keras passes inputs_shape as a list of
+        # two shapes.
         if isinstance(inputs_shape, (list, tuple)) and isinstance(
             inputs_shape[0], (list, tuple)
         ):
@@ -304,7 +311,9 @@ class BLIP2QFormer(keras.Model):
             for i in range(num_layers)
         ]
 
-        vision_input = keras.Input(shape=(None, vision_dim), name="vision_features")
+        vision_input = keras.Input(
+            shape=(None, vision_dim), name="vision_features"
+        )
 
         query_tokens = query_tokens_layer(vision_input)
         query_tokens = layer_norm(query_tokens)

@@ -19,7 +19,9 @@ class BLIP2QFormerTest(TestCase):
             "dropout": 0.0,
             "layer_norm_epsilon": 1e-12,
         }
-        self.vision_features = np.random.uniform(size=(2, 257, 128)).astype("float32")
+        self.vision_features = np.random.uniform(size=(2, 257, 128)).astype(
+            "float32"
+        )
 
     def test_qformer_output_shape(self):
         qformer = BLIP2QFormer(**self.init_kwargs)

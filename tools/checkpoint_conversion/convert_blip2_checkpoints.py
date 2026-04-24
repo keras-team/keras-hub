@@ -27,17 +27,25 @@ from PIL import Image  # noqa: E402
 from transformers import Blip2ForConditionalGeneration  # noqa: E402
 from transformers import Blip2Processor  # noqa: E402
 
-from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone  # noqa: E402
-from keras_hub.src.models.blip2.blip2_causal_lm import BLIP2CausalLM  # noqa: E402
+from keras_hub.src.models.blip2.blip2_backbone import (
+    BLIP2Backbone,  # noqa: E402
+)
+from keras_hub.src.models.blip2.blip2_causal_lm import (
+    BLIP2CausalLM,  # noqa: E402
+)
 from keras_hub.src.models.blip2.blip2_causal_lm_preprocessor import (  # noqa: E402
     BLIP2CausalLMPreprocessor,
 )
-from keras_hub.src.models.blip2.blip2_custom_opt import BLIP2CustomOPT  # noqa: E402
+from keras_hub.src.models.blip2.blip2_custom_opt import (
+    BLIP2CustomOPT,  # noqa: E402
+)
 from keras_hub.src.models.blip2.blip2_image_converter import (  # noqa: E402
     BLIP2ImageConverter,
 )
 from keras_hub.src.models.blip2.blip2_qformer import BLIP2QFormer  # noqa: E402
-from keras_hub.src.models.blip2.blip2_tokenizer import BLIP2Tokenizer  # noqa: E402
+from keras_hub.src.models.blip2.blip2_tokenizer import (
+    BLIP2Tokenizer,  # noqa: E402
+)
 from keras_hub.src.models.blip2.blip2_vision_encoder import (  # noqa: E402
     BLIP2VisionEncoder,
 )
@@ -113,7 +121,9 @@ def validate_vision_encoder(keras_vision, hf_model) -> bool:
 
     image_pt = torch.tensor(image_np).permute(0, 3, 1, 2)
     with torch.no_grad():
-        pt_out = to_np(hf_model.vision_model(pixel_values=image_pt).last_hidden_state)
+        pt_out = to_np(
+            hf_model.vision_model(pixel_values=image_pt).last_hidden_state
+        )
 
     keras_out = to_np(keras_vision(image_np))
 
@@ -123,7 +133,9 @@ def validate_vision_encoder(keras_vision, hf_model) -> bool:
     return _report_diff("Vision encoder hidden states", keras_out, pt_out)
 
 
-def validate_qformer(keras_qformer, hf_model, vision_features_np: np.ndarray) -> bool:
+def validate_qformer(
+    keras_qformer, hf_model, vision_features_np: np.ndarray
+) -> bool:
     _print_header("Q-FORMER VALIDATION")
 
     vision_pt = torch.tensor(vision_features_np)
@@ -145,7 +157,9 @@ def validate_qformer(keras_qformer, hf_model, vision_features_np: np.ndarray) ->
     return _report_diff("Q-Former query outputs", keras_out, pt_out)
 
 
-def validate_projection(keras_proj, hf_model, qformer_out_np: np.ndarray) -> bool:
+def validate_projection(
+    keras_proj, hf_model, qformer_out_np: np.ndarray
+) -> bool:
     _print_header("PROJECTION VALIDATION")
 
     qformer_pt = torch.tensor(qformer_out_np)
@@ -164,7 +178,9 @@ def validate_projection(keras_proj, hf_model, qformer_out_np: np.ndarray) -> boo
     return _report_diff("Projection outputs", keras_out, pt_out)
 
 
-def validate_opt(keras_opt, hf_model, qformer_out_np: np.ndarray, hf_processor) -> bool:
+def validate_opt(
+    keras_opt, hf_model, qformer_out_np: np.ndarray, hf_processor
+) -> bool:
     _print_header("OPT (LANGUAGE MODEL) VALIDATION")
 
     hf_inputs = hf_processor(
@@ -177,8 +193,12 @@ def validate_opt(keras_opt, hf_model, qformer_out_np: np.ndarray, hf_processor) 
     text_len = int(text_ids_pt.shape[1])
 
     with torch.no_grad():
-        projected_pt = hf_model.language_projection(torch.tensor(qformer_out_np))
-        text_embeds = hf_model.language_model.model.decoder.embed_tokens(text_ids_pt)
+        projected_pt = hf_model.language_projection(
+            torch.tensor(qformer_out_np)
+        )
+        text_embeds = hf_model.language_model.model.decoder.embed_tokens(
+            text_ids_pt
+        )
         inputs_embeds = torch.cat([projected_pt, text_embeds], dim=1)
         attention_mask = torch.ones(1, inputs_embeds.shape[1], dtype=torch.long)
         hf_lm_out = hf_model.language_model(
@@ -216,12 +236,16 @@ def validate_opt(keras_opt, hf_model, qformer_out_np: np.ndarray, hf_processor) 
     )
 
 
-def validate_output(keras_backbone, keras_preprocessor, hf_model, hf_processor) -> None:
+def validate_output(
+    keras_backbone, keras_preprocessor, hf_model, hf_processor
+) -> None:
     _print_header("FULL PIPELINE — FORWARD PASS")
 
     keras_params = keras_backbone.count_params()
     hf_params = sum(
-        p.numel() for name, p in hf_model.named_parameters() if "lm_head" not in name
+        p.numel()
+        for name, p in hf_model.named_parameters()
+        if "lm_head" not in name
     )
     print("🔶 Parameter count comparison:")
     print(f"   -> KerasHub    : {keras_params:,}")
@@ -256,7 +280,9 @@ def validate_output(keras_backbone, keras_preprocessor, hf_model, hf_processor) 
     keras_hidden = keras_backbone(keras_inputs)
 
     lm = keras_backbone.language_model
-    keras_logits_full = lm.embeddings_layer.token_embedding(keras_hidden, reverse=True)
+    keras_logits_full = lm.embeddings_layer.token_embedding(
+        keras_hidden, reverse=True
+    )
     keras_text_logits = to_np(keras_logits_full[:, _NUM_QUERY_TOKENS:, :])
 
     print(f"   -> HF    logits shape : {hf_text_logits.shape}")
@@ -288,7 +314,9 @@ def validate_generate(keras_causal_lm, hf_model, hf_processor) -> None:
         strip_prompt=True,
     )
     keras_text = (
-        keras_output[0] if isinstance(keras_output, (list, tuple)) else keras_output
+        keras_output[0]
+        if isinstance(keras_output, (list, tuple))
+        else keras_output
     )
 
     hf_inputs = hf_processor(
@@ -325,7 +353,9 @@ def transfer_vision_weights(keras_vision, hf_vision) -> None:
         to_np(pt_state["embeddings.class_embedding"]).reshape(1, 1, 1408)
     )
     k_weights[1].assign(
-        to_np(pt_state["embeddings.patch_embedding.weight"]).transpose(2, 3, 1, 0)
+        to_np(pt_state["embeddings.patch_embedding.weight"]).transpose(
+            2, 3, 1, 0
+        )
     )
     k_weights[2].assign(to_np(pt_state["embeddings.patch_embedding.bias"]))
     k_weights[3].assign(
@@ -337,7 +367,9 @@ def transfer_vision_weights(keras_vision, hf_vision) -> None:
         pt_prefix = f"encoder.layers.{i}."
 
         k_weights[idx].assign(to_np(pt_state[f"{pt_prefix}layer_norm1.weight"]))
-        k_weights[idx + 1].assign(to_np(pt_state[f"{pt_prefix}layer_norm1.bias"]))
+        k_weights[idx + 1].assign(
+            to_np(pt_state[f"{pt_prefix}layer_norm1.bias"])
+        )
 
         qkv_w = pt_state[f"{pt_prefix}self_attn.qkv.weight"]
         qkv_b = pt_state[f"{pt_prefix}self_attn.qkv.bias"]
@@ -352,20 +384,28 @@ def transfer_vision_weights(keras_vision, hf_vision) -> None:
         k_weights[idx + 7].assign(to_np(v_b).reshape(16, 88))
 
         k_weights[idx + 8].assign(
-            to_np(pt_state[f"{pt_prefix}self_attn.projection.weight"]).T.reshape(
-                16, 88, 1408
-            )
+            to_np(
+                pt_state[f"{pt_prefix}self_attn.projection.weight"]
+            ).T.reshape(16, 88, 1408)
         )
         k_weights[idx + 9].assign(
             to_np(pt_state[f"{pt_prefix}self_attn.projection.bias"])
         )
 
-        k_weights[idx + 10].assign(to_np(pt_state[f"{pt_prefix}layer_norm2.weight"]))
-        k_weights[idx + 11].assign(to_np(pt_state[f"{pt_prefix}layer_norm2.bias"]))
+        k_weights[idx + 10].assign(
+            to_np(pt_state[f"{pt_prefix}layer_norm2.weight"])
+        )
+        k_weights[idx + 11].assign(
+            to_np(pt_state[f"{pt_prefix}layer_norm2.bias"])
+        )
 
-        k_weights[idx + 12].assign(to_np(pt_state[f"{pt_prefix}mlp.fc1.weight"]).T)
+        k_weights[idx + 12].assign(
+            to_np(pt_state[f"{pt_prefix}mlp.fc1.weight"]).T
+        )
         k_weights[idx + 13].assign(to_np(pt_state[f"{pt_prefix}mlp.fc1.bias"]))
-        k_weights[idx + 14].assign(to_np(pt_state[f"{pt_prefix}mlp.fc2.weight"]).T)
+        k_weights[idx + 14].assign(
+            to_np(pt_state[f"{pt_prefix}mlp.fc2.weight"]).T
+        )
         k_weights[idx + 15].assign(to_np(pt_state[f"{pt_prefix}mlp.fc2.bias"]))
         idx += 16
 
@@ -387,7 +427,9 @@ def transfer_qformer_weights(keras_qformer, hf_model) -> None:
     keras_qformer.layer_norm.weights[0].assign(to_np(pt_qf.layernorm.weight))
     keras_qformer.layer_norm.weights[1].assign(to_np(pt_qf.layernorm.bias))
 
-    def copy_attention(keras_attn, pt_prefix: str, is_cross: bool = False) -> None:
+    def copy_attention(
+        keras_attn, pt_prefix: str, is_cross: bool = False
+    ) -> None:
         mha_w = keras_attn.attention.weights
         ln_w = keras_attn.layer_norm.weights
         kv_dim = vision_dim if is_cross else hidden_dim
@@ -515,15 +557,21 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
         layer.self_attn.q_proj.kernel.assign(
             to_np(pt_state[f"{p}self_attn.q_proj.weight"]).T
         )
-        layer.self_attn.q_proj.bias.assign(to_np(pt_state[f"{p}self_attn.q_proj.bias"]))
+        layer.self_attn.q_proj.bias.assign(
+            to_np(pt_state[f"{p}self_attn.q_proj.bias"])
+        )
         layer.self_attn.k_proj.kernel.assign(
             to_np(pt_state[f"{p}self_attn.k_proj.weight"]).T
         )
-        layer.self_attn.k_proj.bias.assign(to_np(pt_state[f"{p}self_attn.k_proj.bias"]))
+        layer.self_attn.k_proj.bias.assign(
+            to_np(pt_state[f"{p}self_attn.k_proj.bias"])
+        )
         layer.self_attn.v_proj.kernel.assign(
             to_np(pt_state[f"{p}self_attn.v_proj.weight"]).T
         )
-        layer.self_attn.v_proj.bias.assign(to_np(pt_state[f"{p}self_attn.v_proj.bias"]))
+        layer.self_attn.v_proj.bias.assign(
+            to_np(pt_state[f"{p}self_attn.v_proj.bias"])
+        )
 
         layer.self_attn.out_proj.kernel.assign(
             to_np(pt_state[f"{p}self_attn.out_proj.weight"]).T
@@ -535,7 +583,9 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
         layer.final_layer_norm.gamma.assign(
             to_np(pt_state[f"{p}final_layer_norm.weight"])
         )
-        layer.final_layer_norm.beta.assign(to_np(pt_state[f"{p}final_layer_norm.bias"]))
+        layer.final_layer_norm.beta.assign(
+            to_np(pt_state[f"{p}final_layer_norm.bias"])
+        )
 
         layer.fc1.kernel.assign(to_np(pt_state[f"{p}fc1.weight"]).T)
         layer.fc1.bias.assign(to_np(pt_state[f"{p}fc1.bias"]))
@@ -631,7 +681,9 @@ def main(_) -> None:
     hf_processor = Blip2Processor.from_pretrained(FLAGS.model_id)
 
     bad_params = [
-        (n, p.dtype) for n, p in hf_model.named_parameters() if p.dtype != torch.float32
+        (n, p.dtype)
+        for n, p in hf_model.named_parameters()
+        if p.dtype != torch.float32
     ]
     if bad_params:
         print("⚠️  Non-fp32 parameters found after cast — forcing individually:")
@@ -688,13 +740,17 @@ def main(_) -> None:
     opt = BLIP2CustomOPT(**opt_config)
 
     dummy_opt_inputs = {
-        "qformer_features": np.zeros((1, _NUM_QUERY_TOKENS, 768), dtype="float32"),
+        "qformer_features": np.zeros(
+            (1, _NUM_QUERY_TOKENS, 768), dtype="float32"
+        ),
         "token_ids": np.zeros((1, 10), dtype="int32"),
         "padding_mask": np.ones((1, 10), dtype="bool"),
     }
     _ = opt(dummy_opt_inputs)
     transfer_opt_weights(opt, hf_model.language_model)
-    transfer_projection_weights(opt.language_projection, hf_model.language_projection)
+    transfer_projection_weights(
+        opt.language_projection, hf_model.language_projection
+    )
 
     backbone = BLIP2Backbone(
         vision_encoder=v_enc,
@@ -719,7 +775,9 @@ def main(_) -> None:
         json.dump(full_vocab, f)
 
     raw_merges = tok_config["model"]["merges"]
-    cleaned_merges = [" ".join(m) if isinstance(m, list) else m for m in raw_merges]
+    cleaned_merges = [
+        " ".join(m) if isinstance(m, list) else m for m in raw_merges
+    ]
     merges_path = os.path.join(FLAGS.output_dir, "merges.txt")
     with open(merges_path, "w") as f:
         f.write("\n".join(cleaned_merges))
@@ -763,7 +821,9 @@ def main(_) -> None:
             ).last_hidden_state
         )
 
-    proj_ok = validate_projection(opt.language_projection, hf_model, qformer_out_np)
+    proj_ok = validate_projection(
+        opt.language_projection, hf_model, qformer_out_np
+    )
     opt_ok = validate_opt(opt, hf_model, qformer_out_np, hf_processor)
 
     validate_output(backbone, preprocessor, hf_model, hf_processor)

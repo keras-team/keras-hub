@@ -107,7 +107,9 @@ class CachedOPTAttention(keras.layers.Layer):
         attn_weights = ops.matmul(q, ops.transpose(k, (0, 1, 3, 2))) * scale
 
         if attention_mask is not None:
-            attn_weights = attn_weights + ops.cast(attention_mask, attn_weights.dtype)
+            attn_weights = attn_weights + ops.cast(
+                attention_mask, attn_weights.dtype
+            )
 
         attn_weights = ops.softmax(attn_weights, axis=-1)
         if self.dropout_rate > 0:
@@ -188,10 +190,14 @@ class OPTDecoderBlock(keras.layers.Layer):
                 dropout, dtype=self.dtype_policy, name="residual_dropout"
             )
 
-    def _compute_attention_mask(self, x, padding_mask, cache, cache_update_index):
+    def _compute_attention_mask(
+        self, x, padding_mask, cache, cache_update_index
+    ):
         batch_size = ops.shape(x)[0]
         output_length = ops.shape(x)[1]
-        input_length = ops.shape(cache)[2] if cache is not None else output_length
+        input_length = (
+            ops.shape(cache)[2] if cache is not None else output_length
+        )
 
         causal_mask = compute_causal_mask(
             batch_size=batch_size,
@@ -205,7 +211,9 @@ class OPTDecoderBlock(keras.layers.Layer):
         )
 
         if decoder_mask is not None:
-            bool_mask = ops.logical_and(causal_mask, ops.cast(decoder_mask, "bool"))
+            bool_mask = ops.logical_and(
+                causal_mask, ops.cast(decoder_mask, "bool")
+            )
         else:
             bool_mask = causal_mask
 
@@ -235,7 +243,9 @@ class OPTDecoderBlock(keras.layers.Layer):
                 training=training,
             )
         else:
-            x = self.self_attn(x, attention_mask=attention_mask, training=training)
+            x = self.self_attn(
+                x, attention_mask=attention_mask, training=training
+            )
             new_cache = None
         if self.dropout_rate > 0:
             x = self.residual_dropout(x, training=training)

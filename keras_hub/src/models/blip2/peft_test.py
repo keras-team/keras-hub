@@ -83,7 +83,9 @@ class BLIP2LoraTest(TestCase):
         new_backbone.enable_lora(rank=4)
         new_backbone.load_weights(path)
 
-        self.assertAllClose(backbone(self.input_data), new_backbone(self.input_data))
+        self.assertAllClose(
+            backbone(self.input_data), new_backbone(self.input_data)
+        )
 
     def test_lora_saving_and_reloading(self):
         backbone = BLIP2Backbone(**self._get_init_kwargs())
@@ -106,10 +108,14 @@ class BLIP2LoraTest(TestCase):
         new_backbone.load_lora_weights(lora_path)
         print("new_backbone lora indices:", new_backbone._lora_enabled_layers)
 
-        self.assertAllClose(backbone(self.input_data), new_backbone(self.input_data))
+        self.assertAllClose(
+            backbone(self.input_data), new_backbone(self.input_data)
+        )
 
         other_backbone = BLIP2Backbone(**self._get_init_kwargs())
-        with self.assertRaisesRegex(ValueError, "There are no lora-enabled layers"):
+        with self.assertRaisesRegex(
+            ValueError, "There are no lora-enabled layers"
+        ):
             other_backbone.save_lora_weights(lora_path)
         other_backbone.enable_lora(rank=8)
         with self.assertRaisesRegex(ValueError, "ranks must match"):

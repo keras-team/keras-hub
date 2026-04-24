@@ -77,7 +77,9 @@ class BLIP2Backbone(Backbone):
         multimodal = self.vision_encoder is not None
 
         # === Inputs ===
-        token_ids_input = keras.Input(shape=(None,), dtype="int32", name="token_ids")
+        token_ids_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
         padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
@@ -142,6 +144,29 @@ class BLIP2Backbone(Backbone):
         """Hidden dimensionality of the Q-Former (0 in text-only mode)."""
         return self.qformer.hidden_dim if self.qformer is not None else 0
 
+    def enable_lora(self, rank):
+        super().enable_lora(rank)
+        # Freeze biases of LoRA-enabled layers so they are fully covered by
+        # save_weights/load_weights (base weights). Without this, biases get
+        # trained but are NOT saved by save_lora_weights(), causing a mismatch
+        # on reload.
+        #
+        # _lora_enabled_layers holds variable indices, not layer indices, so
+        # we derive the affected layer path prefixes from the lora_kernel paths.
+        lora_prefixes = set()
+        for v in self.variables:
+            if "lora_kernel" in v.path:
+                # e.g. "encoder/block_1/mha/query/lora_kernel_a"
+                # → prefix = "encoder/block_1/mha/query"
+                prefix = v.path.rsplit("/lora_kernel", 1)[0]
+                lora_prefixes.add(prefix)
+
+        for v in self.variables:
+            if "bias" in v.path and "lora_kernel" not in v.path:
+                prefix = v.path.rsplit("/bias", 1)[0]
+                if prefix in lora_prefixes:
+                    v.trainable = False
+
     # === Serialization ===
 
     def get_config(self):
@@ -169,5 +194,7 @@ class BLIP2Backbone(Backbone):
         for key in ("vision_encoder", "qformer"):
             if config.get(key) is not None:
                 config[key] = keras.layers.deserialize(config[key])
-        config["language_model"] = keras.layers.deserialize(config["language_model"])
+        config["language_model"] = keras.layers.deserialize(
+            config["language_model"]
+        )
         return cls(**config)

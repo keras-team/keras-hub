@@ -70,8 +70,12 @@ class BLIP2BackboneTest(TestCase):
                 (self.batch_size, self.image_size, self.image_size, 3),
                 dtype="float32",
             ),
-            "token_ids": np.ones((self.batch_size, self.seq_length), dtype="int32"),
-            "padding_mask": np.ones((self.batch_size, self.seq_length), dtype="bool"),
+            "token_ids": np.ones(
+                (self.batch_size, self.seq_length), dtype="int32"
+            ),
+            "padding_mask": np.ones(
+                (self.batch_size, self.seq_length), dtype="bool"
+            ),
         }
 
     def test_backbone_basics(self):

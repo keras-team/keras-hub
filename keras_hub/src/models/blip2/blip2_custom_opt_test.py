@@ -23,7 +23,9 @@ class BLIP2CustomOPTTest(TestCase):
             "language_projection": None,
         }
         self.input_data = {
-            "qformer_features": np.random.uniform(size=(2, 2, 64)).astype("float32"),
+            "qformer_features": np.random.uniform(size=(2, 2, 64)).astype(
+                "float32"
+            ),
             "token_ids": np.ones((2, 5), dtype="int32"),
             "padding_mask": np.ones((2, 5), dtype="bool"),
         }

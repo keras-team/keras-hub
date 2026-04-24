@@ -28,7 +28,8 @@ class BLIP2ImageConverterTest(TestCase):
         inputs = np.ones((224, 224, 3), dtype="float32") * 255.0
         outputs = converter(inputs)
         expected = (
-            255.0 * BLIP2ImageConverter._SCALE[0] + BLIP2ImageConverter._OFFSET[0]
+            255.0 * BLIP2ImageConverter._SCALE[0]
+            + BLIP2ImageConverter._OFFSET[0]
         )
         self.assertAllClose(outputs[0, 0, 0], expected)
 
@@ -37,7 +38,8 @@ class BLIP2ImageConverterTest(TestCase):
         inputs = np.ones((224, 224, 3), dtype="uint8") * 255
         outputs = converter(inputs)
         expected = (
-            255.0 * BLIP2ImageConverter._SCALE[0] + BLIP2ImageConverter._OFFSET[0]
+            255.0 * BLIP2ImageConverter._SCALE[0]
+            + BLIP2ImageConverter._OFFSET[0]
         )
         self.assertAllClose(outputs[0, 0, 0], expected)
 
@@ -59,4 +61,6 @@ class BLIP2ImageConverterTest(TestCase):
         converter_bicubic = BLIP2ImageConverter(interpolation="bicubic")
         converter_nearest = BLIP2ImageConverter(interpolation="nearest")
         inputs = np.random.uniform(size=(100, 100, 3)).astype("float32")
-        self.assertNotAllClose(converter_bicubic(inputs), converter_nearest(inputs))
+        self.assertNotAllClose(
+            converter_bicubic(inputs), converter_nearest(inputs)
+        )

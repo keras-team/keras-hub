@@ -69,7 +69,11 @@ class BLIP2OPTEmbeddings(keras.layers.Layer):
         self.built = True
 
     def call(
-        self, token_ids, position_ids=None, visual_position_ids=None, training=None
+        self,
+        token_ids,
+        position_ids=None,
+        visual_position_ids=None,
+        training=None,
     ):
         token_embeds = self.token_embedding(token_ids, training=training)
         if position_ids is None:
@@ -189,7 +193,9 @@ class BLIP2CustomOPT(keras.Model):
             )
 
         # === Functional Model ===
-        token_ids_input = keras.Input(shape=(None,), dtype="int32", name="token_ids")
+        token_ids_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
         padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
@@ -217,8 +223,12 @@ class BLIP2CustomOPT(keras.Model):
 
             x = ops.concatenate([projected_qf, x], axis=1)
 
-            vis_mask = ops.cast(ops.ones_like(qformer_features_input[..., 0]), "bool")
-            full_padding_mask = ops.concatenate([vis_mask, padding_mask_input], axis=1)
+            vis_mask = ops.cast(
+                ops.ones_like(qformer_features_input[..., 0]), "bool"
+            )
+            full_padding_mask = ops.concatenate(
+                [vis_mask, padding_mask_input], axis=1
+            )
         else:
             x = embeddings_layer(token_ids_input)  # only called once now
             full_padding_mask = padding_mask_input

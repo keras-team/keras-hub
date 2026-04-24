@@ -114,7 +114,9 @@ class BLIP2CausalLM(CausalLM):
             images = ops.expand_dims(images, axis=0)
         vision_features = self.backbone.vision_encoder(images)
         qformer_features = self.backbone.qformer(vision_features)
-        return self.backbone.language_model.language_projection(qformer_features)
+        return self.backbone.language_model.language_projection(
+            qformer_features
+        )
 
     def call_with_cache(
         self,
@@ -134,7 +136,9 @@ class BLIP2CausalLM(CausalLM):
             visual_pos_ids = ops.expand_dims(
                 ops.arange(2, 2 + num_visual, dtype="int32"), axis=0
             )
-            visual_pos_embeds = lm.embeddings_layer.position_embedding(visual_pos_ids)
+            visual_pos_embeds = lm.embeddings_layer.position_embedding(
+                visual_pos_ids
+            )
             projected_features = projected_features + ops.cast(
                 visual_pos_embeds, projected_features.dtype
             )
@@ -150,14 +154,18 @@ class BLIP2CausalLM(CausalLM):
             else:
                 text_len = ops.shape(token_ids)[1]
                 text_mask = ops.ones((batch_size, text_len), dtype="bool")
-                full_padding_mask = ops.concatenate([visual_mask, text_mask], axis=1)
+                full_padding_mask = ops.concatenate(
+                    [visual_mask, text_mask], axis=1
+                )
 
         else:
             batch_size = ops.shape(token_ids)[0]
             position_ids = ops.broadcast_to(
                 ops.cast(cache_update_index + 2, "int32"), (batch_size, 1)
             )
-            token_embeds = lm.embeddings_layer(token_ids, position_ids=position_ids)
+            token_embeds = lm.embeddings_layer(
+                token_ids, position_ids=position_ids
+            )
             x = token_embeds
             full_padding_mask = None
 
@@ -165,7 +173,9 @@ class BLIP2CausalLM(CausalLM):
             x, full_padding_mask, cache, cache_update_index
         )
 
-        logits = lm.embeddings_layer.token_embedding(hidden_states, reverse=True)
+        logits = lm.embeddings_layer.token_embedding(
+            hidden_states, reverse=True
+        )
 
         if projected_features is not None:
             logits = logits[:, num_visual:, :]
