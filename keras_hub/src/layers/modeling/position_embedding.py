@@ -12,7 +12,7 @@ class PositionEmbedding(keras.layers.Layer):
     to the features, and the dimension before the last corresponds to the
     sequence.
 
-    This layer does not supporting masking, but can be combined with a
+    This layer supports masking, and can be combined with a
     `keras.layers.Embedding` for padding mask support.
 
     Args:
@@ -75,6 +75,7 @@ class PositionEmbedding(keras.layers.Layer):
             )
         self.sequence_length = int(sequence_length)
         self.initializer = keras.initializers.get(initializer)
+        self.supports_masking = True
 
     def get_config(self):
         config = super().get_config()
@@ -85,6 +86,9 @@ class PositionEmbedding(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_mask(self, inputs, mask=None):
+        return mask
 
     def build(self, inputs_shape):
         feature_size = inputs_shape[-1]
