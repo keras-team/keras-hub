@@ -1,286 +1,195 @@
-import base64
-import binascii
 import os
 
-import keras
+import tensorflow as tf
 from keras.src.saving import serialization_lib
 
-from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.tokenizers import tokenizer
-from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
-from keras_hub.src.utils.tensor_utils import is_int_dtype
-from keras_hub.src.utils.tensor_utils import is_string_dtype
-from keras_hub.src.utils.tensor_utils import preprocessing_function
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
-try:
-    import tensorflow_text as tf_text
-except ImportError:
-    tf_text = None
-import sentencepiece as spm
-
-VOCAB_FILENAME = "vocabulary.spm"
+from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
+    SentencePieceTokenizer,
+)
 
 
-@keras_hub_export("keras_hub.tokenizers.SentencePieceTokenizer")
-class SentencePieceTokenizer(tokenizer.Tokenizer):
-    """A SentencePiece tokenizer layer.
-
-    This layer provides an implementation of SentencePiece tokenization
-    as described in the [SentencePiece paper](https://arxiv.org/abs/1808.06226)
-    and the [SentencePiece package](https://pypi.org/project/sentencepiece/).
-    The tokenization will run entirely within the Tensorflow graph, and can
-    be saved inside a `keras.Model`.
-
-    By default, the layer will output a `tf.RaggedTensor` where the last
-    dimension of the output is ragged after whitespace splitting and sub-word
-    tokenizing. If `sequence_length` is set, the layer will output a dense
-    `tf.Tensor` where all inputs have been padded or truncated to
-    `sequence_length`. The output dtype can be controlled via the `dtype`
-    argument, which should be either an integer or string type.
-
-    Args:
-        proto: Either a `string` path to a SentencePiece proto file, or a
-            `bytes` object with a serialized SentencePiece proto. See the
-            [SentencePiece repository](https://github.com/google/sentencepiece)
-            for more details on the format.
-        sequence_length: If set, the output will be converted to a dense
-            tensor and padded/trimmed so all outputs are of `sequence_length`.
-        add_bos: Add beginning of sentence token to the result.
-        add_eos: Add end of sentence token to the result. Token is always
-            truncated if output is longer than specified `sequence_length`.
-
-    References:
-        - [Kudo and Richardson, 2018](https://arxiv.org/abs/1808.06226)
-
-    Examples:
-
-    From bytes.
-    ```python
-    def train_sentence_piece_bytes(ds, size):
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=ds.as_numpy_iterator(),
-            model_writer=bytes_io,
-            vocab_size=size,
+class SentencePieceTokenizerTest(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.proto = os.path.join(
+            self.get_test_data_dir(), "tokenizer_test_vocab.spm"
         )
-        return bytes_io.getvalue()
 
-    # Train a sentencepiece proto.
-    ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
-    proto = train_sentence_piece_bytes(ds, 20)
-    # Tokenize inputs.
-    tokenizer = keras_hub.tokenizers.SentencePieceTokenizer(proto=proto)
-    ds = ds.map(tokenizer)
-    ```
-
-    From a file.
-    ```python
-    def train_sentence_piece_file(ds, path, size):
-        with open(path, "wb") as model_file:
-            sentencepiece.SentencePieceTrainer.train(
-                sentence_iterator=ds.as_numpy_iterator(),
-                model_writer=model_file,
-                vocab_size=size,
-            )
-
-    # Train a sentencepiece proto.
-    ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
-    proto = train_sentence_piece_file(ds, "model.spm", 20)
-    # Tokenize inputs.
-    tokenizer = keras_hub.tokenizers.SentencePieceTokenizer(proto="model.spm")
-    ds = ds.map(tokenizer)
-    ```
-    """
-
-    def __init__(
-        self,
-        proto=None,
-        sequence_length=None,
-        dtype="int32",
-        add_bos=False,
-        add_eos=False,
-        **kwargs,
-    ) -> None:
-        if not is_int_dtype(dtype) and not is_string_dtype(dtype):
-            raise ValueError(
-                "Output dtype must be an integer type or a string. "
-                f"Received: dtype={dtype}"
-            )
-
-        super().__init__(dtype=dtype, **kwargs)
-
-        self.proto = None
-        self.sequence_length = sequence_length
-        self.add_bos = add_bos
-        self.add_eos = add_eos
-        self.set_proto(proto)
-        self.file_assets = [VOCAB_FILENAME]
-
-    def save_assets(self, dir_path):
-        path = os.path.join(dir_path, VOCAB_FILENAME)
-        with open(path, "wb") as file:
-            file.write(self.proto)
-
-    def load_assets(self, dir_path):
-        path = os.path.join(dir_path, VOCAB_FILENAME)
-        self.set_proto(path)
-
-    def set_proto(self, proto):
-        if proto is None:
-            self.proto = None
-            self._sentence_piece = None
-            self._vocabulary = None
-            self._vocabulary_size = None
-            self._token_to_id_map = None
-            self._unk_token_id = None
-            return
-
-        if isinstance(proto, str):
-            # A string could be either a filepath, or a base64 encoded byte
-            # array (which we need for serialization). We will heuristically
-            # try to distinguish, by checking if a string is both longer and
-            # than 2048 characters and valid base64 characters.
-            is_base64 = False
-            if len(proto) > 2048:
-                try:
-                    proto_bytes = base64.b64decode(proto, validate=True)
-                    is_base64 = True
-                except binascii.Error:
-                    pass
-            if not is_base64:
-                if serialization_lib.in_safe_mode():
-                    raise ValueError(
-                        "Requested the loading of a proto file outside of "
-                        "the model archive. This carries a potential risk of "
-                        "loading arbitrary and sensitive files and thus it is "
-                        "disallowed by default. If you trust the source of the "
-                        "artifact, you can override this error by passing "
-                        "`safe_mode=False` to the loading function, or calling "
-                        "`keras.config.enable_unsafe_deserialization()`. "
-                        f"Proto file: '{proto}'"
-                    )
-                proto_bytes = open(proto, "rb").read()
-        elif isinstance(proto, bytes):
-            proto_bytes = proto
-        else:
-            raise ValueError(
-                "SentencePiece `proto` argument should be either a `string` "
-                f"filepath or a `bytes` sequence. "
-                f"Received unknown type: {type(proto)}"
-            )
-
-        self._sentence_piece = tf_text.SentencepieceTokenizer(
-            model=proto_bytes,
-            out_type=self.compute_dtype,
-            add_bos=self.add_bos,
-            add_eos=self.add_eos,
+    def test_tokenize(self):
+        input_data = ["the quick brown fox."]
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
         )
-        # Keras cannot serialize a bytestring, so we base64 encode the model
-        # byte array as a string for saving.
-        self.proto = proto_bytes
-        # Use native sentencepiece to extract vocabulary metadata.
-        # This avoids TF ops (.numpy()) making this code safe in
-        # any execution context.
-        sp = spm.SentencePieceProcessor()
-        sp.LoadFromSerializedProto(proto_bytes)
-        self._vocabulary_size = sp.GetPieceSize()
-        self._vocabulary = [
-            sp.IdToPiece(i) for i in range(self._vocabulary_size)
+        call_output = tokenizer(input_data)
+        tokenize_output = tokenizer.tokenize(input_data)
+        self.assertAllEqual(call_output, [[6, 5, 3, 4]])
+        self.assertAllEqual(tokenize_output, [[6, 5, 3, 4]])
+
+    def test_scalar_tokenize(self):
+        input_data = "the quick brown fox."
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+        )
+        call_output = tokenizer(input_data)
+        tokenize_output = tokenizer.tokenize(input_data)
+        self.assertAllEqual(call_output, [6, 5, 3, 4])
+        self.assertAllEqual(tokenize_output, [6, 5, 3, 4])
+
+    def test_dense_output(self):
+        input_data = ["the quick brown fox."]
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+            sequence_length=10,
+        )
+        output_data = tokenizer(input_data)
+        self.assertAllEqual(output_data, [[6, 5, 3, 4, 0, 0, 0, 0, 0, 0]])
+
+    def test_string_tokenize(self):
+        input_data = ["the quick brown fox."]
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+            dtype="string",
+        )
+        output_data = tokenizer(input_data)
+        self.assertAllEqual(
+            output_data,
+            [["▁the", "▁quick", "▁brown", "▁fox."]],
+        )
+
+    def test_scalar_bos_eos(self):
+        input_data = "the quick brown fox."
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+            add_bos=True,
+            add_eos=True,
+        )
+        output_data = tokenizer(input_data)
+        self.assertAllEqual(output_data, [1, 6, 5, 3, 4, 2])
+
+    def test_string_bos_eos(self):
+        input_data = ["the quick brown fox."]
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+            dtype="string",
+            add_bos=True,
+            add_eos=True,
+        )
+        output_data = tokenizer(input_data)
+        self.assertAllEqual(
+            output_data, [["<s>", "▁the", "▁quick", "▁brown", "▁fox.", "</s>"]]
+        )
+
+    def test_detokenize(self):
+        tokenizer = SentencePieceTokenizer(proto=self.proto)
+        outputs = tokenizer.detokenize([6, 5, 3, 4])
+        self.assertAllEqual(outputs, "the quick brown fox.")
+        outputs = tokenizer.detokenize([[6, 5, 3, 4], [6, 4]])
+        self.assertAllEqual(outputs, ["the quick brown fox.", "the fox."])
+
+    def test_accessors(self):
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+        )
+        self.assertEqual(
+            tokenizer.get_vocabulary(),
+            ["<unk>", "<s>", "</s>", "▁brown", "▁fox.", "▁quick", "▁the"],
+        )
+        self.assertEqual(type(tokenizer.get_vocabulary()), list)
+        self.assertEqual(tokenizer.vocabulary_size(), 7)
+        self.assertEqual(type(tokenizer.vocabulary_size()), int)
+        self.assertEqual(tokenizer.id_to_token(0), "<unk>")
+        self.assertEqual(tokenizer.id_to_token(5), "▁quick")
+        self.assertEqual(type(tokenizer.id_to_token(0)), str)
+        self.assertEqual(tokenizer.token_to_id("<unk>"), 0)
+        self.assertEqual(tokenizer.token_to_id("▁quick"), 5)
+        self.assertEqual(type(tokenizer.token_to_id("<unk>")), int)
+
+    def test_error_id_out_of_vocabulary(self):
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+        )
+        with self.assertRaises(ValueError):
+            tokenizer.id_to_token(tokenizer.vocabulary_size())
+        with self.assertRaises(ValueError):
+            tokenizer.id_to_token(-1)
+
+    def test_from_bytes(self):
+        with tf.io.gfile.GFile(self.proto, "rb") as file:
+            proto = file.read()
+        tokenizer = SentencePieceTokenizer(
+            proto=proto,
+        )
+        output_data = tokenizer(["the quick brown fox."])
+        self.assertAllEqual(output_data, [[6, 5, 3, 4]])
+
+    def test_tokenize_then_batch(self):
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+        )
+
+        ds = tf.data.Dataset.from_tensor_slices(
+            ["the quick brown fox.", "the quick", "the", "quick brown fox."]
+        )
+        ds = ds.map(tokenizer).apply(
+            tf.data.experimental.dense_to_ragged_batch(4)
+        )
+        output_data = ds.take(1).get_single_element()
+
+        expected = [
+            [6, 5, 3, 4],
+            [6, 5],
+            [6],
+            [5, 3, 4],
         ]
-        self._token_to_id_map = {
-            token: i for i, token in enumerate(self._vocabulary)
-        }
-        self._unk_token_id = sp.PieceToId("<unk>")
-        self._update_special_token_ids()
+        for i in range(4):
+            self.assertAllEqual(output_data[i], expected[i])
 
-    def vocabulary_size(self):
-        """Get the integer size of the tokenizer vocabulary."""
-        self._check_vocabulary()
-        return self._vocabulary_size
-
-    def get_vocabulary(self):
-        """Get the tokenizer vocabulary."""
-        self._check_vocabulary()
-        return list(self._vocabulary)
-
-    def id_to_token(self, id):
-        """Convert an integer id to a string token."""
-        self._check_vocabulary()
-        if id >= self.vocabulary_size() or id < 0:
-            raise ValueError(
-                f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
-                f"Received: {id}"
-            )
-        return self._vocabulary[id]
-
-    def token_to_id(self, token):
-        """Convert a string token to an integer id."""
-        self._check_vocabulary()
-        if hasattr(token, "numpy"):
-            token = token.numpy()
-        if isinstance(token, bytes):
-            token = token.decode("utf-8")
-        # Return unk_id for unknown tokens, matching the original
-        # SentencePiece `string_to_id()` behavior.
-        return self._token_to_id_map.get(token, self._unk_token_id)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "proto": None,  # Save vocabulary via an asset!
-                "sequence_length": self.sequence_length,
-                "add_bos": self.add_bos,
-                "add_eos": self.add_eos,
-            }
+    def test_batch_then_tokenize(self):
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
         )
-        return config
 
-    def _check_vocabulary(self):
-        if self.proto is None:
-            raise ValueError(
-                "No vocabulary has been set for SentencePieceTokenizer. Make "
-                "sure to pass a `proto` argument when creating the layer."
-            )
-
-    @preprocessing_function
-    def tokenize(self, inputs):
-        self._check_vocabulary()
-        inputs = tf.convert_to_tensor(inputs)
-        unbatched = inputs.shape.rank == 0
-        if unbatched:
-            inputs = tf.expand_dims(inputs, 0)
-
-        tokens = self._sentence_piece.tokenize(inputs)
-
-        # Convert to a dense output if `sequence_length` is set.
-        if self.sequence_length:
-            output_shape = tokens.shape.as_list()
-            output_shape[-1] = self.sequence_length
-            tokens = tokens.to_tensor(shape=output_shape)
-
-        # Convert to a dense output if input was a scalar.
-        if unbatched:
-            tokens = tf.squeeze(tokens, 0)
-            tf.ensure_shape(tokens, shape=[self.sequence_length])
-        return tokens
-
-    @preprocessing_function
-    def detokenize(self, inputs):
-        self._check_vocabulary()
-        inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
-        # tf-text sentencepiece does not handle int64.
-        inputs = tf.cast(inputs, "int32")
-        outputs = self._sentence_piece.detokenize(inputs)
-        if unbatched:
-            outputs = tf.squeeze(outputs, 0)
-        return outputs
-
-    def compute_output_spec(self, input_spec):
-        return keras.KerasTensor(
-            input_spec.shape + (self.sequence_length,), dtype=self.compute_dtype
+        ds = tf.data.Dataset.from_tensor_slices(
+            ["the quick brown fox.", "the quick", "the", "quick brown fox."]
         )
+        ds = ds.batch(4).map(tokenizer)
+        output_data = ds.take(1).get_single_element()
+
+        expected = [
+            [6, 5, 3, 4],
+            [6, 5],
+            [6],
+            [5, 3, 4],
+        ]
+        for i in range(4):
+            self.assertAllEqual(output_data[i], expected[i])
+
+    def test_config(self):
+        input_data = ["the quick brown whale."]
+        original_tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+        )
+        cloned_tokenizer = SentencePieceTokenizer.from_config(
+            original_tokenizer.get_config()
+        )
+        cloned_tokenizer.set_proto(original_tokenizer.proto)
+        self.assertAllEqual(
+            original_tokenizer(input_data),
+            cloned_tokenizer(input_data),
+        )
+
+    def test_safe_mode_proto_file_disallowed(self):
+        temp_dir = self.get_temp_dir()
+        proto_path = os.path.join(temp_dir, "model.spm")
+        with open(proto_path, "wb") as file:
+            file.write(b"dummy proto data")
+
+        tokenizer = SentencePieceTokenizer()
+        with serialization_lib.SafeModeScope(True):
+            with self.assertRaisesRegex(
+                ValueError,
+                r"Requested the loading of a proto file outside of the "
+                r"model archive.*Proto file: .*model\.spm",
+            ):
+                tokenizer.set_proto(proto_path)
