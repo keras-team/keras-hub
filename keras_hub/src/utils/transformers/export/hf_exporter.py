@@ -15,6 +15,18 @@ from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
 # --- Gemma 3 Utils ---
 from keras_hub.src.utils.transformers.export.gemma3 import get_gemma3_config
 from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_generation_config,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_image_converter_config,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_processor_config,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_special_tokens_map,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
     get_gemma3_tokenizer_config,
 )
 from keras_hub.src.utils.transformers.export.gemma3 import (
@@ -200,7 +212,8 @@ def export_tokenizer(tokenizer, path):
     tokenizer_type = tokenizer.__class__.__name__
     if tokenizer_type not in MODEL_TOKENIZER_CONFIGS:
         raise ValueError(
-            f"Export to Transformer format not implemented for {tokenizer_type}"
+            f"Export to Transformers format not implemented for \
+                {tokenizer_type}"
         )
 
     get_tokenizer_config_fn = MODEL_TOKENIZER_CONFIGS[tokenizer_type]
@@ -218,7 +231,12 @@ def export_tokenizer(tokenizer, path):
         if os.path.exists(vocab_spm_path):
             shutil.move(vocab_spm_path, tokenizer_model_path)
         else:
-            warnings.warn(f"{vocab_spm_path} not found.")
+            warnings.warn(
+                f"{vocab_spm_path} not found. Tokenizer may not load "
+                "correctly. Ensure that the tokenizer configuration "
+                "is correct and that the vocabulary file is present "
+                "in the original model."
+            )
 
     # 2. BPE Models (Qwen / GPT-2)
     elif tokenizer_type in ["QwenTokenizer", "GPT2Tokenizer"]:
@@ -230,6 +248,91 @@ def export_tokenizer(tokenizer, path):
             warnings.warn(
                 f"{vocab_json_path} not found.Tokenizer may not load correctly."
             )
+
+    # Generate tokenizer.json for models that need it
+    if tokenizer_type == "Gemma3Tokenizer":
+        try:
+            from transformers import GemmaTokenizerFast
+
+            hf_tokenizer = GemmaTokenizerFast.from_pretrained(path)
+            hf_tokenizer.save_pretrained(path)
+        except Exception as e:
+            warnings.warn(
+                f"Failed to generate tokenizer.json: {e}. "
+                "Tokenizer may not handle special tokens correctly. "
+                "Ensure 'transformers' is installed with sentencepiece support."
+            )
+
+        # Generate special_tokens_map.json for Gemma3
+        special_tokens_map = get_gemma3_special_tokens_map(tokenizer)
+        special_tokens_map_path = os.path.join(path, "special_tokens_map.json")
+        with open(special_tokens_map_path, "w") as f:
+            json.dump(special_tokens_map, f, indent=2)
+
+
+def export_image_converter(backbone, path):
+    """Export image converter config for vision models.
+
+    Args:
+        backbone: The Keras backbone model.
+        path: str. Path to save the exported config.
+    """
+    model_type = backbone.__class__.__name__
+
+    # Handle image converter config based on model type
+    if model_type == "Gemma3Backbone":
+        preprocessor_config = get_gemma3_image_converter_config(backbone)
+        if preprocessor_config is not None:
+            os.makedirs(path, exist_ok=True)
+            preprocessor_config_path = os.path.join(
+                path, "preprocessor_config.json"
+            )
+            with open(preprocessor_config_path, "w") as f:
+                json.dump(preprocessor_config, f, indent=2)
+
+    # Add future vision models here
+    # elif model_type == "PaliGemmaBackbone":
+    #     preprocessor_config = get_paligemma_image_converter_config(backbone)
+    #     ...
+
+
+def export_processor_config(backbone, path):
+    """Export processor config for vision models.
+
+    Args:
+        backbone: The Keras backbone model.
+        path: str. Path to save the exported config.
+    """
+    model_type = backbone.__class__.__name__
+
+    # Handle processor config based on model type
+    if model_type == "Gemma3Backbone":
+        processor_config = get_gemma3_processor_config(backbone)
+        if processor_config is not None:
+            os.makedirs(path, exist_ok=True)
+            processor_config_path = os.path.join(path, "processor_config.json")
+            with open(processor_config_path, "w") as f:
+                json.dump(processor_config, f, indent=2)
+    # Add future vision models here
+
+
+def export_generation_config(backbone, path):
+    """Export generation config for models.
+
+    Args:
+        backbone: The Keras backbone model.
+        path: str. Path to save the exported config.
+    """
+    model_type = backbone.__class__.__name__
+
+    # Handle generation config based on model type
+    if model_type == "Gemma3Backbone":
+        generation_config = get_gemma3_generation_config(backbone)
+        os.makedirs(path, exist_ok=True)
+        generation_config_path = os.path.join(path, "generation_config.json")
+        with open(generation_config_path, "w") as f:
+            json.dump(generation_config, f, indent=2)
+    # Add future models here
 
 
 def export_to_safetensors(keras_model, path):
@@ -246,6 +349,14 @@ def export_to_safetensors(keras_model, path):
     """
     backbone = keras_model.backbone
     export_backbone(backbone, path, include_lm_head=True)
+
+    # Export image converter and processor configs for vision models
+    export_image_converter(backbone, path)
+    export_processor_config(backbone, path)
+
+    # Export generation config
+    export_generation_config(backbone, path)
+
     if (
         keras_model.preprocessor is not None
         and keras_model.preprocessor.tokenizer is None
