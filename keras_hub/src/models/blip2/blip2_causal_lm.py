@@ -299,9 +299,21 @@ class BLIP2CausalLM(CausalLM):
         elif stop_token_ids == "auto":
             stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
 
-        return super().generate(
-            inputs,
-            max_length=max_length,
-            stop_token_ids=stop_token_ids,
-            strip_prompt=strip_prompt,
-        )
+        # ── enforce left-padding so image[i] stays aligned with text[i] ──────
+        if self.preprocessor is not None:
+            original_padding_side = self.preprocessor.tokenizer.padding_side
+            self.preprocessor.tokenizer.padding_side = "left"
+
+        try:
+            outputs = super().generate(
+                inputs,
+                max_length=max_length,
+                stop_token_ids=stop_token_ids,
+                strip_prompt=strip_prompt,
+            )
+        finally:
+            # always restore, even if generation throws
+            if self.preprocessor is not None:
+                self.preprocessor.tokenizer.padding_side = original_padding_side
+
+        return outputs

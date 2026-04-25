@@ -179,6 +179,89 @@ class BLIP2CausalLMTest(TestCase):
             output = causal_lm.generate(prompt)
             self.assertEqual(prompt, output)
 
+        def test_batch_image_text_alignment(self):
+            """Each image must stay paired with its own text prompt
+            after padding."""
+            causal_lm = BLIP2CausalLM(**self.init_kwargs)
+
+            # Two visually distinct images — all-zeros vs all-ones
+            image_a = np.zeros((1, 32, 32, 3), dtype="float32")  # black image
+            image_b = np.ones((1, 32, 32, 3), dtype="float32")  # white image
+
+            # Get individual outputs as the ground truth
+            output_a = causal_lm.generate(
+                {"images": image_a, "text": ["the"]},
+                max_length=6,
+            )
+            output_b = causal_lm.generate(
+                {"images": image_b, "text": ["the"]},
+                max_length=6,
+            )
+
+            # Now run both together in one batch
+            images_batch = np.concatenate([image_a, image_b], axis=0)
+            output_batch = causal_lm.generate(
+                {
+                    "images": images_batch,
+                    "text": ["the", "the"],
+                },
+                max_length=6,
+            )
+
+            # Each batch output must match its individual counterpart.
+            # If alignment is broken, image_a's features bleed into slot 1 or
+            # vice versa.
+            self.assertEqual(
+                output_a[0],
+                output_batch[0],
+                "Batch slot 0 does not match individual output for image_a",
+            )
+            self.assertEqual(
+                output_b[0],
+                output_batch[1],
+                "Batch slot 1 does not match individual output for image_b",
+            )
+
+    def test_unequal_prompt_lengths_alignment(self):
+        """Unequal prompt lengths must not shift image-text pairing
+        after left-pad."""
+        causal_lm = BLIP2CausalLM(**self.init_kwargs)
+
+        image_a = np.zeros((1, 32, 32, 3), dtype="float32")
+        image_b = np.ones((1, 32, 32, 3), dtype="float32")
+
+        # short prompt vs longer prompt — this is where right-padding breaks
+        # alignment
+        short_prompt = "t"
+        long_prompt = "the"
+
+        output_a_solo = causal_lm.generate(
+            {"images": image_a, "text": [short_prompt]}, max_length=6
+        )
+        output_b_solo = causal_lm.generate(
+            {"images": image_b, "text": [long_prompt]}, max_length=6
+        )
+
+        images_batch = np.concatenate([image_a, image_b], axis=0)
+        output_batch = causal_lm.generate(
+            {
+                "images": images_batch,
+                "text": [short_prompt, long_prompt],
+            },
+            max_length=6,
+        )
+
+        self.assertEqual(
+            output_a_solo[0],
+            output_batch[0],
+            "Short prompt slot misaligned after padding",
+        )
+        self.assertEqual(
+            output_b_solo[0],
+            output_batch[1],
+            "Long prompt slot misaligned after padding",
+        )
+
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=BLIP2CausalLM,

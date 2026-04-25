@@ -64,8 +64,6 @@ class BLIP2Tokenizer(BytePairTokenizer):
         add_prefix_space=False,
         **kwargs,
     ):
-        # OPT uses `</s>` as BOS and overrides EOS to `\n` (Ċ / U+010A),
-        # matching the official LAVIS BLIP-2 implementation.
         self._add_special_token("</s>", "start_token")
         self._add_special_token("\u010a", "end_token")
         self._add_special_token("<pad>", "pad_token")
@@ -73,6 +71,8 @@ class BLIP2Tokenizer(BytePairTokenizer):
 
         if unsplittable_tokens is None:
             unsplittable_tokens = ["<pad>", "</s>", "<image>"]
+
+        self.padding_side = "right"  # ← add this
 
         super().__init__(
             vocabulary=vocabulary,
