@@ -20,7 +20,10 @@ try:
     import tensorflow_text as tf_text
 except ImportError:
     tf_text = None
-import sentencepiece as spm
+try:
+    import sentencepiece as spm
+except ImportError:
+    spm = None
 
 VOCAB_FILENAME = "vocabulary.spm"
 
@@ -183,18 +186,23 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         # byte array as a string for saving.
         self.proto = proto_bytes
         # Use native sentencepiece to extract vocabulary metadata.
-        # This avoids TF ops (.numpy()) making this code safe in
+        # This avoids TF ops (.numpy()), making this code safe in
         # any execution context.
+        if spm is None:
+            raise ImportError(
+                "SentencePieceTokenizer requires the `sentencepiece` package. "
+                "Please install it with `pip install sentencepiece`."
+            )
         sp = spm.SentencePieceProcessor()
         sp.LoadFromSerializedProto(proto_bytes)
-        self._vocabulary_size = sp.GetPieceSize()
-        self._vocabulary = [
-            sp.IdToPiece(i) for i in range(self._vocabulary_size)
-        ]
+        self._vocabulary_size = sp.vocab_size()
+        self._vocabulary = list(
+            sp.IdToPiece(list(range(self._vocabulary_size)))
+        )
         self._token_to_id_map = {
             token: i for i, token in enumerate(self._vocabulary)
         }
-        self._unk_token_id = sp.PieceToId("<unk>")
+        self._unk_token_id = sp.unk_id()
         self._update_special_token_ids()
 
     def vocabulary_size(self):
