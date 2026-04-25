@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from keras import backend
 
 from keras_hub.src.models.basnet.basnet import BASNetImageSegmenter
 from keras_hub.src.models.basnet.basnet_backbone import BASNetBackbone
@@ -54,8 +55,11 @@ class BASNetTest(TestCase):
             input_data=self.images,
         )
 
-    @pytest.mark.skip(reason="TODO: Bug with BASNet liteRT export")
     def test_litert_export(self):
+        if backend.backend() != "torch":
+            pytest.skip(
+                reason="BASNet LiteRT export is only enabled on torch."
+            )
         self.run_litert_export_test(
             cls=BASNetImageSegmenter,
             init_kwargs=self.init_kwargs,

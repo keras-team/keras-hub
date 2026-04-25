@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from keras import backend
 
 from keras_hub.src.models.sam.sam_backbone import SAMBackbone
 from keras_hub.src.models.sam.sam_image_converter import SAMImageConverter
@@ -132,9 +133,10 @@ class SAMImageSegmenterTest(TestCase):
             )
 
     def test_litert_export(self):
-        pytest.skip(
-            reason="TODO: Need to fix the bug in TFLite export for SAM model"
-        )
+        if backend.backend() != "torch":
+            pytest.skip(
+                reason="SAM LiteRT export is only enabled on torch."
+            )
         self.run_litert_export_test(
             cls=SAMImageSegmenter,
             init_kwargs=self.init_kwargs,
