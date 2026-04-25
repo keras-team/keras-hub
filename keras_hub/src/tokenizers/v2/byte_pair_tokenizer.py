@@ -5,6 +5,7 @@ from typing import Iterable
 
 import keras
 import numpy as np
+
 try:
     import tokenizers
     from tokenizers import decoders
@@ -13,8 +14,6 @@ try:
 except ImportError:
     tokenizers = None
 from keras.src.saving import serialization_lib
-
-
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
