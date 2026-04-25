@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pytest
+from keras import backend
 from keras import ops
 
 from keras_hub.src.models.gpt_oss.gpt_oss_backbone import GptOssBackbone
@@ -108,6 +109,15 @@ class GptOssCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        condition=backend.backend() == "torch",
+        strict=False,
+        reason=(
+            "Upstream litert-torch limitation: the NHWC layout rewriter does "
+            "not support aten.amax, causing 'NHWC node rewriter not found: "
+            "amax'. Will pass once litert-torch adds amax support."
+        ),
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=GptOssCausalLM,

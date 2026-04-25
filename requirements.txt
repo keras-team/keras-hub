@@ -5,6 +5,7 @@ tensorflow-text>=2.20.1;platform_system != 'Windows'
 
 # Torch.
 --extra-index-url https://download.pytorch.org/whl/cpu
+litert-torch-nightly
 torch>=2.6.0
 torchvision>=0.16.0
 

@@ -1,5 +1,6 @@
 import os
 import pathlib
+import types
 
 import keras
 import numpy as np
@@ -21,6 +22,7 @@ from keras_hub.src.models.task import Task
 from keras_hub.src.models.text_classifier import TextClassifier
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
+from keras_hub.src.utils.litertlm import export as litertlm_export
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
 from keras_hub.src.utils.preset_utils import METADATA_FILE
 from keras_hub.src.utils.preset_utils import MODEL_WEIGHTS_FILE
@@ -354,3 +356,181 @@ class TestTask(TestCase):
         )
         with self.assertRaises(ValueError):
             causal_lm.export_to_transformers(export_path)
+
+    def test_export_to_litertlm(self):
+        causal_lm, _ = self._create_gemma_for_export_tests()
+        export_path = os.path.join(self.get_temp_dir(), "model.litertlm")
+
+        class FakeBuilder:
+            instances = []
+
+            def __init__(self):
+                self.tflite_model_args = None
+                self.tokenizer_path = None
+                self.tokenizer_path_exists = False
+                self.llm_metadata_path = None
+                type(self).instances.append(self)
+
+            def add_system_metadata(self, metadata):
+                return self
+
+            def add_tflite_model(
+                self,
+                tflite_model_path,
+                model_type,
+                backend_constraint=None,
+            ):
+                self.tflite_model_args = (
+                    tflite_model_path,
+                    model_type,
+                    backend_constraint,
+                )
+                return self
+
+            def add_sentencepiece_tokenizer(self, sp_tokenizer_path):
+                self.tokenizer_path = sp_tokenizer_path
+                self.tokenizer_path_exists = os.path.exists(sp_tokenizer_path)
+                return self
+
+            def add_llm_metadata(self, llm_metadata_path):
+                self.llm_metadata_path = llm_metadata_path
+                return self
+
+            def build(self, stream):
+                stream.write(b"litertlm")
+
+        fake_builder_module = types.SimpleNamespace(
+            LitertLmFileBuilder=FakeBuilder,
+            TfLiteModelType=types.SimpleNamespace(PREFILL_DECODE="prefill"),
+            Metadata=types.SimpleNamespace,
+            DType=types.SimpleNamespace(STRING="string"),
+        )
+
+        class FakeEdgeModel:
+            def export(self, path):
+                with open(path, "wb") as f:
+                    f.write(b"tflite")
+
+        class FakeConverter:
+            def signature(self, name, module, sample_kwargs=None, **kwargs):
+                return self
+
+            def convert(self):
+                return FakeEdgeModel()
+
+        fake_litert_torch = types.SimpleNamespace(
+            signature=FakeConverter().signature,
+        )
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                litertlm_export,
+                "_import_litert_lm_builder",
+                lambda: fake_builder_module,
+            )
+            mp.setattr(
+                litertlm_export,
+                "litert_torch",
+                fake_litert_torch,
+            )
+            causal_lm.export_to_litertlm(
+                export_path, backend_constraint="cpu"
+            )
+
+        self.assertTrue(os.path.exists(export_path))
+        self.assertEqual(len(FakeBuilder.instances), 1)
+        builder = FakeBuilder.instances[0]
+        self.assertEqual(builder.tflite_model_args[2], "cpu")
+        self.assertTrue(builder.tokenizer_path.endswith("vocabulary.spm"))
+        self.assertTrue(builder.tokenizer_path_exists)
+        self.assertIsNotNone(builder.llm_metadata_path)
+
+    def test_export_to_litertlm_after_keras_save_load(self):
+        causal_lm, _ = self._create_gemma_for_export_tests()
+        keras_path = os.path.join(self.get_temp_dir(), "model.keras")
+        export_path = os.path.join(self.get_temp_dir(), "model.litertlm")
+        causal_lm.save(keras_path)
+        restored = keras.saving.load_model(keras_path)
+
+        class FakeBuilder:
+            instances = []
+
+            def __init__(self):
+                self.tokenizer_path_exists = False
+                type(self).instances.append(self)
+
+            def add_system_metadata(self, metadata):
+                return self
+
+            def add_tflite_model(
+                self,
+                tflite_model_path,
+                model_type,
+                backend_constraint=None,
+            ):
+                return self
+
+            def add_sentencepiece_tokenizer(self, sp_tokenizer_path):
+                self.tokenizer_path = sp_tokenizer_path
+                self.tokenizer_path_exists = os.path.exists(sp_tokenizer_path)
+                return self
+
+            def add_llm_metadata(self, llm_metadata_path):
+                return self
+
+            def build(self, stream):
+                stream.write(b"litertlm")
+
+        fake_builder_module = types.SimpleNamespace(
+            LitertLmFileBuilder=FakeBuilder,
+            TfLiteModelType=types.SimpleNamespace(PREFILL_DECODE="prefill"),
+            Metadata=types.SimpleNamespace,
+            DType=types.SimpleNamespace(STRING="string"),
+        )
+
+        class FakeEdgeModel:
+            def export(self, path):
+                with open(path, "wb") as f:
+                    f.write(b"tflite")
+
+        class FakeConverter:
+            def signature(self, name, module, sample_kwargs=None, **kwargs):
+                return self
+
+            def convert(self):
+                return FakeEdgeModel()
+
+        fake_litert_torch = types.SimpleNamespace(
+            signature=FakeConverter().signature,
+        )
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                litertlm_export,
+                "_import_litert_lm_builder",
+                lambda: fake_builder_module,
+            )
+            mp.setattr(
+                litertlm_export,
+                "litert_torch",
+                fake_litert_torch,
+            )
+            restored.export_to_litertlm(export_path)
+
+        self.assertTrue(os.path.exists(export_path))
+        self.assertEqual(len(FakeBuilder.instances), 1)
+        self.assertTrue(FakeBuilder.instances[0].tokenizer_path_exists)
+
+    def test_export_to_litertlm_rejects_non_sentencepiece_tokenizer(self):
+        causal_lm, preprocessor = self._create_gemma_for_export_tests()
+        export_path = os.path.join(self.get_temp_dir(), "model.litertlm")
+
+        class UnsupportedTokenizer(Tokenizer):
+            def __init__(self):
+                super().__init__()
+                self.file_assets = ["vocabulary.json"]
+
+        preprocessor.tokenizer = UnsupportedTokenizer()
+
+        with self.assertRaises(ValueError):
+            causal_lm.export_to_litertlm(export_path)

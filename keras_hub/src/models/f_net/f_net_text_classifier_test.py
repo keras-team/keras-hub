@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from keras import backend
 
 from keras_hub.src.models.f_net.f_net_backbone import FNetBackbone
 from keras_hub.src.models.f_net.f_net_text_classifier import FNetTextClassifier
@@ -57,6 +58,16 @@ class FNetTextClassifierTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        condition=backend.backend() == "torch",
+        strict=False,
+        reason=(
+            "Upstream litert-torch limitation: FNet uses ops.fft2 which "
+            "produces aten.complex tensors. litert-torch has no lowering for "
+            "aten.complex.default. Will pass once complex tensor ops are "
+            "supported."
+        ),
+    )
     def test_litert_export(self):
         # F-Net does NOT use padding_mask - it only uses token_ids and
         # segment_ids. Don't add padding_mask to input_data.

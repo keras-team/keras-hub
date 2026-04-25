@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pytest
+from keras import backend
 from keras import ops
 
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_backbone import GPTNeoXBackbone
@@ -107,13 +108,13 @@ class GPTNeoXCausalLMTest(TestCase):
         )
 
     def test_litert_export(self):
-        pytest.skip(reason="TODO: Fix TFLite export bug for GPTNeoX")
+        if backend.backend() != "torch":
+            pytest.skip(
+                reason="GPTNeoX LiteRT export is only enabled on torch."
+            )
         self.run_litert_export_test(
             cls=GPTNeoXCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            output_thresholds={
-                "max": 1e-3,
-                "mean": 1e-4,
-            },  # More lenient thresholds for numerical differences
+            output_thresholds={"*": {"max": 1e-3, "mean": 1e-4}},
         )

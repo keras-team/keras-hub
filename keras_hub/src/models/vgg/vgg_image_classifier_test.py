@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from keras import backend
 
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import VGGImageClassifier
@@ -52,8 +53,11 @@ class VGGImageClassifierTest(TestCase):
             input_data=self.images,
         )
 
-    @pytest.mark.skip(reason="TODO: Bug with VGGImageClassifier liteRT export")
     def test_litert_export(self):
+        if backend.backend() != "torch":
+            pytest.skip(
+                reason="VGG LiteRT export is only enabled on torch."
+            )
         self.run_litert_export_test(
             cls=VGGImageClassifier,
             init_kwargs=self.init_kwargs,

@@ -425,6 +425,42 @@ class CausalLM(Task):
 
         export_to_safetensors(self, path)
 
+    def export_to_litertlm(
+        self,
+        path,
+        backend_constraint=None,
+        prefill_seq_len=None,
+        verbose=None,
+        **kwargs,
+    ):
+        """Export the full CausalLM model to LiteRT-LM format.
+
+        This exports the model with ``prefill`` and ``decode`` signatures
+        required by the LiteRT-LM executor, bundles the SentencePiece
+        tokenizer, and writes an ``LlmMetadata`` protobuf into the
+        `.litertlm` artifact.
+
+        Args:
+            path: str. Path to save the `.litertlm` file.
+            backend_constraint: Optional LiteRT-LM backend constraint, such as
+                `"cpu"` or `"gpu"`.
+            prefill_seq_len: int. Sequence length used when tracing the prefill
+                signature.  Defaults to the model's maximum sequence length.
+            verbose: Verbosity flag passed through to LiteRT export.
+            **kwargs: Additional kwargs forwarded to ``litert_torch``
+                conversion.
+        """
+        from keras_hub.src.utils.litertlm.export import export_to_litertlm
+
+        return export_to_litertlm(
+            self,
+            path,
+            backend_constraint=backend_constraint,
+            prefill_seq_len=prefill_seq_len,
+            verbose=verbose,
+            **kwargs,
+        )
+
     def _post_quantize(self, mode, **kwargs):
         super()._post_quantize(mode, **kwargs)
         # Reset the compiled generate function.
