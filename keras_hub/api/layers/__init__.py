@@ -73,6 +73,9 @@ from keras_hub.src.layers.preprocessing.video_converter import (
 from keras_hub.src.models.basnet.basnet_image_converter import (
     BASNetImageConverter as BASNetImageConverter,
 )
+from keras_hub.src.models.blip2.blip2_image_converter import (
+    BLIP2ImageConverter as BLIP2ImageConverter,
+)
 from keras_hub.src.models.clip.clip_image_converter import (
     CLIPImageConverter as CLIPImageConverter,
 )
