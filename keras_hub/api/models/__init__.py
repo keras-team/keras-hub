@@ -861,6 +861,12 @@ from keras_hub.src.models.vit.vit_image_classifier_preprocessor import (
 from keras_hub.src.models.vit_det.vit_det_backbone import (
     ViTDetBackbone as ViTDetBackbone,
 )
+from keras_hub.src.models.whisper.whisper_audio_to_text import (
+    WhisperAudioToText as WhisperAudioToText,
+)
+from keras_hub.src.models.whisper.whisper_audio_to_text_preprocessor import (
+    WhisperAudioToTextPreprocessor as WhisperAudioToTextPreprocessor,
+)
 from keras_hub.src.models.whisper.whisper_backbone import (
     WhisperBackbone as WhisperBackbone,
 )
