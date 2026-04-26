@@ -286,7 +286,8 @@ def assert_tf_installed(symbol_name):
 
 
 def assert_tf_libs_installed(symbol_name):
-    if tf_text is None or tf is None:
+    # undo this in final commit
+    if tf is None:
         raise ImportError(
             f"{symbol_name} requires `tensorflow` and `tensorflow-text` for "
             "text processing. Run `pip install tensorflow-text` to install "
