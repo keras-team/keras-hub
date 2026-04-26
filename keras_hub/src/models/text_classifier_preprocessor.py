@@ -79,6 +79,11 @@ class TextClassifierPreprocessor(Preprocessor):
         self.sequence_length = sequence_length
         self.truncate = truncate
 
+        # TODO(hongyu): Since `MultiSegmentPacker` requires TF workflow, we
+        # currently disable the Python workflow for
+        # `TextClassifierPreprocessor`.
+        self.tokenizer._allow_python_workflow = False
+
     def build(self, input_shape):
         super().build(input_shape)
         # Defer masker creation to `build()` so that we can be sure tokenizer
