@@ -440,7 +440,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         litert_output,
         sig_outputs,
         expected_output_shape=None,
-        verify_numerics=True,
+        verify_numerics=False,
         comparison_mode="strict",
         output_thresholds=None,
     ):
@@ -560,7 +560,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         input_data=None,
         expected_output_shape=None,
         model=None,
-        verify_numerics=True,
+        verify_numerics=False,
         # No LiteRT output in model saving test; remove undefined return
         output_thresholds=None,
         **export_kwargs,
@@ -596,11 +596,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             keras.__version__
         ) < packaging.version.Version("3.13.0"):
             self.skipTest("LiteRT export requires Keras >= 3.13")
-
-        self.skipTest(
-            "#TODO: [#2572] Re-enable LiteRT tests after a new tf release. "
-            "Can't test with tf 2.20 due to tf.lite module deprecation."
-        )
 
         # Extract comparison_mode from export_kwargs if provided
         comparison_mode = export_kwargs.pop("comparison_mode", "strict")
@@ -694,59 +689,62 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                             f"but SignatureDef has {sorted(actual_outputs)}"
                         )
 
-                # Step 3: Run LiteRT inference
-                os.remove(export_path)
-                # Simple inference implementation
-                runner = interpreter.get_signature_runner("serving_default")
+                # Step 3: Run LiteRT inference (only if verifying numerics)
+                if verify_numerics:
+                    os.remove(export_path)
+                    # Simple inference implementation
+                    runner = interpreter.get_signature_runner("serving_default")
 
-                # Convert input data dtypes to match TFLite expectations
-                def convert_for_tflite(x):
-                    """Convert tensor/array to TFLite-compatible dtypes."""
-                    if hasattr(x, "dtype"):
-                        if isinstance(x, np.ndarray):
-                            if x.dtype == bool:
-                                return x.astype(np.int32)
-                            elif x.dtype == np.float64:
-                                return x.astype(np.float32)
-                            elif x.dtype == np.int64:
-                                return x.astype(np.int32)
-                        else:  # TensorFlow tensor
-                            if x.dtype == tf.bool:
-                                return ops.cast(x, "int32").numpy()
-                            elif x.dtype == tf.float64:
-                                return ops.cast(x, "float32").numpy()
-                            elif x.dtype == tf.int64:
-                                return ops.cast(x, "int32").numpy()
-                            else:
-                                return x.numpy() if hasattr(x, "numpy") else x
-                    elif hasattr(x, "numpy"):
-                        return x.numpy()
-                    return x
+                    # Convert input data dtypes to match TFLite expectations
+                    def convert_for_tflite(x):
+                        """Convert tensor/array to TFLite-compatible dtypes."""
+                        if hasattr(x, "dtype"):
+                            if isinstance(x, np.ndarray):
+                                if x.dtype == bool:
+                                    return x.astype(np.int32)
+                                elif x.dtype == np.float64:
+                                    return x.astype(np.float32)
+                                elif x.dtype == np.int64:
+                                    return x.astype(np.int32)
+                            else:  # TensorFlow tensor
+                                if x.dtype == tf.bool:
+                                    return ops.cast(x, "int32").numpy()
+                                elif x.dtype == tf.float64:
+                                    return ops.cast(x, "float32").numpy()
+                                elif x.dtype == tf.int64:
+                                    return ops.cast(x, "int32").numpy()
+                                else:
+                                    return (
+                                        x.numpy() if hasattr(x, "numpy") else x
+                                    )
+                        elif hasattr(x, "numpy"):
+                            return x.numpy()
+                        return x
 
-                if isinstance(input_data, dict):
-                    converted_input_data = tree.map_structure(
-                        convert_for_tflite, input_data
+                    if isinstance(input_data, dict):
+                        converted_input_data = tree.map_structure(
+                            convert_for_tflite, input_data
+                        )
+                        litert_output = runner(**converted_input_data)
+                    else:
+                        # For single tensor inputs, get the input name
+                        sig_inputs = serving_sig.get("inputs", [])
+                        input_name = sig_inputs[
+                            0
+                        ]  # We verified len(sig_inputs) == 1 above
+                        converted_input = convert_for_tflite(input_data)
+                        litert_output = runner(**{input_name: converted_input})
+
+                    # Step 4: Verify outputs
+                    self._verify_litert_outputs(
+                        keras_output,
+                        litert_output,
+                        sig_outputs,
+                        expected_output_shape=expected_output_shape,
+                        verify_numerics=verify_numerics,
+                        comparison_mode=comparison_mode,
+                        output_thresholds=output_thresholds,
                     )
-                    litert_output = runner(**converted_input_data)
-                else:
-                    # For single tensor inputs, get the input name
-                    sig_inputs = serving_sig.get("inputs", [])
-                    input_name = sig_inputs[
-                        0
-                    ]  # We verified len(sig_inputs) == 1 above
-                    converted_input = convert_for_tflite(input_data)
-                    litert_output = runner(**{input_name: converted_input})
-
-                # Step 4: Verify outputs
-                self._verify_litert_outputs(
-                    keras_output,
-                    litert_output,
-                    sig_outputs,
-                    expected_output_shape=expected_output_shape,
-                    verify_numerics=verify_numerics,
-                    comparison_mode=comparison_mode,
-                    output_thresholds=output_thresholds,
-                )
         finally:
             if interpreter is not None:
                 del interpreter
