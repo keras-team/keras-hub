@@ -245,8 +245,8 @@ def convert_preprocessing_outputs_python(x):
     def convert(x):
         if x is None:
             return x
-        if isinstance(x, str):
-            return tensor_to_list(x)
+        if isinstance(x, (str, bytes)):
+            return x
         dtype = None
         if hasattr(x, "dtype"):
             dtype = keras.backend.standardize_dtype(x.dtype)
