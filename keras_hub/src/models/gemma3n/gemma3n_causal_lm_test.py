@@ -409,14 +409,24 @@ class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
             altup_num_inputs=2,
             laurel_rank=1,
         )
-        causal_lm = Gemma3nCausalLM(
-            preprocessor=preprocessor,
-            backbone=backbone,
-        )
-        train_data = (
-            {
-                "prompts": ["the quick brown fox", "the quick brown fox"],
-                "responses": ["the earth is round", "the earth is round"],
+        self.run_task_test(
+            cls=Gemma3nCausalLM,
+            init_kwargs={
+                "preprocessor": preprocessor,
+                "backbone": backbone,
             },
+            train_data=(
+                {
+                    "prompts": ["the quick brown fox", "the quick brown fox"],
+                    "responses": [
+                        "the earth is round",
+                        "the earth is round",
+                    ],
+                },
+            ),
+            expected_output_shape=(
+                2,
+                20,
+                preprocessor.tokenizer.vocabulary_size(),
+            ),
         )
-        causal_lm.fit(x=train_data[0], batch_size=2)
