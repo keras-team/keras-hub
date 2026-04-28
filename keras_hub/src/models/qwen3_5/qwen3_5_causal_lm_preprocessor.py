@@ -717,13 +717,38 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             "grid_thw": tf.stack(all_grid_thw, axis=0),
         }
 
-    @preprocessing_function
-    def generate_postprocess(self, x):
-        """Convert integer token output to strings for generation.
+    def _generate_postprocess(self, x):
+        if not self.built:
+            self.build(None)
 
-        Strips all Qwen3.5 special tokens (vision markers, image pad,
-        chat markers) from the output before detokenizing.
-        """
+        def _strip_to_ragged(token_ids, masks, ids_to_strip):
+            """Remove masked and special tokens from a sequence."""
+            for id in ids_to_strip:
+                masks = masks & (token_ids != id)
+            if token_ids.ndim == 1:
+                token_ids = token_ids[masks].tolist()
+            else:
+                ragged_ids = []
+                for i in range(token_ids.shape[0]):
+                    ragged_ids.append(token_ids[i][masks[i]].tolist())
+                token_ids = ragged_ids
+            return token_ids
+
+        token_ids, padding_mask = x["token_ids"], x["padding_mask"]
+        token_ids = keras.ops.convert_to_numpy(token_ids).astype("int32")
+        padding_mask = keras.ops.convert_to_numpy(padding_mask).astype("bool")
+
+        # Collect all IDs to strip: base special tokens + vision tokens.
+        ids_to_strip = list(self.tokenizer.special_token_ids)
+        for tok_id in self._special_token_map.values():
+            if tok_id not in ids_to_strip:
+                ids_to_strip.append(tok_id)
+
+        token_ids = _strip_to_ragged(token_ids, padding_mask, ids_to_strip)
+        return self.tokenizer.detokenize(token_ids)
+
+    @preprocessing_function
+    def _generate_postprocess_tf(self, x):
         if not self.built:
             self.build(None)
 
