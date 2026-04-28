@@ -365,7 +365,7 @@ class Gemma3nTextAttention(keras.layers.Layer):
         for grouped-query attention."""
         if self.num_key_value_groups == 1:
             return hidden_states
-        batch, num_key_value_heads, slen, head_dim = hidden_states.shape
+        batch, num_key_value_heads, slen, head_dim = ops.shape(hidden_states)
         hidden_states = ops.expand_dims(hidden_states, 2)
         hidden_states = ops.repeat(
             hidden_states, self.num_key_value_groups, axis=2
