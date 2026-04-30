@@ -223,8 +223,30 @@ class StartEndPacker(PreprocessingLayer):
         add_start_value=True,
         add_end_value=True,
     ):
+        # TODO(hongyuc): Improve the performance of `_call_python`. It becomes
+        # slower when encountering large inputs compared to `_call_tf`.
         def _canonicalize_inputs(inputs):
             if isinstance(inputs, (tuple, list)):
+                # Fast path for common cases:
+                # If the inputs are just normal python types (or lists of
+                # python types), it immediately returns.
+                if not inputs:
+                    return [list(inputs)], False
+                first = inputs[0]
+                if isinstance(
+                    first, (int, str, float, bool, np.integer, np.floating)
+                ):
+                    return [list(inputs)], False
+                if isinstance(first, (tuple, list)) and (
+                    not first
+                    or isinstance(
+                        first[0],
+                        (int, str, float, bool, np.integer, np.floating),
+                    )
+                ):
+                    return [list(x) for x in inputs], True
+
+                # `keras.tree.map_structure` is expensive.
                 inputs = keras.tree.map_structure(convert_to_list, inputs)
                 if inputs and isinstance(inputs[0], (tuple, list)):
                     return inputs, True
