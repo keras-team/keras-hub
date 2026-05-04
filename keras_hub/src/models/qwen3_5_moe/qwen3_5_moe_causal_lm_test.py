@@ -20,36 +20,18 @@ from keras_hub.src.tests.test_case import TestCase
 
 class Qwen3_5MoeCausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "\u0120air", "plane", "\u0120at", "port"]
-        self.vocab += ["<|endoftext|>"]
-        self.vocab += [
-            "<|im_start|>",
-            "<|vision_start|>",
-            "<|vision_end|>",
-            "<|image_pad|>",
-            "<|video_pad|>",
-        ]
-        self.vocab += ["<|im_end|>"]
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<|endoftext|>", "<|im_end|>", "<|im_start|>"]
+        self.vocab += ["<|vision_start|>", "<|vision_end|>", "<|image_pad|>"]
+        self.vocab += ["<|video_pad|>", "!"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
-        self.merges = [
-            "\u0120 a",
-            "\u0120 t",
-            "\u0120 i",
-            "\u0120 b",
-            "a i",
-            "p l",
-            "n e",
-        ]
-        self.merges += [
-            "\u0120a t",
-            "p o",
-            "r t",
-            "\u0120t h",
-            "ai r",
-            "pl a",
-            "po rt",
-        ]
-        self.merges += ["\u0120ai r", "\u0120a i", "pla ne"]
         self.preprocessor = Qwen3_5MoeCausalLMPreprocessor(
             Qwen3_5MoeTokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=7,
@@ -91,7 +73,7 @@ class Qwen3_5MoeCausalLMTest(TestCase):
             cls=Qwen3_5MoeCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 7, 13),
+            expected_output_shape=(2, 7, 37),
         )
 
     def test_generate(self):
