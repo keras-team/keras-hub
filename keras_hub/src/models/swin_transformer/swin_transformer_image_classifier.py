@@ -119,6 +119,7 @@ class SwinTransformerImageClassifier(ImageClassifier):
         x = self.output_dropout(x)
         outputs = self.output_dense(x)
 
+        # Skip the parent class functional model.
         Task.__init__(
             self,
             inputs=inputs,
