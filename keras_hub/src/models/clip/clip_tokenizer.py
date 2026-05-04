@@ -1,8 +1,15 @@
+import tokenizers
+from tokenizers import decoders
+from tokenizers import models
+from tokenizers import normalizers
+from tokenizers import pre_tokenizers
+from tokenizers import processors
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.clip.clip_backbone import CLIPBackbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
-from keras_hub.src.tokenizers.byte_pair_tokenizer import convert_to_ragged_batch
 from keras_hub.src.tokenizers.byte_pair_tokenizer import split_strings_for_bpe
+from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -79,20 +86,95 @@ class CLIPTokenizer(BytePairTokenizer):
             **kwargs,
         )
 
+    def _set_vocabulary_and_merges_tokenizers(self, vocabulary, merges):
+        # CLIPTokenizer has the extra settings.
+        # Ref: transformers.models.clip.tokenization_clip
+        vocabulary = self.vocabulary.copy()
+        merges = self.merges
+        _merges = []
+        for merge in merges:
+            if "#version:" in merge.lstrip():
+                continue
+            a, b = str(merge).split(" ")
+            if a not in vocabulary or b not in vocabulary:
+                raise ValueError(
+                    f"Merge rule '{merge}' contains token '{a}' or '{b}' that "
+                    "is not in the vocabulary."
+                )
+            _merges.append((a, b))
+        self._tokenizer = tokenizers.Tokenizer(
+            models.BPE(
+                vocab=vocabulary,
+                merges=_merges,
+                continuing_subword_prefix="",
+                end_of_word_suffix="</w>",
+                fuse_unk=False,
+                unk_token="<|endoftext|>",
+            )
+        )
+        if self.unsplittable_tokens:
+            self._tokenizer.add_special_tokens(self.unsplittable_tokens)
+        self._tokenizer.normalizer = normalizers.Sequence(
+            [
+                normalizers.NFC(),
+                normalizers.Replace(tokenizers.Regex(r"\s+"), " "),
+                normalizers.Lowercase(),
+            ]
+        )
+        self._tokenizer.pre_tokenizer = pre_tokenizers.Sequence(
+            [
+                pre_tokenizers.Split(
+                    tokenizers.Regex(
+                        r"""<\|startoftext\|>|<\|endoftext\|>|'s|'t|'re|'ve|'m|'ll|'d|[\p{L}]+|[\p{N}]|[^\s\p{L}\p{N}]+"""
+                    ),
+                    behavior="removed",
+                    invert=True,
+                ),
+                pre_tokenizers.ByteLevel(
+                    add_prefix_space=self.add_prefix_space
+                ),
+            ]
+        )
+        self._tokenizer.decoder = decoders.ByteLevel()
+
+        # Dummy attrs for serialization compatibility.
+        if not hasattr(self, "cache"):
+            self.byte2unicode = None
+            self.unicode2byte = None
+            self.cache = None
+            self.id_to_token_map = None
+            self.token_to_id_map = None
+            self.merge_ranks_lookup_default = None
+            self.merge_ranks = None
+
     def set_vocabulary_and_merges(self, vocabulary, merges):
         super().set_vocabulary_and_merges(vocabulary, merges)
         if self.pad_with_end_token:
             self.pad_token_id = self.end_token_id
+        if getattr(self, "_tokenizer") is not None:
+            self._tokenizer.post_processor = processors.RobertaProcessing(
+                sep=(str(self.end_token), self.end_token_id),
+                cls=(str(self.start_token), self.start_token_id),
+                add_prefix_space=False,
+                trim_offsets=False,
+            )
 
-    def _bpe_merge_and_update_cache(self, tokens):
+    def _bpe_merge_and_update_cache_tf(self, tokens):
         """Process unseen tokens and add to cache."""
-        words = self._transform_bytes(tokens)
+
+        def _transform_bytes(tokens):
+            """Map token bytes to unicode using `byte2unicode`."""
+            split_bytes = tf.strings.bytes_split(tokens)
+            split_unicode = self.byte2unicode.lookup(split_bytes)
+            return split_unicode
+
+        words = _transform_bytes(tokens)
 
         # In CLIP, we need to add `</w>` to the last word.
         words = tf.strings.reduce_join(words, axis=1, separator=" ")
         words = tf.strings.join([words, "</w>"])
         words = tf.strings.split(words, sep=" ")
-        tokenized_words = self._bpe_merge(words)
+        tokenized_words = self._bpe_merge_tf(words)
 
         # For each word, join all its token by a whitespace,
         # e.g., ["dragon", "fly"] => "dragon fly" for hash purpose.
@@ -102,11 +184,12 @@ class CLIPTokenizer(BytePairTokenizer):
         self.cache.insert(tokens, tokenized_words)
 
     @preprocessing_function
-    def tokenize(self, inputs):
-        self._check_vocabulary()
+    def _tokenize_tf(self, inputs):
+        self._maybe_initialized_tf()
         if self.add_prefix_space:
             inputs = tf.strings.join([" ", inputs])
 
+        inputs = tf.convert_to_tensor(inputs)
         unbatched = inputs.shape.rank == 0
         if unbatched:
             inputs = tf.expand_dims(inputs, 0)
@@ -121,21 +204,19 @@ class CLIPTokenizer(BytePairTokenizer):
         # Strip and remove empty tokens.
         raw_tokens = tf.strings.strip(raw_tokens)
         raw_tokens = tf.ragged.boolean_mask(raw_tokens, raw_tokens != "")
-
         token_row_splits = raw_tokens.row_splits
         flat_tokens = raw_tokens.flat_values
 
         # Check cache.
         cache_lookup = self.cache.lookup(flat_tokens)
         cache_mask = cache_lookup == ""
-
         has_unseen_words = tf.math.reduce_any(
             (cache_lookup == "") & (flat_tokens != "")
         )
 
         def process_unseen_tokens():
             unseen_tokens = tf.boolean_mask(flat_tokens, cache_mask)
-            self._bpe_merge_and_update_cache(unseen_tokens)
+            self._bpe_merge_and_update_cache_tf(unseen_tokens)
             return self.cache.lookup(flat_tokens)
 
         # If `has_unseen_words == True`, it means not all tokens are in cache,
@@ -145,7 +226,6 @@ class CLIPTokenizer(BytePairTokenizer):
             process_unseen_tokens,
             lambda: cache_lookup,
         )
-
         tokens = tf.strings.split(tokenized_words, sep=" ")
         if self.compute_dtype != tf.string:
             # Encode merged tokens.
@@ -167,11 +247,24 @@ class CLIPTokenizer(BytePairTokenizer):
         if unbatched:
             tokens = tf.squeeze(tokens, 0)
             tf.ensure_shape(tokens, shape=[self.sequence_length])
-
         return tokens
 
+    def _tokenize_tokenizers(self, inputs):
+        outputs = super()._tokenize_tokenizers(inputs)
+        is_batched = True
+        if isinstance(outputs, str):
+            is_batched = False
+            outputs = [outputs]
+        elif isinstance(outputs, list) and isinstance(outputs[0], int):
+            is_batched = False
+            outputs = [outputs]
+        outputs = [output[1:-1] for output in outputs]
+        if not is_batched:
+            outputs = outputs[0]
+        return outputs
+
     @preprocessing_function
-    def detokenize(self, inputs):
+    def _detokenize_tf(self, inputs):
         self._check_vocabulary()
         inputs, unbatched, _ = convert_to_ragged_batch(inputs)
         inputs = tf.cast(inputs, self.dtype)
@@ -191,6 +284,24 @@ class CLIPTokenizer(BytePairTokenizer):
         if unbatched:
             outputs = tf.squeeze(outputs, 0)
         return outputs
+
+    def _detokenize_tokenizers(self, inputs):
+        outputs = super()._detokenize_tokenizers(inputs)
+
+        def _remove_special_token(inputs):
+            is_batched = True
+            if isinstance(inputs, str):
+                inputs = [inputs]
+                is_batched = False
+            for special_token in ("</w>", self.start_token, self.end_token):
+                inputs = [
+                    input.replace(str(special_token), "") for input in inputs
+                ]
+            if not is_batched:
+                inputs = inputs[0]
+            return inputs
+
+        return _remove_special_token(outputs)
 
     def get_config(self):
         config = super().get_config()
