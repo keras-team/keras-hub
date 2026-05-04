@@ -29,6 +29,7 @@ from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_sam3
 from keras_hub.src.utils.transformers import convert_smollm3
+from keras_hub.src.utils.transformers import convert_swin_transformer
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_t5gemma2
 from keras_hub.src.utils.transformers import convert_vit
@@ -74,6 +75,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_mistral
         elif model_type == "paligemma":
             self.converter = convert_pali_gemma
+        elif model_type == "swin":
+            self.converter = convert_swin_transformer
         elif model_type == "vit":
             self.converter = convert_vit
         elif model_type == "qwen2":
