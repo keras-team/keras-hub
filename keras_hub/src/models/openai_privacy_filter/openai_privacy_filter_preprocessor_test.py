@@ -12,18 +12,16 @@ from keras_hub.src.tests.test_case import TestCase
 
 class OpenAIPrivacyFilterPreprocessorTest(TestCase):
     def setUp(self):
-        vocab = {
-            "Ġthe": 0,
-            "Ġquick": 1,
-            "Ġbrown": 2,
-            "Ġfox": 3,
-            "Ġjumps": 4,
-            "<|endoftext|>": 5,
-            "Ġ": 6,
-        }
-        merges = ["Ġ t", "Ġt h", "Ġth e"]
+        self.merges = ["Ġ t", "Ġt h", "Ġth e"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["Ġquick", "Ġbrown", "Ġfox", "Ġjumps", "<|endoftext|>"]
+        self.vocab = sorted(set(self.vocab))
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.tokenizer = OpenAIPrivacyFilterTokenizer(
-            vocabulary=vocab, merges=merges
+            vocabulary=self.vocab, merges=self.merges
         )
         self.init_kwargs = {
             "tokenizer": self.tokenizer,

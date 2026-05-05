@@ -46,6 +46,11 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
         self._sequence_length = sequence_length
         self.truncate = truncate
 
+        # Since `MultiSegmentPacker` requires TF workflow, we
+        # currently disable the Python workflow for
+        # `OpenAIPrivacyFilterPreprocessor`.
+        self.tokenizer._allow_python_workflow = False
+
     def build(self, input_shape):
         super().build(input_shape)
         # Use pad_token_id for start/end/sep since this encoder model
