@@ -377,3 +377,56 @@ class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
         }
         output = causal_lm.generate(inputs)
         self.assertIsInstance(output, str)
+
+    def test_gqa_fit(self):
+        # Test fit() with GQA (num_heads != num_kv_heads).
+        preprocessor = Gemma3nCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=None,
+            audio_converter=None,
+            sequence_length=20,
+            max_images_per_prompt=0,
+            num_vision_tokens_per_image=0,
+            max_audios_per_prompt=0,
+            num_audio_tokens_per_audio=0,
+        )
+        backbone = Gemma3nBackbone(
+            text_vocab_size=preprocessor.tokenizer.vocabulary_size(),
+            text_hidden_size=8,
+            num_hidden_layers=1,
+            pad_token_id=0,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=2,
+            intermediate_size=[16],
+            hidden_activation="gelu_approximate",
+            layer_types=["full_attention"],
+            sliding_window=4,
+            rope_theta=10000.0,
+            max_position_embeddings=20,
+            vocab_size_per_layer_input=10,
+            hidden_size_per_layer_input=2,
+            altup_num_inputs=2,
+            laurel_rank=1,
+        )
+        self.run_task_test(
+            cls=Gemma3nCausalLM,
+            init_kwargs={
+                "preprocessor": preprocessor,
+                "backbone": backbone,
+            },
+            train_data=(
+                {
+                    "prompts": ["the quick brown fox", "the quick brown fox"],
+                    "responses": [
+                        "the earth is round",
+                        "the earth is round",
+                    ],
+                },
+            ),
+            expected_output_shape=(
+                2,
+                20,
+                preprocessor.tokenizer.vocabulary_size(),
+            ),
+        )

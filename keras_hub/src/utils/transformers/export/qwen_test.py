@@ -38,9 +38,12 @@ class TestQwenExport(TestCase):
             "c": 11,
             "k": 12,
             " ": 13,  # Space
+            "qu": 14,
+            "ic": 15,
+            "ck": 16,
         }
         # Add a dummy merge to satisfy initialization
-        merges = ["q u", "i c", "k"]
+        merges = ["q u", "i c", "c k"]
 
         temp_dir = self.get_temp_dir()
         vocab_path = os.path.join(temp_dir, "vocab.json")

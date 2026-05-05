@@ -359,25 +359,6 @@ def convert_weights(backbone, loader, transformers_config):
         vis = backbone.vision_encoder
         vis_prefix = "model.visual"
 
-        # Explicitly build sublayers since they use lazy build().
-        if not vis.patch_embed.built:
-            vis.patch_embed.build(
-                (
-                    None,
-                    vis.temporal_patch_size,
-                    vis.patch_size,
-                    vis.patch_size,
-                    vis.in_channels,
-                )
-            )
-        if not vis.pos_embed.built:
-            vis.pos_embed.build((None,))
-        for blk in vis.blocks:
-            if not blk.built:
-                blk.build((None, vis.hidden_size))
-        if not vis.merger.built:
-            vis.merger.build((None, vis.hidden_size))
-
         # Patch embedding Conv3D.
         # HF: (hidden_size, in_channels, temporal, patch, patch)
         # Keras Conv3D: (temporal, patch, patch, in_channels, hidden_size)

@@ -11,7 +11,6 @@ from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
-from keras_hub.src.utils.tensor_utils import tensor_to_list
 
 try:
     import tensorflow as tf
@@ -21,6 +20,10 @@ try:
     import tensorflow_text as tf_text
 except ImportError:
     tf_text = None
+try:
+    import sentencepiece as spm
+except ImportError:
+    spm = None
 
 VOCAB_FILENAME = "vocabulary.spm"
 
@@ -182,18 +185,24 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         # Keras cannot serialize a bytestring, so we base64 encode the model
         # byte array as a string for saving.
         self.proto = proto_bytes
-        # Eagerly cache vocabulary and size so accessor methods work inside
-        # tf.function and tf.data pipelines without calling .numpy().
-        self._vocabulary_size = int(self._sentence_piece.vocab_size().numpy())
-        self._vocabulary = tensor_to_list(
-            self._sentence_piece.id_to_string(tf.range(self._vocabulary_size))
+        # Use native sentencepiece to extract vocabulary metadata.
+        # This avoids TF ops (.numpy()), making this code safe in
+        # any execution context.
+        if spm is None:
+            raise ImportError(
+                "SentencePieceTokenizer requires the `sentencepiece` package. "
+                "Please install it with `pip install sentencepiece`."
+            )
+        sp = spm.SentencePieceProcessor()
+        sp.LoadFromSerializedProto(proto_bytes)
+        self._vocabulary_size = sp.vocab_size()
+        self._vocabulary = list(
+            sp.IdToPiece(list(range(self._vocabulary_size)))
         )
         self._token_to_id_map = {
             token: id for id, token in enumerate(self._vocabulary)
         }
-        self._unk_token_id = int(
-            self._sentence_piece.string_to_id("<unk>").numpy()
-        )
+        self._unk_token_id = sp.unk_id()
         self._update_special_token_ids()
 
     def vocabulary_size(self):

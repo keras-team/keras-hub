@@ -10,7 +10,7 @@ backbone_presets = {
             "params": 953800816,
             "path": "t5gemma2",
         },
-        "kaggle_handle": "kaggle://keras/t5gemma-2/keras/t5gemma2_270m_270m/1",
+        "kaggle_handle": "kaggle://keras/t5gemma-2/keras/t5gemma2_270m_270m/2",
     },
     "t5gemma2_1b_1b": {
         "metadata": {
@@ -23,7 +23,7 @@ backbone_presets = {
             "params": 2417966192,
             "path": "t5gemma2",
         },
-        "kaggle_handle": "kaggle://keras/t5gemma-2/keras/t5gemma2_1b_1b/1",
+        "kaggle_handle": "kaggle://keras/t5gemma-2/keras/t5gemma2_1b_1b/2",
     },
     "t5gemma2_4b_4b": {
         "metadata": {
@@ -36,6 +36,6 @@ backbone_presets = {
             "params": 8180020080,
             "path": "t5gemma2",
         },
-        "kaggle_handle": "kaggle://keras/t5gemma-2/keras/t5gemma2_4b_4b/1",
+        "kaggle_handle": "kaggle://keras/t5gemma-2/keras/t5gemma2_4b_4b/2",
     },
 }

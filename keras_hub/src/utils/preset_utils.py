@@ -272,7 +272,13 @@ def tf_copy_gfile_to_cache(preset, path):
 
     url = os.path.join(preset, path)
     model_dir = preset.replace("://", "_").replace("-", "_").replace("/", "_")
-    local_path = os.path.join(base_dir, "models", model_dir, path)
+    target_dir = os.path.abspath(os.path.join(base_dir, "models", model_dir))
+    local_path = os.path.abspath(os.path.join(target_dir, path))
+
+    if os.path.commonpath([target_dir, local_path]) != target_dir:
+        raise ValueError(
+            f"Invalid path: '{path}'. It escapes the target directory."
+        )
 
     if not os.path.exists(local_path):
         print_msg(f"Downloading data from {url}")
