@@ -207,10 +207,17 @@ def convert_preprocessing_outputs(x):
     def convert(x):
         if x is None:
             return x
-        if isinstance(x, tf.RaggedTensor) or x.dtype == tf.string:
+
+        if isinstance(x, tf.RaggedTensor):
             return tensor_to_list(x)
-        dtype = keras.backend.standardize_dtype(x.dtype)
-        return ops.convert_to_tensor(x, dtype=dtype)
+
+        if hasattr(x, "dtype"):
+            if x.dtype == tf.string:
+                return tensor_to_list(x)
+            dtype = keras.backend.standardize_dtype(x.dtype)
+            return ops.convert_to_tensor(x, dtype=dtype)
+
+        return x
 
     return keras.tree.map_structure(convert, x)
 
