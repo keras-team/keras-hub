@@ -44,6 +44,7 @@ PRESET_MAP = {
     "qwen3_5_9b_base": "Qwen/Qwen3.5-9B-Base",
     "qwen3_5_9b": "Qwen/Qwen3.5-9B",
     "qwen3_5_27b": "Qwen/Qwen3.5-27B",
+    "qwen3_6_27b": "Qwen/Qwen3.6-27B",
 }
 
 IMAGE_URL = "http://images.cocodataset.org/val2017/000000039769.jpg"
