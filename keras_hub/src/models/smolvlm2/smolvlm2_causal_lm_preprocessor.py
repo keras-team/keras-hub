@@ -153,14 +153,18 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         self.video_metadata = None
 
     def build(self, input_shape):
-        self.packer = MultiSegmentPacker(
+        # Let parent create self.packer = StartEndPacker (used by
+        # the inherited generate_preprocess for text-only inputs).
+        super().build(input_shape)
+        # MultiSegmentPacker for the training call() path which
+        # needs prompt/response segment packing.
+        self._training_packer = MultiSegmentPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
             pad_value=self.tokenizer.pad_token_id,
             sep_value=[],
             sequence_length=self.sequence_length,
         )
-        self.built = True
 
     # ------------------------------------------------------------------
     # Special-token-aware tokenization
@@ -319,7 +323,7 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             images = self.image_converter(images)
 
         # Pad with one extra token for truncation below.
-        token_ids, segment_ids = self.packer(
+        token_ids, segment_ids = self._training_packer(
             (prompts, responses),
             sequence_length=sequence_length + 1,
             add_start_value=self.add_start_token,
@@ -528,7 +532,6 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
     # ------------------------------------------------------------------
     # generate_preprocess
     # ------------------------------------------------------------------
-    @preprocessing_function
     def generate_preprocess(
         self,
         x,
@@ -562,18 +565,9 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
 
         # ------ Text-only path ------
         if images is None and videos is None:
-            prompts = self.tokenizer(prompts)
-            token_ids, segment_ids = self.packer(
-                (prompts,),
-                sequence_length=sequence_length,
-                add_start_value=self.add_start_token,
-                add_end_value=False,
+            return super().generate_preprocess(
+                prompts, sequence_length=sequence_length
             )
-            padding_mask = token_ids != self.tokenizer.pad_token_id
-            return {
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
-            }
 
         # ------ Image path ------
         if images is not None:
@@ -643,9 +637,10 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             expanded_prompt, special_map
         )
 
-        # Pack to fixed length.
+        # Pack to fixed length using the training packer which
+        # supports the tuple input + segment_ids return format.
         token_ids_tensor = tf.ragged.constant([token_ids_list], dtype="int32")
-        token_ids, segment_ids = self.packer(
+        token_ids, segment_ids = self._training_packer(
             (token_ids_tensor,),
             sequence_length=sequence_length,
             add_start_value=self.add_start_token,

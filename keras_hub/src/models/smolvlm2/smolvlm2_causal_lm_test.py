@@ -14,7 +14,15 @@ from keras_hub.src.tests.test_case import TestCase
 
 class SmolVLM2CausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab += ["!"]
         self.vocab += ["<|begin_of_text|>"]
         self.vocab += ["<|end_of_text|>"]
         self.vocab += ["<image>"]
@@ -24,9 +32,6 @@ class SmolVLM2CausalLMTest(TestCase):
         self.vocab += ["<fake_token_around_image>"]
         self.vocab += ["<global-img>"]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
-        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
-        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
-        self.merges += ["Ġai r", "Ġa i", "pla ne"]
         self.preprocessor = SmolVLM2CausalLMPreprocessor(
             SmolVLM2Tokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=8,
@@ -45,7 +50,7 @@ class SmolVLM2CausalLMTest(TestCase):
             num_query_heads=4,
             num_key_value_heads=2,
             scale_factor=1,
-            image_token_id=8,  # <image> token id
+            image_token_id=32,  # <image> token id
             rope_max_wavelength=10000,
             layer_norm_epsilon=1e-5,
             vision_layer_norm_epsilon=1e-6,

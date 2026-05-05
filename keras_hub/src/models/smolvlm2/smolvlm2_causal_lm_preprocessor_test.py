@@ -21,7 +21,23 @@ from keras_hub.src.tests.test_case import TestCase
 
 class SmolVLM2CausalLMPreprocessorTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "\u0120air", "plane", "\u0120at", "port"]
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += [
+            "Ġa t",
+            "p o",
+            "r t",
+            "Ġt h",
+            "ai r",
+            "pl a",
+            "po rt",
+        ]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab += ["!"]
         self.vocab += ["<|begin_of_text|>"]
         self.vocab += ["<|end_of_text|>"]
         self.vocab += ["<image>"]
@@ -31,25 +47,6 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
         self.vocab += ["<fake_token_around_image>"]
         self.vocab += ["<global-img>"]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
-        self.merges = [
-            "\u0120 a",
-            "\u0120 t",
-            "\u0120 i",
-            "\u0120 b",
-            "a i",
-            "p l",
-            "n e",
-        ]
-        self.merges += [
-            "\u0120a t",
-            "p o",
-            "r t",
-            "\u0120t h",
-            "ai r",
-            "pl a",
-            "po rt",
-        ]
-        self.merges += ["\u0120ai r", "\u0120a i", "pla ne"]
         self.tokenizer = SmolVLM2Tokenizer(
             vocabulary=self.vocab,
             merges=self.merges,
@@ -61,14 +58,14 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
         self.input_data = [" airplane at airport"]
 
     def test_preprocessor_basics(self):
-        # " airplane at airport" tokenizes to [2, 3, 4, 2, 5].
+        # " airplane at airport" tokenizes to [23, 14, 24, 23, 16].
         # call() packs (prompts, responses) = same text duplicated.
-        # Packer with seq_length=9 (8+1): [2,3,4,2, 2,3,4,2, 11] → truncated.
-        # token_ids[:-1] = [2,3,4,2, 2,3,4,2].
+        # Packer with seq_length=9 (8+1): [23,14,24,23, 23,14,24,23, 35]
+        # → truncated. token_ids[:-1] = [23,14,24,23, 23,14,24,23].
         preprocessor = SmolVLM2CausalLMPreprocessor(**self.init_kwargs)
         x, y, sw = preprocessor(self.input_data)
 
-        self.assertAllEqual(x["token_ids"], [[2, 3, 4, 2, 2, 3, 4, 2]])
+        self.assertAllEqual(x["token_ids"], [[23, 14, 24, 23, 23, 14, 24, 23]])
         self.assertIn("padding_mask", x)
 
     def test_with_start_end_token(self):
@@ -79,8 +76,10 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
             add_end_token=True,
         )
         x, y, sw = preprocessor(input_data)
-        # start=10, [2,3,4,2, 2,3,4] truncated to 8 positions.
-        self.assertAllEqual(x["token_ids"], [[10, 2, 3, 4, 2, 2, 3, 4]] * 4)
+        # start=34, [23,14,24,23, 23,14,24] truncated to 8 positions.
+        self.assertAllEqual(
+            x["token_ids"], [[34, 23, 14, 24, 23, 23, 14, 24]] * 4
+        )
 
     def test_generate_preprocess_text_only(self):
         input_data = " airplane at airport"
@@ -94,7 +93,7 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
 
     def test_generate_postprocess(self):
         input_data = {
-            "token_ids": [2, 3, 4, 2, 5, 0, 0, 0],
+            "token_ids": [23, 14, 24, 23, 16, 0, 0, 0],
             "padding_mask": [1, 1, 1, 1, 1, 0, 0, 0],
         }
         preprocessor = SmolVLM2CausalLMPreprocessor(**self.init_kwargs)
