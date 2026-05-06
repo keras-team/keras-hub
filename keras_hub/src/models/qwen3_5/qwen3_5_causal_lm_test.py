@@ -14,36 +14,19 @@ from keras_hub.src.tests.test_case import TestCase
 
 class Qwen3_5CausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "\u0120air", "plane", "\u0120at", "port"]
-        self.vocab += ["<|endoftext|>"]
-        self.vocab += [
-            "<|im_start|>",
-            "<|vision_start|>",
-            "<|vision_end|>",
-            "<|image_pad|>",
-            "<|video_pad|>",
-        ]
-        self.vocab += ["<|im_end|>"]
+        self.merges = ["\u0120 a", "\u0120 t", "\u0120 i", "\u0120 b", "a i"]
+        self.merges += ["p l", "n e", "\u0120a t", "p o", "r t", "\u0120t h"]
+        self.merges += ["ai r", "pl a", "po rt", "\u0120ai r", "\u0120a i"]
+        self.merges += ["pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<|endoftext|>", "<|im_end|>", "<|im_start|>"]
+        self.vocab += ["<|vision_start|>", "<|vision_end|>", "<|image_pad|>"]
+        self.vocab += ["<|video_pad|>", "!"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
-        self.merges = [
-            "\u0120 a",
-            "\u0120 t",
-            "\u0120 i",
-            "\u0120 b",
-            "a i",
-            "p l",
-            "n e",
-        ]
-        self.merges += [
-            "\u0120a t",
-            "p o",
-            "r t",
-            "\u0120t h",
-            "ai r",
-            "pl a",
-            "po rt",
-        ]
-        self.merges += ["\u0120ai r", "\u0120a i", "pla ne"]
         self.preprocessor = Qwen3_5CausalLMPreprocessor(
             Qwen3_5Tokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=7,
@@ -81,7 +64,7 @@ class Qwen3_5CausalLMTest(TestCase):
             cls=Qwen3_5CausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 7, 13),
+            expected_output_shape=(2, 7, 37),
         )
 
     def test_generate(self):

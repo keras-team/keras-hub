@@ -13,35 +13,19 @@ from keras_hub.src.tests.test_case import TestCase
 
 class Qwen3_5CausalLMPreprocessorTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "\u0120air", "plane", "\u0120at", "port"]
-        self.vocab += ["<|im_end|>", "<|endoftext|>"]
-        self.vocab += [
-            "<|im_start|>",
-            "<|vision_start|>",
-            "<|vision_end|>",
-            "<|image_pad|>",
-            "<|video_pad|>",
-        ]
+        self.merges = ["\u0120 a", "\u0120 t", "\u0120 i", "\u0120 b", "a i"]
+        self.merges += ["p l", "n e", "\u0120a t", "p o", "r t", "\u0120t h"]
+        self.merges += ["ai r", "pl a", "po rt", "\u0120ai r", "\u0120a i"]
+        self.merges += ["pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<|endoftext|>", "<|im_end|>", "<|im_start|>"]
+        self.vocab += ["<|vision_start|>", "<|vision_end|>", "<|image_pad|>"]
+        self.vocab += ["<|video_pad|>", "!"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
-        self.merges = [
-            "\u0120 a",
-            "\u0120 t",
-            "\u0120 i",
-            "\u0120 b",
-            "a i",
-            "p l",
-            "n e",
-        ]
-        self.merges += [
-            "\u0120a t",
-            "p o",
-            "r t",
-            "\u0120t h",
-            "ai r",
-            "pl a",
-            "po rt",
-        ]
-        self.merges += ["\u0120ai r", "\u0120a i", "pla ne"]
         self.tokenizer = Qwen3_5Tokenizer(
             vocabulary=self.vocab,
             merges=self.merges,
@@ -59,10 +43,10 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[1, 3, 4, 2, 5, 6, 7, 7]],
+                    "token_ids": [[10, 22, 32, 31, 24, 2, 1, 1]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
                 },
-                [[3, 4, 2, 5, 6, 7, 7, 7]],
+                [[22, 32, 31, 24, 2, 1, 1, 1]],
                 [[1, 1, 1, 1, 1, 0, 0, 0]],
             ),
         )
@@ -75,21 +59,21 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
             add_end_token=True,
         )
         x, y, sw = preprocessor(input_data)
-        self.assertAllEqual(x["token_ids"], [[1, 3, 4, 2, 5, 6, 7, 7]] * 4)
+        self.assertAllEqual(x["token_ids"], [[10, 22, 32, 31, 24, 2, 1, 1]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0]] * 4)
-        self.assertAllEqual(y, [[3, 4, 2, 5, 6, 7, 7, 7]] * 4)
+        self.assertAllEqual(y, [[22, 32, 31, 24, 2, 1, 1, 1]] * 4)
         self.assertAllEqual(sw, [[1, 1, 1, 1, 1, 0, 0, 0]] * 4)
 
     def test_generate_preprocess(self):
         input_data = "airplane at airport"
         preprocessor = Qwen3_5CausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_preprocess(input_data)
-        self.assertAllEqual(x["token_ids"], [1, 3, 4, 2, 5, 7, 7, 7])
+        self.assertAllEqual(x["token_ids"], [10, 22, 32, 31, 24, 1, 1, 1])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
 
     def test_generate_postprocess(self):
         input_data = {
-            "token_ids": [1, 3, 4, 2, 5, 7, 7, 7],
+            "token_ids": [10, 22, 32, 31, 24, 1, 1, 1],
             "padding_mask": [1, 1, 1, 1, 1, 0, 0, 0],
         }
         preprocessor = Qwen3_5CausalLMPreprocessor(**self.init_kwargs)
@@ -128,7 +112,7 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
         # token_ids should have four video_pad tokens followed by text.
         token_ids = out["token_ids"]
         self.assertEqual(
-            list(ops.convert_to_numpy(token_ids)[:4]), [12, 12, 12, 12]
+            list(ops.convert_to_numpy(token_ids)[:4]), [5, 5, 5, 5]
         )
 
         self.assertEqual(tuple(out["image_grid_thw"].shape), (1, 3))

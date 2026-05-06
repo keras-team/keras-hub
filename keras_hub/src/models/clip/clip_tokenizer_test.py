@@ -6,12 +6,16 @@ from keras_hub.src.tests.test_case import TestCase
 
 class CLIPTokenizerTest(TestCase):
     def setUp(self):
-        vocab = ["air", "plane</w>", "port</w>"]
-        vocab += ["<|endoftext|>", "<|startoftext|>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(vocab)])
         merges = ["a i", "p l", "n e</w>", "p o", "r t</w>", "ai r", "pl a"]
         merges += ["po rt</w>", "pla ne</w>"]
         self.merges = merges
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<|endoftext|>", "<|startoftext|>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
         self.input_data = ["airplane ", " airport"]
 
@@ -21,7 +25,7 @@ class CLIPTokenizerTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             # Whitespaces should be removed.
-            expected_output=[[0, 1], [0, 2]],
+            expected_output=[[4, 14], [4, 16]],
             expected_detokenize_output=["airplane", "airport"],
         )
 
@@ -52,3 +56,9 @@ class CLIPTokenizerTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+
+class CLIPTokenizerDisallowPythonWorkflowTest(CLIPTokenizerTest):
+    def setUp(self):
+        super().setUp()
+        self.init_kwargs.update({"_allow_python_workflow": False})

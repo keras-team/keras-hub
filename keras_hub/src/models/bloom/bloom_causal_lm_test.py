@@ -14,12 +14,16 @@ from keras_hub.src.tests.test_case import TestCase
 
 class BloomCausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["<unk>", "<s>", "</s>", "<pad>"]
-        self.vocab += ["!", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<unk>", "<s>", "</s>", "<pad>", "!"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.tokenizer = BloomTokenizer(
             vocabulary=self.vocab, merges=self.merges
         )
@@ -27,8 +31,9 @@ class BloomCausalLMTest(TestCase):
             self.tokenizer,
             sequence_length=8,
         )
+        self.vocabulary_size = self.preprocessor.tokenizer.vocabulary_size()
         self.backbone = BloomBackbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            vocabulary_size=self.vocabulary_size,
             num_layers=2,
             num_heads=2,
             hidden_dim=4,
@@ -47,12 +52,11 @@ class BloomCausalLMTest(TestCase):
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_causal_lm_basics(self):
-        vocabulary_size = self.tokenizer.vocabulary_size()
         self.run_task_test(
             cls=BloomCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 8, vocabulary_size),
+            expected_output_shape=(2, 8, self.vocabulary_size),
         )
 
     def test_generate(self):
