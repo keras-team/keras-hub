@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 
@@ -166,6 +167,7 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
             )
 
     @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
         strict=False,
         reason=(
             "Upstream litert-torch limitation: SAM3 uses torchvision::nms "
