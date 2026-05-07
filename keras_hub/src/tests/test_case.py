@@ -613,17 +613,18 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 model.export(), such as allow_custom_ops=True or
                 enable_select_tf_ops=True.
         """
-        # Skip test if Keras version is less than 3.13
-        if packaging.version.Version(
-            keras.__version__
-        ) < packaging.version.Version("3.13.0"):
-            self.skipTest("LiteRT export requires Keras >= 3.13")
-
         # Extract comparison_mode from export_kwargs if provided
         comparison_mode = export_kwargs.pop("comparison_mode", "strict")
         backend = keras.backend.backend()
 
         if backend == "torch":
+            if packaging.version.Version(
+                keras.__version__
+            ) < packaging.version.Version("3.15.0"):
+                self.skipTest(
+                    "LiteRT export with torch backend requires Keras >= 3.15"
+                )
+
             try:
                 import litert_torch  # noqa: F401
             except (ImportError, ModuleNotFoundError):
@@ -640,6 +641,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     "verification with the torch backend"
                 )
         elif backend == "tensorflow":
+            if packaging.version.Version(
+                keras.__version__
+            ) < packaging.version.Version("3.13.0"):
+                self.skipTest("LiteRT export requires Keras >= 3.13")
             self.skipTest(
                 "LiteRT export tests are temporarily skipped on the "
                 "TensorFlow backend."
