@@ -134,9 +134,7 @@ class SAMImageSegmenterTest(TestCase):
 
     def test_litert_export(self):
         if backend.backend() != "torch":
-            pytest.skip(
-                reason="SAM LiteRT export is only enabled on torch."
-            )
+            pytest.skip(reason="SAM LiteRT export is only enabled on torch.")
         self.run_litert_export_test(
             cls=SAMImageSegmenter,
             init_kwargs=self.init_kwargs,

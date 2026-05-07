@@ -57,9 +57,7 @@ class BASNetTest(TestCase):
 
     def test_litert_export(self):
         if backend.backend() != "torch":
-            pytest.skip(
-                reason="BASNet LiteRT export is only enabled on torch."
-            )
+            pytest.skip(reason="BASNet LiteRT export is only enabled on torch.")
         self.run_litert_export_test(
             cls=BASNetImageSegmenter,
             init_kwargs=self.init_kwargs,
