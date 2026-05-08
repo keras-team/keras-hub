@@ -49,13 +49,17 @@ class BertTextEmbedder(TextEmbedder):
     embedder = keras_hub.models.BertTextEmbedder.from_preset(
         "all_minilm_l6_v2_en",
     )
-    embeddings = embedder.predict(
-        ["The quick brown fox.", "I forgot my homework."]
-    )
-    # embeddings.shape == (2, 384)
 
-    # Compute cosine similarity.
-    similarity = embeddings @ embeddings.T
+    # Semantic search.
+    query = "Which planet is known as the Red Planet?"
+    documents = [
+        "Mars is often referred to as the Red Planet.",
+        "Venus is often called Earth's twin.",
+    ]
+    q_emb = embedder.encode_query(query)
+    d_embs = embedder.encode_documents(documents)
+    sims = embedder.similarity(q_emb, d_embs)
+    print("Best match:", documents[sims.argmax()])
     ```
 
     Preprocessed integer data.
@@ -138,22 +142,18 @@ class BertTextEmbedder(TextEmbedder):
     @staticmethod
     def _max_pooling(sequence_output, padding_mask):
         """Max pooling over token embeddings, ignoring padding."""
-        mask = ops.cast(
-            ops.expand_dims(padding_mask, axis=-1), sequence_output.dtype
+        mask = ops.cast(ops.expand_dims(padding_mask, axis=-1), dtype="bool")
+        # Set padding positions to dtype min so they don't affect max.
+        fill_value = ops.cast(
+            ops.convert_to_tensor(-1e9), sequence_output.dtype
         )
-        # Set padding positions to -inf so they don't affect max.
-        masked_output = sequence_output + (1.0 - mask) * (-1e9)
+        masked_output = ops.where(mask, sequence_output, fill_value)
         return ops.max(masked_output, axis=1)
 
     @staticmethod
     def _l2_normalize(embeddings):
         """L2 normalize embeddings to unit length."""
-        norm = ops.sqrt(
-            ops.maximum(
-                ops.sum(ops.square(embeddings), axis=-1, keepdims=True), 1e-12
-            )
-        )
-        return embeddings / norm
+        return ops.nn.normalize(embeddings, axis=-1, order=2)
 
     def get_config(self):
         config = super().get_config()
