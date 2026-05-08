@@ -55,7 +55,7 @@ class BLIP2CausalLM(CausalLM):
 
         # === Functional Model ===
         inputs = backbone.input
-        hidden_states = backbone(inputs)
+        hidden_states = backbone.output
         outputs = backbone.token_embedding(hidden_states, reverse=True)
         # Sliced outputs to match text-only labels.
         outputs = outputs[:, backbone.num_query_tokens :, :]
