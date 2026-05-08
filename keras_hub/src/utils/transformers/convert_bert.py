@@ -19,28 +19,36 @@ def convert_backbone_config(transformers_config):
 
 
 def convert_weights(backbone, loader, transformers_config):
+    # Detect LayerNorm naming: "gamma/beta" (standard BERT) vs
+    # "weight/bias" (sentence-transformers). Prefix is auto-detected.
+    try:
+        loader.get_tensor("embeddings.LayerNorm.gamma")
+        ln_gamma, ln_beta = "gamma", "beta"
+    except Exception:
+        ln_gamma, ln_beta = "weight", "bias"
+
     # Embedding layer
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
-        hf_weight_key="bert.embeddings.word_embeddings.weight",
+        hf_weight_key="embeddings.word_embeddings.weight",
     )
     loader.port_weight(
         keras_variable=backbone.get_layer(
             "position_embedding"
         ).position_embeddings,
-        hf_weight_key="bert.embeddings.position_embeddings.weight",
+        hf_weight_key="embeddings.position_embeddings.weight",
     )
     loader.port_weight(
         keras_variable=backbone.get_layer("segment_embedding").embeddings,
-        hf_weight_key="bert.embeddings.token_type_embeddings.weight",
+        hf_weight_key="embeddings.token_type_embeddings.weight",
     )
     loader.port_weight(
         keras_variable=backbone.get_layer("embeddings_layer_norm").beta,
-        hf_weight_key="bert.embeddings.LayerNorm.beta",
+        hf_weight_key=f"embeddings.LayerNorm.{ln_beta}",
     )
     loader.port_weight(
         keras_variable=backbone.get_layer("embeddings_layer_norm").gamma,
-        hf_weight_key="bert.embeddings.LayerNorm.gamma",
+        hf_weight_key=f"embeddings.LayerNorm.{ln_gamma}",
     )
 
     def transpose_and_reshape(x, shape):
@@ -50,7 +58,7 @@ def convert_weights(backbone, loader, transformers_config):
     for i in range(backbone.num_layers):
         block = backbone.get_layer(f"transformer_layer_{i}")
         attn = block._self_attention_layer
-        hf_prefix = "bert.encoder.layer."
+        hf_prefix = "encoder.layer."
         # Attention layers
         loader.port_weight(
             keras_variable=attn.query_dense.kernel,
@@ -95,11 +103,11 @@ def convert_weights(backbone, loader, transformers_config):
         # Attention layer norm.
         loader.port_weight(
             keras_variable=block._self_attention_layer_norm.beta,
-            hf_weight_key=f"{hf_prefix}{i}.attention.output.LayerNorm.beta",
+            hf_weight_key=f"{hf_prefix}{i}.attention.output.LayerNorm.{ln_beta}",
         )
         loader.port_weight(
             keras_variable=block._self_attention_layer_norm.gamma,
-            hf_weight_key=f"{hf_prefix}{i}.attention.output.LayerNorm.gamma",
+            hf_weight_key=f"{hf_prefix}{i}.attention.output.LayerNorm.{ln_gamma}",
         )
         # MLP layers
         loader.port_weight(
@@ -123,21 +131,21 @@ def convert_weights(backbone, loader, transformers_config):
         # Output layer norm.
         loader.port_weight(
             keras_variable=block._feedforward_layer_norm.beta,
-            hf_weight_key=f"{hf_prefix}{i}.output.LayerNorm.beta",
+            hf_weight_key=f"{hf_prefix}{i}.output.LayerNorm.{ln_beta}",
         )
         loader.port_weight(
             keras_variable=block._feedforward_layer_norm.gamma,
-            hf_weight_key=f"{hf_prefix}{i}.output.LayerNorm.gamma",
+            hf_weight_key=f"{hf_prefix}{i}.output.LayerNorm.{ln_gamma}",
         )
 
     loader.port_weight(
         keras_variable=backbone.get_layer("pooled_dense").kernel,
-        hf_weight_key="bert.pooler.dense.weight",
+        hf_weight_key="pooler.dense.weight",
         hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
     )
     loader.port_weight(
         keras_variable=backbone.get_layer("pooled_dense").bias,
-        hf_weight_key="bert.pooler.dense.bias",
+        hf_weight_key="pooler.dense.bias",
     )
 
 
