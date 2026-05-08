@@ -55,7 +55,7 @@ class BLIP2CausalLM(CausalLM):
 
         # === Functional Model ===
         inputs = backbone.input
-        hidden_states = backbone.output
+        hidden_states = backbone(inputs)
         # Slice hidden states to text tokens only before projecting to logits.
         # This saves compute/memory by not projecting the visual prefix.
         text_hidden_states = hidden_states[:, backbone.num_query_tokens :, :]
