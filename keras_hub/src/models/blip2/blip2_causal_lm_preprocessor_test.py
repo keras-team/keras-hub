@@ -25,6 +25,7 @@ class BLIP2CausalLMPreprocessorTest(TestCase):
             "q": 9,
             "u": 10,
             "i": 11,
+            "c": 15,
             "k": 12,
             "he": 13,
             "Ġt": 14,
