@@ -1,6 +1,7 @@
 """BLIP-2 backbone model."""
 
 import keras
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
@@ -108,6 +109,7 @@ class BLIP2Backbone(Backbone):
 
             # Stage 1 – frozen ViT: image → patch features
             patch_features = self.vision_encoder(images_input)
+            patch_features = ops.stop_gradient(patch_features)
 
             # Stage 2 – Q-Former bridge: patch features → query embeddings
             query_embeddings = self.qformer(patch_features)

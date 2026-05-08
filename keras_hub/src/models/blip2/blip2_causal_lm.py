@@ -56,9 +56,10 @@ class BLIP2CausalLM(CausalLM):
         # === Functional Model ===
         inputs = backbone.input
         hidden_states = backbone.output
-        outputs = backbone.token_embedding(hidden_states, reverse=True)
-        # Sliced outputs to match text-only labels.
-        outputs = outputs[:, backbone.num_query_tokens :, :]
+        # Slice hidden states to text tokens only before projecting to logits.
+        # This saves compute/memory by not projecting the visual prefix.
+        text_hidden_states = hidden_states[:, backbone.num_query_tokens :, :]
+        outputs = backbone.token_embedding(text_hidden_states, reverse=True)
 
         super().__init__(
             inputs=inputs,
@@ -179,12 +180,15 @@ class BLIP2CausalLM(CausalLM):
             x, full_padding_mask, cache, cache_update_index
         )
 
-        logits = lm.embeddings_layer.token_embedding(
-            hidden_states, reverse=True
-        )
-
         if projected_features is not None:
-            logits = logits[:, num_visual:, :]
+            # Slice hidden states to exclude visual tokens before projection.
+            logits_hidden_states = hidden_states[:, num_visual:, :]
+        else:
+            logits_hidden_states = hidden_states
+
+        logits = lm.embeddings_layer.token_embedding(
+            logits_hidden_states, reverse=True
+        )
 
         return logits, hidden_states, new_cache
 
