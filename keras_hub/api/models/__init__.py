@@ -782,6 +782,21 @@ from keras_hub.src.models.smollm3.smollm3_tokenizer import (
 from keras_hub.src.models.smollm3.smollm3_tokenizer import (
     SmolLM3Tokenizer as SmolLMTokenizer,
 )
+from keras_hub.src.models.smolvlm2.smolvlm2_backbone import (
+    SmolVLM2Backbone as SmolVLM2Backbone,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm import (
+    SmolVLM2CausalLM as SmolVLM2CausalLM,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor import (
+    SmolVLM2CausalLMPreprocessor as SmolVLM2CausalLMPreprocessor,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_tokenizer import (
+    SmolVLM2Tokenizer as SmolVLM2Tokenizer,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_vision_encoder import (
+    SmolVLM2VisionEncoder as SmolVLM2VisionEncoder,
+)
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone as StableDiffusion3Backbone,
 )

@@ -193,6 +193,12 @@ from keras_hub.src.models.segformer.segformer_image_converter import (
 from keras_hub.src.models.siglip.siglip_image_converter import (
     SigLIPImageConverter as SigLIPImageConverter,
 )
+from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
+    SmolVLM2ImageConverter as SmolVLM2ImageConverter,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
+    SmolVLM2VideoConverter as SmolVLM2VideoConverter,
+)
 from keras_hub.src.models.t5gemma2.t5gemma2_image_converter import (
     T5Gemma2ImageConverter as T5Gemma2ImageConverter,
 )
