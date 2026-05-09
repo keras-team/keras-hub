@@ -138,33 +138,7 @@ def check_generate(keras_model, hf_model, hf_processor):
     audio = audio.reshape(1, -1)
 
     keras_model.compile(sampler="greedy")
-    # NOTE: pass `stop_token_ids=None` to bypass a pre-existing issue in
-    # `WhisperAudioToText.generate_step` — the sampler's stop predicate
-    # checks for stop tokens at *unmasked* positions of the prompt buffer,
-    # which for Whisper is pre-filled with `pad == eos`, so the default
-    # `stop_token_ids="auto"` aborts before any token is generated. With
-    # `None`, generation runs to `max_length`, then we trim at the first
-    # EOS token id manually to recover a clean transcript.
-    tokenizer = keras_model.preprocessor.tokenizer
-    eos_id = tokenizer.eos_token_id
-    preprocessed = keras_model.preprocessor.generate_preprocess(
-        {"audio": audio}
-    )
-    step_out = keras_model.generate_step(preprocessed, stop_token_ids=None)
-    ids = keras.ops.convert_to_numpy(step_out["decoder_token_ids"])[0]
-    # Drop everything from the first EOS onward.
-    eos_positions = np.where(ids == eos_id)[0]
-    if len(eos_positions) > 0:
-        ids = ids[: eos_positions[0]]
-    # Strip the BOS prefix.
-    bos_id = tokenizer.bos_token_id
-    while len(ids) > 0 and ids[0] == bos_id:
-        ids = ids[1:]
-    keras_text = tokenizer.detokenize(ids[None, :])[0]
-    if hasattr(keras_text, "numpy"):
-        keras_text = keras_text.numpy()
-    if isinstance(keras_text, bytes):
-        keras_text = keras_text.decode("utf-8")
+    keras_text = keras_model.generate({"audio": audio}, max_length=64)[0]
     print(f"Keras generate(): {keras_text!r}")
 
     hf_inputs = hf_processor(audio[0], sampling_rate=16000, return_tensors="pt")

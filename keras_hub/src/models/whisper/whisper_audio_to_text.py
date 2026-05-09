@@ -240,6 +240,16 @@ class WhisperAudioToText(AudioToText):
         decoder_padding_mask = ops.cast(
             inputs["decoder_padding_mask"], dtype="bool"
         )
+        # Whisper uses `pad_token_id == eos_token_id`, so the buffer's pad
+        # region holds a stop token. The sampler's stop predicate inspects
+        # unmasked positions for stop tokens, which would short-circuit the
+        # loop before any token is sampled. Zero out the unmasked region so
+        # only actually generated tokens trigger the stop predicate.
+        decoder_token_ids = ops.where(
+            decoder_padding_mask,
+            decoder_token_ids,
+            ops.zeros_like(decoder_token_ids),
+        )
         batch_size = ops.shape(encoder_features)[0]
 
         (
