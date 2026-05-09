@@ -72,7 +72,7 @@ class BLIP2Tokenizer(BytePairTokenizer):
         if unsplittable_tokens is None:
             unsplittable_tokens = ["<pad>", "</s>", "<image>"]
 
-        self.padding_side = "right"  # ← add this
+        self.padding_side = "right"
 
         super().__init__(
             vocabulary=vocabulary,
