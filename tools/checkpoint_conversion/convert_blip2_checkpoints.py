@@ -64,7 +64,6 @@ flags.DEFINE_string(
 )
 
 _VALIDATION_PROMPT = "Question: What is in this picture? Answer:"
-_NUM_QUERY_TOKENS = 32
 
 
 def set_seed(seed: int = 42) -> None:
@@ -166,7 +165,7 @@ def validate_projection(
     with torch.no_grad():
         pt_out = to_np(hf_model.language_projection(qformer_pt))
 
-    keras_inp = keras.Input(shape=(None, 768))
+    keras_inp = keras.Input(shape=(None, qformer_out_np.shape[-1]))
     keras_out_tensor = keras_proj(keras_inp)
     proj_model = keras.Model(inputs=keras_inp, outputs=keras_out_tensor)
 
@@ -182,6 +181,8 @@ def validate_opt(
     keras_opt, hf_model, qformer_out_np: np.ndarray, hf_processor
 ) -> bool:
     _print_header("OPT (LANGUAGE MODEL) VALIDATION")
+
+    num_query_tokens = keras_opt.num_query_tokens
 
     hf_inputs = hf_processor(
         images=Image.new("RGB", (224, 224), color=(114, 114, 114)),
@@ -205,7 +206,7 @@ def validate_opt(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
         )
-    hf_text_logits = hf_lm_out.logits.float().numpy()[:, _NUM_QUERY_TOKENS:, :]
+    hf_text_logits = hf_lm_out.logits.float().numpy()[:, num_query_tokens:, :]
 
     token_ids = text_ids_pt.numpy()
     padding_mask = np.ones_like(token_ids, dtype=bool)
@@ -219,7 +220,7 @@ def validate_opt(
     keras_logits_full = keras_opt.embeddings_layer.token_embedding(
         keras_hidden, reverse=True
     )
-    keras_text_logits = to_np(keras_logits_full[:, _NUM_QUERY_TOKENS:, :])
+    keras_text_logits = to_np(keras_logits_full[:, num_query_tokens:, :])
 
     print(f"   -> HF    logits shape (text only) : {hf_text_logits.shape}")
     print(f"   -> Keras logits shape (text only) : {keras_text_logits.shape}")
@@ -240,6 +241,8 @@ def validate_output(
     keras_backbone, keras_preprocessor, hf_model, hf_processor
 ) -> None:
     _print_header("FULL PIPELINE — FORWARD PASS")
+
+    num_query_tokens = keras_backbone.num_query_tokens
 
     keras_params = keras_backbone.count_params()
     hf_params = sum(
@@ -264,14 +267,14 @@ def validate_output(
         return_tensors="pt",
         padding=False,
     )
-    text_len = hf_inputs["input_ids"].shape[1] - _NUM_QUERY_TOKENS
+    text_len = hf_inputs["input_ids"].shape[1] - num_query_tokens
     print(f"\n   -> Text length : {text_len} tokens")
 
     with torch.no_grad():
         hf_out = hf_model(**hf_inputs)
 
     hf_logits = hf_out.logits.detach().cpu().float().numpy()
-    hf_text_logits = hf_logits[:, _NUM_QUERY_TOKENS:, :]
+    hf_text_logits = hf_logits[:, num_query_tokens:, :]
 
     keras_inputs = keras_preprocessor.generate_preprocess(
         {"images": image_np[None], "text": [_VALIDATION_PROMPT]},
@@ -283,7 +286,7 @@ def validate_output(
     keras_logits_full = lm.embeddings_layer.token_embedding(
         keras_hidden, reverse=True
     )
-    keras_text_logits = to_np(keras_logits_full[:, _NUM_QUERY_TOKENS:, :])
+    keras_text_logits = to_np(keras_logits_full[:, num_query_tokens:, :])
 
     print(f"   -> HF    logits shape : {hf_text_logits.shape}")
     print(f"   -> Keras logits shape : {keras_text_logits.shape}")
@@ -349,8 +352,13 @@ def transfer_vision_weights(keras_vision, hf_vision) -> None:
     pt_state = hf_vision.state_dict()
     k_weights = keras_vision.weights
 
+    hidden_dim = keras_vision.hidden_dim
+    num_layers = keras_vision.num_layers
+    num_heads = keras_vision.num_heads
+    head_dim = hidden_dim // num_heads
+
     k_weights[0].assign(
-        to_np(pt_state["embeddings.class_embedding"]).reshape(1, 1, 1408)
+        to_np(pt_state["embeddings.class_embedding"]).reshape(1, 1, hidden_dim)
     )
     k_weights[1].assign(
         to_np(pt_state["embeddings.patch_embedding.weight"]).transpose(
@@ -359,11 +367,11 @@ def transfer_vision_weights(keras_vision, hf_vision) -> None:
     )
     k_weights[2].assign(to_np(pt_state["embeddings.patch_embedding.bias"]))
     k_weights[3].assign(
-        to_np(pt_state["embeddings.position_embedding"]).reshape(257, 1408)
+        to_np(pt_state["embeddings.position_embedding"]).reshape(-1, hidden_dim)
     )
 
     idx = 4
-    for i in range(39):
+    for i in range(num_layers):
         pt_prefix = f"encoder.layers.{i}."
 
         k_weights[idx].assign(to_np(pt_state[f"{pt_prefix}layer_norm1.weight"]))
@@ -376,17 +384,23 @@ def transfer_vision_weights(keras_vision, hf_vision) -> None:
         q_w, k_w, v_w = torch.chunk(qkv_w, 3, dim=0)
         q_b, k_b, v_b = torch.chunk(qkv_b, 3, dim=0)
 
-        k_weights[idx + 2].assign(to_np(q_w).T.reshape(1408, 16, 88))
-        k_weights[idx + 3].assign(to_np(q_b).reshape(16, 88))
-        k_weights[idx + 4].assign(to_np(k_w).T.reshape(1408, 16, 88))
-        k_weights[idx + 5].assign(to_np(k_b).reshape(16, 88))
-        k_weights[idx + 6].assign(to_np(v_w).T.reshape(1408, 16, 88))
-        k_weights[idx + 7].assign(to_np(v_b).reshape(16, 88))
+        k_weights[idx + 2].assign(
+            to_np(q_w).T.reshape(hidden_dim, num_heads, head_dim)
+        )
+        k_weights[idx + 3].assign(to_np(q_b).reshape(num_heads, head_dim))
+        k_weights[idx + 4].assign(
+            to_np(k_w).T.reshape(hidden_dim, num_heads, head_dim)
+        )
+        k_weights[idx + 5].assign(to_np(k_b).reshape(num_heads, head_dim))
+        k_weights[idx + 6].assign(
+            to_np(v_w).T.reshape(hidden_dim, num_heads, head_dim)
+        )
+        k_weights[idx + 7].assign(to_np(v_b).reshape(num_heads, head_dim))
 
         k_weights[idx + 8].assign(
             to_np(
                 pt_state[f"{pt_prefix}self_attn.projection.weight"]
-            ).T.reshape(16, 88, 1408)
+            ).T.reshape(num_heads, head_dim, hidden_dim)
         )
         k_weights[idx + 9].assign(
             to_np(pt_state[f"{pt_prefix}self_attn.projection.bias"])
@@ -418,10 +432,10 @@ def transfer_qformer_weights(keras_qformer, hf_model) -> None:
     print("Transferring Q-Former weights...")
     pt_qf = hf_model.qformer
     pt_state = pt_qf.state_dict()
-    hidden_dim = 768
-    num_heads = 12
-    head_dim = 64
-    vision_dim = 1408
+    hidden_dim = keras_qformer.hidden_dim
+    num_heads = keras_qformer.num_heads
+    head_dim = hidden_dim // num_heads
+    vision_dim = keras_qformer.vision_dim
 
     keras_qformer.query_tokens.assign(to_np(hf_model.query_tokens))
     keras_qformer.layer_norm.weights[0].assign(to_np(pt_qf.layernorm.weight))
@@ -604,7 +618,7 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
             to_np(pt_dec.embed_tokens.weight),
         ),
         (
-            "position_embedding (row 34 = first text pos)",
+            "position_embedding",
             keras_opt.embeddings_layer.position_embedding.weights[0],
             to_np(pt_dec.embed_positions.weight),
         ),
@@ -693,55 +707,65 @@ def main(_) -> None:
     else:
         print("✅ All HF parameters confirmed float32")
 
+    hf_config = hf_model.config
+    hf_vision_config = hf_model.vision_model.config
+    hf_qformer_config = hf_model.qformer.config
+    hf_opt_config = hf_model.language_model.config
+
+    num_query_tokens = getattr(hf_config, "num_query_tokens", 32)
+
     vision_config = {
-        "image_size": 224,
-        "patch_size": 14,
-        "num_layers": 39,
-        "num_heads": 16,
-        "hidden_dim": 1408,
-        "intermediate_dim": 6144,
+        "image_size": hf_vision_config.image_size,
+        "patch_size": hf_vision_config.patch_size,
+        "num_layers": hf_vision_config.num_hidden_layers,
+        "num_heads": hf_vision_config.num_attention_heads,
+        "hidden_dim": hf_vision_config.hidden_size,
+        "intermediate_dim": hf_vision_config.intermediate_size,
         "use_patch_bias": True,
         "use_class_token": True,
         "use_mha_bias": True,
         "use_mlp_bias": True,
         "dropout_rate": 0.0,
-        "layer_norm_epsilon": 1e-6,
-        "initializer_range": 0.02,
+        "layer_norm_epsilon": hf_vision_config.layer_norm_eps,
+        "initializer_range": hf_vision_config.initializer_range,
     }
     v_enc = BLIP2VisionEncoder(**vision_config)
     v_enc.build((None, 224, 224, 3))
     transfer_vision_weights(v_enc, hf_model.vision_model)
 
     qf = BLIP2QFormer(
-        num_query_tokens=_NUM_QUERY_TOKENS,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        vision_dim=1408,
-        cross_attention_frequency=2,
-        dropout=0.1,
-        layer_norm_epsilon=1e-12,
+        num_query_tokens=num_query_tokens,
+        num_layers=hf_qformer_config.num_hidden_layers,
+        num_heads=hf_qformer_config.num_attention_heads,
+        hidden_dim=hf_qformer_config.hidden_size,
+        intermediate_dim=hf_qformer_config.intermediate_size,
+        vision_dim=hf_vision_config.hidden_size,
+        cross_attention_frequency=hf_qformer_config.cross_attention_frequency,
+        dropout=hf_qformer_config.hidden_dropout_prob,
+        layer_norm_epsilon=hf_qformer_config.layer_norm_eps,
     )
-    qf.build((None, 257, 1408))
+    qf.build(
+        (None, v_enc.num_vision_tokens_per_image, hf_vision_config.hidden_size)
+    )
     transfer_qformer_weights(qf, hf_model)
 
     opt_config = {
-        "vocabulary_size": 50304,
-        "num_layers": 32,
-        "num_heads": 32,
-        "hidden_dim": 2560,
-        "intermediate_dim": 10240,
-        "num_query_tokens": _NUM_QUERY_TOKENS,
-        "dropout": 0.1,
-        "max_sequence_length": 2048,
-        "qformer_hidden_dim": 768,
+        "vocabulary_size": hf_opt_config.vocab_size,
+        "num_layers": hf_opt_config.num_hidden_layers,
+        "num_heads": hf_opt_config.num_attention_heads,
+        "hidden_dim": hf_opt_config.hidden_size,
+        "intermediate_dim": hf_opt_config.ffn_dim,
+        "num_query_tokens": num_query_tokens,
+        "dropout": hf_opt_config.dropout,
+        "max_sequence_length": hf_opt_config.max_position_embeddings,
+        "qformer_hidden_dim": hf_qformer_config.hidden_size,
     }
     opt = BLIP2CustomOPT(**opt_config)
 
     dummy_opt_inputs = {
         "qformer_features": np.zeros(
-            (1, _NUM_QUERY_TOKENS, 768), dtype="float32"
+            (1, num_query_tokens, hf_qformer_config.hidden_size),
+            dtype="float32",
         ),
         "token_ids": np.zeros((1, 10), dtype="int32"),
         "padding_mask": np.ones((1, 10), dtype="bool"),
@@ -795,11 +819,20 @@ def main(_) -> None:
     )
     preprocessor = BLIP2CausalLMPreprocessor(
         tokenizer=tokenizer,
-        image_converter=BLIP2ImageConverter(image_size=(224, 224)),
+        image_converter=BLIP2ImageConverter(
+            image_size=(
+                hf_vision_config.image_size,
+                hf_vision_config.image_size,
+            )
+        ),
     )
     causal_lm = BLIP2CausalLM(backbone=backbone, preprocessor=preprocessor)
 
-    image_pil = Image.new("RGB", (224, 224), color=(114, 114, 114))
+    image_pil = Image.new(
+        "RGB",
+        (hf_vision_config.image_size, hf_vision_config.image_size),
+        color=(114, 114, 114),
+    )
     image_np = np.array(image_pil).astype(np.float32) / 255.0
 
     vision_ok = validate_vision_encoder(v_enc, hf_model)
