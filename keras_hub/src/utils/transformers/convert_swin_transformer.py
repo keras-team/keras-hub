@@ -3,8 +3,39 @@ import numpy as np
 from keras_hub.src.models.swin_transformer.swin_transformer_backbone import (
     SwinTransformerBackbone,
 )
+from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = SwinTransformerBackbone
+
+
+def load_image_converter_config(preset, transformers_config):
+    """Load image converter config from HuggingFace preprocessor config."""
+    preprocessor_config = load_json(preset, "preprocessor_config.json")
+    if preprocessor_config is None:
+        return None
+
+    mean = preprocessor_config.get("image_mean", [0.485, 0.456, 0.406])
+    std = preprocessor_config.get("image_std", [0.229, 0.224, 0.225])
+    rescale_factor = preprocessor_config.get("rescale_factor", 1.0 / 255.0)
+
+    scale = [rescale_factor / s for s in std]
+    offset = [-m / s for m, s in zip(mean, std)]
+
+    raw_size = preprocessor_config.get(
+        "crop_size", preprocessor_config.get("size", 224)
+    )
+    if isinstance(raw_size, dict):
+        image_size = (raw_size["height"], raw_size["width"])
+    else:
+        image_size = (int(raw_size), int(raw_size))
+
+    return {
+        "image_size": image_size,
+        "scale": scale,
+        "offset": offset,
+        "interpolation": "bicubic",
+        "antialias": True,
+    }
 
 
 def convert_backbone_config(transformers_config):
