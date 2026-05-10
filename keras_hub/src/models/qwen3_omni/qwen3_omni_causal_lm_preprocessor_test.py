@@ -34,10 +34,15 @@ class Qwen3OmniCausalLMPreprocessorTest(TestCase):
             "<|audio_end|>",
             "<|audio_pad|>",
         ]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab = dict(
+            [(token, i) for i, token in enumerate(dict.fromkeys(self.vocab))]
+        )
         self.tokenizer = Qwen3OmniTokenizer(
             vocabulary=self.vocab,
             merges=self.merges,
