@@ -26,7 +26,7 @@ from keras_hub.src.models.swin_transformer.swin_transformer_backbone import (
 from keras_hub.src.models.swin_transformer.swin_transformer_image_classifier_preprocessor import (  # noqa: E501
     SwinTransformerImageClassifierPreprocessor,
 )
-from keras_hub.src.models.swin_transformer.swin_transformer_image_converter import (
+from keras_hub.src.models.swin_transformer.swin_transformer_image_converter import (  # noqa: E501
     SwinTransformerImageConverter,
 )
 
@@ -86,8 +86,19 @@ def convert_image_converter(hf_image_processor):
     )
 
 
-def validate_output(keras_backbone, keras_image_converter, hf_model, hf_processor):
+def validate_output(
+    keras_backbone, keras_image_converter, hf_model, hf_processor
+):
     """Validate converted model outputs match HuggingFace."""
+    # Compare number of parameters between Keras and HF backbone.
+    keras_params = keras_backbone.count_params()
+    hf_params = sum(p.numel() for p in hf_model.parameters())
+    print(f"🔶 Keras model params: {keras_params:,}")
+    print(f"🔶 HF model params:    {hf_params:,}")
+    assert keras_params == hf_params, (
+        "❌ Parameter count mismatch between Keras and HF models!"
+    )
+
     file = keras.utils.get_file(
         origin="http://images.cocodataset.org/val2017/000000039769.jpg"
     )
@@ -178,7 +189,9 @@ def main(_):
         image_converter=keras_image_converter
     )
 
-    validate_output(keras_backbone, keras_image_converter, hf_model, hf_processor)
+    validate_output(
+        keras_backbone, keras_image_converter, hf_model, hf_processor
+    )
     print("✅ Output validated.")
 
     keras_backbone.save_to_preset(f"./{preset}")
