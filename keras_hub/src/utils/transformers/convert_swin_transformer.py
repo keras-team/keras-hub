@@ -109,9 +109,7 @@ def convert_weights(backbone, loader, transformers_config):
                     np.concatenate([q_b, k_b, v_b], axis=0)
                 )
 
-            port_dense(
-                block.attn.proj, f"{prefix}.attention.output.dense"
-            )
+            port_dense(block.attn.proj, f"{prefix}.attention.output.dense")
             loader.port_weight(
                 block.attn.relative_position_bias_table,
                 f"{attn_prefix}.relative_position_bias_table",
