@@ -632,25 +632,16 @@ class Qwen3OmniCausalLM(CausalLM):
         Caches the per-batch M-RoPE delta on ``self`` when an image grid
         is supplied so trailing-text decode positions stay aligned.
         """
-        batch_size = ops.shape(token_ids)[0]
-        max_length = ops.shape(token_ids)[1]
-        cache_shape = ops.concatenate(
-            [
-                ops.expand_dims(batch_size, 0),
-                ops.convert_to_tensor(
-                    [self.backbone.num_layers, 2], dtype="int32"
-                ),
-                ops.expand_dims(max_length, 0),
-                ops.convert_to_tensor(
-                    [
-                        self.backbone.num_key_value_heads,
-                        self.backbone.head_dim,
-                    ],
-                    dtype="int32",
-                ),
-            ],
-            axis=0,
-        )
+        batch_size = token_ids.shape[0]
+        max_length = token_ids.shape[1]
+        cache_shape = [
+            batch_size,
+            self.backbone.num_layers,
+            2,
+            max_length,
+            self.backbone.num_key_value_heads,
+            self.backbone.head_dim,
+        ]
         cache = ops.zeros(cache_shape, dtype=self.compute_dtype)
 
         position_ids = None

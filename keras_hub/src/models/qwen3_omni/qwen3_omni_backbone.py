@@ -332,13 +332,14 @@ class Qwen3OmniBackbone(Backbone):
         # Normalise every value to a tensor before injecting defaults to
         # keep Keras's type-uniformity check happy.
         inputs = {k: ops.convert_to_tensor(v) for k, v in inputs.items()}
+        batch_size = inputs["token_ids"].shape[0]
         if self.has_vision:
             ve = self.vision_encoder
             inputs.setdefault(
                 "pixel_values",
                 ops.zeros(
                     (
-                        0,
+                        batch_size,
                         0,
                         ve.temporal_patch_size,
                         ve.patch_size,
@@ -349,27 +350,56 @@ class Qwen3OmniBackbone(Backbone):
             )
             inputs.setdefault(
                 "image_grid_thw",
-                ops.zeros((0, 0, 3), dtype="int32"),
+                ops.zeros((batch_size, 0, 3), dtype="int32"),
             )
             inputs.setdefault(
                 "vision_indices",
-                ops.zeros((0, 0), dtype="int32"),
+                ops.zeros((batch_size, 0), dtype="int32"),
             )
         if self.has_audio:
             ae = self.audio_encoder
             inputs.setdefault(
                 "audio_features",
-                ops.zeros((0, 0, ae.num_mel_bins)),
+                ops.zeros((batch_size, 0, ae.num_mel_bins)),
             )
             inputs.setdefault(
                 "audio_indices",
-                ops.zeros((0, 0), dtype="int32"),
+                ops.zeros((batch_size, 0), dtype="int32"),
             )
         return inputs
 
     def __call__(self, inputs, *args, **kwargs):
         inputs = self._fill_missing_multimodal_inputs(inputs)
         return super().__call__(inputs, *args, **kwargs)
+
+    def _standardize_inputs(self, inputs):
+        inputs = self._fill_missing_multimodal_inputs(inputs)
+        return super()._standardize_inputs(inputs)
+
+    def call(self, inputs, *args, **kwargs):
+        inputs = self._fill_missing_multimodal_inputs(inputs)
+        return super().call(inputs, *args, **kwargs)
+
+    def stateless_call(
+        self,
+        trainable_variables,
+        non_trainable_variables,
+        *args,
+        return_losses=False,
+        **kwargs,
+    ):
+        if args:
+            args = (
+                self._fill_missing_multimodal_inputs(args[0]),
+                *args[1:],
+            )
+        return super().stateless_call(
+            trainable_variables,
+            non_trainable_variables,
+            *args,
+            return_losses=return_losses,
+            **kwargs,
+        )
 
     def get_config(self):
         config = super().get_config()
