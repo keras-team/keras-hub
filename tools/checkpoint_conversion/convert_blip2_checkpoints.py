@@ -63,6 +63,12 @@ flags.DEFINE_string(
     "Output directory for converted weights and tokenizer assets.",
 )
 
+flags.DEFINE_bool(
+    "skip_generate",
+    False,
+    "Skip the generation validation step (slow, requires full forward pass).",
+)
+
 _VALIDATION_PROMPT = "Question: What is in this picture? Answer:"
 
 
@@ -860,7 +866,11 @@ def main(_) -> None:
     opt_ok = validate_opt(opt, hf_model, qformer_out_np, hf_processor)
 
     validate_output(backbone, preprocessor, hf_model, hf_processor)
-    validate_generate(causal_lm, hf_model, hf_processor)
+    
+    if not FLAGS.skip_generate:
+        validate_generate(causal_lm, hf_model, hf_processor)
+    else:
+        print("\n⏭️  Skipping generation validation (--skip_generate=True)")
 
     _print_header("SUBMODULE VALIDATION SUMMARY")
     for name, ok in [
