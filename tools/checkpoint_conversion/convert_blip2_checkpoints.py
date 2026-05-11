@@ -866,7 +866,7 @@ def main(_) -> None:
     opt_ok = validate_opt(opt, hf_model, qformer_out_np, hf_processor)
 
     validate_output(backbone, preprocessor, hf_model, hf_processor)
-    
+
     if not FLAGS.skip_generate:
         validate_generate(causal_lm, hf_model, hf_processor)
     else:
