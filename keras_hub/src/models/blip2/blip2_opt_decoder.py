@@ -100,6 +100,18 @@ class CachedOPTAttention(keras.layers.Layer):
 
         return output
 
+    def compute_output_shape(
+        self,
+        x_shape,
+        attention_mask=None,
+        cache=None,
+        cache_update_index=0,
+        training=None,
+    ):
+        if cache is not None:
+            return x_shape, cache.shape
+        return x_shape
+
     def call(
         self,
         x,
@@ -260,6 +272,18 @@ class OPTDecoderBlock(keras.layers.Layer):
             return output, new_cache
 
         return output
+
+    def compute_output_shape(
+        self,
+        x_shape,
+        padding_mask=None,
+        cache=None,
+        cache_update_index=0,
+        training=None,
+    ):
+        if cache is not None:
+            return x_shape, cache.shape
+        return x_shape
 
     def call(
         self,
