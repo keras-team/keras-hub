@@ -2,6 +2,7 @@ import tempfile
 
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.causal_lm import CausalLM
@@ -64,7 +65,7 @@ class TestTask(TestCase):
 
         input_ids = np.array([[1, 2, 3, 4, 5, 6, 7, 8]], dtype="int32")
         padding = np.ones_like(input_ids)
-        keras_out = np.asarray(
+        keras_out = ops.convert_to_numpy(
             keras_backbone({"token_ids": input_ids, "padding_mask": padding})
         )
         with torch.no_grad():
