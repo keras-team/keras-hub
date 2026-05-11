@@ -26,9 +26,6 @@ from keras_hub.src.models.swin_transformer.swin_transformer_backbone import (
 from keras_hub.src.models.swin_transformer.swin_transformer_image_classifier_preprocessor import (  # noqa: E501
     SwinTransformerImageClassifierPreprocessor,
 )
-from keras_hub.src.models.swin_transformer.swin_transformer_image_converter import (  # noqa: E501
-    SwinTransformerImageConverter,
-)
 
 FLAGS = flags.FLAGS
 
@@ -61,29 +58,6 @@ flags.DEFINE_string(
     'Could be "kaggle://keras/swin_transformer/keras/{preset}"',
     required=False,
 )
-
-
-def convert_image_converter(hf_image_processor):
-    """Build a SwinTransformerImageConverter from a HuggingFace processor."""
-    config = hf_image_processor.to_dict()
-    # crop_size is the actual model input resolution after resize+crop.
-    image_size = (
-        config["crop_size"]["height"],
-        config["crop_size"]["width"],
-    )
-    std = config["image_std"]
-    mean = config["image_mean"]
-    rescale_factor = config["rescale_factor"]
-    scale = [rescale_factor / s for s in std]
-    offset = [-m / s for m, s in zip(mean, std)]
-    return SwinTransformerImageConverter(
-        image_size=image_size,
-        scale=scale,
-        offset=offset,
-        antialias=True,
-        interpolation="bicubic",
-        crop_to_aspect_ratio=False,
-    )
 
 
 def validate_output(
@@ -170,12 +144,7 @@ def main(_):
 
     # Load HuggingFace model and processor.
     hf_model = SwinModel.from_pretrained(hf_preset)
-    hf_processor = AutoImageProcessor.from_pretrained(
-        hf_preset,
-        do_center_crop=False,
-    )
-    # Align resize target with crop_size so both steps land on the same size.
-    hf_processor.size = hf_processor.crop_size
+    hf_processor = AutoImageProcessor.from_pretrained(hf_preset)
     hf_model.eval()
 
     # Load backbone via on-the-fly conversion (uses convert_swin_transformer.py
@@ -184,10 +153,13 @@ def main(_):
     print("✅ KerasHub backbone loaded via on-the-fly conversion.")
     print(f"   Parameters: {keras_backbone.count_params():,}")
 
-    keras_image_converter = convert_image_converter(hf_processor)
-    keras_preprocessor = SwinTransformerImageClassifierPreprocessor(
-        image_converter=keras_image_converter
+    keras_preprocessor = SwinTransformerImageClassifierPreprocessor.from_preset(
+        f"hf://{hf_preset}"
     )
+    keras_image_converter = keras_preprocessor.image_converter
+    # Keep resize target aligned with converter image size.
+    image_height, image_width = keras_image_converter.image_size
+    hf_processor.size = {"height": image_height, "width": image_width}
 
     validate_output(
         keras_backbone, keras_image_converter, hf_model, hf_processor

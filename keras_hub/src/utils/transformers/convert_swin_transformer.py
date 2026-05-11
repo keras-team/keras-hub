@@ -21,13 +21,11 @@ def load_image_converter_config(preset, transformers_config):
     scale = [rescale_factor / s for s in std]
     offset = [-m / s for m, s in zip(mean, std)]
 
-    raw_size = preprocessor_config.get(
-        "crop_size", preprocessor_config.get("size", 224)
-    )
-    if isinstance(raw_size, dict):
-        image_size = (raw_size["height"], raw_size["width"])
+    size = preprocessor_config["size"]
+    if isinstance(size, dict):
+        image_size = (size["height"], size["width"])
     else:
-        image_size = (int(raw_size), int(raw_size))
+        image_size = (int(size), int(size))
 
     return {
         "image_size": image_size,
@@ -35,6 +33,7 @@ def load_image_converter_config(preset, transformers_config):
         "offset": offset,
         "interpolation": "bicubic",
         "antialias": True,
+        "crop_to_aspect_ratio": False,
     }
 
 
