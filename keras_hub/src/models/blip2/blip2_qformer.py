@@ -244,6 +244,19 @@ class BLIP2QueryTokens(keras.layers.Layer):
             (batch_size, self.num_query_tokens, self.hidden_dim),
         )
 
+    def compute_output_shape(self, input_shape):
+        # input_shape = (batch, num_patches, vision_dim)
+        # output      = (batch, num_query_tokens, hidden_dim)
+        return (input_shape[0], self.num_query_tokens, self.hidden_dim)
+
+    def compute_output_spec(self, vision_features):
+        output_shape = (
+            vision_features.shape[0],
+            self.num_query_tokens,
+            self.hidden_dim,
+        )
+        return keras.KerasTensor(output_shape, dtype=self.compute_dtype)
+
     def get_config(self):
         config = super().get_config()
         config.update(
