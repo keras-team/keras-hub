@@ -75,6 +75,17 @@ class QFormerAttention(keras.layers.Layer):
         attn = self.dropout_layer(attn, training=training)
         return self.layer_norm(query + attn)
 
+    def compute_output_shape(self, input_shape):
+        if isinstance(input_shape, (list, tuple)) and isinstance(
+            input_shape[0], (list, tuple)
+        ):
+            return input_shape[0]
+        return input_shape
+
+    def compute_output_spec(self, inputs):
+        query = inputs[0] if isinstance(inputs, (list, tuple)) else inputs
+        return keras.KerasTensor(query.shape, dtype=self.compute_dtype)
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -197,6 +208,17 @@ class QFormerLayer(keras.layers.Layer):
         h = self.output_dense(h)
         h = self.output_dropout(h, training=training)
         return self.output_layer_norm(x + h)
+
+    def compute_output_shape(self, input_shape):
+        if isinstance(input_shape, (list, tuple)) and isinstance(
+            input_shape[0], (list, tuple)
+        ):
+            return input_shape[0]
+        return input_shape
+
+    def compute_output_spec(self, inputs):
+        query = inputs[0] if isinstance(inputs, (list, tuple)) else inputs
+        return keras.KerasTensor(query.shape, dtype=self.compute_dtype)
 
     def get_config(self):
         config = super().get_config()
