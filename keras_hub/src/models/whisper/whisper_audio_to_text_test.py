@@ -20,17 +20,22 @@ from keras_hub.src.tests.test_case import TestCase
 
 class WhisperAudioToTextTest(TestCase):
     def setUp(self):
-        vocab = ["!", "air", "Ġair", "plane", "Ġat", "port", "<|endoftext|>"]
-        vocab = dict([(token, i) for i, token in enumerate(vocab)])
         merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         merges += ["Ġai r", "Ġa i", "pla ne"]
+        vocab = []
+        for merge in merges:
+            a, b = merge.split(" ")
+            vocab.extend([a, b, a + b])
+        vocab = sorted(set(vocab))
+        vocab += ["!", "<|endoftext|>"]
+        vocab = dict([(token, i) for i, token in enumerate(vocab)])
         special_tokens = {
-            "<|startoftranscript|>": 9,
-            "<|endoftext|>": 10,
-            "<|notimestamps|>": 11,
-            "<|transcribe|>": 12,
-            "<|translate|>": 13,
+            "<|startoftranscript|>": 31,
+            "<|endoftext|>": 32,
+            "<|notimestamps|>": 33,
+            "<|transcribe|>": 34,
+            "<|translate|>": 35,
         }
         self.tokenizer = WhisperTokenizer(
             vocabulary=vocab,
