@@ -83,6 +83,11 @@ class Gemma4AssistantCausalLM(CausalLM):
 
         hidden_size = backbone.hidden_dim
         vocabulary_size = backbone.token_embedding.input_dim
+        if use_ordered_embeddings and vocabulary_size % num_centroids != 0:
+            raise ValueError(
+                f"`vocabulary_size` ({vocabulary_size}) must be divisible by "
+                f"`num_centroids` ({num_centroids})."
+            )
         self._vocab_size_per_centroid = vocabulary_size // num_centroids
 
         for layer in self.backbone.transformer_layers:

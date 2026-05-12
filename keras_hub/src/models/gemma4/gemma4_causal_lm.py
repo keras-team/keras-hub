@@ -777,21 +777,22 @@ class Gemma4CausalLM(CausalLM):
 
             self._assistant_model = assistant_model
 
-        outputs = super().generate(
-            inputs,
-            max_length=max_length,
-            stop_token_ids=stop_token_ids,
-            strip_prompt=strip_prompt,
-        )
-
-        if assistant_model is not None:
-            self._cached_spec_sampler = self.sampler
-            self._cached_spec_generate_fn = self.generate_function
-            # Restore the original sampler and compiled graph.
-            # Do not set generate_function = None — that would discard
-            # the baseline compiled graph and force a recompile.
-            self._assistant_model = None
-            self.sampler = original_sampler
-            self.generate_function = original_generate_function
+        try:
+            outputs = super().generate(
+                inputs,
+                max_length=max_length,
+                stop_token_ids=stop_token_ids,
+                strip_prompt=strip_prompt,
+            )
+        finally:
+            if assistant_model is not None:
+                self._cached_spec_sampler = self.sampler
+                self._cached_spec_generate_fn = self.generate_function
+                # Restore the original sampler and compiled graph.
+                # Do not set generate_function = None — that would discard
+                # the baseline compiled graph and force a recompile.
+                self._assistant_model = None
+                self.sampler = original_sampler
+                self.generate_function = original_generate_function
 
         return outputs

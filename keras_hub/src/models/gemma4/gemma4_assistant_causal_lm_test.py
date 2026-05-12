@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from absl.testing import parameterized
 from keras import ops
@@ -120,3 +122,45 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
             stop_token_ids=None,
         )
         self.assertIsNotNone(output)
+
+    def test_model_saving(self):
+        import keras
+
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        self.model.save(path)
+        loaded_model = keras.saving.load_model(path)
+
+        self.assertIsInstance(loaded_model, Gemma4AssistantCausalLM)
+
+        batch_size = 2
+        target_num_layers = 6
+        max_head_dim = 8
+        target_kv_heads = 1
+        cache_seq = 5
+        target_cache = ops.zeros(
+            (
+                batch_size,
+                target_num_layers,
+                2,
+                cache_seq,
+                target_kv_heads,
+                max_head_dim,
+            )
+        )
+        last_token_embedding = ops.zeros((batch_size, 1, 16))
+        last_hidden_state = ops.zeros((batch_size, 1, 16))
+
+        logits_orig, h_orig = self.model.call_with_cache(
+            last_token_embedding=last_token_embedding,
+            last_hidden_state=last_hidden_state,
+            target_cache=target_cache,
+            cache_update_index=cache_seq - 1,
+        )
+        logits_loaded, h_loaded = loaded_model.call_with_cache(
+            last_token_embedding=last_token_embedding,
+            last_hidden_state=last_hidden_state,
+            target_cache=target_cache,
+            cache_update_index=cache_seq - 1,
+        )
+        self.assertAllClose(logits_orig, logits_loaded)
+        self.assertAllClose(h_orig, h_loaded)
