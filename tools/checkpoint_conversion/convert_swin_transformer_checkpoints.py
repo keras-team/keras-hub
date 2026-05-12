@@ -183,6 +183,7 @@ def main(_):
     keras_model = SwinTransformerImageClassifier.from_preset(
         f"hf://{hf_preset}",
         load_weights=False,
+        num_classes=len(hf_model.config.id2label),
     )
     hf_state_dict = {
         key: value.detach().cpu().numpy()
