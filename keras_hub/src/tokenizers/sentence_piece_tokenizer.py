@@ -160,10 +160,10 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     def set_proto(self, proto):
         if proto is None:
             self.proto = None
-            if hasattr(self, "_sentence_piece"):
-                self._sentence_piece = None
-            if hasattr(self, "_sentence_piece_spm"):
-                self._sentence_piece_spm = None
+            # _sentence_piece
+            self._sentence_piece = None
+            # _sentence_piece_spm
+            self._sentence_piece_spm = None
             self._vocabulary = None
             self._vocabulary_size = None
             self._token_to_id_map = None
@@ -380,45 +380,43 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             outputs = tf.squeeze(outputs, 0)
         return outputs
 
-    def _detokenize_spm(self, inputs):
-        self._maybe_initialized_spm()
-
-        def _canonicalize_detokenize_inputs(inputs):
-            is_batched = True
-            if isinstance(inputs, int):
-                inputs = [[inputs]]
+    def _canonicalize_detokenize_spm_inputs(self, inputs):
+        is_batched = True
+        if isinstance(inputs, int):
+            inputs = [[inputs]]
+            is_batched = False
+        elif isinstance(inputs, (tuple, list)):
+            if not inputs or isinstance(inputs[0], int):
+                # Unbatched list of ints.
+                inputs = [list(inputs)]
                 is_batched = False
-            elif isinstance(inputs, (tuple, list)):
-                if not inputs or isinstance(inputs[0], int):
-                    # Unbatched list of ints.
-                    inputs = [list(inputs)]
-                    is_batched = False
-                else:
-                    # Batched list of lists of ints.
-                    inputs = [list(seq) for seq in inputs]
-            elif isinstance(inputs, np.ndarray) or keras.ops.is_tensor(inputs):
-                inputs = keras.ops.convert_to_numpy(inputs)
-                if inputs.ndim == 0:
-                    inputs = [[inputs.item()]]
-                    is_batched = False
-                elif inputs.ndim == 1:
-                    inputs = [inputs.tolist()]
-                    is_batched = False
-                elif inputs.ndim == 2:
-                    inputs = inputs.tolist()
-                else:
-                    raise ValueError(
-                        f"Array must be 0, 1 or 2 dimensional, "
-                        f"got {inputs.shape}."
-                    )
+            else:
+                # Batched list of lists of ints.
+                inputs = [list(seq) for seq in inputs]
+        elif isinstance(inputs, np.ndarray) or keras.ops.is_tensor(inputs):
+            inputs = keras.ops.convert_to_numpy(inputs)
+            if inputs.ndim == 0:
+                inputs = [[inputs.item()]]
+                is_batched = False
+            elif inputs.ndim == 1:
+                inputs = [inputs.tolist()]
+                is_batched = False
+            elif inputs.ndim == 2:
+                inputs = inputs.tolist()
             else:
                 raise ValueError(
-                    "Input should be an integer, a list of integers, backend "
-                    f"tensor or numpy array. Received: {inputs}"
+                    f"Array must be 0, 1 or 2 dimensional, got {inputs.shape}."
                 )
-            return inputs, is_batched
+        else:
+            raise ValueError(
+                "Input should be an integer, a list of integers, backend "
+                f"tensor or numpy array. Received: {inputs}"
+            )
+        return inputs, is_batched
 
-        inputs, batched = _canonicalize_detokenize_inputs(inputs)
+    def _detokenize_spm(self, inputs):
+        self._maybe_initialized_spm()
+        inputs, batched = self._canonicalize_detokenize_spm_inputs(inputs)
         outputs = self._sentence_piece_spm.Decode(inputs)
         if not batched:
             outputs = outputs[0]

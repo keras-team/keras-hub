@@ -5,7 +5,7 @@ from keras_hub.src.models.metaclip_2.metaclip_2_backbone import (
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
-from keras_hub.src.utils.tensor_utils import tensor_to_list
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -104,11 +104,7 @@ class MetaCLIP2Tokenizer(SentencePieceTokenizer):
     def get_vocabulary(self):
         """Get the tokenizer vocabulary as a list of strings."""
         self._check_vocabulary()
-        vocabulary = tensor_to_list(
-            self._sentence_piece.id_to_string(
-                tf.range(super().vocabulary_size())
-            )
-        )
+        vocabulary = super().get_vocabulary()
         # Remap vocabulary: prefix tokens + rest of vocabulary (skip first 3)
         return self._vocabulary_prefix + vocabulary[3:]
 
@@ -125,27 +121,29 @@ class MetaCLIP2Tokenizer(SentencePieceTokenizer):
                 f"Received: {id}"
             )
 
-        return tensor_to_list(self._sentence_piece.id_to_string(id - 1))
+        return super().id_to_token(id - 1)
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
         self._check_vocabulary()
 
+        if hasattr(token, "numpy"):
+            token = token.numpy()
+        if isinstance(token, bytes):
+            token = token.decode("utf-8")
+
         if token in self._vocabulary_prefix:
             return self._vocabulary_prefix.index(token)
 
-        spm_token_id = self._sentence_piece.string_to_id(token)
-
-        # OOV token
-        spm_unk_token_id = self._sentence_piece.string_to_id("<unk>")
-        if spm_token_id == spm_unk_token_id:
+        spm_id = super().token_to_id(token)
+        if spm_id == super().token_to_id("<unk>"):
             return self.unk_token_id
 
-        return int(spm_token_id.numpy()) + 1
+        return spm_id + 1
 
-    def tokenize(self, inputs):
-        self._check_vocabulary()
-        tokens = super().tokenize(inputs)
+    @preprocessing_function
+    def _tokenize_tf(self, inputs):
+        tokens = super()._tokenize_tf(inputs)
 
         # Correct `unk_token_id` (0 -> 3). Note that we do not correct
         # `start_token_id` and `end_token_id`; they are dealt with in
@@ -155,9 +153,21 @@ class MetaCLIP2Tokenizer(SentencePieceTokenizer):
         # Shift the tokens IDs right by one to account for vocabulary remapping.
         return tf.add(tokens, 1)
 
-    def detokenize(self, inputs):
-        self._check_vocabulary()
+    def _tokenize_spm(self, inputs):
+        tokens = super()._tokenize_spm(inputs)
 
+        def process(ids):
+            return [
+                (id if id != 0 else self.unk_token_id - 1) + 1 for id in ids
+            ]
+
+        if isinstance(inputs, str):
+            return process(tokens)
+        else:
+            return [process(ids) for ids in tokens]
+
+    @preprocessing_function
+    def _detokenize_tf(self, inputs):
         # Shift the tokens IDs left by one.
         tokens = tf.subtract(inputs, 1)
 
@@ -182,4 +192,31 @@ class MetaCLIP2Tokenizer(SentencePieceTokenizer):
             ),
         )
 
-        return super().detokenize(tokens)
+        return super()._detokenize_tf(tokens)
+
+    def _detokenize_spm(self, inputs):
+        inputs, _ = self._canonicalize_detokenize_spm_inputs(inputs)
+
+        def process(ids):
+            new_ids = []
+            for id in ids:
+                id -= 1
+                if id == self.unk_token_id - 1:
+                    new_ids.append(0)
+                elif id == self.end_token_id - 1:
+                    new_ids.append(2)
+                elif id == self.start_token_id - 1:
+                    new_ids.append(1)
+                else:
+                    new_ids.append(id)
+            # Filter out special tokens for cleaner output
+            return [
+                id
+                for id in new_ids
+                if id != self.pad_token_id - 1
+                and id != self.start_token_id - 1
+                and id != self.end_token_id - 1
+            ]
+
+        processed_inputs = [process(ids) for ids in inputs]
+        return super()._detokenize_spm(processed_inputs)
