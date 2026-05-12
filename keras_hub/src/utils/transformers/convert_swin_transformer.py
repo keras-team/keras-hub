@@ -128,3 +128,16 @@ def convert_weights(backbone, loader, transformers_config):
 
     # 3. Final norm
     port_ln(backbone.norm, "layernorm")
+
+
+def convert_head(task, loader, transformers_config):
+    prefix = "classifier."
+    loader.port_weight(
+        task.output_dense.kernel,
+        hf_weight_key=prefix + "weight",
+        hook_fn=lambda x, _: x.T,
+    )
+    loader.port_weight(
+        task.output_dense.bias,
+        hf_weight_key=prefix + "bias",
+    )
