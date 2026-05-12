@@ -23,6 +23,7 @@ import keras_hub
 from keras_hub.src.models.swin_transformer.swin_transformer_image_classifier import (  # noqa: E501
     SwinTransformerImageClassifier,
 )
+from keras_hub.src.utils.transformers import convert_swin_transformer
 
 FLAGS = flags.FLAGS
 
@@ -49,6 +50,38 @@ flags.DEFINE_string(
     f"Must be one of {','.join(PRESET_MAP.keys())}",
     required=True,
 )
+
+
+class StateDictLoader:
+    """Minimal loader adapter to port weights from a HF PyTorch state_dict."""
+
+    def __init__(self, state_dict):
+        self.state_dict = state_dict
+        self.prefix = None
+
+    def get_tensor(self, hf_weight_key):
+        if hf_weight_key in self.state_dict:
+            return self.state_dict[hf_weight_key]
+
+        if self.prefix is not None:
+            full_key = self.prefix + hf_weight_key
+            if full_key in self.state_dict:
+                return self.state_dict[full_key]
+
+        for full_key in self.state_dict:
+            if full_key.endswith(hf_weight_key) and full_key != hf_weight_key:
+                self.prefix = full_key[: -len(hf_weight_key)]
+                return self.state_dict[full_key]
+
+        raise KeyError(f"Missing key in HF state_dict: {hf_weight_key}")
+
+    def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
+        hf_tensor = self.get_tensor(hf_weight_key)
+        if hook_fn:
+            hf_tensor = hook_fn(hf_tensor, list(keras_variable.shape))
+        keras_variable.assign(hf_tensor)
+
+
 flags.DEFINE_string(
     "upload_uri",
     None,
@@ -144,8 +177,28 @@ def main(_):
     hf_processor = AutoImageProcessor.from_pretrained(hf_preset)
     hf_model.eval()
 
+    # Load preset architecture/config only and port HF weights manually.
+    # This avoids requiring model.safetensors for presets that only publish
+    # pytorch_model.bin.
     keras_model = SwinTransformerImageClassifier.from_preset(
-        f"hf://{hf_preset}"
+        f"hf://{hf_preset}",
+        load_weights=False,
+    )
+    hf_state_dict = {
+        key: value.detach().cpu().numpy()
+        for key, value in hf_model.state_dict().items()
+    }
+    loader = StateDictLoader(hf_state_dict)
+    hf_config = hf_model.config.to_dict()
+    convert_swin_transformer.convert_weights(
+        keras_model.backbone,
+        loader,
+        hf_config,
+    )
+    convert_swin_transformer.convert_head(
+        keras_model,
+        loader,
+        hf_config,
     )
     print("✅ KerasHub classifier loaded via on-the-fly conversion.")
     print(f"   Parameters: {keras_model.count_params():,}")
