@@ -116,4 +116,60 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_31b/2",
     },
+    "gemma4_instruct_2b_assistant": {
+        "metadata": {
+            "description": (
+                "Gemma 4 E2B MTP Assistant model: 4-layer speculative-decoding "
+                "assistant for the 2B-it model. Uses Multi-Token Prediction to "
+                "propose candidate tokens and achieve inference speedups."
+            ),
+            "params": 1330000000,
+            "path": "gemma4",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/gemma4/keras/gemma4_instruct_2b_assistant/1"
+        ),
+    },
+    "gemma4_instruct_4b_assistant": {
+        "metadata": {
+            "description": (
+                "Gemma 4 E4B MTP Assistant model: 4-layer speculative-decoding "
+                "assistant for the 4B-it model. Uses Multi-Token Prediction to "
+                "propose candidate tokens and achieve inference speedups."
+            ),
+            "params": 1330000000,
+            "path": "gemma4",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/gemma4/keras/gemma4_instruct_4b_assistant/1"
+        ),
+    },
+    "gemma4_instruct_26b_a4b_assistant": {
+        "metadata": {
+            "description": (
+                "Gemma 4 26B A4B MTP Assistant model: 4-layer speculative-"
+                "decoding assistant for the 26B MoE model. Uses Multi-Token "
+                "Prediction and a standard logit head to propose candidates."
+            ),
+            "params": 1330000000,
+            "path": "gemma4",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/gemma4/keras/gemma4_instruct_26b_a4b_assistant/1"
+        ),
+    },
+    "gemma4_instruct_31b_assistant": {
+        "metadata": {
+            "description": (
+                "Gemma 4 31B MTP Assistant model: 4-layer speculative-decoding "
+                "assistant for the 31B dense model. Uses Multi-Token "
+                "Prediction and a standard logit head to propose candidates."
+            ),
+            "params": 1330000000,
+            "path": "gemma4",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/gemma4/keras/gemma4_instruct_31b_assistant/1"
+        ),
+    },
 }

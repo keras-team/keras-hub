@@ -76,6 +76,11 @@ class Gemma4Backbone(Backbone):
             attention pattern. The last layer in each group of this many
             consecutive layers uses global attention; all others use local
             (sliding-window) attention. Defaults to `6`.
+        layer_types: list of str or `None`. Explicit specification of the
+            attention type for every layer sequentially
+            (e.g. `"full_attention"`, `"sliding_attention"`). When `None`,
+            type sequence is derived from `sliding_window_pattern`.
+            Defaults to `None`.
         global_head_dim: int or `None`. Per-head dimension used specifically
             for global attention layers. When `None`, `head_dim` is used
             for all layers. Defaults to `None`.
@@ -194,6 +199,7 @@ class Gemma4Backbone(Backbone):
         use_sliding_window_attention=True,
         sliding_window_size=512,
         sliding_window_pattern=6,
+        layer_types=None,
         global_head_dim=None,
         local_rope_scaling_factor=1.0,
         global_rope_scaling_factor=1.0,
@@ -269,6 +275,7 @@ class Gemma4Backbone(Backbone):
 
         self.vision_encoder = vision_encoder
         self.audio_encoder = audio_encoder
+        self.layer_types = layer_types
         text_only_model = vision_encoder is None and audio_encoder is None
         if vision_encoder is not None:
             self.interleave_embeddings = Gemma4InterleaveEmbeddings(
@@ -294,34 +301,62 @@ class Gemma4Backbone(Backbone):
         # The last `num_kv_shared_layers` layers reuse K/V from the most
         # recent non-shared layer of the same attention type.
         _first_kv_shared = num_layers - num_kv_shared_layers
+        _kv_source = {}
         if num_kv_shared_layers > 0:
-            _non_shared_types = [
-                "global"
-                if (j % sliding_window_pattern) == (sliding_window_pattern - 1)
-                else "local"
-                for j in range(_first_kv_shared)
-            ]
-            # Map each shared layer index → the absolute index of its KV source.
-            _kv_source = {}
-            for j in range(_first_kv_shared, num_layers):
-                _is_g = (j % sliding_window_pattern) == (
-                    sliding_window_pattern - 1
-                )
-                _type = "global" if _is_g else "local"
-                for k in range(len(_non_shared_types) - 1, -1, -1):
-                    if _non_shared_types[k] == _type:
-                        _kv_source[j] = k
-                        break
-        else:
-            _kv_source = {}
+            if _first_kv_shared == 0:
+                # Assistant mode: all layers share KV externally.
+                # Mirror HF's hardcoded logic: assign arbitrary indices
+                # 0 and 1 based on type.
+                for j in range(num_layers):
+                    if layer_types is not None:
+                        _is_g = layer_types[j] == "full_attention"
+                    else:
+                        _is_g = (j % sliding_window_pattern) == (
+                            sliding_window_pattern - 1
+                        )
+                    _kv_source[j] = 1 if _is_g else 0
+            else:
+                if layer_types is not None:
+                    _non_shared_types = [
+                        "global" if t == "full_attention" else "local"
+                        for t in layer_types[:_first_kv_shared]
+                    ]
+                else:
+                    _non_shared_types = [
+                        "global"
+                        if (j % sliding_window_pattern)
+                        == (sliding_window_pattern - 1)
+                        else "local"
+                        for j in range(_first_kv_shared)
+                    ]
+                # Map shared layer index → absolute index of its KV source.
+                for j in range(_first_kv_shared, num_layers):
+                    if layer_types is not None:
+                        _type = (
+                            "global"
+                            if layer_types[j] == "full_attention"
+                            else "local"
+                        )
+                    else:
+                        _is_g = (j % sliding_window_pattern) == (
+                            sliding_window_pattern - 1
+                        )
+                        _type = "global" if _is_g else "local"
+                    for k in range(len(_non_shared_types) - 1, -1, -1):
+                        if _non_shared_types[k] == _type:
+                            _kv_source[j] = k
+                            break
 
         self.transformer_layers = []
         for i in range(num_layers):
             # A layer is global when it's the last in each group of
             # `sliding_window_pattern` consecutive layers.
-            is_global = (i % sliding_window_pattern) == (
-                sliding_window_pattern - 1
-            )
+            if layer_types is not None:
+                is_global = layer_types[i] == "full_attention"
+            else:
+                is_global = (i % sliding_window_pattern) == (
+                    sliding_window_pattern - 1
+                )
             sliding_window = use_sliding_window_attention and not is_global
             rope_wavelength = (
                 (global_rope_wavelength or 1_000_000.0)
@@ -692,6 +727,7 @@ class Gemma4Backbone(Backbone):
                 ),
                 "sliding_window_size": self.sliding_window_size,
                 "sliding_window_pattern": self.sliding_window_pattern,
+                "layer_types": self.layer_types,
                 "global_head_dim": self.global_head_dim,
                 "local_rope_scaling_factor": self.local_rope_scaling_factor,
                 "global_rope_scaling_factor": self.global_rope_scaling_factor,
