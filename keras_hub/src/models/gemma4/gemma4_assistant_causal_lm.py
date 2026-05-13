@@ -209,13 +209,13 @@ class Gemma4AssistantCausalLM(CausalLM):
         )
 
         # Scatter active logits into a full-vocab output tensor.
-        # Inactive positions are set far below the active range so their
-        # softmax probability is negligible.
+        # Inactive positions are filled with min(active_logits) - 1.0,
+        # matching HF's masked_embedding behaviour.
         flat_hs = batch * seq
         scatter_idx = ops.reshape(selected_canonical, (flat_hs, n_tokens))
         flat_logits = ops.reshape(selected_logits, (flat_hs, n_tokens))
         min_active = ops.min(flat_logits)
-        inactive_fill = min_active - ops.cast(100.0, flat_logits.dtype)
+        inactive_fill = min_active - ops.cast(1.0, flat_logits.dtype)
         output = (
             ops.ones((flat_hs, vocab_size), dtype=hidden_states.dtype)
             * inactive_fill
