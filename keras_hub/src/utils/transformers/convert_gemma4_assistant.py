@@ -126,5 +126,5 @@ def convert_head(model, loader, transformers_config):
         loader.port_weight(
             keras_variable=model.token_ordering,
             hf_weight_key="masked_embedding.token_ordering",
-            hook_fn=lambda x, _: x.astype(np.int32),
+            hook_fn=lambda x, _: x.astype(np.float32),
         )

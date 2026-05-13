@@ -209,17 +209,16 @@ class Gemma4AssistantCausalLM(CausalLM):
         )
 
         # Scatter active logits into a full-vocab output tensor.
-        # Non-active positions are filled with min(active_logits) - 1.0 so
-        # that inactive tokens receive a finite value just below the minimum
-        # active logit, preventing probability collapse onto active positions.
+        # Inactive positions are set far below the active range so their
+        # softmax probability is negligible.
         flat_hs = batch * seq
         scatter_idx = ops.reshape(selected_canonical, (flat_hs, n_tokens))
         flat_logits = ops.reshape(selected_logits, (flat_hs, n_tokens))
-        # Global min across all active logits in the batch (scalar tensor).
-        min_active = ops.min(flat_logits) - ops.cast(1.0, flat_logits.dtype)
+        min_active = ops.min(flat_logits)
+        inactive_fill = min_active - ops.cast(100.0, flat_logits.dtype)
         output = (
             ops.ones((flat_hs, vocab_size), dtype=hidden_states.dtype)
-            * min_active
+            * inactive_fill
         )
 
         # Memory-efficient sparse scatter to avoid full OOM one-hot allocation.
