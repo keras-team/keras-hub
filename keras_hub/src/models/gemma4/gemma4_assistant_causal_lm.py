@@ -140,10 +140,14 @@ class Gemma4AssistantCausalLM(CausalLM):
             )
             self.centroids.build((None, 1, hidden_size))
 
+            # Store as float32 so TensorFlow places this variable on GPU
+            # alongside other model weights. Cast to int32 at use time in
+            # _apply_centroid_logits. Using int32 here causes TF to place
+            # the variable on CPU, which breaks XLA execution on GPU.
             self.token_ordering = self.add_weight(
                 name="token_ordering",
                 shape=(vocabulary_size,),
-                dtype="int32",
+                dtype="float32",
                 trainable=False,
                 initializer="zeros",
             )
