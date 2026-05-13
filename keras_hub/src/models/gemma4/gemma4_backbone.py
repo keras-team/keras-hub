@@ -414,6 +414,14 @@ class Gemma4Backbone(Backbone):
             )
             self.transformer_layers.append(layer)
 
+        if self.layer_types is None:
+            self.layer_types = [
+                "full_attention"
+                if (i % sliding_window_pattern) == (sliding_window_pattern - 1)
+                else "sliding_attention"
+                for i in range(num_layers)
+            ]
+
         self.layer_norm = RMSNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,

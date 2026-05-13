@@ -606,13 +606,6 @@ class Gemma4CausalLM(CausalLM):
                 last_token_embedding = self.backbone.token_embedding(
                     last_token_id
                 )
-                # Apply embedding scale (sqrt(hidden_dim)) to match the target
-                # model's token embedding convention.
-                embed_scale = ops.cast(
-                    ops.sqrt(self.backbone.hidden_dim),
-                    last_token_embedding.dtype,
-                )
-                last_token_embedding = last_token_embedding * embed_scale
                 logits, next_hidden = _assistant.call_with_cache(
                     last_token_embedding=last_token_embedding,
                     last_hidden_state=last_hidden,
@@ -754,15 +747,23 @@ class Gemma4CausalLM(CausalLM):
 
             num_spec = getattr(assistant_model, "num_speculative_tokens", 5)
 
+            # Use the sampler stored on the assistant model (loaded from
+            # generation_config.json during from_preset) as the base_sampler
+            # for stochastic rejection sampling. This avoids requiring the
+            # caller to manually recompile the target model with the correct
+            # temperature/top_p/top_k settings.
+            spec_base_sampler = getattr(assistant_model, "sampler", None)
+
             # Reuse a previously compiled speculative graph when
-            # num_speculative_tokens matches, avoiding a full JIT recompile.
+            # num_speculative_tokens and base_sampler both match, avoiding a
+            # full JIT recompile.
             cached_spec_sampler = getattr(self, "_cached_spec_sampler", None)
             cached_spec_fn = getattr(self, "_cached_spec_generate_fn", None)
 
             if (
                 cached_spec_sampler is not None
                 and cached_spec_sampler.num_speculative_tokens == num_spec
-                and cached_spec_sampler.base_sampler is original_sampler
+                and cached_spec_sampler.base_sampler is spec_base_sampler
             ):
                 # Reuse compiled speculative graph.
                 self.sampler = cached_spec_sampler
@@ -771,7 +772,7 @@ class Gemma4CausalLM(CausalLM):
                 # Compile a new speculative graph.
                 self.sampler = SpeculativeSampler(
                     num_speculative_tokens=num_spec,
-                    base_sampler=original_sampler,
+                    base_sampler=spec_base_sampler,
                 )
                 self.generate_function = None  # force recompile
 
