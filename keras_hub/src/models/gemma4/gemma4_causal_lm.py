@@ -606,6 +606,16 @@ class Gemma4CausalLM(CausalLM):
                 last_token_embedding = self.backbone.token_embedding(
                     last_token_id
                 )
+                # Scale to match Gemma4TextScaledWordEmbedding: the target
+                # backbone's call() does x *= sqrt(hidden_dim), so callers
+                # that bypass call() must apply this factor explicitly.
+                _embed_scale = ops.cast(
+                    ops.sqrt(
+                        ops.cast(self.backbone.hidden_dim, "float32")
+                    ),
+                    last_token_embedding.dtype,
+                )
+                last_token_embedding = last_token_embedding * _embed_scale
                 logits, next_hidden = _assistant.call_with_cache(
                     last_token_embedding=last_token_embedding,
                     last_hidden_state=last_hidden,
