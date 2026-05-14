@@ -17,18 +17,13 @@ from absl import app
 from absl import flags
 from PIL import Image
 from transformers import AutoImageProcessor
-from transformers import SwinModel
+from transformers import SwinForImageClassification
 
 import keras_hub
-from keras_hub.src.models.swin_transformer.swin_transformer_backbone import (
-    SwinTransformerBackbone,
+from keras_hub.src.models.swin_transformer.swin_transformer_image_classifier import (  # noqa: E501
+    SwinTransformerImageClassifier,
 )
-from keras_hub.src.models.swin_transformer.swin_transformer_image_classifier_preprocessor import (  # noqa: E501
-    SwinTransformerImageClassifierPreprocessor,
-)
-from keras_hub.src.models.swin_transformer.swin_transformer_image_converter import (  # noqa: E501
-    SwinTransformerImageConverter,
-)
+from keras_hub.src.utils.transformers import convert_swin_transformer
 
 FLAGS = flags.FLAGS
 
@@ -55,6 +50,38 @@ flags.DEFINE_string(
     f"Must be one of {','.join(PRESET_MAP.keys())}",
     required=True,
 )
+
+
+class StateDictLoader:
+    """Minimal loader adapter to port weights from a HF PyTorch state_dict."""
+
+    def __init__(self, state_dict):
+        self.state_dict = state_dict
+        self.prefix = None
+
+    def get_tensor(self, hf_weight_key):
+        if hf_weight_key in self.state_dict:
+            return self.state_dict[hf_weight_key]
+
+        if self.prefix is not None:
+            full_key = self.prefix + hf_weight_key
+            if full_key in self.state_dict:
+                return self.state_dict[full_key]
+
+        for full_key in self.state_dict:
+            if full_key.endswith(hf_weight_key) and full_key != hf_weight_key:
+                self.prefix = full_key[: -len(hf_weight_key)]
+                return self.state_dict[full_key]
+
+        raise KeyError(f"Missing key in HF state_dict: {hf_weight_key}")
+
+    def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
+        hf_tensor = self.get_tensor(hf_weight_key)
+        if hook_fn:
+            hf_tensor = hook_fn(hf_tensor, list(keras_variable.shape))
+        keras_variable.assign(hf_tensor)
+
+
 flags.DEFINE_string(
     "upload_uri",
     None,
@@ -63,36 +90,11 @@ flags.DEFINE_string(
 )
 
 
-def convert_image_converter(hf_image_processor):
-    """Build a SwinTransformerImageConverter from a HuggingFace processor."""
-    config = hf_image_processor.to_dict()
-    # crop_size is the actual model input resolution after resize+crop.
-    image_size = (
-        config["crop_size"]["height"],
-        config["crop_size"]["width"],
-    )
-    std = config["image_std"]
-    mean = config["image_mean"]
-    rescale_factor = config["rescale_factor"]
-    scale = [rescale_factor / s for s in std]
-    offset = [-m / s for m, s in zip(mean, std)]
-    return SwinTransformerImageConverter(
-        image_size=image_size,
-        scale=scale,
-        offset=offset,
-        antialias=True,
-        interpolation="bicubic",
-        crop_to_aspect_ratio=False,
-    )
-
-
-def validate_output(
-    keras_backbone, keras_image_converter, hf_model, hf_processor
-):
-    """Validate converted model outputs match HuggingFace."""
-    # Compare number of parameters between Keras and HF backbone.
-    keras_params = keras_backbone.count_params()
-    hf_params = sum(p.numel() for p in hf_model.parameters())
+def validate_output(keras_model, keras_image_converter, hf_model, hf_processor):
+    """Validate converted classifier outputs match HuggingFace."""
+    # Compare number of parameters between Keras and HF classifier.
+    keras_params = keras_model.count_params()
+    hf_params = hf_model.num_parameters()
     print(f"🔶 Keras model params: {keras_params:,}")
     print(f"🔶 HF model params:    {hf_params:,}")
     assert keras_params == hf_params, (
@@ -116,22 +118,24 @@ def validate_output(
         )
     )
     with torch.no_grad():
-        hf_features = (
-            hf_model(**hf_inputs).last_hidden_state.detach().cpu().numpy()
-        )
+        hf_logits = hf_model(**hf_inputs).logits.detach().cpu().numpy()
 
-    keras_features = keras.ops.convert_to_numpy(
-        keras_backbone(keras_preprocessed, training=False)
+    keras_logits = keras.ops.convert_to_numpy(
+        keras_model(keras_preprocessed, training=False)
     )
+    keras_label = np.argmax(keras_logits[0])
+    hf_label = np.argmax(hf_logits[0])
 
-    print("🔶 Keras output (first token, first 10 dims):")
-    print(f"   {keras_features[0, 0, :10]}")
-    print("🔶 HF output (first token, first 10 dims):")
-    print(f"   {hf_features[0, 0, :10]}")
+    print("🔶 Keras output (first 10 logits):")
+    print(f"   {keras_logits[0, :10]}")
+    print("🔶 HF output (first 10 logits):")
+    print(f"   {hf_logits[0, :10]}")
+    print(f"🔶 Keras label: {keras_label}")
+    print(f"🔶 HF label:    {hf_label}")
 
-    modeling_diff = np.mean(np.abs(keras_features - hf_features))
-    max_diff = np.max(np.abs(keras_features - hf_features))
-    relative_error = modeling_diff / np.mean(np.abs(hf_features))
+    modeling_diff = np.mean(np.abs(keras_logits - hf_logits))
+    max_diff = np.max(np.abs(keras_logits - hf_logits))
+    relative_error = modeling_diff / np.mean(np.abs(hf_logits))
     print(f"🔶 Modeling difference (mean): {modeling_diff:.6f}")
     print(f"🔶 Modeling difference (max):  {max_diff:.6f}")
     print(f"🔶 Relative error:             {relative_error * 100:.4f}%")
@@ -169,33 +173,47 @@ def main(_):
     print(f"🏃 Converting {preset}")
 
     # Load HuggingFace model and processor.
-    hf_model = SwinModel.from_pretrained(hf_preset)
-    hf_processor = AutoImageProcessor.from_pretrained(
-        hf_preset,
-        do_center_crop=False,
-    )
-    # Align resize target with crop_size so both steps land on the same size.
-    hf_processor.size = hf_processor.crop_size
+    hf_model = SwinForImageClassification.from_pretrained(hf_preset)
+    hf_processor = AutoImageProcessor.from_pretrained(hf_preset)
     hf_model.eval()
 
-    # Load backbone via on-the-fly conversion (uses convert_swin_transformer.py
-    # under the hood).
-    keras_backbone = SwinTransformerBackbone.from_preset(f"hf://{hf_preset}")
-    print("✅ KerasHub backbone loaded via on-the-fly conversion.")
-    print(f"   Parameters: {keras_backbone.count_params():,}")
-
-    keras_image_converter = convert_image_converter(hf_processor)
-    keras_preprocessor = SwinTransformerImageClassifierPreprocessor(
-        image_converter=keras_image_converter
+    # Load preset architecture/config only and port HF weights manually.
+    # This avoids requiring model.safetensors for presets that only publish
+    # pytorch_model.bin.
+    keras_model = SwinTransformerImageClassifier.from_preset(
+        f"hf://{hf_preset}",
+        load_weights=False,
+        num_classes=len(hf_model.config.id2label),
     )
-
-    validate_output(
-        keras_backbone, keras_image_converter, hf_model, hf_processor
+    hf_state_dict = {
+        key: value.detach().cpu().numpy()
+        for key, value in hf_model.state_dict().items()
+    }
+    loader = StateDictLoader(hf_state_dict)
+    hf_config = hf_model.config.to_dict()
+    convert_swin_transformer.convert_weights(
+        keras_model.backbone,
+        loader,
+        hf_config,
     )
+    convert_swin_transformer.convert_head(
+        keras_model,
+        loader,
+        hf_config,
+    )
+    print("✅ KerasHub classifier loaded via on-the-fly conversion.")
+    print(f"   Parameters: {keras_model.count_params():,}")
+
+    keras_preprocessor = keras_model.preprocessor
+    keras_image_converter = keras_preprocessor.image_converter
+    # Keep resize target aligned with converter image size.
+    image_height, image_width = keras_image_converter.image_size
+    hf_processor.size = {"height": image_height, "width": image_width}
+
+    validate_output(keras_model, keras_image_converter, hf_model, hf_processor)
     print("✅ Output validated.")
 
-    keras_backbone.save_to_preset(f"./{preset}")
-    keras_preprocessor.save_to_preset(f"./{preset}")
+    keras_model.save_to_preset(f"./{preset}")
     print(f"🏁 Preset saved to ./{preset}.")
 
     upload_uri = FLAGS.upload_uri
