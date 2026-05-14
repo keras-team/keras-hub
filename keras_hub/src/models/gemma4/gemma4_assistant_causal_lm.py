@@ -269,6 +269,12 @@ class Gemma4AssistantCausalLM(CausalLM):
             `(batch, 1, vocabulary_size)` and `next_hidden_state` has shape
             `(batch, 1, backbone_hidden_size)`.
         """
+        last_token_embedding = ops.cast(
+            last_token_embedding, self.compute_dtype
+        )
+        last_hidden_state = ops.cast(last_hidden_state, self.compute_dtype)
+        target_cache = ops.cast(target_cache, self.compute_dtype)
+
         # Concatenate target token embedding and target hidden state:
         # (batch, 1, 2 * backbone_hidden_size).
         inputs_embeds = ops.concatenate(

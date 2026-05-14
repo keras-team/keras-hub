@@ -7,6 +7,8 @@ from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
     Gemma4CausalLMPreprocessor,
 )
+from keras_hub.src.samplers.greedy_sampler import GreedySampler
+from keras_hub.src.samplers.speculative_sampler import SpeculativeSampler
 from keras_hub.src.utils.tensor_utils import any_equal
 
 try:
@@ -610,9 +612,7 @@ class Gemma4CausalLM(CausalLM):
                 # backbone's call() does x *= sqrt(hidden_dim), so callers
                 # that bypass call() must apply this factor explicitly.
                 _embed_scale = ops.cast(
-                    ops.sqrt(
-                        ops.cast(self.backbone.hidden_dim, "float32")
-                    ),
+                    ops.sqrt(ops.cast(self.backbone.hidden_dim, "float32")),
                     last_token_embedding.dtype,
                 )
                 last_token_embedding = last_token_embedding * _embed_scale
@@ -745,10 +745,6 @@ class Gemma4CausalLM(CausalLM):
             ]
 
         if assistant_model is not None:
-            from keras_hub.src.samplers.speculative_sampler import (
-                SpeculativeSampler,
-            )
-
             # Save current (sampler, compiled graph) as a consistent pair so
             # we can restore them after the speculative call without
             # discarding either compiled graph.
@@ -763,6 +759,8 @@ class Gemma4CausalLM(CausalLM):
             # caller to manually recompile the target model with the correct
             # temperature/top_p/top_k settings.
             spec_base_sampler = getattr(assistant_model, "sampler", None)
+            if isinstance(self.sampler, GreedySampler):
+                spec_base_sampler = None
 
             # Reuse a previously compiled speculative graph when
             # num_speculative_tokens and base_sampler both match, avoiding a
