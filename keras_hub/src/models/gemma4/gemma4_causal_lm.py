@@ -682,6 +682,12 @@ class Gemma4CausalLM(CausalLM):
                     audio_mask=audio_mask_slice,
                     cache_update_mask=cache_update_slice,
                 )
+                # Align position 0 of logits and hidden_states with index - 1.
+                start_offset = ops.cast(index - 1, "int32") - safe_start
+                logits = ops.roll(logits, shift=-start_offset, axis=1)
+                hidden_states = ops.roll(
+                    hidden_states, shift=-start_offset, axis=1
+                )
                 return logits, hidden_states, updated_cache
 
             # `fixed_pos` is held constant across all k draft steps within
