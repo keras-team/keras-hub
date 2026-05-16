@@ -14,5 +14,8 @@ from keras_hub.src.samplers.sampler import Sampler as Sampler
 from keras_hub.src.samplers.serialization import deserialize as deserialize
 from keras_hub.src.samplers.serialization import get as get
 from keras_hub.src.samplers.serialization import serialize as serialize
+from keras_hub.src.samplers.speculative_sampler import (
+    SpeculativeSampler as SpeculativeSampler,
+)
 from keras_hub.src.samplers.top_k_sampler import TopKSampler as TopKSampler
 from keras_hub.src.samplers.top_p_sampler import TopPSampler as TopPSampler
