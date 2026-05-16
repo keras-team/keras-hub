@@ -23,6 +23,9 @@ from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_metaclip_2
 from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_mixtral
+from keras_hub.src.utils.transformers import (
+    convert_openai_privacy_filter,  # noqa: E501
+)
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
@@ -70,6 +73,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gpt2
         elif model_type == "gpt_oss":
             self.converter = convert_gpt_oss
+        elif model_type == "openai_privacy_filter":
+            self.converter = convert_openai_privacy_filter
         elif model_type == "llama":
             # TODO: handle other llama versions.
             self.converter = convert_llama3
@@ -132,6 +137,20 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         architecture = self.config["architectures"][0]
+
+        # Token classification models (e.g. OpenAI Privacy Filter)
+        if "ForTokenClassification" in architecture:
+            if "num_classes" not in kwargs:
+                kwargs["num_classes"] = len(self.config.get("id2label", {}))
+            task = super().load_task(
+                cls, load_weights, load_task_weights, **kwargs
+            )
+            if load_task_weights:
+                with SafetensorLoader(self.preset, prefix="") as loader:
+                    if hasattr(self.converter, "convert_head"):
+                        self.converter.convert_head(task, loader, self.config)
+            return task
+
         if (
             not load_task_weights
             or not issubclass(cls, ImageClassifier)
