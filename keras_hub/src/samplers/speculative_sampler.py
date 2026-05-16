@@ -68,6 +68,10 @@ class SpeculativeSampler(Sampler):
         super().__init__(**kwargs)
         self.num_speculative_tokens = num_speculative_tokens
         self.base_sampler = base_sampler
+        if self.base_sampler is not None and hasattr(
+            self.base_sampler, "temperature"
+        ):
+            self.base_sampler.temperature = self.temperature
         self.seed = seed
         self.seed_generator = random.SeedGenerator(seed)
 
@@ -208,15 +212,22 @@ class SpeculativeSampler(Sampler):
 
             # Refresh the target cache in draft_cache so the next draft cycle
             # uses the updated K/V entries. Supports 2-tuple and 3-tuple forms.
+            from keras_hub.src.models.gemma4.gemma4_causal_lm import (
+                Gemma4CausalLM,
+            )
+
+            is_gemma4 = isinstance(model, Gemma4CausalLM)
             if (
-                has_draft_cache
+                is_gemma4
+                and has_draft_cache
                 and has_cache
                 and isinstance(draft_cache, tuple)
                 and len(draft_cache) == 2
             ):
                 current_draft_cache = (current_draft_cache[0], updated_cache)
             elif (
-                has_draft_cache
+                is_gemma4
+                and has_draft_cache
                 and has_cache
                 and isinstance(draft_cache, tuple)
                 and len(draft_cache) == 3
@@ -397,7 +408,8 @@ class SpeculativeSampler(Sampler):
             # Update fixed_pos to the new cycle-start position (new_index - 1)
             # so the next cycle's draft steps share the correct RoPE anchor.
             if (
-                has_draft_cache
+                is_gemma4
+                and has_draft_cache
                 and isinstance(current_draft_cache, tuple)
                 and len(current_draft_cache) == 3
             ):

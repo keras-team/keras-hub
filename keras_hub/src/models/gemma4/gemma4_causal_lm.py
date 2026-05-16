@@ -8,7 +8,6 @@ from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
     Gemma4CausalLMPreprocessor,
 )
 from keras_hub.src.samplers.greedy_sampler import GreedySampler
-from keras_hub.src.samplers.speculative_sampler import SpeculativeSampler
 from keras_hub.src.utils.tensor_utils import any_equal
 
 try:
@@ -753,6 +752,10 @@ class Gemma4CausalLM(CausalLM):
             ]
 
         if assistant_model is not None:
+            from keras_hub.src.samplers.speculative_sampler import (
+                SpeculativeSampler,
+            )
+
             # Save current (sampler, compiled graph) as a consistent pair so
             # we can restore them after the speculative call without
             # discarding either compiled graph.
@@ -789,6 +792,7 @@ class Gemma4CausalLM(CausalLM):
                 self.sampler = SpeculativeSampler(
                     num_speculative_tokens=num_spec,
                     base_sampler=spec_base_sampler,
+                    temperature=getattr(original_sampler, "temperature", 1.0),
                 )
                 self.generate_function = None  # force recompile
 

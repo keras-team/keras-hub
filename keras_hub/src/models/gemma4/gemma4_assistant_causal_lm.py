@@ -235,6 +235,22 @@ class Gemma4AssistantCausalLM(CausalLM):
         output = ops.scatter_update(output, coords, updates)
         return ops.reshape(output, (batch, seq, vocab_size))
 
+    def call(self, *args, **kwargs):
+        raise NotImplementedError(
+            "Gemma4AssistantCausalLM is an MTP draft model that requires a "
+            "target model and cannot be called standalone. Use "
+            "`target_model.generate(..., assistant_model=assistant_model)` "
+            "instead."
+        )
+
+    def generate_step(self, *args, **kwargs):
+        raise NotImplementedError(
+            "Gemma4AssistantCausalLM is an MTP draft model that requires a "
+            "target model and cannot be called standalone. Use "
+            "`target_model.generate(..., assistant_model=assistant_model)` "
+            "instead."
+        )
+
     def call_with_cache(
         self,
         last_token_embedding,
@@ -328,27 +344,6 @@ class Gemma4AssistantCausalLM(CausalLM):
         next_hidden_state = self.post_projection(hidden_states)
 
         return logits, next_hidden_state
-
-    @property
-    def _layers(self):
-        base = self.__dict__.get("_layers_storage", [])
-        extra = []
-        for attr in ("pre_projection", "post_projection", "centroids"):
-            layer = getattr(self, attr, None)
-            if layer is not None and layer not in base:
-                extra.append(layer)
-        return base + extra
-
-    @_layers.setter
-    def _layers(self, value):
-        # Use object.__setattr__ to bypass __setattr__ → tracker recursion.
-        object.__setattr__(self, "_layers_storage", value)
-
-    def _flatten_layers(self, include_self=True, recursive=True):
-        """Delegate to super(); the ``_layers`` property already adds extras."""
-        return super()._flatten_layers(
-            include_self=include_self, recursive=recursive
-        )
 
     def get_config(self):
         config = super().get_config()

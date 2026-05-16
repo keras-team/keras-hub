@@ -123,7 +123,7 @@ backbone_presets = {
                 "assistant for the 2B-it model. Uses Multi-Token Prediction to "
                 "propose candidate tokens and achieve inference speedups."
             ),
-            "params": 1330000000,
+            "params": 76027396,
             "path": "gemma4",
         },
         "kaggle_handle": (
@@ -137,7 +137,7 @@ backbone_presets = {
                 "assistant for the 4B-it model. Uses Multi-Token Prediction to "
                 "propose candidate tokens and achieve inference speedups."
             ),
-            "params": 1330000000,
+            "params": 76027396,
             "path": "gemma4",
         },
         "kaggle_handle": (
@@ -151,7 +151,7 @@ backbone_presets = {
                 "decoding assistant for the 26B MoE model. Uses Multi-Token "
                 "Prediction and a standard logit head to propose candidates."
             ),
-            "params": 1330000000,
+            "params": 411060484,
             "path": "gemma4",
         },
         "kaggle_handle": (
@@ -165,7 +165,7 @@ backbone_presets = {
                 "assistant for the 31B dense model. Uses Multi-Token "
                 "Prediction and a standard logit head to propose candidates."
             ),
-            "params": 1330000000,
+            "params": 453003524,
             "path": "gemma4",
         },
         "kaggle_handle": (
