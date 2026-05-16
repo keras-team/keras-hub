@@ -121,9 +121,12 @@ backbone_presets = {
             "description": (
                 "Gemma 4 E2B MTP Assistant model: 4-layer speculative-decoding "
                 "assistant for the 2B-it model. Uses Multi-Token Prediction to "
-                "propose candidate tokens and achieve inference speedups."
+                "propose candidate tokens and achieve inference speedups. "
+                "This model must NOT be used standalone. It is designed "
+                "exclusively as a draft model to be passed to the target "
+                "model's generate() method via the assistant_model argument."
             ),
-            "params": 76027396,
+            "params": 77731332,
             "path": "gemma4",
         },
         "kaggle_handle": (
@@ -135,9 +138,12 @@ backbone_presets = {
             "description": (
                 "Gemma 4 E4B MTP Assistant model: 4-layer speculative-decoding "
                 "assistant for the 4B-it model. Uses Multi-Token Prediction to "
-                "propose candidate tokens and achieve inference speedups."
+                "propose candidate tokens and achieve inference speedups. "
+                "This model must NOT be used standalone. It is designed "
+                "exclusively as a draft model to be passed to the target "
+                "model's generate() method via the assistant_model argument."
             ),
-            "params": 76027396,
+            "params": 77731332,
             "path": "gemma4",
         },
         "kaggle_handle": (
@@ -149,9 +155,12 @@ backbone_presets = {
             "description": (
                 "Gemma 4 26B A4B MTP Assistant model: 4-layer speculative-"
                 "decoding assistant for the 26B MoE model. Uses Multi-Token "
-                "Prediction and a standard logit head to propose candidates."
+                "Prediction and a standard logit head to propose candidates. "
+                "This model must NOT be used standalone. It is designed "
+                "exclusively as a draft model to be passed to the target "
+                "model's generate() method via the assistant_model argument."
             ),
-            "params": 411060484,
+            "params": 412764420,
             "path": "gemma4",
         },
         "kaggle_handle": (
@@ -163,9 +172,12 @@ backbone_presets = {
             "description": (
                 "Gemma 4 31B MTP Assistant model: 4-layer speculative-decoding "
                 "assistant for the 31B dense model. Uses Multi-Token "
-                "Prediction and a standard logit head to propose candidates."
+                "Prediction and a standard logit head to propose candidates. "
+                "This model must NOT be used standalone. It is designed "
+                "exclusively as a draft model to be passed to the target "
+                "model's generate() method via the assistant_model argument."
             ),
-            "params": 453003524,
+            "params": 454707460,
             "path": "gemma4",
         },
         "kaggle_handle": (

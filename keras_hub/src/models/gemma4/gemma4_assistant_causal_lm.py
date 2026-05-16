@@ -345,6 +345,27 @@ class Gemma4AssistantCausalLM(CausalLM):
 
         return logits, next_hidden_state
 
+    @property
+    def _layers(self):
+        base = self.__dict__.get("_layers_storage", [])
+        extra = []
+        for attr in ("pre_projection", "post_projection", "centroids"):
+            layer = getattr(self, attr, None)
+            if layer is not None and layer not in base:
+                extra.append(layer)
+        return base + extra
+
+    @_layers.setter
+    def _layers(self, value):
+        # Use object.__setattr__ to bypass __setattr__ → tracker recursion.
+        object.__setattr__(self, "_layers_storage", value)
+
+    def _flatten_layers(self, include_self=True, recursive=True):
+        """Delegate to super(); the ``_layers`` property already adds extras."""
+        return super()._flatten_layers(
+            include_self=include_self, recursive=recursive
+        )
+
     def get_config(self):
         config = super().get_config()
         config.update(
