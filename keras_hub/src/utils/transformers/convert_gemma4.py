@@ -273,6 +273,7 @@ def convert_backbone_config(transformers_config):
         "sliding_window_size": text_cfg.get("sliding_window", 512) or 512,
         "sliding_window_pattern": sliding_window_pattern,
         "layer_norm_epsilon": text_cfg.get("rms_norm_eps", 1e-6),
+        "layer_types": text_cfg["layer_types"],
         "vision_encoder": vision_encoder,
         "audio_encoder": audio_encoder,
         "num_kv_shared_layers": text_cfg.get("num_kv_shared_layers", 0),
