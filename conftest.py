@@ -13,11 +13,7 @@ OPENVINO_SUPPORTED_PATHS = [
 ]
 
 # OpenVINO specific test skips
-OPENVINO_SPECIFIC_SKIPPING_TESTS = {
-    "test_backbone_basics": "bfloat16 dtype not supported",
-    "test_score_loss": "Non-implemented roll operation",
-    "test_causal_lm_basics": "Missing ops and requires trainable backend",
-}
+OPENVINO_SPECIFIC_SKIPPING_TESTS = {}
 
 
 def pytest_addoption(parser):
