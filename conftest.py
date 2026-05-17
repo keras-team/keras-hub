@@ -6,9 +6,23 @@ import pytest
 # OpenVINO supported test paths
 OPENVINO_SUPPORTED_PATHS = [
     "keras-hub/integration_tests",
+    "keras_hub/src/models/bloom",
+    "keras_hub/src/models/falcon",
     "keras_hub/src/models/gemma",
+    "keras_hub/src/models/gemma3",
+    "keras_hub/src/models/gemma4",
     "keras_hub/src/models/gpt2",
+    "keras_hub/src/models/gpt_neo_x",
+    "keras_hub/src/models/gpt_oss",
+    "keras_hub/src/models/llama",
+    "keras_hub/src/models/llama3",
     "keras_hub/src/models/mistral",
+    "keras_hub/src/models/mixtral",
+    "keras_hub/src/models/opt",
+    "keras_hub/src/models/phi3",
+    "keras_hub/src/models/qwen",
+    "keras_hub/src/models/qwen3",
+    "keras_hub/src/models/qwen3_5",
     "keras_hub/src/tokenizers",
 ]
 
