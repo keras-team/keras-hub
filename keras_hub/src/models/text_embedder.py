@@ -1,5 +1,5 @@
 import keras
-import numpy as np
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
@@ -119,20 +119,26 @@ class TextEmbedder(Task):
         return self.predict(documents, **kwargs)
 
     def similarity(self, query_embeddings, document_embeddings):
-        """Compute cosine similarity between query and document embeddings.
+        """Compute similarity between query and document embeddings.
 
-        When embeddings are L2 normalized (the default), this is equivalent
-        to the dot product. Returns a similarity matrix of shape
+        Computes the dot product between query and document embeddings.
+        When embeddings are L2 normalized (the default for
+        `BertTextEmbedder`), this is equivalent to cosine similarity.
+        Returns a similarity matrix of shape
         `(num_queries, num_documents)`.
 
         Args:
-            query_embeddings: A numpy array of shape
+            query_embeddings: An array or tensor of shape
                 `(num_queries, embedding_dim)`.
-            document_embeddings: A numpy array of shape
+            document_embeddings: An array or tensor of shape
                 `(num_documents, embedding_dim)`.
 
         Returns:
-            A numpy array of shape `(num_queries, num_documents)` containing
-            cosine similarity scores.
+            An array of shape `(num_queries, num_documents)` containing
+            similarity scores.
         """
-        return np.array(query_embeddings) @ np.array(document_embeddings).T
+        query_tensor = ops.convert_to_tensor(query_embeddings)
+        document_tensor = ops.convert_to_tensor(document_embeddings)
+        return ops.convert_to_numpy(
+            ops.matmul(query_tensor, ops.transpose(document_tensor))
+        )

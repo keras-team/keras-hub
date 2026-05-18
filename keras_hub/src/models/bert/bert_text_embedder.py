@@ -143,9 +143,9 @@ class BertTextEmbedder(TextEmbedder):
     def _max_pooling(sequence_output, padding_mask):
         """Max pooling over token embeddings, ignoring padding."""
         mask = ops.cast(ops.expand_dims(padding_mask, axis=-1), dtype="bool")
-        # Set padding positions to dtype min so they don't affect max.
+        # Set padding positions to -inf so they don't affect max.
         fill_value = ops.cast(
-            ops.convert_to_tensor(-1e9), sequence_output.dtype
+            ops.convert_to_tensor(float("-inf")), sequence_output.dtype
         )
         masked_output = ops.where(mask, sequence_output, fill_value)
         return ops.max(masked_output, axis=1)

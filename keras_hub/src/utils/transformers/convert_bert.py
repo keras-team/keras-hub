@@ -19,8 +19,10 @@ def convert_backbone_config(transformers_config):
 
 
 def convert_weights(backbone, loader, transformers_config):
-    # Detect LayerNorm naming: "gamma/beta" (standard BERT) vs
-    # "weight/bias" (sentence-transformers). Prefix is auto-detected.
+    # Detect LayerNorm naming convention. Standard BERT uses
+    # "gamma/beta", sentence-transformers use "weight/bias".
+    # `loader.get_tensor()` handles `bert.` prefix auto-detection
+    # via `SafetensorLoader.get_prefixed_key()` suffix matching.
     try:
         loader.get_tensor("embeddings.LayerNorm.gamma")
         ln_gamma, ln_beta = "gamma", "beta"

@@ -63,10 +63,9 @@ class TextEmbedderPreprocessor(Preprocessor):
         self.sequence_length = sequence_length
         self.truncate = truncate
 
-        # TODO(hongyu): Since `MultiSegmentPacker` requires TF workflow, we
-        # currently disable the Python workflow for
-        # `TextEmbedderPreprocessor`.
-        self.tokenizer._allow_python_workflow = False
+        # `MultiSegmentPacker` requires TF workflow, so disable Python
+        # workflow on this preprocessor layer.
+        self._allow_python_workflow = False
 
     def build(self, input_shape):
         super().build(input_shape)
