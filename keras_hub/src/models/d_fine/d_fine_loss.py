@@ -619,12 +619,14 @@ def compute_local_losses(
             mask_flat = keras.ops.reshape(mask_expanded, (-1,))
             loss_match_local1 = keras.ops.cond(
                 keras.ops.any(mask_flat),
-                lambda: keras.ops.sum(
-                    loss_match_local
-                    * keras.ops.cast(mask_flat, loss_match_local.dtype)
-                )
-                / keras.ops.sum(
-                    keras.ops.cast(mask_flat, loss_match_local.dtype)
+                lambda: (
+                    keras.ops.sum(
+                        loss_match_local
+                        * keras.ops.cast(mask_flat, loss_match_local.dtype)
+                    )
+                    / keras.ops.sum(
+                        keras.ops.cast(mask_flat, loss_match_local.dtype)
+                    )
                 ),
                 lambda: keras.ops.convert_to_tensor(
                     0.0, dtype=loss_match_local.dtype
@@ -633,12 +635,14 @@ def compute_local_losses(
             neg_mask_flat = keras.ops.logical_not(mask_flat)
             loss_match_local2 = keras.ops.cond(
                 keras.ops.any(neg_mask_flat),
-                lambda: keras.ops.sum(
-                    loss_match_local
-                    * keras.ops.cast(neg_mask_flat, loss_match_local.dtype)
-                )
-                / keras.ops.sum(
-                    keras.ops.cast(neg_mask_flat, loss_match_local.dtype)
+                lambda: (
+                    keras.ops.sum(
+                        loss_match_local
+                        * keras.ops.cast(neg_mask_flat, loss_match_local.dtype)
+                    )
+                    / keras.ops.sum(
+                        keras.ops.cast(neg_mask_flat, loss_match_local.dtype)
+                    )
                 ),
                 lambda: keras.ops.convert_to_tensor(
                     0.0, dtype=loss_match_local.dtype
