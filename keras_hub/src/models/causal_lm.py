@@ -362,7 +362,7 @@ class CausalLM(Task):
             # response, in a batch-friendly fashion.
             y = {}
             prompt_mask = prompt["padding_mask"]
-            seq_len = prompt_mask.shape[1]
+            seq_len = ops.shape(prompt_mask)[1]
 
             # We need to shift every output sequence by the size of the prompt.
             shifts = -ops.sum(ops.cast(prompt_mask, "int"), axis=1) % seq_len
