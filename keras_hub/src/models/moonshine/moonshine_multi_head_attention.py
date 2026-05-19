@@ -1,5 +1,4 @@
 import keras
-from keras import backend
 
 from keras_hub.src.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
@@ -29,42 +28,16 @@ def _rotate_half(x):
     Returns:
         Tensor: A tensor of shape `[..., 2*d]` with the two halves rotated.
     """
-    # Conditional for Tensorflow backend.
-    if backend.backend() == "tensorflow":
-        x_shape = keras.ops.shape(x)
-        last_dim = x_shape[-1]
-        d = last_dim // 2
-        x_shape_tensor = keras.ops.convert_to_tensor(x_shape)
-        new_shape = keras.ops.concatenate(
-            [x_shape_tensor[:-1], keras.ops.convert_to_tensor([d, 2])], axis=0
-        )
-        x = keras.ops.reshape(x, new_shape)
-        x1 = x[..., 0]
-        x2 = x[..., 1]
-        x_rotated = keras.ops.stack([-x2, x1], axis=-1)
-        x_rotated = keras.ops.reshape(x_rotated, x_shape)
-        return x_rotated
-
-    # Conditional for PyTorch and JAX backends.
-    if backend.backend() == "torch" or backend.backend() == "jax":
-        x_shape = keras.ops.shape(x)
-        x_shape_tuple = tuple(
-            int(keras.ops.convert_to_numpy(dim).item()) for dim in x_shape
-        )
-        last_dim = x_shape_tuple[-1]
-        d = last_dim // 2
-        new_shape = x_shape_tuple[:-1] + (d, 2)
-        x = keras.ops.reshape(x, new_shape)
-        x1 = x[..., 0]
-        x2 = x[..., 1]
-        x_rotated = keras.ops.stack([-x2, x1], axis=-1)
-        x_rotated = keras.ops.reshape(x_rotated, x_shape_tuple)
-        return x_rotated
-
-    else:
-        raise NotImplementedError(
-            "Backend not supported. Please use TensorFlow, PyTorch, or JAX."
-        )
+    x_shape = keras.ops.shape(x)
+    last_dim = x_shape[-1]
+    d = last_dim // 2
+    new_shape = x_shape[:-1] + (d, 2)
+    x = keras.ops.reshape(x, new_shape)
+    x1 = x[..., 0]
+    x2 = x[..., 1]
+    x_rotated = keras.ops.stack([-x2, x1], axis=-1)
+    x_rotated = keras.ops.reshape(x_rotated, x_shape)
+    return x_rotated
 
 
 def _apply_rotary_pos_emb(t, freqs):
@@ -241,24 +214,10 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         self.built = True
 
     def _compute_causal_mask(self, query, value=None, for_cache=False):
-        if backend.backend() == "torch" or backend.backend() == "jax":
-            q_seq_length = int(
-                keras.ops.convert_to_numpy(keras.ops.shape(query)[1]).item()
-            )
-            v_seq_length = (
-                int(
-                    keras.ops.convert_to_numpy(keras.ops.shape(value)[1]).item()
-                )
-                if value is not None
-                else q_seq_length
-            )
-        elif backend.backend() == "tensorflow":
-            if for_cache:
-                assert value is not None
-                v_seq_length = keras.ops.shape(value)[1]
-            else:
-                v_seq_length = keras.ops.shape(query)[1]
-            q_seq_length = keras.ops.shape(query)[1]
+        q_seq_length = keras.ops.shape(query)[1]
+        v_seq_length = (
+            keras.ops.shape(value)[1] if value is not None else q_seq_length
+        )
         n_rows = v_seq_length if for_cache else q_seq_length
         ones_mask = keras.ops.ones((1, n_rows, v_seq_length), dtype="int32")
         row_index = keras.ops.cumsum(ones_mask, axis=-2)
