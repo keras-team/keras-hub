@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 import tempfile
+import warnings
 
 import keras
 import numpy as np
@@ -645,10 +646,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 keras.__version__
             ) < packaging.version.Version("3.13.0"):
                 self.skipTest("LiteRT export requires Keras >= 3.13")
-            self.skipTest(
-                "LiteRT export tests are temporarily skipped on the "
-                "TensorFlow backend."
-            )
+            # NOTE: TF backend LiteRT export is now enabled for testing.
+            # Flex delegate warnings are expected and harmless.
 
             try:
                 from ai_edge_litert.interpreter import Interpreter
@@ -790,40 +789,62 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                         return x.numpy()
                     return x
 
-                if isinstance(input_data, dict):
-                    converted_input_data = tree.map_structure(
-                        convert_for_tflite, input_data
-                    )
-                    if backend == "torch":
-                        expected_dtypes = {
-                            d["name"]: d["dtype"]
-                            for d in interpreter.get_input_details()
-                        }
-                        sig_input_names = sorted(sig_inputs)
-                        input_keys = list(input_data.keys())
-                        runner_kwargs = {}
-                        for i, key in enumerate(input_keys):
-                            sig_name = sig_input_names[i]
-                            val = converted_input_data[key]
-                            for dname, dt in expected_dtypes.items():
-                                if sig_name in dname:
-                                    if val.dtype != dt:
-                                        val = val.astype(dt)
-                                    break
-                            runner_kwargs[sig_name] = val
-                        litert_output = runner(**runner_kwargs)
+                litert_output = None
+                flex_delegate_error = False
+                try:
+                    if isinstance(input_data, dict):
+                        converted_input_data = tree.map_structure(
+                            convert_for_tflite, input_data
+                        )
+                        if backend == "torch":
+                            expected_dtypes = {
+                                d["name"]: d["dtype"]
+                                for d in interpreter.get_input_details()
+                            }
+                            sig_input_names = sorted(sig_inputs)
+                            input_keys = list(input_data.keys())
+                            runner_kwargs = {}
+                            for i, key in enumerate(input_keys):
+                                sig_name = sig_input_names[i]
+                                val = converted_input_data[key]
+                                for dname, dt in expected_dtypes.items():
+                                    if sig_name in dname:
+                                        if val.dtype != dt:
+                                            val = val.astype(dt)
+                                        break
+                                runner_kwargs[sig_name] = val
+                            litert_output = runner(**runner_kwargs)
+                        else:
+                            litert_output = runner(**converted_input_data)
                     else:
-                        litert_output = runner(**converted_input_data)
-                else:
-                    # For single tensor inputs, get the input name
-                    sig_inputs = serving_sig.get("inputs", [])
-                    input_name = sig_inputs[
-                        0
-                    ]  # We verified len(sig_inputs) == 1 above
-                    converted_input = convert_for_tflite(input_data)
-                    litert_output = runner(**{input_name: converted_input})
+                        # For single tensor inputs, get the input name
+                        sig_inputs = serving_sig.get("inputs", [])
+                        input_name = sig_inputs[
+                            0
+                        ]  # We verified len(sig_inputs) == 1 above
+                        converted_input = convert_for_tflite(input_data)
+                        litert_output = runner(**{input_name: converted_input})
+                except RuntimeError as e:
+                    msg = str(e)
+                    if (
+                        backend == "tensorflow"
+                        and "Flex" in msg
+                        and "flex delegate" in msg.lower()
+                    ):
+                        flex_delegate_error = True
+                        warnings.warn(
+                            f"TF backend LiteRT export produced Flex ops; "
+                            f"interpreter inference skipped on desktop: {msg}"
+                        )
+                    else:
+                        raise
 
                 # Step 4: Verify outputs
+                if flex_delegate_error:
+                    self.skipTest(
+                        "TF backend LiteRT model contains Flex ops; "
+                        "numeric verification requires Flex delegate."
+                    )
                 self._verify_litert_outputs(
                     keras_output,
                     litert_output,
