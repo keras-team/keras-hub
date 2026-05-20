@@ -12,7 +12,6 @@ from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.litertlm.export import export_to_litertlm
 
 
 class TestLiteRTLmExport(TestCase):
@@ -92,7 +91,7 @@ class TestLiteRTLmExport(TestCase):
         with open(litertlm_path, "rb") as f:
             data = f.read()
         header_end = struct.unpack("<Q", data[24:32])[0]
-        import ai_edge_litert.internal.litertlm_core as core
+        import litert_lm_builder.litertlm_core as core
 
         metadata_buf = data[32:header_end]
         metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
@@ -207,4 +206,3 @@ class TestLiteRTLmExport(TestCase):
                 atol=1e-4,
                 rtol=1e-4,
             )
-

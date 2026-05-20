@@ -62,6 +62,14 @@ def export_to_litertlm(
             "method."
         )
 
+    if backend_constraint is not None:
+        valid_backends = {"cpu", "gpu", "npu", "gpu_artisan"}
+        if backend_constraint.lower() not in valid_backends:
+            raise ValueError(
+                f"Invalid backend_constraint: {backend_constraint!r}. "
+                f"Must be one of {sorted(valid_backends)}."
+            )
+
     tokenizer = _get_tokenizer(model)
     _validate_sentencepiece_tokenizer(tokenizer)
     cache_cfg = _get_cache_config(model)
@@ -156,6 +164,8 @@ def export_to_litertlm(
         meta_path = os.path.join(temp_dir, "llm_metadata.pb")
         _build_llm_metadata(model, cache_length, meta_path)
 
+        # Package the TFLite model, tokenizer, and metadata into a
+        # `.litertlm` bundle using the public LiteRT-LM builder API.
         litert_lm_builder = _import_litert_lm_builder()
         builder = litert_lm_builder.LitertLmFileBuilder()
         builder.add_system_metadata(
@@ -165,6 +175,10 @@ def export_to_litertlm(
                 dtype=litert_lm_builder.DType.STRING,
             )
         )
+        # `add_tflite_model` is the official builder API for adding the
+        # inference graph to the `.litertlm` bundle.  The bundle may
+        # contain multiple TFLite models (e.g. prefill/decode, embedder,
+        # vision encoder) identified by `TfLiteModelType`.
         builder.add_tflite_model(
             tflite_path,
             litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
@@ -301,9 +315,9 @@ def _materialize_sentencepiece_tokenizer(tokenizer, temp_dir):
 
 def _build_llm_metadata(model, max_num_tokens, path):
     """Serialize an ``LlmMetadata`` protobuf to *path*."""
-    from ai_edge_litert.internal.llm_metadata_pb2 import LlmMetadata
+    from litert_lm_builder.litertlm_builder import llm_metadata_pb2
 
-    meta = LlmMetadata()
+    meta = llm_metadata_pb2.LlmMetadata()
 
     # Start / stop tokens
     tokenizer = _get_tokenizer(model)
@@ -317,31 +331,40 @@ def _build_llm_metadata(model, max_num_tokens, path):
 
     meta.max_num_tokens = int(max_num_tokens)
 
-    # Model type mapping
-    model_cls_name = type(model).__name__
-    if model_cls_name.startswith("Gemma3n"):
-        meta.llm_model_type.gemma3n.SetInParent()
-    elif model_cls_name.startswith("Gemma3"):
-        meta.llm_model_type.gemma3.SetInParent()
-    elif model_cls_name.startswith("Gemma4"):
-        meta.llm_model_type.generic_model.SetInParent()
-    elif model_cls_name.startswith("Qwen3"):
-        meta.llm_model_type.qwen3.SetInParent()
-    elif model_cls_name.startswith("Qwen2"):
-        meta.llm_model_type.qwen2p5.SetInParent()
-    else:
-        meta.llm_model_type.generic_model.SetInParent()
+    _set_llm_model_type(meta, model)
 
     with open(path, "wb") as f:
         f.write(meta.SerializeToString())
 
 
+def _set_llm_model_type(meta, model):
+    """Map the KerasHub model class to the LiteRT-LM model type.
+
+    The mapping is based on the concrete model class name.  Prefixes are
+    checked from most-specific to least-specific so that ``Gemma3n`` is
+    matched before ``Gemma3``.
+    """
+    model_cls_name = type(model).__name__
+    mapping = [
+        ("Gemma3n", "gemma3n"),
+        ("Gemma3", "gemma3"),
+        ("Gemma4", "gemma4"),
+        ("Qwen3", "qwen3"),
+        ("Qwen2", "qwen2p5"),
+    ]
+    for prefix, model_type in mapping:
+        if model_cls_name.startswith(prefix):
+            getattr(meta.llm_model_type, model_type).SetInParent()
+            return
+    meta.llm_model_type.generic_model.SetInParent()
+
+
 def _import_litert_lm_builder():
     try:
-        import ai_edge_litert.internal.litertlm_builder as litert_lm_builder
+        import litert_lm_builder
     except ImportError as e:
         raise ImportError(
-            "LiteRT-LM export requires `ai-edge-litert`. "
-            "It is automatically installed with `litert-torch`."
+            "LiteRT-LM export requires `litert-lm-builder`. "
+            "Install it with: pip install litert-lm-builder"
         ) from e
     return litert_lm_builder
