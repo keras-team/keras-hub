@@ -88,6 +88,7 @@ def export_to_litertlm(
         )
 
     # Build sample inputs for tracing.
+    dtype = _torch_dtype_from_model(model)
     prefill_inputs = _build_sample_inputs(
         batch_size=1,
         seq_len=prefill_seq_len,
@@ -95,6 +96,7 @@ def export_to_litertlm(
         cache_length=cache_length,
         num_kv_heads=num_kv_heads,
         head_dim=head_dim,
+        dtype=dtype,
     )
     decode_inputs = _build_sample_inputs(
         batch_size=1,
@@ -103,6 +105,7 @@ def export_to_litertlm(
         cache_length=cache_length,
         num_kv_heads=num_kv_heads,
         head_dim=head_dim,
+        dtype=dtype,
     )
 
     adapter = KerasHubLiteRTAdapter(model, num_layers, cache_length)
@@ -204,7 +207,11 @@ def _get_cache_config(model):
         if preprocessor is not None:
             cache_length = getattr(preprocessor, "sequence_length", None)
     if cache_length is None:
-        cache_length = 2048
+        raise ValueError(
+            "Could not determine cache length from model backbone or "
+            "preprocessor. Please specify `prefill_seq_len` or ensure the "
+            "model has `max_sequence_length`."
+        )
 
     num_kv_heads = getattr(backbone, "num_key_value_heads", None)
     if num_kv_heads is None:
@@ -237,7 +244,13 @@ def _get_cache_config(model):
 
 
 def _build_sample_inputs(
-    batch_size, seq_len, num_layers, cache_length, num_kv_heads, head_dim
+    batch_size,
+    seq_len,
+    num_layers,
+    cache_length,
+    num_kv_heads,
+    head_dim,
+    dtype=torch.float32,
 ):
     """Create concrete sample tensors for one signature."""
     device = "cpu"
@@ -252,17 +265,17 @@ def _build_sample_inputs(
     # ``call_with_cache``, but LiteRT-LM executors may expect it.
     mask = torch.ones(
         (batch_size, 1, seq_len, cache_length),
-        dtype=torch.float32,
+        dtype=dtype,
         device=device,
     )
     kv_cache = {}
     for i in range(num_layers):
         shape = (batch_size, cache_length, num_kv_heads, head_dim)
         kv_cache[f"kv_cache_k_{i}"] = torch.zeros(
-            shape, dtype=torch.float32, device=device
+            shape, dtype=dtype, device=device
         )
         kv_cache[f"kv_cache_v_{i}"] = torch.zeros(
-            shape, dtype=torch.float32, device=device
+            shape, dtype=dtype, device=device
         )
 
     sample = {
@@ -340,23 +353,62 @@ def _build_llm_metadata(model, max_num_tokens, path):
 def _set_llm_model_type(meta, model):
     """Map the KerasHub model class to the LiteRT-LM model type.
 
-    The mapping is based on the concrete model class name.  Prefixes are
-    checked from most-specific to least-specific so that ``Gemma3n`` is
-    matched before ``Gemma3``.
+    Uses ``isinstance`` checks against actual model classes rather than
+    fragile string matching on class names.
     """
-    model_cls_name = type(model).__name__
+    import importlib
+
     mapping = [
-        ("Gemma3n", "gemma3n"),
-        ("Gemma3", "gemma3"),
-        ("Gemma4", "gemma4"),
-        ("Qwen3", "qwen3"),
-        ("Qwen2", "qwen2p5"),
+        (
+            "keras_hub.src.models.gemma3n.gemma3n_causal_lm",
+            "Gemma3nCausalLM",
+            "gemma3n",
+        ),
+        (
+            "keras_hub.src.models.gemma3.gemma3_causal_lm",
+            "Gemma3CausalLM",
+            "gemma3",
+        ),
+        (
+            "keras_hub.src.models.gemma4.gemma4_causal_lm",
+            "Gemma4CausalLM",
+            "gemma4",
+        ),
+        (
+            "keras_hub.src.models.qwen3.qwen3_causal_lm",
+            "Qwen3CausalLM",
+            "qwen3",
+        ),
+        (
+            "keras_hub.src.models.qwen.qwen_causal_lm",
+            "QwenCausalLM",
+            "qwen2p5",
+        ),
     ]
-    for prefix, model_type in mapping:
-        if model_cls_name.startswith(prefix):
-            getattr(meta.llm_model_type, model_type).SetInParent()
-            return
+    for module_path, class_name, model_type in mapping:
+        try:
+            mod = importlib.import_module(module_path)
+            cls = getattr(mod, class_name)
+            if isinstance(model, cls):
+                getattr(meta.llm_model_type, model_type).SetInParent()
+                return
+        except (ImportError, AttributeError):
+            continue
     meta.llm_model_type.generic_model.SetInParent()
+
+
+def _torch_dtype_from_model(model):
+    """Return a ``torch.dtype`` matching the model's compute dtype."""
+    compute_dtype = getattr(model, "compute_dtype", None)
+    if compute_dtype is None:
+        compute_dtype = getattr(model.backbone, "compute_dtype", "float32")
+    torch_dtype = getattr(torch, compute_dtype, None)
+    if torch_dtype is None:
+        raise ValueError(
+            f"Unsupported compute_dtype for LiteRT-LM export: "
+            f"{compute_dtype!r}. Expected a PyTorch dtype string."
+        )
+    return torch_dtype
 
 
 def _import_litert_lm_builder():
