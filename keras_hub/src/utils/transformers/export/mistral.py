@@ -44,7 +44,9 @@ def get_mistral_weights_map(backbone, include_lm_head=False):
     weights_map = {}
 
     # Token embeddings
-    weights_map["model.embed_tokens.weight"] = backbone.token_embedding.embeddings
+    weights_map["model.embed_tokens.weight"] = (
+        backbone.token_embedding.embeddings
+    )
 
     for i in range(backbone.num_layers):
         decoder_layer = backbone.transformer_layers[i]
@@ -144,7 +146,7 @@ def get_mistral_tokenizer_config(tokenizer):
         "unk_token": "<unk>",
         "use_default_system_prompt": False,
     }
-    
+
     # Add added_tokens_decoder
     added_tokens_decoder = {}
     special_tokens = [tokenizer.start_token, tokenizer.end_token, "<unk>"]

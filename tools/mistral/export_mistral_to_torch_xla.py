@@ -49,7 +49,7 @@ from absl import app
 from absl import flags
 
 try:
-    import torch_xla.core.xla_model as xm
+    import torch_xla  # noqa: F401
 except ImportError as e:
     raise ImportError(
         "torch_xla is required but could not be imported. "
@@ -60,10 +60,9 @@ except ImportError as e:
 
 os.environ["KERAS_BACKEND"] = "torch"
 
-import keras  # noqa: E402
 import keras.ops as ops  # noqa: E402
-import keras_hub  # noqa: E402
 
+import keras_hub  # noqa: E402
 
 PRESET_MAP = {
     "mistral_7b_en": "Base Mistral 7B",
@@ -128,7 +127,9 @@ def convert_checkpoints(preset, weights_file, output_dir):
     # Key layout matches the mistral-inference Transformer state dict so
     # run_mistral_xla.py can load it with model.load_state_dict().
     # ------------------------------------------------------------------ #
-    print("\n-> Converting weights from KerasHub Mistral to mistral-inference...")
+    print(
+        "\n-> Converting weights from KerasHub Mistral to mistral-inference..."
+    )
 
     state_dict = {}
 
@@ -145,30 +146,30 @@ def convert_checkpoints(preset, weights_file, output_dir):
         # KerasHub Q kernel: (hidden_dim, num_query_heads, head_dim)
         # mistral-inference wq.weight: (num_query_heads * head_dim, hidden_dim)
         q = _to_torch(attn._query_dense.kernel)
-        state_dict[f"layers.{i}.attention.wq.weight"] = (
-            q.reshape(backbone.hidden_dim, -1).T.contiguous()
-        )
+        state_dict[f"layers.{i}.attention.wq.weight"] = q.reshape(
+            backbone.hidden_dim, -1
+        ).T.contiguous()
 
         # KerasHub K kernel: (hidden_dim, num_key_value_heads, head_dim)
         # mistral-inference wk.weight: (num_kv_heads * head_dim, hidden_dim)
         k = _to_torch(attn._key_dense.kernel)
-        state_dict[f"layers.{i}.attention.wk.weight"] = (
-            k.reshape(backbone.hidden_dim, -1).T.contiguous()
-        )
+        state_dict[f"layers.{i}.attention.wk.weight"] = k.reshape(
+            backbone.hidden_dim, -1
+        ).T.contiguous()
 
         # KerasHub V kernel: (hidden_dim, num_key_value_heads, head_dim)
         # mistral-inference wv.weight: (num_kv_heads * head_dim, hidden_dim)
         v = _to_torch(attn._value_dense.kernel)
-        state_dict[f"layers.{i}.attention.wv.weight"] = (
-            v.reshape(backbone.hidden_dim, -1).T.contiguous()
-        )
+        state_dict[f"layers.{i}.attention.wv.weight"] = v.reshape(
+            backbone.hidden_dim, -1
+        ).T.contiguous()
 
         # KerasHub O kernel: (num_query_heads, head_dim, hidden_dim)
         # mistral-inference wo.weight: (hidden_dim, num_query_heads * head_dim)
         o = _to_torch(attn._output_dense.kernel)
-        state_dict[f"layers.{i}.attention.wo.weight"] = (
-            o.reshape(-1, backbone.hidden_dim).T.contiguous()
-        )
+        state_dict[f"layers.{i}.attention.wo.weight"] = o.reshape(
+            -1, backbone.hidden_dim
+        ).T.contiguous()
 
         # ---- MLP (SwiGLU) ---- #
         # KerasHub gate kernel: (hidden_dim, intermediate_dim)
@@ -251,17 +252,19 @@ def flag_error_handler():
     if not FLAGS.preset and not FLAGS.weights_file:
         raise ValueError(
             "Please pass either a valid Keras preset to `--preset` "
-            "or supply a Keras weights file (`.weights.h5`) to `--weights_file`."
+            "or supply a Keras weights file (`.weights.h5`) to"
+            " `--weights_file`."
         )
     if FLAGS.weights_file:
         if not FLAGS.preset:
             raise ValueError(
-                "The `--preset` flag must be given together with `--weights_file` "
-                "to define the model architecture."
+                "The `--preset` flag must be given together with"
+                " `--weights_file` to define the model architecture."
             )
         if not str(FLAGS.weights_file).endswith(".weights.h5"):
             raise ValueError(
-                "Please pass a valid Keras weights file ending in `.weights.h5`."
+                "Please pass a valid Keras weights file ending"
+                " in `.weights.h5`."
             )
     if FLAGS.dtype:
         dtype = getattr(torch, FLAGS.dtype, None)

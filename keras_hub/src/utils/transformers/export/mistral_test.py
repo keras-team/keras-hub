@@ -128,7 +128,7 @@ class TestMistralExport(TestCase):
         # 10. Test model inference - verify shapes match
         input_ids = np.array([hf_tokens], dtype=np.int32)
         hf_outputs = hf_model(input_ids=input_ids, return_dict=True)
-        
+
         # Check output shape
         self.assertEqual(
             hf_outputs.logits.shape[-1],

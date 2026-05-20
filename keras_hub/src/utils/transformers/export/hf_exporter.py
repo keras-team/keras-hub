@@ -224,7 +224,11 @@ def export_tokenizer(tokenizer, path):
     # Rename files to match Hugging Face expectations
 
     # 1. SentencePiece Models (Gemma / Gemma 3 / Mistral)
-    if tokenizer_type in ["GemmaTokenizer", "Gemma3Tokenizer", "MistralTokenizer"]:
+    if tokenizer_type in [
+        "GemmaTokenizer",
+        "Gemma3Tokenizer",
+        "MistralTokenizer",
+    ]:
         vocab_spm_path = os.path.join(path, "vocabulary.spm")
         tokenizer_model_path = os.path.join(path, "tokenizer.model")
         if os.path.exists(vocab_spm_path):

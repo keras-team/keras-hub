@@ -97,8 +97,8 @@ def _build_rope_cache(
         )
     )
     t = torch.arange(max_seq_len, dtype=torch.float32, device=device)
-    freqs = torch.outer(t, inv_freq)        # (max_seq_len, head_dim // 2)
-    emb = torch.cat([freqs, freqs], dim=-1) # (max_seq_len, head_dim)
+    freqs = torch.outer(t, inv_freq)  # (max_seq_len, head_dim // 2)
+    emb = torch.cat([freqs, freqs], dim=-1)  # (max_seq_len, head_dim)
     return emb.cos(), emb.sin()
 
 
@@ -123,12 +123,12 @@ class Attention(nn.Module):
 
     def forward(
         self,
-        x: torch.Tensor,       # (batch, 1, dim)
-        cos: torch.Tensor,     # (1, head_dim) — RoPE for current position
-        sin: torch.Tensor,     # (1, head_dim)
-        k_cache: torch.Tensor, # (batch, max_seq_len, n_kv_heads, head_dim)
+        x: torch.Tensor,  # (batch, 1, dim)
+        cos: torch.Tensor,  # (1, head_dim) — RoPE for current position
+        sin: torch.Tensor,  # (1, head_dim)
+        k_cache: torch.Tensor,  # (batch, max_seq_len, n_kv_heads, head_dim)
         v_cache: torch.Tensor,
-        pos: int,              # current sequence position index
+        pos: int,  # current sequence position index
     ) -> torch.Tensor:
         bsz = x.shape[0]
 
@@ -160,22 +160,22 @@ class Attention(nn.Module):
         k_full = k_full.transpose(1, 2)
         v_full = v_full.transpose(1, 2)
 
-        attn = (
-            torch.matmul(q, k_full.transpose(2, 3)) / math.sqrt(self.head_dim)
+        attn = torch.matmul(q, k_full.transpose(2, 3)) / math.sqrt(
+            self.head_dim
         )  # (batch, n_heads, 1, pos+1)
         attn = F.softmax(attn.float(), dim=-1).type_as(q)
 
-        out = torch.matmul(attn, v_full)               # (batch, n_heads, 1, head_dim)
+        out = torch.matmul(attn, v_full)  # (batch, n_heads, 1, head_dim)
         out = out.transpose(1, 2).contiguous().view(bsz, 1, -1)
-        return self.wo(out)                            # (batch, 1, dim)
+        return self.wo(out)  # (batch, 1, dim)
 
 
 class FeedForward(nn.Module):
     def __init__(self, dim: int, hidden_dim: int):
         super().__init__()
-        self.w1 = nn.Linear(dim, hidden_dim, bias=False)   # gate
-        self.w2 = nn.Linear(hidden_dim, dim, bias=False)   # down
-        self.w3 = nn.Linear(dim, hidden_dim, bias=False)   # up
+        self.w1 = nn.Linear(dim, hidden_dim, bias=False)  # gate
+        self.w2 = nn.Linear(hidden_dim, dim, bias=False)  # down
+        self.w3 = nn.Linear(dim, hidden_dim, bias=False)  # up
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.w2(F.silu(self.w1(x)) * self.w3(x))
@@ -233,7 +233,7 @@ class MistralModel(nn.Module):
         self,
         token_id: torch.Tensor,  # (batch,)
         pos: int,
-        cos: torch.Tensor,       # (1, head_dim)
+        cos: torch.Tensor,  # (1, head_dim)
         sin: torch.Tensor,
         k_caches: list,
         v_caches: list,
@@ -241,7 +241,7 @@ class MistralModel(nn.Module):
         x = self.tok_embeddings(token_id).unsqueeze(1)  # (batch, 1, dim)
         for i, layer in enumerate(self.layers):
             x = layer(x, cos, sin, k_caches[i], v_caches[i], pos)
-        return self.output(self.norm(x[:, -1, :]))      # (batch, vocab_size)
+        return self.output(self.norm(x[:, -1, :]))  # (batch, vocab_size)
 
 
 # ------------------------------------------------------------------ #
@@ -252,7 +252,8 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "checkpoint_dir",
     "mistral_xla",
-    "Directory containing `mistral.ckpt`, `params.json`, and `tokenizer.model`.",
+    "Directory containing `mistral.ckpt`, `params.json`, and"
+    " `tokenizer.model`.",
 )
 flags.DEFINE_string(
     "prompt",
@@ -338,7 +339,7 @@ def generate(
 
     # 6. Phase 2 — Decode: generate `output_len` new tokens
     if temperature == 0.0:
-        next_tok = logits.argmax(dim=-1)   # (1,) — first generated token
+        next_tok = logits.argmax(dim=-1)  # (1,) — first generated token
     else:
         probs = F.softmax(logits / temperature, dim=-1)
         next_tok = torch.multinomial(probs, num_samples=1).squeeze(-1)
@@ -347,7 +348,7 @@ def generate(
     generated_ids = []
     pos = len(prompt_ids)
     for _ in range(output_len):
-        tok_id = next_tok.item()           # sync point — unavoidable for EOS check
+        tok_id = next_tok.item()  # sync point — unavoidable for EOS check
         generated_ids.append(tok_id)
         if tok_id == sp.eos_id():
             break
