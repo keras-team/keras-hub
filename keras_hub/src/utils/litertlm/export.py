@@ -342,15 +342,39 @@ def _build_llm_metadata(model, max_num_tokens, path):
     if end_id is not None:
         meta.stop_tokens.add().token_ids.ids.append(int(end_id))
 
+    # Gemma3 (and similar chat-tuned models) use <end_of_turn> as the turn
+    # separator.  The LiteRT-LM runtime needs to know about it so generation
+    # stops after the assistant finishes its turn.
+    try:
+        eot_id = tokenizer.token_to_id("<end_of_turn>")
+        if eot_id is not None:
+            meta.stop_tokens.add().token_ids.ids.append(int(eot_id))
+    except Exception:
+        pass
+
     meta.max_num_tokens = int(max_num_tokens)
 
-    # Default to generic_model.  Subclasses can override
-    # _build_llm_metadata if they need a specific LlmModelType
-    # (e.g. gemma3, qwen3) for multimodal or function-calling support.
-    meta.llm_model_type.generic_model.SetInParent()
+    # Use model-specific type when known so the LiteRT-LM runtime applies
+    # the correct chat template and stop-token behaviour.
+    model_type = _detect_llm_model_type(model)
+    getattr(meta.llm_model_type, model_type).SetInParent()
 
     with open(path, "wb") as f:
         f.write(meta.SerializeToString())
+
+
+def _detect_llm_model_type(model):
+    """Return the LiteRT-LM LlmModelType name for *model*."""
+    cls_name = type(model).__name__
+    if "Gemma3" in cls_name:
+        return "gemma3"
+    if "Gemma" in cls_name:
+        return "generic_model"  # older Gemma variants
+    if "Qwen3" in cls_name:
+        return "qwen3"
+    if "Qwen2" in cls_name:
+        return "qwen2p5"
+    return "generic_model"
 
 
 def _torch_dtype_from_model(model):
