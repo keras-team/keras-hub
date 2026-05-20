@@ -344,57 +344,13 @@ def _build_llm_metadata(model, max_num_tokens, path):
 
     meta.max_num_tokens = int(max_num_tokens)
 
-    _set_llm_model_type(meta, model)
+    # Default to generic_model.  Subclasses can override
+    # _build_llm_metadata if they need a specific LlmModelType
+    # (e.g. gemma3, qwen3) for multimodal or function-calling support.
+    meta.llm_model_type.generic_model.SetInParent()
 
     with open(path, "wb") as f:
         f.write(meta.SerializeToString())
-
-
-def _set_llm_model_type(meta, model):
-    """Map the KerasHub model class to the LiteRT-LM model type.
-
-    Uses ``isinstance`` checks against actual model classes rather than
-    fragile string matching on class names.
-    """
-    import importlib
-
-    mapping = [
-        (
-            "keras_hub.src.models.gemma3n.gemma3n_causal_lm",
-            "Gemma3nCausalLM",
-            "gemma3n",
-        ),
-        (
-            "keras_hub.src.models.gemma3.gemma3_causal_lm",
-            "Gemma3CausalLM",
-            "gemma3",
-        ),
-        (
-            "keras_hub.src.models.gemma4.gemma4_causal_lm",
-            "Gemma4CausalLM",
-            "gemma4",
-        ),
-        (
-            "keras_hub.src.models.qwen3.qwen3_causal_lm",
-            "Qwen3CausalLM",
-            "qwen3",
-        ),
-        (
-            "keras_hub.src.models.qwen.qwen_causal_lm",
-            "QwenCausalLM",
-            "qwen2p5",
-        ),
-    ]
-    for module_path, class_name, model_type in mapping:
-        try:
-            mod = importlib.import_module(module_path)
-            cls = getattr(mod, class_name)
-            if isinstance(model, cls):
-                getattr(meta.llm_model_type, model_type).SetInParent()
-                return
-        except (ImportError, AttributeError):
-            continue
-    meta.llm_model_type.generic_model.SetInParent()
 
 
 def _torch_dtype_from_model(model):
