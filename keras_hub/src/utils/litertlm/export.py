@@ -124,8 +124,8 @@ def export_to_litertlm(
 
     if litert_torch is None:
         raise ImportError(
-            "LiteRT-LM export requires `litert-torch`. Install it from the "
-            "LiteRT-LM repo or PyPI before calling `export_to_litertlm()`."
+            "LiteRT-LM export requires `litert-torch`. "
+            "Install it with: pip install litert-torch"
         )
 
     with _traceable_slice_update_scope():
@@ -341,8 +341,7 @@ def _import_litert_lm_builder():
         import ai_edge_litert.internal.litertlm_builder as litert_lm_builder
     except ImportError as e:
         raise ImportError(
-            "LiteRT-LM export requires the `ai-edge-litert` package with "
-            "`internal.litertlm_builder`. Install it before calling "
-            "`export_to_litertlm()`."
+            "LiteRT-LM export requires `ai-edge-litert`. "
+            "It is automatically installed with `litert-torch`."
         ) from e
     return litert_lm_builder
