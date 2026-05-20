@@ -1,6 +1,7 @@
 import os
 
 import numpy as np
+import torch
 from transformers import AutoModelForCausalLM
 from transformers import AutoTokenizer
 
@@ -62,7 +63,11 @@ class TestMistralExport(TestCase):
         self.assertIn("tokenizer_config.json", exported)
 
         # 7. Load with Hugging Face Transformers
-        hf_tokenizer = AutoTokenizer.from_pretrained(export_path)
+        # use_fast=False: the tiny test vocab is not a standard BPE/Unigram
+        # SentencePiece model, so the fast tokenizer conversion fails.
+        hf_tokenizer = AutoTokenizer.from_pretrained(
+            export_path, use_fast=False
+        )
         hf_model = AutoModelForCausalLM.from_pretrained(export_path)
 
         # 8. Verify configuration
@@ -114,7 +119,10 @@ class TestMistralExport(TestCase):
         )
 
         # 9. Test tokenizer functionality
-        test_text = "Hello, world!"
+        # Use in-vocabulary text; the tiny test vocab only contains a handful
+        # of words so out-of-vocabulary text maps to UNK and HF/KerasHub
+        # differ in how they handle UNK (HF strips it, KerasHub keeps it).
+        test_text = "the quick brown fox"
         keras_tokens = tokenizer(test_text)
         hf_tokens = hf_tokenizer.encode(test_text, add_special_tokens=False)
         # Compare tokens (handling potential type differences)
@@ -126,7 +134,7 @@ class TestMistralExport(TestCase):
         )
 
         # 10. Test model inference - verify shapes match
-        input_ids = np.array([hf_tokens], dtype=np.int32)
+        input_ids = torch.tensor([hf_tokens], dtype=torch.long)
         hf_outputs = hf_model(input_ids=input_ids, return_dict=True)
 
         # Check output shape
