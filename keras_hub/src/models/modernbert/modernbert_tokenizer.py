@@ -1,11 +1,15 @@
 import keras
+
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.modernbert.modernbert_backbone import(
+from keras_hub.src.models.modernbert.modernbert_backbone import (
     ModernBertBackbone,
 )
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
-@keras.utils.register_keras_serializable(package="keras_hub")
+
+@keras.utils.register_keras_serializable(
+    package="keras_hub",
+)
 @keras_hub_export(
     [
         "keras_hub.tokenizers.ModernBertTokenizer",
@@ -13,76 +17,118 @@ from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
     ]
 )
 class ModernBertTokenizer(BytePairTokenizer):
-    """ModernBERT tokenizer based on Byte-Pair Encoding (BPE).
+    """ModernBERT byte-level BPE tokenizer.
 
-    This tokenizer class is a specialized version of the 
-    `keras_hub.tokenizers.BytePairTokenizer` tailored for ModernBERT. It 
-    uses a byte-level BPE vocabulary and includes special tokens required 
-    for ModernBERT's masking and sequence boundary logic.
-
-    The tokenizer uses `<|endoftext|>` as the primary sequence boundary token 
-    (serving as both start, end, and separator) and `<|padding|>` for padding.
+    This tokenizer configures the special token defaults required for the
+    ModernBERT architecture, mapping padding, mask, and sequence boundary
+    tokens to their specific unsplittable representations.
 
     Args:
-        vocabulary: dict or str. A dictionary mapping strings to token IDs, or 
-            a path to a JSON file containing the vocabulary.
-        merges: list or str. A list of merge rules, or a path to a text file 
-            containing the merge rules.
-        **kwargs: Standard `keras_hub.tokenizers.BytePairTokenizer` arguments.
+        vocabulary: dict or string. A dictionary mapping string tokens
+        to integer IDs, or a file path to a json-serialized vocabulary map.
+
+        merges: list or string. A list of byte pair merge rule strings,
+        or a file path to a text merge rule list. Defaults to `None`.
+        **kwargs: Additional keyword arguments passed to the parent
+            `BytePairTokenizer` class.
 
     Examples:
     ```python
-    # Instantiate from local files
-    tokenizer = keras_hub.models.ModernBertTokenizer(
-        vocabulary="vocab.json",
-        merges="merges.txt",
+    import keras_hub
+
+    # Load tokenizer directly from a preset configuration
+    tokenizer = keras_hub.models.ModernBertTokenizer.from_preset(
+        "modernbert_base"
     )
+
+    # Encode raw text strings to integer ID tokens
+    token_ids = tokenizer("The quick brown fox.")
     ```
     """
 
     backbone_cls = ModernBertBackbone
 
-    def __init__(self, vocabulary=None, merges=None, **kwargs):
+    def __init__(
+        self,
+        vocabulary=None,
+        merges=None,
+        **kwargs,
+    ):
         self.pad_token = "<|padding|>"
         self.mask_token = "[MASK]"
+        self.start_token = "<|endoftext|>"
         self.end_token = "<|endoftext|>"
 
-        # ModernBERT special tokens should not be split by the BPE process
-        kwargs["unsplittable_tokens"] = [self.pad_token, self.mask_token, self.end_token]
-        kwargs["add_prefix_space"] = kwargs.get("add_prefix_space", False)
+        unsplittable_tokens = kwargs.pop(
+            "unsplittable_tokens",
+            [],
+        )
 
-        super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
+        unsplittable_tokens = list(unsplittable_tokens)
 
-    def _add_special_tokens(self):
-        """Sets internal aliases for common special tokens."""
-        self.cls_token = self.end_token
+        special_tokens = [
+            self.pad_token,
+            self.mask_token,
+            self.start_token,
+            self.end_token,
+        ]
+        for token in special_tokens:
+            if token not in unsplittable_tokens:
+                unsplittable_tokens.append(token)
+
+        kwargs["unsplittable_tokens"] = unsplittable_tokens
+
+        kwargs["add_prefix_space"] = kwargs.get(
+            "add_prefix_space",
+            False,
+        )
+
+        super().__init__(
+            vocabulary=vocabulary,
+            merges=merges,
+            **kwargs,
+        )
+
+        self.cls_token = self.start_token
         self.sep_token = self.end_token
-        self.start_token = self.end_token
 
     @property
     def pad_token_id(self):
-        """Returns the ID of the padding token."""
-        return self.token_to_id(self.pad_token)
+        return self._safe_token_id(self.pad_token)
 
     @property
     def mask_token_id(self):
-        """Returns the ID of the mask token."""
-        return self.token_to_id(self.mask_token)
-    
+        return self._safe_token_id(self.mask_token)
+
     @property
-    def vocabulary_size(self):
-        """Returns the total number of tokens in the vocabulary."""
-        return len(self.vocabulary)
+    def start_token_id(self):
+        return self._safe_token_id(self.start_token)
 
     @property
     def end_token_id(self):
-        """Returns the ID of the end-of-text token (<|endoftext|>)."""
-        return self.token_to_id(self.end_token)
+        return self._safe_token_id(self.end_token)
+
+    def _safe_token_id(self, token):
+        if self.vocabulary is None:
+            return 0
+
+        return self.token_to_id(token)
+
+    @property
+    def vocabulary_size(self):
+        if self.vocabulary is None:
+            return 0
+
+        return len(self.vocabulary)
 
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "vocabulary": self.vocabulary, 
-            "merges": self.merges
-        })
+
+        config.update(
+            {
+                "vocabulary": self.vocabulary,
+                "merges": self.merges,
+            }
+        )
+
         return config

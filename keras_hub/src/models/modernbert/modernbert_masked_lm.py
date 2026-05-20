@@ -1,10 +1,16 @@
 import keras
 from keras import layers
 from keras import ops
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.masked_lm import MaskedLM
-from modernbert_backbone import ModernBertBackbone
-from modernbert_preprocessor import ModernBertMaskedLMPreprocessor
+from keras_hub.src.models.modernbert.modernbert_backbone import (
+    ModernBertBackbone,
+)
+from keras_hub.src.models.modernbert.modernbert_preprocessor import (
+    ModernBertMaskedLMPreprocessor,
+)
+
 
 @keras_hub_export("keras_hub.models.ModernBertMaskedLM")
 class ModernBertMaskedLM(MaskedLM):
@@ -20,11 +26,14 @@ class ModernBertMaskedLM(MaskedLM):
 
     Args:
         backbone: A `keras_hub.models.ModernBertBackbone` instance.
-        preprocessor: A `keras_hub.models.ModernBertMaskedLMPreprocessor` or
-            `None`. If `None`, this model will not handle input preprocessing.
-        **kwargs: Standard `keras.Model` arguments.
+        preprocessor: A `keras_hub.models.ModernBertMaskedLMPreprocessor`
+        instance or `None`. If `None`, this model will not handle input
+        preprocessing automatically during `fit()`, `predict()`, or
+        `evaluate()`.
+        dtype: string or `keras.DTypePolicy`. The precision policy used
+        for the model's computations and weights.
 
-    Example:
+    Examples:
     ```python
     import keras_hub
     import numpy as np
@@ -61,41 +70,48 @@ class ModernBertMaskedLM(MaskedLM):
     backbone_cls = ModernBertBackbone
     preprocessor_cls = ModernBertMaskedLMPreprocessor
 
-    def __init__(self, backbone, preprocessor=None, **kwargs):
+    def __init__(
+        self,
+        backbone,
+        preprocessor=None,
+        **kwargs,
+    ):
         # === Inputs ===
         inputs = backbone.input
-        
+
         mask_positions = keras.Input(
-            shape=(None,), dtype="int32", name="mask_positions"
+            shape=(None,),
+            dtype="int32",
+            name="mask_positions",
         )
+
         # Output shape: (batch_size, sequence_length, hidden_dim)
         sequence_output = backbone(inputs)
 
-        x = ops.take_along_axis(
-            sequence_output, 
-            mask_positions[:, :, None], 
-            axis=1
+        masked_sequence_output = ops.take_along_axis(
+            sequence_output,
+            mask_positions[:, :, None],
+            axis=1,
         )
 
-        # ModernBERT uses RMSNorm (LayerNormalization with rms_scaling=True)
-        x = layers.LayerNormalization(
-            epsilon=backbone.layer_norm_epsilon,
-            rms_scaling=True,
+        masked_sequence_output = layers.RMSNormalization(
+            epsilon=(backbone.layer_norm_epsilon),
             name="mlm_head_norm",
-        )(x)
-        
-        # Output shape: (batch_size, mask_selection_length, vocabulary_size)
-        logits = layers.Dense(
-            backbone.vocabulary_size,
-            kernel_initializer=keras.initializers.TruncatedNormal(stddev=0.02),
-            name="mlm_head_logits",
-        )(x)
+        )(masked_sequence_output)
+
+        logits = backbone.token_embedding(
+            masked_sequence_output,
+            reverse=True,
+        )
 
         # === Initialize the MaskedLM base class ===
         super().__init__(
             backbone=backbone,
-            preprocessor=preprocessor, 
-            inputs={**inputs, "mask_positions": mask_positions},
+            preprocessor=preprocessor,
+            inputs={
+                **inputs,
+                "mask_positions": (mask_positions),
+            },
             outputs=logits,
             **kwargs,
         )
