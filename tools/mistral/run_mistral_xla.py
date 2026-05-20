@@ -2,16 +2,15 @@
 This script loads a converted Mistral checkpoint (produced by
 `export_mistral_to_torch_xla.py`) onto an XLA device and runs text generation.
 
-Please ensure that `mistral-inference` and `torch_xla` are installed:
+`mistral-inference` is NOT required.  Only `torch_xla` and `sentencepiece`
+are needed:
 
-`pip install mistral-inference`
-`pip install torch_xla`
+`pip install torch_xla sentencepiece`
 
-Note that this script can take several minutes to run on CPU.
+Ensure that your installed `torch_xla` and `torch` versions match.
 
 Sample usage:
 
-Run with the output directory produced by the export script:
 ```
 python tools/mistral/run_mistral_xla.py \
   --checkpoint_dir mistral_xla \
@@ -28,30 +27,221 @@ RESULT: a thief who steals corporate secrets through the use of
 """
 
 import json
+import math
 import os
 import sys
-from typing import List
 
-import sentencepiece as spm
 import torch
-import torch_xla.core.xla_model as xm
-import torch_xla.distributed.xla_multiprocessing as xmp
+import torch.nn as nn
+import torch.nn.functional as F
 from absl import app
 from absl import flags
-from mistral_inference.args import ModelArgs
-from mistral_inference.model import Transformer
 
-"""
-Sample usage:
+try:
+    import sentencepiece as spm
+except ImportError as e:
+    raise ImportError(
+        "sentencepiece is required: pip install sentencepiece"
+    ) from e
 
-```
-python tools/mistral/run_mistral_xla.py \
-    --checkpoint_dir mistral_xla \
-    --prompt "The capital of France is"
-```
-"""
+try:
+    import torch_xla.core.xla_model as xm
+    import torch_xla.distributed.xla_multiprocessing as xmp
+except ImportError as e:
+    raise ImportError(
+        "torch_xla is required but could not be imported. "
+        "Ensure torch and torch_xla versions match:\n"
+        "  pip install torch_xla[tpu]==<torch_version> "
+        "-f https://storage.googleapis.com/libtpu-releases/index.html"
+    ) from e
 
-PAD_TOKEN_ID = -1
+
+# ------------------------------------------------------------------ #
+# Mistral model — pure PyTorch, no external inference library needed
+# ------------------------------------------------------------------ #
+
+
+class RMSNorm(nn.Module):
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        norm = x.float() * torch.rsqrt(
+            x.float().pow(2).mean(-1, keepdim=True) + self.eps
+        )
+        return norm.type_as(x) * self.weight
+
+
+def _rotate_half(x: torch.Tensor) -> torch.Tensor:
+    """Rotate the second half of the last dim into the first half."""
+    half = x.shape[-1] // 2
+    return torch.cat([-x[..., half:], x[..., :half]], dim=-1)
+
+
+def _build_rope_cache(
+    max_seq_len: int, head_dim: int, rope_theta: float, device
+):
+    """Pre-compute cos/sin tables for Rotary Position Embeddings."""
+    inv_freq = 1.0 / (
+        rope_theta
+        ** (
+            torch.arange(0, head_dim, 2, dtype=torch.float32, device=device)
+            / head_dim
+        )
+    )
+    t = torch.arange(max_seq_len, dtype=torch.float32, device=device)
+    freqs = torch.outer(t, inv_freq)        # (max_seq_len, head_dim // 2)
+    emb = torch.cat([freqs, freqs], dim=-1) # (max_seq_len, head_dim)
+    return emb.cos(), emb.sin()
+
+
+class Attention(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        n_heads: int,
+        n_kv_heads: int,
+        head_dim: int,
+    ):
+        super().__init__()
+        self.n_heads = n_heads
+        self.n_kv_heads = n_kv_heads
+        self.head_dim = head_dim
+        self.n_rep = n_heads // n_kv_heads  # GQA repeat factor
+
+        self.wq = nn.Linear(dim, n_heads * head_dim, bias=False)
+        self.wk = nn.Linear(dim, n_kv_heads * head_dim, bias=False)
+        self.wv = nn.Linear(dim, n_kv_heads * head_dim, bias=False)
+        self.wo = nn.Linear(n_heads * head_dim, dim, bias=False)
+
+    def forward(
+        self,
+        x: torch.Tensor,       # (batch, 1, dim)
+        cos: torch.Tensor,     # (1, head_dim) — RoPE for current position
+        sin: torch.Tensor,     # (1, head_dim)
+        k_cache: torch.Tensor, # (batch, max_seq_len, n_kv_heads, head_dim)
+        v_cache: torch.Tensor,
+        pos: int,              # current sequence position index
+    ) -> torch.Tensor:
+        bsz = x.shape[0]
+
+        q = self.wq(x).view(bsz, 1, self.n_heads, self.head_dim)
+        k = self.wk(x).view(bsz, 1, self.n_kv_heads, self.head_dim)
+        v = self.wv(x).view(bsz, 1, self.n_kv_heads, self.head_dim)
+
+        # Apply RoPE
+        cos = cos.view(1, 1, 1, self.head_dim)
+        sin = sin.view(1, 1, 1, self.head_dim)
+        q = q * cos + _rotate_half(q) * sin
+        k = k * cos + _rotate_half(k) * sin
+
+        # Write new k, v into cache
+        k_cache[:, pos : pos + 1] = k
+        v_cache[:, pos : pos + 1] = v
+
+        # Attend to all cached positions [0 : pos+1]
+        k_full = k_cache[:, : pos + 1]  # (batch, pos+1, n_kv_heads, head_dim)
+        v_full = v_cache[:, : pos + 1]
+
+        # Expand kv heads for GQA
+        if self.n_rep > 1:
+            k_full = k_full.repeat_interleave(self.n_rep, dim=2)
+            v_full = v_full.repeat_interleave(self.n_rep, dim=2)
+
+        # (batch, n_heads, 1, head_dim) @ (batch, n_heads, head_dim, pos+1)
+        q = q.transpose(1, 2)
+        k_full = k_full.transpose(1, 2)
+        v_full = v_full.transpose(1, 2)
+
+        attn = (
+            torch.matmul(q, k_full.transpose(2, 3)) / math.sqrt(self.head_dim)
+        )  # (batch, n_heads, 1, pos+1)
+        attn = F.softmax(attn.float(), dim=-1).type_as(q)
+
+        out = torch.matmul(attn, v_full)               # (batch, n_heads, 1, head_dim)
+        out = out.transpose(1, 2).contiguous().view(bsz, 1, -1)
+        return self.wo(out)                            # (batch, 1, dim)
+
+
+class FeedForward(nn.Module):
+    def __init__(self, dim: int, hidden_dim: int):
+        super().__init__()
+        self.w1 = nn.Linear(dim, hidden_dim, bias=False)   # gate
+        self.w2 = nn.Linear(hidden_dim, dim, bias=False)   # down
+        self.w3 = nn.Linear(dim, hidden_dim, bias=False)   # up
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.w2(F.silu(self.w1(x)) * self.w3(x))
+
+
+class TransformerBlock(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        n_heads: int,
+        n_kv_heads: int,
+        head_dim: int,
+        hidden_dim: int,
+        norm_eps: float,
+    ):
+        super().__init__()
+        self.attention_norm = RMSNorm(dim, eps=norm_eps)
+        self.attention = Attention(dim, n_heads, n_kv_heads, head_dim)
+        self.ffn_norm = RMSNorm(dim, eps=norm_eps)
+        self.feed_forward = FeedForward(dim, hidden_dim)
+
+    def forward(self, x, cos, sin, k_cache, v_cache, pos):
+        x = x + self.attention(
+            self.attention_norm(x), cos, sin, k_cache, v_cache, pos
+        )
+        x = x + self.feed_forward(self.ffn_norm(x))
+        return x
+
+
+class MistralModel(nn.Module):
+    def __init__(self, params: dict):
+        super().__init__()
+        dim = params["dim"]
+        n_heads = params["n_heads"]
+        self.n_layers = params["n_layers"]
+
+        self.tok_embeddings = nn.Embedding(params["vocab_size"], dim)
+        self.layers = nn.ModuleList(
+            [
+                TransformerBlock(
+                    dim=dim,
+                    n_heads=n_heads,
+                    n_kv_heads=params["n_kv_heads"],
+                    head_dim=params.get("head_dim", dim // n_heads),
+                    hidden_dim=params["hidden_dim"],
+                    norm_eps=params.get("norm_eps", 1e-5),
+                )
+                for _ in range(self.n_layers)
+            ]
+        )
+        self.norm = RMSNorm(dim, eps=params.get("norm_eps", 1e-5))
+        self.output = nn.Linear(dim, params["vocab_size"], bias=False)
+
+    def forward(
+        self,
+        token_id: torch.Tensor,  # (batch,)
+        pos: int,
+        cos: torch.Tensor,       # (1, head_dim)
+        sin: torch.Tensor,
+        k_caches: list,
+        v_caches: list,
+    ) -> torch.Tensor:
+        x = self.tok_embeddings(token_id).unsqueeze(1)  # (batch, 1, dim)
+        for i, layer in enumerate(self.layers):
+            x = layer(x, cos, sin, k_caches[i], v_caches[i], pos)
+        return self.output(self.norm(x[:, -1, :]))      # (batch, vocab_size)
+
+
+# ------------------------------------------------------------------ #
+# Flags
+# ------------------------------------------------------------------ #
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -64,188 +254,128 @@ flags.DEFINE_string(
     "The capital of France is",
     "A test prompt for verifying functionality of the converted model.",
 )
-flags.DEFINE_integer(
-    "output_len",
-    10,
-    "Number of new tokens to generate.",
-)
+flags.DEFINE_integer("output_len", 10, "Number of new tokens to generate.")
 flags.DEFINE_float(
-    "temperature",
-    0.0,
-    "Sampling temperature. Use 0.0 for greedy decoding.",
+    "temperature", 0.0, "Sampling temperature. Use 0.0 for greedy decoding."
 )
+flags.DEFINE_integer(
+    "max_seq_len",
+    512,
+    "Maximum sequence length (prompt + output). KV caches are pre-allocated "
+    "to this size.",
+)
+
+
+# ------------------------------------------------------------------ #
+# Generation
+# ------------------------------------------------------------------ #
 
 
 def generate(
     index: int,
     checkpoint_dir: str,
-    prompts: List[str],
+    prompt: str,
     output_len: int,
     temperature: float,
+    max_seq_len: int,
 ):
     """Generate text on an XLA device from a converted Mistral checkpoint."""
     device = xm.xla_device()
 
-    # Suppress output from non-primary workers in multi-process mode
     if index > 0:
         sys.stdout = open(os.devnull, "w")
 
-    # ------------------------------------------------------------------ #
-    # 1. Load model config
-    # ------------------------------------------------------------------ #
-    params_path = os.path.join(checkpoint_dir, "params.json")
-    with open(params_path) as f:
+    # 1. Load params and build model
+    with open(os.path.join(checkpoint_dir, "params.json")) as f:
         params = json.load(f)
-    model_args = ModelArgs(**params)
 
-    # ------------------------------------------------------------------ #
-    # 2. Create model on XLA device and load converted weights
-    # ------------------------------------------------------------------ #
-    model = Transformer(model_args).to(device).eval()
-
-    checkpoint_path = os.path.join(checkpoint_dir, "mistral.ckpt")
-    state = torch.load(checkpoint_path, map_location="cpu")
+    model = MistralModel(params).to(torch.float32).eval()
+    state = torch.load(
+        os.path.join(checkpoint_dir, "mistral.ckpt"), map_location="cpu"
+    )
     model.load_state_dict(state["model_state_dict"])
     model = model.to(device)
     xm.mark_step()
 
-    # ------------------------------------------------------------------ #
-    # 3. Tokenise prompts
-    # ------------------------------------------------------------------ #
-    tokenizer = spm.SentencePieceProcessor()
-    tokenizer.Load(os.path.join(checkpoint_dir, "tokenizer.model"))
+    # 2. Tokenise
+    sp = spm.SentencePieceProcessor()
+    sp.Load(os.path.join(checkpoint_dir, "tokenizer.model"))
+    prompt_ids = sp.Encode(prompt, out_type=int)
 
-    prompt_tokens = [tokenizer.Encode(p, out_type=int) for p in prompts]
-    min_prompt_len = min(len(p) for p in prompt_tokens)
-    max_seq_len = max(len(p) + output_len for p in prompt_tokens)
-    batch_size = len(prompts)
+    # 3. Pre-allocate KV caches
+    n_kv_heads = params["n_kv_heads"]
+    head_dim = params.get("head_dim", params["dim"] // params["n_heads"])
+    k_caches = [
+        torch.zeros(1, max_seq_len, n_kv_heads, head_dim, device=device)
+        for _ in range(params["n_layers"])
+    ]
+    v_caches = [
+        torch.zeros(1, max_seq_len, n_kv_heads, head_dim, device=device)
+        for _ in range(params["n_layers"])
+    ]
 
-    assert max_seq_len <= model_args.max_position_embeddings, (
-        f"max_seq_len {max_seq_len} exceeds model max "
-        f"{model_args.max_position_embeddings}"
+    # 4. Pre-compute RoPE tables
+    rope_theta = params.get("rope_theta", 10000.0)
+    cos_table, sin_table = _build_rope_cache(
+        max_seq_len, head_dim, rope_theta, device
     )
-
-    n_kv_heads = model_args.n_kv_heads or model_args.n_heads
-    head_dim = model_args.head_dim or (model_args.dim // model_args.n_heads)
-
-    # ------------------------------------------------------------------ #
-    # 4. Build initial token tensors and KV caches
-    # ------------------------------------------------------------------ #
-    token_ids_tensor = torch.full(
-        (batch_size, max_seq_len), PAD_TOKEN_ID, dtype=torch.int64
-    )
-    input_token_ids_tensor = torch.full(
-        (batch_size, min_prompt_len), PAD_TOKEN_ID, dtype=torch.int64
-    )
-    for i, p in enumerate(prompt_tokens):
-        token_ids_tensor[i, : len(p)] = torch.tensor(p)
-        input_token_ids_tensor[i, :min_prompt_len] = torch.tensor(
-            p[:min_prompt_len]
-        )
-
-    token_ids_tensor = token_ids_tensor.to(device)
-    prompt_mask_tensor = token_ids_tensor != PAD_TOKEN_ID
-    input_token_ids_tensor = input_token_ids_tensor.to(device)
-
-    # Causal mask: −∞ above the diagonal, 0 on/below
-    mask_tensor = torch.full(
-        (1, 1, max_seq_len, max_seq_len), float("-inf")
-    ).to(torch.float32)
-    mask_tensor = torch.triu(mask_tensor, diagonal=1).to(device)
-
-    input_positions_tensor = torch.arange(
-        0, min_prompt_len, dtype=torch.int64
-    ).to(device)
-    output_positions_tensor = torch.LongTensor([min_prompt_len - 1]).to(device)
-    output_index = torch.tensor(min_prompt_len, dtype=torch.int64).to(device)
-
-    # KV cache buffers
-    kv_caches = []
-    for _ in range(model_args.n_layers):
-        k_cache = torch.zeros(
-            (batch_size, max_seq_len, n_kv_heads, head_dim),
-            dtype=torch.float32,
-            device=device,
-        )
-        v_cache = torch.zeros(
-            (batch_size, max_seq_len, n_kv_heads, head_dim),
-            dtype=torch.float32,
-            device=device,
-        )
-        kv_caches.append((k_cache, v_cache))
-
-    curr_mask_tensor = mask_tensor.index_select(2, input_positions_tensor)
     xm.mark_step()
 
-    # ------------------------------------------------------------------ #
-    # 5. Auto-regressive generation loop
-    # ------------------------------------------------------------------ #
-    temperatures_tensor = torch.FloatTensor([temperature] * batch_size).to(
-        device
-    )
-
-    for _ in range(max_seq_len - min_prompt_len):
-        logits = model(
-            input_token_ids=input_token_ids_tensor,
-            input_positions=input_positions_tensor,
-            kv_write_indices=None,
-            kv_caches=kv_caches,
-            mask=curr_mask_tensor,
-            output_positions=output_positions_tensor,
-            temperatures=temperatures_tensor,
-            top_ps=torch.FloatTensor([1.0] * batch_size).to(device),
-            top_ks=torch.LongTensor([1] * batch_size).to(device),
-        )
-
-        # Pick next token (logits already argmax-ed / sampled inside model)
-        next_token_ids = logits
-
-        # If this position was already part of the prompt, keep the prompt token
-        curr_prompt_mask = prompt_mask_tensor.index_select(
-            1, output_index
-        ).squeeze(dim=1)
-        curr_token_ids = token_ids_tensor.index_select(1, output_index).squeeze(
-            dim=1
-        )
-        output_token_ids = torch.where(
-            curr_prompt_mask, curr_token_ids, next_token_ids
-        ).unsqueeze(dim=1)
-        token_ids_tensor.index_copy_(1, output_index, output_token_ids)
-
-        input_token_ids_tensor = output_token_ids
-        input_positions_tensor = output_index
-        curr_mask_tensor = mask_tensor.index_select(2, input_positions_tensor)
-        output_positions_tensor = torch.tensor(0, dtype=torch.int64).to(device)
-        output_index = output_index + 1
+    # 5. Phase 1 — Prefill: feed prompt tokens one by one into the KV cache
+    logits = None
+    for pos, tok_id in enumerate(prompt_ids):
+        tok = torch.tensor([tok_id], dtype=torch.long, device=device)
+        cos = cos_table[pos : pos + 1]
+        sin = sin_table[pos : pos + 1]
+        with torch.no_grad():
+            logits = model(tok, pos, cos, sin, k_caches, v_caches)
         xm.mark_step()
 
-    # ------------------------------------------------------------------ #
-    # 6. Decode and print
-    # ------------------------------------------------------------------ #
-    eos_id = tokenizer.eos_id()
-    token_ids = token_ids_tensor.tolist()
-    for prompt, tokens in zip(prompts, token_ids):
-        # Trim to the generated portion only
-        generated = tokens[len(tokenizer.Encode(prompt, out_type=int)):]
-        generated = generated[:output_len]
-        if eos_id in generated:
-            generated = generated[: generated.index(eos_id)]
-        result = tokenizer.Decode(generated)
+    # 6. Phase 2 — Decode: generate `output_len` new tokens
+    if temperature == 0.0:
+        next_tok = logits.argmax(dim=-1)   # (1,) — first generated token
+    else:
+        probs = F.softmax(logits / temperature, dim=-1)
+        next_tok = torch.multinomial(probs, num_samples=1).squeeze(-1)
+    xm.mark_step()
 
-        print("=" * 38)
-        print(f"PROMPT: {prompt}")
-        print(f"RESULT: {result}")
-        print("=" * 38)
+    generated_ids = []
+    pos = len(prompt_ids)
+    for _ in range(output_len):
+        tok_id = next_tok.item()           # sync point — unavoidable for EOS check
+        generated_ids.append(tok_id)
+        if tok_id == sp.eos_id():
+            break
+
+        cos = cos_table[pos : pos + 1]
+        sin = sin_table[pos : pos + 1]
+        with torch.no_grad():
+            logits = model(next_tok, pos, cos, sin, k_caches, v_caches)
+        xm.mark_step()
+        pos += 1
+
+        if temperature == 0.0:
+            next_tok = logits.argmax(dim=-1)
+        else:
+            probs = F.softmax(logits / temperature, dim=-1)
+            next_tok = torch.multinomial(probs, num_samples=1).squeeze(-1)
+        xm.mark_step()
+
+    # 7. Decode and print
+    result = sp.Decode(generated_ids)
+    print("=" * 38)
+    print(f"PROMPT: {prompt}")
+    print(f"RESULT: {result}")
+    print("=" * 38)
 
 
 def flag_error_handler():
-    checkpoint_dir = FLAGS.checkpoint_dir
     for required in ("mistral.ckpt", "params.json", "tokenizer.model"):
-        path = os.path.join(checkpoint_dir, required)
+        path = os.path.join(FLAGS.checkpoint_dir, required)
         if not os.path.exists(path):
             raise FileNotFoundError(
                 f"Required file not found: `{path}`. "
-                f"Please run `export_mistral_to_torch_xla.py` first."
+                "Please run `export_mistral_to_torch_xla.py` first."
             )
 
 
@@ -255,9 +385,10 @@ def main(_):
         generate,
         args=(
             FLAGS.checkpoint_dir,
-            [FLAGS.prompt],
+            FLAGS.prompt,
             FLAGS.output_len,
             FLAGS.temperature,
+            FLAGS.max_seq_len,
         ),
     )
 
