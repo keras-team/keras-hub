@@ -46,7 +46,6 @@ except ImportError as e:
 
 try:
     import torch_xla.core.xla_model as xm
-    import torch_xla.distributed.xla_multiprocessing as xmp
 except ImportError as e:
     raise ImportError(
         "torch_xla is required but could not be imported. "
@@ -381,15 +380,13 @@ def flag_error_handler():
 
 def main(_):
     flag_error_handler()
-    xmp.spawn(
-        generate,
-        args=(
-            FLAGS.checkpoint_dir,
-            FLAGS.prompt,
-            FLAGS.output_len,
-            FLAGS.temperature,
-            FLAGS.max_seq_len,
-        ),
+    generate(
+        0,
+        FLAGS.checkpoint_dir,
+        FLAGS.prompt,
+        FLAGS.output_len,
+        FLAGS.temperature,
+        FLAGS.max_seq_len,
     )
 
 
