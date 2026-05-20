@@ -448,36 +448,29 @@ class CausalLM(Task):
 
         export_to_safetensors(self, path)
 
-    def export_to_litertlm(
+    def export(
         self,
-        path,
-        backend_constraint=None,
-        prefill_seq_len=None,
+        filepath,
+        format="tf_saved_model",
+        verbose=None,
+        input_signature=None,
         **kwargs,
     ):
-        """Export the full CausalLM model to LiteRT-LM format.
+        if format == "litertlm":
+            from keras_hub.src.utils.litertlm.export import export_to_litertlm
 
-        This exports the model with ``prefill`` and ``decode`` signatures
-        required by the LiteRT-LM executor, bundles the SentencePiece
-        tokenizer, and writes an ``LlmMetadata`` protobuf into the
-        `.litertlm` artifact.
-
-        Args:
-            path: str. Path to save the `.litertlm` file.
-            backend_constraint: Optional LiteRT-LM backend constraint, such as
-                `"cpu"` or `"gpu"`.
-            prefill_seq_len: int. Sequence length used when tracing the prefill
-                signature.  Defaults to the model's maximum sequence length.
-            **kwargs: Additional kwargs forwarded to ``litert_torch``
-                conversion.
-        """
-        from keras_hub.src.utils.litertlm.export import export_to_litertlm
-
-        return export_to_litertlm(
-            self,
-            path,
-            backend_constraint=backend_constraint,
-            prefill_seq_len=prefill_seq_len,
+            return export_to_litertlm(
+                self,
+                filepath,
+                backend_constraint=kwargs.pop("backend_constraint", None),
+                prefill_seq_len=kwargs.pop("prefill_seq_len", None),
+                **kwargs,
+            )
+        return super().export(
+            filepath,
+            format=format,
+            verbose=verbose,
+            input_signature=input_signature,
             **kwargs,
         )
 

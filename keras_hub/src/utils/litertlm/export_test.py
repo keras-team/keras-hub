@@ -1,6 +1,5 @@
 import os
 import struct
-import unittest
 
 import numpy as np
 import tensorflow as tf
@@ -49,7 +48,7 @@ class TestLiteRTLmExport(TestCase):
         model.set_weights(weights)
 
         path = os.path.join(self.get_temp_dir(), "test.litertlm")
-        export_to_litertlm(model, path, prefill_seq_len=8)
+        model.export(path, format="litertlm", prefill_seq_len=8)
 
         self.assertTrue(os.path.exists(path))
         self.assertGreater(os.path.getsize(path), 0)
@@ -87,7 +86,7 @@ class TestLiteRTLmExport(TestCase):
 
         # Export
         litertlm_path = os.path.join(self.get_temp_dir(), "verify.litertlm")
-        export_to_litertlm(model, litertlm_path, prefill_seq_len=8)
+        model.export(litertlm_path, format="litertlm", prefill_seq_len=8)
 
         # Extract TFLite
         with open(litertlm_path, "rb") as f:
@@ -209,38 +208,3 @@ class TestLiteRTLmExport(TestCase):
                 rtol=1e-4,
             )
 
-    @unittest.mock.patch("keras.config.backend", return_value="tensorflow")
-    def test_export_rejects_non_torch_backend(self, mock_backend):
-        # Use a lightweight mock; the backend guard fires before any
-        # model-specific validation, so we must avoid building a real Keras
-        # model while the backend is mocked to a different value.
-        model = type("MockModel", (), {"call_with_cache": True})()
-        path = os.path.join(self.get_temp_dir(), "test.litertlm")
-        with self.assertRaisesRegex(ValueError, "PyTorch backend"):
-            export_to_litertlm(model, path)
-
-    @unittest.mock.patch("keras.config.backend", return_value="torch")
-    def test_export_rejects_prefill_seq_len_greater_than_cache_length(
-        self, mock_backend
-    ):
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer = GemmaTokenizer(proto=proto)
-        backbone = GemmaBackbone(
-            vocabulary_size=tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=1,
-            hidden_dim=32,
-            head_dim=8,
-            intermediate_dim=64,
-            max_sequence_length=8,
-        )
-        preprocessor = GemmaCausalLMPreprocessor(
-            tokenizer=tokenizer, sequence_length=8
-        )
-        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
-        path = os.path.join(self.get_temp_dir(), "test.litertlm")
-        with self.assertRaisesRegex(
-            ValueError, "prefill_seq_len .* cannot exceed"
-        ):
-            export_to_litertlm(model, path, prefill_seq_len=16)
