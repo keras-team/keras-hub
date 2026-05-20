@@ -45,7 +45,13 @@ except ImportError as e:
     ) from e
 
 try:
+    import torch_xla
     import torch_xla.core.xla_model as xm
+
+    # torch_xla >= 2.6 exposes torch_xla.device() / torch_xla.sync();
+    # fall back to the legacy xm helpers on older versions.
+    _xla_device = getattr(torch_xla, "device", xm.xla_device)
+    _xla_sync = getattr(torch_xla, "sync", xm.mark_step)
 except ImportError as e:
     raise ImportError(
         "torch_xla is required but could not be imported. "
@@ -279,7 +285,7 @@ def generate(
     max_seq_len: int,
 ):
     """Generate text on an XLA device from a converted Mistral checkpoint."""
-    device = xm.xla_device()
+    device = _xla_device()
 
     if index > 0:
         sys.stdout = open(os.devnull, "w")
@@ -294,7 +300,7 @@ def generate(
     )
     model.load_state_dict(state["model_state_dict"])
     model = model.to(device)
-    xm.mark_step()
+    _xla_sync()
 
     # 2. Tokenise
     sp = spm.SentencePieceProcessor()
@@ -318,7 +324,7 @@ def generate(
     cos_table, sin_table = _build_rope_cache(
         max_seq_len, head_dim, rope_theta, device
     )
-    xm.mark_step()
+    _xla_sync()
 
     # 5. Phase 1 — Prefill: feed prompt tokens one by one into the KV cache
     logits = None
@@ -328,7 +334,7 @@ def generate(
         sin = sin_table[pos : pos + 1]
         with torch.no_grad():
             logits = model(tok, pos, cos, sin, k_caches, v_caches)
-        xm.mark_step()
+        _xla_sync()
 
     # 6. Phase 2 — Decode: generate `output_len` new tokens
     if temperature == 0.0:
@@ -336,7 +342,7 @@ def generate(
     else:
         probs = F.softmax(logits / temperature, dim=-1)
         next_tok = torch.multinomial(probs, num_samples=1).squeeze(-1)
-    xm.mark_step()
+    _xla_sync()
 
     generated_ids = []
     pos = len(prompt_ids)
@@ -350,7 +356,7 @@ def generate(
         sin = sin_table[pos : pos + 1]
         with torch.no_grad():
             logits = model(next_tok, pos, cos, sin, k_caches, v_caches)
-        xm.mark_step()
+        _xla_sync()
         pos += 1
 
         if temperature == 0.0:
@@ -358,7 +364,7 @@ def generate(
         else:
             probs = F.softmax(logits / temperature, dim=-1)
             next_tok = torch.multinomial(probs, num_samples=1).squeeze(-1)
-        xm.mark_step()
+        _xla_sync()
 
     # 7. Decode and print
     result = sp.Decode(generated_ids)
