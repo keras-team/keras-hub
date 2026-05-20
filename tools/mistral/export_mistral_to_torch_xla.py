@@ -1,12 +1,11 @@
 """
-Prior to running this conversion script, please install the PyTorch
-implementation of Mistral and `torch_xla`:
+Prior to running this conversion script, please install `torch_xla`:
 
-`pip install mistral-inference`
 `pip install torch_xla`
 
-Please also ensure that your installed versions of `torch_xla` and `torch` are
-compatible.
+Please ensure that your installed versions of `torch_xla` and `torch` are
+compatible. `mistral-inference` is NOT required for this script; it is only
+needed by `run_mistral_xla.py`.
 
 Sample usage:
 
@@ -46,11 +45,18 @@ import json
 import os
 
 import torch
-import torch_xla.core.xla_model as xm
 from absl import app
 from absl import flags
-from mistral_inference.model import Transformer
-from mistral_inference.args import ModelArgs
+
+try:
+    import torch_xla.core.xla_model as xm
+except ImportError as e:
+    raise ImportError(
+        "torch_xla is required but could not be imported. "
+        "Ensure torch and torch_xla versions match:\n"
+        "  pip install torch_xla[tpu]==<torch_version> "
+        "-f https://storage.googleapis.com/libtpu-releases/index.html"
+    ) from e
 
 os.environ["KERAS_BACKEND"] = "torch"
 
@@ -96,23 +102,11 @@ flags.DEFINE_string(
 
 
 def _to_torch(keras_var):
-    """Convert a Keras variable to a CPU float32 torch.Tensor."""
-    arr = ops.convert_to_numpy(keras_var)
-    return torch.from_numpy(arr)
-
-
-def update_state_dict(layer, weight_name: str, tensor: torch.Tensor) -> None:
-    """Copy a tensor into the named parameter of a PyTorch module."""
-    assert tensor.shape == layer.state_dict()[weight_name].shape, (
-        f"Shape mismatch for {weight_name}: "
-        f"got {tensor.shape}, expected {layer.state_dict()[weight_name].shape}"
-    )
-    layer.state_dict()[weight_name].copy_(tensor)
+    """Convert a Keras variable to a CPU torch.Tensor."""
+    return torch.from_numpy(ops.convert_to_numpy(keras_var))
 
 
 def convert_checkpoints(preset, weights_file, output_dir):
-    device = xm.xla_device()
-
     # ------------------------------------------------------------------ #
     # 1. Load KerasHub model
     # ------------------------------------------------------------------ #
@@ -129,35 +123,18 @@ def convert_checkpoints(preset, weights_file, output_dir):
     head_dim = backbone.hidden_dim // backbone.num_query_heads
 
     # ------------------------------------------------------------------ #
-    # 2. Build mistral-inference ModelArgs and Transformer shell
-    # ------------------------------------------------------------------ #
-    model_args = ModelArgs(
-        dim=backbone.hidden_dim,
-        n_layers=backbone.num_layers,
-        n_heads=backbone.num_query_heads,
-        n_kv_heads=backbone.num_key_value_heads,
-        head_dim=head_dim,
-        hidden_dim=backbone.intermediate_dim,
-        vocab_size=backbone.vocabulary_size,
-        norm_eps=backbone.layer_norm_epsilon,
-        sliding_window=backbone.sliding_window,
-        rope_theta=float(backbone.rope_max_wavelength),
-    )
-
-    print(f"\n-> Building mistral-inference Transformer (on XLA device)...")
-    model = Transformer(model_args).to(device)
-    print("\n✅ Transformer shell created.")
-
-    # ------------------------------------------------------------------ #
-    # 3. Convert weights: KerasHub → mistral-inference
+    # 2. Build state dict directly (no mistral-inference needed at export)
+    #
+    # Key layout matches the mistral-inference Transformer state dict so
+    # run_mistral_xla.py can load it with model.load_state_dict().
     # ------------------------------------------------------------------ #
     print("\n-> Converting weights from KerasHub Mistral to mistral-inference...")
 
+    state_dict = {}
+
     # Token embedding  (vocab_size, dim)  — same layout in both
-    update_state_dict(
-        model.tok_embeddings,
-        "weight",
-        _to_torch(backbone.token_embedding.embeddings).to(device),
+    state_dict["tok_embeddings.weight"] = _to_torch(
+        backbone.token_embedding.embeddings
     )
 
     for i in range(backbone.num_layers):
@@ -168,82 +145,63 @@ def convert_checkpoints(preset, weights_file, output_dir):
         # KerasHub Q kernel: (hidden_dim, num_query_heads, head_dim)
         # mistral-inference wq.weight: (num_query_heads * head_dim, hidden_dim)
         q = _to_torch(attn._query_dense.kernel)
-        q = q.reshape(backbone.hidden_dim, -1).T.contiguous().to(device)
-        update_state_dict(model.layers[i].attention.wq, "weight", q)
+        state_dict[f"layers.{i}.attention.wq.weight"] = (
+            q.reshape(backbone.hidden_dim, -1).T.contiguous()
+        )
 
         # KerasHub K kernel: (hidden_dim, num_key_value_heads, head_dim)
         # mistral-inference wk.weight: (num_kv_heads * head_dim, hidden_dim)
         k = _to_torch(attn._key_dense.kernel)
-        k = k.reshape(backbone.hidden_dim, -1).T.contiguous().to(device)
-        update_state_dict(model.layers[i].attention.wk, "weight", k)
+        state_dict[f"layers.{i}.attention.wk.weight"] = (
+            k.reshape(backbone.hidden_dim, -1).T.contiguous()
+        )
 
         # KerasHub V kernel: (hidden_dim, num_key_value_heads, head_dim)
         # mistral-inference wv.weight: (num_kv_heads * head_dim, hidden_dim)
         v = _to_torch(attn._value_dense.kernel)
-        v = v.reshape(backbone.hidden_dim, -1).T.contiguous().to(device)
-        update_state_dict(model.layers[i].attention.wv, "weight", v)
+        state_dict[f"layers.{i}.attention.wv.weight"] = (
+            v.reshape(backbone.hidden_dim, -1).T.contiguous()
+        )
 
         # KerasHub O kernel: (num_query_heads, head_dim, hidden_dim)
         # mistral-inference wo.weight: (hidden_dim, num_query_heads * head_dim)
         o = _to_torch(attn._output_dense.kernel)
-        o = o.reshape(-1, backbone.hidden_dim).T.contiguous().to(device)
-        update_state_dict(model.layers[i].attention.wo, "weight", o)
+        state_dict[f"layers.{i}.attention.wo.weight"] = (
+            o.reshape(-1, backbone.hidden_dim).T.contiguous()
+        )
 
         # ---- MLP (SwiGLU) ---- #
         # KerasHub gate kernel: (hidden_dim, intermediate_dim)
         # mistral-inference w1.weight (gate): (intermediate_dim, hidden_dim)
         gate = _to_torch(decoder_layer._feedforward_gate_dense.kernel)
-        update_state_dict(
-            model.layers[i].feed_forward.w1,
-            "weight",
-            gate.T.contiguous().to(device),
-        )
+        state_dict[f"layers.{i}.feed_forward.w1.weight"] = gate.T.contiguous()
 
         # KerasHub intermediate kernel: (hidden_dim, intermediate_dim)
         # mistral-inference w3.weight (up): (intermediate_dim, hidden_dim)
         up = _to_torch(decoder_layer._feedforward_intermediate_dense.kernel)
-        update_state_dict(
-            model.layers[i].feed_forward.w3,
-            "weight",
-            up.T.contiguous().to(device),
-        )
+        state_dict[f"layers.{i}.feed_forward.w3.weight"] = up.T.contiguous()
 
         # KerasHub output kernel: (intermediate_dim, hidden_dim)
         # mistral-inference w2.weight (down): (hidden_dim, intermediate_dim)
         down = _to_torch(decoder_layer._feedforward_output_dense.kernel)
-        update_state_dict(
-            model.layers[i].feed_forward.w2,
-            "weight",
-            down.T.contiguous().to(device),
-        )
+        state_dict[f"layers.{i}.feed_forward.w2.weight"] = down.T.contiguous()
 
         # ---- Layer norms ---- #
-        attn_norm = _to_torch(decoder_layer._self_attention_layernorm.scale)
-        update_state_dict(
-            model.layers[i].attention_norm,
-            "weight",
-            attn_norm.to(device),
+        state_dict[f"layers.{i}.attention_norm.weight"] = _to_torch(
+            decoder_layer._self_attention_layernorm.scale
         )
-
-        ffn_norm = _to_torch(decoder_layer._feedforward_layernorm.scale)
-        update_state_dict(
-            model.layers[i].ffn_norm,
-            "weight",
-            ffn_norm.to(device),
+        state_dict[f"layers.{i}.ffn_norm.weight"] = _to_torch(
+            decoder_layer._feedforward_layernorm.scale
         )
 
     # Final layer norm
-    update_state_dict(
-        model.norm,
-        "weight",
-        _to_torch(backbone.layer_norm.scale).to(device),
-    )
+    state_dict["norm.weight"] = _to_torch(backbone.layer_norm.scale)
 
-    # LM head (output)
-    # KerasHub reverse_embeddings: (hidden_dim, vocab_size)
+    # LM head: KerasHub reverse_embeddings (hidden_dim, vocab_size)
     # mistral-inference output.weight: (vocab_size, hidden_dim)
-    lm_head = _to_torch(backbone.token_embedding.reverse_embeddings).T
-    update_state_dict(model.output, "weight", lm_head.contiguous().to(device))
+    state_dict["output.weight"] = _to_torch(
+        backbone.token_embedding.reverse_embeddings
+    ).T.contiguous()
 
     print("\n✅ Weights converted successfully.")
 
@@ -254,8 +212,7 @@ def convert_checkpoints(preset, weights_file, output_dir):
 
     output_file = os.path.join(output_dir, "mistral.ckpt")
     print(f"\n-> Saving PyTorch checkpoint to `{output_file}`...")
-    xm.mark_step()  # flush XLA graph before saving
-    torch.save({"model_state_dict": model.state_dict()}, output_file)
+    torch.save({"model_state_dict": state_dict}, output_file)
     print(f"\n✅ Checkpoint saved to `{output_file}`.")
 
     params_file = os.path.join(output_dir, "params.json")
