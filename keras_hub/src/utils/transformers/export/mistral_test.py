@@ -1,3 +1,4 @@
+import json
 import os
 
 import numpy as np
@@ -107,8 +108,13 @@ class TestMistralExport(TestCase):
             backbone.layer_norm_epsilon,
             "Layer norm epsilons do not match",
         )
+        # rope_theta was added as an explicit MistralConfig attribute in a
+        # later transformers release; read from the saved config.json directly
+        # to stay version-agnostic.
+        with open(os.path.join(export_path, "config.json")) as f:
+            saved_config = json.load(f)
         self.assertEqual(
-            hf_config.rope_theta,
+            saved_config.get("rope_theta"),
             backbone.rope_max_wavelength,
             "RoPE theta values do not match",
         )
