@@ -40,21 +40,22 @@ class KerasHubLiteRTAdapter(nn.Module):
         self.cache_length = cache_length
 
     def forward_prefill(self, tokens, input_pos, mask=None, **kv_cache):
-        """Prefill step – processes the full prompt starting at cache pos 0.
+        """Prefill step – processes the full prompt at the given cache position.
 
         LiteRT-LM requires prefill to return **only** KV cache tensors
         (no logits).  The runtime extracts the last-token logits internally
         via a dedicated decode step.
 
-        ``input_pos`` is accepted to match the LiteRT-LM signature but is
-        currently ignored: prefill always begins at cache position 0 because
-        KerasHub ``call_with_cache`` does not support per-token position
-        offsets during prefill.
+        ``input_pos`` is a 1-D int64 tensor (e.g. ``[0, 1, 2, ...]`` for the
+        first turn, or ``[N, N+1, ...]`` for subsequent turns).  The first
+        element is used as the cache-update index so that prefill appends to
+        the existing cache instead of overwriting from position 0.
         """
         cache = self._stack_kv_cache(kv_cache)
-        # Prefill always starts writing at position 0.
+        # The first element of input_pos is the start position.
+        cache_update_index = input_pos[0]
         logits, _, updated_cache = self.keras_model.call_with_cache(
-            tokens, cache, 0
+            tokens, cache, cache_update_index
         )
         # Return ONLY the KV cache outputs (no logits).
         outputs = self._unstack_kv_cache(updated_cache)
@@ -129,21 +130,19 @@ def _traceable_slice_update_scope():
             if isinstance(start, torch.Tensor):
                 tensor_dims.append(dim)
 
-        # Single dynamic dimension with update_len == 1 → index_copy_.
+        # Single dynamic dimension → loop over index_copy_ (works for any
+        # update_len because update_len is a constant at export time).
         if len(tensor_dims) == 1:
             dim = tensor_dims[0]
             update_len = updates.shape[dim]
-            if update_len == 1:
-                start = starts[dim].reshape(())
-                index = start.unsqueeze(0)
-                outputs = torch.clone(inputs)
-                outputs.index_copy_(dim, index, updates)
-                return outputs
-            raise RuntimeError(
-                "slice_update patch only supports a dynamic start index when "
-                f"the update length along that dimension is 1. Got "
-                f"update_len={update_len} in dim {dim}."
-            )
+            start = starts[dim].reshape(())
+
+            outputs = torch.clone(inputs)
+            for i in range(update_len):
+                index = (start + i).reshape(()).unsqueeze(0)
+                update_slice = updates.select(dim, i).unsqueeze(dim)
+                outputs.index_copy_(dim, index, update_slice)
+            return outputs
 
         if len(tensor_dims) > 1:
             raise RuntimeError(
