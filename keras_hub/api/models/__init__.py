@@ -83,11 +83,14 @@ from keras_hub.src.models.blip2.blip2_causal_lm_preprocessor import (
 from keras_hub.src.models.blip2.blip2_custom_opt import (
     BLIP2CustomOPT as BLIP2CustomOPT,
 )
-from keras_hub.src.models.blip2.blip2_qformer import (
-    BLIP2QFormer as BLIP2QFormer,
+from keras_hub.src.models.blip2.blip2_flan_t5_tokenizer import (
+    BLIP2FlanT5Tokenizer as BLIP2FlanT5Tokenizer,
 )
 from keras_hub.src.models.blip2.blip2_opt_tokenizer import (
     BLIP2Tokenizer as BLIP2Tokenizer,
+)
+from keras_hub.src.models.blip2.blip2_qformer import (
+    BLIP2QFormer as BLIP2QFormer,
 )
 from keras_hub.src.models.blip2.blip2_vision_encoder import (
     BLIP2VisionEncoder as BLIP2VisionEncoder,

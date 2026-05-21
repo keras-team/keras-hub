@@ -16,7 +16,6 @@ import os
 os.environ["KERAS_BACKEND"] = "torch"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-import keras  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 from absl import app  # noqa: E402
@@ -51,10 +50,10 @@ from keras_hub.src.models.blip2.blip2_custom_opt import (
 from keras_hub.src.models.blip2.blip2_image_converter import (  # noqa: E402
     BLIP2ImageConverter,
 )
-from keras_hub.src.models.blip2.blip2_qformer import BLIP2QFormer  # noqa: E402
 from keras_hub.src.models.blip2.blip2_opt_tokenizer import (
     BLIP2Tokenizer,  # noqa: E402
 )
+from keras_hub.src.models.blip2.blip2_qformer import BLIP2QFormer  # noqa: E402
 from keras_hub.src.models.blip2.blip2_vision_encoder import (  # noqa: E402
     BLIP2VisionEncoder,
 )
@@ -249,7 +248,6 @@ def validate_generate(keras_causal_lm, hf_model, hf_processor) -> None:
     print(f"   -> HuggingFace output : {hf_text!r}")
     match = keras_text.strip() == hf_text.strip()
     print(f"   -> {'✅ Match' if match else '⚠️  No match'}")
-
 
 
 def transfer_opt_weights(keras_opt, hf_opt) -> None:

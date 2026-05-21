@@ -7,11 +7,10 @@ and live here to avoid duplication.
 
 import random
 
+import keras
 import numpy as np
 import torch
 from PIL import Image
-
-import keras
 
 
 def set_seed(seed: int = 42) -> None:
@@ -60,6 +59,7 @@ def report_diff(
 
 
 # ── Validation ────────────────────────────────────────────────────────────────
+
 
 def validate_vision_encoder(keras_vision, hf_model) -> bool:
     print_header("VISION ENCODER VALIDATION")
@@ -128,6 +128,7 @@ def validate_projection(
 
 
 # ── Weight transfer ───────────────────────────────────────────────────────────
+
 
 def transfer_vision_weights(keras_vision, hf_vision) -> None:
     print("Transferring Vision Encoder (EVA-CLIP) weights...")

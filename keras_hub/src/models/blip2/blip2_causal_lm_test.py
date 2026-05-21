@@ -12,8 +12,8 @@ from keras_hub.src.models.blip2.blip2_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.blip2.blip2_custom_opt import BLIP2CustomOPT
 from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter
-from keras_hub.src.models.blip2.blip2_qformer import BLIP2QFormer
 from keras_hub.src.models.blip2.blip2_opt_tokenizer import BLIP2Tokenizer
+from keras_hub.src.models.blip2.blip2_qformer import BLIP2QFormer
 from keras_hub.src.models.blip2.blip2_vision_encoder import BLIP2VisionEncoder
 from keras_hub.src.tests.test_case import TestCase
 
