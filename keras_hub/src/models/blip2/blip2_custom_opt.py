@@ -202,6 +202,7 @@ class BLIP2CustomOPT(keras.Model):
                 layer_norm_epsilon=layer_norm_epsilon,
                 normalize_first=True,
                 kernel_initializer=opt_kernel_initializer(initializer_range),
+                decoder_sequence_shape=(None, None, hidden_dim),
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
