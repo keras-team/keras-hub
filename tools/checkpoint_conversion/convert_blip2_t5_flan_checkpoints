@@ -1,0 +1,138 @@
+"""
+Convert BLIP-2 t5-flan checkpoints to KerasHub format.
+
+Usage:
+```shell
+python convert_blip2_t5_flan_checkpoints.py \
+    --model_id Salesforce/blip2_t5_flan_x \
+    --output_dir blip2_t5_flan_xl_converted
+```
+"""
+
+import gc
+import json
+import os
+import random
+
+os.environ["KERAS_BACKEND"] = "torch"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+import keras  # noqa: E402
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
+from absl import app  # noqa: E402
+from absl import flags  # noqa: E402
+from huggingface_hub import hf_hub_download  # noqa: E402
+from PIL import Image  # noqa: E402
+from transformers import Blip2ForConditionalGeneration  # noqa: E402
+from transformers import Blip2Processor  # noqa: E402
+
+
+from keras_hub.src.models.blip2.blip2_backbone import (
+    BLIP2Backbone,  # noqa: E402
+)
+from keras_hub.src.models.blip2.blip2_causal_lm import (
+    BLIP2CausalLM,  # noqa: E402
+)
+from keras_hub.src.models.blip2.blip2_causal_lm_preprocessor import (  # noqa: E402
+    BLIP2CausalLMPreprocessor,
+)
+from keras_hub.src.models.blip2.blip2_custom_opt import (
+    BLIP2CustomOPT,  # noqa: E402
+)
+from keras_hub.src.models.blip2.blip2_image_converter import (  # noqa: E402
+    BLIP2ImageConverter,
+)
+from keras_hub.src.models.blip2.blip2_qformer import BLIP2QFormer  # noqa: E402
+from keras_hub.src.models.blip2.blip2_tokenizer import (
+    BLIP2Tokenizer,  # noqa: E402
+)
+from keras_hub.src.models.blip2.blip2_vision_encoder import (  # noqa: E402
+    BLIP2VisionEncoder,
+)
+
+FLAGS = flags.FLAGS
+
+flags.DEFINE_string(
+    "model_id",
+    "Salesforce/blip2-flan-t5-xl",
+    "Hugging Face model ID.",
+)
+flags.DEFINE_string(
+    "output_dir",
+    "blip2_t5_flan_xl_converted",
+    "Output directory for converted weights and tokenizer assets.",
+)
+
+flags.DEFINE_bool(
+    "skip_generate",
+    False,
+    "Skip the generation validation step (slow, requires full forward pass).",
+)
+
+_VALIDATION_PROMPT = "Question: What is in this picture? Answer:"
+
+
+def set_seed(seed: int = 42) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    keras.utils.set_random_seed(seed)
+
+
+def to_np(tensor) -> np.ndarray:
+    if isinstance(tensor, torch.Tensor):
+        return tensor.detach().cpu().numpy()
+    try:
+        return tensor.detach().cpu().numpy()
+    except AttributeError:
+        return np.array(tensor)
+    
+    
+def _print_header(title: str) -> None:
+    width = 60
+    print("\n" + "=" * width)
+    print(f"  {title}")
+    print("=" * width)
+    
+def _report_diff(
+    label: str,
+    keras_out: np.ndarray,
+    pt_out: np.ndarray,
+    atol: float = 1e-3,
+    rtol: float = 1e-3,
+) -> bool:
+    abs_diff = np.abs(keras_out - pt_out)
+    mean_diff = float(np.mean(abs_diff))
+    max_diff = float(np.max(abs_diff))
+    print(f"\n🔶 {label}")
+    print(f"   -> mean absolute diff : {mean_diff:.8f}")
+    print(f"   -> max  absolute diff : {max_diff:.8f}")
+    try:
+        np.testing.assert_allclose(keras_out, pt_out, atol=atol, rtol=rtol)
+        print(f"   -> ✅ within atol={atol}, rtol={rtol}")
+        return True
+    except AssertionError as err:
+        print(f"   -> ⚠️  tolerance check failed: {err.args[0][:120]}")
+        return False
+    
+    
+def validate_vision_encoder(keras_vision, hf_model) -> bool:
+    _print_header("VISION ENCODER VALIDATION")
+
+    image_pil = Image.new("RGB", (224, 224), color=(114, 114, 114))
+    image_np = np.array(image_pil).astype(np.float32) / 255.0
+    image_np = image_np[None]
+
+    image_pt = torch.tensor(image_np).permute(0, 3, 1, 2)
+    with torch.no_grad():
+        pt_out = to_np(
+            hf_model.vision_model(pixel_values=image_pt).last_hidden_state
+        )
+
+    keras_out = to_np(keras_vision(image_np))
+
+    print(f"   -> HF    shape : {pt_out.shape}")
+    print(f"   -> Keras shape : {keras_out.shape}")
+
+    return _report_diff("Vision encoder hidden states", keras_out, pt_out)
