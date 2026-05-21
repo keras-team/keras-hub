@@ -17,7 +17,26 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
             "<|padding|>",
             "[MASK]",
             "<|endoftext|>",
+            "t",
+            "h",
+            "e",
+            "q",
+            "u",
+            "i",
+            "c",
+            "k",
+            "b",
+            "r",
+            "o",
+            "w",
+            "n",
+            "f",
+            "x",
+            "ck",
+            "th",
             "the",
+            "qu",
+            "qui",
             "quick",
             "brown",
             "fox",
@@ -97,7 +116,7 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
             (
                 {
                     "token_ids": [
-                        [2, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, 2]
+                        [2, 19, -1, 21, 9, 10, -1, 11, 12, 13, 14, 2]
                     ],
                     "segment_ids": [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]],

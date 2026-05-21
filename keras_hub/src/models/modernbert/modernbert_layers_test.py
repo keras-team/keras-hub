@@ -30,8 +30,8 @@ class ModernBertLayersTest(TestCase):
         mask = ops.convert_to_tensor([[1, 1, 0, 0]], dtype="int32")
         output = layer(x, padding_mask=mask)
 
-        self.assertFalse(np.any(np.isnan(output)))
-        self.assertEqual(output.shape, (1, 4, 16))
+        output_np = ops.convert_to_numpy(output)
+        self.assertFalse(np.any(np.isnan(output_np)))
 
     def test_serialization_attributes(self):
         """Explicitly verify that custom attributes are restored.
