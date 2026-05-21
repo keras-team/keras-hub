@@ -7,6 +7,7 @@ from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
     Gemma4CausalLMPreprocessor,
 )
+from keras_hub.src.samplers.greedy_sampler import GreedySampler
 from keras_hub.src.utils.tensor_utils import any_equal
 
 try:
@@ -107,8 +108,6 @@ class Gemma4CausalLM(CausalLM):
         self.final_logit_cap = final_logit_cap
 
         # === Functional Model ===
-        # This must be "backbone.input" i.e. the full input structure,
-        # rather than "backbone.inputs" which is the flattened list of inputs.
         inputs = backbone.input
         hidden_state = backbone(inputs=inputs)
         outputs = backbone.token_embedding(hidden_state, reverse=True)
@@ -248,9 +247,9 @@ class Gemma4CausalLM(CausalLM):
 
         text_embeddings = self.backbone.token_embedding(token_ids)
 
-        # Interleave image embeddings. Pre-scale by 1/sqrt(hidden_dim) so that
-        # after the global x *= sqrt(hidden_dim) below, vision positions remain
-        # at their natural (unscaled) embed_vision magnitude.
+        # Pre-scale vision/audio embeddings by 1/sqrt(hidden_dim) so that
+        # after the global x *= sqrt(hidden_dim) below, their magnitude is
+        # preserved at the natural embed_vision scale.
         if img_embeddings is not None:
             scaled_img_embeddings = img_embeddings * ops.cast(
                 float(self.backbone.hidden_dim) ** -0.5, img_embeddings.dtype
@@ -274,8 +273,8 @@ class Gemma4CausalLM(CausalLM):
                 vision_indices=audio_indices,
             )
 
-        # Per-layer token embeddings. Vision positions use pad_token_id (0),
-        # mirroring HF's llm_input_ids masking before embed_tokens_per_layer.
+        # Per-layer token embeddings; vision/audio positions use pad_token_id
+        # (0) to zero out their per-layer contribution.
         _hpl = self.backbone.hidden_size_per_layer_input
         if _hpl > 0:
             _per_layer_ids = token_ids
@@ -410,7 +409,7 @@ class Gemma4CausalLM(CausalLM):
         )
         return config
 
-    def generate_step(self, inputs, stop_token_ids=[106]):
+    def generate_step(self, inputs, stop_token_ids=None):
         """A compilable generation function for a single batch of inputs.
 
         This function represents the inner, XLA-compilable, generation function
@@ -453,16 +452,14 @@ class Gemma4CausalLM(CausalLM):
         # After preprocessing, pixel_values shape is
         # (batch, num_images, n**2, dim).
         # For text-only input, num_images=0 (static shape).
-        # We use static shape check which returns a Python int, not a tensor.
+        # We use a static shape check which returns a Python int, not a tensor.
         num_images = 0
         if (
             pixel_values is not None
             and hasattr(pixel_values, "shape")
             and len(pixel_values.shape) > 1
         ):
-            num_images = pixel_values.shape[
-                1
-            ]  # Static shape; Python int or None.
+            num_images = pixel_values.shape[1]  # static shape; Python int
 
         if not self.backbone.text_only_model and num_images:
             # Handle an unbatched image.
@@ -487,12 +484,10 @@ class Gemma4CausalLM(CausalLM):
             vision_indices = None
 
         # Determine if we have actual audio clips to process.
-        # After preprocessing, audio_mel shape is (batch, num_clips, T, feat)
-        # when batched, or (num_clips, T, feat) when unbatched (batch dim was
-        # squeezed out in generate_preprocess). For no-audio input, num_clips=0.
-        # We must key on axis 0 for the unbatched (3-D) case because axis 1
-        # is the mel-time axis, which is dynamic and would evaluate to None,
-        # silently disabling audio.
+        # audio_mel is (B, num_clips, T, feat) when batched, or
+        # (num_clips, T, feat) when unbatched. Key on axis 0 for the 3-D
+        # case — axis 1 is the dynamic mel-time dimension and evaluates to
+        # None, which would silently disable audio.
         num_clips = 0
         if audio_mel is not None and hasattr(audio_mel, "shape"):
             if len(audio_mel.shape) == 4:
@@ -516,6 +511,7 @@ class Gemma4CausalLM(CausalLM):
         else:
             audio_embeddings = None
             audio_indices = None
+            audio_mask = None
 
         # Create and seed cache with a single forward pass.
         hidden_states, cache = self._build_cache(
@@ -554,6 +550,152 @@ class Gemma4CausalLM(CausalLM):
                 cache,
             )
 
+        draft_next = None
+        draft_cache = None
+        verify_next = None
+
+        # Speculative decoding: build draft_next and verify_next when an
+        # assistant model is attached via generate().
+        _assistant = getattr(self, "_assistant_model", None)
+        if _assistant is not None:
+            # Compute the correct KV source indices for the assistant.
+            # KV-shared target layers never write to their own cache slots;
+            # find the last non-KV-shared full/sliding attention layer instead.
+            _target_kv_src_full_idx = None
+            _target_kv_src_local_idx = None
+            _target_layer_types = self.backbone.layer_types or []
+            for _i, _tl in enumerate(self.backbone.transformer_layers):
+                if not getattr(_tl, "is_kv_shared_layer", False):
+                    _lt = (
+                        _target_layer_types[_i]
+                        if _i < len(_target_layer_types)
+                        else None
+                    )
+                    if _lt == "full_attention":
+                        _target_kv_src_full_idx = _i
+                    else:
+                        _target_kv_src_local_idx = _i
+
+            # The draft model borrows the target's KV cache (MTP / KV-sharing)
+            # and does not maintain its own. draft_cache carries
+            # (last_hidden, target_cache, fixed_pos) between steps, seeded from
+            # the target's hidden state at the last prompt position.
+            batch_size_ = ops.shape(token_ids)[0]
+            start_pos = ops.cast(index - 1, "int32")
+            init_last_hidden = ops.slice(
+                hidden_states,
+                [0, start_pos, 0],
+                [batch_size_, 1, self.backbone.hidden_dim],
+            )
+
+            def draft_next(prompt, draft_state, index):
+                """One draft step: produce a candidate token from the assistant.
+
+                `draft_state` is a tuple
+                `(last_hidden, cur_target_cache, fixed_pos)`:
+                  - `last_hidden`: target model hidden state from the
+                    previous step.
+                  - `cur_target_cache`: the target model's KV cache.
+                  - `fixed_pos`: RoPE position shared across all k draft steps.
+                """
+                last_hidden, cur_target_cache, fixed_pos = draft_state
+                batch = ops.shape(prompt)[0]
+                # Extract the last token id at position `index - 1`.
+                last_token_id = ops.slice(
+                    prompt, [0, ops.cast(index - 1, "int32")], [batch, 1]
+                )
+                last_token_embedding = self.backbone.token_embedding(
+                    last_token_id
+                )
+                # Scale to match Gemma4TextScaledWordEmbedding: the target
+                # backbone's call() does x *= sqrt(hidden_dim), so callers
+                # that bypass call() must apply this factor explicitly.
+                _embed_scale = ops.cast(
+                    ops.sqrt(ops.cast(self.backbone.hidden_dim, "float32")),
+                    last_token_embedding.dtype,
+                )
+                last_token_embedding = last_token_embedding * _embed_scale
+                logits, next_hidden = _assistant.call_with_cache(
+                    last_token_embedding=last_token_embedding,
+                    last_hidden_state=last_hidden,
+                    target_cache=cur_target_cache,
+                    cache_update_index=fixed_pos,
+                    target_kv_source_full_idx=_target_kv_src_full_idx,
+                    target_kv_source_local_idx=_target_kv_src_local_idx,
+                )
+                # Apply the same final logit soft-cap as the target model so
+                # that draft and verify logits are on the same scale.
+                if self.final_logit_cap is not None:
+                    cap = ops.cast(self.final_logit_cap, logits.dtype)
+                    logits = ops.tanh(logits / cap) * cap
+                return (
+                    ops.squeeze(logits, axis=1),
+                    next_hidden,
+                    (next_hidden, cur_target_cache, fixed_pos),
+                )
+
+            def verify_next(prompt, target_cache, index, k):
+                """Verify K+1 positions with the target model in parallel.
+
+                ``safe_start`` is clamped so that the k+1-token window never
+                overflows the buffer, preventing out-of-bounds in the
+                sliding-window mask and key-cache update slices when generation
+                nears the end of the pre-allocated sequence.
+                """
+                batch = ops.shape(prompt)[0]
+                max_len = ops.shape(prompt)[1]
+                safe_start = ops.maximum(
+                    ops.cast(0, "int32"),
+                    ops.minimum(
+                        ops.cast(index - 1, "int32"),
+                        ops.cast(max_len - k - 1, "int32"),
+                    ),
+                )
+                prompt_slice = ops.slice(
+                    prompt, [0, safe_start], [batch, k + 1]
+                )
+                # cache_update_mask: True=write; False=keep existing.
+                cache_update_slice = ops.slice(
+                    ~padding_mask, [0, safe_start], [batch, k + 1]
+                )
+                vision_mask_slice = (
+                    ops.slice(vision_mask, [0, safe_start], [batch, k + 1])
+                    if vision_mask is not None
+                    else None
+                )
+                audio_mask_slice = (
+                    ops.slice(audio_mask, [0, safe_start], [batch, k + 1])
+                    if audio_mask is not None
+                    else None
+                )
+                logits, hidden_states, updated_cache = self.call_with_cache(
+                    token_ids=prompt_slice,
+                    cache=target_cache,
+                    cache_update_index=safe_start,
+                    img_embeddings=None,
+                    vision_mask=vision_mask_slice,
+                    padding_mask=None,
+                    vision_indices=None,
+                    audio_embeddings=None,
+                    audio_indices=None,
+                    audio_mask=audio_mask_slice,
+                    cache_update_mask=cache_update_slice,
+                )
+                # Align position 0 of logits and hidden_states with index - 1.
+                start_offset = ops.cast(index - 1, "int32") - safe_start
+                indices = ops.arange(k + 1, dtype="int32")
+                indices = ops.minimum(
+                    indices + start_offset, ops.cast(k, "int32")
+                )
+                logits = ops.take(logits, indices, axis=1)
+                hidden_states = ops.take(hidden_states, indices, axis=1)
+                return logits, hidden_states, updated_cache
+
+            # `fixed_pos` is held constant across all k draft steps within
+            # a cycle so every draft token uses the same RoPE position.
+            initial_fixed_pos = ops.cast(index - 1, "int32")
+            draft_cache = (init_last_hidden, cache, initial_fixed_pos)
+
         token_ids = self.sampler(
             next=next,
             prompt=token_ids,
@@ -563,6 +705,9 @@ class Gemma4CausalLM(CausalLM):
             stop_token_ids=stop_token_ids,
             hidden_states=hidden_states,
             model=self,
+            draft_next=draft_next,
+            draft_cache=draft_cache,
+            verify_next=verify_next,
         )
 
         # Compute an updated padding mask.
@@ -588,6 +733,7 @@ class Gemma4CausalLM(CausalLM):
         max_length=None,
         stop_token_ids="auto",
         strip_prompt=False,
+        assistant_model=None,
     ):
         # If `auto`, add `<turn|>` as a stop token too.
         if self.preprocessor is None and stop_token_ids == "auto":
@@ -605,9 +751,69 @@ class Gemma4CausalLM(CausalLM):
                 self.preprocessor.tokenizer.token_to_id("<turn|>"),
             ]
 
-        return super().generate(
-            inputs,
-            max_length=max_length,
-            stop_token_ids=stop_token_ids,
-            strip_prompt=strip_prompt,
-        )
+        if assistant_model is not None:
+            from keras_hub.src.samplers.speculative_sampler import (
+                SpeculativeSampler,
+            )
+
+            # Save current (sampler, compiled graph) as a consistent pair so
+            # we can restore them after the speculative call without
+            # discarding either compiled graph.
+            original_sampler = self.sampler
+            original_generate_function = self.generate_function
+
+            num_spec = getattr(assistant_model, "num_speculative_tokens", 5)
+
+            # Use the sampler stored on the assistant model (loaded from
+            # generation_config.json during from_preset) as the base_sampler
+            # for stochastic rejection sampling. This avoids requiring the
+            # caller to manually recompile the target model with the correct
+            # temperature/top_p/top_k settings.
+            spec_base_sampler = getattr(assistant_model, "sampler", None)
+            if isinstance(self.sampler, GreedySampler):
+                spec_base_sampler = None
+
+            # Reuse a previously compiled speculative graph when
+            # num_speculative_tokens and base_sampler both match, avoiding a
+            # full JIT recompile.
+            cached_spec_sampler = getattr(self, "_cached_spec_sampler", None)
+            cached_spec_fn = getattr(self, "_cached_spec_generate_fn", None)
+
+            if (
+                cached_spec_sampler is not None
+                and cached_spec_sampler.num_speculative_tokens == num_spec
+                and cached_spec_sampler.base_sampler is spec_base_sampler
+            ):
+                # Reuse compiled speculative graph.
+                self.sampler = cached_spec_sampler
+                self.generate_function = cached_spec_fn
+            else:
+                # Compile a new speculative graph.
+                self.sampler = SpeculativeSampler(
+                    num_speculative_tokens=num_spec,
+                    base_sampler=spec_base_sampler,
+                    temperature=getattr(original_sampler, "temperature", 1.0),
+                )
+                self.generate_function = None  # force recompile
+
+            self._assistant_model = assistant_model
+
+        try:
+            outputs = super().generate(
+                inputs,
+                max_length=max_length,
+                stop_token_ids=stop_token_ids,
+                strip_prompt=strip_prompt,
+            )
+        finally:
+            if assistant_model is not None:
+                self._cached_spec_sampler = self.sampler
+                self._cached_spec_generate_fn = self.generate_function
+                # Restore the original sampler and compiled graph.
+                # Do not set generate_function = None — that would discard
+                # the baseline compiled graph and force a recompile.
+                self._assistant_model = None
+                self.sampler = original_sampler
+                self.generate_function = original_generate_function
+
+        return outputs
