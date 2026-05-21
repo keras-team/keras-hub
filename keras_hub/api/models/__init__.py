@@ -86,7 +86,7 @@ from keras_hub.src.models.blip2.blip2_custom_opt import (
 from keras_hub.src.models.blip2.blip2_qformer import (
     BLIP2QFormer as BLIP2QFormer,
 )
-from keras_hub.src.models.blip2.blip2_tokenizer import (
+from keras_hub.src.models.blip2.blip2_opt_tokenizer import (
     BLIP2Tokenizer as BLIP2Tokenizer,
 )
 from keras_hub.src.models.blip2.blip2_vision_encoder import (

@@ -5,8 +5,8 @@ import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
 from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter
-from keras_hub.src.models.blip2.blip2_tokenizer import BLIP2Tokenizer
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
+from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -30,7 +30,10 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
     in a separate process).
 
     Args:
-        tokenizer: A `keras_hub.models.BLIP2Tokenizer` instance.
+        tokenizer: A `keras_hub.models.BLIP2Tokenizer` or
+            `keras_hub.models.BLIP2FlanT5Tokenizer` instance. The actual
+            tokenizer is resolved from the preset config when using
+            `from_preset()`.
         image_converter: A `keras_hub.models.BLIP2ImageConverter` instance, or
             `None`. If `None`, the preprocessor operates in text-only mode.
         sequence_length: int. The maximum length of the packed token sequence.
@@ -74,7 +77,7 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
     """
 
     backbone_cls = BLIP2Backbone
-    tokenizer_cls = BLIP2Tokenizer
+    tokenizer_cls = Tokenizer
     image_converter_cls = BLIP2ImageConverter
 
     def __init__(
