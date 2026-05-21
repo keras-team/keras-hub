@@ -98,10 +98,7 @@ class ModernBertMaskedLMTest(TestCase):
         using standard training APIs.
         """
         input_data = ["the quick brown", "the quick"]
-        self.model.compile(
-            optimizer="adam", loss="sparse_categorical_crossentropy"
-        )
-        print(type(input_data))
+        self.model.compile(optimizer="adam", loss="sparse_categorical_crossentropy")
         ds = self.model.preprocessor(input_data)
         self.model.fit(ds, epochs=1)
 

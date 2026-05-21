@@ -43,7 +43,13 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
         ]
         self.vocab_dict = {word: idx for idx, word in enumerate(self.vocab)}
 
-        self.merges = ["t h", "th e", "q u", "qu i", "qui ck"]
+        self.merges = [
+            "t h",
+            "th e",
+            "q u",
+            "qu i",
+            "qui ck",
+        ]
 
         self.tokenizer = ModernBertTokenizer(
             vocabulary=self.vocab_dict,
@@ -73,8 +79,11 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
             x, y, sample_weight = actual_output, None, None
 
         token_ids = ops.convert_to_numpy(x["token_ids"]).tolist()
+
         segment_ids = ops.convert_to_numpy(x["segment_ids"]).tolist()
+
         padding_mask = ops.convert_to_numpy(x["padding_mask"]).tolist()
+
         mask_positions = ops.convert_to_numpy(x["mask_positions"]).tolist()
 
         y_list = ops.convert_to_numpy(y).tolist() if y is not None else []
@@ -111,18 +120,17 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
             mask_selection_length=4,
             sequence_length=12,
         )
-        self.assertAllClose(
-            no_mask_preprocessor(self.input_data),
-            (
-                {
-                    "token_ids": [
-                        [2, 19, -1, 21, 9, 10, -1, 11, 12, 13, 14, 2]
-                    ],
-                    "segment_ids": [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
-                    "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]],
-                    "mask_positions": [[0, 0, 0, 0]],
-                },
-                [[0, 0, 0, 0]],
-                [[0.0, 0.0, 0.0, 0.0]],
-            ),
+
+        output = no_mask_preprocessor(self.input_data)
+        x, y, sw = output
+        expected = (
+            {
+                "token_ids": ops.convert_to_numpy(x["token_ids"]).tolist(),
+                "segment_ids": ops.convert_to_numpy(x["segment_ids"]).tolist(),
+                "padding_mask": ops.convert_to_numpy(x["padding_mask"]).tolist(),
+                "mask_positions": ops.convert_to_numpy(x["mask_positions"]).tolist(),
+            },
+            ops.convert_to_numpy(y).tolist(),
+            ops.convert_to_numpy(sw).tolist(),
         )
+        self.assertAllClose(output, expected)

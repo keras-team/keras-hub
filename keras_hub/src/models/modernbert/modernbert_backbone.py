@@ -101,9 +101,7 @@ class ModernBertBackbone(Backbone):
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            embeddings_initializer=keras.initializers.TruncatedNormal(
-                stddev=0.02
-            ),
+            embeddings_initializer=keras.initializers.TruncatedNormal(stddev=0.02),
             dtype=layer_dtype_policy,
             name="token_embedding",
         )
@@ -146,9 +144,7 @@ class ModernBertBackbone(Backbone):
         )
 
         token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
+        padding_mask = keras.Input(shape=(None,), dtype="int32", name="padding_mask")
 
         x = self.token_embedding(token_ids)
         x = self.embedding_norm(x)

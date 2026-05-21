@@ -51,9 +51,7 @@ class ModernBertMLP(layers.Layer):
         self.wi_1 = layers.Dense(
             intermediate_dim, use_bias=False, dtype=dtype, name="wi_1"
         )
-        self.wo = layers.Dense(
-            hidden_dim, use_bias=False, dtype=dtype, name="wo"
-        )
+        self.wo = layers.Dense(hidden_dim, use_bias=False, dtype=dtype, name="wo")
 
     def call(self, x):
         """Forward pass of the GeGLU MLP layer."""
@@ -129,9 +127,7 @@ class ModernBertAttention(layers.Layer):
         self.local_attention_window = local_attention_window
         self.dropout = dropout
 
-        self.qkv = layers.Dense(
-            hidden_dim * 3, use_bias=False, dtype=dtype, name="qkv"
-        )
+        self.qkv = layers.Dense(hidden_dim * 3, use_bias=False, dtype=dtype, name="qkv")
         self.output_dense = layers.Dense(
             hidden_dim, use_bias=False, dtype=dtype, name="output_dense"
         )
@@ -181,9 +177,7 @@ class ModernBertAttention(layers.Layer):
 
         if padding_mask is not None:
             pm = ops.cast(padding_mask, dtype)
-            scores = scores + (1.0 - pm[:, None, None, :]) * ops.cast(
-                -1e9, dtype
-            )
+            scores = scores + (1.0 - pm[:, None, None, :]) * ops.cast(-1e9, dtype)
 
         probs = ops.softmax(scores, axis=-1)
         probs = self.attn_dropout(probs, training=training)

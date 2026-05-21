@@ -114,7 +114,6 @@ class ModernBertMaskedLMPreprocessor(Preprocessor):
             padding_mask = packed["padding_mask"]
         else:
             token_ids, segment_ids = packed
-
             padding_mask = ops.cast(
                 token_ids != self.tokenizer.pad_token_id,
                 "int32",

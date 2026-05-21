@@ -104,7 +104,6 @@ class ModernBertMaskedLM(MaskedLM):
             reverse=True,
         )
 
-        # === Initialize the MaskedLM base class ===
         super().__init__(
             backbone=backbone,
             preprocessor=preprocessor,
