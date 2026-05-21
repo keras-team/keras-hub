@@ -1,10 +1,10 @@
-"""BLIP-2 custom OPT model."""
+"""BLIP-2 OPT language model."""
 
 import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.blip2.blip2_opt_decoder import OPTDecoderBlock
+from keras_hub.src.layers.modeling.transformer_decoder import TransformerDecoder
 
 
 def opt_kernel_initializer(stddev=0.02):
@@ -194,12 +194,14 @@ class BLIP2CustomOPT(keras.Model):
             name="embeddings_layer",
         )
         transformer_layers = [
-            OPTDecoderBlock(
-                num_heads=num_heads,
-                hidden_dim=hidden_dim,
+            TransformerDecoder(
                 intermediate_dim=intermediate_dim,
+                num_heads=num_heads,
                 dropout=dropout,
+                activation="relu",
                 layer_norm_epsilon=layer_norm_epsilon,
+                normalize_first=True,
+                kernel_initializer=opt_kernel_initializer(initializer_range),
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
@@ -262,7 +264,7 @@ class BLIP2CustomOPT(keras.Model):
             full_padding_mask = padding_mask_input
 
         for layer in transformer_layers:
-            x = layer(x, padding_mask=full_padding_mask)
+            x = layer(x, decoder_padding_mask=full_padding_mask)
 
         outputs = layer_norm(x)
 
@@ -298,9 +300,9 @@ class BLIP2CustomOPT(keras.Model):
         for i, layer in enumerate(self.transformer_layers):
             x, new_layer_cache = layer(
                 x,
-                padding_mask=padding_mask,
-                cache=cache[:, i],
-                cache_update_index=cache_update_index,
+                decoder_padding_mask=padding_mask,
+                self_attention_cache=cache[:, i],
+                self_attention_cache_update_index=cache_update_index,
             )
             updated_caches.append(new_layer_cache)
         new_cache = ops.stack(updated_caches, axis=1)

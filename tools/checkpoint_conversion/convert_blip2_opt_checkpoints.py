@@ -3,7 +3,7 @@ Convert BLIP-2 opt checkpoints to KerasHub format.
 
 Usage:
 ```shell
-python convert_blip2_checkpoints.py \
+python convert_blip2_opt_checkpoints.py \
     --model_id Salesforce/blip2-opt-2.7b \
     --output_dir blip2_opt_2_7b_converted
 ```
@@ -255,18 +255,31 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
 
     Position embedding note
     -----------------------
-    HuggingFace OPT's ``embed_positions`` table has shape ``(2050, 2560)``:
+    HuggingFace OPT's ``embed_positions`` table has shape ``(2050, hidden_dim)``:
     rows 0-1 are reserved and never used; real positions start at row 2.
 
     ``BLIP2OPTEmbeddings`` uses a plain ``keras.layers.Embedding`` of size
     ``max_sequence_length + 2 = 2050`` and looks up indices that already
     include the HF +2 offset (``position_offset = num_query_tokens + 2``).
     Therefore we load the full 2050-row table without stripping any rows.
+
+    Attention weight note
+    ---------------------
+    ``TransformerDecoder`` (via ``CachedMultiHeadAttention``) stores q/k/v
+    kernels as ``(hidden_dim, num_heads, head_dim)`` and biases as
+    ``(num_heads, head_dim)``, while the output projection kernel is
+    ``(num_heads, head_dim, hidden_dim)``.  HF stores these as flat 2-D
+    matrices ``(hidden_dim, hidden_dim)`` (PyTorch ``(out, in)`` convention),
+    so we transpose then reshape.
     """
     print("Transferring OPT weights...")
 
     pt_dec = hf_opt.model.decoder
     pt_state = pt_dec.state_dict()
+
+    num_heads = keras_opt.num_heads
+    hidden_dim = keras_opt.hidden_dim
+    head_dim = hidden_dim // num_heads
 
     keras_opt.embeddings_layer.token_embedding.weights[0].assign(
         to_np(pt_dec.embed_tokens.weight)
@@ -280,50 +293,72 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
         p = f"layers.{i}."
         layer = keras_opt.transformer_layers[i]
 
-        layer.self_attn_layer_norm.gamma.assign(
+        layer._self_attention_layer_norm.gamma.assign(
             to_np(pt_state[f"{p}self_attn_layer_norm.weight"])
         )
-        layer.self_attn_layer_norm.beta.assign(
+        layer._self_attention_layer_norm.beta.assign(
             to_np(pt_state[f"{p}self_attn_layer_norm.bias"])
         )
 
-        layer.self_attn.q_proj.kernel.assign(
-            to_np(pt_state[f"{p}self_attn.q_proj.weight"]).T
+        layer._self_attention_layer._query_dense.kernel.assign(
+            to_np(pt_state[f"{p}self_attn.q_proj.weight"]).T.reshape(
+                hidden_dim, num_heads, head_dim
+            )
         )
-        layer.self_attn.q_proj.bias.assign(
-            to_np(pt_state[f"{p}self_attn.q_proj.bias"])
+        layer._self_attention_layer._query_dense.bias.assign(
+            to_np(pt_state[f"{p}self_attn.q_proj.bias"]).reshape(
+                num_heads, head_dim
+            )
         )
-        layer.self_attn.k_proj.kernel.assign(
-            to_np(pt_state[f"{p}self_attn.k_proj.weight"]).T
+        layer._self_attention_layer._key_dense.kernel.assign(
+            to_np(pt_state[f"{p}self_attn.k_proj.weight"]).T.reshape(
+                hidden_dim, num_heads, head_dim
+            )
         )
-        layer.self_attn.k_proj.bias.assign(
-            to_np(pt_state[f"{p}self_attn.k_proj.bias"])
+        layer._self_attention_layer._key_dense.bias.assign(
+            to_np(pt_state[f"{p}self_attn.k_proj.bias"]).reshape(
+                num_heads, head_dim
+            )
         )
-        layer.self_attn.v_proj.kernel.assign(
-            to_np(pt_state[f"{p}self_attn.v_proj.weight"]).T
+        layer._self_attention_layer._value_dense.kernel.assign(
+            to_np(pt_state[f"{p}self_attn.v_proj.weight"]).T.reshape(
+                hidden_dim, num_heads, head_dim
+            )
         )
-        layer.self_attn.v_proj.bias.assign(
-            to_np(pt_state[f"{p}self_attn.v_proj.bias"])
+        layer._self_attention_layer._value_dense.bias.assign(
+            to_np(pt_state[f"{p}self_attn.v_proj.bias"]).reshape(
+                num_heads, head_dim
+            )
         )
 
-        layer.self_attn.out_proj.kernel.assign(
-            to_np(pt_state[f"{p}self_attn.out_proj.weight"]).T
+        layer._self_attention_layer._output_dense.kernel.assign(
+            to_np(pt_state[f"{p}self_attn.out_proj.weight"]).T.reshape(
+                num_heads, head_dim, hidden_dim
+            )
         )
-        layer.self_attn.out_proj.bias.assign(
+        layer._self_attention_layer._output_dense.bias.assign(
             to_np(pt_state[f"{p}self_attn.out_proj.bias"])
         )
 
-        layer.final_layer_norm.gamma.assign(
+        layer._feedforward_layer_norm.gamma.assign(
             to_np(pt_state[f"{p}final_layer_norm.weight"])
         )
-        layer.final_layer_norm.beta.assign(
+        layer._feedforward_layer_norm.beta.assign(
             to_np(pt_state[f"{p}final_layer_norm.bias"])
         )
 
-        layer.fc1.kernel.assign(to_np(pt_state[f"{p}fc1.weight"]).T)
-        layer.fc1.bias.assign(to_np(pt_state[f"{p}fc1.bias"]))
-        layer.fc2.kernel.assign(to_np(pt_state[f"{p}fc2.weight"]).T)
-        layer.fc2.bias.assign(to_np(pt_state[f"{p}fc2.bias"]))
+        layer._feedforward_intermediate_dense.kernel.assign(
+            to_np(pt_state[f"{p}fc1.weight"]).T
+        )
+        layer._feedforward_intermediate_dense.bias.assign(
+            to_np(pt_state[f"{p}fc1.bias"])
+        )
+        layer._feedforward_output_dense.kernel.assign(
+            to_np(pt_state[f"{p}fc2.weight"]).T
+        )
+        layer._feedforward_output_dense.bias.assign(
+            to_np(pt_state[f"{p}fc2.bias"])
+        )
 
     keras_opt.layer_norm.gamma.assign(to_np(pt_dec.final_layer_norm.weight))
     keras_opt.layer_norm.beta.assign(to_np(pt_dec.final_layer_norm.bias))
@@ -343,42 +378,50 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
         ),
         (
             "self_attn_layer_norm gamma",
-            layer0.self_attn_layer_norm.gamma,
+            layer0._self_attention_layer_norm.gamma,
             to_np(pt_state["layers.0.self_attn_layer_norm.weight"]),
         ),
         (
             "q_proj kernel",
-            layer0.self_attn.q_proj.kernel,
-            to_np(pt_state["layers.0.self_attn.q_proj.weight"]).T,
+            layer0._self_attention_layer._query_dense.kernel,
+            to_np(pt_state["layers.0.self_attn.q_proj.weight"]).T.reshape(
+                hidden_dim, num_heads, head_dim
+            ),
         ),
         (
             "k_proj kernel",
-            layer0.self_attn.k_proj.kernel,
-            to_np(pt_state["layers.0.self_attn.k_proj.weight"]).T,
+            layer0._self_attention_layer._key_dense.kernel,
+            to_np(pt_state["layers.0.self_attn.k_proj.weight"]).T.reshape(
+                hidden_dim, num_heads, head_dim
+            ),
         ),
         (
             "v_proj kernel",
-            layer0.self_attn.v_proj.kernel,
-            to_np(pt_state["layers.0.self_attn.v_proj.weight"]).T,
+            layer0._self_attention_layer._value_dense.kernel,
+            to_np(pt_state["layers.0.self_attn.v_proj.weight"]).T.reshape(
+                hidden_dim, num_heads, head_dim
+            ),
         ),
         (
             "out_proj kernel",
-            layer0.self_attn.out_proj.kernel,
-            to_np(pt_state["layers.0.self_attn.out_proj.weight"]).T,
+            layer0._self_attention_layer._output_dense.kernel,
+            to_np(pt_state["layers.0.self_attn.out_proj.weight"]).T.reshape(
+                num_heads, head_dim, hidden_dim
+            ),
         ),
         (
-            "final_layer_norm gamma",
-            layer0.final_layer_norm.gamma,
+            "feedforward_layer_norm gamma",
+            layer0._feedforward_layer_norm.gamma,
             to_np(pt_state["layers.0.final_layer_norm.weight"]),
         ),
         (
             "fc1 kernel",
-            layer0.fc1.kernel,
+            layer0._feedforward_intermediate_dense.kernel,
             to_np(pt_state["layers.0.fc1.weight"]).T,
         ),
         (
             "fc2 kernel",
-            layer0.fc2.kernel,
+            layer0._feedforward_output_dense.kernel,
             to_np(pt_state["layers.0.fc2.weight"]).T,
         ),
     ]
