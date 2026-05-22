@@ -372,8 +372,11 @@ def validate_t5_lm(
         p.numel() for p in hf_model.language_projection.parameters()
     )
     embed_params = hf_model.language_model.shared.weight.numel()
-    # lm_head + encoder.embed_tokens share the same tensor → subtract 2 copies
-    hf_params = hf_t5_params + hf_proj_params - 2 * embed_params
+    # PyTorch parameters() deduplicates by tensor identity. In Blip2 T5,
+    # lm_head.weight IS a separate nn.Parameter (not the same object as
+    # shared.weight even though it's tied), so it gets counted twice.
+    # Subtract one copy to match Keras which counts the embedding once.
+    hf_params = hf_t5_params + hf_proj_params - embed_params
     print(f"   -> Keras params : {keras_params:,}")
     print(f"   -> HF params    : {hf_params:,}")
     if keras_params == hf_params:
@@ -407,9 +410,58 @@ def validate_t5_lm(
             inputs_embeds=enc_embeds_pt,
             attention_mask=enc_mask_pt,
             decoder_input_ids=dec_ids_pt,
+            output_hidden_states=True,
         )
     hf_logits = hf_out.logits.float().numpy()  # (1, 1, vocab_size)
+    hf_enc_out = hf_out.encoder_hidden_states[-1].float().numpy()
+    hf_dec_raw = hf_out.decoder_hidden_states[-1].float().numpy()
 
+    # ── Keras: manual encoder+decoder to compare intermediates ───────────────
+    t5 = keras_flan_t5.t5
+    proj_k = to_np(keras_flan_t5.language_projection(qformer_out_np))
+    text_emb_k = to_np(t5.token_embedding(text_ids_np))
+    enc_emb_k = np.concatenate([proj_k, text_emb_k], axis=1)
+    enc_attn_k = np.ones(
+        (1, 1, enc_emb_k.shape[1]), dtype=np.float32
+    )  # (B,1,enc_len)
+    x = enc_emb_k
+    pos_bias = None
+    for layer in t5.encoder_transformer_layers:
+        out = layer(
+            x,
+            attention_mask=enc_attn_k,
+            position_bias=pos_bias,
+            use_causal_mask=False,
+            training=False,
+        )
+        if isinstance(out, tuple):
+            x, pos_bias = out
+    keras_enc_out = to_np(t5.encoder_layer_norm(x))
+    report_diff(
+        "Encoder hidden states (with visual prefix)", keras_enc_out, hf_enc_out
+    )
+
+    x = to_np(t5.token_embedding(dec_ids_np))
+    dec_attn_k = np.ones((1, 1, 1), dtype=np.float32)
+    d_pos_bias = None
+    for layer in t5.decoder_transformer_layers:
+        out = layer(
+            x,
+            attention_mask=dec_attn_k,
+            position_bias=d_pos_bias,
+            encoder_hidden_states=keras_enc_out,
+            encoder_attention_mask=enc_attn_k,
+            use_causal_mask=True,
+            training=False,
+        )
+        if isinstance(out, tuple):
+            x, d_pos_bias = out
+    keras_dec_raw = to_np(t5.decoder_layer_norm(x))
+    report_diff(
+        "Decoder hidden states (with visual prefix)", keras_dec_raw, hf_dec_raw
+    )
+
+    # ── Full Keras forward (via BLIP2FlanT5.call) ────────────────────────────
     keras_hidden = keras_flan_t5(
         {
             "qformer_features": qformer_out_np,
