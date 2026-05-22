@@ -299,8 +299,10 @@ def validate_t5_decoder(keras_flan_t5, hf_model) -> bool:
             attention_mask=torch.tensor(enc_mask),
             decoder_input_ids=torch.tensor(dec_ids),
             decoder_attention_mask=torch.tensor(dec_mask),
+            output_hidden_states=True,
         )
-        pt_out = to_np(hf_out.last_hidden_state)
+        # decoder_hidden_states[-1] is the last layer output (after final norm)
+        pt_out = to_np(hf_out.decoder_hidden_states[-1])
 
     # Run Keras encoder then decoder manually
     t5 = keras_flan_t5.t5
