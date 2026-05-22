@@ -10,7 +10,7 @@ backbone_presets = {
                 "(2M), and OPT-2.7B language model (2.65B). Pretrained for "
                 "image-text matching and visual question answering."
             ),
-            "params": 3744737280,
+            "params": 3744761856,
             "path": "blip2",
         },
         "kaggle_handle": "kaggle://keras/blip2/keras/blip2_opt_2_7b/1",
@@ -23,7 +23,7 @@ backbone_presets = {
                 "(2M), and OPT-6.7B language model (6.66B). Pretrained for "
                 "image-text matching and visual question answering."
             ),
-            "params": 7751761920,
+            "params": 7752869376,
             "path": "blip2",
         },
         "kaggle_handle": "kaggle://keras/blip2/keras/blip2_opt_6_7b/1",
