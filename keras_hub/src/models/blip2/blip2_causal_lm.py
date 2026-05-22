@@ -59,7 +59,14 @@ class BLIP2CausalLM(CausalLM):
         # Slice hidden states to text tokens only before projecting to logits.
         # This saves compute/memory by not projecting the visual prefix.
         text_hidden_states = hidden_states[:, backbone.num_query_tokens :, :]
-        outputs = backbone.token_embedding(text_hidden_states, reverse=True)
+
+        lm = backbone.language_model
+        if hasattr(lm, "lm_head") and lm.lm_head is not None:
+            # Use the dedicated LM head (e.g., Flan-T5).
+            outputs = lm.lm_head(text_hidden_states)
+        else:
+            # Fall back to tied embedding weights (e.g., OPT).
+            outputs = backbone.token_embedding(text_hidden_states, reverse=True)
 
         super().__init__(
             inputs=inputs,
@@ -137,6 +144,10 @@ class BLIP2CausalLM(CausalLM):
         lm = self.backbone.language_model
         num_visual = self.backbone.num_query_tokens
 
+        # Note: This method currently assumes OPT-like architecture for caching.
+        # If the LM doesn't support the required sub-layers, this will fail.
+        # For Flan-T5, we bypass this via generate_step.
+
         if projected_features is not None:
             token_embeds = lm.embeddings_layer(token_ids)
 
@@ -186,9 +197,10 @@ class BLIP2CausalLM(CausalLM):
         else:
             logits_hidden_states = hidden_states
 
-        logits = lm.embeddings_layer.token_embedding(
-            logits_hidden_states, reverse=True
-        )
+        if hasattr(lm, "lm_head") and lm.lm_head is not None:
+            logits = lm.lm_head(logits_hidden_states)
+        else:
+            logits = lm.token_embedding(logits_hidden_states, reverse=True)
 
         return logits, hidden_states, new_cache
 
@@ -225,29 +237,70 @@ class BLIP2CausalLM(CausalLM):
         padding_mask = inputs["padding_mask"]
         images = inputs.get("images")
         num_visual = self.backbone.num_query_tokens
+        lm = self.backbone.language_model
 
         if images is not None:
             projected_features = self._encode_images(images)
         else:
             projected_features = None
 
-        hidden_states, cache = self._build_cache(
-            token_ids, projected_features, padding_mask
+        # Determine if we can use KV caching.
+        use_cache = hasattr(lm, "call_with_cache") and hasattr(
+            lm, "embeddings_layer"
         )
+
+        if use_cache:
+            hidden_states, cache = self._build_cache(
+                token_ids, projected_features, padding_mask
+            )
+        else:
+            # No cache support: Run a full forward pass to get initial state.
+            hidden_states = self.backbone(inputs)
+            cache = None
 
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
-            cache_update_index = index - 1 + num_visual
-            batch_size = ops.shape(prompt)[0]
-            prompt_slice = ops.slice(prompt, [0, index - 1], [batch_size, 1])
-            logits, hidden_states, cache = self.call_with_cache(
-                token_ids=prompt_slice,
-                cache=cache,
-                cache_update_index=cache_update_index,
-                projected_features=None,
-            )
+            if use_cache:
+                cache_update_index = index - 1 + num_visual
+                batch_size = ops.shape(prompt)[0]
+                prompt_slice = ops.slice(
+                    prompt, [0, index - 1], [batch_size, 1]
+                )
+                logits, hidden_states, cache = self.call_with_cache(
+                    token_ids=prompt_slice,
+                    cache=cache,
+                    cache_update_index=cache_update_index,
+                    projected_features=None,
+                )
+            else:
+                # Fallback: Run the full backbone for each step.
+                # This is slower but correct for Flan-T5.
+                # We need to construct the input dict for the backbone.
+                current_inputs = {
+                    "token_ids": prompt,
+                    "padding_mask": ops.cast(prompt != 0, "int32"),
+                }
+                if images is not None:
+                    current_inputs["images"] = images
+
+                # Call the functional model (self) to get logits.
+                # We slice to the token we just generated (at index - 1).
+                all_logits = self(current_inputs)
+                batch_size = ops.shape(prompt)[0]
+                logits = ops.slice(
+                    all_logits, [0, index - 1, 0], [batch_size, 1, -1]
+                )
+
+                # For hidden_states, we use the backbone directly.
+                all_hidden_states = self.backbone(current_inputs)
+                hidden_states = ops.slice(
+                    all_hidden_states,
+                    [0, num_visual + index - 1, 0],
+                    [batch_size, 1, -1],
+                )
+
             return (
                 ops.squeeze(logits, axis=1),
                 ops.squeeze(hidden_states, axis=1),
