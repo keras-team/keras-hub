@@ -360,6 +360,28 @@ def validate_t5_lm(
     """
     print_header("T5 LM LOGITS VALIDATION")
 
+    # ── Parameter count ───────────────────────────────────────────────────────
+    # Keras: BLIP2FlanT5 holds T5 + language_projection (token_embedding is
+    #        shared so counted once).
+    # HF: language_model (T5ForConditionalGeneration) + language_projection,
+    #     minus the three tied/duplicated embedding tables that HF counts twice:
+    #     lm_head, encoder.embed_tokens, decoder.embed_tokens.
+    keras_params = keras_flan_t5.count_params()
+    hf_t5_params = sum(p.numel() for p in hf_model.language_model.parameters())
+    hf_proj_params = sum(
+        p.numel() for p in hf_model.language_projection.parameters()
+    )
+    embed_params = hf_model.language_model.shared.weight.numel()
+    # lm_head + encoder.embed_tokens share the same tensor → subtract 2 copies
+    hf_params = hf_t5_params + hf_proj_params - 2 * embed_params
+    print(f"   -> Keras params : {keras_params:,}")
+    print(f"   -> HF params    : {hf_params:,}")
+    if keras_params == hf_params:
+        print("   -> ✅ Parameter counts match")
+    else:
+        diff = abs(keras_params - hf_params)
+        print(f"   -> ⚠️  Mismatch by {diff:,} parameters")
+
     hf_inputs = hf_processor(
         images=Image.new("RGB", (224, 224), color=(114, 114, 114)),
         text=_VALIDATION_PROMPT,
@@ -708,13 +730,10 @@ def main(_):
     )
     enc_ok = validate_t5_encoder(flan_t5, hf_model)
     dec_ok = validate_t5_decoder(flan_t5, hf_model)
+    lm_ok = validate_t5_lm(flan_t5, hf_model, qformer_out_np, hf_processor)
 
     if not FLAGS.skip_generate:
-        print_header("GENERATION VALIDATION")
-        print(
-            "⏭️  T5 generation not yet integrated — "
-            "skipping (pass --skip_generate to suppress this message)."
-        )
+        validate_generate(flan_t5, hf_model, hf_processor)
     else:
         print("\n⏭️  Skipping generation validation (--skip_generate=True)")
 
@@ -725,6 +744,7 @@ def main(_):
         ("Projection", proj_ok),
         ("T5 Encoder", enc_ok),
         ("T5 Decoder", dec_ok),
+        ("T5 LM Logits", lm_ok),
     ]:
         status = "✅ PASS" if ok else "⚠️  FAIL"
         print(f"   {status}  {name}")
