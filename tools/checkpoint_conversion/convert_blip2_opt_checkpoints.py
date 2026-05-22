@@ -255,7 +255,8 @@ def transfer_opt_weights(keras_opt, hf_opt) -> None:
 
     Position embedding note
     -----------------------
-    HuggingFace OPT's ``embed_positions`` table has shape ``(2050, hidden_dim)``:
+    HuggingFace OPT's ``embed_positions`` table has shape
+    ``(2050, hidden_dim)``:
     rows 0-1 are reserved and never used; real positions start at row 2.
 
     ``BLIP2OPTEmbeddings`` uses a plain ``keras.layers.Embedding`` of size
