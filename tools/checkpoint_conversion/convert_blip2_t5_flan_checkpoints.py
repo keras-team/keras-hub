@@ -56,6 +56,7 @@ from blip2_conversion_utils import validate_vision_encoder  # noqa: E402
 from huggingface_hub import hf_hub_download  # noqa: E402
 from PIL import Image  # noqa: E402
 from transformers import Blip2ForConditionalGeneration  # noqa: E402
+from transformers import Blip2Processor  # noqa: E402
 
 from keras_hub.src.models.blip2.blip2_backbone import (
     BLIP2Backbone,  # noqa: E402
@@ -97,6 +98,8 @@ flags.DEFINE_bool(
     False,
     "Skip the end-to-end generation validation (slow).",
 )
+
+_VALIDATION_PROMPT = "Question: What is in this picture? Answer:"
 
 
 # ── T5 weight transfer ────────────────────────────────────────────────────────
@@ -345,6 +348,208 @@ def validate_t5_decoder(keras_flan_t5, hf_model) -> bool:
     return report_diff("T5 decoder hidden states", keras_out, pt_out)
 
 
+def validate_t5_lm(
+    keras_flan_t5, hf_model, qformer_out_np: np.ndarray, hf_processor
+) -> bool:
+    """Compare decoder logits for the full BLIP-2 T5 forward pass.
+
+    Feeds the projected Q-Former output + tokenised prompt to the T5
+    encoder (matching what BLIP2FlanT5.call does) and a single decoder
+    step, then compares logits between HF and Keras.
+    """
+    print_header("T5 LM LOGITS VALIDATION")
+
+    keras_params = keras_flan_t5.count_params()
+    # lm_head is tied to shared embedding in T5 — exclude to avoid double-count
+    hf_params = sum(
+        p.numel()
+        for name, p in hf_model.named_parameters()
+        if "lm_head" not in name
+        and "encoder.embed_tokens" not in name
+        and "decoder.embed_tokens" not in name
+    )
+    print("🔶 Parameter count comparison:")
+    print(f"   -> KerasHub (BLIP2FlanT5) : {keras_params:,}")
+    print(f"   -> HuggingFace (full)     : {hf_params:,}")
+    if keras_params == hf_params:
+        print("   -> ✅ counts match")
+    else:
+        diff = abs(keras_params - hf_params)
+        print(f"   -> ⚠️  differ by {diff:,} (expected: vocab padding only)")
+
+    hf_inputs = hf_processor(
+        images=Image.new("RGB", (224, 224), color=(114, 114, 114)),
+        text=_VALIDATION_PROMPT,
+        return_tensors="pt",
+        padding=False,
+    )
+    text_ids_pt = hf_inputs["input_ids"]
+    text_ids_np = text_ids_pt.numpy()
+    text_mask_np = np.ones_like(text_ids_np, dtype=np.int32)
+
+    # Decoder input: single pad/BOS token (T5 uses 0)
+    dec_ids_pt = torch.zeros((1, 1), dtype=torch.long)
+    dec_ids_np = np.zeros((1, 1), dtype=np.int32)
+    dec_mask_np = np.ones((1, 1), dtype=np.int32)
+
+    hf_t5 = hf_model.language_model
+    with torch.no_grad():
+        proj_pt = hf_model.language_projection(torch.tensor(qformer_out_np))
+        text_emb_pt = hf_t5.encoder.embed_tokens(text_ids_pt)
+        enc_embeds_pt = torch.cat([proj_pt, text_emb_pt], dim=1)
+        enc_mask_pt = torch.ones(1, enc_embeds_pt.shape[1], dtype=torch.long)
+        hf_out = hf_t5(
+            inputs_embeds=enc_embeds_pt,
+            attention_mask=enc_mask_pt,
+            decoder_input_ids=dec_ids_pt,
+        )
+    hf_logits = hf_out.logits.float().numpy()  # (1, 1, vocab_size)
+
+    keras_hidden = keras_flan_t5(
+        {
+            "qformer_features": qformer_out_np,
+            "token_ids": text_ids_np,
+            "padding_mask": text_mask_np,
+            "decoder_token_ids": dec_ids_np,
+            "decoder_padding_mask": dec_mask_np,
+        },
+        training=False,
+    )
+    keras_logits = to_np(
+        keras_flan_t5.token_embedding(keras_hidden, reverse=True)
+    )  # (1, 1, vocab_size)
+
+    hf_pred = int(np.argmax(hf_logits[0, 0]))
+    keras_pred = int(np.argmax(keras_logits[0, 0]))
+    print(f"   -> HF    logits shape : {hf_logits.shape}")
+    print(f"   -> Keras logits shape : {keras_logits.shape}")
+    print(f"   -> HF    top-1 token  : {hf_pred}")
+    print(f"   -> Keras top-1 token  : {keras_pred}")
+    print(
+        f"   -> Top-1 {'✅ match' if hf_pred == keras_pred else '⚠️  mismatch'}"
+    )
+
+    return report_diff("T5 LM logits", keras_logits, hf_logits)
+
+
+def validate_generate(keras_flan_t5, hf_model, hf_processor) -> None:
+    """Greedy-decode up to 20 tokens and compare HF vs manual Keras output.
+
+    HF generation uses ``hf_model.generate()``.  Keras generation is a
+    manual greedy loop: the encoder runs once (with the visual prefix),
+    then the decoder is called step-by-step, argmax-selecting the next
+    token at each step.
+    """
+    print_header("GENERATION VALIDATION (greedy, 20 tokens)")
+
+    max_new_tokens = 20
+    image_pil = Image.new("RGB", (224, 224), color=(114, 114, 114))
+
+    hf_inputs = hf_processor(
+        images=image_pil,
+        text=_VALIDATION_PROMPT,
+        return_tensors="pt",
+        padding=False,
+    )
+    with torch.no_grad():
+        hf_generated = hf_model.generate(
+            **hf_inputs,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+            num_beams=1,
+        )
+    hf_text = hf_processor.batch_decode(
+        hf_generated, skip_special_tokens=True
+    )[0]
+
+    # ── Manual Keras greedy decode ────────────────────────────────────────
+    text_ids_np = hf_inputs["input_ids"].numpy()
+    text_mask_np = np.ones_like(text_ids_np, dtype=np.int32)
+
+    # Dummy image -> vision -> qformer to get visual features for Keras
+    image_np = np.array(image_pil).astype(np.float32) / 255.0
+    image_pt = torch.tensor(image_np[None]).permute(0, 3, 1, 2)
+    with torch.no_grad():
+        vis_np = to_np(
+            hf_model.vision_model(pixel_values=image_pt).last_hidden_state
+        )
+        qt_pt = hf_model.query_tokens.expand(1, -1, -1)
+        qf_np = to_np(
+            hf_model.qformer(
+                query_embeds=qt_pt,
+                encoder_hidden_states=torch.tensor(vis_np),
+            ).last_hidden_state
+        )
+
+    # Build encoder output once (projected qformer + text prompt)
+    t5 = keras_flan_t5.t5
+    proj_enc = to_np(keras_flan_t5.language_projection(qf_np))
+    text_emb = to_np(t5.token_embedding(text_ids_np))
+    enc_emb = np.concatenate([proj_enc, text_emb], axis=1)
+    vis_m = np.ones((1, qf_np.shape[1]), dtype=np.int32)
+    enc_mask = np.concatenate([vis_m, text_mask_np], axis=1)
+    enc_attn = enc_mask[:, None, :]
+
+    x = enc_emb
+    pos_bias = None
+    for layer in t5.encoder_transformer_layers:
+        out = layer(
+            x,
+            attention_mask=enc_attn,
+            position_bias=pos_bias,
+            use_causal_mask=False,
+            training=False,
+        )
+        if isinstance(out, tuple):
+            x, pos_bias = out
+    x = t5.encoder_layer_norm(x)
+    encoder_out = x  # fixed for all decoder steps
+
+    # Greedy decode loop
+    pad_token_id = 0
+    eos_token_id = 1  # </s> in T5 vocabulary
+    dec_ids = np.array([[pad_token_id]], dtype=np.int32)
+    generated = []
+
+    for _ in range(max_new_tokens):
+        dec_mask = np.ones_like(dec_ids, dtype=np.int32)
+        dec_attn = dec_mask[:, None, :]
+        x = t5.token_embedding(dec_ids)
+        d_pos_bias = None
+        for layer in t5.decoder_transformer_layers:
+            out = layer(
+                x,
+                attention_mask=dec_attn,
+                position_bias=d_pos_bias,
+                encoder_hidden_states=encoder_out,
+                encoder_attention_mask=enc_attn,
+                use_causal_mask=True,
+                training=False,
+            )
+            if isinstance(out, tuple):
+                x, d_pos_bias = out
+        x = t5.decoder_layer_norm(x)
+        logits = to_np(
+            keras_flan_t5.token_embedding(x, reverse=True)
+        )  # (1, dec_len, vocab)
+        next_token = int(np.argmax(logits[0, -1]))
+        if next_token == eos_token_id:
+            break
+        generated.append(next_token)
+        dec_ids = np.concatenate(
+            [dec_ids, np.array([[next_token]], dtype=np.int32)], axis=1
+        )
+
+    keras_text = hf_processor.batch_decode(
+        [generated], skip_special_tokens=True
+    )[0]
+
+    print(f"\n   -> HuggingFace : {hf_text!r}")
+    print(f"   -> Keras       : {keras_text!r}")
+    match = keras_text.strip() == hf_text.strip()
+    print(f"   -> {'✅ Match' if match else '⚠️  No match'}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 
@@ -356,6 +561,7 @@ def main(_):
     hf_model = Blip2ForConditionalGeneration.from_pretrained(
         FLAGS.model_id, torch_dtype=torch.float32
     )
+    hf_processor = Blip2Processor.from_pretrained(FLAGS.model_id)
     hf_model.eval()
 
     # Verify all parameters are float32
@@ -518,13 +724,10 @@ def main(_):
     )
     enc_ok = validate_t5_encoder(flan_t5, hf_model)
     dec_ok = validate_t5_decoder(flan_t5, hf_model)
+    lm_ok = validate_t5_lm(flan_t5, hf_model, qformer_out_np, hf_processor)
 
     if not FLAGS.skip_generate:
-        print_header("GENERATION VALIDATION")
-        print(
-            "⏭️  T5 generation not yet integrated — "
-            "skipping (pass --skip_generate to suppress this message)."
-        )
+        validate_generate(flan_t5, hf_model, hf_processor)
     else:
         print("\n⏭️  Skipping generation validation (--skip_generate=True)")
 
@@ -535,6 +738,7 @@ def main(_):
         ("Projection", proj_ok),
         ("T5 Encoder", enc_ok),
         ("T5 Decoder", dec_ok),
+        ("T5 LM Logits", lm_ok),
     ]:
         status = "✅ PASS" if ok else "⚠️  FAIL"
         print(f"   {status}  {name}")
