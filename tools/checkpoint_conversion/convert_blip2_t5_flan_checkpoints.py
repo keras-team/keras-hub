@@ -463,9 +463,9 @@ def validate_generate(keras_flan_t5, hf_model, hf_processor) -> None:
             do_sample=False,
             num_beams=1,
         )
-    hf_text = hf_processor.batch_decode(
-        hf_generated, skip_special_tokens=True
-    )[0]
+    hf_text = hf_processor.batch_decode(hf_generated, skip_special_tokens=True)[
+        0
+    ]
 
     # ── Manual Keras greedy decode ────────────────────────────────────────
     text_ids_np = hf_inputs["input_ids"].numpy()
