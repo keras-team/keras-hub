@@ -181,18 +181,6 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/sentence-transformers/keras/paraphrase_minilm_l12_v2_en/1",
     },
-    "paraphrase_multilingual_minilm_l12_v2": {
-        "metadata": {
-            "description": (
-                "12-layer multilingual MiniLM model for paraphrase "
-                "detection. Supports 50+ languages with 384-dimensional "
-                "sentence embeddings. Vocab size: 250,037."
-            ),
-            "params": 117654528,
-            "path": "bert",
-        },
-        "kaggle_handle": "kaggle://keras/sentence-transformers/keras/paraphrase_multilingual_minilm_l12_v2/1",
-    },
     # "multi-qa-*" family: optimized for question answering / semantic search.
     "multi_qa_minilm_l6_cos_v1_en": {
         "metadata": {
@@ -227,17 +215,6 @@ backbone_presets = {
             "path": "bert",
         },
         "kaggle_handle": "kaggle://keras/sentence-transformers/keras/msmarco_minilm_l6_cos_v5_en/1",
-    },
-    "msmarco_minilm_l12_v3_en": {
-        "metadata": {
-            "description": (
-                "12-layer MiniLM model for information retrieval. "
-                "Trained on MS MARCO passage ranking."
-            ),
-            "params": 33360000,
-            "path": "bert",
-        },
-        "kaggle_handle": "kaggle://keras/sentence-transformers/keras/msmarco_minilm_l12_v3_en/1",
     },
     "msmarco_minilm_l12_cos_v5_en": {
         "metadata": {

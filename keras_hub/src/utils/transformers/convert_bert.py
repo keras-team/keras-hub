@@ -2,6 +2,7 @@ import numpy as np
 
 from keras_hub.src.models.bert.bert_backbone import BertBackbone
 from keras_hub.src.utils.preset_utils import HF_TOKENIZER_CONFIG_FILE
+from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import load_json
 
@@ -158,3 +159,56 @@ def convert_tokenizer(cls, preset, **kwargs):
         lowercase=transformers_config["do_lower_case"],
         **kwargs,
     )
+
+
+def load_task_config(preset, transformers_config):
+    """Detect sentence-transformer pipeline settings.
+
+    Reads two sentence-transformer config files when available:
+
+    - ``modules.json``: determines whether L2 normalization is applied.
+      Models like all-MiniLM-* include a Normalize module, while
+      paraphrase-* models do not.
+    - ``1_Pooling/config.json``: determines the pooling strategy
+      (mean, cls, or max).
+
+    Returns kwargs suitable for ``BertTextEmbedder``.
+    """
+    kwargs = {}
+
+    # Detect normalization from modules.json.
+    if check_file_exists(preset, "modules.json"):
+        modules = load_json(preset, "modules.json")
+        kwargs["normalize"] = any(
+            "Normalize" in m.get("type", "") for m in modules
+        )
+
+    # Detect pooling mode from 1_Pooling/config.json.
+    pooling_config_file = "1_Pooling/config.json"
+    if check_file_exists(preset, pooling_config_file):
+        pooling_config = load_json(preset, pooling_config_file)
+        if pooling_config.get("pooling_mode_cls_token", False):
+            kwargs["pooling_mode"] = "cls"
+        elif pooling_config.get("pooling_mode_max_tokens", False):
+            kwargs["pooling_mode"] = "max"
+        else:
+            kwargs["pooling_mode"] = "mean"
+
+    return kwargs
+
+
+def load_preprocessor_config(preset, transformers_config):
+    """Read sentence-transformer sequence length from sentence_bert_config.json.
+
+    Sentence-transformer models define their actual max sequence length in
+    ``sentence_bert_config.json`` as ``max_seq_length``, which is often
+    shorter than ``max_position_embeddings`` in ``config.json``
+    (e.g., 256 vs 512 for all-MiniLM-L6-v2).
+    """
+    st_config_file = "sentence_bert_config.json"
+    if check_file_exists(preset, st_config_file):
+        st_config = load_json(preset, st_config_file)
+        max_seq_length = st_config.get("max_seq_length")
+        if max_seq_length is not None:
+            return {"sequence_length": max_seq_length}
+    return {}

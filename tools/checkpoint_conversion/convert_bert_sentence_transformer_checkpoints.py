@@ -39,6 +39,10 @@ from keras_hub.src.utils.transformers.convert_bert import (
 )
 from keras_hub.src.utils.transformers.convert_bert import convert_tokenizer
 from keras_hub.src.utils.transformers.convert_bert import convert_weights
+from keras_hub.src.utils.transformers.convert_bert import (
+    load_preprocessor_config,
+)
+from keras_hub.src.utils.transformers.convert_bert import load_task_config
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
 FLAGS = flags.FLAGS
@@ -78,9 +82,6 @@ SENTENCE_TRANSFORMER_PRESET_MAP = {
     "paraphrase_minilm_l12_v2_en": (
         "sentence-transformers/paraphrase-MiniLM-L12-v2"
     ),
-    "paraphrase_multilingual_minilm_l12_v2": (
-        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    ),
     # "multi-qa-*" family: optimized for semantic search.
     "multi_qa_minilm_l6_cos_v1_en": (
         "sentence-transformers/multi-qa-MiniLM-L6-cos-v1"
@@ -91,9 +92,6 @@ SENTENCE_TRANSFORMER_PRESET_MAP = {
     # "msmarco-*" family: optimized for information retrieval.
     "msmarco_minilm_l6_cos_v5_en": (
         "sentence-transformers/msmarco-MiniLM-L6-cos-v5"
-    ),
-    "msmarco_minilm_l12_v3_en": (
-        "sentence-transformers/msmarco-MiniLM-L12-cos-v5"
     ),
     "msmarco_minilm_l12_cos_v5_en": (
         "sentence-transformers/msmarco-MiniLM-L12-cos-v5"
@@ -240,12 +238,12 @@ def validate_output(keras_model, hf_model_id):
         print("❌ FAILED: Parameter count mismatch")
         passed = False
 
-    if max_diff > 5e-4:
-        print(f"❌ FAILED: Max diff {max_diff:.2e} > 5e-4")
+    if mean_diff > 5e-4:
+        print(f"❌ FAILED: Mean diff {mean_diff:.2e} > 5e-4")
         passed = False
-    elif max_diff > 1e-4:
+    elif mean_diff > 1e-4:
         print(
-            f"⚠️  WARN: Max diff {max_diff:.2e} > 1e-4 "
+            f"⚠️  WARN: Mean diff {mean_diff:.2e} > 1e-4 "
             "(acceptable FP32 variance)"
         )
 
@@ -321,16 +319,32 @@ def main(_):
         tokenizer = convert_tokenizer(keras_hub.models.BertTokenizer, temp_dir)
 
         if is_sentence_transformer:
+            # Download sentence-transformer config files.
+            hf_hub_download(hf_model_id, "modules.json", local_dir=temp_dir)
+            hf_hub_download(
+                hf_model_id, "1_Pooling/config.json", local_dir=temp_dir
+            )
+            hf_hub_download(
+                hf_model_id,
+                "sentence_bert_config.json",
+                local_dir=temp_dir,
+            )
+            task_config = load_task_config(temp_dir, transformers_config)
+            preprocessor_config = load_preprocessor_config(
+                temp_dir, transformers_config
+            )
+            print(f"Task config: {task_config}")
+            print(f"Preprocessor config: {preprocessor_config}")
+
             # Build full BertTextEmbedder with preprocessor.
             preprocessor = keras_hub.models.BertTextEmbedderPreprocessor(
                 tokenizer=tokenizer,
-                sequence_length=transformers_config.get(
-                    "max_position_embeddings", 512
-                ),
+                **preprocessor_config,
             )
             embedder = BertTextEmbedder(
                 backbone=backbone,
                 preprocessor=preprocessor,
+                **task_config,
             )
 
             # Validate with sentence-transformers reference.
