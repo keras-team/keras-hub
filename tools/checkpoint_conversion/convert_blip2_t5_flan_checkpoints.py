@@ -239,6 +239,9 @@ def transfer_t5_weights(keras_flan_t5, hf_t5_model) -> None:
     t5.decoder_layer_norm.weight.assign(
         to_np(pt_state["decoder.final_layer_norm.weight"])
     )
+
+    # LM head (separate from shared embedding when tie_word_embeddings=False)
+    keras_flan_t5.lm_head.kernel.assign(to_np(pt_state["lm_head.weight"]).T)
     print("✓ T5 weights transferred")
 
 
@@ -361,22 +364,22 @@ def validate_t5_lm(
     print_header("T5 LM LOGITS VALIDATION")
 
     # ── Parameter count ───────────────────────────────────────────────────────
-    # Keras: BLIP2FlanT5 holds T5 + language_projection (token_embedding is
-    #        shared so counted once).
-    # HF: language_model (T5ForConditionalGeneration) + language_projection,
-    #     minus the three tied/duplicated embedding tables that HF counts twice:
-    #     lm_head, encoder.embed_tokens, decoder.embed_tokens.
+    # Keras: BLIP2FlanT5 holds T5 (shared embedding + enc/dec layers) +
+    #        language_projection + lm_head.
+    # HF: language_model parameters() counts shared.weight once (enc/dec
+    #     embed_tokens are tied to it) plus lm_head separately.
+    #     language_projection is counted via hf_model.language_projection.
     keras_params = keras_flan_t5.count_params()
     hf_t5_params = sum(p.numel() for p in hf_model.language_model.parameters())
     hf_proj_params = sum(
         p.numel() for p in hf_model.language_projection.parameters()
     )
-    embed_params = hf_model.language_model.shared.weight.numel()
-    # PyTorch parameters() deduplicates by tensor identity. In Blip2 T5,
-    # lm_head.weight IS a separate nn.Parameter (not the same object as
-    # shared.weight even though it's tied), so it gets counted twice.
-    # Subtract one copy to match Keras which counts the embedding once.
-    hf_params = hf_t5_params + hf_proj_params - embed_params
+    # Flan-T5 uses tie_word_embeddings=False: lm_head.weight is a separate
+    # nn.Parameter from shared.weight. PyTorch parameters() deduplicates
+    # encoder/decoder.embed_tokens (tied to shared) but counts lm_head
+    # separately. Keras also has both (token_embedding + lm_head), so counts
+    # match directly — no subtraction needed.
+    hf_params = hf_t5_params + hf_proj_params
     print(f"   -> Keras params : {keras_params:,}")
     print(f"   -> HF params    : {hf_params:,}")
     if keras_params == hf_params:
@@ -461,7 +464,9 @@ def validate_t5_lm(
         "Decoder hidden states (with visual prefix)", keras_dec_raw, hf_dec_raw
     )
 
-    # ── Full Keras forward (via BLIP2FlanT5.call) ────────────────────────────
+    # call() returns raw decoder hidden states (no scale); lm_head projects
+    # them to logits using the separate lm_head weight
+    # (tie_word_embeddings=False).
     keras_hidden = keras_flan_t5(
         {
             "qformer_features": qformer_out_np,
@@ -473,7 +478,7 @@ def validate_t5_lm(
         training=False,
     )
     keras_logits = to_np(
-        keras_flan_t5.token_embedding(keras_hidden, reverse=True)
+        keras_flan_t5.lm_head(keras_hidden)
     )  # (1, 1, vocab_size)
 
     hf_pred = int(np.argmax(hf_logits[0, 0]))
@@ -586,10 +591,7 @@ def validate_generate(keras_flan_t5, hf_model, hf_processor) -> None:
             if isinstance(out, tuple):
                 x, d_pos_bias = out
         x = t5.decoder_layer_norm(x)
-        scale = keras_flan_t5.hidden_dim**-0.5
-        logits = to_np(
-            keras_flan_t5.token_embedding(x * scale, reverse=True)
-        )  # (1, dec_len, vocab)
+        logits = to_np(keras_flan_t5.lm_head(x))  # (1, dec_len, vocab)
         next_token = int(np.argmax(logits[0, -1]))
         if next_token == eos_token_id:
             break
@@ -710,6 +712,8 @@ def main(_):
         ),
     }
     _ = flan_t5(dummy_t5_inputs, training=False)
+    # lm_head is not called inside BLIP2FlanT5.call(); build it explicitly.
+    flan_t5.lm_head.build((1, 1, hf_t5_config.d_model))
 
     transfer_t5_weights(flan_t5, hf_model.language_model)
     transfer_projection_weights(

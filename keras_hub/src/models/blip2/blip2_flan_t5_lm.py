@@ -44,6 +44,10 @@ class BLIP2FlanT5(keras.layers.Layer):
         language_projection: ``keras.layers.Layer`` or None.  Projects
             Q-Former features from ``qformer_hidden_dim`` →
             ``hidden_dim``.  A ``Dense`` layer is created when ``None``.
+        lm_head: ``keras.layers.Layer`` or None.  Projects decoder hidden
+            states from ``hidden_dim`` → ``vocabulary_size`` to produce
+            logits.  Required when ``tie_word_embeddings=False`` (e.g.
+            Flan-T5).  A ``Dense`` layer is created when ``None``.
         dtype: dtype for model weights and compute.
     """
 
@@ -60,6 +64,7 @@ class BLIP2FlanT5(keras.layers.Layer):
         dropout=0.1,
         layer_norm_epsilon=1e-6,
         language_projection=None,
+        lm_head=None,
         dtype=None,
         **kwargs,
     ):
@@ -88,6 +93,15 @@ class BLIP2FlanT5(keras.layers.Layer):
                 name="language_projection",
             )
         self.language_projection = language_projection
+
+        if lm_head is None:
+            lm_head = keras.layers.Dense(
+                vocabulary_size,
+                use_bias=False,
+                dtype=dtype,
+                name="lm_head",
+            )
+        self.lm_head = lm_head
 
         # === Config ===
         self.vocabulary_size = vocabulary_size
@@ -156,11 +170,6 @@ class BLIP2FlanT5(keras.layers.Layer):
                 x, position_bias = out
         x = self.t5.decoder_layer_norm(x)
         x = self.t5.decoder_dropout(x, training=training)
-        # HF T5ForConditionalGeneration scales decoder output by d_model**-0.5
-        # before unembedding when tie_word_embeddings=True (which is always the
-        # case for Flan-T5). Apply here so token_embedding(x, reverse=True)
-        # gives correct logits without callers needing to know this detail.
-        x = x * (self.hidden_dim**-0.5)
         return x
 
     def get_config(self):
@@ -180,14 +189,15 @@ class BLIP2FlanT5(keras.layers.Layer):
                 "language_projection": keras.layers.serialize(
                     self.language_projection
                 ),
+                "lm_head": keras.layers.serialize(self.lm_head),
             }
         )
         return config
 
     @classmethod
     def from_config(cls, config):
-        if config.get("language_projection") is not None:
-            config["language_projection"] = keras.layers.deserialize(
-                config["language_projection"]
-            )
+        config = dict(config)
+        for key in ("language_projection", "lm_head"):
+            if config.get(key) is not None:
+                config[key] = keras.layers.deserialize(config[key])
         return cls(**config)
