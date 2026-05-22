@@ -83,6 +83,9 @@ from keras_hub.src.models.blip2.blip2_causal_lm_preprocessor import (
 from keras_hub.src.models.blip2.blip2_custom_opt import (
     BLIP2CustomOPT as BLIP2CustomOPT,
 )
+from keras_hub.src.models.blip2.blip2_flan_t5_lm import (
+    BLIP2FlanT5 as BLIP2FlanT5,
+)
 from keras_hub.src.models.blip2.blip2_flan_t5_tokenizer import (
     BLIP2FlanT5Tokenizer as BLIP2FlanT5Tokenizer,
 )

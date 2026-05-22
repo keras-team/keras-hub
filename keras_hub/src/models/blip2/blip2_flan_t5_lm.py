@@ -112,14 +112,12 @@ class BLIP2FlanT5(keras.layers.Layer):
         dec_mask = inputs.get("decoder_padding_mask", enc_mask)
         qf = inputs.get("qformer_features", None)
 
-        # ── Encoder ──────────────────────────────────────────────────────────
+        # Encoder
         enc_emb = self.t5.token_embedding(enc_ids)
         if qf is not None:
             proj = self.language_projection(qf)
             enc_emb = ops.concatenate([proj, enc_emb], axis=1)
-            vis_mask = ops.cast(
-                ops.ones_like(qf[..., 0]), dtype=enc_mask.dtype
-            )
+            vis_mask = ops.cast(ops.ones_like(qf[..., 0]), dtype=enc_mask.dtype)
             enc_mask = ops.concatenate([vis_mask, enc_mask], axis=1)
 
         x = self.t5.encoder_embedding_dropout(enc_emb, training=training)
@@ -139,7 +137,7 @@ class BLIP2FlanT5(keras.layers.Layer):
         x = self.t5.encoder_dropout(x, training=training)
         encoder_out = x
 
-        # ── Decoder ──────────────────────────────────────────────────────────
+        # Decoder
         dec_emb = self.t5.token_embedding(dec_ids)
         x = self.t5.decoder_embedding_dropout(dec_emb, training=training)
         dec_attn_mask = dec_mask[:, None, :]
