@@ -84,12 +84,26 @@ class TextEmbedderPreprocessor(Preprocessor):
         x = x if isinstance(x, tuple) else (x,)
         x = tuple(self.tokenizer(segment) for segment in x)
         token_ids, segment_ids = self.packer(x)
-        x = {
+        x = self._format_output(token_ids, segment_ids)
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def _format_output(self, token_ids, segment_ids):
+        """Format packer output into a model-ready dictionary.
+
+        Subclasses should override this to add model-specific keys
+        (e.g., `padding_mask`, `segment_ids`).
+
+        Args:
+            token_ids: Packed token IDs tensor.
+            segment_ids: Segment IDs tensor from the packer.
+
+        Returns:
+            A dictionary of model inputs.
+        """
+        return {
             "token_ids": token_ids,
-            "padding_mask": token_ids != self.tokenizer.pad_token_id,
             "segment_ids": segment_ids,
         }
-        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def get_config(self):
         config = super().get_config()

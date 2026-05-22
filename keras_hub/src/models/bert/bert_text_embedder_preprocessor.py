@@ -80,3 +80,11 @@ class BertTextEmbedderPreprocessor(TextEmbedderPreprocessor):
 
     backbone_cls = BertBackbone
     tokenizer_cls = BertTokenizer
+
+    def _format_output(self, token_ids, segment_ids):
+        """Add BERT-specific padding mask to preprocessor output."""
+        return {
+            "token_ids": token_ids,
+            "padding_mask": token_ids != self.tokenizer.pad_token_id,
+            "segment_ids": segment_ids,
+        }

@@ -21,18 +21,18 @@ class TestTextEmbedderPreprocessor(TestCase):
     @pytest.mark.large
     def test_from_preset(self):
         self.assertIsInstance(
-            TextEmbedderPreprocessor.from_preset("bert_tiny_en_uncased"),
+            TextEmbedderPreprocessor.from_preset("all_minilm_l6_v2_en"),
             BertTextEmbedderPreprocessor,
         )
         self.assertIsInstance(
-            BertTextEmbedderPreprocessor.from_preset("bert_tiny_en_uncased"),
+            BertTextEmbedderPreprocessor.from_preset("all_minilm_l6_v2_en"),
             BertTextEmbedderPreprocessor,
         )
 
     @pytest.mark.large
     def test_from_preset_with_sequence_length(self):
         preprocessor = TextEmbedderPreprocessor.from_preset(
-            "bert_tiny_en_uncased", sequence_length=16
+            "all_minilm_l6_v2_en", sequence_length=16
         )
         self.assertEqual(preprocessor.sequence_length, 16)
 

@@ -110,7 +110,7 @@ def validate_output(keras_model, hf_model_id):
     1. Parameter count verification.
     2. Embedding output comparison (max absolute difference).
     3. Cosine similarity ranking consistency.
-    4. Semantic search parity (encode_query / encode_documents / similarity).
+    4. Semantic search parity (encode_text / encode_documents / similarity).
 
     Args:
         keras_model: The converted KerasHub BertTextEmbedder.
@@ -199,7 +199,7 @@ def validate_output(keras_model, hf_model_id):
     # =========================================
     # SEMANTIC SEARCH VERIFICATION
     # =========================================
-    print("\n--- Semantic Search (encode_query / encode_documents) ---")
+    print("\n--- Semantic Search (encode_text / encode_documents) ---")
     query = "Which planet is known as the Red Planet?"
     documents = [
         "Venus is often called Earth's twin.",
@@ -210,7 +210,7 @@ def validate_output(keras_model, hf_model_id):
     print(f"Documents: {documents}")
 
     # KerasHub: use convenience methods.
-    keras_q = keras_model.encode_query(query)
+    keras_q = keras_model.encode_text(query)
     keras_d = keras_model.encode_documents(documents)
     keras_search_sims = keras_model.similarity(keras_q, keras_d)
     keras_best = int(np.argmax(keras_search_sims))

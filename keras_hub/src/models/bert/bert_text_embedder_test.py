@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from keras import ops
 
 from keras_hub.src.models.bert.bert_backbone import BertBackbone
@@ -12,57 +13,77 @@ from keras_hub.src.tests.test_case import TestCase
 
 class BertTextEmbedderTest(TestCase):
     def setUp(self):
-        # Set up a minimal BERT backbone and tokenizer for testing.
-        self.vocab = [
-            "[UNK]",
-            "[CLS]",
-            "[SEP]",
-            "[PAD]",
-            "[MASK]",
-            "the",
-            "quick",
-            "brown",
-            "fox",
-            "jumped",
-            ".",
-            "call",
-            "me",
-            "is",
-            "##hmael",
-        ]
+        # Setup model.
+        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab += ["the", "quick", "brown", "fox", "."]
         self.preprocessor = BertTextEmbedderPreprocessor(
-            tokenizer=BertTokenizer(vocabulary=self.vocab),
-            sequence_length=12,
+            BertTokenizer(vocabulary=self.vocab),
+            sequence_length=5,
         )
         self.backbone = BertBackbone(
-            vocabulary_size=len(self.vocab),
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
-            hidden_dim=8,
-            intermediate_dim=16,
-            max_sequence_length=12,
+            hidden_dim=2,
+            intermediate_dim=4,
+            max_sequence_length=self.preprocessor.sequence_length,
         )
         self.init_kwargs = {
-            "backbone": self.backbone,
             "preprocessor": self.preprocessor,
+            "backbone": self.backbone,
         }
-        self.input_data = ["The quick brown fox jumped."]
+        self.train_data = (
+            ["the quick brown fox.", "the slow brown fox."],  # Features.
+            [1, 0],  # Labels.
+        )
+        self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_embedder_basics(self):
         self.run_task_test(
             cls=BertTextEmbedder,
             init_kwargs=self.init_kwargs,
-            train_data=(self.input_data, [1]),
-            expected_output_shape=(1, 8),
+            train_data=self.train_data,
+            expected_output_shape=(2, 2),
         )
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=BertTextEmbedder,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=BertTextEmbedder,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    @pytest.mark.extra_large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=BertTextEmbedder,
+            preset="all_minilm_l6_v2_en",
+            input_data=self.input_data,
+            expected_output_shape=(2, 384),
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in BertTextEmbedder.presets:
+            self.run_preset_test(
+                cls=BertTextEmbedder,
+                preset=preset,
+                input_data=self.input_data,
+            )
 
     def test_output_is_normalized(self):
         """Test that output embeddings have unit L2 norm."""
         embedder = BertTextEmbedder(**self.init_kwargs)
-        preprocessed = self.preprocessor(self.input_data)
-        output = embedder(preprocessed)
+        output = embedder(self.input_data)
         norms = ops.sqrt(ops.sum(ops.square(output), axis=-1))
-        # Each vector should have norm ≈ 1.0
         self.assertAllClose(norms, np.ones(norms.shape), atol=1e-5)
 
     def test_output_not_normalized(self):
@@ -72,11 +93,8 @@ class BertTextEmbedderTest(TestCase):
             preprocessor=self.preprocessor,
             normalize=False,
         )
-        preprocessed = self.preprocessor(self.input_data)
-        output = embedder(preprocessed)
-        # With normalize=False, norms should generally NOT be 1.0
-        # (unless the model happens to produce unit vectors).
-        self.assertEqual(output.shape, (1, 8))
+        output = embedder(self.input_data)
+        self.assertEqual(output.shape, (2, 2))
 
     def test_cls_pooling(self):
         """Test CLS pooling mode."""
@@ -85,10 +103,8 @@ class BertTextEmbedderTest(TestCase):
             preprocessor=self.preprocessor,
             pooling_mode="cls",
         )
-        preprocessed = self.preprocessor(self.input_data)
-        output = embedder(preprocessed)
-        self.assertEqual(output.shape, (1, 8))
-        # Output should be normalized.
+        output = embedder(self.input_data)
+        self.assertEqual(output.shape, (2, 2))
         norms = ops.sqrt(ops.sum(ops.square(output), axis=-1))
         self.assertAllClose(norms, np.ones(norms.shape), atol=1e-5)
 
@@ -99,9 +115,8 @@ class BertTextEmbedderTest(TestCase):
             preprocessor=self.preprocessor,
             pooling_mode="max",
         )
-        preprocessed = self.preprocessor(self.input_data)
-        output = embedder(preprocessed)
-        self.assertEqual(output.shape, (1, 8))
+        output = embedder(self.input_data)
+        self.assertEqual(output.shape, (2, 2))
 
     def test_invalid_pooling_mode(self):
         """Test that invalid pooling mode raises ValueError."""
@@ -117,20 +132,17 @@ class BertTextEmbedderTest(TestCase):
         embedder = BertTextEmbedder(
             backbone=self.backbone, normalize=False, pooling_mode="mean"
         )
-        # Create two inputs with different padding.
         input_1 = {
-            "token_ids": np.array([[1, 5, 6, 2, 0, 0]], dtype="int32"),
-            "segment_ids": np.array([[0, 0, 0, 0, 0, 0]], dtype="int32"),
-            "padding_mask": np.array([[1, 1, 1, 1, 0, 0]], dtype="int32"),
+            "token_ids": np.array([[1, 5, 6, 2, 0]], dtype="int32"),
+            "segment_ids": np.array([[0, 0, 0, 0, 0]], dtype="int32"),
+            "padding_mask": np.array([[1, 1, 1, 1, 0]], dtype="int32"),
         }
         input_2 = {
-            "token_ids": np.array([[1, 5, 6, 2, 0, 0]], dtype="int32"),
-            "segment_ids": np.array([[0, 0, 0, 0, 0, 0]], dtype="int32"),
-            "padding_mask": np.array([[1, 1, 1, 1, 1, 1]], dtype="int32"),
+            "token_ids": np.array([[1, 5, 6, 2, 0]], dtype="int32"),
+            "segment_ids": np.array([[0, 0, 0, 0, 0]], dtype="int32"),
+            "padding_mask": np.array([[1, 1, 1, 1, 1]], dtype="int32"),
         }
         output_1 = embedder(input_1)
         output_2 = embedder(input_2)
-        # Different masks should produce different embeddings because padding
-        # tokens have non-zero embeddings that get excluded vs included.
-        self.assertEqual(output_1.shape, (1, 8))
-        self.assertEqual(output_2.shape, (1, 8))
+        self.assertEqual(output_1.shape, (1, 2))
+        self.assertEqual(output_2.shape, (1, 2))
