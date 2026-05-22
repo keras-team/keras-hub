@@ -44,6 +44,7 @@ class BertTextEmbedderTest(TestCase):
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 2),
+            compile_kwargs={"loss": "mean_squared_error"},
         )
 
     @pytest.mark.large
