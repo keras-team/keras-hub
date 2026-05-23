@@ -66,7 +66,9 @@ class BLIP2CausalLM(CausalLM):
         if is_encoder_decoder:
             text_hidden_states = hidden_states
         else:
-            text_hidden_states = hidden_states[:, backbone.num_query_tokens :, :]
+            text_hidden_states = hidden_states[
+                :, backbone.num_query_tokens :, :
+            ]
 
         if hasattr(lm, "lm_head") and lm.lm_head is not None:
             # Use the dedicated LM head (e.g., Flan-T5).
