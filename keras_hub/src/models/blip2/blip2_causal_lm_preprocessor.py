@@ -30,7 +30,7 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
     in a separate process).
 
     Args:
-        tokenizer: A `keras_hub.models.BLIP2Tokenizer` or
+        tokenizer: A `keras_hub.models.BLIP2OPTTokenizer` or
             `keras_hub.models.BLIP2FlanT5Tokenizer` instance. The actual
             tokenizer is resolved from the preset config when using
             `from_preset()`.
