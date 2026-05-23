@@ -7,11 +7,11 @@ from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 @keras_hub_export(
     [
-        "keras_hub.tokenizers.BLIP2Tokenizer",
-        "keras_hub.models.BLIP2Tokenizer",
+        "keras_hub.tokenizers.BLIP2OPTTokenizer",
+        "keras_hub.models.BLIP2OPTTokenizer",
     ]
 )
-class BLIP2Tokenizer(BytePairTokenizer):
+class BLIP2OPTTokenizer(BytePairTokenizer):
     """BLIP-2 tokenizer using Byte-Pair Encoding.
 
     This tokenizer is based on `keras_hub.tokenizers.BytePairTokenizer` and
@@ -40,7 +40,7 @@ class BLIP2Tokenizer(BytePairTokenizer):
     Example:
     ```python
     # Unbatched input.
-    tokenizer = keras_hub.models.BLIP2Tokenizer.from_preset("blip2_opt_2_7b")
+    tokenizer = keras_hub.models.BLIP2OPTTokenizer.from_preset("blip2_opt_2_7b")
     tokenizer("Question: What is this? Answer:")
 
     # Batched input.

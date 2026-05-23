@@ -7,7 +7,7 @@ from keras_hub.src.models.blip2.blip2_causal_lm_preprocessor import (
     BLIP2CausalLMPreprocessor,
 )
 from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter
-from keras_hub.src.models.blip2.blip2_opt_tokenizer import BLIP2Tokenizer
+from keras_hub.src.models.blip2.blip2_opt_tokenizer import BLIP2OPTTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -31,7 +31,7 @@ class BLIP2CausalLMPreprocessorTest(TestCase):
             "Ġt": 14,
         }
         merges = ["h e", "Ġ t"]
-        self.tokenizer = BLIP2Tokenizer(vocabulary=vocab, merges=merges)
+        self.tokenizer = BLIP2OPTTokenizer(vocabulary=vocab, merges=merges)
         self.image_converter = BLIP2ImageConverter(image_size=(4, 4))
 
         self.init_text_kwargs = {

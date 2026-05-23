@@ -17,7 +17,7 @@ from keras_hub.src.models.blip2.blip2_flan_t5_tokenizer import (
     BLIP2FlanT5Tokenizer as BLIP2FlanT5Tokenizer,
 )
 from keras_hub.src.models.blip2.blip2_opt_tokenizer import (
-    BLIP2Tokenizer as BLIP2Tokenizer,
+    BLIP2OPTTokenizer as BLIP2OPTTokenizer,
 )
 from keras_hub.src.models.bloom.bloom_tokenizer import (
     BloomTokenizer as BloomTokenizer,
