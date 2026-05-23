@@ -250,20 +250,23 @@ class BLIP2CausalLM(CausalLM):
             lm, "embeddings_layer"
         )
 
+        encoder_hidden_states = None
+        encoder_attention_mask = None
         if use_cache:
             hidden_states, cache = self._build_cache(
                 token_ids, projected_features, padding_mask
             )
         else:
             if is_encoder_decoder:
-                backbone_inputs = dict(inputs)
-                backbone_inputs.setdefault(
-                    "decoder_token_ids", inputs["token_ids"]
+                encoder_hidden_states, encoder_attention_mask = lm.call_encoder(
+                    token_ids, padding_mask, qformer_features
                 )
-                backbone_inputs.setdefault(
-                    "decoder_padding_mask", inputs["padding_mask"]
+                hidden_states = lm.call_decoder(
+                    token_ids,
+                    padding_mask,
+                    encoder_hidden_states,
+                    encoder_attention_mask,
                 )
-                hidden_states = self.backbone(backbone_inputs)
             else:
                 hidden_states = self.backbone(inputs)
             cache = None
@@ -306,15 +309,20 @@ class BLIP2CausalLM(CausalLM):
                 decoder_mask = ops.concatenate(
                     [dec_start_mask, ops.cast(gen_part != 0, "int32")], axis=1
                 )
-                lm_inputs = {
-                    "token_ids": token_ids,
-                    "padding_mask": padding_mask,
-                    "decoder_token_ids": decoder_input,
-                    "decoder_padding_mask": decoder_mask,
-                }
-                if qformer_features is not None:
-                    lm_inputs["qformer_features"] = qformer_features
-                hidden_out = lm(lm_inputs)
+
+                enc_batch = ops.shape(encoder_hidden_states)[0]
+
+                def repeat_for_beams(x):
+                    if ops.shape(x)[0] == batch_size:
+                        return x
+                    return ops.repeat(x, batch_size // enc_batch, axis=0)
+
+                hidden_out = lm.call_decoder(
+                    decoder_input,
+                    decoder_mask,
+                    repeat_for_beams(encoder_hidden_states),
+                    repeat_for_beams(encoder_attention_mask),
+                )
                 all_logits = lm.lm_head(hidden_out)
                 decoder_pos = index - initial_index
                 logits = ops.slice(
