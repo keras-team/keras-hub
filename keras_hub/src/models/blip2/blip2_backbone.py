@@ -120,6 +120,26 @@ class BLIP2Backbone(Backbone):
             "token_ids": token_ids_input,
             "padding_mask": padding_mask_input,
         }
+
+        # Encoder-decoder models (e.g. Flan-T5) require explicit decoder
+        # inputs.  Expose them as backbone inputs and default them to the
+        # encoder inputs so the backbone can be called without decoder ids
+        # (e.g. initial forward pass during generation).
+        is_encoder_decoder = hasattr(
+            self.language_model, "encoder_transformer_layers"
+        )
+        if is_encoder_decoder:
+            decoder_token_ids_input = keras.Input(
+                shape=(None,), dtype="int32", name="decoder_token_ids"
+            )
+            decoder_padding_mask_input = keras.Input(
+                shape=(None,), dtype="int32", name="decoder_padding_mask"
+            )
+            inputs["decoder_token_ids"] = decoder_token_ids_input
+            inputs["decoder_padding_mask"] = decoder_padding_mask_input
+            lm_inputs["decoder_token_ids"] = decoder_token_ids_input
+            lm_inputs["decoder_padding_mask"] = decoder_padding_mask_input
+
         if query_embeddings is not None:
             lm_inputs["qformer_features"] = query_embeddings
 

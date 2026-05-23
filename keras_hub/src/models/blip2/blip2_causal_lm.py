@@ -273,7 +273,19 @@ class BLIP2CausalLM(CausalLM):
             )
         else:
             # No cache support: Run a full forward pass to get initial state.
-            hidden_states = self.backbone(inputs)
+            if is_encoder_decoder:
+                # Functional backbone now requires decoder_token_ids; default
+                # them to the encoder tokens for this initial forward pass.
+                backbone_inputs = dict(inputs)
+                backbone_inputs.setdefault(
+                    "decoder_token_ids", inputs["token_ids"]
+                )
+                backbone_inputs.setdefault(
+                    "decoder_padding_mask", inputs["padding_mask"]
+                )
+                hidden_states = self.backbone(backbone_inputs)
+            else:
+                hidden_states = self.backbone(inputs)
             cache = None
 
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
