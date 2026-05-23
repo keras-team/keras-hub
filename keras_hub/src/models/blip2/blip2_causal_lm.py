@@ -305,12 +305,14 @@ class BLIP2CausalLM(CausalLM):
                     lm_inputs["qformer_features"] = qformer_features
                 hidden_out = lm(lm_inputs)  # (batch, dec_len, hidden_dim)
                 all_logits = lm.lm_head(hidden_out)
-                logits = ops.slice(
-                    all_logits, [0, index - 1, 0], [batch_size, 1, -1]
-                )
-                hidden_states = ops.slice(
-                    hidden_out, [0, index - 1, 0], [batch_size, 1, -1]
-                )
+                # Index into the sequence dim with a scalar tensor — avoids
+                # ops.slice(..., -1) which PyTorch backend does not support.
+                logits = ops.expand_dims(
+                    all_logits[:, index - 1, :], axis=1
+                )  # (batch, 1, vocab_size)
+                hidden_states = ops.expand_dims(
+                    hidden_out[:, index - 1, :], axis=1
+                )  # (batch, 1, hidden_dim)
             else:
                 # Decoder-only fallback (no KV cache): full forward pass.
                 current_inputs = {
