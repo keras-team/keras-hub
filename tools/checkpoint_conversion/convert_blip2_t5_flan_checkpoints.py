@@ -520,10 +520,14 @@ def validate_generate(keras_causal_lm, hf_model, hf_processor) -> None:
     ]
 
     # ── Actual Keras generate() call ──────────────────────────────────────────
+    # HF's max_new_tokens is *additional* tokens beyond the prompt.
+    # Keras max_length is the *total* sequence length (prompt + generated).
+    # Use a generous prompt budget so the buffer is never full at start.
+    keras_max_length = max_new_tokens + 64
     keras_causal_lm.compile(sampler="greedy")
     keras_output = keras_causal_lm.generate(
         {"images": image_np, "text": [_VALIDATION_PROMPT]},
-        max_length=max_new_tokens,
+        max_length=keras_max_length,
         strip_prompt=True,
     )
     keras_text = (
