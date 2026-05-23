@@ -75,29 +75,20 @@ class BLIP2FlanT5Test(TestCase):
         self.model = _build()
         self.data = _make_inputs()
 
-    # ── 1. Output shape ───────────────────────────────────────────────────────
-
     def test_decoder_hidden_state_shape(self):
-        """call() returns (batch, dec_len, hidden_dim) — not logits."""
         out = self.model(self.data)
         self.assertEqual(out.shape, (BATCH, DEC_LEN, _TINY["hidden_dim"]))
 
     def test_lm_head_shape(self):
-        """lm_head projects hidden states to (batch, dec_len, vocab_size)."""
         out = self.model.lm_head(self.model(self.data))
         self.assertEqual(out.shape, (BATCH, DEC_LEN, _TINY["vocabulary_size"]))
 
-    # ── 2. Architecture invariants ────────────────────────────────────────────
-
     def test_lm_head_not_tied_to_token_embedding(self):
-        """Flan-T5 uses tie_word_embeddings=False: zeroing lm_head.kernel
-        must not affect token_embedding and vice-versa."""
         from keras import ops
 
         emb = self.model.t5.token_embedding.embeddings
         kernel = self.model.lm_head.kernel
 
-        # shapes are transposes of each other
         self.assertEqual(
             kernel.shape, (_TINY["hidden_dim"], _TINY["vocabulary_size"])
         )
@@ -110,17 +101,12 @@ class BLIP2FlanT5Test(TestCase):
         self.assertAllClose(emb, original)
 
     def test_language_projection_shape(self):
-        """language_projection must map qformer_hidden_dim → hidden_dim."""
         k = self.model.language_projection.kernel
         self.assertEqual(
             k.shape, (_TINY["qformer_hidden_dim"], _TINY["hidden_dim"])
         )
 
-    # ── 3. Information flow ───────────────────────────────────────────────────
-
     def test_encoder_context_reaches_decoder(self):
-        """Different encoder token_ids must change decoder hidden states
-        (cross-attention must be live)."""
         data_b = {
             **self.data,
             "token_ids": np.full((BATCH, ENC_LEN), 5, dtype="int32"),
@@ -128,8 +114,6 @@ class BLIP2FlanT5Test(TestCase):
         self.assertNotAllClose(self.model(self.data), self.model(data_b))
 
     def test_visual_prefix_changes_decoder_output(self):
-        """Different qformer_features must change decoder output,
-        proving the visual soft-prompt is wired into the encoder."""
         data_b = {
             **self.data,
             "qformer_features": np.zeros(
@@ -140,7 +124,6 @@ class BLIP2FlanT5Test(TestCase):
         self.assertNotAllClose(self.model(self.data), self.model(data_b))
 
     def test_decoder_tokens_affect_output(self):
-        """Different decoder_token_ids must produce different hidden states."""
         data_b = {
             **self.data,
             "decoder_token_ids": np.full((BATCH, DEC_LEN), 7, dtype="int32"),
@@ -148,24 +131,17 @@ class BLIP2FlanT5Test(TestCase):
         self.assertNotAllClose(self.model(self.data), self.model(data_b))
 
     def test_causal_decoder_mask(self):
-        """First decoder position must be identical regardless of what tokens
-        follow it — the causal mask must block future information."""
-        # baseline: all-ones decoder input
         out_base = self.model(self.data)
 
-        # change only positions 1+ of the decoder input
         corrupted = self.data["decoder_token_ids"].copy()
         corrupted[:, 1:] = 99
         data_b = {**self.data, "decoder_token_ids": corrupted}
         out_b = self.model(data_b)
 
-        # position 0 of decoder output must be unchanged
         self.assertAllClose(out_base[:, 0, :], out_b[:, 0, :])
-        # but later positions will differ
         self.assertNotAllClose(out_base[:, 1:, :], out_b[:, 1:, :])
 
     def test_batch_elements_independent(self):
-        """Attention must not leak across batch items."""
         data = _make_inputs(
             batch=2,
             enc_len=ENC_LEN,
@@ -179,19 +155,13 @@ class BLIP2FlanT5Test(TestCase):
         out = self.model(data)
         self.assertNotAllClose(out[0], out[1])
 
-    # ── 4. Serialization ──────────────────────────────────────────────────────
-
     def test_config_round_trip(self):
-        """from_config(get_config()) must reproduce an identical config,
-        including language_projection and lm_head sub-configs."""
         cfg = self.model.get_config()
         self.assertIn("language_projection", cfg)
         self.assertIn("lm_head", cfg)
         self.assertEqual(BLIP2FlanT5.from_config(cfg).get_config(), cfg)
 
     def test_weights_round_trip(self):
-        """save_weights/load_weights must give bit-exact outputs on both
-        the main call and the external lm_head."""
         import os
         import tempfile
 
@@ -207,8 +177,6 @@ class BLIP2FlanT5Test(TestCase):
             clone.lm_head(clone(self.data)),
         )
 
-    # ── 5. Training vs inference behaviour ───────────────────────────────────
-
     def test_inference_is_deterministic(self):
         model = _build(dropout=0.5)
         self.assertAllClose(
@@ -223,17 +191,12 @@ class BLIP2FlanT5Test(TestCase):
             model(self.data, training=True),
         )
 
-    # ── 6. Production config smoke test ───────────────────────────────────────
-
+    @pytest.mark.large
     def test_xl_config_instantiates(self):
-        """Flan-T5-XL config must build without error (no forward pass —
-        just validates parameter wiring before loading weights on Kaggle)."""
         model = BLIP2FlanT5(**_XL)
         self.assertIsNotNone(model)
         self.assertEqual(model.hidden_dim, 2048)
         self.assertEqual(model.num_layers, 24)
-
-    # ── 7. Full save/load ─────────────────────────────────────────────────────
 
     @pytest.mark.large
     def test_saved_model(self):

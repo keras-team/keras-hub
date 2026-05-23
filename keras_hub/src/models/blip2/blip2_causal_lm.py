@@ -271,7 +271,6 @@ class BLIP2CausalLM(CausalLM):
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         index = ops.min(row_lengths)
         initial_index = index
-        max_new_tokens = ops.shape(token_ids)[1] - initial_index
 
         def next(prompt, cache, index):
             batch_size = ops.shape(prompt)[0]
@@ -287,10 +286,21 @@ class BLIP2CausalLM(CausalLM):
                     projected_features=None,
                 )
             elif is_encoder_decoder:
-                dec_start = ops.zeros((batch_size, 1), dtype="int32")
-                gen_part = ops.slice(
-                    prompt, [0, initial_index], [batch_size, max_new_tokens]
+                # ops.slice requires static shapes; use ops.take with dynamic
+                # indices so the output shape is always (batch, seq_len).
+                seq_len = prompt.shape[1]
+                positions = ops.cast(ops.arange(seq_len), "int32")
+                gen_indices = ops.minimum(
+                    positions + initial_index, seq_len - 1
                 )
+                gen_part = ops.take(prompt, gen_indices, axis=1)
+                valid = ops.cast(
+                    positions < ops.cast(seq_len - initial_index, "int32"),
+                    "int32",
+                )
+                gen_part = gen_part * valid[None, :]
+
+                dec_start = ops.zeros((batch_size, 1), dtype="int32")
                 decoder_input = ops.concatenate([dec_start, gen_part], axis=1)
                 dec_start_mask = ops.ones((batch_size, 1), dtype="int32")
                 decoder_mask = ops.concatenate(
@@ -307,9 +317,15 @@ class BLIP2CausalLM(CausalLM):
                 hidden_out = lm(lm_inputs)
                 all_logits = lm.lm_head(hidden_out)
                 decoder_pos = index - initial_index
-                logits = ops.expand_dims(all_logits[:, decoder_pos, :], axis=1)
-                hidden_states = ops.expand_dims(
-                    hidden_out[:, decoder_pos, :], axis=1
+                logits = ops.slice(
+                    all_logits,
+                    [0, decoder_pos, 0],
+                    [prompt.shape[0], 1, all_logits.shape[-1]],
+                )
+                hidden_states = ops.slice(
+                    hidden_out,
+                    [0, decoder_pos, 0],
+                    [prompt.shape[0], 1, hidden_out.shape[-1]],
                 )
             else:
                 current_inputs = {
