@@ -56,11 +56,18 @@ class BLIP2CausalLM(CausalLM):
         # === Functional Model ===
         inputs = backbone.input
         hidden_states = backbone(inputs)
-        # Slice hidden states to text tokens only before projecting to logits.
-        # This saves compute/memory by not projecting the visual prefix.
-        text_hidden_states = hidden_states[:, backbone.num_query_tokens :, :]
-
         lm = backbone.language_model
+
+        # For decoder-only LMs (e.g. OPT) the backbone output contains the
+        # visual prefix tokens prepended to the text tokens; slice them off
+        # before projecting to logits.  For encoder-decoder LMs (e.g. Flan-T5)
+        # the backbone returns decoder hidden states only — no visual prefix.
+        is_encoder_decoder = hasattr(lm, "encoder_transformer_layers")
+        if is_encoder_decoder:
+            text_hidden_states = hidden_states
+        else:
+            text_hidden_states = hidden_states[:, backbone.num_query_tokens :, :]
+
         if hasattr(lm, "lm_head") and lm.lm_head is not None:
             # Use the dedicated LM head (e.g., Flan-T5).
             outputs = lm.lm_head(text_hidden_states)
@@ -238,11 +245,20 @@ class BLIP2CausalLM(CausalLM):
         images = inputs.get("images")
         num_visual = self.backbone.num_query_tokens
         lm = self.backbone.language_model
+        is_encoder_decoder = hasattr(lm, "encoder_transformer_layers")
 
         if images is not None:
             projected_features = self._encode_images(images)
         else:
             projected_features = None
+
+        # For encoder-decoder models, precompute visual features once so the
+        # generation loop does not re-run the vision encoder every step.
+        if is_encoder_decoder and images is not None:
+            vis_features = self.backbone.vision_encoder(images)
+            qformer_features = self.backbone.qformer(vis_features)
+        else:
+            qformer_features = None
 
         # Determine if we can use KV caching.
         use_cache = hasattr(lm, "call_with_cache") and hasattr(
@@ -262,9 +278,9 @@ class BLIP2CausalLM(CausalLM):
         index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
+            batch_size = ops.shape(prompt)[0]
             if use_cache:
                 cache_update_index = index - 1 + num_visual
-                batch_size = ops.shape(prompt)[0]
                 prompt_slice = ops.slice(
                     prompt, [0, index - 1], [batch_size, 1]
                 )
@@ -274,26 +290,37 @@ class BLIP2CausalLM(CausalLM):
                     cache_update_index=cache_update_index,
                     projected_features=None,
                 )
+            elif is_encoder_decoder:
+                # Flan-T5: encoder input is the original fixed text prompt;
+                # decoder receives the growing generated sequence.
+                lm_inputs = {
+                    "token_ids": token_ids,
+                    "padding_mask": padding_mask,
+                    "decoder_token_ids": prompt,
+                    "decoder_padding_mask": ops.cast(prompt != 0, "int32"),
+                }
+                if qformer_features is not None:
+                    lm_inputs["qformer_features"] = qformer_features
+                hidden_out = lm(lm_inputs)  # (batch, dec_len, hidden_dim)
+                all_logits = lm.lm_head(hidden_out)
+                logits = ops.slice(
+                    all_logits, [0, index - 1, 0], [batch_size, 1, -1]
+                )
+                hidden_states = ops.slice(
+                    hidden_out, [0, index - 1, 0], [batch_size, 1, -1]
+                )
             else:
-                # Fallback: Run the full backbone for each step.
-                # This is slower but correct for Flan-T5.
-                # We need to construct the input dict for the backbone.
+                # Decoder-only fallback (no KV cache): full forward pass.
                 current_inputs = {
                     "token_ids": prompt,
                     "padding_mask": ops.cast(prompt != 0, "int32"),
                 }
                 if images is not None:
                     current_inputs["images"] = images
-
-                # Call the functional model (self) to get logits.
-                # We slice to the token we just generated (at index - 1).
                 all_logits = self(current_inputs)
-                batch_size = ops.shape(prompt)[0]
                 logits = ops.slice(
                     all_logits, [0, index - 1, 0], [batch_size, 1, -1]
                 )
-
-                # For hidden_states, we use the backbone directly.
                 all_hidden_states = self.backbone(current_inputs)
                 hidden_states = ops.slice(
                     all_hidden_states,

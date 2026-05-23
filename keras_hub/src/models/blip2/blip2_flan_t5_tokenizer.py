@@ -22,3 +22,7 @@ class BLIP2FlanT5Tokenizer(T5Tokenizer):
     """
 
     backbone_cls = BLIP2Backbone
+
+    def __init__(self, proto, **kwargs):
+        super().__init__(proto=proto, **kwargs)
+        self.padding_side = "right"
