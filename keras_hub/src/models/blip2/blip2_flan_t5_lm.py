@@ -116,8 +116,7 @@ class BLIP2FlanT5(keras.Model):
             "decoder_padding_mask": decoder_padding_mask_input,
         }
 
-        enc_emb = t5.token_embedding(token_ids_input)
-
+        qformer_features_input = None
         if num_query_tokens > 0:
             qformer_features_input = keras.Input(
                 shape=(num_query_tokens, qformer_hidden_dim),
@@ -125,54 +124,24 @@ class BLIP2FlanT5(keras.Model):
             )
             inputs["qformer_features"] = qformer_features_input
 
-            proj = language_projection(qformer_features_input)
-            enc_emb = ops.concatenate([proj, enc_emb], axis=1)
+        encoder_out, encoder_attention_mask = self._run_encoder(
+            t5,
+            language_projection,
+            token_ids_input,
+            padding_mask_input,
+            qformer_features_input,
+        )
+        decoder_out = self._run_decoder(
+            t5,
+            decoder_token_ids_input,
+            decoder_padding_mask_input,
+            encoder_out,
+            encoder_attention_mask,
+        )
 
-            vis_mask = ops.cast(
-                ops.ones_like(qformer_features_input[..., 0]),
-                dtype=padding_mask_input.dtype,
-            )
-            full_enc_mask = ops.concatenate(
-                [vis_mask, padding_mask_input], axis=1
-            )
-        else:
-            full_enc_mask = padding_mask_input
-
-        x = t5.encoder_embedding_dropout(enc_emb)
-        enc_attn_mask = full_enc_mask[:, None, :]
-        position_bias = None
-        for layer in t5.encoder_transformer_layers:
-            out = layer(
-                x,
-                attention_mask=enc_attn_mask,
-                position_bias=position_bias,
-                use_causal_mask=False,
-            )
-            if isinstance(out, tuple):
-                x, position_bias = out
-        x = t5.encoder_layer_norm(x)
-        x = t5.encoder_dropout(x)
-        encoder_out = x
-
-        dec_emb = t5.token_embedding(decoder_token_ids_input)
-        x = t5.decoder_embedding_dropout(dec_emb)
-        dec_attn_mask = decoder_padding_mask_input[:, None, :]
-        position_bias = None
-        for layer in t5.decoder_transformer_layers:
-            out = layer(
-                x,
-                attention_mask=dec_attn_mask,
-                position_bias=position_bias,
-                encoder_hidden_states=encoder_out,
-                encoder_attention_mask=enc_attn_mask,
-                use_causal_mask=True,
-            )
-            if isinstance(out, tuple):
-                x, position_bias = out
-        x = t5.decoder_layer_norm(x)
-        x = t5.decoder_dropout(x)
-
-        super().__init__(inputs=inputs, outputs=x, dtype=dtype, **kwargs)
+        super().__init__(
+            inputs=inputs, outputs=decoder_out, dtype=dtype, **kwargs
+        )
 
         self.t5 = t5
         self.language_projection = language_projection
@@ -188,6 +157,89 @@ class BLIP2FlanT5(keras.Model):
         self.key_value_dim = key_value_dim
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
+
+    @staticmethod
+    def _run_encoder(
+        t5, language_projection, token_ids, padding_mask, qformer_features=None
+    ):
+        enc_emb = t5.token_embedding(token_ids)
+        if qformer_features is not None:
+            proj = language_projection(qformer_features)
+            enc_emb = ops.concatenate([proj, enc_emb], axis=1)
+            vis_mask = ops.cast(
+                ops.ones_like(qformer_features[..., 0]),
+                dtype=padding_mask.dtype,
+            )
+            full_enc_mask = ops.concatenate([vis_mask, padding_mask], axis=1)
+        else:
+            full_enc_mask = padding_mask
+
+        x = t5.encoder_embedding_dropout(enc_emb)
+        enc_attn_mask = full_enc_mask[:, None, :]
+        position_bias = None
+        for layer in t5.encoder_transformer_layers:
+            out = layer(
+                x,
+                attention_mask=enc_attn_mask,
+                position_bias=position_bias,
+                use_causal_mask=False,
+            )
+            if isinstance(out, tuple):
+                x, position_bias = out
+        x = t5.encoder_layer_norm(x)
+        x = t5.encoder_dropout(x)
+        return x, enc_attn_mask
+
+    @staticmethod
+    def _run_decoder(
+        t5,
+        decoder_token_ids,
+        decoder_padding_mask,
+        encoder_hidden_states,
+        encoder_attention_mask,
+    ):
+        dec_emb = t5.token_embedding(decoder_token_ids)
+        x = t5.decoder_embedding_dropout(dec_emb)
+        dec_attn_mask = decoder_padding_mask[:, None, :]
+        position_bias = None
+        for layer in t5.decoder_transformer_layers:
+            out = layer(
+                x,
+                attention_mask=dec_attn_mask,
+                position_bias=position_bias,
+                encoder_hidden_states=encoder_hidden_states,
+                encoder_attention_mask=encoder_attention_mask,
+                use_causal_mask=True,
+            )
+            if isinstance(out, tuple):
+                x, position_bias = out
+        x = t5.decoder_layer_norm(x)
+        x = t5.decoder_dropout(x)
+        return x
+
+    def call_encoder(self, token_ids, padding_mask, qformer_features=None):
+        return self._run_encoder(
+            self.t5,
+            self.language_projection,
+            token_ids,
+            padding_mask,
+            qformer_features,
+        )
+
+    def call_decoder(
+        self,
+        decoder_token_ids,
+        decoder_padding_mask,
+        encoder_hidden_states,
+        encoder_attention_mask,
+    ):
+        return self._run_decoder(
+            self.t5,
+            decoder_token_ids,
+            decoder_padding_mask,
+            encoder_hidden_states,
+            encoder_attention_mask,
+        )
 
     @property
     def token_embedding(self):
