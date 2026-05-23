@@ -28,4 +28,17 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/blip2/keras/blip2_opt_6_7b/1",
     },
+    "blip2_flan_t5_xl": {
+        "metadata": {
+            "description": (
+                "3.88 billion parameter BLIP-2 model with EVA-CLIP vision "
+                "encoder (ViT, 985M), Q-Former (105M), language projection "
+                "(2M), and Flan-T5-XL language model (2.85B). Pretrained for "
+                "image-text matching and visual question answering."
+            ),
+            "params": 3876648448,
+            "path": "blip2",
+        },
+        "kaggle_handle": "kaggle://keras/blip2/keras/blip2_flan_t5_xl/1",
+    },
 }
