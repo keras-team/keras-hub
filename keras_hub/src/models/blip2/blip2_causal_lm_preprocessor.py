@@ -164,9 +164,26 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
 
         images, text = self._parse_inputs(x)
 
-        x_text = super().generate_preprocess(
-            text, sequence_length=sequence_length
-        )
+        from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
+
+        if isinstance(self.tokenizer, T5Tokenizer):
+            # T5 encoder input convention: tokens + EOS (no BOS).
+            # The base generate_preprocess adds BOS and omits EOS, which is
+            # wrong for T5 (start_token == end_token == </s>).
+            if not self.built:
+                self.build(None)
+            sequence_length = sequence_length or self.sequence_length
+            token_ids, padding_mask = self.packer(
+                self.tokenizer(text),
+                sequence_length=sequence_length,
+                add_start_value=False,
+                add_end_value=True,
+            )
+            x_text = {"token_ids": token_ids, "padding_mask": padding_mask}
+        else:
+            x_text = super().generate_preprocess(
+                text, sequence_length=sequence_length
+            )
 
         x_out = {
             "token_ids": x_text["token_ids"],
