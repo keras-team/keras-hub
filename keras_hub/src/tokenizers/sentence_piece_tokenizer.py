@@ -235,7 +235,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
         # Keras cannot serialize a bytestring, so we base64 encode the model
         # byte array as a string for saving.
-        self.proto = proto
+        self.proto = proto_bytes
         self._update_special_token_ids()
 
     def _check_vocabulary(self):
@@ -324,16 +324,47 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         self._maybe_initialized_spm()
 
         def _canonicalize_tokenize_inputs(inputs):
-            if isinstance(inputs, str):
+            if isinstance(inputs, (str, bytes)):
+                if isinstance(inputs, bytes):
+                    inputs = inputs.decode("utf-8")
                 return [inputs], False
             elif isinstance(inputs, (tuple, list)):
-                if not all(isinstance(i, str) for i in inputs):
+                inputs = list(inputs)
+                for i in range(len(inputs)):
+                    if isinstance(inputs[i], bytes):
+                        inputs[i] = inputs[i].decode("utf-8")
+                    elif not isinstance(inputs[i], str):
+                        raise ValueError(
+                            "If a list or tuple is provided as input, all "
+                            f"elements must be strings. Received: {inputs}"
+                        )
+                return inputs, True
+            elif (
+                isinstance(inputs, np.ndarray)
+                or keras.ops.is_tensor(inputs)
+                or (tf is not None and isinstance(inputs, tf.Tensor))
+            ):
+                inputs = keras.ops.convert_to_numpy(inputs)
+                if inputs.ndim == 0:
+                    val = inputs.item()
+                    if isinstance(val, bytes):
+                        val = val.decode("utf-8")
+                    return [val], False
+                elif inputs.ndim == 1:
+                    val_list = inputs.tolist()
+                    for i in range(len(val_list)):
+                        if isinstance(val_list[i], bytes):
+                            val_list[i] = val_list[i].decode("utf-8")
+                        elif not isinstance(val_list[i], str):
+                            raise ValueError(
+                                "If a array is provided as input, all elements "
+                                f"must be strings. Received: {inputs}"
+                            )
+                    return val_list, True
+                else:
                     raise ValueError(
-                        "If a list or tuple is provided as input, all elements "
-                        "must be strings. "
-                        f"Received: {inputs}"
+                        f"Array must be 0 or 1 dimensional, got {inputs.shape}."
                     )
-                return list(inputs), True
             else:
                 raise ValueError(
                     "Input should be a string or a list of strings. "
@@ -381,6 +412,11 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         return outputs
 
     def _canonicalize_detokenize_spm_inputs(self, inputs):
+        if tf is not None and isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            if isinstance(inputs, tf.RaggedTensor):
+                inputs = inputs.to_list()
+            else:
+                inputs = np.array(inputs)
         is_batched = True
         if isinstance(inputs, int):
             inputs = [[inputs]]
