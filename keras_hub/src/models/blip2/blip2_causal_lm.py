@@ -278,6 +278,10 @@ class BLIP2CausalLM(CausalLM):
 
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         index = ops.min(row_lengths)
+        # For encoder-decoder: capture the encoder prompt length and the
+        # number of new tokens we will generate (both are fixed for the loop).
+        initial_index = index
+        max_new_tokens = ops.shape(token_ids)[1] - initial_index
 
         def next(prompt, cache, index):
             batch_size = ops.shape(prompt)[0]
@@ -293,25 +297,39 @@ class BLIP2CausalLM(CausalLM):
                     projected_features=None,
                 )
             elif is_encoder_decoder:
-                # Flan-T5: encoder input is the original fixed text prompt;
-                # decoder receives the growing generated sequence.
+                # Flan-T5: encoder input is the original fixed text prompt.
+                # Decoder input must be [dec_start=0, gen_0, gen_1, ...],
+                # NOT the raw encoder tokens.  We build it from the generated
+                # portion of prompt (positions initial_index..end) and
+                # prepend the T5 decoder-start token (pad id = 0).
+                dec_start = ops.zeros((batch_size, 1), dtype="int32")
+                gen_part = ops.slice(
+                    prompt, [0, initial_index], [batch_size, max_new_tokens]
+                )
+                decoder_input = ops.concatenate([dec_start, gen_part], axis=1)
+                dec_start_mask = ops.ones((batch_size, 1), dtype="int32")
+                decoder_mask = ops.concatenate(
+                    [dec_start_mask, ops.cast(gen_part != 0, "int32")], axis=1
+                )
                 lm_inputs = {
                     "token_ids": token_ids,
                     "padding_mask": padding_mask,
-                    "decoder_token_ids": prompt,
-                    "decoder_padding_mask": ops.cast(prompt != 0, "int32"),
+                    "decoder_token_ids": decoder_input,
+                    "decoder_padding_mask": decoder_mask,
                 }
                 if qformer_features is not None:
                     lm_inputs["qformer_features"] = qformer_features
-                hidden_out = lm(lm_inputs)  # (batch, dec_len, hidden_dim)
+                hidden_out = lm(lm_inputs)  # (batch, 1+max_new_tokens, hidden)
                 all_logits = lm.lm_head(hidden_out)
-                # Index into the sequence dim with a scalar tensor — avoids
-                # ops.slice(..., -1) which PyTorch backend does not support.
+                # decoder position 0 corresponds to the dec_start token and
+                # predicts the first generated token; position k predicts the
+                # (k+1)-th token.  At loop step k, index = initial_index + k.
+                decoder_pos = index - initial_index
                 logits = ops.expand_dims(
-                    all_logits[:, index - 1, :], axis=1
+                    all_logits[:, decoder_pos, :], axis=1
                 )  # (batch, 1, vocab_size)
                 hidden_states = ops.expand_dims(
-                    hidden_out[:, index - 1, :], axis=1
+                    hidden_out[:, decoder_pos, :], axis=1
                 )  # (batch, 1, hidden_dim)
             else:
                 # Decoder-only fallback (no KV cache): full forward pass.
