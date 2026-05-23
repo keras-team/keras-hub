@@ -91,7 +91,7 @@ flags.DEFINE_string(
 )
 flags.DEFINE_string(
     "output_dir",
-    "blip2_flan_t5_xl_converted",
+    "blip2_flan_t5_xl",
     "Output directory for converted weights and tokenizer assets.",
 )
 flags.DEFINE_bool(
@@ -717,7 +717,7 @@ def main(_):
     lm_ok = validate_t5_lm(flan_t5, hf_model, qformer_out_np, hf_processor)
 
     if not FLAGS.skip_generate:
-        validate_generate(flan_t5, hf_model, hf_processor)
+        validate_generate(causal_lm, hf_model, hf_processor)
     else:
         print("\n⏭️  Skipping generation validation (--skip_generate=True)")
 
