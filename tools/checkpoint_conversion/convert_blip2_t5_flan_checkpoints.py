@@ -494,18 +494,13 @@ def validate_t5_lm(
     return report_diff("T5 LM logits", keras_logits, hf_logits)
 
 
-def validate_generate(keras_flan_t5, hf_model, hf_processor) -> None:
-    """Greedy-decode up to 20 tokens and compare HF vs manual Keras output.
-
-    HF generation uses ``hf_model.generate()``.  Keras generation is a
-    manual greedy loop: the encoder runs once (with the visual prefix),
-    then the decoder is called step-by-step, argmax-selecting the next
-    token at each step.
-    """
+def validate_generate(keras_causal_lm, hf_model, hf_processor) -> None:
+    """Greedy-decode tokens and compare HF vs actual Keras generate()."""
     print_header("GENERATION VALIDATION (greedy, 20 tokens)")
 
     max_new_tokens = 20
     image_pil = Image.new("RGB", (224, 224), color=(114, 114, 114))
+    image_np = np.array(image_pil)
 
     hf_inputs = hf_processor(
         images=image_pil,
@@ -524,85 +519,18 @@ def validate_generate(keras_flan_t5, hf_model, hf_processor) -> None:
         0
     ]
 
-    # ── Manual Keras greedy decode ────────────────────────────────────────
-    text_ids_np = hf_inputs["input_ids"].numpy()
-    text_mask_np = np.ones_like(text_ids_np, dtype=np.int32)
-
-    # Dummy image -> vision -> qformer to get visual features for Keras
-    image_np = np.array(image_pil).astype(np.float32) / 255.0
-    image_pt = torch.tensor(image_np[None]).permute(0, 3, 1, 2)
-    with torch.no_grad():
-        vis_np = to_np(
-            hf_model.vision_model(pixel_values=image_pt).last_hidden_state
-        )
-        qt_pt = hf_model.query_tokens.expand(1, -1, -1)
-        qf_np = to_np(
-            hf_model.qformer(
-                query_embeds=qt_pt,
-                encoder_hidden_states=torch.tensor(vis_np),
-            ).last_hidden_state
-        )
-
-    # Build encoder output once (projected qformer + text prompt)
-    t5 = keras_flan_t5.t5
-    proj_enc = to_np(keras_flan_t5.language_projection(qf_np))
-    text_emb = to_np(t5.token_embedding(text_ids_np))
-    enc_emb = np.concatenate([proj_enc, text_emb], axis=1)
-    vis_m = np.ones((1, qf_np.shape[1]), dtype=np.int32)
-    enc_mask = np.concatenate([vis_m, text_mask_np], axis=1)
-    enc_attn = enc_mask[:, None, :]
-
-    x = enc_emb
-    pos_bias = None
-    for layer in t5.encoder_transformer_layers:
-        out = layer(
-            x,
-            attention_mask=enc_attn,
-            position_bias=pos_bias,
-            use_causal_mask=False,
-            training=False,
-        )
-        if isinstance(out, tuple):
-            x, pos_bias = out
-    x = t5.encoder_layer_norm(x)
-    encoder_out = x  # fixed for all decoder steps
-
-    # Greedy decode loop
-    pad_token_id = 0
-    eos_token_id = 1  # </s> in T5 vocabulary
-    dec_ids = np.array([[pad_token_id]], dtype=np.int32)
-    generated = []
-
-    for _ in range(max_new_tokens):
-        dec_mask = np.ones_like(dec_ids, dtype=np.int32)
-        dec_attn = dec_mask[:, None, :]
-        x = t5.token_embedding(dec_ids)
-        d_pos_bias = None
-        for layer in t5.decoder_transformer_layers:
-            out = layer(
-                x,
-                attention_mask=dec_attn,
-                position_bias=d_pos_bias,
-                encoder_hidden_states=encoder_out,
-                encoder_attention_mask=enc_attn,
-                use_causal_mask=True,
-                training=False,
-            )
-            if isinstance(out, tuple):
-                x, d_pos_bias = out
-        x = t5.decoder_layer_norm(x)
-        logits = to_np(keras_flan_t5.lm_head(x))  # (1, dec_len, vocab)
-        next_token = int(np.argmax(logits[0, -1]))
-        if next_token == eos_token_id:
-            break
-        generated.append(next_token)
-        dec_ids = np.concatenate(
-            [dec_ids, np.array([[next_token]], dtype=np.int32)], axis=1
-        )
-
-    keras_text = hf_processor.batch_decode(
-        [generated], skip_special_tokens=True
-    )[0]
+    # ── Actual Keras generate() call ──────────────────────────────────────────
+    keras_causal_lm.compile(sampler="greedy")
+    keras_output = keras_causal_lm.generate(
+        {"images": image_np, "text": [_VALIDATION_PROMPT]},
+        max_length=max_new_tokens,
+        strip_prompt=True,
+    )
+    keras_text = (
+        keras_output[0]
+        if isinstance(keras_output, (list, tuple))
+        else keras_output
+    )
 
     print(f"\n   -> HuggingFace : {hf_text!r}")
     print(f"   -> Keras       : {keras_text!r}")
