@@ -119,6 +119,10 @@ class BLIP2FlanT5(keras.layers.Layer):
     def token_embedding(self):
         return self.t5.token_embedding
 
+    @property
+    def encoder_transformer_layers(self):
+        return self.t5.encoder_transformer_layers
+
     def call(self, inputs, training=False):
         enc_ids = inputs["token_ids"]
         enc_mask = inputs["padding_mask"]
