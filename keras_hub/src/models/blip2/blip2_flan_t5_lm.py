@@ -9,23 +9,22 @@ from keras_hub.src.models.t5.t5_backbone import T5Backbone
 
 @keras_hub_export("keras_hub.models.BLIP2FlanT5")
 @keras.saving.register_keras_serializable(package="keras_hub")
-class BLIP2FlanT5(keras.layers.Layer):
+class BLIP2FlanT5(keras.Model):
     """Flan-T5 language model adapter for BLIP-2.
 
-    Wraps ``T5Backbone`` to accept BLIP-2's input format:
+    Wraps ``T5Backbone`` to accept BLIP-2's input format as a functional
+    ``keras.Model``.  Inputs:
 
     - ``token_ids`` / ``padding_mask`` feed the T5 **encoder**.
-    - ``qformer_features`` (optional) are projected from
-      ``qformer_hidden_dim`` → ``hidden_dim`` and prepended to the
-      encoder token embeddings as a visual soft-prompt.
+    - ``qformer_features`` (required when ``num_query_tokens > 0``) are
+      projected from ``qformer_hidden_dim`` → ``hidden_dim`` and prepended
+      to the encoder token embeddings as a visual soft-prompt.
     - ``decoder_token_ids`` / ``decoder_padding_mask`` feed the T5
-      **decoder** (teacher-forced during training).  Both default to
-      ``token_ids`` / ``padding_mask`` when omitted, which lets
-      ``BLIP2Backbone`` trace its functional graph without extra inputs.
+      **decoder** (teacher-forced during training, decoder-start + generated
+      tokens during inference).
 
-    The layer returns the decoder hidden states as a single tensor,
-    matching the interface expected by ``BLIP2Backbone`` and
-    ``BLIP2CausalLM``.
+    The model returns the decoder hidden states.  The ``lm_head`` is kept
+    as a separate sub-layer so ``BLIP2CausalLM`` can call it externally.
 
     Args:
         vocabulary_size: int. Token vocabulary size.
@@ -34,20 +33,18 @@ class BLIP2FlanT5(keras.layers.Layer):
         hidden_dim: int. Transformer hidden dimension (``d_model``).
         intermediate_dim: int. FFN intermediate dimension (``d_ff``).
         num_query_tokens: int. Number of Q-Former visual query tokens
-            prepended to the T5 encoder.
-        qformer_hidden_dim: int. Q-Former output dimension (before the
-            language projection).
-        key_value_dim: int or None. Per-head key/value dimension
-            (``d_kv``).  Defaults to ``hidden_dim // num_heads``.
+            prepended to the T5 encoder.  Pass ``0`` for text-only mode.
+        qformer_hidden_dim: int. Q-Former output dimension.
+        key_value_dim: int or None. Per-head key/value dimension.
+            Defaults to ``hidden_dim // num_heads``.
         dropout: float. Dropout probability.
         layer_norm_epsilon: float. Epsilon for T5LayerNorm.
         language_projection: ``keras.layers.Layer`` or None.  Projects
-            Q-Former features from ``qformer_hidden_dim`` →
-            ``hidden_dim``.  A ``Dense`` layer is created when ``None``.
+            Q-Former features from ``qformer_hidden_dim`` → ``hidden_dim``.
+            A ``Dense`` layer is created when ``None``.
         lm_head: ``keras.layers.Layer`` or None.  Projects decoder hidden
-            states from ``hidden_dim`` → ``vocabulary_size`` to produce
-            logits.  Required when ``tie_word_embeddings=False`` (e.g.
-            Flan-T5).  A ``Dense`` layer is created when ``None``.
+            states → ``vocabulary_size``.  A ``Dense`` layer is created
+            when ``None``.
         dtype: dtype for model weights and compute.
     """
 
@@ -68,9 +65,8 @@ class BLIP2FlanT5(keras.layers.Layer):
         dtype=None,
         **kwargs,
     ):
-        super().__init__(dtype=dtype, **kwargs)
-
-        self.t5 = T5Backbone(
+        # === Sub-layers ===
+        t5 = T5Backbone(
             vocabulary_size=vocabulary_size,
             num_layers=num_layers,
             num_heads=num_heads,
@@ -92,7 +88,6 @@ class BLIP2FlanT5(keras.layers.Layer):
                 dtype=dtype,
                 name="language_projection",
             )
-        self.language_projection = language_projection
 
         if lm_head is None:
             lm_head = keras.layers.Dense(
@@ -101,6 +96,92 @@ class BLIP2FlanT5(keras.layers.Layer):
                 dtype=dtype,
                 name="lm_head",
             )
+
+        # === Functional graph ===
+        token_ids_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        decoder_token_ids_input = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_token_ids"
+        )
+        decoder_padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_padding_mask"
+        )
+
+        inputs = {
+            "token_ids": token_ids_input,
+            "padding_mask": padding_mask_input,
+            "decoder_token_ids": decoder_token_ids_input,
+            "decoder_padding_mask": decoder_padding_mask_input,
+        }
+
+        # Encoder — optionally prepend projected Q-Former visual features.
+        enc_emb = t5.token_embedding(token_ids_input)
+
+        if num_query_tokens > 0:
+            qformer_features_input = keras.Input(
+                shape=(num_query_tokens, qformer_hidden_dim),
+                name="qformer_features",
+            )
+            inputs["qformer_features"] = qformer_features_input
+
+            proj = language_projection(qformer_features_input)
+            enc_emb = ops.concatenate([proj, enc_emb], axis=1)
+
+            vis_mask = ops.cast(
+                ops.ones_like(qformer_features_input[..., 0]),
+                dtype=padding_mask_input.dtype,
+            )
+            full_enc_mask = ops.concatenate(
+                [vis_mask, padding_mask_input], axis=1
+            )
+        else:
+            full_enc_mask = padding_mask_input
+
+        x = t5.encoder_embedding_dropout(enc_emb)
+        enc_attn_mask = full_enc_mask[:, None, :]
+        position_bias = None
+        for layer in t5.encoder_transformer_layers:
+            out = layer(
+                x,
+                attention_mask=enc_attn_mask,
+                position_bias=position_bias,
+                use_causal_mask=False,
+            )
+            if isinstance(out, tuple):
+                x, position_bias = out
+        x = t5.encoder_layer_norm(x)
+        x = t5.encoder_dropout(x)
+        encoder_out = x
+
+        # Decoder
+        dec_emb = t5.token_embedding(decoder_token_ids_input)
+        x = t5.decoder_embedding_dropout(dec_emb)
+        dec_attn_mask = decoder_padding_mask_input[:, None, :]
+        position_bias = None
+        for layer in t5.decoder_transformer_layers:
+            out = layer(
+                x,
+                attention_mask=dec_attn_mask,
+                position_bias=position_bias,
+                encoder_hidden_states=encoder_out,
+                encoder_attention_mask=enc_attn_mask,
+                use_causal_mask=True,
+            )
+            if isinstance(out, tuple):
+                x, position_bias = out
+        x = t5.decoder_layer_norm(x)
+        x = t5.decoder_dropout(x)
+
+        super().__init__(inputs=inputs, outputs=x, dtype=dtype, **kwargs)
+
+        # === Store sub-layers (assigned after super().__init__ per functional
+        #     model convention, same as BLIP2CustomOPT). ===
+        self.t5 = t5
+        self.language_projection = language_projection
         self.lm_head = lm_head
 
         # === Config ===
@@ -122,59 +203,6 @@ class BLIP2FlanT5(keras.layers.Layer):
     @property
     def encoder_transformer_layers(self):
         return self.t5.encoder_transformer_layers
-
-    def call(self, inputs, training=False):
-        enc_ids = inputs["token_ids"]
-        enc_mask = inputs["padding_mask"]
-        dec_ids = inputs.get("decoder_token_ids", enc_ids)
-        dec_mask = inputs.get("decoder_padding_mask", enc_mask)
-        qf = inputs.get("qformer_features", None)
-
-        # Encoder
-        enc_emb = self.t5.token_embedding(enc_ids)
-        if qf is not None:
-            proj = self.language_projection(qf)
-            enc_emb = ops.concatenate([proj, enc_emb], axis=1)
-            vis_mask = ops.cast(ops.ones_like(qf[..., 0]), dtype=enc_mask.dtype)
-            enc_mask = ops.concatenate([vis_mask, enc_mask], axis=1)
-
-        x = self.t5.encoder_embedding_dropout(enc_emb, training=training)
-        enc_attn_mask = enc_mask[:, None, :]
-        position_bias = None
-        for layer in self.t5.encoder_transformer_layers:
-            out = layer(
-                x,
-                attention_mask=enc_attn_mask,
-                position_bias=position_bias,
-                use_causal_mask=False,
-                training=training,
-            )
-            if isinstance(out, tuple):
-                x, position_bias = out
-        x = self.t5.encoder_layer_norm(x)
-        x = self.t5.encoder_dropout(x, training=training)
-        encoder_out = x
-
-        # Decoder
-        dec_emb = self.t5.token_embedding(dec_ids)
-        x = self.t5.decoder_embedding_dropout(dec_emb, training=training)
-        dec_attn_mask = dec_mask[:, None, :]
-        position_bias = None
-        for layer in self.t5.decoder_transformer_layers:
-            out = layer(
-                x,
-                attention_mask=dec_attn_mask,
-                position_bias=position_bias,
-                encoder_hidden_states=encoder_out,
-                encoder_attention_mask=enc_attn_mask,
-                use_causal_mask=True,
-                training=training,
-            )
-            if isinstance(out, tuple):
-                x, position_bias = out
-        x = self.t5.decoder_layer_norm(x)
-        x = self.t5.decoder_dropout(x, training=training)
-        return x
 
     def get_config(self):
         config = super().get_config()
