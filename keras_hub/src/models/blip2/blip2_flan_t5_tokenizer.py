@@ -1,4 +1,4 @@
-"""BLIP-2 t5-flan Variants sentence piece tokenizer."""
+"""BLIP-2 Flan-T5 SentencePiece tokenizer."""
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone

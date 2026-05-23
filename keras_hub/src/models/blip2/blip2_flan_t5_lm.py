@@ -65,7 +65,6 @@ class BLIP2FlanT5(keras.Model):
         dtype=None,
         **kwargs,
     ):
-        # === Sub-layers ===
         t5 = T5Backbone(
             vocabulary_size=vocabulary_size,
             num_layers=num_layers,
@@ -97,7 +96,6 @@ class BLIP2FlanT5(keras.Model):
                 name="lm_head",
             )
 
-        # === Functional graph ===
         token_ids_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
         )
@@ -118,7 +116,6 @@ class BLIP2FlanT5(keras.Model):
             "decoder_padding_mask": decoder_padding_mask_input,
         }
 
-        # Encoder — optionally prepend projected Q-Former visual features.
         enc_emb = t5.token_embedding(token_ids_input)
 
         if num_query_tokens > 0:
@@ -157,7 +154,6 @@ class BLIP2FlanT5(keras.Model):
         x = t5.encoder_dropout(x)
         encoder_out = x
 
-        # Decoder
         dec_emb = t5.token_embedding(decoder_token_ids_input)
         x = t5.decoder_embedding_dropout(dec_emb)
         dec_attn_mask = decoder_padding_mask_input[:, None, :]
@@ -178,13 +174,10 @@ class BLIP2FlanT5(keras.Model):
 
         super().__init__(inputs=inputs, outputs=x, dtype=dtype, **kwargs)
 
-        # === Store sub-layers (assigned after super().__init__ per functional
-        #     model convention, same as BLIP2CustomOPT). ===
         self.t5 = t5
         self.language_projection = language_projection
         self.lm_head = lm_head
 
-        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads

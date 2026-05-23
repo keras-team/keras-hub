@@ -49,19 +49,13 @@ class BLIP2CausalLM(CausalLM):
         backbone,
         **kwargs,
     ):
-        # === Layers ===
         self.preprocessor = preprocessor
         self.backbone = backbone
 
-        # === Functional Model ===
         inputs = backbone.input
         hidden_states = backbone(inputs)
         lm = backbone.language_model
 
-        # For decoder-only LMs (e.g. OPT) the backbone output contains the
-        # visual prefix tokens prepended to the text tokens; slice them off
-        # before projecting to logits.  For encoder-decoder LMs (e.g. Flan-T5)
-        # the backbone returns decoder hidden states only — no visual prefix.
         is_encoder_decoder = hasattr(lm, "encoder_transformer_layers")
         if is_encoder_decoder:
             text_hidden_states = hidden_states
@@ -71,10 +65,8 @@ class BLIP2CausalLM(CausalLM):
             ]
 
         if hasattr(lm, "lm_head") and lm.lm_head is not None:
-            # Use the dedicated LM head (e.g., Flan-T5).
             outputs = lm.lm_head(text_hidden_states)
         else:
-            # Fall back to tied embedding weights (e.g., OPT).
             outputs = backbone.token_embedding(text_hidden_states, reverse=True)
 
         super().__init__(
@@ -132,7 +124,6 @@ class BLIP2CausalLM(CausalLM):
         return [inputs], False
 
     def _encode_images(self, images):
-        """Run vision encoder → Q-Former → language projection."""
         if ops.ndim(images) == 3:
             images = ops.expand_dims(images, axis=0)
         vision_features = self.backbone.vision_encoder(images)
@@ -152,10 +143,6 @@ class BLIP2CausalLM(CausalLM):
         """Language-model forward pass with a KV cache."""
         lm = self.backbone.language_model
         num_visual = self.backbone.num_query_tokens
-
-        # Note: This method currently assumes OPT-like architecture for caching.
-        # If the LM doesn't support the required sub-layers, this will fail.
-        # For Flan-T5, we bypass this via generate_step.
 
         if projected_features is not None:
             token_embeds = lm.embeddings_layer(token_ids)
@@ -201,7 +188,6 @@ class BLIP2CausalLM(CausalLM):
         )
 
         if projected_features is not None:
-            # Slice hidden states to exclude visual tokens before projection.
             logits_hidden_states = hidden_states[:, num_visual:, :]
         else:
             logits_hidden_states = hidden_states
@@ -254,15 +240,12 @@ class BLIP2CausalLM(CausalLM):
         else:
             projected_features = None
 
-        # For encoder-decoder models, precompute visual features once so the
-        # generation loop does not re-run the vision encoder every step.
         if is_encoder_decoder and images is not None:
             vis_features = self.backbone.vision_encoder(images)
             qformer_features = self.backbone.qformer(vis_features)
         else:
             qformer_features = None
 
-        # Determine if we can use KV caching.
         use_cache = hasattr(lm, "call_with_cache") and hasattr(
             lm, "embeddings_layer"
         )
@@ -272,10 +255,7 @@ class BLIP2CausalLM(CausalLM):
                 token_ids, projected_features, padding_mask
             )
         else:
-            # No cache support: Run a full forward pass to get initial state.
             if is_encoder_decoder:
-                # Functional backbone now requires decoder_token_ids; default
-                # them to the encoder tokens for this initial forward pass.
                 backbone_inputs = dict(inputs)
                 backbone_inputs.setdefault(
                     "decoder_token_ids", inputs["token_ids"]
@@ -290,8 +270,6 @@ class BLIP2CausalLM(CausalLM):
 
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         index = ops.min(row_lengths)
-        # For encoder-decoder: capture the encoder prompt length and the
-        # number of new tokens we will generate (both are fixed for the loop).
         initial_index = index
         max_new_tokens = ops.shape(token_ids)[1] - initial_index
 
@@ -309,11 +287,6 @@ class BLIP2CausalLM(CausalLM):
                     projected_features=None,
                 )
             elif is_encoder_decoder:
-                # Flan-T5: encoder input is the original fixed text prompt.
-                # Decoder input must be [dec_start=0, gen_0, gen_1, ...],
-                # NOT the raw encoder tokens.  We build it from the generated
-                # portion of prompt (positions initial_index..end) and
-                # prepend the T5 decoder-start token (pad id = 0).
                 dec_start = ops.zeros((batch_size, 1), dtype="int32")
                 gen_part = ops.slice(
                     prompt, [0, initial_index], [batch_size, max_new_tokens]
@@ -331,20 +304,14 @@ class BLIP2CausalLM(CausalLM):
                 }
                 if qformer_features is not None:
                     lm_inputs["qformer_features"] = qformer_features
-                hidden_out = lm(lm_inputs)  # (batch, 1+max_new_tokens, hidden)
+                hidden_out = lm(lm_inputs)
                 all_logits = lm.lm_head(hidden_out)
-                # decoder position 0 corresponds to the dec_start token and
-                # predicts the first generated token; position k predicts the
-                # (k+1)-th token.  At loop step k, index = initial_index + k.
                 decoder_pos = index - initial_index
-                logits = ops.expand_dims(
-                    all_logits[:, decoder_pos, :], axis=1
-                )  # (batch, 1, vocab_size)
+                logits = ops.expand_dims(all_logits[:, decoder_pos, :], axis=1)
                 hidden_states = ops.expand_dims(
                     hidden_out[:, decoder_pos, :], axis=1
-                )  # (batch, 1, hidden_dim)
+                )
             else:
-                # Decoder-only fallback (no KV cache): full forward pass.
                 current_inputs = {
                     "token_ids": prompt,
                     "padding_mask": ops.cast(prompt != 0, "int32"),
@@ -417,7 +384,6 @@ class BLIP2CausalLM(CausalLM):
         elif stop_token_ids == "auto":
             stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
 
-        # ── enforce left-padding so image[i] stays aligned with text[i] ──────
         if self.preprocessor is not None:
             original_padding_side = self.preprocessor.tokenizer.padding_side
             self.preprocessor.tokenizer.padding_side = "left"
@@ -430,7 +396,6 @@ class BLIP2CausalLM(CausalLM):
                 strip_prompt=strip_prompt,
             )
         finally:
-            # always restore, even if generation throws
             if self.preprocessor is not None:
                 self.preprocessor.tokenizer.padding_side = original_padding_side
 

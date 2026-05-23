@@ -6,7 +6,6 @@ import pytest
 from keras_hub.src.models.blip2.blip2_flan_t5_lm import BLIP2FlanT5
 from keras_hub.src.tests.test_case import TestCase
 
-# Minimal config used by all unit tests — fast to build, covers all code paths.
 _TINY = {
     "vocabulary_size": 128,
     "num_layers": 2,
@@ -20,7 +19,6 @@ _TINY = {
     "layer_norm_epsilon": 1e-6,
 }
 
-# Actual Flan-T5-XL production config (no weights loaded — just validates build).
 _XL = {
     "vocabulary_size": 32128,
     "num_layers": 24,
@@ -39,9 +37,14 @@ ENC_LEN = 6
 DEC_LEN = 3
 
 
-def _make_inputs(batch=BATCH, enc_len=ENC_LEN, dec_len=DEC_LEN,
-                 num_query_tokens=_TINY["num_query_tokens"],
-                 qformer_hidden_dim=_TINY["qformer_hidden_dim"], seed=0):
+def _make_inputs(
+    batch=BATCH,
+    enc_len=ENC_LEN,
+    dec_len=DEC_LEN,
+    num_query_tokens=_TINY["num_query_tokens"],
+    qformer_hidden_dim=_TINY["qformer_hidden_dim"],
+    seed=0,
+):
     rng = np.random.default_rng(seed)
     return {
         "token_ids": np.ones((batch, enc_len), dtype="int32"),
@@ -68,7 +71,6 @@ def _build(cfg=None, **overrides):
 
 
 class BLIP2FlanT5Test(TestCase):
-
     def setUp(self):
         self.model = _build()
         self.data = _make_inputs()
@@ -78,16 +80,12 @@ class BLIP2FlanT5Test(TestCase):
     def test_decoder_hidden_state_shape(self):
         """call() returns (batch, dec_len, hidden_dim) — not logits."""
         out = self.model(self.data)
-        self.assertEqual(
-            out.shape, (BATCH, DEC_LEN, _TINY["hidden_dim"])
-        )
+        self.assertEqual(out.shape, (BATCH, DEC_LEN, _TINY["hidden_dim"]))
 
     def test_lm_head_shape(self):
         """lm_head projects hidden states to (batch, dec_len, vocab_size)."""
         out = self.model.lm_head(self.model(self.data))
-        self.assertEqual(
-            out.shape, (BATCH, DEC_LEN, _TINY["vocabulary_size"])
-        )
+        self.assertEqual(out.shape, (BATCH, DEC_LEN, _TINY["vocabulary_size"]))
 
     # ── 2. Architecture invariants ────────────────────────────────────────────
 
@@ -100,8 +98,12 @@ class BLIP2FlanT5Test(TestCase):
         kernel = self.model.lm_head.kernel
 
         # shapes are transposes of each other
-        self.assertEqual(kernel.shape, (_TINY["hidden_dim"], _TINY["vocabulary_size"]))
-        self.assertEqual(emb.shape, (_TINY["vocabulary_size"], _TINY["hidden_dim"]))
+        self.assertEqual(
+            kernel.shape, (_TINY["hidden_dim"], _TINY["vocabulary_size"])
+        )
+        self.assertEqual(
+            emb.shape, (_TINY["vocabulary_size"], _TINY["hidden_dim"])
+        )
 
         original = ops.convert_to_numpy(emb).copy()
         kernel.assign(np.zeros_like(ops.convert_to_numpy(kernel)))
@@ -119,7 +121,10 @@ class BLIP2FlanT5Test(TestCase):
     def test_encoder_context_reaches_decoder(self):
         """Different encoder token_ids must change decoder hidden states
         (cross-attention must be live)."""
-        data_b = {**self.data, "token_ids": np.full((BATCH, ENC_LEN), 5, dtype="int32")}
+        data_b = {
+            **self.data,
+            "token_ids": np.full((BATCH, ENC_LEN), 5, dtype="int32"),
+        }
         self.assertNotAllClose(self.model(self.data), self.model(data_b))
 
     def test_visual_prefix_changes_decoder_output(self):
@@ -136,7 +141,10 @@ class BLIP2FlanT5Test(TestCase):
 
     def test_decoder_tokens_affect_output(self):
         """Different decoder_token_ids must produce different hidden states."""
-        data_b = {**self.data, "decoder_token_ids": np.full((BATCH, DEC_LEN), 7, dtype="int32")}
+        data_b = {
+            **self.data,
+            "decoder_token_ids": np.full((BATCH, DEC_LEN), 7, dtype="int32"),
+        }
         self.assertNotAllClose(self.model(self.data), self.model(data_b))
 
     def test_causal_decoder_mask(self):
@@ -184,7 +192,8 @@ class BLIP2FlanT5Test(TestCase):
     def test_weights_round_trip(self):
         """save_weights/load_weights must give bit-exact outputs on both
         the main call and the external lm_head."""
-        import os, tempfile
+        import os
+        import tempfile
 
         clone = _build()
         with tempfile.TemporaryDirectory() as d:

@@ -100,11 +100,9 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
         self.text_only_model = self.image_converter is None
 
     def _preprocess_images(self, images):
-        """Run the image converter on a batch of raw images."""
         return self.image_converter(images)
 
     def _parse_inputs(self, x):
-        """Parse multimodal inputs (images and text) from x."""
         if isinstance(x, dict):
             images = x.get("images")
             text = x.get("text")
@@ -142,23 +140,6 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
 
     @preprocessing_function
     def generate_preprocess(self, x, sequence_length=None):
-        """Convert inputs to token ids and masks for generation.
-
-        Unlike calling the layer for training, this method does not compute
-        labels and will never append a `tokenizer.end_token_id` to the end of
-        the sequence (as generation is expected to continue at the end of the
-        inputted prompt).
-
-        Accepts either raw string/image inputs (for generation from scratch) or
-        an already-preprocessed dict containing ``token_ids`` and
-        ``padding_mask`` (e.g. the output of a previous `call()` used directly
-        as generation input).  In the latter case the dict is returned as-is so
-        that the generation loop can reuse pre-tokenised inputs without trying
-        to re-tokenise a ``None`` text field.
-        """
-        # Fast-path: input is already tokenised (has token_ids).
-        # This happens when callers pass the output of `call()` directly to
-        # `generate()` instead of raw text/image data.
         if isinstance(x, dict) and "token_ids" in x:
             return x
 
@@ -167,9 +148,6 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
         from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
 
         if isinstance(self.tokenizer, T5Tokenizer):
-            # T5 encoder input convention: tokens + EOS (no BOS).
-            # The base generate_preprocess adds BOS and omits EOS, which is
-            # wrong for T5 (start_token == end_token == </s>).
             if not self.built:
                 self.build(None)
             sequence_length = sequence_length or self.sequence_length
@@ -196,12 +174,6 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
 
     @preprocessing_function
     def generate_postprocess(self, x):
-        """Convert token id output back to strings.
-
-        This method reverses `generate_preprocess()`, by first removing all
-        padding and start/end tokens, and then converting the integer sequence
-        back to a string.
-        """
         return super().generate_postprocess(x)
 
     def get_config(self):
