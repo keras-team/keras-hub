@@ -102,6 +102,7 @@ class MistralBackbone(Backbone):
         sliding_window=512,
         dropout=0,
         dtype=None,
+        head_dim=None,
         **kwargs,
     ):
         # === Layers ===
