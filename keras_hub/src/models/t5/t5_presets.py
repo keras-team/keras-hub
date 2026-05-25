@@ -7,7 +7,7 @@ backbone_presets = {
                 "8-layer T5 model. Trained on the Colossal Clean Crawled "
                 "Corpus (C4)."
             ),
-            "params": 0,
+            "params": 60506624,
             "path": "t5",
         },
         "kaggle_handle": "kaggle://keras/t5/keras/t5_small_multi/3",
@@ -26,7 +26,7 @@ backbone_presets = {
                 "12-layer T5 model. Trained on the Colossal Clean Crawled "
                 "Corpus (C4)."
             ),
-            "params": 0,
+            "params": 222903552,
             "path": "t5",
         },
         "kaggle_handle": "kaggle://keras/t5/keras/t5_base_multi/3",
@@ -45,7 +45,7 @@ backbone_presets = {
                 "24-layer T5 model. Trained on the Colossal Clean Crawled "
                 "Corpus (C4)."
             ),
-            "params": 0,
+            "params": 737668096,
             "path": "t5",
         },
         "kaggle_handle": "kaggle://keras/t5/keras/t5_large_multi/3",
@@ -80,7 +80,7 @@ backbone_presets = {
                 "8-layer T5 model. Trained on the Colossal Clean Crawled "
                 "Corpus (C4)."
             ),
-            "params": 0,
+            "params": 76961152,
             "path": "t5",
         },
         "kaggle_handle": "kaggle://keras/t5/keras/flan_small_multi/3",
@@ -91,7 +91,7 @@ backbone_presets = {
                 "12-layer T5 model. Trained on the Colossal Clean Crawled "
                 "Corpus (C4)."
             ),
-            "params": 0,
+            "params": 247577856,
             "path": "t5",
         },
         "kaggle_handle": "kaggle://keras/t5/keras/flan_base_multi/3",
@@ -102,7 +102,7 @@ backbone_presets = {
                 "24-layer T5 model. Trained on the Colossal Clean Crawled "
                 "Corpus (C4)."
             ),
-            "params": 0,
+            "params": 783150080,
             "path": "t5",
         },
         "kaggle_handle": "kaggle://keras/t5/keras/flan_large_multi/3",
