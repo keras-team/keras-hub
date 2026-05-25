@@ -36,28 +36,39 @@ class ModernBertMaskedLMTest(TestCase):
             "o",
             "r",
             "h",
-            "Ġa",
-            "th",
             "ai",
             "pl",
             "po",
             "rt",
+            "th",
             "air",
-            "Ġair",
-            "plane",
-            "Ġat",
+            "pla",
+            "ne",
             "port",
+            "plane",
+            "Ġa",
+            "Ġt",
+            "Ġi",
+            "Ġb",
+            "Ġat",
+            "Ġair",
         ]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
 
-        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
-        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
-        self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = {t: i for i, t in enumerate(self.vocab)}
 
-        self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
-        self.input_data = [
-            "[CLS] airplane at airport[SEP][PAD]",
-            " airplane airport",
+        self.merges = [
+            "Ġ a",
+            "Ġ t",
+            "a i",
+            "p l",
+            "n e",
+            "p o",
+            "r t",
+            "t h",
+            "ai r",
+            "pl a",
+            "po rt",
+            "pla ne",
         ]
 
         self.tokenizer = ModernBertTokenizer(
@@ -67,12 +78,13 @@ class ModernBertMaskedLMTest(TestCase):
 
         self.preprocessor = ModernBertMaskedLMPreprocessor(
             tokenizer=self.tokenizer,
-            sequence_length=10,
+            sequence_length=12,
             mask_selection_rate=0.2,
             mask_selection_length=2,
         )
+
         self.backbone = ModernBertBackbone(
-            vocabulary_size=100,
+            vocabulary_size=self.tokenizer.vocabulary_size,
             num_layers=2,
             num_heads=2,
             hidden_dim=16,
@@ -89,7 +101,8 @@ class ModernBertMaskedLMTest(TestCase):
             "backbone": self.backbone,
             "preprocessor": self.preprocessor,
         }
-        self.input_data = ["the quick brown", "the quick"]
+
+        self.input_data = ["airplane airport", "airplane"]
 
     @pytest.mark.extra_large
     def test_fit(self):
@@ -97,10 +110,12 @@ class ModernBertMaskedLMTest(TestCase):
         Validate model execution and compilation
         using standard training APIs.
         """
-        input_data = ["the quick brown", "the quick"]
-        self.model.compile(optimizer="adam", loss="sparse_categorical_crossentropy")
-        ds = self.model.preprocessor(input_data)
-        self.model.fit(ds, epochs=1)
+        input_data = ["airplane airport", "airplane"]
+        self.model.compile(
+            optimizer="adam", loss="sparse_categorical_crossentropy"
+        )
+
+        self.model.fit(input_data, epochs=1)
 
     @pytest.mark.large
     def test_saved_model(self):
