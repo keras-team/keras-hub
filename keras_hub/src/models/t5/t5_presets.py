@@ -77,7 +77,7 @@ backbone_presets = {
     "flan_small_multi": {
         "metadata": {
             "description": (
-                "6-layer T5 model. Trained on the Colossal Clean Crawled "
+                "8-layer T5 model. Trained on the Colossal Clean Crawled "
                 "Corpus (C4)."
             ),
             "params": 76961152,
