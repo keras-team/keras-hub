@@ -48,7 +48,7 @@ class ModernBertBackbone(Backbone):
 
     # Instantiate a ModernBERT backbone
     backbone = keras_hub.models.ModernBertBackbone(
-        vocabulary_size=50257,
+        vocabulary_size=50368,
         hidden_dim=768,
         intermediate_dim=1152,
         num_layers=22,
@@ -57,7 +57,7 @@ class ModernBertBackbone(Backbone):
 
     # Prepare dummy input data
     input_data = {
-        "token_ids": np.random.randint(0, 50257, size=(2, 512), dtype="int32"),
+        "token_ids": np.random.randint(0, 50368, size=(2, 512), dtype="int32"),
         "padding_mask": np.ones((2, 512), dtype="int32"),
     }
 
@@ -67,11 +67,11 @@ class ModernBertBackbone(Backbone):
 
     def __init__(
         self,
-        vocabulary_size,
-        hidden_dim,
-        intermediate_dim,
-        num_layers,
-        num_heads,
+        vocabulary_size=50368,
+        hidden_dim=768,
+        intermediate_dim=1152,
+        num_layers=22,
+        num_heads=12,
         local_attention_window=128,
         global_attn_every_n_layers=3,
         dropout=0.0,
@@ -101,7 +101,9 @@ class ModernBertBackbone(Backbone):
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            embeddings_initializer=keras.initializers.TruncatedNormal(stddev=0.02),
+            embeddings_initializer=keras.initializers.TruncatedNormal(
+                stddev=0.02
+            ),
             dtype=layer_dtype_policy,
             name="token_embedding",
         )
@@ -144,7 +146,9 @@ class ModernBertBackbone(Backbone):
         )
 
         token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        padding_mask = keras.Input(shape=(None,), dtype="int32", name="padding_mask")
+        padding_mask = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
 
         x = self.token_embedding(token_ids)
         x = self.embedding_norm(x)
