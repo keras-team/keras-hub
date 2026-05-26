@@ -120,15 +120,3 @@ class ModernBertTokenizer(BytePairTokenizer):
             return 0
 
         return len(self.vocabulary)
-
-    def get_config(self):
-        config = super().get_config()
-
-        config.update(
-            {
-                "vocabulary": self.vocabulary,
-                "merges": self.merges,
-            }
-        )
-
-        return config

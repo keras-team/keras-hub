@@ -88,7 +88,6 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
             x = output
 
         self.assertEqual(x["token_ids"].shape, (1, 12))
-        self.assertEqual(x["segment_ids"].shape, (1, 12))
         self.assertEqual(x["padding_mask"].shape, (1, 12))
         self.assertEqual(x["mask_positions"].shape, (1, 4))
 

@@ -123,7 +123,6 @@ class ModernBertMaskedLMPreprocessor(Preprocessor):
 
         features = {
             "token_ids": mask_data["token_ids"],
-            "segment_ids": segment_ids,
             "padding_mask": padding_mask,
             "mask_positions": mask_data["mask_positions"],
         }
