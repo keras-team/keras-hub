@@ -56,7 +56,9 @@ class ModernBertLayersTest(TestCase):
         - Matrix structure compliance with target expected attention boundaries.
         """
 
-        layer = ModernBertAttention(hidden_dim=8, num_heads=2, local_attention_window=2)
+        layer = ModernBertAttention(
+            hidden_dim=8, num_heads=2, local_attention_window=2
+        )
         mask = layer._get_sliding_window_mask(seq_len=4, dtype="float32")
 
         expected = [

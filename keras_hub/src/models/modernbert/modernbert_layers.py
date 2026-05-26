@@ -51,7 +51,9 @@ class ModernBertMLP(layers.Layer):
         self.wi_1 = layers.Dense(
             intermediate_dim, use_bias=False, dtype=dtype, name="wi_1"
         )
-        self.wo = layers.Dense(hidden_dim, use_bias=False, dtype=dtype, name="wo")
+        self.wo = layers.Dense(
+            hidden_dim, use_bias=False, dtype=dtype, name="wo"
+        )
 
     def call(self, x):
         """Forward pass of the GeGLU MLP layer."""
@@ -127,7 +129,9 @@ class ModernBertAttention(layers.Layer):
         self.local_attention_window = local_attention_window
         self.dropout = dropout
 
-        self.qkv = layers.Dense(hidden_dim * 3, use_bias=False, dtype=dtype, name="qkv")
+        self.qkv = layers.Dense(
+            hidden_dim * 3, use_bias=False, dtype=dtype, name="qkv"
+        )
         self.output_dense = layers.Dense(
             hidden_dim, use_bias=False, dtype=dtype, name="output_dense"
         )
@@ -174,7 +178,8 @@ class ModernBertAttention(layers.Layer):
 
         if padding_mask is not None:
             pm = ops.cast(padding_mask, dtype)
-            scores = scores + (1.0 - pm[:, None, None, :]) * ops.cast(-1e9, dtype)
+            mask_offset = (1.0 - pm[:, None, None, :]) * ops.cast(-1e9, dtype)
+            scores = scores + mask_offset
 
         probs = ops.softmax(scores, axis=-1)
         probs = self.attn_dropout(probs, training=training)
@@ -194,14 +199,16 @@ class ModernBertAttention(layers.Layer):
                 "num_heads": self.num_heads,
                 "local_attention_window": self.local_attention_window,
                 "dropout": self.dropout,
-                "rotary_embedding": keras.layers.serialize(self.rotary_embedding),
+                "rotary_embedding": keras.layers.serialize(
+                    self.rotary_embedding
+                ),
             }
         )
         return config
 
     @classmethod
     def from_config(cls, config):
-        if "rotary_embedding" in config and config["rotary_embedding"] is not None:
+        if config.get("rotary_embedding") is not None:
             config["rotary_embedding"] = keras.layers.deserialize(
                 config["rotary_embedding"]
             )
@@ -340,7 +347,9 @@ class ModernBertEncoderLayer(layers.Layer):
                 "dropout": self.dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "local_attention_window": self.local_attention_window,
-                "rotary_embedding": keras.layers.serialize(self.rotary_embedding),
+                "rotary_embedding": keras.layers.serialize(
+                    self.rotary_embedding
+                ),
             }
         )
         return config
