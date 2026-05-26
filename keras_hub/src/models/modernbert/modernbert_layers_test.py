@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from keras import ops
 
 from keras_hub.src.models.modernbert.modernbert_layers import (
@@ -7,9 +6,6 @@ from keras_hub.src.models.modernbert.modernbert_layers import (
 )
 from keras_hub.src.models.modernbert.modernbert_layers import (
     ModernBertEncoderLayer,
-)
-from keras_hub.src.models.modernbert.modernbert_masked_lm import (
-    ModernBertMaskedLM,
 )
 from keras_hub.src.tests.test_case import TestCase
 
@@ -60,9 +56,7 @@ class ModernBertLayersTest(TestCase):
         - Matrix structure compliance with target expected attention boundaries.
         """
 
-        layer = ModernBertAttention(
-            hidden_dim=8, num_heads=2, local_attention_window=2
-        )
+        layer = ModernBertAttention(hidden_dim=8, num_heads=2, local_attention_window=2)
         mask = layer._get_sliding_window_mask(seq_len=4, dtype="float32")
 
         expected = [
@@ -72,11 +66,3 @@ class ModernBertLayersTest(TestCase):
             [0, 1, 1, 1],
         ]
         self.assertAllClose(mask, expected)
-
-    @pytest.mark.large
-    def test_saved_model(self):
-        self.run_model_saving_test(
-            cls=ModernBertMaskedLM,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-        )

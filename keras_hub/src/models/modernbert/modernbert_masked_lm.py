@@ -85,7 +85,6 @@ class ModernBertMaskedLM(MaskedLM):
             name="mask_positions",
         )
 
-        # Output shape: (batch_size, sequence_length, hidden_dim)
         sequence_output = backbone(inputs)
 
         masked_sequence_output = ops.take_along_axis(
@@ -94,10 +93,11 @@ class ModernBertMaskedLM(MaskedLM):
             axis=1,
         )
 
-        masked_sequence_output = layers.RMSNormalization(
-            epsilon=(backbone.layer_norm_epsilon),
+        self.mlm_head_norm = layers.RMSNormalization(
+            epsilon=backbone.layer_norm_epsilon,
             name="mlm_head_norm",
-        )(masked_sequence_output)
+        )
+        masked_sequence_output = self.mlm_head_norm(masked_sequence_output)
 
         logits = backbone.token_embedding(
             masked_sequence_output,

@@ -36,5 +36,15 @@ class ModernBertTokenizerTest(TestCase):
         Verify that initialization fails gracefully
         when special tokens are missing.
         """
+        vocabulary = {
+            "a": 0,
+            "b": 1,
+            "ab": 2,
+        }
+        merges = ["a b"]
         with self.assertRaises(ValueError):
-            ModernBertTokenizer(vocabulary=["a", "b", "c"], merges=[])
+            ModernBertTokenizer(
+                vocabulary=vocabulary,
+                merges=merges,
+                pad_token="[MISSING_TOKEN_NOT_IN_VOCAB]",
+            )

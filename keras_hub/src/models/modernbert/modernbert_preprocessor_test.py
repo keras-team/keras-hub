@@ -1,5 +1,3 @@
-from keras import ops
-
 from keras_hub.src.models.modernbert.modernbert_preprocessor import (
     ModernBertMaskedLMPreprocessor,
 )
@@ -107,20 +105,5 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
             seed=42,
         )
 
-        x, y, sw = no_mask_preprocessor(self.input_data)
-
-        output = (
-            {
-                "token_ids": ops.convert_to_numpy(x["token_ids"]).tolist(),
-                "segment_ids": ops.convert_to_numpy(x["segment_ids"]).tolist(),
-                "padding_mask": ops.convert_to_numpy(
-                    x["padding_mask"]
-                ).tolist(),
-                "mask_positions": ops.convert_to_numpy(
-                    x["mask_positions"]
-                ).tolist(),
-            },
-            ops.convert_to_numpy(y).tolist(),
-            ops.convert_to_numpy(sw).tolist(),
-        )
-        self.assertAllClose(output, output)
+        _, _, sw = no_mask_preprocessor(self.input_data)
+        self.assertAllClose(sw, [[0.0, 0.0, 0.0, 0.0]])
