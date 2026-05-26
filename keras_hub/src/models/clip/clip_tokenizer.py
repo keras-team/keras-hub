@@ -1,3 +1,5 @@
+import inspect
+
 import tokenizers
 from tokenizers import decoders
 from tokenizers import models
@@ -152,11 +154,22 @@ class CLIPTokenizer(BytePairTokenizer):
         if self.pad_with_end_token:
             self.pad_token_id = self.end_token_id
         if getattr(self, "_tokenizer") is not None:
+            # tokenizers <=0.22 use `cls`, >= 0.23 use `cls_token` because `cls`
+            # collides with the first argument of the Python `__new__`.
+            cls_token_arg = (
+                "cls"
+                if "cls"
+                in inspect.signature(processors.RobertaProcessing).parameters
+                else "cls_token"
+            )
+            preprocessing_args = {
+                "sep": (str(self.end_token), self.end_token_id),
+                cls_token_arg: (str(self.start_token), self.start_token_id),
+                "add_prefix_space": False,
+                "trim_offsets": False,
+            }
             self._tokenizer.post_processor = processors.RobertaProcessing(
-                sep=(str(self.end_token), self.end_token_id),
-                cls=(str(self.start_token), self.start_token_id),
-                add_prefix_space=False,
-                trim_offsets=False,
+                **preprocessing_args
             )
 
     def _bpe_merge_and_update_cache_tf(self, tokens):
