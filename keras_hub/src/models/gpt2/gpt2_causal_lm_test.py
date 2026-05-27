@@ -245,6 +245,7 @@ class GPT2CausalLMTest(TestCase):
 
         self.assertIsNone(causal_lm.get_quantization_layer_structure("int8"))
 
+
 class GPT2CausalLMDistributionTest(TestCase):
     def setUp(self):
         super().setUp()
@@ -289,7 +290,9 @@ class GPT2CausalLMDistributionTest(TestCase):
         }
 
         self.device_mesh = keras.distribution.DeviceMesh(
-            shape=(self.device_count,), axis_names=["batch"], devices=keras.distribution.list_devices()
+            shape=(self.device_count,),
+            axis_names=["batch"],
+            devices=keras.distribution.list_devices(),
         )
 
         self.layout_map = keras.distribution.LayoutMap(self.device_mesh)
