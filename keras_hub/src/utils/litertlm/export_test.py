@@ -52,6 +52,74 @@ class TestLiteRTLmExport(TestCase):
         self.assertTrue(os.path.exists(path))
         self.assertGreater(os.path.getsize(path), 0)
 
+    def test_export_with_bucketing(self):
+        """Verify that multiple prefill_seq_len creates multiple signatures."""
+        import keras
+
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
+        tokenizer = GemmaTokenizer(proto=proto)
+
+        backbone = GemmaBackbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=1,
+            hidden_dim=32,
+            head_dim=8,
+            intermediate_dim=64,
+            max_sequence_length=8,
+        )
+        preprocessor = GemmaCausalLMPreprocessor(
+            tokenizer=tokenizer, sequence_length=8
+        )
+        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
+
+        rng = np.random.default_rng(42)
+        weights = model.get_weights()
+        for i in range(len(weights)):
+            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
+        model.set_weights(weights)
+
+        path = os.path.join(self.get_temp_dir(), "test_buckets.litertlm")
+        model.export(
+            path,
+            format="litertlm",
+            prefill_seq_len=[4, 8],
+        )
+
+        self.assertTrue(os.path.exists(path))
+
+        # Extract TFLite and verify signatures.
+        with open(path, "rb") as f:
+            data = f.read()
+        header_end = struct.unpack("<Q", data[24:32])[0]
+        import litert_lm_builder.litertlm_core as core
+
+        metadata_buf = data[32:header_end]
+        metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
+            metadata_buf, 0
+        )
+        tflite_path = os.path.join(self.get_temp_dir(), "test_buckets.tflite")
+        for i in range(metadata.SectionMetadata().ObjectsLength()):
+            obj = metadata.SectionMetadata().Objects(i)
+            if (
+                core.any_section_data_type_to_string(obj.DataType())
+                == "TFLiteModel"
+            ):
+                tflite_data = data[obj.BeginOffset() : obj.EndOffset()]
+                with open(tflite_path, "wb") as f:
+                    f.write(tflite_data)
+
+        interpreter = tf.lite.Interpreter(model_path=tflite_path)
+        signatures = list(interpreter._get_full_signature_list().keys())
+
+        self.assertIn("prefill_4", signatures)
+        self.assertIn("prefill_8", signatures)
+        self.assertIn("decode", signatures)
+
     def test_export_outputs_match_keras(self):
         """Verify that exported TFLite outputs match Keras eager outputs."""
         import keras

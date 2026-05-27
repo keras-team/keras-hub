@@ -456,6 +456,43 @@ class CausalLM(Task):
         input_signature=None,
         **kwargs,
     ):
+        """Export the model as an artifact for inference.
+
+        This overrides the base ``Task.export`` to intercept
+        ``format="litertlm"`` and delegate to the LiteRT-LM exporter.
+
+        Args:
+            filepath: `str` or `pathlib.Path`. The path to save the artifact.
+            format: `str`. The export format. For LiteRT-LM, use
+                ``"litertlm"``. All other formats are forwarded to the
+                superclass.
+            verbose: `bool`. Whether to print a message during export.
+            input_signature: Optional input signature specification.
+                Not used for ``format="litertlm"``.
+            **kwargs: Additional keyword arguments.
+                For ``format="litertlm"``, supported kwargs are:
+
+                - ``backend_constraint``: Optional backend constraint such as
+                  ``"cpu"`` or ``"gpu"``.
+                - ``prefill_seq_len``: ``int`` or ``list[int]``. Sequence
+                  length(s) for prefill signature tracing. A list enables
+                  bucketing (e.g. ``[32, 64, 128, 256]``).
+                - ``quant_config``: Optional
+                  ``litert_torch.quantize.quant_config.QuantConfig`` for
+                  in-conversion quantization. Supported recipes are
+                  ``full_dynamic_recipe()``,
+                  ``full_weight_only_recipe()``, and
+                  ``full_fp16_recipe()`` from
+                  ``litert_torch.generative.quantize.quant_recipes``.
+                  ``weight_dtype`` can be ``INT8`` (default), ``INT4``,
+                  ``FP16``, or ``FP32``; ``granularity`` can be
+                  ``CHANNELWISE`` (default), ``BLOCKWISE_32``,
+                  ``BLOCKWISE_64``, ``BLOCKWISE_128``, or
+                  ``BLOCKWISE_256``.
+
+        Returns:
+            The exported artifact path.
+        """
         if format == "litertlm":
             from keras_hub.src.utils.litertlm.export import export_to_litertlm
 
@@ -464,6 +501,7 @@ class CausalLM(Task):
                 filepath,
                 backend_constraint=kwargs.pop("backend_constraint", None),
                 prefill_seq_len=kwargs.pop("prefill_seq_len", None),
+                quant_config=kwargs.pop("quant_config", None),
                 **kwargs,
             )
         return super().export(
