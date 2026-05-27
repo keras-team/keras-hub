@@ -10,15 +10,18 @@ pattern as the checkpoint conversion scripts:
 
 Usage:
     # Full validation (logits + generation):
-    KERAS_BACKEND=torch python3 tools/checkpoint_export/verify_mistral_export.py \\
+    KERAS_BACKEND=torch python3 \
+        tools/checkpoint_export/verify_mistral_export.py \
         --preset mistral_7b_en
 
     # Skip generation (faster, logit-only check):
-    KERAS_BACKEND=torch python3 tools/checkpoint_export/verify_mistral_export.py \\
+    KERAS_BACKEND=torch python3 \
+        tools/checkpoint_export/verify_mistral_export.py \
         --preset mistral_7b_en --skip_generation
 
     # Custom export directory:
-    KERAS_BACKEND=torch python3 tools/checkpoint_export/verify_mistral_export.py \\
+    KERAS_BACKEND=torch python3 \
+        tools/checkpoint_export/verify_mistral_export.py \
         --preset mistral_7b_en --export_dir /tmp/mistral_export
 
 Requirements:
@@ -187,8 +190,7 @@ def validate_configs(exp_cfg, orig_cfg):
         print(f"\n    ⚠ {len(mismatches)} field(s) differ: {mismatches}")
     else:
         print(
-            f"\n    ✓ All {len(all_keys) - len(skip_keys)} "
-            "config fields match"
+            f"\n    ✓ All {len(all_keys) - len(skip_keys)} config fields match"
         )
 
     return config_pass
@@ -213,10 +215,7 @@ def validate_token_ids(exp_cfg, orig_cfg):
         o = getattr(orig_cfg, name, None)
         e = getattr(exp_cfg, name, None)
         match = o == e
-        print(
-            f"    {'✓' if match else '✗'} {name}: "
-            f"original={o}, exported={e}"
-        )
+        print(f"    {'✓' if match else '✗'} {name}: original={o}, exported={e}")
         if not match:
             token_pass = False
 
@@ -228,15 +227,14 @@ def validate_token_ids(exp_cfg, orig_cfg):
 # ---------------------------------------------------------------
 
 
-def validate_numerics(exp_model, exp_tokenizer, original_results,
-                      skip_generation):
+def validate_numerics(
+    exp_model, exp_tokenizer, original_results, skip_generation
+):
     """Compare logits and generation between exported and original models."""
     results = {}
 
     print("\n  TEXT LOGIT VALIDATION")
-    text_ids = torch.tensor(
-        original_results["text_input_ids"]
-    ).to(device)
+    text_ids = torch.tensor(original_results["text_input_ids"]).to(device)
     with torch.no_grad():
         exp_text_out = exp_model(input_ids=text_ids)
     exp_text_logits = exp_text_out.logits.float().cpu().numpy()
@@ -254,9 +252,7 @@ def validate_numerics(exp_model, exp_tokenizer, original_results,
 
     if not skip_generation:
         print("\n  GENERATION COMPARISON")
-        hf_inputs = exp_tokenizer(
-            TEXT_PROMPT, return_tensors="pt"
-        ).to(device)
+        hf_inputs = exp_tokenizer(TEXT_PROMPT, return_tensors="pt").to(device)
         prompt_len = hf_inputs["input_ids"].shape[1]
         with torch.no_grad():
             exp_gen = exp_model.generate(
@@ -353,8 +349,7 @@ def print_summary(results):
     print(f"     - Config fields match {'✓' if config_pass else '✗'}")
     print(f"     - Token IDs match     {'✓' if token_pass else '✗'}")
     print(
-        f"     - Parameter count:    "
-        f"{'match ✓' if param_match else 'differ ✗'}"
+        f"     - Parameter count:    {'match ✓' if param_match else 'differ ✗'}"
     )
     print(
         f"     - Text logit parity   "
@@ -382,10 +377,7 @@ def main():
     parser.add_argument(
         "--preset",
         default="mistral_7b_en",
-        help=(
-            "KerasHub preset name "
-            "(default: mistral_7b_en)"
-        ),
+        help=("KerasHub preset name (default: mistral_7b_en)"),
     )
     parser.add_argument(
         "--hf_model_id",
