@@ -21,6 +21,7 @@ def export_to_litertlm(
     path,
     backend_constraint=None,
     prefill_seq_len=None,
+    quant_config=None,
     **kwargs,
 ):
     """Export a KerasHub CausalLM model to a LiteRT-LM bundle.
@@ -29,20 +30,95 @@ def export_to_litertlm(
     required by the LiteRT-LM executor, bundles the SentencePiece tokenizer,
     and writes an ``LlmMetadata`` protobuf into the ``.litertlm`` artifact.
 
+    **Bucketing:** ``prefill_seq_len`` accepts either a single ``int`` or a
+    ``list[int]``. When a list is provided (e.g.
+    ``[32, 64, 128, 256, 512, 1024]``), the exporter traces one prefill
+    signature per bucket. At runtime the LiteRT-LM executor dispatches to
+    the smallest bucket that fits the actual prompt, avoiding wasted
+    computation on padding.
+
+    **Quantization:** ``quant_config`` is forwarded to
+    ``litert_torch.convert()`` for in-graph quantization. It must be an
+    instance of ``litert_torch.quantize.quant_config.QuantConfig``.
+
+    For generative models the supported recipes (from
+    ``litert_torch.generative.quantize.quant_recipes``) are:
+
+    - ``full_dynamic_recipe()`` — dynamic-range quantization of weights
+      (activations stay FP32). Recommended default.
+    - ``full_weight_only_recipe()`` — weight-only quantization. Weights are
+      statically quantized; activations remain FP32.
+    - ``full_fp16_recipe()`` — FP16 weights and activations.
+
+    Each recipe accepts the following parameters:
+
+    - ``mcfg`` — optional ``ModelConfig`` for the target model. Usually
+      omitted for KerasHub exports.
+    - ``weight_dtype`` — one of:
+      ``quant_attrs.Dtype.INT8`` (default),
+      ``quant_attrs.Dtype.INT4``,
+      ``quant_attrs.Dtype.FP16``,
+      ``quant_attrs.Dtype.FP32``.
+    - ``granularity`` — one of:
+      ``quant_attrs.Granularity.CHANNELWISE`` (default),
+      ``quant_attrs.Granularity.BLOCKWISE_32``,
+      ``quant_attrs.Granularity.BLOCKWISE_64``,
+      ``quant_attrs.Granularity.BLOCKWISE_128``,
+      ``quant_attrs.Granularity.BLOCKWISE_256``.
+
+    Example configurations:
+
+    ```python
+    from litert_torch.generative.quantize.quant_recipes import (
+        full_dynamic_recipe,
+        full_weight_only_recipe,
+    )
+    import litert_torch.generative.quantize.quant_attrs as quant_attrs
+
+    # Dynamic INT8 weights, FP32 activations (good balance)
+    quant_config = full_dynamic_recipe()
+
+    # Weight-only INT4 (smallest size)
+    quant_config = full_weight_only_recipe(
+        weight_dtype=quant_attrs.Dtype.INT4
+    )
+
+    # Weight-only INT8 with block-wise granularity
+    quant_config = full_weight_only_recipe(
+        weight_dtype=quant_attrs.Dtype.INT8,
+        granularity=quant_attrs.Granularity.BLOCKWISE_128,
+    )
+    ```
+
     Args:
         model: A KerasHub ``CausalLM`` instance with an attached preprocessor
             and tokenizer.
         path: str. Path to save the ``.litertlm`` file.
         backend_constraint: Optional LiteRT-LM backend constraint, such as
-            ``"cpu"`` or ``"gpu"``.
-        prefill_seq_len: int. Sequence length used when tracing the prefill
-            signature.  Defaults to the model's maximum sequence length.
-            *Note:* dynamic sequence length is not yet supported, so prompts
-            should be padded/truncated to this exact length at runtime.
-        **kwargs: Additional kwargs forwarded to ``litert_torch`` conversion.
+            ``"cpu"`` or ``"gpu"``. Defaults to ``None``.
+        prefill_seq_len: int or list[int]. Sequence length(s) used when
+            tracing the prefill signature(s). Defaults to the model's
+            maximum sequence length. Each value must not exceed
+            ``cache_length``.
+        quant_config: Optional
+            ``litert_torch.quantize.quant_config.QuantConfig`` for
+            in-conversion quantization. Use ``full_dynamic_recipe()``,
+            ``full_weight_only_recipe()``, or ``full_fp16_recipe()`` from
+            ``litert_torch.generative.quantize.quant_recipes``. Defaults to
+            ``None`` (no quantization, FP32).
+        **kwargs: Additional kwargs forwarded to ``litert_torch`` signature
+            tracing.
 
     Returns:
         The output ``path``.
+
+    Raises:
+        ValueError: If the backend is not ``"torch"``, if ``path`` does not
+            end with ``.litertlm``, if the model lacks ``call_with_cache``,
+            if ``backend_constraint`` is invalid, or if any
+            ``prefill_seq_len`` exceeds ``cache_length``.
+        ImportError: If ``litert-torch`` or ``litert-lm-builder`` are not
+            installed.
     """
     if keras.config.backend() != "torch":
         raise ValueError(
@@ -78,26 +154,36 @@ def export_to_litertlm(
     num_kv_heads = cache_cfg["num_kv_heads"]
     head_dim = cache_cfg["head_dim"]
 
+    # Normalise prefill_seq_len to a sorted list.
     if prefill_seq_len is None:
-        prefill_seq_len = cache_length
+        prefill_seq_lens = [cache_length]
+    elif isinstance(prefill_seq_len, int):
+        prefill_seq_lens = [prefill_seq_len]
+    else:
+        prefill_seq_lens = sorted(set(prefill_seq_len))
 
-    if prefill_seq_len > cache_length:
-        raise ValueError(
-            f"prefill_seq_len ({prefill_seq_len}) cannot exceed "
-            f"cache_length ({cache_length})."
+    for seq_len in prefill_seq_lens:
+        if seq_len > cache_length:
+            raise ValueError(
+                f"prefill_seq_len ({seq_len}) cannot exceed "
+                f"cache_length ({cache_length})."
+            )
+
+    dtype = _torch_dtype_from_model(model)
+
+    # Build sample inputs for each prefill bucket and the decode signature.
+    prefill_inputs_map = {}
+    for seq_len in prefill_seq_lens:
+        prefill_inputs_map[seq_len] = _build_sample_inputs(
+            batch_size=1,
+            seq_len=seq_len,
+            num_layers=num_layers,
+            cache_length=cache_length,
+            num_kv_heads=num_kv_heads,
+            head_dim=head_dim,
+            dtype=dtype,
         )
 
-    # Build sample inputs for tracing.
-    dtype = _torch_dtype_from_model(model)
-    prefill_inputs = _build_sample_inputs(
-        batch_size=1,
-        seq_len=prefill_seq_len,
-        num_layers=num_layers,
-        cache_length=cache_length,
-        num_kv_heads=num_kv_heads,
-        head_dim=head_dim,
-        dtype=dtype,
-    )
     decode_inputs = _build_sample_inputs(
         batch_size=1,
         seq_len=1,
@@ -140,21 +226,37 @@ def export_to_litertlm(
         )
 
     with _traceable_slice_update_scope():
-        edge_model = (
-            litert_torch.signature(
-                "prefill",
-                prefill_adapter,
-                sample_kwargs=prefill_inputs,
-                **kwargs,
+        # Chain one signature per prefill bucket.
+        converter = None
+        for seq_len in prefill_seq_lens:
+            sig_name = (
+                "prefill"
+                if len(prefill_seq_lens) == 1
+                else f"prefill_{seq_len}"
             )
-            .signature(
-                "decode",
-                decode_adapter,
-                sample_kwargs=decode_inputs,
-                **kwargs,
-            )
-            .convert()
+            if converter is None:
+                converter = litert_torch.signature(
+                    sig_name,
+                    prefill_adapter,
+                    sample_kwargs=prefill_inputs_map[seq_len],
+                    **kwargs,
+                )
+            else:
+                converter = converter.signature(
+                    sig_name,
+                    prefill_adapter,
+                    sample_kwargs=prefill_inputs_map[seq_len],
+                    **kwargs,
+                )
+
+        converter = converter.signature(
+            "decode",
+            decode_adapter,
+            sample_kwargs=decode_inputs,
+            **kwargs,
         )
+
+        edge_model = converter.convert(quant_config=quant_config)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         tflite_path = os.path.join(temp_dir, "model.tflite")
@@ -167,8 +269,6 @@ def export_to_litertlm(
         meta_path = os.path.join(temp_dir, "llm_metadata.pb")
         _build_llm_metadata(model, cache_length, meta_path)
 
-        # Package the TFLite model, tokenizer, and metadata into a
-        # `.litertlm` bundle using the public LiteRT-LM builder API.
         litert_lm_builder = _import_litert_lm_builder()
         builder = litert_lm_builder.LitertLmFileBuilder()
         builder.add_system_metadata(
@@ -178,10 +278,6 @@ def export_to_litertlm(
                 dtype=litert_lm_builder.DType.STRING,
             )
         )
-        # `add_tflite_model` is the official builder API for adding the
-        # inference graph to the `.litertlm` bundle.  The bundle may
-        # contain multiple TFLite models (e.g. prefill/decode, embedder,
-        # vision encoder) identified by `TfLiteModelType`.
         builder.add_tflite_model(
             tflite_path,
             litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
@@ -259,10 +355,7 @@ def _build_sample_inputs(
     )
     input_pos = torch.arange(seq_len, dtype=torch.int32, device=device)
     if seq_len == 1:
-        # Decode: input_pos is the current position (e.g. [0]).
         input_pos = torch.zeros((1,), dtype=torch.int32, device=device)
-    # Causal mask – all ones.  Most KerasHub models ignore this in
-    # ``call_with_cache``, but LiteRT-LM executors may expect it.
     mask = torch.ones(
         (batch_size, 1, seq_len, cache_length),
         dtype=dtype,
@@ -332,7 +425,6 @@ def _build_llm_metadata(model, max_num_tokens, path):
 
     meta = llm_metadata_pb2.LlmMetadata()
 
-    # Start / stop tokens
     tokenizer = _get_tokenizer(model)
     start_id = getattr(tokenizer, "start_token_id", None)
     if start_id is not None:
@@ -342,9 +434,6 @@ def _build_llm_metadata(model, max_num_tokens, path):
     if end_id is not None:
         meta.stop_tokens.add().token_ids.ids.append(int(end_id))
 
-    # Gemma3 (and similar chat-tuned models) use <end_of_turn> as the turn
-    # separator.  The LiteRT-LM runtime needs to know about it so generation
-    # stops after the assistant finishes its turn.
     try:
         eot_id = tokenizer.token_to_id("<end_of_turn>")
         if eot_id is not None:
@@ -354,8 +443,6 @@ def _build_llm_metadata(model, max_num_tokens, path):
 
     meta.max_num_tokens = int(max_num_tokens)
 
-    # Use model-specific type when known so the LiteRT-LM runtime applies
-    # the correct chat template and stop-token behaviour.
     model_type = _detect_llm_model_type(model)
     getattr(meta.llm_model_type, model_type).SetInParent()
 
@@ -369,7 +456,7 @@ def _detect_llm_model_type(model):
     if "Gemma3" in cls_name:
         return "gemma3"
     if "Gemma" in cls_name:
-        return "generic_model"  # older Gemma variants
+        return "generic_model"
     if "Qwen3" in cls_name:
         return "qwen3"
     if "Qwen2" in cls_name:
