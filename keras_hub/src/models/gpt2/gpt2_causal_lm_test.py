@@ -252,7 +252,7 @@ class GPT2CausalLMDistributionTest(TestCase):
         if keras.config.backend() != "jax":
             pytest.skip("This test requires the JAX backend")
 
-        self.device_count = jax.device_count()
+        self.device_count = len(keras.distribution.list_devices())
 
         # Initialize kwargs for model creation
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
