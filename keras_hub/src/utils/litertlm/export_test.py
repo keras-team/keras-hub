@@ -1,9 +1,20 @@
 import os
 import struct
+import unittest
 
 import numpy as np
 import tensorflow as tf
 import torch
+
+try:
+    import litert_torch
+except ImportError:
+    litert_torch = None
+
+try:
+    import litert_lm_builder
+except ImportError:
+    litert_lm_builder = None
 
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
@@ -14,6 +25,16 @@ from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
+@unittest.skipIf(
+    litert_torch is None,
+    "LiteRT-LM export requires `litert-torch`. "
+    "Install it with: pip install litert-torch",
+)
+@unittest.skipIf(
+    litert_lm_builder is None,
+    "LiteRT-LM export requires `litert-lm-builder`. "
+    "Install it with: pip install litert-lm-builder",
+)
 class TestLiteRTLmExport(TestCase):
     def test_export_tiny_gemma(self):
         import keras
@@ -96,7 +117,7 @@ class TestLiteRTLmExport(TestCase):
         with open(path, "rb") as f:
             data = f.read()
         header_end = struct.unpack("<Q", data[24:32])[0]
-        import litert_lm_builder.litertlm_core as core
+        from litert_lm_builder import litertlm_core as core
 
         metadata_buf = data[32:header_end]
         metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
@@ -159,7 +180,7 @@ class TestLiteRTLmExport(TestCase):
         with open(litertlm_path, "rb") as f:
             data = f.read()
         header_end = struct.unpack("<Q", data[24:32])[0]
-        import litert_lm_builder.litertlm_core as core
+        from litert_lm_builder import litertlm_core as core
 
         metadata_buf = data[32:header_end]
         metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
