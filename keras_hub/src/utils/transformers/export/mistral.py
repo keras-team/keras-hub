@@ -140,18 +140,27 @@ def get_mistral_tokenizer_config(tokenizer):
         "clean_up_tokenization_spaces": False,
         "eos_token": tokenizer.end_token,
         "legacy": False,
+        # 32768 matches the canonical Mistral context window (same as
+        # max_position_embeddings set in get_mistral_config).
         "model_max_length": 32768,
         "pad_token": None,
         "sp_model_kwargs": {},
         "spaces_between_special_tokens": False,
         "tokenizer_class": "LlamaTokenizer",
+        # Mistral's SentencePiece model always uses "<unk>" as the unknown
+        # token piece; MistralTokenizer does not expose an unk_token property.
         "unk_token": "<unk>",
         "use_default_system_prompt": False,
     }
 
-    # Add added_tokens_decoder
+    # Add added_tokens_decoder; filter out any tokens that are None (e.g. if
+    # a subclass does not define start_token / end_token).
     added_tokens_decoder = {}
-    special_tokens = [tokenizer.start_token, tokenizer.end_token, "<unk>"]
+    special_tokens = [
+        t
+        for t in [tokenizer.start_token, tokenizer.end_token, "<unk>"]
+        if t is not None
+    ]
     for token in special_tokens:
         token_id = tokenizer.token_to_id(token)
         if token_id is not None:
