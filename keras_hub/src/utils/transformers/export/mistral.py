@@ -17,10 +17,12 @@ def get_mistral_config(backbone):
         "head_dim": head_dim,
         "rms_norm_eps": backbone.layer_norm_epsilon,
         "rope_theta": backbone.rope_max_wavelength,
+        # All Mistral 7B variants use max_position_embeddings=32768.
+        # The backbone does not expose this field; the HF default (131072)
+        # differs from the canonical Mistral checkpoints.
+        "max_position_embeddings": 32768,
         "hidden_act": "silu",
         "attention_dropout": backbone.dropout,
-        "attention_bias": False,
-        "mlp_bias": False,
         "tie_word_embeddings": False,
         "use_cache": True,
         "sliding_window": backbone.sliding_window,
