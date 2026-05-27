@@ -1,6 +1,7 @@
 import json
 import os
 
+import keras.ops as ops
 import numpy as np
 import torch
 from transformers import AutoModelForCausalLM
@@ -145,7 +146,9 @@ class TestMistralExport(TestCase):
         )
 
         # 10. Test model inference - verify shapes match
-        keras_tokens_list = keras_tokens.cpu().numpy().tolist()
+        # ops.convert_to_numpy works across all Keras backends (torch/MPS,
+        # JAX, TensorFlow) unlike backend-specific calls like .cpu().numpy().
+        keras_tokens_list = ops.convert_to_numpy(keras_tokens).tolist()
         input_ids = torch.tensor([keras_tokens_list], dtype=torch.long)
         hf_outputs = hf_model(input_ids=input_ids, return_dict=True)
 
