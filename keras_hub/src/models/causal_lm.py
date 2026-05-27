@@ -360,16 +360,20 @@ class CausalLM(Task):
             distribution = distribution_lib.distribution()
             if distribution is None:
                 return x
-            result = {}
-            for key, value in x.items():
+
+            def _distribute_tensor(value):
                 if value is None:
-                    result[key] = None
-                    continue
+                    return None
                 if not ops.is_tensor(value):
                     value = ops.convert_to_tensor(value)
                 layout = distribution.get_data_layout(value.shape)
-                result[key] = distribution_lib.distribute_tensor(value, layout) if layout else value
-            return result
+                return (
+                    distribution_lib.distribute_tensor(value, layout)
+                    if layout
+                    else value
+                )
+
+            return tree.map_structure(_distribute_tensor, x)
 
         def generate(x):
             return generate_function(x, stop_token_ids=stop_token_ids)
