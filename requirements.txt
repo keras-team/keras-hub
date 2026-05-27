@@ -11,4 +11,8 @@ torchvision>=0.16.0
 # Jax.
 jax[cpu]
 
+# LiteRT (for torch-backend TFLite export and LiteRT-LM testing).
+litert-torch>=0.9.0
+litert-lm-builder>=0.11.0
+
 -r requirements-common.txt
