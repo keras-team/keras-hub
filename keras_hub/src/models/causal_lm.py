@@ -362,6 +362,11 @@ class CausalLM(Task):
                 return x
             result = {}
             for key, value in x.items():
+                if value is None:
+                    result[key] = None
+                    continue
+                if not ops.is_tensor(value):
+                    value = ops.convert_to_tensor(value)
                 layout = distribution.get_data_layout(value.shape)
                 result[key] = distribution_lib.distribute_tensor(value, layout) if layout else value
             return result

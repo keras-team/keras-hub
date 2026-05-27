@@ -252,6 +252,8 @@ class GPT2CausalLMDistributionTest(TestCase):
         if keras.config.backend() != "jax":
             pytest.skip("This test requires the JAX backend")
 
+        self.device_count = jax.device_count()
+
         # Initialize kwargs for model creation
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
@@ -286,7 +288,6 @@ class GPT2CausalLMDistributionTest(TestCase):
             "preprocessor": self.preprocessor,
         }
 
-        self.device_count = len(keras.distribution.list_devices())
         self.device_mesh = keras.distribution.DeviceMesh(
             shape=(self.device_count,), axis_names=["batch"], devices=keras.distribution.list_devices()
         )
@@ -303,13 +304,13 @@ class GPT2CausalLMDistributionTest(TestCase):
 
         causal_lm = GPT2CausalLM(**self.init_kwargs)
 
-        # Pass 2 prompts to match the 2 devices
-        prompts = [" airplane at airport", " airplane at airport"]
+        # Pass prompts to match the number of devices
+        prompts = [" airplane at airport"] * self.device_count
 
         # This should run without errors and use the distribution
         output = causal_lm.generate(prompts)
         self.assertIsInstance(output, (list, tuple))
-        self.assertLen(output, 2)
+        self.assertLen(output, self.device_count)
 
     def test_e2e_data_parallel_generate_indivisible_error(self):
         if self.device_count < 2:
