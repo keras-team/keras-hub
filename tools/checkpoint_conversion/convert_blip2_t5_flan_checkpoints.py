@@ -369,16 +369,13 @@ def validate_t5_lm(
     # HF: language_model parameters() counts shared.weight once (enc/dec
     #     embed_tokens are tied to it) plus lm_head separately.
     #     language_projection is counted via hf_model.language_projection.
-    keras_params = keras_flan_t5.count_params()
+    # lm_head is not in BLIP2FlanT5's functional graph (call() returns raw
+    # decoder hidden states), so count_params() excludes it — add it manually.
+    keras_params = keras_flan_t5.count_params() + keras_flan_t5.lm_head.count_params()
     hf_t5_params = sum(p.numel() for p in hf_model.language_model.parameters())
     hf_proj_params = sum(
         p.numel() for p in hf_model.language_projection.parameters()
     )
-    # Flan-T5 uses tie_word_embeddings=False: lm_head.weight is a separate
-    # nn.Parameter from shared.weight. PyTorch parameters() deduplicates
-    # encoder/decoder.embed_tokens (tied to shared) but counts lm_head
-    # separately. Keras also has both (token_embedding + lm_head), so counts
-    # match directly — no subtraction needed.
     hf_params = hf_t5_params + hf_proj_params
     print(f"   -> Keras params : {keras_params:,}")
     print(f"   -> HF params    : {hf_params:,}")
