@@ -246,12 +246,11 @@ class GPT2CausalLMTest(TestCase):
         self.assertIsNone(causal_lm.get_quantization_layer_structure("int8"))
 
 
+@pytest.mark.skipif(keras.src.backend.backend() != "jax", reason="JAX only")
+@pytest.mark.multi_device
 class GPT2CausalLMDistributionTest(TestCase):
     def setUp(self):
         super().setUp()
-
-        if keras.config.backend() != "jax":
-            pytest.skip("This test requires the JAX backend")
 
         self.device_count = len(keras.distribution.list_devices())
 
@@ -302,30 +301,29 @@ class GPT2CausalLMDistributionTest(TestCase):
             self.layout_map,
         )
 
-    def tearDown(self):
-        keras.distribution.set_distribution(None)
-
     def test_e2e_data_parallel_generate(self):
-        keras.distribution.set_distribution(self.distribution)
+        with self.distribution.scope():
+            # keras.distribution.set_distribution(self.distribution)
 
-        causal_lm = GPT2CausalLM(**self.init_kwargs)
+            causal_lm = GPT2CausalLM(**self.init_kwargs)
 
-        # Pass prompts to match the number of devices
-        prompts = [" airplane at airport"] * self.device_count
+            # Pass prompts to match the number of devices
+            prompts = [" airplane at airport"] * self.device_count
 
-        # This should run without errors and use the distribution
-        output = causal_lm.generate(prompts)
-        self.assertIsInstance(output, (list, tuple))
-        self.assertLen(output, self.device_count)
+            # This should run without errors and use the distribution
+            output = causal_lm.generate(prompts)
+            self.assertIsInstance(output, (list, tuple))
+            self.assertLen(output, self.device_count)
 
     def test_e2e_data_parallel_generate_indivisible_error(self):
-        if self.device_count < 2:
-            pytest.skip("This test requires at least 2 devices")
-        keras.distribution.set_distribution(self.distribution)
-        causal_lm = GPT2CausalLM(**self.init_kwargs)
+        with self.distribution.scope():
+            if self.device_count < 2:
+                pytest.skip("This test requires at least 2 devices")
+            keras.distribution.set_distribution(self.distribution)
+            causal_lm = GPT2CausalLM(**self.init_kwargs)
 
-        # Pass only 1 prompt, which is not divisible by the number of devices
-        prompt = " airplane at airport"
+            # Pass only 1 prompt, which is not divisible by the number of devices
+            prompt = " airplane at airport"
 
-        with self.assertRaises(Exception):
-            causal_lm.generate(prompt)
+            with self.assertRaises(Exception):
+                causal_lm.generate(prompt)

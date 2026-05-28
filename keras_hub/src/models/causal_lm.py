@@ -4,11 +4,11 @@ from functools import partial
 import keras
 from keras import ops
 from keras import tree
+from keras.src.distribution import distribution_lib
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
 from keras_hub.src.samplers.serialization import get as get_sampler
-from keras.src.distribution import distribution_lib
 
 try:
     import tensorflow as tf
