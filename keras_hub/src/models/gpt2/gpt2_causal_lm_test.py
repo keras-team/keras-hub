@@ -302,6 +302,9 @@ class GPT2CausalLMDistributionTest(TestCase):
             self.layout_map,
         )
 
+    def tearDown(self):
+        keras.distribution.set_distribution(None)
+
     def test_e2e_data_parallel_generate(self):
         keras.distribution.set_distribution(self.distribution)
 
