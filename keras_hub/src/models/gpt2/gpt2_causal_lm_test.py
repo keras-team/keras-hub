@@ -303,14 +303,12 @@ class GPT2CausalLMDistributionTest(TestCase):
 
     def test_e2e_data_parallel_generate(self):
         with self.distribution.scope():
-            # keras.distribution.set_distribution(self.distribution)
-
             causal_lm = GPT2CausalLM(**self.init_kwargs)
 
-            # Pass prompts to match the number of devices
+            # Pass prompts to match the number of devices.
             prompts = [" airplane at airport"] * self.device_count
 
-            # This should run without errors and use the distribution
+            # This should run without errors and use the distribution.
             output = causal_lm.generate(prompts)
             self.assertIsInstance(output, (list, tuple))
             self.assertLen(output, self.device_count)
@@ -322,7 +320,8 @@ class GPT2CausalLMDistributionTest(TestCase):
             keras.distribution.set_distribution(self.distribution)
             causal_lm = GPT2CausalLM(**self.init_kwargs)
 
-            # Pass only 1 prompt, which is not divisible by the number of devices
+            # Pass only 1 prompt, which is not divisible by the number of
+            # devices.
             prompt = " airplane at airport"
 
             with self.assertRaises(Exception):
