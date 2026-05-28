@@ -12,12 +12,12 @@ module.exports = async ({ github, context }) => {
 
   // 1. Determine if this is an Issue or PR and select the list
   if (isIssue) {
-    candidates = ["dhantule", "sachinprasadhs", "LakshmiKalaKadali", "maitry63"];
+    candidates = ["dhantule", "mrinalghoshh", "maitry63"];
     itemNumber = context.payload.issue.number;
     author = context.payload.issue.user.login;
   } else if (isPr) {
     // Reviewer list for PRs
-    candidates = ["sachinprasadhs", "divyashreepathihalli"];
+    candidates = ["laxmareddyp", "divyashreepathihalli"];
     itemNumber = context.payload.pull_request.number;
     author = context.payload.pull_request.user.login;
   } else {

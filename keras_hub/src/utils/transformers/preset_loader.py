@@ -17,6 +17,7 @@ from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gemma3
 from keras_hub.src.utils.transformers import convert_gemma3n
 from keras_hub.src.utils.transformers import convert_gemma4
+from keras_hub.src.utils.transformers import convert_gemma4_assistant
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
@@ -32,7 +33,6 @@ from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_sam3
 from keras_hub.src.utils.transformers import convert_smollm3
-from keras_hub.src.utils.transformers import convert_swin_transformer
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_t5gemma2
 from keras_hub.src.utils.transformers import convert_vit
@@ -67,6 +67,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma3n
         elif model_type in ("gemma4", "gemma4_text"):
             self.converter = convert_gemma4
+        elif model_type == "gemma4_assistant":
+            self.converter = convert_gemma4_assistant
         elif model_type == "gpt2":
             self.converter = convert_gpt2
         elif model_type == "gpt_oss":
@@ -80,8 +82,6 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_mistral
         elif model_type == "paligemma":
             self.converter = convert_pali_gemma
-        elif model_type == "swin":
-            self.converter = convert_swin_transformer
         elif model_type == "vit":
             self.converter = convert_vit
         elif model_type == "qwen2":
@@ -135,10 +135,22 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         architecture = self.config["architectures"][0]
-        if (
-            not load_task_weights
-            or not issubclass(cls, ImageClassifier)
-            or architecture == "ViTModel"
+        is_classifier = issubclass(cls, ImageClassifier)
+        is_assistant = architecture == "Gemma4AssistantForCausalLM"
+
+        if hasattr(self.converter, "convert_task_config"):
+            task_config = self.converter.convert_task_config(self.config)
+            kwargs = {**task_config, **kwargs}
+
+        if hasattr(self.converter, "load_task_config"):
+            extra = self.converter.load_task_config(self.preset, self.config)
+            if extra:
+                kwargs = {**extra, **kwargs}
+
+        if not load_task_weights or (
+            not is_classifier
+            and not is_assistant
+            and architecture != "ViTModel"
         ):
             return super().load_task(
                 cls, load_weights, load_task_weights, **kwargs
