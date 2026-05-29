@@ -128,6 +128,88 @@ class Qwen3_5MoeCausalLMTest(TestCase):
         causal_lm.compile(sampler="greedy")
         self.assertIsNone(causal_lm.generate_function)
 
+    def test_cache_shapes(self):
+        """Verify that _build_cache produces caches with correct shapes."""
+        causal_lm = Qwen3_5MoeCausalLM(**self.init_kwargs)
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"]
+        )
+        token_ids = prompt_ids["token_ids"]
+        padding_mask = prompt_ids["padding_mask"]
+
+        hidden_states, cache = causal_lm._build_cache(token_ids, padding_mask)
+        kv_cache, conv_cache, recurrent_cache = cache
+
+        batch_size = ops.shape(token_ids)[0]
+        max_length = ops.shape(token_ids)[1]
+        bb = self.backbone
+
+        # KV cache: (batch, num_layers, 2, max_length, num_kv_heads, head_dim)
+        expected_kv_shape = (
+            batch_size,
+            bb.num_layers,
+            2,
+            max_length,
+            bb.num_key_value_heads,
+            bb.head_dim,
+        )
+        self.assertEqual(ops.shape(kv_cache), expected_kv_shape)
+
+        # Conv cache: (batch, num_layers, conv_dim, kernel_dim - 1)
+        linear_key_dim = bb.linear_num_key_heads * bb.linear_key_head_dim
+        linear_val_dim = bb.linear_num_value_heads * bb.linear_value_head_dim
+        conv_dim = linear_key_dim * 2 + linear_val_dim
+        expected_conv_shape = (
+            batch_size,
+            bb.num_layers,
+            conv_dim,
+            bb.linear_conv_kernel_dim - 1,
+        )
+        self.assertEqual(ops.shape(conv_cache), expected_conv_shape)
+
+        # Recurrent cache: (batch, num_layers, num_value_heads,
+        #                    key_head_dim, value_head_dim)
+        expected_recurrent_shape = (
+            batch_size,
+            bb.num_layers,
+            bb.linear_num_value_heads,
+            bb.linear_key_head_dim,
+            bb.linear_value_head_dim,
+        )
+        self.assertEqual(ops.shape(recurrent_cache), expected_recurrent_shape)
+
+    def test_cache_output_consistency(self):
+        """Verify cached decoding produces correct output shapes."""
+        causal_lm = Qwen3_5MoeCausalLM(**self.init_kwargs)
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"]
+        )
+        token_ids = prompt_ids["token_ids"]
+        padding_mask = prompt_ids["padding_mask"]
+
+        # Build cache from prompt (this runs the full forward pass).
+        hidden_states, cache = causal_lm._build_cache(token_ids, padding_mask)
+        kv_cache, conv_cache, recurrent_cache = cache
+
+        # Simulate one autoregressive step (what generate_step does).
+        row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
+        index = ops.min(row_lengths)
+        batch_size = ops.shape(token_ids)[0]
+        next_token = ops.slice(token_ids, [0, index - 1], [batch_size, 1])
+        cached_logits, _, new_cache = causal_lm.call_with_cache(
+            next_token, cache, index
+        )
+
+        # Verify output shape: (batch_size, 1, vocab_size).
+        vocab_size = self.backbone.vocabulary_size
+        self.assertEqual(ops.shape(cached_logits), (batch_size, 1, vocab_size))
+
+        # Verify cache structure is preserved after update.
+        new_kv, new_conv, new_recurrent = new_cache
+        self.assertEqual(ops.shape(new_kv), ops.shape(kv_cache))
+        self.assertEqual(ops.shape(new_conv), ops.shape(conv_cache))
+        self.assertEqual(ops.shape(new_recurrent), ops.shape(recurrent_cache))
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(

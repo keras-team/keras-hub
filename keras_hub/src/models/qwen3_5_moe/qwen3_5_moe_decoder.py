@@ -24,8 +24,9 @@ def compute_load_balancing_loss(
         router_logits: Tensor of shape (batch_size * seq_len, num_experts).
         num_experts: Integer, total number of experts.
         top_k: Integer, number of experts to select per token.
-        attention_mask: Tensor of shape (batch_size, seq_len, seq_len),
-            optional mask for padding.
+        attention_mask: Optional mask for padding. Supports both 2D
+            (batch_size, seq_len) padding masks and 3D
+            (batch_size, seq_len, seq_len) attention masks.
 
     Returns:
         Scalar tensor representing the auxiliary loss.
@@ -35,11 +36,14 @@ def compute_load_balancing_loss(
     expert_mask = ops.one_hot(selected_experts, num_experts)
 
     if attention_mask is not None:
-        batch_size, seq_len, _ = ops.shape(attention_mask)
-        flat_mask = ops.any(attention_mask, axis=-1)
+        # Handle both 2D (batch, seq) and 3D (batch, seq, seq) masks.
+        if len(ops.shape(attention_mask)) == 3:
+            flat_mask = ops.any(attention_mask, axis=-1)
+        else:
+            flat_mask = attention_mask
+        flat_mask = ops.cast(flat_mask, dtype="float32")
         flat_mask = ops.reshape(flat_mask, (-1,))
         expert_attention_mask = ops.expand_dims(flat_mask, axis=-1)
-        expert_attention_mask = ops.cast(expert_attention_mask, dtype="float32")
 
         tokens_per_expert = ops.sum(
             expert_mask * expert_attention_mask[:, None, :], axis=0
@@ -130,6 +134,16 @@ class Qwen3_5MoeExperts(keras.layers.Layer):
 
     All experts are stored in fused 3D weight tensors and computed
     via batched einsum for efficiency.
+
+    NOTE: Experts are implemented as a single fused layer that computes
+    all experts for every token in the batch. The routing weights are
+    applied after computation to select the top-k expert contributions.
+    While a truly sparse implementation would only compute the selected
+    experts per token, this is currently not feasible in a
+    backend-agnostic way due to the lack of `ragged_dot` support in the
+    Keras ops API. The fused batched einsum approach is the established
+    pattern across all MoE models in KerasHub (Mixtral, Qwen3MoE, etc.)
+    and ensures stable XLA compilation on all backends.
 
     Args:
         num_experts: int. The total number of experts.
@@ -326,7 +340,7 @@ class Qwen3_5MoeTransformerDecoder(keras.layers.Layer):
         partial_rotary_factor: Fraction of head_dim that gets RoPE.
         rope_max_wavelength: Maximum wavelength for rotary embeddings.
         rope_scaling_factor: Scaling factor for rotary embeddings.
-        activation: Activation function for the FFN.
+
         layer_norm_epsilon: Epsilon for layer norms.
         kernel_initializer: Initializer for projection kernels.
         dropout: Dropout rate.
@@ -353,7 +367,6 @@ class Qwen3_5MoeTransformerDecoder(keras.layers.Layer):
         partial_rotary_factor=0.25,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
-        activation="silu",
         layer_norm_epsilon=1e-6,
         kernel_initializer="glorot_uniform",
         dropout=0.0,
@@ -381,7 +394,7 @@ class Qwen3_5MoeTransformerDecoder(keras.layers.Layer):
         self.rope_scaling_factor = rope_scaling_factor
         self.dropout = dropout
         self.sliding_window_size = sliding_window_size
-        self.activation = keras.activations.get(activation)
+
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.linear_num_key_heads = linear_num_key_heads
@@ -519,10 +532,9 @@ class Qwen3_5MoeTransformerDecoder(keras.layers.Layer):
 
         residual = x
         x = self._post_attention_layernorm(x)
-        x = self.mlp(x, training=training)
+        x = self.mlp(x, attention_mask=decoder_padding_mask, training=training)
 
-        if isinstance(x, tuple):
-            x, _ = x
+        x, _ = x
 
         x = ops.cast(x, ops.dtype(residual))
         decoder_output = x + residual
@@ -638,7 +650,6 @@ class Qwen3_5MoeTransformerDecoder(keras.layers.Layer):
                 "partial_rotary_factor": self.partial_rotary_factor,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
-                "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer

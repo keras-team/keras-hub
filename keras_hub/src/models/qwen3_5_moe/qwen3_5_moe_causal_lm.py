@@ -291,7 +291,11 @@ class Qwen3_5MoeCausalLM(CausalLM):
             token_ids = token_ids["token_ids"]
 
         batch_shape = ops.shape(token_ids)[:2]
-        assert len(batch_shape) == 2
+        if len(batch_shape) != 2:
+            raise ValueError(
+                "`token_ids` must be a 2D tensor of shape "
+                f"(batch_size, sequence_length), got shape {batch_shape}."
+            )
 
         if padding_mask is None:
             padding_mask = ops.ones(shape=batch_shape)

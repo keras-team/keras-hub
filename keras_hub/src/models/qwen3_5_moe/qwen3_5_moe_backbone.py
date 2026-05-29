@@ -155,7 +155,6 @@ class Qwen3_5MoeBackbone(Backbone):
                 rope_max_wavelength=rope_max_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
                 layer_norm_epsilon=layer_norm_epsilon,
-                activation=ops.silu,
                 kernel_initializer=keras.initializers.RandomNormal(stddev=0.02),
                 dropout=dropout,
                 sliding_window_size=sliding_window_size,
