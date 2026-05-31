@@ -149,8 +149,12 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         return super()._detokenize_tf(inputs)
 
     def _detokenize_spm(self, inputs):
-        inputs, _ = self._canonicalize_detokenize_spm_inputs(inputs)
+        self._maybe_initialized_spm()
+        inputs, batched = self._canonicalize_detokenize_spm_inputs(inputs)
         inputs = [
             [id for id in seqs if id != self.mask_token_id] for seqs in inputs
         ]
-        return super()._detokenize_spm(inputs)
+        outputs = self._sentence_piece_spm.Decode(inputs)
+        if not batched:
+            outputs = outputs[0]
+        return outputs

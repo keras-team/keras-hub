@@ -179,10 +179,10 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
                 (id if id != 0 else self.unk_token_id - 1) + 1 for id in ids
             ]
 
-        if isinstance(inputs, str):
-            return process(tokens)
-        else:
+        if tokens and isinstance(tokens[0], list):
             return [process(ids) for ids in tokens]
+        else:
+            return process(tokens)
 
     @preprocessing_function
     def _detokenize_tf(self, inputs):
@@ -208,7 +208,8 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         return super()._detokenize_tf(tokens)
 
     def _detokenize_spm(self, inputs):
-        inputs, _ = self._canonicalize_detokenize_spm_inputs(inputs)
+        self._maybe_initialized_spm()
+        inputs, batched = self._canonicalize_detokenize_spm_inputs(inputs)
 
         def process(ids):
             ids = [id for id in ids if id != self.mask_token_id]
@@ -226,4 +227,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
             return new_ids
 
         processed_inputs = [process(ids) for ids in inputs]
-        return super()._detokenize_spm(processed_inputs)
+        outputs = self._sentence_piece_spm.Decode(processed_inputs)
+        if not batched:
+            outputs = outputs[0]
+        return outputs
