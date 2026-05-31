@@ -3,10 +3,13 @@ import io
 from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
 
 try:
-    import sentencepiece as spm
+    from sentencepiece import SentencePieceTrainer
+except ImportError:
+    SentencePieceTrainer = None
+
+try:
     import tensorflow as tf
 except ImportError:
-    spm = None
     tf = None
 
 from keras_hub.src.api_export import keras_hub_export
@@ -81,7 +84,7 @@ def compute_sentence_piece_proto(
     """
     assert_tf_libs_installed("compute_sentence_piece_proto")
 
-    if spm is None:
+    if SentencePieceTrainer is None:
         raise ImportError(
             f"{compute_sentence_piece_proto.__name__} requires the "
             "`sentencepiece` package. Please install it with "
@@ -105,7 +108,7 @@ def compute_sentence_piece_proto(
         open(proto_output_file, "wb") if proto_output_file else io.BytesIO()
     )
     if tf is not None and isinstance(data, tf.data.Dataset):
-        spm.SentencePieceTrainer.train(
+        SentencePieceTrainer.train(
             sentence_iterator=data.as_numpy_iterator(),
             model_writer=model_writer,
             vocab_size=vocabulary_size,
@@ -117,7 +120,7 @@ def compute_sentence_piece_proto(
             eos_id=3,
         )
     else:
-        spm.SentencePieceTrainer.train(
+        SentencePieceTrainer.train(
             input=data,
             model_writer=model_writer,
             vocab_size=vocabulary_size,

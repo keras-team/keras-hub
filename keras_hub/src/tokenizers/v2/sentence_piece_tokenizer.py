@@ -4,7 +4,12 @@ import os
 
 import keras
 import numpy as np
-import sentencepiece as spm
+
+try:
+    from sentencepiece import SentencePieceProcessor
+except ImportError:
+    SentencePieceProcessor = None
+
 from keras.src.saving import serialization_lib
 
 from keras_hub.src.api_export import keras_hub_export
@@ -120,7 +125,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 f"Received unknown type: {type(proto)}"
             )
 
-        self._sentence_piece = spm.SentencePieceProcessor()
+        self._sentence_piece = SentencePieceProcessor()
         self._sentence_piece.Init(
             model_proto=proto_bytes,
             out_type=str if is_string_dtype(self.compute_dtype) else int,

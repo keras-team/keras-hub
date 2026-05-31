@@ -7,7 +7,8 @@ import unittest
 import keras
 import numpy as np
 import pytest
-import sentencepiece
+from sentencepiece import SentencePieceProcessor
+from sentencepiece import SentencePieceTrainer
 import tensorflow as tf
 
 import keras_hub
@@ -121,7 +122,8 @@ def test_fenced_docstrings(docstring_module):
                     "keras": keras,
                     "keras_hub": keras_hub,
                     "io": io,
-                    "sentencepiece": sentencepiece,
+                    "SentencePieceTrainer": SentencePieceTrainer,
+                    "SentencePieceProcessor": SentencePieceProcessor,
                 },
                 checker=docstring_lib.DoctestOutputChecker(),
                 optionflags=(
