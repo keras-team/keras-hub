@@ -2,7 +2,14 @@ import keras.ops as ops
 
 
 def get_llama3_config(backbone):
-    """Convert Keras Llama3 backbone config to Hugging Face dictionary."""
+    """Convert Keras Llama3 backbone config to Hugging Face dictionary.
+
+    Args:
+        backbone: Llama3Backbone. The Keras Llama3 backbone instance.
+
+    Returns:
+        A dict containing the Hugging Face model configuration.
+    """
     head_dim = backbone.hidden_dim // backbone.num_query_heads
 
     hf_config = {
@@ -27,15 +34,19 @@ def get_llama3_config(backbone):
     }
 
     # Llama 3.1+ uses scaled RoPE ("llama3" rope_type).
-    # Reconstruct the rope_scaling dict when the adjustment factor is set.
-    if backbone.rope_frequency_adjustment_factor is not None:
+    # Use getattr with None defaults so that older Llama 3.0 backbones that
+    # lack these attributes do not raise AttributeError.
+    rope_freq_adj = getattr(backbone, "rope_frequency_adjustment_factor", None)
+    if rope_freq_adj is not None:
         hf_config["rope_scaling"] = {
             "rope_type": "llama3",
-            "factor": backbone.rope_frequency_adjustment_factor,
-            "low_freq_factor": backbone.rope_low_freq_factor,
-            "high_freq_factor": backbone.rope_high_freq_factor,
-            "original_max_position_embeddings": (
-                backbone.rope_pretraining_sequence_length
+            "factor": rope_freq_adj,
+            "low_freq_factor": getattr(backbone, "rope_low_freq_factor", None),
+            "high_freq_factor": getattr(
+                backbone, "rope_high_freq_factor", None
+            ),
+            "original_max_position_embeddings": getattr(
+                backbone, "rope_pretraining_sequence_length", None
             ),
         }
 
@@ -46,12 +57,12 @@ def get_llama3_weights_map(backbone, include_lm_head=False):
     """Create a Keras-to-HuggingFace weight name mapping for Llama3.
 
     Args:
-        backbone: A `keras_hub.models.Llama3Backbone` instance.
-        include_lm_head: If True, includes the ``lm_head.weight`` tensor
+        backbone: Llama3Backbone. A `keras_hub.models.Llama3Backbone` instance.
+        include_lm_head: bool. If True, includes the ``lm_head.weight`` tensor
             (used when exporting a CausalLM task).
 
     Returns:
-        dict mapping HuggingFace weight keys to Keras tensors.
+        A dict mapping HuggingFace weight keys to Keras tensors.
     """
     weights_map = {}
 
@@ -146,7 +157,14 @@ def get_llama3_weights_map(backbone, include_lm_head=False):
 
 
 def get_llama3_tokenizer_config(tokenizer):
-    """Build a HuggingFace-compatible tokenizer_config.json for Llama3."""
+    """Build a HuggingFace-compatible tokenizer_config.json for Llama3.
+
+    Args:
+        tokenizer: Llama3Tokenizer. The Keras Llama3 tokenizer instance.
+
+    Returns:
+        A dict containing the Hugging Face tokenizer configuration.
+    """
     tokenizer_config = {
         "tokenizer_class": "PreTrainedTokenizerFast",
         "bos_token": tokenizer.start_token,
@@ -170,12 +188,18 @@ def build_llama3_tokenizer_json(tokenizer):
     so no extra dependency beyond the standard ``json`` module is needed.
 
     Args:
-        tokenizer: A `keras_hub.models.Llama3Tokenizer` instance.
+        tokenizer: Llama3Tokenizer. A `keras_hub.models.Llama3Tokenizer`
+            instance.
 
     Returns:
         A dict suitable for serialising as ``tokenizer.json``.
     """
-    vocab = dict(tokenizer.vocabulary)  # {str: int}
+    # Support both dict {str: int} and list-of-strings vocabulary formats.
+    raw_vocab = tokenizer.vocabulary
+    if isinstance(raw_vocab, dict):
+        vocab = dict(raw_vocab)  # {str: int}
+    else:
+        vocab = {token: i for i, token in enumerate(raw_vocab)}
     merges = list(tokenizer.merges)  # ["tok1 tok2", ...]
 
     # Collect special/added tokens from the tokenizer's registered attrs.
