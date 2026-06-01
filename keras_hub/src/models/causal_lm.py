@@ -476,7 +476,11 @@ class CausalLM(Task):
                   ``"cpu"`` or ``"gpu"``.
                 - ``prefill_seq_len``: ``int`` or ``list[int]``. Sequence
                   length(s) for prefill signature tracing. A list enables
-                  bucketing (e.g. ``[32, 64, 128, 256]``).
+                  bucketing (e.g. ``[32, 64, 128, 256]``). For multimodal
+                  models (e.g. Gemma3), ``prefill_seq_len`` must match the
+                  preprocessor's ``sequence_length``; bucketing is not
+                  supported for multimodal models due to attention mask
+                  shape constraints.
                 - ``quant_config``: Optional
                   ``litert_torch.quantize.quant_config.QuantConfig`` for
                   in-conversion quantization. Supported recipes are

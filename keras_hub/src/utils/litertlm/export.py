@@ -30,12 +30,20 @@ def export_to_litertlm(
     required by the LiteRT-LM executor, bundles the SentencePiece tokenizer,
     and writes an ``LlmMetadata`` protobuf into the ``.litertlm`` artifact.
 
+    **Multimodal:** When the model has a ``vision_encoder`` (e.g. Gemma3),
+    the vision encoder is baked into the prefill signature so that image
+    inputs are processed alongside text tokens.  The decode signature
+    remains text-only because image KV-caches are already seeded after
+    prefill.
+
     **Bucketing:** ``prefill_seq_len`` accepts either a single ``int`` or a
     ``list[int]``. When a list is provided (e.g.
     ``[32, 64, 128, 256, 512, 1024]``), the exporter traces one prefill
     signature per bucket. At runtime the LiteRT-LM executor dispatches to
     the smallest bucket that fits the actual prompt, avoiding wasted
-    computation on padding.
+    computation on padding. For multimodal models (e.g. Gemma3), bucketing
+    is not supported because the vision attention mask computation requires
+    cache length to equal input length.
 
     **Quantization:** ``quant_config`` is forwarded to
     ``litert_torch.convert()`` for in-graph quantization. It must be an
@@ -115,8 +123,9 @@ def export_to_litertlm(
     Raises:
         ValueError: If the backend is not ``"torch"``, if ``path`` does not
             end with ``.litertlm``, if the model lacks ``call_with_cache``,
-            if ``backend_constraint`` is invalid, or if any
-            ``prefill_seq_len`` exceeds ``cache_length``.
+            if ``backend_constraint`` is invalid, if any
+            ``prefill_seq_len`` exceeds ``cache_length``, or if a multimodal
+            model is exported with mismatched ``prefill_seq_len`` values.
         ImportError: If ``litert-torch`` or ``litert-lm-builder`` are not
             installed.
     """
@@ -154,6 +163,12 @@ def export_to_litertlm(
     num_kv_heads = cache_cfg["num_kv_heads"]
     head_dim = cache_cfg["head_dim"]
 
+    # Detect multimodal capabilities.
+    vision_cfg = _get_vision_config(model)
+    audio_cfg = _get_audio_config(model)
+    has_vision = vision_cfg is not None
+    has_audio = audio_cfg is not None
+
     # Normalise prefill_seq_len to a sorted list.
     if prefill_seq_len is None:
         prefill_seq_lens = [cache_length]
@@ -169,12 +184,23 @@ def export_to_litertlm(
                 f"cache_length ({cache_length})."
             )
 
+    # Multimodal models require cache_length == token_length due to how
+    # Gemma3 computes bidirectional image attention masks. Enforce this.
+    if has_vision and any(seq_len != cache_length for seq_len in prefill_seq_lens):
+        raise ValueError(
+            f"Multimodal LiteRT-LM export currently requires all "
+            f"`prefill_seq_len` values ({prefill_seq_lens}) to match the "
+            f"cache_length ({cache_length}). This is a limitation of the "
+            f"Gemma3 attention mask computation when cache length differs "
+            f"from input length."
+        )
+
     dtype = _torch_dtype_from_model(model)
 
     # Build sample inputs for each prefill bucket and the decode signature.
     prefill_inputs_map = {}
     for seq_len in prefill_seq_lens:
-        prefill_inputs_map[seq_len] = _build_sample_inputs(
+        base = _build_sample_inputs(
             batch_size=1,
             seq_len=seq_len,
             num_layers=num_layers,
@@ -183,6 +209,27 @@ def export_to_litertlm(
             head_dim=head_dim,
             dtype=dtype,
         )
+        if has_vision:
+            base.update(
+                _build_vision_sample_inputs(
+                    batch_size=1,
+                    max_images=vision_cfg["max_images_per_prompt"],
+                    image_size=vision_cfg["image_size"],
+                    num_vision_tokens=vision_cfg["num_vision_tokens"],
+                    seq_len=seq_len,
+                )
+            )
+        if has_audio:
+            base.update(
+                _build_audio_sample_inputs(
+                    batch_size=1,
+                    max_clips=audio_cfg["max_clips_per_prompt"],
+                    num_frames=audio_cfg["num_frames"],
+                    num_audio_tokens=audio_cfg["num_audio_tokens"],
+                    seq_len=seq_len,
+                )
+            )
+        prefill_inputs_map[seq_len] = base
 
     decode_inputs = _build_sample_inputs(
         batch_size=1,
@@ -203,9 +250,32 @@ def export_to_litertlm(
             super().__init__()
             self.base = base
 
-        def forward(self, tokens, input_pos, mask=None, **kv_cache):
+        def forward(
+            self,
+            tokens,
+            input_pos,
+            mask=None,
+            images=None,
+            vision_indices=None,
+            vision_mask=None,
+            audio_mel=None,
+            audio_mel_mask=None,
+            audio_indices=None,
+            audio_mask=None,
+            **kv_cache,
+        ):
             return self.base.forward_prefill(
-                tokens, input_pos, mask, **kv_cache
+                tokens,
+                input_pos,
+                mask,
+                images,
+                vision_indices,
+                vision_mask,
+                audio_mel,
+                audio_mel_mask,
+                audio_indices,
+                audio_mask,
+                **kv_cache,
             )
 
     class _DecodeAdapter(torch.nn.Module):
@@ -256,7 +326,9 @@ def export_to_litertlm(
             **kwargs,
         )
 
-        edge_model = converter.convert(quant_config=quant_config)
+        edge_model = converter.convert(
+            quant_config=quant_config, lightweight_conversion=True
+        )
 
     with tempfile.TemporaryDirectory() as temp_dir:
         tflite_path = os.path.join(temp_dir, "model.tflite")
@@ -267,7 +339,9 @@ def export_to_litertlm(
         )
 
         meta_path = os.path.join(temp_dir, "llm_metadata.pb")
-        _build_llm_metadata(model, cache_length, meta_path)
+        _build_llm_metadata(
+            model, cache_length, meta_path, vision_cfg=vision_cfg, audio_cfg=audio_cfg
+        )
 
         litert_lm_builder = _import_litert_lm_builder()
         builder = litert_lm_builder.LitertLmFileBuilder()
@@ -339,6 +413,52 @@ def _get_cache_config(model):
     }
 
 
+def _get_vision_config(model):
+    """Return vision metadata if *model* has a vision encoder, else ``None``."""
+    backbone = getattr(model, "backbone", None)
+    if backbone is None:
+        return None
+    vision_encoder = getattr(backbone, "vision_encoder", None)
+    if vision_encoder is None:
+        return None
+    preprocessor = getattr(model, "preprocessor", None)
+    max_images = getattr(preprocessor, "max_images_per_prompt", 1)
+    image_size = getattr(backbone, "image_size", 224)
+    num_vision_tokens = getattr(
+        backbone, "num_vision_tokens_per_image", 0
+    ) * max_images
+    patch_size = getattr(vision_encoder, "patch_size", None)
+    pool_size = getattr(vision_encoder, "pool_size", None)
+    return {
+        "max_images_per_prompt": max_images,
+        "image_size": image_size,
+        "num_vision_tokens": num_vision_tokens,
+        "patch_size": patch_size,
+        "pool_size": pool_size,
+    }
+
+
+def _get_audio_config(model):
+    """Return audio metadata if *model* has an audio encoder, else ``None``."""
+    backbone = getattr(model, "backbone", None)
+    if backbone is None:
+        return None
+    audio_encoder = getattr(backbone, "audio_encoder", None)
+    if audio_encoder is None:
+        return None
+    preprocessor = getattr(model, "preprocessor", None)
+    max_clips = getattr(preprocessor, "max_audio_clips_per_prompt", 1)
+    num_frames = getattr(preprocessor, "max_audio_frames", 100)
+    num_audio_tokens = getattr(
+        backbone, "num_audio_tokens_per_clip", 0
+    ) * max_clips
+    return {
+        "max_clips_per_prompt": max_clips,
+        "num_frames": num_frames,
+        "num_audio_tokens": num_audio_tokens,
+    }
+
+
 def _build_sample_inputs(
     batch_size,
     seq_len,
@@ -380,6 +500,64 @@ def _build_sample_inputs(
     return sample
 
 
+def _build_vision_sample_inputs(
+    batch_size,
+    max_images,
+    image_size,
+    num_vision_tokens,
+    seq_len,
+):
+    """Create concrete vision sample tensors for a prefill signature."""
+    device = "cpu"
+    images = torch.zeros(
+        (batch_size, max_images, image_size, image_size, 3),
+        dtype=torch.float32,
+        device=device,
+    )
+    vision_indices = torch.zeros(
+        (batch_size, num_vision_tokens), dtype=torch.int32, device=device
+    )
+    vision_mask = torch.zeros(
+        (batch_size, seq_len), dtype=torch.int32, device=device
+    )
+    return {
+        "images": images,
+        "vision_indices": vision_indices,
+        "vision_mask": vision_mask,
+    }
+
+
+def _build_audio_sample_inputs(
+    batch_size,
+    max_clips,
+    num_frames,
+    num_audio_tokens,
+    seq_len,
+):
+    """Create concrete audio sample tensors for a prefill signature."""
+    device = "cpu"
+    audio_mel = torch.zeros(
+        (batch_size, max_clips, num_frames, 128),
+        dtype=torch.float32,
+        device=device,
+    )
+    audio_mel_mask = torch.zeros(
+        (batch_size, max_clips, num_frames), dtype=torch.int32, device=device
+    )
+    audio_indices = torch.zeros(
+        (batch_size, num_audio_tokens), dtype=torch.int32, device=device
+    )
+    audio_mask = torch.zeros(
+        (batch_size, seq_len), dtype=torch.int32, device=device
+    )
+    return {
+        "audio_mel": audio_mel,
+        "audio_mel_mask": audio_mel_mask,
+        "audio_indices": audio_indices,
+        "audio_mask": audio_mask,
+    }
+
+
 def _get_tokenizer(model):
     preprocessor = getattr(model, "preprocessor", None)
     if preprocessor is None:
@@ -419,7 +597,39 @@ def _materialize_sentencepiece_tokenizer(tokenizer, temp_dir):
     return tokenizer_path
 
 
-def _build_llm_metadata(model, max_num_tokens, path):
+def _populate_vision_metadata(meta, model_type, vision_cfg, tokenizer):
+    """Populate vision-related fields in the LlmMetadata protobuf."""
+    image_size = vision_cfg.get("image_size", 224)
+    patch_size = vision_cfg.get("patch_size")
+    pool_size = vision_cfg.get("pool_size")
+
+    if model_type in ("gemma3", "gemma3n"):
+        subtype = getattr(meta.llm_model_type, model_type)
+        subtype.start_of_image_token.token_str = "<start_of_image>"
+        subtype.end_of_image_token.token_str = "<end_of_image>"
+        subtype.image_tensor_height = image_size
+        subtype.image_tensor_width = image_size
+    elif model_type == "gemma4":
+        subtype = meta.llm_model_type.gemma4
+        subtype.start_of_image_token.token_str = "<|image>"
+        subtype.end_of_image_token.token_str = "<image|>"
+        if patch_size is not None:
+            subtype.patch_width = patch_size
+            subtype.patch_height = patch_size
+            subtype.max_num_patches = (image_size // patch_size) ** 2
+        if pool_size is not None:
+            subtype.pooling_kernel_size = pool_size
+
+
+def _populate_audio_metadata(meta, model_type, audio_cfg, tokenizer):
+    """Populate audio-related fields in the LlmMetadata protobuf."""
+    if model_type in ("gemma3n", "gemma4"):
+        subtype = getattr(meta.llm_model_type, model_type)
+        subtype.start_of_audio_token.token_str = "<|audio>"
+        subtype.end_of_audio_token.token_str = "<audio|>"
+
+
+def _build_llm_metadata(model, max_num_tokens, path, vision_cfg=None, audio_cfg=None):
     """Serialize an ``LlmMetadata`` protobuf to *path*."""
     from litert_lm_builder.litertlm_builder import llm_metadata_pb2
 
@@ -446,13 +656,81 @@ def _build_llm_metadata(model, max_num_tokens, path):
     model_type = _detect_llm_model_type(model)
     getattr(meta.llm_model_type, model_type).SetInParent()
 
+    # Populate vision fields for supported model types.
+    if vision_cfg is not None:
+        _populate_vision_metadata(meta, model_type, vision_cfg, tokenizer)
+
+    # Populate audio fields for supported model types.
+    if audio_cfg is not None:
+        _populate_audio_metadata(meta, model_type, audio_cfg, tokenizer)
+
     with open(path, "wb") as f:
         f.write(meta.SerializeToString())
 
 
 def _detect_llm_model_type(model):
-    """Return the LiteRT-LM LlmModelType name for *model*."""
+    """Return the LiteRT-LM LlmModelType name for *model*.
+
+    Uses ``isinstance`` checks where possible to avoid mis-identifying
+    user-defined subclasses.
+    """
+    # Lazy imports to avoid heavy top-level dependencies.
+    try:
+        from keras_hub.src.models.gemma4.gemma4_causal_lm import (
+            Gemma4CausalLM,
+        )
+
+        if isinstance(model, Gemma4CausalLM):
+            return "gemma4"
+    except ImportError:
+        pass
+
+    try:
+        from keras_hub.src.models.gemma3.gemma3_causal_lm import (
+            Gemma3CausalLM,
+        )
+
+        if isinstance(model, Gemma3CausalLM):
+            return "gemma3"
+    except ImportError:
+        pass
+
+    try:
+        from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
+
+        if isinstance(model, GemmaCausalLM):
+            return "generic_model"
+    except ImportError:
+        pass
+
+    try:
+        from keras_hub.src.models.qwen3.qwen3_causal_lm import Qwen3CausalLM
+
+        if isinstance(model, Qwen3CausalLM):
+            return "qwen3"
+    except ImportError:
+        pass
+
+    try:
+        from keras_hub.src.models.qwen2.qwen2_causal_lm import Qwen2CausalLM
+
+        if isinstance(model, Qwen2CausalLM):
+            return "qwen2p5"
+    except ImportError:
+        pass
+
+    try:
+        from keras_hub.src.models.llama.llama_causal_lm import LlamaCausalLM
+
+        if isinstance(model, LlamaCausalLM):
+            return "llama"
+    except ImportError:
+        pass
+
+    # Fallback to class-name heuristic for models not explicitly imported.
     cls_name = type(model).__name__
+    if "Gemma4" in cls_name:
+        return "gemma4"
     if "Gemma3" in cls_name:
         return "gemma3"
     if "Gemma" in cls_name:
@@ -461,6 +739,10 @@ def _detect_llm_model_type(model):
         return "qwen3"
     if "Qwen2" in cls_name:
         return "qwen2p5"
+    # NOTE: LlmModelType does not have a dedicated "llama" field; fall back
+    # to generic_model so that the protobuf oneof stays valid.
+    if "Llama" in cls_name:
+        return "generic_model"
     return "generic_model"
 
 

@@ -2,6 +2,7 @@
 LiteRT-LM."""
 
 import contextlib
+import inspect
 
 import torch
 from keras.src.backend.torch import core as torch_core
@@ -14,19 +15,29 @@ class KerasHubLiteRTAdapter(nn.Module):
     The adapter exposes `forward_prefill` and `forward_decode` signatures
     compatible with `litert_torch.signature(...)`:
 
-        inputs:
-            tokens:       int32 [batch, seq_len]
-            input_pos:    int32 [seq_len]   (position indices)
-            mask:         optional float mask (ignored by most models)
-            kv_cache_k_0, kv_cache_v_0, ...: per-layer KV caches
+    Text-only inputs:
+        tokens:       int32 [batch, seq_len]
+        input_pos:    int32 [seq_len]   (position indices)
+        mask:         optional float mask (ignored by most models)
+        kv_cache_k_0, kv_cache_v_0, ...: per-layer KV caches
 
-        outputs (prefill):
-            kv_cache_k_0, kv_cache_v_0, ...: updated per-layer KV caches
-            (no logits – LiteRT-LM extracts last-token logits via decode)
+    Multimodal prefill inputs (when model has a vision/audio encoder):
+        images:       float32 [batch, num_images, H, W, 3]
+        vision_indices: int32 [batch, num_vision_tokens]
+        vision_mask:  int32 [batch, seq_len] or bool
+        audio_mel:    float32 [batch, num_clips, num_frames, 128]
+        audio_mel_mask: int32 [batch, num_clips, num_frames]
+        audio_indices: int32 [batch, num_audio_tokens]
+        audio_mask:   int32 [batch, seq_len] or bool
+        (plus text inputs above)
 
-        outputs (decode):
-            logits:       float [batch, seq_len, vocab_size]
-            kv_cache_k_0, kv_cache_v_0, ...: updated per-layer KV caches
+    Outputs (prefill):
+        kv_cache_k_0, kv_cache_v_0, ...: updated per-layer KV caches
+        (no logits – LiteRT-LM extracts last-token logits via decode)
+
+    Outputs (decode):
+        logits:       float [batch, seq_len, vocab_size]
+        kv_cache_k_0, kv_cache_v_0, ...: updated per-layer KV caches
 
     The adapter stacks per-layer k/v tensors into the Keras cache format
     (``[batch, num_layers, 2, cache_length, num_kv_heads, head_dim]``),
@@ -38,8 +49,29 @@ class KerasHubLiteRTAdapter(nn.Module):
         self.keras_model = keras_model
         self.num_layers = num_layers
         self.cache_length = cache_length
+        self.has_vision = (
+            hasattr(keras_model.backbone, "vision_encoder")
+            and keras_model.backbone.vision_encoder is not None
+        )
+        self.has_audio = (
+            hasattr(keras_model.backbone, "audio_encoder")
+            and keras_model.backbone.audio_encoder is not None
+        )
 
-    def forward_prefill(self, tokens, input_pos, mask=None, **kv_cache):
+    def forward_prefill(
+        self,
+        tokens,
+        input_pos,
+        mask=None,
+        images=None,
+        vision_indices=None,
+        vision_mask=None,
+        audio_mel=None,
+        audio_mel_mask=None,
+        audio_indices=None,
+        audio_mask=None,
+        **kv_cache,
+    ):
         """Prefill step – processes the full prompt at the given cache position.
 
         LiteRT-LM requires prefill to return **only** KV cache tensors
@@ -54,8 +86,32 @@ class KerasHubLiteRTAdapter(nn.Module):
         cache = self._stack_kv_cache(kv_cache)
         # The first element of input_pos is the start position.
         cache_update_index = input_pos[0]
+
+        # Run vision encoder if images are provided.
+        img_embeddings = None
+        if self.has_vision and images is not None:
+            img_embeddings = self.keras_model.backbone.vision_encoder(images)
+
+        # Run audio encoder if audio mel is provided.
+        audio_embeddings = None
+        if self.has_audio and audio_mel is not None:
+            audio_embeddings = self.keras_model.backbone.audio_encoder(
+                audio_mel, audio_mel_mask
+            )
+
+        call_kwargs = self._build_call_with_cache_kwargs(
+            img_embeddings=img_embeddings,
+            vision_mask=vision_mask,
+            vision_indices=vision_indices,
+            audio_embeddings=audio_embeddings,
+            audio_mask=audio_mask,
+            audio_indices=audio_indices,
+        )
         logits, _, updated_cache = self.keras_model.call_with_cache(
-            tokens, cache, cache_update_index
+            tokens,
+            cache,
+            cache_update_index,
+            **call_kwargs,
         )
         # Return ONLY the KV cache outputs (no logits).
         outputs = self._unstack_kv_cache(updated_cache)
@@ -71,8 +127,19 @@ class KerasHubLiteRTAdapter(nn.Module):
         cache = self._stack_kv_cache(kv_cache)
         # Squeeze to a 0-D tensor so Keras cache operations receive a scalar.
         cache_update_index = input_pos.reshape(())
+        call_kwargs = self._build_call_with_cache_kwargs(
+            img_embeddings=None,
+            vision_mask=None,
+            vision_indices=None,
+            audio_embeddings=None,
+            audio_mask=None,
+            audio_indices=None,
+        )
         logits, _, updated_cache = self.keras_model.call_with_cache(
-            tokens, cache, cache_update_index
+            tokens,
+            cache,
+            cache_update_index,
+            **call_kwargs,
         )
         outputs = self._unstack_kv_cache(updated_cache)
         outputs["logits"] = logits
@@ -85,6 +152,37 @@ class KerasHubLiteRTAdapter(nn.Module):
         k_stack = torch.stack(k_list, dim=1)
         v_stack = torch.stack(v_list, dim=1)
         return torch.stack([k_stack, v_stack], dim=2)
+
+    def _build_call_with_cache_kwargs(
+        self,
+        img_embeddings=None,
+        vision_mask=None,
+        vision_indices=None,
+        audio_embeddings=None,
+        audio_mask=None,
+        audio_indices=None,
+    ):
+        """Build kwargs dict for ``call_with_cache`` based on its signature."""
+        sig = inspect.signature(self.keras_model.call_with_cache)
+        params = set(sig.parameters.keys())
+        kwargs = {}
+        if "img_embeddings" in params:
+            kwargs["img_embeddings"] = img_embeddings
+        if "vision_mask" in params:
+            kwargs["vision_mask"] = vision_mask
+        if "padding_mask" in params:
+            kwargs["padding_mask"] = None
+        if "vision_indices" in params:
+            kwargs["vision_indices"] = vision_indices
+        if "cache_update_mask" in params:
+            kwargs["cache_update_mask"] = None
+        if "audio_embeddings" in params:
+            kwargs["audio_embeddings"] = audio_embeddings
+        if "audio_mask" in params:
+            kwargs["audio_mask"] = audio_mask
+        if "audio_indices" in params:
+            kwargs["audio_indices"] = audio_indices
+        return kwargs
 
     def _unstack_kv_cache(self, cache):
         """Split Keras cache back into per-layer output tensors."""
@@ -122,7 +220,7 @@ def _traceable_slice_update_scope():
             start_indices = torch_core.convert_to_tensor(
                 start_indices, dtype="int64"
             )
-            starts = [start_indices[i] for i in range(start_indices.numel())]
+            starts = [start_indices.reshape(-1)[i] for i in range(start_indices.numel())]
 
         # Dimensions whose start is a tensor → potentially dynamic.
         tensor_dims = []
@@ -171,13 +269,13 @@ def _traceable_slice_update_scope():
             start_indices = torch_core.convert_to_tensor(
                 start_indices, dtype="int64"
             )
-            starts = [start_indices[i] for i in range(start_indices.numel())]
+            starts = [start_indices.reshape(-1)[i] for i in range(start_indices.numel())]
 
         if isinstance(shape, (list, tuple)):
             lengths = list(shape)
         else:
             shape = torch_core.convert_to_tensor(shape, dtype="int64")
-            lengths = [shape[i] for i in range(shape.numel())]
+            lengths = [shape.reshape(-1)[i] for i in range(shape.numel())]
 
         # Dimensions whose start is a tensor → potentially dynamic.
         tensor_dims = []
