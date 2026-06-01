@@ -23,7 +23,7 @@ def get_llama3_config(backbone):
         "mlp_bias": False,
         "tie_word_embeddings": backbone.tie_word_embeddings,
         "use_cache": True,
-        "torch_dtype": backbone.dtype_policy.name,
+        "torch_dtype": backbone.dtype_policy.compute_dtype,
     }
 
     # Llama 3.1+ uses scaled RoPE ("llama3" rope_type).
@@ -208,18 +208,41 @@ def build_llama3_tokenizer_json(tokenizer):
         "padding": None,
         "added_tokens": added_tokens,
         "normalizer": None,
-        # Llama3 uses byte-level BPE with no prefix space and tiktoken-style
-        # regex splitting.
+        # Llama3 uses byte-level BPE with tiktoken-style regex splitting.
+        # The pre_tokenizer must be a Sequence: first split on the Llama 3
+        # regex, then apply ByteLevel encoding (with use_regex=False so the
+        # GPT-2 fallback regex is not applied a second time).
         "pre_tokenizer": {
-            "type": "ByteLevel",
-            "add_prefix_space": False,
-            "trim_offsets": True,
-            "use_regex": True,
+            "type": "Sequence",
+            "pretokenizers": [
+                {
+                    "type": "Split",
+                    "pattern": {
+                        "Regex": (
+                            r"(?i:'s|'t|'re|'ve|'m|'ll|'d)"
+                            r"|[^\r\n\p{L}\p{N}]?\p{L}+"
+                            r"|\p{N}{1,3}"
+                            r"| ?[^\s\p{L}\p{N}]+[\r\n]*"
+                            r"|\s*[\r\n]+"
+                            r"|\s+(?!\S)"
+                            r"|\s+"
+                        )
+                    },
+                    "behavior": "Removed",
+                    "invert": True,
+                },
+                {
+                    "type": "ByteLevel",
+                    "add_prefix_space": False,
+                    "trim_offsets": True,
+                    "use_regex": False,
+                },
+            ],
         },
         "post_processor": None,
         "decoder": {
             "type": "ByteLevel",
-            "add_prefix_space": True,
+            "add_prefix_space": False,
             "trim_offsets": True,
             "use_regex": True,
         },
