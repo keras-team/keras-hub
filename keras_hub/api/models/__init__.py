@@ -71,6 +71,17 @@ from keras_hub.src.models.bert.bert_text_classifier_preprocessor import (
 from keras_hub.src.models.bert.bert_tokenizer import (
     BertTokenizer as BertTokenizer,
 )
+from keras_hub.src.models.bge.bge_backbone import BgeBackbone as BgeBackbone
+from keras_hub.src.models.bge.bge_text_embedder import (
+    BgeTextEmbedder as BgeTextEmbedder,
+)
+from keras_hub.src.models.bge.bge_text_embedder_preprocessor import (
+    BgeTextEmbedderPreprocessor as BgeEmbedderPreprocessor,
+)
+from keras_hub.src.models.bge.bge_text_embedder_preprocessor import (
+    BgeTextEmbedderPreprocessor as BgeTextEmbedderPreprocessor,
+)
+from keras_hub.src.models.bge.bge_tokenizer import BgeTokenizer as BgeTokenizer
 from keras_hub.src.models.bloom.bloom_backbone import (
     BloomBackbone as BloomBackbone,
 )
