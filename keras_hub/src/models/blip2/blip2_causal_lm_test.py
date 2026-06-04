@@ -177,48 +177,48 @@ class BLIP2CausalLMTest(TestCase):
             output = causal_lm.generate(prompt)
             self.assertEqual(prompt, output)
 
-        def test_batch_image_text_alignment(self):
-            """Each image must stay paired with its own text prompt
-            after padding."""
-            causal_lm = BLIP2CausalLM(**self.init_kwargs)
+    def test_batch_image_text_alignment(self):
+        """Each image must stay paired with its own text prompt
+        after padding."""
+        causal_lm = BLIP2CausalLM(**self.init_kwargs)
 
-            # Two visually distinct images — all-zeros vs all-ones
-            image_a = np.zeros((1, 32, 32, 3), dtype="float32")  # black image
-            image_b = np.ones((1, 32, 32, 3), dtype="float32")  # white image
+        # Two visually distinct images — all-zeros vs all-ones
+        image_a = np.zeros((1, 32, 32, 3), dtype="float32")  # black image
+        image_b = np.ones((1, 32, 32, 3), dtype="float32")  # white image
 
-            # Get individual outputs as the ground truth
-            output_a = causal_lm.generate(
-                {"images": image_a, "text": ["the"]},
-                max_length=6,
-            )
-            output_b = causal_lm.generate(
-                {"images": image_b, "text": ["the"]},
-                max_length=6,
-            )
+        # Get individual outputs as the ground truth
+        output_a = causal_lm.generate(
+            {"images": image_a, "text": ["the"]},
+            max_length=6,
+        )
+        output_b = causal_lm.generate(
+            {"images": image_b, "text": ["the"]},
+            max_length=6,
+        )
 
-            # Now run both together in one batch
-            images_batch = np.concatenate([image_a, image_b], axis=0)
-            output_batch = causal_lm.generate(
-                {
-                    "images": images_batch,
-                    "text": ["the", "the"],
-                },
-                max_length=6,
-            )
+        # Now run both together in one batch
+        images_batch = np.concatenate([image_a, image_b], axis=0)
+        output_batch = causal_lm.generate(
+            {
+                "images": images_batch,
+                "text": ["the", "the"],
+            },
+            max_length=6,
+        )
 
-            # Each batch output must match its individual counterpart.
-            # If alignment is broken, image_a's features bleed into slot 1 or
-            # vice versa.
-            self.assertEqual(
-                output_a[0],
-                output_batch[0],
-                "Batch slot 0 does not match individual output for image_a",
-            )
-            self.assertEqual(
-                output_b[0],
-                output_batch[1],
-                "Batch slot 1 does not match individual output for image_b",
-            )
+        # Each batch output must match its individual counterpart.
+        # If alignment is broken, image_a's features bleed into slot 1 or
+        # vice versa.
+        self.assertEqual(
+            output_a[0],
+            output_batch[0],
+            "Batch slot 0 does not match individual output for image_a",
+        )
+        self.assertEqual(
+            output_b[0],
+            output_batch[1],
+            "Batch slot 1 does not match individual output for image_b",
+        )
 
     def test_unequal_prompt_lengths_alignment(self):
         """Unequal prompt lengths must not shift image-text pairing
