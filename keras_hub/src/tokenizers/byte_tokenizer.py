@@ -1,3 +1,5 @@
+import numbers
+
 import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
@@ -170,6 +172,25 @@ class ByteTokenizer(tokenizer.Tokenizer):
                 f"Received: errors={errors}"
             )
 
+        # Validate sequence_length
+        if sequence_length is not None:
+            if isinstance(sequence_length, bool):
+                raise ValueError(
+                    "`sequence_length` must be an int, got bool: "
+                    f"{sequence_length}"
+                )
+
+            if not isinstance(sequence_length, numbers.Integral):
+                raise ValueError(
+                    "`sequence_length` must be an int or None. "
+                    f"{sequence_length}"
+                )
+
+            if sequence_length <= 0:
+                raise ValueError(
+                    f"`sequence_length` must be > 0.{sequence_length}"
+                )
+
         super().__init__(dtype=dtype, **kwargs)
 
         self.lowercase = lowercase
@@ -215,7 +236,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
         tokens = tf.cast(tokens, self.compute_dtype)
 
         # Convert to a dense output if `sequence_length` is set.
-        if self.sequence_length:
+        if self.sequence_length is not None:
             output_shape = tokens.shape.as_list()
             output_shape[-1] = self.sequence_length
             tokens = tokens.to_tensor(shape=output_shape)

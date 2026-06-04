@@ -216,3 +216,35 @@ class ByteTokenizerTest(TestCase):
         tokenizer = ByteTokenizer()
         tokens = [tokenizer.id_to_token(i) for i in input_ids]
         self.assertAllEqual(tokens, expected_tokens)
+
+    def test_sequence_length_valid_int(self):
+        tokenizer = ByteTokenizer(sequence_length=5)
+        self.assertEqual(tokenizer.sequence_length, 5)
+
+    def test_sequence_length_valid_float(self):
+        with self.assertRaises(ValueError):
+            ByteTokenizer(sequence_length=5.0)
+
+    def test_sequence_length_invalid_float(self):
+        with self.assertRaises(ValueError):
+            ByteTokenizer(sequence_length=5.5)
+
+    def test_sequence_length_none(self):
+        tokenizer = ByteTokenizer(sequence_length=None)
+        self.assertIsNone(tokenizer.sequence_length)
+
+    def test_sequence_length_invalid_string(self):
+        with self.assertRaises(ValueError):
+            ByteTokenizer(sequence_length="5")
+
+    def test_sequence_length_bool(self):
+        with self.assertRaises(ValueError):
+            ByteTokenizer(sequence_length=True)
+
+    def test_sequence_length_zero(self):
+        with self.assertRaises(ValueError):
+            ByteTokenizer(sequence_length=0)
+
+    def test_sequence_length_negative(self):
+        with self.assertRaises(ValueError):
+            ByteTokenizer(sequence_length=-1)
