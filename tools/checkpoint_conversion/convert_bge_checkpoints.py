@@ -4,10 +4,12 @@ Convert HuggingFace BAAI/bge-*-en-v1.5 checkpoints to KerasHub format.
 BGE (BAAI General Embedding) models are standard BERT encoders fine-tuned for
 dense retrieval. Embeddings are computed as the CLS token output followed by
 L2 normalization. This maps exactly to:
-    BertTextEmbedder(backbone, pooling_mode="cls", normalize=True)
-
-Validation is performed against the HuggingFace transformers library directly
-(no sentence-transformers dependency required).
+    BertTextEmbedder(
+        backbone=backbone,
+        preprocessor=preprocessor,
+        pooling_mode="cls",
+        normalize=True,
+    )
 
 Setup:
 ```shell
@@ -18,6 +20,9 @@ Usage:
 ```shell
 cd tools/checkpoint_conversion
 python convert_bge_checkpoints.py --preset bge_small_en_v1.5
+python convert_bge_checkpoints.py \
+    --preset bge_small_en_v1.5 \
+    --upload_uri kaggle://keras/bge/keras/bge_small_en_v1.5
 ```
 """
 
@@ -52,6 +57,12 @@ flags.DEFINE_string(
     None,
     "Preset name to convert. Must be one of the keys in PRESET_MAP.",
 )
+flags.DEFINE_string(
+    "upload_uri",
+    None,
+    "Kaggle URI to upload the preset to, e.g. "
+    '"kaggle://keras/bge/keras/{preset}". Optional.',
+)
 
 PRESET_MAP = {
     "bge_small_en_v1.5": "BAAI/bge-small-en-v1.5",
@@ -59,7 +70,7 @@ PRESET_MAP = {
     "bge_large_en_v1.5": "BAAI/bge-large-en-v1.5",
 }
 
-# BGE uses sequence_length=512 (same as base BERT).
+# BGE standardizes on sequence_length=512.
 SEQUENCE_LENGTH = 512
 
 
@@ -88,11 +99,12 @@ def validate_output(keras_embedder, hf_model_id):
     Validate numerical parity between the converted KerasHub model and the
     HuggingFace reference implementation.
 
-    Performs four checks:
+    Performs five checks:
     1. Parameter count verification.
     2. Embedding output comparison (max/mean absolute difference).
     3. L2 norm check (embeddings must be unit-length).
-    4. Semantic search ranking consistency.
+    4. Cosine similarity ranking consistency (intra-batch).
+    5. Semantic search ranking consistency.
 
     Args:
         keras_embedder: Converted KerasHub BertTextEmbedder.
@@ -150,6 +162,17 @@ def validate_output(keras_embedder, hf_model_id):
     print(f"\nMax absolute diff:  {max_diff:.2e}")
     print(f"Mean absolute diff: {mean_diff:.2e}")
 
+    # Cosine similarity ranking check.
+    keras_batch_sims = keras_embeddings @ keras_embeddings.T
+    hf_batch_sims = hf_embeddings @ hf_embeddings.T
+    # Sentences 0 and 1 should be more similar to each other than to 2.
+    keras_ranking_ok = keras_batch_sims[0, 1] > keras_batch_sims[0, 2]
+    hf_ranking_ok = hf_batch_sims[0, 1] > hf_batch_sims[0, 2]
+    print(
+        f"\nRanking consistency: KerasHub={keras_ranking_ok}, "
+        f"HF={hf_ranking_ok}"
+    )
+
     # =========================================
     # L2 NORM CHECK
     # =========================================
@@ -175,7 +198,7 @@ def validate_output(keras_embedder, hf_model_id):
 
     keras_q = np.array(keras_embedder.encode_text(query))
     keras_d = np.array(keras_embedder.encode_documents(documents))
-    keras_sims = keras_q @ keras_d.T
+    keras_sims = np.array(keras_embedder.similarity(keras_q, keras_d))
     keras_best = int(np.argmax(keras_sims))
 
     hf_q = _hf_encode(hf_model, hf_tokenizer, [query])
@@ -207,6 +230,10 @@ def validate_output(keras_embedder, hf_model_id):
         print("❌ FAILED: Embeddings are not unit-length")
         passed = False
 
+    if not keras_ranking_ok:
+        print("❌ FAILED: Ranking inconsistency")
+        passed = False
+
     if not search_ok:
         print("❌ FAILED: Semantic search ranking mismatch")
         passed = False
@@ -218,6 +245,9 @@ def validate_output(keras_embedder, hf_model_id):
 
 
 def main(_):
+    """
+    Main entry point: convert, validate, and save preset.
+    """
     preset = FLAGS.preset
     if preset not in PRESET_MAP:
         raise ValueError(
@@ -281,13 +311,18 @@ def main(_):
         # Validate.
         passed = validate_output(embedder, hf_model_id)
         if not passed:
-            print("\n Verification failed. Preset not saved.")
+            print("\n⚠️  Verification failed. Preset not saved.")
             return
 
         # Save.
         print(f"\nSaving to preset: ./{preset}")
         embedder.save_to_preset(preset)
-        print(f"\n Successfully converted and saved to: ./{preset}")
+        print(f"\n✅ Successfully converted and saved to: ./{preset}")
+
+        upload_uri = FLAGS.upload_uri
+        if upload_uri:
+            keras_hub.upload_preset(uri=upload_uri, preset=f"./{preset}")
+            print(f"🏁 Preset uploaded to {upload_uri}")
 
 
 if __name__ == "__main__":
