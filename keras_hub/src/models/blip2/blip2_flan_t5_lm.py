@@ -8,7 +8,6 @@ from keras_hub.src.models.t5.t5_backbone import T5Backbone
 
 
 @keras_hub_export("keras_hub.models.BLIP2FlanT5")
-@keras.saving.register_keras_serializable(package="keras_hub")
 class BLIP2FlanT5(keras.Model):
     """Flan-T5 language model adapter for BLIP-2.
 

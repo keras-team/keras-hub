@@ -371,7 +371,9 @@ def validate_t5_lm(
     #     language_projection is counted via hf_model.language_projection.
     # lm_head is not in BLIP2FlanT5's functional graph (call() returns raw
     # decoder hidden states), so count_params() excludes it — add it manually.
-    keras_params = keras_flan_t5.count_params() + keras_flan_t5.lm_head.count_params()
+    keras_params = (
+        keras_flan_t5.count_params() + keras_flan_t5.lm_head.count_params()
+    )
     hf_t5_params = sum(p.numel() for p in hf_model.language_model.parameters())
     hf_proj_params = sum(
         p.numel() for p in hf_model.language_projection.parameters()
