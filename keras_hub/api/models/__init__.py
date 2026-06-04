@@ -800,6 +800,18 @@ from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image im
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
     StableDiffusion3TextToImagePreprocessor as StableDiffusion3TextToImagePreprocessor,
 )
+from keras_hub.src.models.stablelm.stablelm_backbone import (
+    StableLMBackbone as StableLMBackbone,
+)
+from keras_hub.src.models.stablelm.stablelm_causal_lm import (
+    StableLMCausalLM as StableLMCausalLM,
+)
+from keras_hub.src.models.stablelm.stablelm_causal_lm_preprocessor import (
+    StableLMCausalLMPreprocessor as StableLMCausalLMPreprocessor,
+)
+from keras_hub.src.models.stablelm.stablelm_tokenizer import (
+    StableLMTokenizer as StableLMTokenizer,
+)
 from keras_hub.src.models.swin_transformer.swin_transformer_backbone import (
     SwinTransformerBackbone as SwinTransformerBackbone,
 )

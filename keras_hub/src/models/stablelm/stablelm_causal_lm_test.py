@@ -14,35 +14,16 @@ from keras_hub.src.tests.test_case import TestCase
 
 class StableLMCausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = [
-            "!",
-            "air",
-            "Ġair",
-            "plane",
-            "Ġat",
-            "port",
-            "<|endoftext|>",
-        ]
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["!", "<|endoftext|>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
-        self.merges = [
-            "Ġ a",
-            "Ġ t",
-            "Ġ i",
-            "Ġ b",
-            "a i",
-            "p l",
-            "n e",
-            "Ġa t",
-            "p o",
-            "r t",
-            "Ġt h",
-            "ai r",
-            "pl a",
-            "po rt",
-            "Ġai r",
-            "Ġa i",
-            "pla ne",
-        ]
 
         self.preprocessor = StableLMCausalLMPreprocessor(
             tokenizer=StableLMTokenizer(
@@ -51,9 +32,11 @@ class StableLMCausalLMTest(TestCase):
             sequence_length=8,
         )
 
+        self.vocabulary_size = self.preprocessor.tokenizer.vocabulary_size()
+
         # Config
         self.backbone = StableLMBackbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            vocabulary_size=self.vocabulary_size,
             num_layers=2,
             num_query_heads=2,
             num_key_value_heads=2,
@@ -76,7 +59,8 @@ class StableLMCausalLMTest(TestCase):
             cls=StableLMCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 8, 7),
+            # Updated expectation to match the dynamic vocab size (31)
+            expected_output_shape=(2, 8, self.vocabulary_size),
         )
 
     def test_generate(self):

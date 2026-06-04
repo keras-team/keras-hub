@@ -4,35 +4,17 @@ from keras_hub.src.tests.test_case import TestCase
 
 class StableLMTokenizerTest(TestCase):
     def setUp(self):
-        self.vocab = [
-            "!",
-            "air",
-            "Ġair",
-            "plane",
-            "Ġat",
-            "port",
-            "<|endoftext|>",
-        ]
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["!", "<|endoftext|>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
-        self.merges = [
-            "Ġ a",
-            "Ġ t",
-            "Ġ i",
-            "Ġ b",
-            "a i",
-            "p l",
-            "n e",
-            "Ġa t",
-            "p o",
-            "r t",
-            "Ġt h",
-            "ai r",
-            "pl a",
-            "po rt",
-            "Ġai r",
-            "Ġa i",
-            "pla ne",
-        ]
+
         self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
         self.input_data = [
             " airplane at airport<|endoftext|>",
@@ -40,9 +22,8 @@ class StableLMTokenizerTest(TestCase):
         ]
 
     def test_tokenizer_basics(self):
-        expected_output = [[2, 3, 4, 2, 5, 6], [2, 3, 2, 5]]
+        expected_output = [[25, 16, 26, 25, 18, 1], [25, 16, 25, 18]]
 
-        # Run the preprocessing layer test to verify tokenization
         self.run_preprocessing_layer_test(
             cls=StableLMTokenizer,
             init_kwargs=self.init_kwargs,
@@ -51,7 +32,7 @@ class StableLMTokenizerTest(TestCase):
         )
 
     def test_errors_missing_special_tokens(self):
-        # Test that an error is raised if "<|endoftext|>" is
-        # missing from the vocabulary
         with self.assertRaises(ValueError):
-            StableLMTokenizer(vocabulary=["a", "b", "c"], merges=[])
+            StableLMTokenizer(
+                vocabulary={"a": 0, "b": 1, "ab": 2}, merges=["a b"]
+            )

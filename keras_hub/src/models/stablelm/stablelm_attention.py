@@ -190,10 +190,7 @@ class StableLMAttention(keras.layers.Layer):
         )
         attention_output = self.output_dense(attention_output)
 
-        return (
-            attention_output,
-            cache if cache is not None else attention_output,
-        )
+        return (attention_output, cache)
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
         if attention_mask is not None:

@@ -32,7 +32,7 @@ class StableLMBackbone(Backbone):
         vocabulary_size: int. The size of the token vocabulary.
         num_layers: int. The number of transformer layers.
         num_query_heads: int. The number of query attention heads.
-        hidden_dim: int. The hidden size .
+        hidden_dim: int. The hidden size.
         intermediate_dim: int. The output dimension of the first Dense layer
             in the feedforward network.
         num_key_value_heads: int. The number of key/value attention heads.
@@ -40,11 +40,12 @@ class StableLMBackbone(Backbone):
             to 10000.
         rope_scaling_factor: float. The scaling factor for RoPE. Defaults
             to 1.0.
+        rotary_percentage: float. The percentage of head dimensions to apply
+            rotary embeddings. Defaults to 0.25.
         layer_norm_epsilon: float. Epsilon for LayerNorm. Defaults to 1e-5.
         dropout: float. Dropout rate. Defaults to 0.0.
-        tie_word_embeddings: bool, optional. Whether to tie input and output
-            embeddings. Defaults to False.
-        dtype: The dtype to use for computations and weights.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for computations and weights.
 
     Examples:
 
