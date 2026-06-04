@@ -196,9 +196,9 @@ def validate_output(keras_embedder, hf_model_id):
     print(f"Query: {query}")
     print(f"Documents: {documents}")
 
-    keras_q = np.array(keras_embedder.encode_text(query))
-    keras_d = np.array(keras_embedder.encode_documents(documents))
-    keras_sims = np.array(keras_embedder.similarity(keras_q, keras_d))
+    keras_q = np.array(keras_embedder.predict([query]))
+    keras_d = np.array(keras_embedder.predict(documents))
+    keras_sims = keras_q @ keras_d.T
     keras_best = int(np.argmax(keras_sims))
 
     hf_q = _hf_encode(hf_model, hf_tokenizer, [query])
