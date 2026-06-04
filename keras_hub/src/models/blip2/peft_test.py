@@ -94,7 +94,6 @@ class BLIP2LoraTest(TestCase):
         backbone.save_weights(base_path)
 
         backbone.enable_lora(rank=4)
-        print("backbone lora indices:", backbone._lora_enabled_layers)
         backbone.compile(optimizer="sgd", loss="mse")
         backbone.fit(self.input_data, self.targets, epochs=1)
 
@@ -106,7 +105,6 @@ class BLIP2LoraTest(TestCase):
         new_backbone.load_weights(base_path)
         new_backbone.enable_lora(rank=4)
         new_backbone.load_lora_weights(lora_path)
-        print("new_backbone lora indices:", new_backbone._lora_enabled_layers)
 
         self.assertAllClose(
             backbone(self.input_data), new_backbone(self.input_data)
