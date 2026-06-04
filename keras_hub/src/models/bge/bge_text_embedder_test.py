@@ -68,7 +68,7 @@ class BgeTextEmbedderTest(TestCase):
     def test_dot_product_equals_cosine_similarity(self):
         """After L2 normalization, dot product must equal cosine similarity."""
         embedder = BgeTextEmbedder(**self.init_kwargs)
-        outputs = embedder(self.preprocessed_data).numpy()
+        outputs = ops.convert_to_numpy(embedder(self.preprocessed_data))
         # dot(a, b) == cosine_sim(a, b) when both are unit vectors
         dot = float(np.dot(outputs[0], outputs[1]))
         norms = np.linalg.norm(outputs, axis=-1)

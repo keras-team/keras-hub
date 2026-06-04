@@ -24,7 +24,7 @@ class BgeTextEmbedderPreprocessor(TextClassifierPreprocessor):
        `"padding_mask"` that can be passed directly to a `BgeBackbone`.
 
     This layer is intended to be paired with `BgeTextEmbedder`. The
-    preprocessing is identical to `BgeTextClassifierPreprocessor` but is
+    preprocessing is identical to standard BERT classifier preprocessing but is
     provided as a separate class so that `from_preset()` on
     `BgeTextEmbedder` automatically resolves the correct preprocessor.
 

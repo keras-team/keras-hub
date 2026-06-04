@@ -58,17 +58,20 @@ def download_files(hf_model_name):
     # Config.
     config_path = os.path.join(extract_dir, "config.json")
     response = requests.get(
-        f"https://huggingface.co/{hf_model_name}/raw/main/config.json"
+        f"https://huggingface.co/{hf_model_name}/raw/main/config.json",
+        timeout=30,
     )
-    open(config_path, "wb").write(response.content)
+    with open(config_path, "wb") as f:
+        f.write(response.content)
     print(f"  `{config_path}`")
-
     # Vocab.
     vocab_path = os.path.join(extract_dir, "vocab.txt")
     response = requests.get(
-        f"https://huggingface.co/{hf_model_name}/raw/main/vocab.txt"
+        f"https://huggingface.co/{hf_model_name}/raw/main/vocab.txt",
+        timeout=30,
     )
-    open(vocab_path, "wb").write(response.content)
+    with open(vocab_path, "wb") as f:
+        f.write(response.content)
     print(f"  `{vocab_path}`")
 
 
