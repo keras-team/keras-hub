@@ -1,5 +1,3 @@
-"""BLIP-2 Opt Variants BPE tokenizer."""
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer

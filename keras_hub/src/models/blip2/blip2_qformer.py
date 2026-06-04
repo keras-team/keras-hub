@@ -1,5 +1,3 @@
-"""BLIP-2 Q-Former model."""
-
 import keras
 from keras import ops
 

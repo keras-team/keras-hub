@@ -1,5 +1,3 @@
-"""Tests for BLIP-2 vision encoder."""
-
 import numpy as np
 
 from keras_hub.src.models.blip2.blip2_vision_encoder import BLIP2VisionEncoder

@@ -74,9 +74,9 @@ def validate_output(keras_lm, hf_model, hf_processor, image):
             do_sample=False,
             num_beams=1,
         )
-    hf_text = hf_processor.batch_decode(
-        hf_generated, skip_special_tokens=True
-    )[0].strip()
+    hf_text = hf_processor.batch_decode(hf_generated, skip_special_tokens=True)[
+        0
+    ].strip()
 
     keras_lm.compile(sampler="greedy")
     keras_output = keras_lm.generate(
@@ -116,9 +116,7 @@ def main(_):
         f"hf://{hf_model_name}", dtype="float32"
     )
 
-    image = Image.open(
-        requests.get(_IMAGE_URL, stream=True).raw
-    ).convert("RGB")
+    image = Image.open(requests.get(_IMAGE_URL, stream=True).raw).convert("RGB")
 
     validate_output(keras_lm, hf_model, hf_processor, image)
 

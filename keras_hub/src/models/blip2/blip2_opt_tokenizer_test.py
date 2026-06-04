@@ -1,5 +1,3 @@
-"""Tests for BLIP-2 Opt Variants BPE tokenizer."""
-
 import pytest
 
 from keras_hub.src.models.blip2.blip2_opt_tokenizer import BLIP2OPTTokenizer

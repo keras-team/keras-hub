@@ -1,5 +1,3 @@
-"""Tests for BLIP-2 custom OPT."""
-
 import keras
 import numpy as np
 import pytest

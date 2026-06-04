@@ -1,5 +1,3 @@
-"""BLIP-2 image converter."""
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone

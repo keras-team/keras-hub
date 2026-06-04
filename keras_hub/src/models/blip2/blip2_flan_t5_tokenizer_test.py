@@ -1,5 +1,3 @@
-"""Tests for BLIP-2 Flan-T5 SentencePiece tokenizer."""
-
 import os
 
 import pytest

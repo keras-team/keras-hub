@@ -1,5 +1,3 @@
-"""BLIP-2 Flan-T5 language model."""
-
 import keras
 from keras import ops
 

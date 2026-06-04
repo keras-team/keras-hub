@@ -1,5 +1,3 @@
-"""Tests for BLIP-2 Causal LM preprocessor."""
-
 import numpy as np
 import pytest
 

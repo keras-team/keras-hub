@@ -1,5 +1,3 @@
-"""Tests for BLIP-2 Causal LM model."""
-
 from unittest.mock import patch
 
 import numpy as np

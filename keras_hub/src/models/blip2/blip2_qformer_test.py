@@ -1,5 +1,3 @@
-"""Tests for BLIP-2 Q-Former."""
-
 import numpy as np
 
 from keras_hub.src.models.blip2.blip2_qformer import BLIP2QFormer

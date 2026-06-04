@@ -1,5 +1,3 @@
-"""BLIP-2 Causal LM model."""
-
 import numpy as np
 from keras import ops
 

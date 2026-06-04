@@ -1,5 +1,3 @@
-"""Tests for BLIP-2 image converter."""
-
 import numpy as np
 
 from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter

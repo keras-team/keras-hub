@@ -1,5 +1,3 @@
-"""BLIP-2 OPT language model."""
-
 import keras
 from keras import ops
 

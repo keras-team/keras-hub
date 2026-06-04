@@ -488,9 +488,7 @@ def _convert_t5_weights(flan_t5, loader):
         if with_rel_bias and attn.use_relative_attention_bias:
             loader.port_weight(
                 keras_variable=attn.relative_attention_bias,
-                hf_weight_key=(
-                    f"{hf_prefix}.relative_attention_bias.weight"
-                ),
+                hf_weight_key=(f"{hf_prefix}.relative_attention_bias.weight"),
             )
 
     def port_t5_ffn(layer, hf_prefix):

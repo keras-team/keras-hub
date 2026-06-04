@@ -1,5 +1,3 @@
-"""Tests for BLIP-2 Flan-T5 language model."""
-
 import numpy as np
 import pytest
 

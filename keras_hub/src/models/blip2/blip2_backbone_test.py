@@ -1,5 +1,3 @@
-"""Tests for BLIP-2 backbone."""
-
 import numpy as np
 import pytest
 

@@ -1,5 +1,3 @@
-"""Tests for PEFT on BLIP-2."""
-
 import os
 
 import numpy as np
