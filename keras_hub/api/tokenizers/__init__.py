@@ -13,7 +13,6 @@ from keras_hub.src.models.bart.bart_tokenizer import (
 from keras_hub.src.models.bert.bert_tokenizer import (
     BertTokenizer as BertTokenizer,
 )
-from keras_hub.src.models.bge.bge_tokenizer import BgeTokenizer as BgeTokenizer
 from keras_hub.src.models.bloom.bloom_tokenizer import (
     BloomTokenizer as BloomTokenizer,
 )

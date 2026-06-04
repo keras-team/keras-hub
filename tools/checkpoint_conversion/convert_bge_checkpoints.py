@@ -1,391 +1,295 @@
-"""Convert BAAI/bge-*-en-v1.5 checkpoints to KerasHub format.
+"""
+Convert HuggingFace BAAI/bge-*-en-v1.5 checkpoints to KerasHub format.
+
+BGE (BAAI General Embedding) models are standard BERT encoders fine-tuned for
+dense retrieval. Embeddings are computed as the CLS token output followed by
+L2 normalization. This maps exactly to:
+    BertTextEmbedder(backbone, pooling_mode="cls", normalize=True)
+
+Validation is performed against the HuggingFace transformers library directly
+(no sentence-transformers dependency required).
+
+Setup:
+```shell
+pip install keras-hub keras transformers safetensors huggingface_hub torch
+```
 
 Usage:
-    python tools/checkpoint_conversion/convert_bge_checkpoints.py \
-        --preset bge_small_en_v1.5
-
-    # To upload after conversion:
-    python tools/checkpoint_conversion/convert_bge_checkpoints.py \
-        --preset bge_small_en_v1.5 \
-        --upload_uri kaggle://keras/bge/keras/bge_small_en_v1.5
+```shell
+cd tools/checkpoint_conversion
+python convert_bge_checkpoints.py --preset bge_small_en_v1.5
+```
 """
 
 import json
 import os
+import tempfile
 
-import keras
+os.environ["KERAS_BACKEND"] = "torch"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
 import numpy as np
-import requests
 import torch
-import torch.nn.functional as F
-import transformers
 from absl import app
 from absl import flags
+from huggingface_hub import hf_hub_download
+from transformers import AutoModel
+from transformers import AutoTokenizer
 
 import keras_hub
-from tools.checkpoint_conversion.checkpoint_conversion_utils import (
-    get_md5_checksum,
+from keras_hub.src.models.bert.bert_text_embedder import BertTextEmbedder
+from keras_hub.src.utils.transformers.convert_bert import (
+    convert_backbone_config,
+)
+from keras_hub.src.utils.transformers.convert_bert import convert_tokenizer
+from keras_hub.src.utils.transformers.convert_bert import convert_weights
+from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
+
+FLAGS = flags.FLAGS
+
+flags.DEFINE_string(
+    "preset",
+    None,
+    "Preset name to convert. Must be one of the keys in PRESET_MAP.",
 )
 
-# Maps KerasHub preset name → HuggingFace model ID.
 PRESET_MAP = {
     "bge_small_en_v1.5": "BAAI/bge-small-en-v1.5",
     "bge_base_en_v1.5": "BAAI/bge-base-en-v1.5",
     "bge_large_en_v1.5": "BAAI/bge-large-en-v1.5",
 }
 
-EXTRACT_DIR = "./{}"
-
-FLAGS = flags.FLAGS
-flags.DEFINE_string(
-    "preset",
-    None,
-    f"Must be one of {', '.join(PRESET_MAP.keys())}",
-)
-flags.DEFINE_string(
-    "upload_uri",
-    None,
-    "Optional URI to upload the preset (e.g. kaggle://keras/bge/keras/bge_small_en_v1.5).",
-)
+# BGE uses sequence_length=512 (same as base BERT).
+SEQUENCE_LENGTH = 512
 
 
-def download_files(hf_model_name):
-    print("-> Download original vocab and config.")
-    extract_dir = EXTRACT_DIR.format(FLAGS.preset)
-    if not os.path.exists(extract_dir):
-        os.makedirs(extract_dir)
-
-    # Config.
-    config_path = os.path.join(extract_dir, "config.json")
-    response = requests.get(
-        f"https://huggingface.co/{hf_model_name}/raw/main/config.json",
-        timeout=30,
-    )
-    with open(config_path, "wb") as f:
-        f.write(response.content)
-    print(f"  `{config_path}`")
-    # Vocab.
-    vocab_path = os.path.join(extract_dir, "vocab.txt")
-    response = requests.get(
-        f"https://huggingface.co/{hf_model_name}/raw/main/vocab.txt",
-        timeout=30,
-    )
-    with open(vocab_path, "wb") as f:
-        f.write(response.content)
-    print(f"  `{vocab_path}`")
-
-
-def define_tokenizer(hf_model_name):
-    print("\n-> Define tokenizers.")
-    extract_dir = EXTRACT_DIR.format(FLAGS.preset)
-    vocab_path = os.path.join(extract_dir, "vocab.txt")
-
-    keras_hub_tokenizer = keras_hub.models.BgeTokenizer(
-        vocabulary=vocab_path,
-        lowercase=True,
-    )
-    hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_name)
-
-    print("\n-> MD5 checksum of the vocab file:")
-    print(f"  `{vocab_path}` md5sum: {get_md5_checksum(vocab_path)}")
-
-    return keras_hub_tokenizer, hf_tokenizer
-
-
-def convert_checkpoints(keras_hub_model, hf_model):
-    """Assign HuggingFace weights to the KerasHub BgeBackbone."""
-    print("\n-> Convert original weights to KerasHub format.")
-
-    extract_dir = EXTRACT_DIR.format(FLAGS.preset)
-    config_path = os.path.join(extract_dir, "config.json")
-
-    # Build backbone config from HF config.json.
-    with open(config_path, "r") as f:
-        pt_cfg = json.load(f)
-
-    cfg = {
-        "vocabulary_size": pt_cfg["vocab_size"],
-        "num_layers": pt_cfg["num_hidden_layers"],
-        "num_heads": pt_cfg["num_attention_heads"],
-        "hidden_dim": pt_cfg["hidden_size"],
-        "intermediate_dim": pt_cfg["intermediate_size"],
-        "dropout": pt_cfg.get("hidden_dropout_prob", 0.1),
-        "max_sequence_length": pt_cfg["max_position_embeddings"],
-        "num_segments": pt_cfg["type_vocab_size"],
-    }
-    print("Backbone config:", cfg)
-
-    hf_wts = hf_model.state_dict()
-    print("\nHuggingFace weight keys:")
-    for k in hf_wts.keys():
-        print(f"  {k}  {tuple(hf_wts[k].shape)}")
-
-    # ── Embeddings ──────────────────────────────────────────────────────────
-    keras_hub_model.get_layer("token_embedding").embeddings.assign(
-        hf_wts["embeddings.word_embeddings.weight"].numpy()
-    )
-    keras_hub_model.get_layer("position_embedding").position_embeddings.assign(
-        hf_wts["embeddings.position_embeddings.weight"].numpy()
-    )
-    keras_hub_model.get_layer("segment_embedding").embeddings.assign(
-        hf_wts["embeddings.token_type_embeddings.weight"].numpy()
-    )
-    keras_hub_model.get_layer("embeddings_layer_norm").gamma.assign(
-        hf_wts["embeddings.LayerNorm.weight"].numpy()
-    )
-    keras_hub_model.get_layer("embeddings_layer_norm").beta.assign(
-        hf_wts["embeddings.LayerNorm.bias"].numpy()
-    )
-
-    # ── Transformer layers ───────────────────────────────────────────────────
-    for i in range(cfg["num_layers"]):
-        num_heads = cfg["num_heads"]
-        hidden_dim = cfg["hidden_dim"]
-        head_dim = hidden_dim // num_heads
-
-        # --- Self-attention: query ---
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer._query_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.query.weight"]
-            .numpy()
-            .T.reshape(hidden_dim, num_heads, head_dim)
-        )
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer._query_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.query.bias"]
-            .numpy()
-            .reshape(num_heads, head_dim)
-        )
-
-        # --- Self-attention: key ---
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer._key_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.key.weight"]
-            .numpy()
-            .T.reshape(hidden_dim, num_heads, head_dim)
-        )
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer._key_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.key.bias"]
-            .numpy()
-            .reshape(num_heads, head_dim)
-        )
-
-        # --- Self-attention: value ---
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer._value_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.value.weight"]
-            .numpy()
-            .T.reshape(hidden_dim, num_heads, head_dim)
-        )
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer._value_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.value.bias"]
-            .numpy()
-            .reshape(num_heads, head_dim)
-        )
-
-        # --- Self-attention: output projection ---
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer._output_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.attention.output.dense.weight"]
-            .numpy()
-            .T.reshape(num_heads, head_dim, hidden_dim)
-        )
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer._output_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.attention.output.dense.bias"].numpy()
-        )
-
-        # --- Self-attention layer norm ---
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer_norm.gamma.assign(
-            hf_wts[
-                f"encoder.layer.{i}.attention.output.LayerNorm.weight"
-            ].numpy()
-        )
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer_norm.beta.assign(
-            hf_wts[f"encoder.layer.{i}.attention.output.LayerNorm.bias"].numpy()
-        )
-
-        # --- FFN: intermediate (up-projection) ---
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._feedforward_intermediate_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.intermediate.dense.weight"].numpy().T
-        )
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._feedforward_intermediate_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.intermediate.dense.bias"].numpy()
-        )
-
-        # --- FFN: output (down-projection) ---
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._feedforward_output_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.output.dense.weight"].numpy().T
-        )
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._feedforward_output_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.output.dense.bias"].numpy()
-        )
-
-        # --- FFN layer norm ---
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._feedforward_layer_norm.gamma.assign(
-            hf_wts[f"encoder.layer.{i}.output.LayerNorm.weight"].numpy()
-        )
-        keras_hub_model.get_layer(
-            f"transformer_layer_{i}"
-        )._feedforward_layer_norm.beta.assign(
-            hf_wts[f"encoder.layer.{i}.output.LayerNorm.bias"].numpy()
-        )
-
-    # ── Pooler ───────────────────────────────────────────────────────────────
-    # NOTE: Pooler weights are converted for completeness.  For BGE-style
-    # sentence embeddings, use sequence_output[:, 0, :] + L2 normalization
-    # rather than pooled_output (which is Tanh-activated).
-    keras_hub_model.get_layer("pooled_dense").kernel.assign(
-        hf_wts["pooler.dense.weight"].numpy().T
-    )
-    keras_hub_model.get_layer("pooled_dense").bias.assign(
-        hf_wts["pooler.dense.bias"].numpy()
-    )
-
-
-def validate_output(
-    keras_hub_model,
-    hf_model,
-    keras_hub_tokenizer,
-    hf_tokenizer,
-):
-    """Cross-framework numerical validation (atol=1e-4)."""
-
-    print("\n-> Validate outputs numerically.")
-    test_sentence = "I love machine learning and nlp"
-
-    # HuggingFace reference.
-    hf_inputs = hf_tokenizer(
-        [test_sentence],
-        return_tensors="pt",
+def _hf_encode(hf_model, hf_tokenizer, texts):
+    """
+    Encode texts with a HuggingFace BERT model using CLS + L2 normalization,
+    matching BGE's reference implementation exactly.
+    """
+    encoded = hf_tokenizer(
+        texts,
         padding=True,
         truncation=True,
-        max_length=512,
+        max_length=SEQUENCE_LENGTH,
+        return_tensors="pt",
     )
     with torch.no_grad():
-        hf_outputs = hf_model(**hf_inputs)
-    hf_cls = hf_outputs.last_hidden_state[:, 0, :].numpy()
-    hf_emb = F.normalize(torch.tensor(hf_cls), p=2, dim=1).numpy()
+        outputs = hf_model(**encoded)
+    # CLS token (index 0), then L2 normalize.
+    cls_embeddings = outputs.last_hidden_state[:, 0, :].numpy()
+    norms = np.linalg.norm(cls_embeddings, axis=1, keepdims=True)
+    return cls_embeddings / norms
 
-    # KerasHub.
-    preprocessor = keras_hub.models.BgeTextEmbedderPreprocessor(
-        keras_hub_tokenizer, sequence_length=512
-    )
-    kh_inputs = preprocessor([test_sentence])
-    kh_outputs = keras_hub_model(kh_inputs)
-    kh_cls = kh_outputs["sequence_output"][:, 0, :].numpy()
-    kh_emb = keras.ops.normalize(
-        keras.ops.convert_to_tensor(kh_cls), axis=-1
-    ).numpy()
 
-    print(f"  HF embedding (first 5 dims):  {hf_emb[0, :5]}")
-    print(f"  KerasHub embedding (first 5):  {kh_emb[0, :5]}")
+def validate_output(keras_embedder, hf_model_id):
+    """
+    Validate numerical parity between the converted KerasHub model and the
+    HuggingFace reference implementation.
 
-    if np.allclose(hf_emb, kh_emb, atol=1e-4):
-        print("  ✓ Outputs match within atol=1e-4")
+    Performs four checks:
+    1. Parameter count verification.
+    2. Embedding output comparison (max/mean absolute difference).
+    3. L2 norm check (embeddings must be unit-length).
+    4. Semantic search ranking consistency.
+
+    Args:
+        keras_embedder: Converted KerasHub BertTextEmbedder.
+        hf_model_id: HuggingFace model ID to compare against.
+
+    Returns:
+        bool: True if all checks pass.
+    """
+    print("\n" + "=" * 60)
+    print("NUMERICAL VERIFICATION")
+    print("=" * 60)
+
+    print(f"\nLoading HuggingFace model: {hf_model_id}")
+    hf_tokenizer = AutoTokenizer.from_pretrained(hf_model_id)
+    hf_model = AutoModel.from_pretrained(hf_model_id)
+    hf_model.eval()
+
+    # =========================================
+    # PARAMETER COUNT
+    # =========================================
+    print("\n--- Parameter Count ---")
+    keras_params = keras_embedder.backbone.count_params()
+    hf_params = sum(p.numel() for p in hf_model.parameters())
+    print(f"KerasHub params:    {keras_params:,}")
+    print(f"HuggingFace params: {hf_params:,}")
+    param_diff = abs(keras_params - hf_params)
+    if param_diff == 0:
+        print("✅ Exact match")
     else:
-        max_diff = np.abs(hf_emb - kh_emb).max()
-        print(f"  ✗ Max absolute difference: {max_diff:.6f}")
-        print(
-            "  WARNING: Outputs differ beyond tolerance. "
-            "Inspect weight assignment and activation function."
-        )
+        print(f"❌ Mismatch — diff: {param_diff:,}")
+
+    # =========================================
+    # EMBEDDING PARITY
+    # =========================================
+    print("\n--- Embedding Parity ---")
+    test_texts = [
+        "The weather is lovely today.",
+        "It's so sunny outside!",
+        "He drove to the stadium.",
+    ]
+    print(f"Test inputs: {test_texts}")
+
+    print("\nComputing HuggingFace embeddings (CLS + L2 norm)...")
+    hf_embeddings = _hf_encode(hf_model, hf_tokenizer, test_texts)
+    print(f"HF shape: {hf_embeddings.shape}")
+    print(f"HF[0][:5]: {hf_embeddings[0][:5]}")
+
+    print("\nComputing KerasHub embeddings...")
+    keras_embeddings = np.array(keras_embedder.predict(test_texts))
+    print(f"KerasHub shape: {keras_embeddings.shape}")
+    print(f"KerasHub[0][:5]: {keras_embeddings[0][:5]}")
+
+    max_diff = np.max(np.abs(hf_embeddings - keras_embeddings))
+    mean_diff = np.mean(np.abs(hf_embeddings - keras_embeddings))
+    print(f"\nMax absolute diff:  {max_diff:.2e}")
+    print(f"Mean absolute diff: {mean_diff:.2e}")
+
+    # =========================================
+    # L2 NORM CHECK
+    # =========================================
+    print("\n--- L2 Norm Check (should be ~1.0) ---")
+    keras_norms = np.linalg.norm(keras_embeddings, axis=1)
+    hf_norms = np.linalg.norm(hf_embeddings, axis=1)
+    print(f"KerasHub norms: {keras_norms}")
+    print(f"HF norms:       {hf_norms}")
+    norms_ok = np.allclose(keras_norms, 1.0, atol=1e-5)
+
+    # =========================================
+    # SEMANTIC SEARCH RANKING
+    # =========================================
+    print("\n--- Semantic Search Ranking ---")
+    query = "Which planet is known as the Red Planet?"
+    documents = [
+        "Venus is often called Earth's twin.",
+        "Mars is often referred to as the Red Planet.",
+        "Jupiter has a prominent red spot.",
+    ]
+    print(f"Query: {query}")
+    print(f"Documents: {documents}")
+
+    keras_q = np.array(keras_embedder.encode_text(query))
+    keras_d = np.array(keras_embedder.encode_documents(documents))
+    keras_sims = keras_q @ keras_d.T
+    keras_best = int(np.argmax(keras_sims))
+
+    hf_q = _hf_encode(hf_model, hf_tokenizer, [query])
+    hf_d = _hf_encode(hf_model, hf_tokenizer, documents)
+    hf_sims = hf_q @ hf_d.T
+    hf_best = int(np.argmax(hf_sims))
+
+    print(f"\nKerasHub sims: {keras_sims} -> Best: {documents[keras_best]}")
+    print(f"HF sims:       {hf_sims[0]} -> Best: {documents[hf_best]}")
+    search_ok = keras_best == hf_best
+
+    # =========================================
+    # RESULT
+    # =========================================
+    print("\n--- Result ---")
+    passed = True
+
+    if param_diff != 0:
+        print("❌ FAILED: Parameter count mismatch")
+        passed = False
+
+    if mean_diff > 5e-4:
+        print(f"❌ FAILED: Mean diff {mean_diff:.2e} exceeds 5e-4")
+        passed = False
+    elif mean_diff > 1e-4:
+        print(f"⚠️  WARN: Mean diff {mean_diff:.2e} > 1e-4 (FP32 variance)")
+
+    if not norms_ok:
+        print("❌ FAILED: Embeddings are not unit-length")
+        passed = False
+
+    if not search_ok:
+        print("❌ FAILED: Semantic search ranking mismatch")
+        passed = False
+
+    if passed:
+        print("✅ ALL CHECKS PASSED")
+
+    return passed
 
 
 def main(_):
-    if FLAGS.preset not in PRESET_MAP:
+    preset = FLAGS.preset
+    if preset not in PRESET_MAP:
         raise ValueError(
-            f"Invalid preset '{FLAGS.preset}'. "
-            f"Choose from: {list(PRESET_MAP.keys())}"
+            f"Invalid preset '{preset}'. "
+            f"Must be one of: {list(PRESET_MAP.keys())}"
         )
 
-    hf_model_name = PRESET_MAP[FLAGS.preset]
-    print(f"Converting preset: {FLAGS.preset}  (HF: {hf_model_name})")
+    hf_model_id = PRESET_MAP[preset]
 
-    # 1. Download vocab and config.
-    download_files(hf_model_name)
+    print(f"\n{'=' * 60}")
+    print(f"Converting: {hf_model_id} -> {preset}")
+    print("Pooling: CLS token + L2 normalization")
+    print(f"{'=' * 60}\n")
 
-    # 2. Load HF model.
-    print("\n-> Load HuggingFace model.")
-    hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
-    hf_model.eval()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        print(f"Using temporary directory: {temp_dir}")
 
-    # 3. Define KerasHub tokenizer.
-    keras_hub_tokenizer, hf_tokenizer = define_tokenizer(hf_model_name)
+        # Download and parse config.
+        print("Downloading config.json...")
+        config_path = hf_hub_download(
+            hf_model_id, "config.json", local_dir=temp_dir
+        )
+        with open(config_path, "r") as f:
+            transformers_config = json.load(f)
 
-    # 4. Build KerasHub backbone from HF config.
-    extract_dir = EXTRACT_DIR.format(FLAGS.preset)
-    with open(os.path.join(extract_dir, "config.json"), "r") as f:
-        pt_cfg = json.load(f)
+        # Build KerasHub backbone from HF config.
+        keras_config = convert_backbone_config(transformers_config)
+        print(f"\nBackbone config: {keras_config}")
+        backbone = keras_hub.models.BertBackbone(
+            **keras_config, dtype="float32"
+        )
+        print(f"Backbone parameters: {backbone.count_params():,}")
 
-    keras_hub_backbone = keras_hub.models.BgeBackbone(
-        vocabulary_size=pt_cfg["vocab_size"],
-        num_layers=pt_cfg["num_hidden_layers"],
-        num_heads=pt_cfg["num_attention_heads"],
-        hidden_dim=pt_cfg["hidden_size"],
-        intermediate_dim=pt_cfg["intermediate_size"],
-        dropout=pt_cfg.get("hidden_dropout_prob", 0.1),
-        max_sequence_length=pt_cfg["max_position_embeddings"],
-        num_segments=pt_cfg["type_vocab_size"],
-    )
+        # Download and load weights.
+        print("\nDownloading model.safetensors...")
+        hf_hub_download(hf_model_id, "model.safetensors", local_dir=temp_dir)
+        print("Converting weights...")
+        with SafetensorLoader(temp_dir) as loader:
+            convert_weights(backbone, loader, transformers_config)
 
-    # Run a dummy forward pass to build all weights.
-    dummy = {
-        "token_ids": keras.ops.ones((1, 8), dtype="int32"),
-        "segment_ids": keras.ops.zeros((1, 8), dtype="int32"),
-        "padding_mask": keras.ops.ones((1, 8), dtype="int32"),
-    }
-    keras_hub_backbone(dummy)
+        # Build tokenizer.
+        print("\nDownloading tokenizer files...")
+        hf_hub_download(hf_model_id, "vocab.txt", local_dir=temp_dir)
+        hf_hub_download(
+            hf_model_id, "tokenizer_config.json", local_dir=temp_dir
+        )
+        tokenizer = convert_tokenizer(keras_hub.models.BertTokenizer, temp_dir)
 
-    print(
-        f"\n  KerasHub parameter count: {keras_hub_backbone.count_params():,}"
-    )
+        # Assemble BertTextEmbedder with BGE settings.
+        preprocessor = keras_hub.models.BertTextEmbedderPreprocessor(
+            tokenizer=tokenizer,
+            sequence_length=SEQUENCE_LENGTH,
+        )
+        embedder = BertTextEmbedder(
+            backbone=backbone,
+            preprocessor=preprocessor,
+            pooling_mode="cls",
+            normalize=True,
+        )
 
-    # 5. Convert weights.
-    convert_checkpoints(keras_hub_backbone, hf_model)
+        # Validate.
+        passed = validate_output(embedder, hf_model_id)
+        if not passed:
+            print("\n Verification failed. Preset not saved.")
+            return
 
-    # 6. Validate.
-    validate_output(
-        keras_hub_backbone, hf_model, keras_hub_tokenizer, hf_tokenizer
-    )
-
-    # 7. Save preset.
-    print("\n-> Save KerasHub preset.")
-    preset_path = os.path.join(extract_dir, "preset")
-    keras_hub_backbone.save_to_preset(preset_path)
-    keras_hub_tokenizer.save_to_preset(preset_path)
-    print(f"  Preset saved to: `{preset_path}`")
-
-    # 8. Upload if requested.
-    if FLAGS.upload_uri:
-        print(f"\n-> Upload preset to: {FLAGS.upload_uri}")
-        keras_hub.upload_preset(FLAGS.upload_uri, preset_path)
-        print("  Upload complete.")
+        # Save.
+        print(f"\nSaving to preset: ./{preset}")
+        embedder.save_to_preset(preset)
+        print(f"\n Successfully converted and saved to: ./{preset}")
 
 
 if __name__ == "__main__":
+    flags.mark_flag_as_required("preset")
     app.run(main)
