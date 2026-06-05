@@ -5,6 +5,12 @@ import numpy as np
 from keras_hub.src.models.gemma4.gemma4_audio_encoder import Gemma4AudioEncoder
 from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.models.gemma4.gemma4_tokenizer import IMAGE_PLACEHOLDER_TOKEN
+from keras_hub.src.models.gemma4.gemma4_unified_audio_embedder import (
+    Gemma4UnifiedAudioEmbedder,
+)
+from keras_hub.src.models.gemma4.gemma4_unified_vision_embedder import (
+    Gemma4UnifiedVisionEmbedder,
+)
 from keras_hub.src.models.gemma4.gemma4_vision_encoder import (
     Gemma4VisionEncoder,
 )
@@ -54,34 +60,78 @@ def load_image_converter_config(preset, transformers_config):
     if "vision_config" not in transformers_config:
         return None
 
+    model_type = transformers_config["model_type"]
+    is_unified = model_type == "gemma4_unified"
+
     processor_config = load_json(preset, "processor_config.json")
-    image_processor = processor_config["image_processor"]
-    scale, offset = _compute_scale_offset(image_processor, "image_processor")
 
     vision_config = transformers_config["vision_config"]
-    # image_size is not present in the HF vision_config; 896 is the fixed
-    # positional-embedding size used across all Gemma4 vision checkpoints
-    # (matches the hardcoded value in convert_backbone_config).
-    image_size = 896
-    patch_size = vision_config["patch_size"]
-    # max_soft_tokens lives in the image_processor section of processor_config;
-    # vision_soft_tokens_per_image in the model config is the authoritative cap.
-    max_soft_tokens = image_processor["max_soft_tokens"]
     pooling_kernel_size = vision_config["pooling_kernel_size"]
 
-    return {
-        "image_size": (image_size, image_size),
-        "patch_size": patch_size,
-        "max_soft_tokens": max_soft_tokens,
-        "pooling_kernel_size": pooling_kernel_size,
-        "scale": scale,
-        "offset": offset,
-    }
+    if is_unified:
+        # Unified models use a different image processor structure.
+        # The processor_config may have image_processor nested or at top level.
+        if "image_processor" in processor_config:
+            image_processor = processor_config["image_processor"]
+        else:
+            image_processor = processor_config
+        scale, offset = None, None
+        if image_processor.get("do_rescale") or image_processor.get(
+            "do_normalize"
+        ):
+            scale, offset = _compute_scale_offset(
+                image_processor, "image_processor"
+            )
+
+        patch_size = vision_config["patch_size"]
+        max_soft_tokens = vision_config["num_soft_tokens"]
+
+        return {
+            "image_size": None,
+            "patch_size": patch_size,
+            "max_soft_tokens": max_soft_tokens,
+            "pooling_kernel_size": pooling_kernel_size,
+            "scale": scale,
+            "offset": offset,
+        }
+    else:
+        image_processor = processor_config["image_processor"]
+        scale, offset = _compute_scale_offset(
+            image_processor, "image_processor"
+        )
+
+        # image_size is not present in the HF vision_config; 896 is the fixed
+        # positional-embedding size used across all Gemma4 vision checkpoints
+        # (matches the hardcoded value in convert_backbone_config).
+        image_size = 896
+        patch_size = vision_config["patch_size"]
+        # max_soft_tokens lives in the image_processor section of
+        # processor_config; vision_soft_tokens_per_image in the model
+        # config is the authoritative cap.
+        max_soft_tokens = image_processor["max_soft_tokens"]
+
+        return {
+            "image_size": (image_size, image_size),
+            "patch_size": patch_size,
+            "max_soft_tokens": max_soft_tokens,
+            "pooling_kernel_size": pooling_kernel_size,
+            "scale": scale,
+            "offset": offset,
+        }
 
 
 def load_audio_converter_config(preset, transformers_config):
     """Return Gemma4AudioConverter kwargs, or None for text/vision models."""
     if not transformers_config.get("audio_config"):
+        return None
+
+    model_type = transformers_config["model_type"]
+    is_unified = model_type == "gemma4_unified"
+
+    if is_unified:
+        # Unified models use a simple linear projection for audio,
+        # no conformer encoder. No audio converter is needed — raw
+        # waveform frames are fed directly.
         return None
 
     processor_config = load_json(preset, "processor_config.json")
@@ -142,7 +192,8 @@ def load_preprocessor_config(preset, transformers_config):
 def convert_backbone_config(transformers_config):
     """Map a Transformers config dict → Gemma4Backbone keyword arguments."""
     model_type = transformers_config.get("model_type", "gemma4")
-    is_text_only = model_type == "gemma4_text"
+    is_text_only = model_type in ("gemma4_text", "gemma4_unified_text")
+    is_unified = model_type in ("gemma4_unified", "gemma4_unified_assistant")
 
     if is_text_only:
         text_cfg = transformers_config
@@ -151,60 +202,99 @@ def convert_backbone_config(transformers_config):
         image_size = None
     else:
         text_cfg = transformers_config["text_config"]
-        image_size = 896
 
-        # Vision encoder.
-        if "vision_config" in transformers_config:
-            vis_cfg = transformers_config["vision_config"]
-            vision_encoder = Gemma4VisionEncoder(
-                image_size=image_size,
-                patch_size=vis_cfg["patch_size"],
-                num_heads=vis_cfg["num_attention_heads"],
-                hidden_dim=vis_cfg["hidden_size"],
-                num_layers=vis_cfg["num_hidden_layers"],
-                intermediate_dim=vis_cfg["intermediate_size"],
-                head_dim=vis_cfg.get("head_dim", 64),
-                num_key_value_heads=vis_cfg.get(
-                    "num_key_value_heads", vis_cfg["num_attention_heads"]
-                ),
-                output_dim=text_cfg["hidden_size"],
-                pool_size=vis_cfg.get("pooling_kernel_size", 3),
-                position_embedding_size=vis_cfg.get(
-                    "position_embedding_size", 10240
-                ),
-                rope_max_wavelength=vis_cfg.get("rope_parameters", {}).get(
-                    "rope_theta", 100.0
-                ),
-                layer_norm_epsilon=vis_cfg.get("rms_norm_eps", 1e-6),
-                use_clipped_linears=vis_cfg.get("use_clipped_linears", True),
-                standardize=vis_cfg.get("standardize", False),
-            )
-        else:
-            vision_encoder = None
+        if is_unified:
+            # --- Gemma4 Unified (encoder-free) ---
+            image_size = None
 
-        # Audio encoder — key may be present but null for vision-only models.
-        if transformers_config.get("audio_config") is not None:
-            aud_cfg = transformers_config["audio_config"]
-            audio_encoder = Gemma4AudioEncoder(
-                hidden_size=aud_cfg["hidden_size"],
-                num_heads=aud_cfg["num_attention_heads"],
-                num_layers=aud_cfg["num_hidden_layers"],
-                chunk_size=aud_cfg["attention_chunk_size"],
-                context_left=aud_cfg["attention_context_left"],
-                context_right=aud_cfg["attention_context_right"],
-                logit_cap=aud_cfg["attention_logit_cap"],
-                invalid_logit_value=aud_cfg["attention_invalid_logits_value"],
-                conv_kernel_size=aud_cfg["conv_kernel_size"],
-                residual_weight=aud_cfg["residual_weight"],
-                gradient_clipping=aud_cfg["gradient_clipping"],
-                sscp_conv_channels=tuple(aud_cfg["subsampling_conv_channels"]),
-                output_proj_dims=aud_cfg["output_proj_dims"],
-                output_dim=text_cfg["hidden_size"],
-                norm_eps=aud_cfg["rms_norm_eps"],
-                sscp_norm_eps=aud_cfg["rms_norm_eps"],
-            )
+            # Vision: lightweight projection (no ViT tower).
+            if "vision_config" in transformers_config:
+                vis_cfg = transformers_config["vision_config"]
+                vision_encoder = Gemma4UnifiedVisionEmbedder(
+                    hidden_dim=vis_cfg["mm_embed_dim"],
+                    model_patch_size=vis_cfg["model_patch_size"],
+                    mm_posemb_size=vis_cfg["mm_posemb_size"],
+                    num_soft_tokens=vis_cfg["num_soft_tokens"],
+                    pooling_kernel_size=vis_cfg["pooling_kernel_size"],
+                    patch_size=vis_cfg["patch_size"],
+                    layer_norm_epsilon=vis_cfg["rms_norm_eps"],
+                )
+            else:
+                vision_encoder = None
+
+            # Audio: lightweight projection (no conformer).
+            if "audio_config" in transformers_config:
+                aud_cfg = transformers_config["audio_config"]
+                audio_encoder = Gemma4UnifiedAudioEmbedder(
+                    hidden_dim=text_cfg["hidden_size"],
+                    audio_embed_dim=aud_cfg["audio_embed_dim"],
+                    layer_norm_epsilon=aud_cfg["rms_norm_eps"],
+                )
+            else:
+                audio_encoder = None
         else:
-            audio_encoder = None
+            # --- Standard Gemma4 (tower-based) ---
+            image_size = 896
+
+            # Vision encoder.
+            if "vision_config" in transformers_config:
+                vis_cfg = transformers_config["vision_config"]
+                vision_encoder = Gemma4VisionEncoder(
+                    image_size=image_size,
+                    patch_size=vis_cfg["patch_size"],
+                    num_heads=vis_cfg["num_attention_heads"],
+                    hidden_dim=vis_cfg["hidden_size"],
+                    num_layers=vis_cfg["num_hidden_layers"],
+                    intermediate_dim=vis_cfg["intermediate_size"],
+                    head_dim=vis_cfg.get("head_dim", 64),
+                    num_key_value_heads=vis_cfg.get(
+                        "num_key_value_heads",
+                        vis_cfg["num_attention_heads"],
+                    ),
+                    output_dim=text_cfg["hidden_size"],
+                    pool_size=vis_cfg.get("pooling_kernel_size", 3),
+                    position_embedding_size=vis_cfg.get(
+                        "position_embedding_size", 10240
+                    ),
+                    rope_max_wavelength=vis_cfg.get("rope_parameters", {}).get(
+                        "rope_theta", 100.0
+                    ),
+                    layer_norm_epsilon=vis_cfg.get("rms_norm_eps", 1e-6),
+                    use_clipped_linears=vis_cfg.get(
+                        "use_clipped_linears", True
+                    ),
+                    standardize=vis_cfg.get("standardize", False),
+                )
+            else:
+                vision_encoder = None
+
+            # Audio encoder — key may be present but null.
+            if transformers_config.get("audio_config") is not None:
+                aud_cfg = transformers_config["audio_config"]
+                audio_encoder = Gemma4AudioEncoder(
+                    hidden_size=aud_cfg["hidden_size"],
+                    num_heads=aud_cfg["num_attention_heads"],
+                    num_layers=aud_cfg["num_hidden_layers"],
+                    chunk_size=aud_cfg["attention_chunk_size"],
+                    context_left=aud_cfg["attention_context_left"],
+                    context_right=aud_cfg["attention_context_right"],
+                    logit_cap=aud_cfg["attention_logit_cap"],
+                    invalid_logit_value=aud_cfg[
+                        "attention_invalid_logits_value"
+                    ],
+                    conv_kernel_size=aud_cfg["conv_kernel_size"],
+                    residual_weight=aud_cfg["residual_weight"],
+                    gradient_clipping=aud_cfg["gradient_clipping"],
+                    sscp_conv_channels=tuple(
+                        aud_cfg["subsampling_conv_channels"]
+                    ),
+                    output_proj_dims=aud_cfg["output_proj_dims"],
+                    output_dim=text_cfg["hidden_size"],
+                    norm_eps=aud_cfg["rms_norm_eps"],
+                    sscp_norm_eps=aud_cfg["rms_norm_eps"],
+                )
+            else:
+                audio_encoder = None
 
     # Config stores the pattern as "_sliding_window_pattern" (underscore
     # prefix).
@@ -306,7 +396,8 @@ def convert_backbone_config(transformers_config):
 
 def convert_weights(backbone, loader, transformers_config):
     model_type = transformers_config.get("model_type", "gemma4")
-    is_text_only = model_type == "gemma4_text"
+    is_text_only = model_type in ("gemma4_text", "gemma4_unified_text")
+    is_unified = model_type in ("gemma4_unified", "gemma4_unified_assistant")
 
     if is_text_only:
         text_prefix = _resolve_prefix(loader, ["model", "language_model", ""])
@@ -351,11 +442,21 @@ def convert_weights(backbone, loader, transformers_config):
 
     vision_encoder = backbone.vision_encoder
     if vision_encoder is not None:
-        _convert_vision_encoder(vision_encoder, loader, transformers_config)
+        if is_unified:
+            _convert_unified_vision_embedder(
+                vision_encoder, loader, transformers_config
+            )
+        else:
+            _convert_vision_encoder(vision_encoder, loader, transformers_config)
 
     audio_encoder = backbone.audio_encoder
     if audio_encoder is not None:
-        _convert_audio_encoder(audio_encoder, loader, transformers_config)
+        if is_unified:
+            _convert_unified_audio_embedder(
+                audio_encoder, loader, transformers_config
+            )
+        else:
+            _convert_audio_encoder(audio_encoder, loader, transformers_config)
 
     for i in range(backbone.num_layers):
         decoder_layer = backbone.get_layer(f"decoder_block_{i}")
@@ -530,6 +631,51 @@ def _convert_audio_encoder(audio_encoder, loader, transformers_config):
         hook_fn=lambda x, _: np.transpose(x),
     )
     # embed_audio.embedding_post_projection_norm: parameter-free (Gemma4VNorm).
+
+
+def _convert_unified_vision_embedder(
+    vision_embedder, loader, transformers_config
+):
+    """Port unified vision-embedder weights from HF.
+
+    The unified model uses `model.embed_vision` with just:
+      - embedding_projection.weight  (Dense: [hidden, input_dim])
+      - pos_embedding_table           (Embedding: [mm_posemb_size, hidden])
+      - embedding_post_projection_norm: parameter-free VNorm (no weights)
+    """
+    vis_prefix = "model.embed_vision"
+
+    loader.port_weight(
+        keras_variable=vision_embedder.get_layer("embedding_projection").kernel,
+        hf_weight_key=f"{vis_prefix}.embedding_projection.weight",
+        hook_fn=lambda x, _: np.transpose(x),
+    )
+    loader.port_weight(
+        keras_variable=vision_embedder.get_layer(
+            "pos_embedding_table"
+        ).embeddings,
+        hf_weight_key=f"{vis_prefix}.pos_embedding_table",
+    )
+    # embedding_post_projection_norm: parameter-free (Gemma4VNorm).
+
+
+def _convert_unified_audio_embedder(
+    audio_embedder, loader, transformers_config
+):
+    """Port unified audio-embedder weights from HF.
+
+    The unified model uses `model.embed_audio` with just:
+      - embedding_projection.weight  (Dense: [hidden, audio_embed_dim])
+      - embedding_post_projection_norm: parameter-free VNorm (no weights)
+    """
+    aud_prefix = "model.embed_audio"
+
+    loader.port_weight(
+        keras_variable=audio_embedder.embedding_projection.kernel,
+        hf_weight_key=f"{aud_prefix}.embedding_projection.weight",
+        hook_fn=lambda x, _: np.transpose(x),
+    )
+    # embedding_post_projection_norm: parameter-free (Gemma4VNorm).
 
 
 def _convert_vision_encoder(vision_encoder, loader, transformers_config):
