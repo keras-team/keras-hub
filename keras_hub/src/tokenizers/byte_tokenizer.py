@@ -179,16 +179,15 @@ class ByteTokenizer(tokenizer.Tokenizer):
                     "`sequence_length` must be an int, got bool: "
                     f"{sequence_length}"
                 )
-
             if not isinstance(sequence_length, numbers.Integral):
                 raise ValueError(
                     "`sequence_length` must be an int or None. "
                     f"{sequence_length}"
                 )
-
             if sequence_length <= 0:
                 raise ValueError(
-                    f"`sequence_length` must be > 0.{sequence_length}"
+                    "`sequence_length` must be > 0. "
+                    f"Received: {sequence_length}"
                 )
 
         super().__init__(dtype=dtype, **kwargs)
