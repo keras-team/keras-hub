@@ -1,3 +1,4 @@
+import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -12,7 +13,10 @@ class Gemma4VideoConverter(VideoConverter):
     """Video converter for Gemma4.
 
     This layer handles video inputs by sampling frames and delegating to
-    `Gemma4ImageConverter` for frame-level processing.
+    an image converter for frame-level processing. By default, it uses
+    `Gemma4ImageConverter`, but for unified models an external converter
+    (e.g. `Gemma4UnifiedImageConverter`) can be passed via the
+    `image_converter` argument.
 
     Args:
         patch_size: int. Size of each square patch in pixels. Defaults to
@@ -23,6 +27,9 @@ class Gemma4VideoConverter(VideoConverter):
             the vision encoder. Defaults to `3`.
         num_frames: int. Number of frames to uniformly sample from the video.
             Defaults to `32`.
+        image_converter: A pre-built image converter instance to use for
+            per-frame processing. If `None` (default), a
+            `Gemma4ImageConverter` is created automatically.
     """
 
     def __init__(
@@ -31,15 +38,19 @@ class Gemma4VideoConverter(VideoConverter):
         max_soft_tokens=70,
         pooling_kernel_size=3,
         num_frames=32,
+        image_converter=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.image_converter = Gemma4ImageConverter(
-            patch_size=patch_size,
-            max_soft_tokens=max_soft_tokens,
-            pooling_kernel_size=pooling_kernel_size,
-            **kwargs,
-        )
+        if image_converter is not None:
+            self.image_converter = image_converter
+        else:
+            self.image_converter = Gemma4ImageConverter(
+                patch_size=patch_size,
+                max_soft_tokens=max_soft_tokens,
+                pooling_kernel_size=pooling_kernel_size,
+                **kwargs,
+            )
         self.num_frames = num_frames
         self.patch_size = patch_size
         self.max_soft_tokens = max_soft_tokens
@@ -134,6 +145,16 @@ class Gemma4VideoConverter(VideoConverter):
                 "max_soft_tokens": self.max_soft_tokens,
                 "pooling_kernel_size": self.pooling_kernel_size,
                 "num_frames": self.num_frames,
+                "image_converter": keras.layers.serialize(self.image_converter),
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        image_converter_config = config.pop("image_converter", None)
+        if image_converter_config is not None:
+            config["image_converter"] = keras.layers.deserialize(
+                image_converter_config
+            )
+        return cls(**config)

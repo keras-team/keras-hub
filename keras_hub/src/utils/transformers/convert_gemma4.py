@@ -165,7 +165,7 @@ def load_video_converter_config(preset, transformers_config):
     video_proc = processor_config["video_processor"]
     scale, offset = _compute_scale_offset(video_proc, "video_processor")
 
-    return {
+    result = {
         "num_frames": video_proc["num_frames"],
         "max_soft_tokens": video_proc["max_soft_tokens"],
         "patch_size": video_proc["patch_size"],
@@ -173,6 +173,23 @@ def load_video_converter_config(preset, transformers_config):
         "scale": scale,
         "offset": offset,
     }
+
+    # For unified models the video converter must use the unified image
+    # converter so that per-frame patches are merged to the model patch
+    # dimension (e.g. 48²×3 = 6912 instead of 16²×3 = 768).
+    model_type = transformers_config.get("model_type", "gemma4")
+    if model_type.startswith("gemma4_unified"):
+        from keras_hub.src.models.gemma4.gemma4_unified_image_converter import (
+            Gemma4UnifiedImageConverter,
+        )
+
+        result["image_converter"] = Gemma4UnifiedImageConverter(
+            patch_size=video_proc["patch_size"],
+            max_soft_tokens=video_proc["max_soft_tokens"],
+            pooling_kernel_size=video_proc["pooling_kernel_size"],
+        )
+
+    return result
 
 
 def load_preprocessor_config(preset, transformers_config):
@@ -205,8 +222,8 @@ def load_preprocessor_config(preset, transformers_config):
         {
             "num_frames_per_video": video_proc["num_frames"],
             "num_vision_tokens_per_frame": video_proc["max_soft_tokens"],
-            # video_fps is not stored in HF configs; 24.0
-            # matches the HF default.
+            # video_fps is not stored in HF configs;
+            # 24.0 matches the HF default.
             "video_fps": 24.0,
         }
     )
