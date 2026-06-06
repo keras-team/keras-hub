@@ -217,6 +217,7 @@ def convert_backbone_config(transformers_config):
                     num_soft_tokens=vis_cfg["num_soft_tokens"],
                     pooling_kernel_size=vis_cfg["pooling_kernel_size"],
                     patch_size=vis_cfg["patch_size"],
+                    posemb_stride=vis_cfg.get("posemb_stride", 40),
                     layer_norm_epsilon=vis_cfg.get("rms_norm_eps", 1e-6),
                 )
             else:

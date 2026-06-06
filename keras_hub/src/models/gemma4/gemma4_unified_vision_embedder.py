@@ -38,8 +38,12 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
         pooling_kernel_size: int. Kernel size used during teacher-patch
             merging. Stored for configuration only; the actual merge happens
             in the image converter.
-        patch_size: int. Teacher patch size in pixels. Stored for
-            configuration only.
+        patch_size: int. Teacher patch size in pixels. Defaults to `16`.
+        posemb_stride: int. Fixed stride for the 2-D positional embedding
+            flat index: `idx = x * posemb_stride + y`. Must match the
+            grid layout used during pre-training. For the 12B model
+            (`mm_posemb_size=1120`, 28×40 grid), this is `40`.
+            Defaults to `40`.
         layer_norm_epsilon: float. Epsilon for the post-projection norm.
             Defaults to `1e-6`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. Compute dtype.
@@ -73,16 +77,11 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
         num_soft_tokens,
         pooling_kernel_size=3,
         patch_size=16,
+        posemb_stride=40,
         layer_norm_epsilon=1e-6,
         dtype=None,
         **kwargs,
     ):
-        # Vision embedder always runs in float32 for consistency.
-        if hasattr(dtype, "variable_dtype"):
-            dtype = "float32"
-        elif dtype is not None and dtype != "float32":
-            dtype = "float32"
-
         input_dim = model_patch_size * model_patch_size * 3
 
         # === Functional Model ===
@@ -122,12 +121,10 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
         pos_x_safe = ops.maximum(pos_x, 0)
         pos_y_safe = ops.maximum(pos_y, 0)
 
-        # Flat index: idx = x * num_patches_y + y (per-image, matches HF).
-        num_patches_y = ops.cast(
-            ops.maximum(ops.max(pos_y_safe, axis=-1, keepdims=True) + 1, 1),
-            "int32",
-        )
-        flat_pos = pos_x_safe * num_patches_y + pos_y_safe
+        # Fixed stride for flat index: idx = x * posemb_stride + y.
+        # Learned positional embeddings require a deterministic mapping
+        # from (x, y) → index that is independent of image aspect ratio.
+        flat_pos = pos_x_safe * posemb_stride + pos_y_safe
         flat_pos = ops.minimum(flat_pos, mm_posemb_size - 1)
 
         pos_emb = pos_embedding_table(flat_pos)
@@ -158,6 +155,7 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
         self.num_soft_tokens = num_soft_tokens
         self.pooling_kernel_size = pooling_kernel_size
         self.patch_size = patch_size
+        self.posemb_stride = posemb_stride
         self.layer_norm_epsilon = layer_norm_epsilon
 
     @property
@@ -175,6 +173,7 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
                 "num_soft_tokens": self.num_soft_tokens,
                 "pooling_kernel_size": self.pooling_kernel_size,
                 "patch_size": self.patch_size,
+                "posemb_stride": self.posemb_stride,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )
