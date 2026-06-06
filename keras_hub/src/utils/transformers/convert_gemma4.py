@@ -178,8 +178,22 @@ def load_video_converter_config(preset, transformers_config):
 def load_preprocessor_config(preset, transformers_config):
     """Return extra Gemma4CausalLMPreprocessor kwargs from processor_config."""
     processor_config = load_json(preset, "processor_config.json")
+
+    result = {}
+
+    # Audio feature size: needed for correct dummy audio_mel shapes.
+    feature_extractor = processor_config.get("feature_extractor")
+    if feature_extractor is not None:
+        model_type = transformers_config.get("model_type", "gemma4")
+        if model_type.startswith("gemma4_unified"):
+            result["audio_input_feat_size"] = feature_extractor[
+                "audio_samples_per_token"
+            ]
+        else:
+            result["audio_input_feat_size"] = feature_extractor["feature_size"]
+
     if "video_processor" not in processor_config:
-        return {}
+        return result
 
     video_proc = processor_config["video_processor"]
     # do_sample_frames=True means the processor samples num_frames from the
@@ -187,12 +201,16 @@ def load_preprocessor_config(preset, transformers_config):
     # False, frames are expected to be pre-sampled by the caller and num_frames
     # is ignored at runtime (the converter still linspaces over whatever it
     # receives, but total_frames == num_frames so the result is identical).
-    return {
-        "num_frames_per_video": video_proc["num_frames"],
-        "num_vision_tokens_per_frame": video_proc["max_soft_tokens"],
-        # video_fps is not stored in HF configs; 24.0 matches the HF default.
-        "video_fps": 24.0,
-    }
+    result.update(
+        {
+            "num_frames_per_video": video_proc["num_frames"],
+            "num_vision_tokens_per_frame": video_proc["max_soft_tokens"],
+            # video_fps is not stored in HF configs; 24.0
+            # matches the HF default.
+            "video_fps": 24.0,
+        }
+    )
+    return result
 
 
 def convert_backbone_config(transformers_config):
