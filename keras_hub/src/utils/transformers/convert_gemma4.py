@@ -231,7 +231,9 @@ def convert_backbone_config(transformers_config):
 
     # Partial RoPE factor for global (full) attention layers.
     # Stored under rope_parameters["full_attention"]["partial_rotary_factor"].
-    rope_params = text_cfg.get("rope_parameters", {}) or {}
+    rope_params = text_cfg.get("rope_parameters", {})
+    if rope_params is None:
+        rope_params = {}
     global_rope_partial_rotary_factor = rope_params.get(
         "full_attention", {}
     ).get("partial_rotary_factor")
@@ -243,6 +245,8 @@ def convert_backbone_config(transformers_config):
     # If it's missing in `full_attention`, safely fall back to top-level cfg.
     if global_rope_theta is None:
         global_rope_theta = text_cfg.get("rope_theta")
+    if local_rope_theta is None:
+        local_rope_theta = text_cfg.get("rope_theta")
 
     # HF `use_bidirectional_attention` controls vision-token attention only:
     #   null     → purely causal for all tokens (E2B, E4B).
