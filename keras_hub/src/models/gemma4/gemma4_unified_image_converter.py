@@ -12,6 +12,9 @@ from keras_hub.src.models.gemma4.gemma4_image_converter import (
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
+# Large value used to push padding patches to the end during argsort.
+_PADDING_SORT_SENTINEL = 1_000_000_000
+
 
 def _patches_merge_numpy(patches, positions_xy, length):
     """Merge k×k groups of teacher patches into model patches (NumPy path).
@@ -62,7 +65,9 @@ def _patches_merge_numpy(patches, positions_xy, length):
 
         # Ensure padding patches (where pos is -1) are sorted to the end
         is_padding = (pos[:, 0] == -1) & (pos[:, 1] == -1)
-        target_ordering = np.where(is_padding, 1e9, target_ordering)
+        target_ordering = np.where(
+            is_padding, _PADDING_SORT_SENTINEL, target_ordering
+        )
 
         perm = np.argsort(target_ordering)
         kernel_ordered = p[perm]  # (L, D)
@@ -77,15 +82,17 @@ def _patches_merge_numpy(patches, positions_xy, length):
             length, k * patch_size * k * patch_size * 3
         )
 
-        # Compute merged positions
+        # Compute merged positions. Mask out -1 padding entries so they
+        # don't corrupt the min; restore -1 for fully-padding groups.
         kernel_pos = pos[perm]  # (L, 2)
-        kernel_pos = kernel_pos.reshape(length, k * k, 2).astype(np.float64)
-
-        # Compute merged position: divide by k to get model-level grid coords.
-        # For non-padded patches, compute new positions
-        new_pos = kernel_pos // k
-        # Take min valid position per kernel
-        new_pos = new_pos.min(axis=1).astype(np.int32)
+        kernel_pos = kernel_pos.reshape(length, k * k, 2)
+        is_pad = (kernel_pos == -1).all(axis=-1, keepdims=True)
+        # Replace padding coords with large value for min, then divide.
+        safe_pos = np.where(is_pad, np.iinfo(np.int32).max, kernel_pos)
+        new_pos = (safe_pos // k).min(axis=1)
+        # Restore -1 where all k² patches in a group were padding.
+        all_pad = is_pad.all(axis=1)  # (length, 1)
+        new_pos = np.where(all_pad, -1, new_pos).astype(np.int32)
 
         all_merged_patches.append(merged)
         all_merged_positions.append(new_pos)
@@ -336,10 +343,7 @@ class Gemma4UnifiedImageConverter(ImageConverter):
             )
             target_ordering = tf.where(
                 is_padding,
-                tf.cast(
-                    tf.fill(tf.shape(target_ordering), 1000000000),
-                    target_ordering.dtype,
-                ),
+                tf.cast(_PADDING_SORT_SENTINEL, target_ordering.dtype),
                 target_ordering,
             )
 
@@ -353,12 +357,20 @@ class Gemma4UnifiedImageConverter(ImageConverter):
             kernel_ordered = tf.transpose(kernel_ordered, (0, 1, 3, 2, 4, 5))
             merged = tf.reshape(kernel_ordered, (length, k * ps * k * ps * 3))
 
-            # Compute merged positions
+            # Compute merged positions. Mask out -1 padding entries so
+            # they don't corrupt the min; restore -1 for all-pad groups.
             kernel_pos = tf.gather(pos, perm)
             kernel_pos = tf.reshape(kernel_pos, (length, k * k, 2))
-            kernel_pos = tf.cast(kernel_pos, tf.float64)
-            new_pos = kernel_pos // k
-            new_pos = tf.reduce_min(new_pos, axis=1)
+            is_pad = tf.reduce_all(
+                tf.equal(kernel_pos, -1), axis=-1, keepdims=True
+            )
+            large_val = tf.constant(
+                2147483647, dtype=kernel_pos.dtype
+            )  # int32 max
+            safe_pos = tf.where(is_pad, large_val, kernel_pos)
+            new_pos = tf.reduce_min(safe_pos // k, axis=1)
+            all_pad = tf.reduce_all(is_pad, axis=1)  # (length, 1)
+            new_pos = tf.where(all_pad, -1, new_pos)
             new_pos = tf.cast(new_pos, tf.int32)
 
             return merged, new_pos

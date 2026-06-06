@@ -122,11 +122,13 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
         pos_x_safe = ops.maximum(pos_x, 0)
         pos_y_safe = ops.maximum(pos_y, 0)
 
-        # Flat index: idx = x * num_patches_y + y (dynamic, matches HF).
+        # Flat index: idx = x * num_patches_y + y (per-image, matches HF).
         num_patches_y = ops.cast(
-            ops.maximum(ops.max(pos_y_safe) + 1, 1), "int32"
+            ops.maximum(ops.max(pos_y_safe, axis=-1, keepdims=True) + 1, 1),
+            "int32",
         )
         flat_pos = pos_x_safe * num_patches_y + pos_y_safe
+        flat_pos = ops.minimum(flat_pos, mm_posemb_size - 1)
 
         pos_emb = pos_embedding_table(flat_pos)
         x = x + pos_emb
@@ -177,3 +179,7 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)

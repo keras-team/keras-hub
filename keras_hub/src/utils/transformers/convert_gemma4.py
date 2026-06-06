@@ -193,7 +193,7 @@ def convert_backbone_config(transformers_config):
     """Map a Transformers config dict → Gemma4Backbone keyword arguments."""
     model_type = transformers_config.get("model_type", "gemma4")
     is_text_only = model_type in ("gemma4_text", "gemma4_unified_text")
-    is_unified = model_type in ("gemma4_unified", "gemma4_unified_assistant")
+    is_unified = model_type.startswith("gemma4_unified")
 
     if is_text_only:
         text_cfg = transformers_config
@@ -217,7 +217,7 @@ def convert_backbone_config(transformers_config):
                     num_soft_tokens=vis_cfg["num_soft_tokens"],
                     pooling_kernel_size=vis_cfg["pooling_kernel_size"],
                     patch_size=vis_cfg["patch_size"],
-                    layer_norm_epsilon=vis_cfg["rms_norm_eps"],
+                    layer_norm_epsilon=vis_cfg.get("rms_norm_eps", 1e-6),
                 )
             else:
                 vision_encoder = None
@@ -228,7 +228,7 @@ def convert_backbone_config(transformers_config):
                 audio_encoder = Gemma4UnifiedAudioEmbedder(
                     hidden_dim=text_cfg["hidden_size"],
                     audio_embed_dim=aud_cfg["audio_embed_dim"],
-                    layer_norm_epsilon=aud_cfg["rms_norm_eps"],
+                    layer_norm_epsilon=aud_cfg.get("rms_norm_eps", 1e-6),
                 )
             else:
                 audio_encoder = None
@@ -397,7 +397,7 @@ def convert_backbone_config(transformers_config):
 def convert_weights(backbone, loader, transformers_config):
     model_type = transformers_config.get("model_type", "gemma4")
     is_text_only = model_type in ("gemma4_text", "gemma4_unified_text")
-    is_unified = model_type in ("gemma4_unified", "gemma4_unified_assistant")
+    is_unified = model_type.startswith("gemma4_unified")
 
     if is_text_only:
         text_prefix = _resolve_prefix(loader, ["model", "language_model", ""])

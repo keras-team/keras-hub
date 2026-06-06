@@ -2,9 +2,6 @@
 
 import inspect
 
-from keras_hub.src.models.gemma4.gemma4_unified_image_converter import (  # noqa: E501
-    Gemma4UnifiedImageConverter,
-)
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.preset_utils import jax_memory_cleanup
@@ -179,6 +176,13 @@ class TransformersPresetLoader(PresetLoader):
                 # For unified models, use the unified image converter.
                 model_type = self.config.get("model_type", "")
                 if model_type.startswith("gemma4_unified"):
+                    from keras_hub.src.models.gemma4.gemma4_unified_image_converter import (  # noqa: E501
+                        Gemma4UnifiedImageConverter,
+                    )
+
+                    # Override the caller's cls: unified models use a
+                    # different converter that merges teacher patches,
+                    # which the standard Gemma4ImageConverter does not do.
                     cls = Gemma4UnifiedImageConverter
                 return cls(**{**config, **kwargs})
         # TODO: set image size for pali gemma checkpoints.
