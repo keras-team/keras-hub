@@ -601,9 +601,11 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Audio feature mask creation from Ragged tensor row lengths
         row_lengths = audio.row_lengths()
-        # Compute Mel output lengths: stride or max step coords triggers
+        # Compute output lengths using ceiling division — the converter
+        # zero-pads partial frames, so ceil(samples / stride) matches the
+        # actual number of output tokens.
         stride = self.audio_converter.stride
-        output_lengths = tf.cast(row_lengths // stride, tf.int32)
+        output_lengths = tf.cast((row_lengths + stride - 1) // stride, tf.int32)
 
         mask = tf.sequence_mask(
             output_lengths, maxlen=tf.shape(mel)[2], dtype=tf.int32
