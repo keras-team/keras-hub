@@ -79,7 +79,7 @@ class Gemma4UnifiedAudioEmbedder(keras.layers.Layer):
         # Force sub-layers to build so Keras sees them as built.
         self.embedding_projection.build((None, None, self.audio_embed_dim))
         self.post_norm.build((None, None, self.hidden_dim))
-        self.built = True
+        super().build(input_shape)
 
     def call(self, audio_features, audio_mask):
         """Project audio features into the language model's hidden space.

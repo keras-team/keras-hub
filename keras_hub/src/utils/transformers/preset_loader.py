@@ -178,7 +178,7 @@ class TransformersPresetLoader(PresetLoader):
             if config is not None:
                 # For unified models, use the unified image converter.
                 model_type = self.config.get("model_type", "")
-                if model_type == "gemma4_unified":
+                if model_type.startswith("gemma4_unified"):
                     cls = Gemma4UnifiedImageConverter
                 return cls(**{**config, **kwargs})
         # TODO: set image size for pali gemma checkpoints.

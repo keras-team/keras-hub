@@ -1,5 +1,6 @@
 import math
 
+import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -8,6 +9,7 @@ from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.models.gemma4.gemma4_image_converter import (
     Gemma4AspectRatioResizing,
 )
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -27,13 +29,19 @@ def _patches_merge_numpy(patches, positions_xy, length):
         merged_patches: (batch, length, k²×D)
         merged_positions: (batch, length, 2)
     """
-    import numpy as np
 
     batch_size = patches.shape[0]
     L = patches.shape[1]
     D = patches.shape[2]
     patch_size = int(math.isqrt(D // 3))
     k = int(math.isqrt(L // length))
+
+    if batch_size == 0:
+        merged_dim = k * patch_size * k * patch_size * 3
+        return (
+            np.empty((0, length, merged_dim), dtype=patches.dtype),
+            np.empty((0, length, 2), dtype=np.int32),
+        )
 
     all_merged_patches = []
     all_merged_positions = []
@@ -51,6 +59,10 @@ def _patches_merge_numpy(patches, positions_xy, length):
         within_kernel_y = pos[:, 1] % k
         num_from_tl_kernel = within_kernel_x + within_kernel_y * k
         target_ordering = num_from_tl_kernel + num_from_tl
+
+        # Ensure padding patches (where pos is -1) are sorted to the end
+        is_padding = (pos[:, 0] == -1) & (pos[:, 1] == -1)
+        target_ordering = np.where(is_padding, 1e9, target_ordering)
 
         perm = np.argsort(target_ordering)
         kernel_ordered = p[perm]  # (L, D)
@@ -108,6 +120,21 @@ class Gemma4UnifiedImageConverter(ImageConverter):
             spatial axis. Defaults to `3`.
         **kwargs: Additional keyword arguments forwarded to
             `keras_hub.layers.ImageConverter`.
+
+    Example:
+    ```python
+    import numpy as np
+
+    converter = keras_hub.layers.Gemma4UnifiedImageConverter(
+        patch_size=16,
+        max_soft_tokens=280,
+        pooling_kernel_size=3,
+    )
+    images = np.random.rand(1, 768, 768, 3).astype("float32") * 255
+    output = converter(images)
+    # output["pixel_values"].shape == (1, 280, 6912)
+    # output["pixel_position_ids"].shape == (1, 280, 2)
+    ```
     """
 
     backbone_cls = Gemma4Backbone
@@ -138,8 +165,6 @@ class Gemma4UnifiedImageConverter(ImageConverter):
 
     @preprocessing_function
     def call(self, inputs):
-        import numpy as np
-
         # --- Resize ---
         if isinstance(inputs, dict):
             x = self.resizing.call(inputs["images"])
@@ -156,59 +181,119 @@ class Gemma4UnifiedImageConverter(ImageConverter):
             x, offset = self._convert_types(x, offset, x.dtype)
             x = x + offset
 
-        # --- Patchify into teacher patches ---
         ps = self.patch_size
         k = self.pooling_kernel_size
         max_teacher_patches = self.max_soft_tokens * (k**2)
 
-        # Convert to numpy for the merge logic (preprocessing runs in eager).
-        x_np = np.array(x) if not isinstance(x, np.ndarray) else x
-        batch_size = x_np.shape[0]
-        h, w = x_np.shape[1], x_np.shape[2]
-        n_h = h // ps
-        n_w = w // ps
+        if in_tf_function():
+            import tensorflow as tf
 
-        # (batch, n_h, ps, n_w, ps, 3) → (batch, n_h*n_w, ps*ps*3)
-        x_np = x_np.reshape(batch_size, n_h, ps, n_w, ps, 3)
-        x_np = x_np.transpose(0, 1, 3, 2, 4, 5)
-        teacher_patches = x_np.reshape(batch_size, n_h * n_w, 3 * ps * ps)
+            shape = tf.shape(x)
+            batch_size = shape[0]
+            h = shape[1]
+            w = shape[2]
+            n_h = h // ps
+            n_w = w // ps
 
-        # Build teacher-level position IDs: (x, y) for each patch
-        col_ids = np.arange(n_w, dtype=np.int32)  # x
-        row_ids = np.arange(n_h, dtype=np.int32)  # y
-        col_grid = np.tile(col_ids.reshape(1, n_w), (n_h, 1))
-        row_grid = np.tile(row_ids.reshape(n_h, 1), (1, n_w))
-        positions = np.stack(
-            [col_grid.reshape(-1), row_grid.reshape(-1)], axis=-1
-        )
-        positions = np.tile(positions[np.newaxis], (batch_size, 1, 1))
+            # --- Patchify into teacher patches ---
+            x = tf.reshape(x, (batch_size, n_h, ps, n_w, ps, 3))
+            x = tf.transpose(x, (0, 1, 3, 2, 4, 5))
+            teacher_patches = tf.reshape(
+                x, (batch_size, n_h * n_w, 3 * ps * ps)
+            )
 
-        # Pad teacher patches to max_teacher_patches
-        current = n_h * n_w
-        pad_len = max_teacher_patches - current
-        if pad_len > 0:
-            p_pad = np.zeros(
+            # Build teacher-level position IDs: (x, y)
+            col_ids = tf.range(n_w, dtype="int32")
+            row_ids = tf.range(n_h, dtype="int32")
+            col_grid = tf.tile(tf.reshape(col_ids, (1, n_w)), (n_h, 1))
+            row_grid = tf.tile(tf.reshape(row_ids, (n_h, 1)), (1, n_w))
+            positions = tf.stack(
+                [tf.reshape(col_grid, [-1]), tf.reshape(row_grid, [-1])],
+                axis=-1,
+            )
+            positions = tf.tile(
+                tf.expand_dims(positions, 0), [batch_size, 1, 1]
+            )
+
+            # Pad teacher patches to max_teacher_patches
+            current = n_h * n_w
+            pad_len = tf.cast(max_teacher_patches, tf.int32) - current
+            p_pad = tf.zeros(
                 (batch_size, pad_len, 3 * ps * ps),
                 dtype=teacher_patches.dtype,
             )
-            teacher_patches = np.concatenate([teacher_patches, p_pad], axis=1)
-            pos_pad = np.full(
-                (batch_size, pad_len, 2), -1, dtype=positions.dtype
+            teacher_patches = tf.concat([teacher_patches, p_pad], axis=1)
+            teacher_patches = tf.ensure_shape(
+                teacher_patches,
+                [None, max_teacher_patches, 3 * ps * ps],
             )
-            positions = np.concatenate([positions, pos_pad], axis=1)
+            pos_pad = tf.fill((batch_size, pad_len, 2), -1)
+            positions = tf.concat([positions, pos_pad], axis=1)
+            positions = tf.ensure_shape(
+                positions, [None, max_teacher_patches, 2]
+            )
 
-        # --- Merge teacher patches → model patches ---
-        merged_patches, merged_positions = _patches_merge_numpy(
-            teacher_patches, positions, self.max_soft_tokens
-        )
+            # --- Merge teacher patches → model patches (TF path) ---
+            merged_patches, merged_positions = self._patches_merge_tf(
+                teacher_patches, positions, self.max_soft_tokens
+            )
+            pixel_values = tf.ensure_shape(
+                merged_patches,
+                [None, self.max_soft_tokens, (k * ps) ** 2 * 3],
+            )
+            pixel_position_ids = tf.ensure_shape(
+                merged_positions, [None, self.max_soft_tokens, 2]
+            )
+        else:
+            # Convert to numpy for the merge logic (eager mode).
+            x_np = np.array(x) if not isinstance(x, np.ndarray) else x
+            batch_size = x_np.shape[0]
+            h, w = x_np.shape[1], x_np.shape[2]
+            n_h = h // ps
+            n_w = w // ps
 
-        # Convert back to framework tensors
-        pixel_values = ops.convert_to_tensor(
-            merged_patches, dtype=self.compute_dtype
-        )
-        pixel_position_ids = ops.convert_to_tensor(
-            merged_positions, dtype="int32"
-        )
+            # --- Patchify into teacher patches ---
+            x_np = x_np.reshape(batch_size, n_h, ps, n_w, ps, 3)
+            x_np = x_np.transpose(0, 1, 3, 2, 4, 5)
+            teacher_patches = x_np.reshape(batch_size, n_h * n_w, 3 * ps * ps)
+
+            # Build teacher-level position IDs: (x, y)
+            col_ids = np.arange(n_w, dtype=np.int32)
+            row_ids = np.arange(n_h, dtype=np.int32)
+            col_grid = np.tile(col_ids.reshape(1, n_w), (n_h, 1))
+            row_grid = np.tile(row_ids.reshape(n_h, 1), (1, n_w))
+            positions = np.stack(
+                [col_grid.reshape(-1), row_grid.reshape(-1)], axis=-1
+            )
+            positions = np.tile(positions[np.newaxis], (batch_size, 1, 1))
+
+            # Pad teacher patches to max_teacher_patches
+            current = n_h * n_w
+            pad_len = max_teacher_patches - current
+            if pad_len > 0:
+                p_pad = np.zeros(
+                    (batch_size, pad_len, 3 * ps * ps),
+                    dtype=teacher_patches.dtype,
+                )
+                teacher_patches = np.concatenate(
+                    [teacher_patches, p_pad], axis=1
+                )
+                pos_pad = np.full(
+                    (batch_size, pad_len, 2), -1, dtype=positions.dtype
+                )
+                positions = np.concatenate([positions, pos_pad], axis=1)
+
+            # --- Merge teacher patches → model patches (NumPy path) ---
+            merged_patches, merged_positions = _patches_merge_numpy(
+                teacher_patches, positions, self.max_soft_tokens
+            )
+
+            pixel_values = ops.convert_to_tensor(
+                merged_patches, dtype=self.compute_dtype
+            )
+            pixel_position_ids = ops.convert_to_tensor(
+                merged_positions, dtype="int32"
+            )
 
         outputs = {
             "pixel_values": pixel_values,
@@ -220,7 +305,81 @@ class Gemma4UnifiedImageConverter(ImageConverter):
             return inputs
         return outputs
 
+    def _patches_merge_tf(self, patches, positions_xy, length):
+        """Merge k×k groups of teacher patches (TF graph-safe path).
+
+        This reimplements `_patches_merge_numpy` using pure `tf.*` ops
+        so it can execute inside `tf.data.Dataset.map` or `tf.function`.
+        """
+        import tensorflow as tf
+
+        ps = self.patch_size
+        k = self.pooling_kernel_size
+
+        def _merge_single(args):
+            p, pos = args  # (L, D), (L, 2)
+
+            # Compute target ordering: group by kernel
+            max_x = tf.reduce_max(pos[:, 0]) + 1
+            kernel_x = pos[:, 0] // k
+            kernel_y = pos[:, 1] // k
+
+            num_from_tl = k * k * kernel_x + k * max_x * kernel_y
+            within_kernel_x = pos[:, 0] % k
+            within_kernel_y = pos[:, 1] % k
+            num_from_tl_kernel = within_kernel_x + within_kernel_y * k
+            target_ordering = num_from_tl_kernel + num_from_tl
+
+            # Ensure padding patches are sorted to the end
+            is_padding = tf.math.logical_and(
+                tf.equal(pos[:, 0], -1), tf.equal(pos[:, 1], -1)
+            )
+            target_ordering = tf.where(
+                is_padding,
+                tf.cast(
+                    tf.fill(tf.shape(target_ordering), 1000000000),
+                    target_ordering.dtype,
+                ),
+                target_ordering,
+            )
+
+            perm = tf.argsort(target_ordering)
+            kernel_ordered = tf.gather(p, perm)
+
+            # Reshape to merge
+            kernel_ordered = tf.reshape(
+                kernel_ordered, (length, k, k, ps, ps, 3)
+            )
+            kernel_ordered = tf.transpose(kernel_ordered, (0, 1, 3, 2, 4, 5))
+            merged = tf.reshape(kernel_ordered, (length, k * ps * k * ps * 3))
+
+            # Compute merged positions
+            kernel_pos = tf.gather(pos, perm)
+            kernel_pos = tf.reshape(kernel_pos, (length, k * k, 2))
+            kernel_pos = tf.cast(kernel_pos, tf.float64)
+            new_pos = kernel_pos // k
+            new_pos = tf.reduce_min(new_pos, axis=1)
+            new_pos = tf.cast(new_pos, tf.int32)
+
+            return merged, new_pos
+
+        merged, positions = tf.map_fn(
+            _merge_single,
+            (patches, positions_xy),
+            fn_output_signature=(
+                tf.TensorSpec((length, (k * ps) ** 2 * 3), patches.dtype),
+                tf.TensorSpec((length, 2), tf.int32),
+            ),
+        )
+        return merged, positions
+
     def get_config(self):
         config = super().get_config()
-        config.update({"patch_size": self.patch_size})
+        config.update(
+            {
+                "patch_size": self.patch_size,
+                "max_soft_tokens": self.max_soft_tokens,
+                "pooling_kernel_size": self.pooling_kernel_size,
+            }
+        )
         return config

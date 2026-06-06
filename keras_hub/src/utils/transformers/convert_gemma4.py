@@ -61,7 +61,7 @@ def load_image_converter_config(preset, transformers_config):
         return None
 
     model_type = transformers_config["model_type"]
-    is_unified = model_type == "gemma4_unified"
+    is_unified = model_type.startswith("gemma4_unified")
 
     processor_config = load_json(preset, "processor_config.json")
 
@@ -126,7 +126,7 @@ def load_audio_converter_config(preset, transformers_config):
         return None
 
     model_type = transformers_config["model_type"]
-    is_unified = model_type == "gemma4_unified"
+    is_unified = model_type.startswith("gemma4_unified")
 
     if is_unified:
         # Unified models use a simple linear projection for audio,

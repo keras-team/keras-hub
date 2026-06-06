@@ -1,4 +1,5 @@
 import keras
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.gemma4.gemma4_layers import Gemma4VNorm
@@ -104,11 +105,7 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
         )
         x = embedding_projection(pixel_values_input)
 
-        # 2-D positional embedding.
-        # Position IDs are (x, y) integer coordinates. We flatten them to a
-        # 1-D index via  idx = x * max_y_dim + y  and look up from a table.
-        # We use mm_posemb_size as the table size, which is pre-computed to
-        # be large enough for any valid (x, y) pair.
+        # 2-D positional embedding (XY → flat 1-D index → lookup).
         pos_embedding_table = keras.layers.Embedding(
             mm_posemb_size,
             hidden_dim,
@@ -121,23 +118,15 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
         pos_x = pixel_position_ids_input[..., 0]  # (..., N)
         pos_y = pixel_position_ids_input[..., 1]  # (..., N)
 
-        # Find the max y dimension from the position grid to compute the
-        # flat index. We use mm_posemb_size as a safe upper bound for the
-        # stride since the actual max_y ≤ sqrt(mm_posemb_size).
-        # The HF implementation computes: idx = x * num_patches_y + y
-        # where num_patches_y = image_height / model_patch_size.
-        # Since we don't know the image dims at graph build time, use
-        # a simple flat index: x * stride + y where stride is chosen such
-        # that x * stride + y < mm_posemb_size for all valid positions.
-        # For 12B: max pos value = sqrt(1120) ≈ 33, so stride = 34 works.
-        # More robustly, use the sqrt of mm_posemb_size as stride.
-        import math
-
-        stride = math.isqrt(mm_posemb_size)
         # Clamp -1 padding positions to 0.
-        pos_x_safe = keras.ops.maximum(pos_x, 0)
-        pos_y_safe = keras.ops.maximum(pos_y, 0)
-        flat_pos = pos_x_safe * stride + pos_y_safe
+        pos_x_safe = ops.maximum(pos_x, 0)
+        pos_y_safe = ops.maximum(pos_y, 0)
+
+        # Flat index: idx = x * num_patches_y + y (dynamic, matches HF).
+        num_patches_y = ops.cast(
+            ops.maximum(ops.max(pos_y_safe) + 1, 1), "int32"
+        )
+        flat_pos = pos_x_safe * num_patches_y + pos_y_safe
 
         pos_emb = pos_embedding_table(flat_pos)
         x = x + pos_emb
@@ -164,7 +153,7 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
         self.hidden_dim = hidden_dim
         self.model_patch_size = model_patch_size
         self.mm_posemb_size = mm_posemb_size
-        self._num_soft_tokens = num_soft_tokens
+        self.num_soft_tokens = num_soft_tokens
         self.pooling_kernel_size = pooling_kernel_size
         self.patch_size = patch_size
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -172,7 +161,7 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
     @property
     def num_vision_tokens_per_image(self):
         """Maximum number of vision soft tokens per image."""
-        return self._num_soft_tokens
+        return self.num_soft_tokens
 
     def get_config(self):
         config = super().get_config()
@@ -181,7 +170,7 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
                 "hidden_dim": self.hidden_dim,
                 "model_patch_size": self.model_patch_size,
                 "mm_posemb_size": self.mm_posemb_size,
-                "num_soft_tokens": self._num_soft_tokens,
+                "num_soft_tokens": self.num_soft_tokens,
                 "pooling_kernel_size": self.pooling_kernel_size,
                 "patch_size": self.patch_size,
                 "layer_norm_epsilon": self.layer_norm_epsilon,

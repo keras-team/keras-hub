@@ -352,6 +352,12 @@ from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
 from keras_hub.src.models.gemma4.gemma4_tokenizer import (
     Gemma4Tokenizer as Gemma4Tokenizer,
 )
+from keras_hub.src.models.gemma4.gemma4_unified_audio_embedder import (
+    Gemma4UnifiedAudioEmbedder as Gemma4UnifiedAudioEmbedder,
+)
+from keras_hub.src.models.gemma4.gemma4_unified_vision_embedder import (
+    Gemma4UnifiedVisionEmbedder as Gemma4UnifiedVisionEmbedder,
+)
 from keras_hub.src.models.gemma4.gemma4_vision_encoder import (
     Gemma4VisionEncoder as Gemma4VisionEncoder,
 )
