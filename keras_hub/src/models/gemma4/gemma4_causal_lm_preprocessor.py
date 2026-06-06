@@ -410,11 +410,15 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
             )
 
         if pixel_values is None:
-            patch_dim = (
-                3 * self.image_converter.patch_size**2
-                if self.image_converter is not None
-                else 48
-            )
+            if self.image_converter is not None:
+                patch_size = getattr(
+                    self.image_converter,
+                    "model_patch_size",
+                    self.image_converter.patch_size,
+                )
+                patch_dim = 3 * patch_size**2
+            else:
+                patch_dim = 48
             pixel_values = tf.zeros(
                 (batch_size, 0, 1, patch_dim), dtype="float32"
             )
@@ -546,13 +550,18 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
             if not isinstance(pixel_position_ids, tf.Tensor):
                 pixel_position_ids = pixel_position_ids.cpu()
 
+        patch_size = getattr(
+            self.image_converter,
+            "model_patch_size",
+            self.image_converter.patch_size,
+        )
         pixel_values = tf.reshape(
             pixel_values,
             [
                 original_images_shape[0],
                 original_images_shape[1],
                 -1,
-                self.image_converter.patch_size**2 * 3,
+                patch_size**2 * 3,
             ],
         )
         pixel_position_ids = tf.reshape(
@@ -998,7 +1007,12 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
             vision_mask = token_ids == self.tokenizer.image_placeholder_id
         else:
             if self.image_converter is not None:
-                patch_dim = self.image_converter.patch_size**2 * 3
+                patch_size = getattr(
+                    self.image_converter,
+                    "model_patch_size",
+                    self.image_converter.patch_size,
+                )
+                patch_dim = patch_size**2 * 3
                 pixel_values = tf.ones(
                     [batch_size, 0, 0, patch_dim], dtype="float32"
                 )
@@ -1182,7 +1196,12 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
             vision_mask = token_ids == self.tokenizer.image_placeholder_id
         else:
             if self.image_converter is not None:
-                patch_dim = self.image_converter.patch_size**2 * 3
+                patch_size = getattr(
+                    self.image_converter,
+                    "model_patch_size",
+                    self.image_converter.patch_size,
+                )
+                patch_dim = patch_size**2 * 3
                 pixel_values = tf.ones(
                     [batch_size, 0, 0, patch_dim], dtype="float32"
                 )
