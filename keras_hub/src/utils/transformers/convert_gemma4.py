@@ -638,16 +638,15 @@ def _convert_unified_vision_embedder(
 ):
     """Port unified vision-embedder weights from HF.
 
-    The unified model uses `model.embed_vision` with:
-      - patch_ln1.{weight,bias}     (LayerNorm on raw patches)
-      - patch_dense.{weight,bias}   (Dense: patch_dim → mm_embed_dim)
-      - patch_ln2.{weight,bias}     (LayerNorm after projection)
-      - pos_embedding               (factorized: [mm_posemb_size, 2, hidden])
-      - pos_norm.{weight,bias}      (LayerNorm after adding pos emb)
-      - multimodal_embedder.embedding_pre_projection_norm: param-free VNorm
-      - multimodal_embedder.embedding_projection.weight (Dense: mm→text)
+    The HF checkpoint stores vision embedder weights under two prefixes:
+      - `model.vision_embedder` for the patch embedding + pos embedding
+        layers (patch_ln1, patch_dense, patch_ln2, pos_embedding, pos_norm).
+      - `model.embed_vision` for the multimodal projection
+        (embedding_projection).
+    The `embedding_pre_projection_norm` is parameter-free (VNorm).
     """
-    vis_prefix = "model.embed_vision"
+    vis_prefix = "model.vision_embedder"
+    proj_prefix = "model.embed_vision"
 
     # --- patch_ln1 ---
     loader.port_weight(
@@ -707,7 +706,7 @@ def _convert_unified_vision_embedder(
     # embedding_pre_projection_norm: parameter-free (Gemma4VNorm).
     loader.port_weight(
         keras_variable=vision_embedder.get_layer("embedding_projection").kernel,
-        hf_weight_key=f"{vis_prefix}.multimodal_embedder.embedding_projection.weight",
+        hf_weight_key=f"{proj_prefix}.embedding_projection.weight",
         hook_fn=lambda x, _: np.transpose(x),
     )
 
