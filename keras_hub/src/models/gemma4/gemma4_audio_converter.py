@@ -135,6 +135,15 @@ class Gemma4AudioConverter(AudioConverter):
 
         self.built = True
 
+    @property
+    def audio_subsampling_factor(self):
+        """Number of converter output frames per audio soft-token.
+
+        The standard Gemma4 conformer encoder subsamples by a factor of
+        4 (two Conv2dSubsampling layers, each with stride 2).
+        """
+        return 4
+
     def _get_mel_filters(self):
         """Build an HTK-scale mel filterbank with Slaney normalisation.
 

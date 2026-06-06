@@ -129,10 +129,16 @@ def load_audio_converter_config(preset, transformers_config):
     is_unified = model_type.startswith("gemma4_unified")
 
     if is_unified:
-        # Unified models use a simple linear projection for audio,
-        # no conformer encoder. No audio converter is needed — raw
-        # waveform frames are fed directly.
-        return None
+        # Unified models chunk raw waveform into fixed-length frames
+        # (no mel spectrograms, no conformer encoder).
+        processor_config = load_json(preset, "processor_config.json")
+        feature_extractor = processor_config["feature_extractor"]
+        return {
+            "audio_samples_per_token": feature_extractor[
+                "audio_samples_per_token"
+            ],
+            "sampling_rate": feature_extractor["sampling_rate"],
+        }
 
     processor_config = load_json(preset, "processor_config.json")
     feature_extractor = processor_config["feature_extractor"]

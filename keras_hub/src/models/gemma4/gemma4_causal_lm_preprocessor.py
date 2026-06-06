@@ -570,7 +570,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         }
 
     def _preprocess_audio(self, audio, batched):
-        """Converts raw audio into Mel spectrograms."""
+        """Converts raw audio into features for the audio encoder/embedder."""
         if not batched or (hasattr(audio, "shape") and len(audio.shape) == 1):
             # Expand dims so rank >= 2
             audio = tf.expand_dims(audio, axis=0)
@@ -843,7 +843,8 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
                     audio, batched
                 )
                 output_lengths = tf.reduce_sum(audio_mel_mask, axis=[1, 2])
-                exact_tokens = (output_lengths + 3) // 4
+                sub = self.audio_converter.audio_subsampling_factor
+                exact_tokens = (output_lengths + sub - 1) // sub
                 num_audio_tokens = tf.reduce_max(exact_tokens)
                 num_audio_tokens = tf.maximum(num_audio_tokens, 1)
 
@@ -897,16 +898,20 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
                 tf.cast(is_placeholder, tf.int32), axis=1
             )
 
-            # Max frames needed: 4 * num_placeholders
-            max_frames = tf.reduce_max(num_placeholders) * 4
+            sub = self.audio_converter.audio_subsampling_factor
+
+            # Max frames needed: sub * num_placeholders
+            max_frames = tf.reduce_max(num_placeholders) * sub
 
             # Clip audio_mel to max_frames
             audio_mel = audio_mel[:, :, :max_frames, :]
             audio_mel_mask = audio_mel_mask[:, :, :max_frames]
 
             # Dynamically clip unused placeholders to remove the gap!
-            # Use ceil division to match audio encoder subsampling (stride 4)
-            exact_tokens = (tf.reduce_sum(audio_mel_mask, axis=[1, 2]) + 3) // 4
+            # Use ceil division to match audio encoder subsampling.
+            exact_tokens = (
+                tf.reduce_sum(audio_mel_mask, axis=[1, 2]) + sub - 1
+            ) // sub
 
             placeholder_counts = tf.cumsum(
                 tf.cast(is_placeholder, tf.int32), axis=1
@@ -1090,7 +1095,8 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
             audio_mel, audio_mel_mask = self._preprocess_audio(audio, batched)
             # audio_mel_mask is (B, 1, Seq)
             output_lengths = tf.reduce_sum(audio_mel_mask, axis=[1, 2])
-            exact_tokens = (output_lengths + 3) // 4
+            sub = self.audio_converter.audio_subsampling_factor
+            exact_tokens = (output_lengths + sub - 1) // sub
 
             num_audio_tokens = tf.reduce_max(exact_tokens)
             num_audio_tokens = tf.maximum(num_audio_tokens, 1)

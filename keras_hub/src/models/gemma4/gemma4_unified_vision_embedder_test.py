@@ -1,4 +1,5 @@
 import numpy as np
+from keras import ops
 
 from keras_hub.src.models.gemma4.gemma4_unified_vision_embedder import (
     Gemma4UnifiedVisionEmbedder,
@@ -78,8 +79,8 @@ class Gemma4UnifiedVisionEmbedderTest(TestCase):
 
         output = embedder({"pixel_values": pv_data, "pixel_position_ids": pos})
         # Same input + same position → same output
-        out0 = np.array(output[0, 0, 0, :])
-        out1 = np.array(output[0, 1, 0, :])
+        out0 = ops.convert_to_numpy(output[0, 0, 0, :])
+        out1 = ops.convert_to_numpy(output[0, 1, 0, :])
         np.testing.assert_allclose(out0, out1, rtol=1e-5)
 
     def test_num_vision_tokens_per_image(self):

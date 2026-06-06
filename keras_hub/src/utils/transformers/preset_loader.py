@@ -194,6 +194,13 @@ class TransformersPresetLoader(PresetLoader):
                 self.preset, self.config
             )
             if config is not None:
+                model_type = self.config.get("model_type", "")
+                if model_type.startswith("gemma4_unified"):
+                    from keras_hub.src.models.gemma4.gemma4_unified_audio_converter import (  # noqa: E501
+                        Gemma4UnifiedAudioConverter,
+                    )
+
+                    cls = Gemma4UnifiedAudioConverter
                 return cls(**{**config, **kwargs})
         return None
 
