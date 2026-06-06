@@ -217,7 +217,6 @@ def convert_backbone_config(transformers_config):
                     num_soft_tokens=vis_cfg["num_soft_tokens"],
                     pooling_kernel_size=vis_cfg["pooling_kernel_size"],
                     patch_size=vis_cfg["patch_size"],
-                    posemb_stride=vis_cfg.get("posemb_stride", 40),
                     layer_norm_epsilon=vis_cfg.get("rms_norm_eps", 1e-6),
                 )
             else:
@@ -631,7 +630,7 @@ def _convert_audio_encoder(audio_encoder, loader, transformers_config):
         hf_weight_key="model.embed_audio.embedding_projection.weight",
         hook_fn=lambda x, _: np.transpose(x),
     )
-    # embed_audio.embedding_post_projection_norm: parameter-free (Gemma4VNorm).
+    # embed_audio.embedding_pre_projection_norm: parameter-free (Gemma4VNorm).
 
 
 def _convert_unified_vision_embedder(
@@ -639,25 +638,78 @@ def _convert_unified_vision_embedder(
 ):
     """Port unified vision-embedder weights from HF.
 
-    The unified model uses `model.embed_vision` with just:
-      - embedding_projection.weight  (Dense: [hidden, input_dim])
-      - pos_embedding_table           (Embedding: [mm_posemb_size, hidden])
-      - embedding_post_projection_norm: parameter-free VNorm (no weights)
+    The unified model uses `model.embed_vision` with:
+      - patch_ln1.{weight,bias}     (LayerNorm on raw patches)
+      - patch_dense.{weight,bias}   (Dense: patch_dim → mm_embed_dim)
+      - patch_ln2.{weight,bias}     (LayerNorm after projection)
+      - pos_embedding               (factorized: [mm_posemb_size, 2, hidden])
+      - pos_norm.{weight,bias}      (LayerNorm after adding pos emb)
+      - multimodal_embedder.embedding_pre_projection_norm: param-free VNorm
+      - multimodal_embedder.embedding_projection.weight (Dense: mm→text)
     """
     vis_prefix = "model.embed_vision"
 
+    # --- patch_ln1 ---
     loader.port_weight(
-        keras_variable=vision_embedder.get_layer("embedding_projection").kernel,
-        hf_weight_key=f"{vis_prefix}.embedding_projection.weight",
+        keras_variable=vision_embedder.get_layer("patch_ln1").gamma,
+        hf_weight_key=f"{vis_prefix}.patch_ln1.weight",
+    )
+    loader.port_weight(
+        keras_variable=vision_embedder.get_layer("patch_ln1").beta,
+        hf_weight_key=f"{vis_prefix}.patch_ln1.bias",
+    )
+
+    # --- patch_dense (Linear with bias) ---
+    loader.port_weight(
+        keras_variable=vision_embedder.get_layer("patch_dense").kernel,
+        hf_weight_key=f"{vis_prefix}.patch_dense.weight",
         hook_fn=lambda x, _: np.transpose(x),
     )
     loader.port_weight(
-        keras_variable=vision_embedder.get_layer(
-            "pos_embedding_table"
-        ).embeddings,
-        hf_weight_key=f"{vis_prefix}.pos_embedding_table",
+        keras_variable=vision_embedder.get_layer("patch_dense").bias,
+        hf_weight_key=f"{vis_prefix}.patch_dense.bias",
     )
-    # embedding_post_projection_norm: parameter-free (Gemma4VNorm).
+
+    # --- patch_ln2 ---
+    loader.port_weight(
+        keras_variable=vision_embedder.get_layer("patch_ln2").gamma,
+        hf_weight_key=f"{vis_prefix}.patch_ln2.weight",
+    )
+    loader.port_weight(
+        keras_variable=vision_embedder.get_layer("patch_ln2").beta,
+        hf_weight_key=f"{vis_prefix}.patch_ln2.bias",
+    )
+
+    # --- factorized pos_embedding: HF shape (mm_posemb_size, 2, hidden) ---
+    # Split axis-0 (X) and axis-1 (Y) into our two Embedding layers.
+    loader.port_weight(
+        keras_variable=vision_embedder.get_layer("pos_embedding_x").embeddings,
+        hf_weight_key=f"{vis_prefix}.pos_embedding",
+        hook_fn=lambda x, _: x[:, 0, :],
+    )
+    loader.port_weight(
+        keras_variable=vision_embedder.get_layer("pos_embedding_y").embeddings,
+        hf_weight_key=f"{vis_prefix}.pos_embedding",
+        hook_fn=lambda x, _: x[:, 1, :],
+    )
+
+    # --- pos_norm ---
+    loader.port_weight(
+        keras_variable=vision_embedder.get_layer("pos_norm").gamma,
+        hf_weight_key=f"{vis_prefix}.pos_norm.weight",
+    )
+    loader.port_weight(
+        keras_variable=vision_embedder.get_layer("pos_norm").beta,
+        hf_weight_key=f"{vis_prefix}.pos_norm.bias",
+    )
+
+    # --- embedding_projection (multimodal embedder: RMSNorm → Linear) ---
+    # embedding_pre_projection_norm: parameter-free (Gemma4VNorm).
+    loader.port_weight(
+        keras_variable=vision_embedder.get_layer("embedding_projection").kernel,
+        hf_weight_key=f"{vis_prefix}.multimodal_embedder.embedding_projection.weight",
+        hook_fn=lambda x, _: np.transpose(x),
+    )
 
 
 def _convert_unified_audio_embedder(
@@ -665,9 +717,10 @@ def _convert_unified_audio_embedder(
 ):
     """Port unified audio-embedder weights from HF.
 
-    The unified model uses `model.embed_audio` with just:
-      - embedding_projection.weight  (Dense: [hidden, audio_embed_dim])
-      - embedding_post_projection_norm: parameter-free VNorm (no weights)
+    The unified model uses `model.embed_audio` which is a
+    Gemma4UnifiedMultimodalEmbedder with:
+      - embedding_pre_projection_norm: parameter-free VNorm (no weights)
+      - embedding_projection.weight  (Dense: [text_hidden, audio_embed_dim])
     """
     aud_prefix = "model.embed_audio"
 
@@ -676,7 +729,7 @@ def _convert_unified_audio_embedder(
         hf_weight_key=f"{aud_prefix}.embedding_projection.weight",
         hook_fn=lambda x, _: np.transpose(x),
     )
-    # embedding_post_projection_norm: parameter-free (Gemma4VNorm).
+    # embedding_pre_projection_norm: parameter-free (Gemma4VNorm).
 
 
 def _convert_vision_encoder(vision_encoder, loader, transformers_config):

@@ -64,6 +64,24 @@ class Gemma4UnifiedVisionEmbedderTest(TestCase):
         output = embedder({"pixel_values": pv, "pixel_position_ids": pos})
         self.assertEqual(output.shape, (1, 2, 16, 32))
 
+    def test_factorized_pos_embedding(self):
+        """Same (x,y) should get the same pos embedding in different images."""
+        embedder = self._make_embedder()
+        input_dim = 48 * 48 * 3
+        # Use identical pixel values so only pos embedding differs
+        pv_data = np.zeros((1, 2, 16, input_dim), dtype="float32")
+        pos = np.full((1, 2, 16, 2), -1, dtype="int32")
+
+        # Both images: position (3, 5) at index 0
+        pos[0, 0, 0, :] = [3, 5]
+        pos[0, 1, 0, :] = [3, 5]
+
+        output = embedder({"pixel_values": pv_data, "pixel_position_ids": pos})
+        # Same input + same position → same output
+        out0 = np.array(output[0, 0, 0, :])
+        out1 = np.array(output[0, 1, 0, :])
+        np.testing.assert_allclose(out0, out1, rtol=1e-5)
+
     def test_num_vision_tokens_per_image(self):
         """Property should return num_soft_tokens."""
         embedder = self._make_embedder()

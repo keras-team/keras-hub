@@ -252,8 +252,7 @@ class Gemma4UnifiedImageConverter(ImageConverter):
                 merged_positions, [None, self.max_soft_tokens, 2]
             )
         else:
-            # Convert to numpy for the merge logic (eager mode).
-            x_np = np.array(x) if not isinstance(x, np.ndarray) else x
+            x_np = x if isinstance(x, np.ndarray) else ops.convert_to_numpy(x)
             batch_size = x_np.shape[0]
             h, w = x_np.shape[1], x_np.shape[2]
             n_h = h // ps

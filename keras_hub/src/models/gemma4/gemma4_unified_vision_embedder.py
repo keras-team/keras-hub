@@ -11,19 +11,15 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
 
     Unlike the tower-based `Gemma4VisionEncoder` used by 2B/4B/26B/31B
     models, this embedder projects pre-merged image patches directly into
-    the language model's hidden space via a single linear projection and
-    learned 2-D positional embeddings. There is no separate ViT encoder.
+    the language model's hidden space. There is no separate ViT encoder.
 
-    The image preprocessing pipeline (resize → patchify → merge k×k teacher
-    patches → pad) produces `pixel_values` of shape
-    `(batch, num_images, max_soft_tokens, model_patch_size² × 3)` and
-    `pixel_position_ids` of shape `(batch, num_images, max_soft_tokens, 2)`.
+    Pipeline: `LN₁(patch_dim) → Dense(patch_dim → hidden_dim) → LN₂ →
+    + factorized_pos_emb → LN₃ → RMSNorm → Linear(hidden_dim → hidden_dim)`.
 
-    This embedder then:
-    1. Projects the flattened patch pixels via a dense layer to `hidden_dim`.
-    2. Adds 2-D learned positional embeddings looked up from
-       `pos_embedding_table` using the XY position IDs.
-    3. Applies a parameter-free RMS norm (`Gemma4VNorm`).
+    The positional embedding is **factorized**: separate learned embeddings
+    for X and Y axes, each of shape `(mm_posemb_size, hidden_dim)`. The
+    two axis embeddings are looked up independently and summed. Padding
+    positions (where `pixel_position_ids == -1`) are masked to zero.
 
     Args:
         hidden_dim: int. Output embedding dimension (must match the text
@@ -31,20 +27,15 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
         model_patch_size: int. Spatial size of each merged model patch in
             pixels (e.g. 48 = 16 × 3 for teacher `patch_size=16` and
             `pooling_kernel_size=3`).
-        mm_posemb_size: int. Number of entries in the learned position
-            embedding table. Should be ≥ max possible flattened XY index.
+        mm_posemb_size: int. Number of entries in each axis of the learned
+            factorized position embedding table.
         num_soft_tokens: int. Maximum number of soft (vision) tokens per
             image after patch merging.
         pooling_kernel_size: int. Kernel size used during teacher-patch
-            merging. Stored for configuration only; the actual merge happens
-            in the image converter.
+            merging. Stored for configuration only; the actual merge
+            happens in the image converter.
         patch_size: int. Teacher patch size in pixels. Defaults to `16`.
-        posemb_stride: int. Fixed stride for the 2-D positional embedding
-            flat index: `idx = x * posemb_stride + y`. Must match the
-            grid layout used during pre-training. For the 12B model
-            (`mm_posemb_size=1120`, 28×40 grid), this is `40`.
-            Defaults to `40`.
-        layer_norm_epsilon: float. Epsilon for the post-projection norm.
+        layer_norm_epsilon: float. Epsilon for LayerNorm layers.
             Defaults to `1e-6`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. Compute dtype.
 
@@ -77,16 +68,15 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
         num_soft_tokens,
         pooling_kernel_size=3,
         patch_size=16,
-        posemb_stride=40,
         layer_norm_epsilon=1e-6,
         dtype=None,
         **kwargs,
     ):
-        input_dim = model_patch_size * model_patch_size * 3
+        patch_dim = model_patch_size * model_patch_size * 3
 
         # === Functional Model ===
         pixel_values_input = keras.Input(
-            shape=(None, None, input_dim),
+            shape=(None, None, patch_dim),
             name="pixel_values",
         )
         pixel_position_ids_input = keras.Input(
@@ -95,48 +85,87 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
             name="pixel_position_ids",
         )
 
-        # Linear projection: (model_patch_size² × 3) → hidden_dim
+        # --- Patch projection: LN₁ → Dense → LN₂ ---
+        patch_ln1 = keras.layers.LayerNormalization(
+            epsilon=layer_norm_epsilon,
+            dtype=dtype,
+            name="patch_ln1",
+        )
+        patch_dense = keras.layers.Dense(
+            hidden_dim,
+            use_bias=True,
+            dtype=dtype,
+            name="patch_dense",
+        )
+        patch_ln2 = keras.layers.LayerNormalization(
+            epsilon=layer_norm_epsilon,
+            dtype=dtype,
+            name="patch_ln2",
+        )
+
+        x = patch_ln1(pixel_values_input)
+        x = patch_dense(x)
+        x = patch_ln2(x)
+
+        # --- Factorized 2-D positional embedding ---
+        # Two embedding tables: one for X, one for Y.
+        # pos_embedding shape: (mm_posemb_size, 2, hidden_dim) in HF;
+        # we use two separate Embedding layers for Keras compatibility.
+        pos_embedding_x = keras.layers.Embedding(
+            mm_posemb_size,
+            hidden_dim,
+            dtype=dtype,
+            name="pos_embedding_x",
+        )
+        pos_embedding_y = keras.layers.Embedding(
+            mm_posemb_size,
+            hidden_dim,
+            dtype=dtype,
+            name="pos_embedding_y",
+        )
+
+        pos_x = pixel_position_ids_input[..., 0]  # (..., N)
+        pos_y = pixel_position_ids_input[..., 1]  # (..., N)
+
+        # Clamp -1 padding to 0 for safe lookup, then mask.
+        pos_x_safe = ops.maximum(pos_x, 0)
+        pos_y_safe = ops.maximum(pos_y, 0)
+
+        pe_x = pos_embedding_x(pos_x_safe)  # (..., N, hidden_dim)
+        pe_y = pos_embedding_y(pos_y_safe)  # (..., N, hidden_dim)
+
+        # Mask out padding positions (where original pos was -1).
+        valid_x = ops.cast(ops.expand_dims(pos_x != -1, axis=-1), pe_x.dtype)
+        valid_y = ops.cast(ops.expand_dims(pos_y != -1, axis=-1), pe_y.dtype)
+        pos_emb = pe_x * valid_x + pe_y * valid_y
+
+        x = x + pos_emb
+
+        # --- Post-position norm ---
+        pos_norm = keras.layers.LayerNormalization(
+            epsilon=layer_norm_epsilon,
+            dtype=dtype,
+            name="pos_norm",
+        )
+        x = pos_norm(x)
+
+        # --- Multimodal embedder: RMSNorm → Linear ---
+        # Maps vision features to the LM's text embedding space.
+        # Mirrors `Gemma4MultimodalEmbedder` (RMSNorm → Dense) and
+        # the same pattern used by `Gemma4UnifiedAudioEmbedder`.
+        embedding_pre_projection_norm = Gemma4VNorm(
+            epsilon=layer_norm_epsilon,
+            dtype=dtype,
+            name="embedding_pre_projection_norm",
+        )
         embedding_projection = keras.layers.Dense(
             hidden_dim,
             use_bias=False,
             dtype=dtype,
             name="embedding_projection",
         )
-        x = embedding_projection(pixel_values_input)
-
-        # 2-D positional embedding (XY → flat 1-D index → lookup).
-        pos_embedding_table = keras.layers.Embedding(
-            mm_posemb_size,
-            hidden_dim,
-            dtype=dtype,
-            name="pos_embedding_table",
-        )
-
-        # Flatten XY → 1-D index. Position IDs of -1 indicate padding;
-        # clamp to 0 and mask later.
-        pos_x = pixel_position_ids_input[..., 0]  # (..., N)
-        pos_y = pixel_position_ids_input[..., 1]  # (..., N)
-
-        # Clamp -1 padding positions to 0.
-        pos_x_safe = ops.maximum(pos_x, 0)
-        pos_y_safe = ops.maximum(pos_y, 0)
-
-        # Fixed stride for flat index: idx = x * posemb_stride + y.
-        # Learned positional embeddings require a deterministic mapping
-        # from (x, y) → index that is independent of image aspect ratio.
-        flat_pos = pos_x_safe * posemb_stride + pos_y_safe
-        flat_pos = ops.minimum(flat_pos, mm_posemb_size - 1)
-
-        pos_emb = pos_embedding_table(flat_pos)
-        x = x + pos_emb
-
-        # Post-projection norm (parameter-free RMSNorm / VNorm).
-        post_norm = Gemma4VNorm(
-            epsilon=layer_norm_epsilon,
-            dtype=dtype,
-            name="embedding_post_projection_norm",
-        )
-        x = post_norm(x)
+        x = embedding_pre_projection_norm(x)
+        x = embedding_projection(x)
 
         outputs = x
         super().__init__(
@@ -155,7 +184,6 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
         self.num_soft_tokens = num_soft_tokens
         self.pooling_kernel_size = pooling_kernel_size
         self.patch_size = patch_size
-        self.posemb_stride = posemb_stride
         self.layer_norm_epsilon = layer_norm_epsilon
 
     @property
@@ -173,7 +201,6 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
                 "num_soft_tokens": self.num_soft_tokens,
                 "pooling_kernel_size": self.pooling_kernel_size,
                 "patch_size": self.patch_size,
-                "posemb_stride": self.posemb_stride,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )

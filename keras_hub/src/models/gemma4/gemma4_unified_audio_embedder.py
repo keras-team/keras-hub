@@ -17,15 +17,15 @@ class Gemma4UnifiedAudioEmbedder(keras.layers.Layer):
     samples (640 samples at 16 kHz ≈ 40 ms of audio).
 
     This embedder:
-    1. Projects the raw audio features via a dense layer to `hidden_dim`.
-    2. Applies a parameter-free RMS norm (`Gemma4VNorm`).
+    1. Applies a parameter-free RMS norm (`Gemma4VNorm`).
+    2. Projects the normalised audio features via a dense layer to `hidden_dim`.
 
     Args:
         hidden_dim: int. Output embedding dimension (must match the text
             backbone's `hidden_dim`).
         audio_embed_dim: int. Dimension of each audio input frame
             (= `audio_samples_per_token`, typically 640).
-        layer_norm_epsilon: float. Epsilon for the post-projection norm.
+        layer_norm_epsilon: float. Epsilon for the pre-projection norm.
             Defaults to `1e-6`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. Compute dtype.
 
@@ -65,11 +65,13 @@ class Gemma4UnifiedAudioEmbedder(keras.layers.Layer):
             name="embedding_projection",
         )
 
-        # Post-projection norm (parameter-free RMSNorm / VNorm).
-        self.post_norm = Gemma4VNorm(
+        # Pre-projection norm (parameter-free RMSNorm / VNorm).
+        # Applied BEFORE the projection, matching HF's
+        # Gemma4UnifiedMultimodalEmbedder.embedding_pre_projection_norm.
+        self.pre_norm = Gemma4VNorm(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
-            name="embedding_post_projection_norm",
+            name="embedding_pre_projection_norm",
         )
 
         # Store the input feature size so the backbone can build audio inputs.
@@ -78,7 +80,7 @@ class Gemma4UnifiedAudioEmbedder(keras.layers.Layer):
     def build(self, input_shape=None):
         # Force sub-layers to build so Keras sees them as built.
         self.embedding_projection.build((None, None, self.audio_embed_dim))
-        self.post_norm.build((None, None, self.hidden_dim))
+        self.pre_norm.build((None, None, self.audio_embed_dim))
         super().build(input_shape)
 
     def call(self, audio_features, audio_mask):
@@ -95,8 +97,8 @@ class Gemma4UnifiedAudioEmbedder(keras.layers.Layer):
         Returns:
             Tensor of shape `(batch, num_frames, hidden_dim)`.
         """
-        x = self.embedding_projection(audio_features)
-        x = self.post_norm(x)
+        x = self.pre_norm(audio_features)
+        x = self.embedding_projection(x)
         return x
 
     def get_config(self):
