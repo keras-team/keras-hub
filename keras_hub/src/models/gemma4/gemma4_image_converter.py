@@ -56,8 +56,12 @@ class Gemma4AspectRatioResizing(keras.layers.Layer):
                 method=tf.image.ResizeMethod.BICUBIC,
                 antialias=True,
             )
+            # Round to match HF's torchvision behaviour: when the input
+            # is uint8, tvF.resize produces uint8 output (implicitly
+            # rounding).  Without this, sub-pixel fractional values
+            # accumulate through the vision pipeline.
             clipped = tf.clip_by_value(resized, 0.0, 255.0)
-            return clipped
+            return tf.round(clipped)
         else:
             # Eager mode: use backend-agnostic ops (works with concrete
             # numpy/torch/jax arrays).
@@ -81,24 +85,36 @@ class Gemma4AspectRatioResizing(keras.layers.Layer):
             )
             target_height = ops.maximum(target_height, side_mult)
             target_width = ops.maximum(target_width, side_mult)
-            float_inputs = ops.cast(inputs, "float32")
-            # Resize using bicubic interpolation with antialias=True.
-            #
-            # HF's AutoProcessor uses PIL Image.resize(..., Image.BICUBIC),
-            # which is a Catmull-Rom spline evaluated in C without antialias.
-            # `ops.image.resize` uses the backend's GPU-friendly bicubic
-            # kernel, which differs near sharp edges (max|Δ| ≈ 22/255 with
-            # antialias=True vs ≈ 35/255 without). A perfect match is not
-            # achievable without falling back to PIL, which would break
-            # tf.function and GPU execution.
-            resized = ops.image.resize(
-                float_inputs,
-                size=(int(target_height), int(target_width)),
-                interpolation="bicubic",
-                antialias=True,
-            )
-            clipped = ops.clip(resized, 0.0, 255.0)
-            return clipped
+
+            if keras.backend.backend() == "torch":
+                import torch
+                from torchvision.transforms import InterpolationMode
+                from torchvision.transforms.v2 import functional as tvF
+
+                # Convert NHWC → NCHW uint8 so tvF.resize uses its
+                # integer-arithmetic bicubic kernel — exactly matching HF's
+                # TorchvisionBackend which passes uint8 to tvF.resize.
+                if not isinstance(inputs, torch.Tensor):
+                    inputs = torch.from_numpy(ops.convert_to_numpy(inputs))
+                uint8_inputs = inputs.to(torch.uint8).permute(0, 3, 1, 2)
+                resized = tvF.resize(
+                    uint8_inputs,
+                    size=(int(target_height), int(target_width)),
+                    interpolation=InterpolationMode.BICUBIC,
+                    antialias=True,
+                )
+                return resized.permute(0, 2, 3, 1).float()
+            else:
+                float_inputs = ops.cast(inputs, "float32")
+                resized = ops.image.resize(
+                    float_inputs,
+                    size=(int(target_height), int(target_width)),
+                    interpolation="bicubic",
+                    antialias=True,
+                )
+                # Round to match HF's uint8 quantization behaviour.
+                clipped = ops.clip(resized, 0.0, 255.0)
+                return ops.round(clipped)
 
 
 @keras_hub_export("keras_hub.layers.Gemma4ImageConverter")
