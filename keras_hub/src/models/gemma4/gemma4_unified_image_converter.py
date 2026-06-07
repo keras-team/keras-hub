@@ -179,10 +179,15 @@ class Gemma4UnifiedImageConverter(ImageConverter):
             x = self.resizing.call(inputs)
 
         # Apply scale/offset normalization.
+        # Gemma4 Unified always expects pixels in [0, 1].  When no explicit
+        # scale is configured (e.g. after a serialization round-trip that lost
+        # the value), default to 1/255 rescaling so raw uint8 images work.
         if self.scale is not None:
             scale = self._expand_non_channel_dims(self.scale, x)
             x, scale = self._convert_types(x, scale, self.compute_dtype)
             x = x * scale
+        else:
+            x = ops.cast(x, self.compute_dtype) / 255.0
         if self.offset is not None:
             offset = self._expand_non_channel_dims(self.offset, x)
             x, offset = self._convert_types(x, offset, x.dtype)

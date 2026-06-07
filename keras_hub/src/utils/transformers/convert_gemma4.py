@@ -187,6 +187,8 @@ def load_video_converter_config(preset, transformers_config):
             patch_size=video_proc["patch_size"],
             max_soft_tokens=video_proc["max_soft_tokens"],
             pooling_kernel_size=video_proc["pooling_kernel_size"],
+            scale=scale,
+            offset=offset,
         )
 
     return result

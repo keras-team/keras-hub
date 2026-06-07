@@ -563,6 +563,50 @@ class Gemma4Backbone(Backbone):
         # Decoder layers.
         _hpl = hidden_size_per_layer_input
         shared_kv_tensors = {}
+
+        # Compute block_sequence_ids for block-aware sliding-window masking.
+        # This mirrors HF's get_block_sequence_ids_for_mask: each contiguous
+        # run of multimodal tokens receives a unique non-negative group ID;
+        # text tokens receive 0.  The blockwise overlay in
+        # _compute_attention_mask
+        # OR-s the causal sliding-window mask with a same-group bidirectional
+        # mask, allowing tokens within the same multimodal block to attend to
+        # each other bidirectionally in sliding-window layers.
+        block_sequence_ids = None
+        if vision_encoder is not None or audio_encoder is not None:
+            # Combine vision and audio masks into a single multimodal mask.
+            if vision_encoder is not None and audio_encoder is not None:
+                is_multimodal = ops.logical_or(
+                    ops.cast(vision_mask_input, "bool"),
+                    ops.cast(audio_mask_input, "bool"),
+                )
+            elif vision_encoder is not None:
+                is_multimodal = ops.cast(vision_mask_input, "bool")
+            else:
+                is_multimodal = ops.cast(audio_mask_input, "bool")
+
+            # Detect the start of each new multimodal block: positions where
+            # is_multimodal is True but the previous position was not.
+            is_multimodal_int = ops.cast(is_multimodal, "int32")
+            padded_multimodal = ops.pad(
+                is_multimodal_int, [(0, 0), (1, 0)], constant_values=0
+            )
+            previous_multimodal = padded_multimodal[:, :-1]
+            new_block_starts = ops.cast(
+                ops.logical_and(
+                    is_multimodal,
+                    ops.logical_not(ops.cast(previous_multimodal, "bool")),
+                ),
+                "int32",
+            )
+            block_group_ids = ops.cumsum(new_block_starts, axis=-1) - 1
+
+            block_sequence_ids = ops.where(
+                is_multimodal,
+                block_group_ids,
+                ops.zeros_like(block_group_ids),
+            )
+
         for i, transformer_layer in enumerate(self.transformer_layers):
             if per_layer_proj_flat is not None:
                 # Slice the i-th (hpl,) block: apply projection norm to proj
@@ -593,6 +637,7 @@ class Gemma4Backbone(Backbone):
                 per_layer_input=per_layer_input_i,
                 shared_kv=shared_kv,
                 positions=position_ids_input,
+                block_sequence_ids=block_sequence_ids,
             )
 
             shared_kv_tensors[i] = new_cache
