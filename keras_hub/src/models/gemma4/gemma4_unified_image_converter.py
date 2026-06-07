@@ -187,7 +187,12 @@ class Gemma4UnifiedImageConverter(ImageConverter):
             x, scale = self._convert_types(x, scale, self.compute_dtype)
             x = x * scale
         else:
-            x = ops.cast(x, self.compute_dtype) / 255.0
+            if in_tf_function():
+                import tensorflow as tf
+
+                x = tf.cast(x, self.compute_dtype) / 255.0
+            else:
+                x = ops.cast(x, self.compute_dtype) / 255.0
         if self.offset is not None:
             offset = self._expand_non_channel_dims(self.offset, x)
             x, offset = self._convert_types(x, offset, x.dtype)

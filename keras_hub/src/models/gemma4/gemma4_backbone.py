@@ -567,8 +567,8 @@ class Gemma4Backbone(Backbone):
         # Compute block_sequence_ids for block-aware sliding-window masking.
         # This mirrors HF's get_block_sequence_ids_for_mask: each contiguous
         # run of multimodal tokens receives a unique non-negative group ID;
-        # text tokens receive 0.  The blockwise overlay in
-        # _compute_attention_mask
+        # text tokens receive 0.
+        # The blockwise overlay in _compute_attention_mask
         # OR-s the causal sliding-window mask with a same-group bidirectional
         # mask, allowing tokens within the same multimodal block to attend to
         # each other bidirectionally in sliding-window layers.
@@ -604,7 +604,7 @@ class Gemma4Backbone(Backbone):
             block_sequence_ids = ops.where(
                 is_multimodal,
                 block_group_ids,
-                ops.zeros_like(block_group_ids),
+                ops.full_like(block_group_ids, -1),
             )
 
         for i, transformer_layer in enumerate(self.transformer_layers):
