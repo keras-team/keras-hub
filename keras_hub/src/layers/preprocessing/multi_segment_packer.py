@@ -1,8 +1,13 @@
+import keras
+import numpy as np
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_hub.src.utils.tensor_utils import convert_to_list
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import pad
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -132,7 +137,10 @@ class MultiSegmentPacker(PreprocessingLayer):
         padding_side="right",
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            _allow_python_workflow=_allow_python_workflow, **kwargs
+        )
 
         self.sequence_length = sequence_length
         if truncate not in ("round_robin", "waterfall"):
@@ -170,22 +178,7 @@ class MultiSegmentPacker(PreprocessingLayer):
         self.pad_value = pad_value
         self.padding_side = padding_side
 
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "sequence_length": self.sequence_length,
-                "start_value": self._start_value,
-                "end_value": self._end_value,
-                "sep_value": self._sep_value,
-                "pad_value": self.pad_value,
-                "truncate": self.truncate,
-                "padding_side": self.padding_side,
-            }
-        )
-        return config
-
-    def _sanitize_inputs(self, inputs):
+    def _sanitize_inputs_tf(self, inputs):
         """Force inputs to a list of rank 2 ragged tensors."""
         # Sanitize inputs.
         if not isinstance(inputs, tuple):
@@ -205,7 +198,7 @@ class MultiSegmentPacker(PreprocessingLayer):
             )
         return x, unbatched[0]
 
-    def _trim_inputs(
+    def _trim_inputs_tf(
         self,
         inputs,
         sequence_length=None,
@@ -231,7 +224,7 @@ class MultiSegmentPacker(PreprocessingLayer):
         else:
             raise ValueError("Unsupported truncate: %s" % self.truncate)
 
-    def _combine_inputs(
+    def _combine_inputs_tf(
         self,
         segments,
         add_start_value=True,
@@ -284,23 +277,23 @@ class MultiSegmentPacker(PreprocessingLayer):
         return token_ids, segment_ids
 
     @preprocessing_function
-    def call(
+    def _call_tf(
         self,
         inputs,
         sequence_length=None,
         add_start_value=True,
         add_end_value=True,
     ):
-        inputs, unbatched = self._sanitize_inputs(inputs)
+        inputs, unbatched = self._sanitize_inputs_tf(inputs)
 
         sequence_length = sequence_length or self.sequence_length
-        segments = self._trim_inputs(
+        segments = self._trim_inputs_tf(
             inputs,
             sequence_length=sequence_length,
             add_start_value=add_start_value,
             add_end_value=add_end_value,
         )
-        token_ids, segment_ids = self._combine_inputs(
+        token_ids, segment_ids = self._combine_inputs_tf(
             segments,
             add_start_value=add_start_value,
             add_end_value=add_end_value,
@@ -325,6 +318,298 @@ class MultiSegmentPacker(PreprocessingLayer):
             segment_ids = tf.squeeze(segment_ids, 0)
 
         return (token_ids, segment_ids)
+
+    def _canonicalize_inputs_python(self, inputs):
+        """Force inputs to a tuple of 2D ragged lists."""
+        if isinstance(inputs, np.ndarray):
+            inputs = inputs.tolist()
+        if not isinstance(inputs, tuple):
+            inputs = (inputs,)
+        if not inputs:
+            raise ValueError(
+                "At least one input is required for packing. "
+                f"Received: `inputs={inputs}`"
+            )
+
+        # TODO(hongyuc): Improve the performance of `_call_python`. It becomes
+        # slower when encountering large inputs compared to `_call_tf`.
+        def _canonicalize_single_input(inputs):
+            if isinstance(inputs, (tuple, list)):
+                # Fast path for common cases:
+                # If the inputs are just normal python types (or lists of
+                # python types), it immediately returns.
+                if not inputs:
+                    return [list(inputs)], False
+                first = inputs[0]
+                if isinstance(
+                    first, (int, str, float, bool, np.integer, np.floating)
+                ):
+                    return [list(inputs)], False
+                if isinstance(first, (tuple, list)) and (
+                    not first
+                    or isinstance(
+                        first[0],
+                        (int, str, float, bool, np.integer, np.floating),
+                    )
+                ):
+                    return [list(x) for x in inputs], True
+
+                # `keras.tree.map_structure` is expensive.
+                inputs = keras.tree.map_structure(convert_to_list, inputs)
+                if inputs and isinstance(inputs[0], (tuple, list)):
+                    return inputs, True
+                else:
+                    return [inputs], False
+            elif tf is not None and isinstance(
+                inputs, (tf.Tensor, tf.RaggedTensor)
+            ):
+                unbatched = inputs.shape.rank == 1
+                if unbatched:
+                    inputs = tf.expand_dims(inputs, 0)
+                if isinstance(inputs, tf.Tensor):
+                    inputs = inputs.numpy().tolist()
+                else:
+                    inputs = inputs.to_list()
+                return inputs, not unbatched
+            elif keras.ops.is_tensor(inputs):
+                inputs = convert_to_list(inputs)
+                if inputs and isinstance(inputs[0], (tuple, list)):
+                    return inputs, True
+                else:
+                    return [inputs], False
+            else:
+                raise ValueError(
+                    "Input should be a list or a list of lists. "
+                    f"Received: {inputs}"
+                )
+
+        # convert_to_ragged_batch returns (x, batched) triplets.
+        triplets = [_canonicalize_single_input(x) for x in inputs]
+        x, batched = list(zip(*triplets))
+        if len(set(batched)) != 1:
+            raise ValueError(
+                "All inputs for packing must have the same rank. "
+                f"Received: `inputs={inputs}`."
+            )
+        return x, batched[0]
+
+    def _trim_inputs_round_robin_python(self, max_seq_length, segments):
+        # segments: list of lists of lists
+        num_segments = len(segments)
+        batch_size = len(segments[0])
+        trimmed_segments = [
+            [[] for _ in range(batch_size)] for _ in range(num_segments)
+        ]
+        for b in range(batch_size):
+            lengths = [len(segments[s][b]) for s in range(num_segments)]
+            if sum(lengths) <= max_seq_length:
+                for s in range(num_segments):
+                    trimmed_segments[s][b] = segments[s][b]
+                continue
+
+            # Binary search for the cutoff priority
+            # Priority of token k in segment s is: k * num_segments + s
+            # We want to find the smallest P such that
+            # count(priority <= P) >= max_seq_length
+            low = -1
+            high = num_segments * max(lengths)
+            cutoff_priority = high
+            while low <= high:
+                mid = (low + high) // 2
+                count = 0
+                for s in range(num_segments):
+                    max_index = (mid - s) // num_segments
+                    if max_index >= 0:
+                        count += min(lengths[s], max_index + 1)
+                if count >= max_seq_length:
+                    cutoff_priority = mid
+                    high = mid - 1
+                else:
+                    low = mid + 1
+
+            # Apply the cutoff
+            for s in range(num_segments):
+                max_index = (cutoff_priority - s) // num_segments
+                trimmed_segments[s][b] = segments[s][b][: max_index + 1]
+        return trimmed_segments
+
+    def _trim_inputs_waterfall_python(self, max_seq_length, segments):
+        num_segments = len(segments)
+        batch_size = len(segments[0])
+        trimmed_segments = [
+            [[] for _ in range(batch_size)] for _ in range(num_segments)
+        ]
+        for b in range(batch_size):
+            remaining_budget = max_seq_length
+
+            # Check if total length is within limit
+            for s in range(num_segments):
+                seg_len = len(segments[s][b])
+                if remaining_budget <= 0:
+                    trimmed_segments[s][b] = []
+                elif seg_len <= remaining_budget:
+                    trimmed_segments[s][b] = segments[s][b]
+                    remaining_budget -= seg_len
+                else:
+                    trimmed_segments[s][b] = segments[s][b][:remaining_budget]
+                    remaining_budget = 0
+        return trimmed_segments
+
+    def _trim_inputs_python(self, inputs):
+        """Trim inputs to desired length."""
+        num_segments = len(inputs)
+        num_special_tokens = (
+            len(self.start_value)
+            + (num_segments - 1) * len(self.sep_value)
+            + len(self.end_value)
+        )
+        if self.truncate == "round_robin":
+            return self._trim_inputs_round_robin_python(
+                self.sequence_length - num_special_tokens, inputs
+            )
+        elif self.truncate == "waterfall":
+            return self._trim_inputs_waterfall_python(
+                self.sequence_length - num_special_tokens, inputs
+            )
+        else:
+            raise ValueError("Unsupported truncate: %s" % self.truncate)
+
+    def _combine_inputs_python(
+        self, segments, add_start_value=True, add_end_value=True
+    ):
+        """Combine inputs with start and end values added."""
+        batch_size = len(segments[0])
+        token_ids = []
+        segment_ids = []
+
+        for b in range(batch_size):
+            example_tokens = []
+            example_segment_ids = []
+
+            if add_start_value:
+                example_tokens.extend(self.start_value)
+                example_segment_ids.extend([0] * len(self.start_value))
+
+            for i in range(len(segments)):
+                seg = segments[i][b]
+                example_tokens.extend(seg)
+                example_segment_ids.extend([i] * len(seg))
+
+                # Account for the sep/end tokens here.
+                if i == len(segments) - 1:
+                    if add_end_value:
+                        example_tokens.extend(self.end_value)
+                        example_segment_ids.extend([i] * len(self.end_value))
+                else:
+                    example_tokens.extend(self.sep_value)
+                    example_segment_ids.extend([i] * len(self.sep_value))
+
+            token_ids.append(example_tokens)
+            segment_ids.append(example_segment_ids)
+
+        return token_ids, segment_ids
+
+    def _call_python(
+        self,
+        inputs,
+        sequence_length=None,
+        add_start_value=True,
+        add_end_value=True,
+    ):
+        def _get_type(inputs):
+            for segment in inputs:
+                for sequence in segment:
+                    if sequence:
+                        return type(sequence[0])
+            raise ValueError("Cannot determine token type from empty inputs.")
+
+        def _pad(x, pad_value, padding_side, sequence_length, input_type=None):
+            if padding_side not in ("left", "right"):
+                raise ValueError(
+                    "padding_side must be 'left' or 'right'. "
+                    f"Received: {padding_side}"
+                )
+            if pad_value is None:
+                pad_value = "" if input_type is str else 0
+            if padding_side == "right":
+                x = [
+                    seq + [pad_value] * (sequence_length - len(seq))
+                    for seq in x
+                ]
+            else:
+                x = [
+                    [pad_value] * (sequence_length - len(seq)) + seq
+                    for seq in x
+                ]
+            return x
+
+        inputs, batched = self._canonicalize_inputs_python(inputs)
+        input_type = _get_type(inputs)
+
+        segments = self._trim_inputs_python(inputs)
+        token_ids, segment_ids = self._combine_inputs_python(
+            segments,
+            add_start_value=add_start_value,
+            add_end_value=add_end_value,
+        )
+
+        # Pad to dense tensor output.
+        sequence_length = sequence_length or self.sequence_length
+        token_ids = _pad(
+            token_ids,
+            pad_value=self.pad_value,
+            padding_side=self.padding_side,
+            sequence_length=sequence_length,
+            input_type=input_type,
+        )
+        segment_ids = _pad(
+            segment_ids,
+            pad_value=0,
+            padding_side=self.padding_side,
+            sequence_length=sequence_length,
+        )
+        # Remove the batch dim if added.
+        if not batched:
+            token_ids = token_ids[0]
+            segment_ids = segment_ids[0]
+        return (token_ids, segment_ids)
+
+    def call(
+        self,
+        inputs,
+        sequence_length=None,
+        add_start_value=True,
+        add_end_value=True,
+    ):
+        if not self._allow_python_workflow or in_tf_function():
+            return self._call_tf(
+                inputs,
+                sequence_length=sequence_length,
+                add_start_value=add_start_value,
+                add_end_value=add_end_value,
+            )
+        else:
+            return self._call_python(
+                inputs,
+                sequence_length=sequence_length,
+                add_start_value=add_start_value,
+                add_end_value=add_end_value,
+            )
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.sequence_length,
+                "start_value": self._start_value,
+                "end_value": self._end_value,
+                "sep_value": self._sep_value,
+                "pad_value": self.pad_value,
+                "truncate": self.truncate,
+                "padding_side": self.padding_side,
+            }
+        )
+        return config
 
     def compute_output_shape(self, inputs_shape):
         if isinstance(inputs_shape[0], tuple):
