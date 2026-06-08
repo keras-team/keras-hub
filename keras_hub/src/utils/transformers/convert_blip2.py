@@ -87,65 +87,74 @@ def convert_backbone_config(transformers_config):
     ``BLIP2Backbone`` is constructed from layer objects (not flat config), so
     we build the vision encoder, Q-Former and language model here and return
     them as constructor kwargs.
+
+    HuggingFace serializes only non-default values, so on disk the nested
+    ``vision_config`` and ``qformer_config`` are almost empty. Re-instantiating
+    ``Blip2Config`` repopulates every default (``image_size``, ``patch_size``,
+    layer counts, ...), matching what ``hf_model.config`` provided before the
+    conversion was routed through ``from_preset``.
     """
-    vision_config = transformers_config["vision_config"]
-    qformer_config = transformers_config["qformer_config"]
-    text_config = transformers_config["text_config"]
-    num_query_tokens = transformers_config.get("num_query_tokens", 32)
+    from transformers import Blip2Config
+
+    config = Blip2Config.from_dict(transformers_config)
+    vision_config = config.vision_config
+    qformer_config = config.qformer_config
+    text_config = config.text_config
+    num_query_tokens = config.num_query_tokens
 
     vision_encoder = BLIP2VisionEncoder(
-        image_size=vision_config["image_size"],
-        patch_size=vision_config["patch_size"],
-        num_layers=vision_config["num_hidden_layers"],
-        num_heads=vision_config["num_attention_heads"],
-        hidden_dim=vision_config["hidden_size"],
-        intermediate_dim=vision_config["intermediate_size"],
+        image_size=vision_config.image_size,
+        patch_size=vision_config.patch_size,
+        num_layers=vision_config.num_hidden_layers,
+        num_heads=vision_config.num_attention_heads,
+        hidden_dim=vision_config.hidden_size,
+        intermediate_dim=vision_config.intermediate_size,
         use_patch_bias=True,
         use_class_token=True,
         use_mha_bias=True,
         use_mlp_bias=True,
         dropout_rate=0.0,
-        layer_norm_epsilon=vision_config["layer_norm_eps"],
-        initializer_range=vision_config["initializer_range"],
+        layer_norm_epsilon=vision_config.layer_norm_eps,
+        initializer_range=vision_config.initializer_range,
     )
 
     qformer = BLIP2QFormer(
         num_query_tokens=num_query_tokens,
-        num_layers=qformer_config["num_hidden_layers"],
-        num_heads=qformer_config["num_attention_heads"],
-        hidden_dim=qformer_config["hidden_size"],
-        intermediate_dim=qformer_config["intermediate_size"],
-        vision_dim=vision_config["hidden_size"],
-        cross_attention_frequency=qformer_config["cross_attention_frequency"],
-        dropout=qformer_config["hidden_dropout_prob"],
-        layer_norm_epsilon=qformer_config["layer_norm_eps"],
+        num_layers=qformer_config.num_hidden_layers,
+        num_heads=qformer_config.num_attention_heads,
+        hidden_dim=qformer_config.hidden_size,
+        intermediate_dim=qformer_config.intermediate_size,
+        vision_dim=vision_config.hidden_size,
+        cross_attention_frequency=qformer_config.cross_attention_frequency,
+        dropout=qformer_config.hidden_dropout_prob,
+        layer_norm_epsilon=qformer_config.layer_norm_eps,
     )
 
-    model_type = text_config["model_type"]
+    model_type = text_config.model_type
     if model_type == "opt":
         language_model = BLIP2CustomOPT(
-            vocabulary_size=text_config["vocab_size"],
-            num_layers=text_config["num_hidden_layers"],
-            num_heads=text_config["num_attention_heads"],
-            hidden_dim=text_config["hidden_size"],
-            intermediate_dim=text_config["ffn_dim"],
+            vocabulary_size=text_config.vocab_size,
+            num_layers=text_config.num_hidden_layers,
+            num_heads=text_config.num_attention_heads,
+            hidden_dim=text_config.hidden_size,
+            intermediate_dim=text_config.ffn_dim,
             num_query_tokens=num_query_tokens,
-            dropout=text_config["dropout"],
-            max_sequence_length=text_config["max_position_embeddings"],
-            qformer_hidden_dim=qformer_config["hidden_size"],
+            dropout=text_config.dropout,
+            max_sequence_length=text_config.max_position_embeddings,
+            qformer_hidden_dim=qformer_config.hidden_size,
         )
     elif model_type == "t5":
         language_model = BLIP2FlanT5(
-            vocabulary_size=text_config["vocab_size"],
-            num_layers=text_config["num_layers"],
-            num_heads=text_config["num_heads"],
-            hidden_dim=text_config["d_model"],
-            intermediate_dim=text_config["d_ff"],
-            key_value_dim=text_config["d_kv"],
+            vocabulary_size=text_config.vocab_size,
+            num_layers=text_config.num_layers,
+            num_heads=text_config.num_heads,
+            hidden_dim=text_config.d_model,
+            intermediate_dim=text_config.d_ff,
+            key_value_dim=text_config.d_kv,
             num_query_tokens=num_query_tokens,
-            qformer_hidden_dim=qformer_config["hidden_size"],
-            dropout=text_config["dropout_rate"],
-            layer_norm_epsilon=text_config["layer_norm_epsilon"],
+            qformer_hidden_dim=qformer_config.hidden_size,
+            dropout=text_config.dropout_rate,
+            layer_norm_epsilon=text_config.layer_norm_epsilon,
         )
     else:
         raise ValueError(
@@ -626,7 +635,12 @@ def load_image_converter_config(preset, transformers_config):
     """Build BLIP2ImageConverter kwargs from the HF config.
 
     `BLIP2ImageConverter` bakes in the EVA-CLIP normalization statistics, so
-    only the spatial size is read from the checkpoint.
+    only the spatial size is read from the checkpoint. The size lives in the
+    nested ``vision_config``, which HuggingFace prunes to its defaults on disk,
+    so we repopulate it through ``Blip2Config`` rather than reading raw JSON.
     """
-    image_size = transformers_config["vision_config"]["image_size"]
+    from transformers import Blip2Config
+
+    config = Blip2Config.from_dict(transformers_config)
+    image_size = config.vision_config.image_size
     return {"image_size": (image_size, image_size)}
