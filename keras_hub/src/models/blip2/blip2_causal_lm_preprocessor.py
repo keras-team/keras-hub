@@ -1,9 +1,11 @@
 import keras
+import tensorflow as tf
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
 from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
+from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -172,7 +174,37 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
 
     @preprocessing_function
     def generate_postprocess(self, x):
-        return super().generate_postprocess(x)
+        # The OPT (byte-pair) tokenizer has a pure-Python detokenize path that
+        # accepts a ragged list of sequences. The Flan-T5 SentencePiece
+        # tokenizer only detokenizes via TensorFlow, which cannot convert a
+        # ragged Python list (produced by batched generation with
+        # different-length outputs). Build a ragged tensor explicitly for it.
+        if not isinstance(self.tokenizer, T5Tokenizer):
+            return super().generate_postprocess(x)
+
+        if not self.built:
+            self.build(None)
+
+        token_ids = keras.ops.convert_to_numpy(x["token_ids"]).astype("int32")
+        padding_mask = keras.ops.convert_to_numpy(x["padding_mask"]).astype(
+            "bool"
+        )
+        ids_to_strip = getattr(self.tokenizer, "special_token_ids", [])
+        mask = padding_mask
+        for token_id in ids_to_strip:
+            mask = mask & (token_ids != token_id)
+
+        if token_ids.ndim == 1:
+            stripped = token_ids[mask].tolist()
+        else:
+            stripped = tf.ragged.constant(
+                [
+                    token_ids[i][mask[i]].tolist()
+                    for i in range(token_ids.shape[0])
+                ],
+                dtype="int32",
+            )
+        return self.tokenizer.detokenize(stripped)
 
     def get_config(self):
         config = super().get_config()
