@@ -395,7 +395,6 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         vision_mask,
         cache,
         cache_update_index,
-        block_sequence_ids=None,
     ):
         decoder_mask = merge_padding_and_attention_mask(
             inputs=x, padding_mask=padding_mask, attention_mask=None
@@ -449,29 +448,6 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             )
             causal_mask = ops.logical_or(causal_mask, bidirectional_image_mask)
 
-        # Blockwise masking for sliding-window layers: tokens within the
-        # same multimodal block (same block_sequence_id >= 0) attend
-        # bidirectionally.  This matches HF's blockwise_overlay which is
-        # OR-ed with the sliding-window causal mask.
-        if (
-            block_sequence_ids is not None
-            and cache is None
-            and self.use_sliding_window_attention
-            and not self.is_global_attention
-        ):
-            # same_block_mask[b, q, kv] = (ids[q] == ids[kv]) & (ids[q] >= 0)
-            query_block_ids = ops.expand_dims(
-                block_sequence_ids, -1
-            )  # (B, seq, 1)
-            key_block_ids = ops.expand_dims(
-                block_sequence_ids, 1
-            )  # (B, 1, seq)
-            same_block_mask = ops.logical_and(
-                ops.equal(query_block_ids, key_block_ids),
-                ops.greater_equal(query_block_ids, 0),
-            )
-            causal_mask = ops.logical_or(causal_mask, same_block_mask)
-
         # Respect the padding mask.
         if decoder_mask is not None:
             causal_mask = ops.minimum(decoder_mask, causal_mask)
@@ -489,7 +465,6 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         per_layer_input=None,
         shared_kv=None,
         positions=None,
-        block_sequence_ids=None,
     ):
         # Clamp float16 to avoid overflow.
         is_float16 = keras.backend.standardize_dtype(x.dtype) == "float16"
@@ -500,12 +475,7 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         residual = x
         normalized_x = self.pre_attention_norm(x)
         attention_mask = self._compute_attention_mask(
-            normalized_x,
-            padding_mask,
-            vision_mask,
-            cache,
-            cache_update_index,
-            block_sequence_ids,
+            normalized_x, padding_mask, vision_mask, cache, cache_update_index
         )
         if cache is not None:
             attention, new_cache = self.attention(

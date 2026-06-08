@@ -118,12 +118,6 @@ from keras_hub.src.models.gemma4.gemma4_audio_converter import (
 from keras_hub.src.models.gemma4.gemma4_image_converter import (
     Gemma4ImageConverter as Gemma4ImageConverter,
 )
-from keras_hub.src.models.gemma4.gemma4_unified_audio_converter import (
-    Gemma4UnifiedAudioConverter as Gemma4UnifiedAudioConverter,
-)
-from keras_hub.src.models.gemma4.gemma4_unified_image_converter import (
-    Gemma4UnifiedImageConverter as Gemma4UnifiedImageConverter,
-)
 from keras_hub.src.models.gemma4.gemma4_video_converter import (
     Gemma4VideoConverter as Gemma4VideoConverter,
 )

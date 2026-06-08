@@ -410,15 +410,11 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
             )
 
         if pixel_values is None:
-            if self.image_converter is not None:
-                patch_size = getattr(
-                    self.image_converter,
-                    "model_patch_size",
-                    self.image_converter.patch_size,
-                )
-                patch_dim = 3 * patch_size**2
-            else:
-                patch_dim = 48
+            patch_dim = (
+                3 * self.image_converter.patch_size**2
+                if self.image_converter is not None
+                else 48
+            )
             pixel_values = tf.zeros(
                 (batch_size, 0, 1, patch_dim), dtype="float32"
             )
@@ -550,18 +546,13 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
             if not isinstance(pixel_position_ids, tf.Tensor):
                 pixel_position_ids = pixel_position_ids.cpu()
 
-        patch_size = getattr(
-            self.image_converter,
-            "model_patch_size",
-            self.image_converter.patch_size,
-        )
         pixel_values = tf.reshape(
             pixel_values,
             [
                 original_images_shape[0],
                 original_images_shape[1],
                 -1,
-                patch_size**2 * 3,
+                self.image_converter.patch_size**2 * 3,
             ],
         )
         pixel_position_ids = tf.reshape(
@@ -579,7 +570,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         }
 
     def _preprocess_audio(self, audio, batched):
-        """Converts raw audio into features for the audio encoder/embedder."""
+        """Converts raw audio into Mel spectrograms."""
         if not batched or (hasattr(audio, "shape") and len(audio.shape) == 1):
             # Expand dims so rank >= 2
             audio = tf.expand_dims(audio, axis=0)
@@ -610,11 +601,9 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Audio feature mask creation from Ragged tensor row lengths
         row_lengths = audio.row_lengths()
-        # Compute output lengths using ceiling division — the converter
-        # zero-pads partial frames, so ceil(samples / stride) matches the
-        # actual number of output tokens.
+        # Compute Mel output lengths: stride or max step coords triggers
         stride = self.audio_converter.stride
-        output_lengths = tf.cast((row_lengths + stride - 1) // stride, tf.int32)
+        output_lengths = tf.cast(row_lengths // stride, tf.int32)
 
         mask = tf.sequence_mask(
             output_lengths, maxlen=tf.shape(mel)[2], dtype=tf.int32
@@ -854,8 +843,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
                     audio, batched
                 )
                 output_lengths = tf.reduce_sum(audio_mel_mask, axis=[1, 2])
-                sub = self.audio_converter.audio_subsampling_factor
-                exact_tokens = (output_lengths + sub - 1) // sub
+                exact_tokens = (output_lengths + 3) // 4
                 num_audio_tokens = tf.reduce_max(exact_tokens)
                 num_audio_tokens = tf.maximum(num_audio_tokens, 1)
 
@@ -909,20 +897,16 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
                 tf.cast(is_placeholder, tf.int32), axis=1
             )
 
-            sub = self.audio_converter.audio_subsampling_factor
-
-            # Max frames needed: sub * num_placeholders
-            max_frames = tf.reduce_max(num_placeholders) * sub
+            # Max frames needed: 4 * num_placeholders
+            max_frames = tf.reduce_max(num_placeholders) * 4
 
             # Clip audio_mel to max_frames
             audio_mel = audio_mel[:, :, :max_frames, :]
             audio_mel_mask = audio_mel_mask[:, :, :max_frames]
 
             # Dynamically clip unused placeholders to remove the gap!
-            # Use ceil division to match audio encoder subsampling.
-            exact_tokens = (
-                tf.reduce_sum(audio_mel_mask, axis=[1, 2]) + sub - 1
-            ) // sub
+            # Use ceil division to match audio encoder subsampling (stride 4)
+            exact_tokens = (tf.reduce_sum(audio_mel_mask, axis=[1, 2]) + 3) // 4
 
             placeholder_counts = tf.cumsum(
                 tf.cast(is_placeholder, tf.int32), axis=1
@@ -1007,12 +991,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
             vision_mask = token_ids == self.tokenizer.image_placeholder_id
         else:
             if self.image_converter is not None:
-                patch_size = getattr(
-                    self.image_converter,
-                    "model_patch_size",
-                    self.image_converter.patch_size,
-                )
-                patch_dim = patch_size**2 * 3
+                patch_dim = self.image_converter.patch_size**2 * 3
                 pixel_values = tf.ones(
                     [batch_size, 0, 0, patch_dim], dtype="float32"
                 )
@@ -1111,8 +1090,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
             audio_mel, audio_mel_mask = self._preprocess_audio(audio, batched)
             # audio_mel_mask is (B, 1, Seq)
             output_lengths = tf.reduce_sum(audio_mel_mask, axis=[1, 2])
-            sub = self.audio_converter.audio_subsampling_factor
-            exact_tokens = (output_lengths + sub - 1) // sub
+            exact_tokens = (output_lengths + 3) // 4
 
             num_audio_tokens = tf.reduce_max(exact_tokens)
             num_audio_tokens = tf.maximum(num_audio_tokens, 1)
@@ -1196,12 +1174,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
             vision_mask = token_ids == self.tokenizer.image_placeholder_id
         else:
             if self.image_converter is not None:
-                patch_size = getattr(
-                    self.image_converter,
-                    "model_patch_size",
-                    self.image_converter.patch_size,
-                )
-                patch_dim = patch_size**2 * 3
+                patch_dim = self.image_converter.patch_size**2 * 3
                 pixel_values = tf.ones(
                     [batch_size, 0, 0, patch_dim], dtype="float32"
                 )
