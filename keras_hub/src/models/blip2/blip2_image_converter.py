@@ -14,8 +14,9 @@ class BLIP2ImageConverter(ImageConverter):
     performed in float32 regardless of the global Keras dtype policy.
 
     Preprocessing steps:
-    1. **Resizing**: Images are resized to `(224, 224)` (default) using
-       bicubic interpolation.
+    1. **Resizing**: Images are stretched to `(224, 224)` (default) using
+       antialiased bicubic interpolation, matching HuggingFace's
+       `BlipImageProcessor` (a plain resize, no aspect-ratio crop).
     2. **Normalization**: Pixel values are normalized using EVA-CLIP channel
        statistics (mean and standard deviation per channel).
 
@@ -24,9 +25,13 @@ class BLIP2ImageConverter(ImageConverter):
             the image, not including the channels axis. Defaults to
             `(224, 224)`.
         crop_to_aspect_ratio: bool. If `True`, resize without aspect ratio
-            distortion. Defaults to `True`.
+            distortion. Defaults to `False` to match HuggingFace, which
+            stretches the image to the target size.
         interpolation: string. The interpolation method used during resizing.
             Defaults to `"bicubic"`.
+        antialias: bool. Whether to use an antialiasing filter when
+            downsampling. Defaults to `True` to match HuggingFace's PIL
+            bicubic resize.
         **kwargs: Standard Keras layer arguments.
 
     Example:
@@ -58,8 +63,9 @@ class BLIP2ImageConverter(ImageConverter):
     def __init__(
         self,
         image_size=(224, 224),
-        crop_to_aspect_ratio=True,
+        crop_to_aspect_ratio=False,
         interpolation="bicubic",
+        antialias=True,
         **kwargs,
     ):
         # Image preprocessing must always run in float32.
@@ -70,6 +76,7 @@ class BLIP2ImageConverter(ImageConverter):
             offset=self._OFFSET,
             crop_to_aspect_ratio=crop_to_aspect_ratio,
             interpolation=interpolation,
+            antialias=antialias,
             dtype="float32",
             **kwargs,
         )

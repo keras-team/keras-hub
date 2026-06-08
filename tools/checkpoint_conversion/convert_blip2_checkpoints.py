@@ -128,6 +128,11 @@ def main(_):
     keras_lm.save_to_preset(preset)
     print("-> Preset saved.")
 
+    # Free the converted model before reloading so we don't hold two full
+    # copies in memory at once (peaks at ~2x the model size otherwise).
+    del keras_lm
+    gc.collect()
+
     print("\n-> Verifying preset reload.")
     CausalLM.from_preset(preset)
     print("-> Preset reload verified.")
