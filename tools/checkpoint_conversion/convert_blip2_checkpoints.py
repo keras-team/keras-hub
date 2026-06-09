@@ -100,7 +100,6 @@ def validate_output(keras_lm, hf_model, hf_processor, image):
     lm = backbone.language_model
     is_encoder_decoder = hasattr(lm, "encoder_transformer_layers")
     lm_name = "Flan-T5" if is_encoder_decoder else "OPT"
-    num_query_tokens = backbone.num_query_tokens
 
     print("\n-> Comparing parameter counts.")
     keras_params = keras_lm.backbone.count_params()
@@ -119,8 +118,24 @@ def validate_output(keras_lm, hf_model, hf_processor, image):
     hf_inputs = hf_processor(
         images=image, text=_PROMPT, return_tensors="pt", padding=False
     )
-    token_ids = hf_inputs["input_ids"].numpy().astype("int32")
-    padding_mask = hf_inputs["attention_mask"].numpy().astype("int32")
+    # Newer `Blip2Processor` versions expand `input_ids` with image-placeholder
+    # tokens (one per query token); HuggingFace swaps the visual embeddings in
+    # place. KerasHub's backbone prepends the visual prompt itself, so feed it
+    # the text tokens only. (Older processors add no placeholders, in which case
+    # this filter is a no-op.)
+    input_ids = hf_inputs["input_ids"]
+    attention_mask = hf_inputs["attention_mask"]
+    image_token_id = getattr(
+        hf_model.config,
+        "image_token_index",
+        getattr(hf_model.config, "image_token_id", None),
+    )
+    if image_token_id is not None:
+        keep = input_ids[0] != image_token_id
+        input_ids = input_ids[:, keep]
+        attention_mask = attention_mask[:, keep]
+    token_ids = input_ids.numpy().astype("int32")
+    padding_mask = attention_mask.numpy().astype("int32")
     pixel_values = hf_inputs["pixel_values"]
     keras_images = np.transpose(_to_np(pixel_values), (0, 2, 3, 1))
 
@@ -175,14 +190,17 @@ def validate_output(keras_lm, hf_model, hf_processor, image):
             "padding_mask": padding_mask,
         }
         # Backbone returns LM hidden states; the lm head is applied by the
-        # CausalLM functional model (which strips the query-token prefix).
-        keras_lm_hidden = _to_np(backbone(keras_inputs))
-        keras_lm_hidden = keras_lm_hidden[:, num_query_tokens:, :]
-        keras_logits = keras_lm(keras_inputs)
-        hf_lm_hidden = _to_np(
-            hf_out.language_model_outputs.hidden_states[-1]
-        )[:, num_query_tokens:, :]
-        hf_logits = _to_np(hf_out.logits)[:, num_query_tokens:, :]
+        # CausalLM functional model (which strips the query-token prefix). The
+        # text tokens are contiguous at the end of both sequences, so compare
+        # the trailing `text_len` positions (robust to however many visual /
+        # placeholder tokens each framework prepends).
+        text_len = token_ids.shape[1]
+        keras_lm_hidden = _to_np(backbone(keras_inputs))[:, -text_len:, :]
+        keras_logits = _to_np(keras_lm(keras_inputs))[:, -text_len:, :]
+        hf_lm_hidden = _to_np(hf_out.language_model_outputs.hidden_states[-1])[
+            :, -text_len:, :
+        ]
+        hf_logits = _to_np(hf_out.logits)[:, -text_len:, :]
 
     _report_diff(
         f"{lm_name} language-model hidden states (logits input)",
