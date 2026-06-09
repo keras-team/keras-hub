@@ -49,8 +49,59 @@ flags.DEFINE_string(
 )
 
 
+def _to_np(tensor):
+    """Detach a torch tensor (or array-like) to a float32 numpy array."""
+    if isinstance(tensor, torch.Tensor):
+        return tensor.detach().cpu().float().numpy()
+    return np.asarray(tensor, dtype=np.float32)
+
+
+def _report_diff(label, keras_out, hf_out, atol=1e-4, rtol=1e-4):
+    """Print a per-component KerasHub vs HuggingFace comparison.
+
+    Mirrors the validation style used by other conversion scripts
+    (e.g. ``convert_t5gemma2_checkpoints.py``): the first few elements of
+    each tensor, the mean / max absolute difference, and an
+    ``atol``/``rtol`` tolerance check that degrades gracefully to a
+    mismatch percentage instead of crashing.
+    """
+    keras_out = _to_np(keras_out)
+    hf_out = _to_np(hf_out)
+    abs_diff = np.abs(keras_out - hf_out)
+    print(f"\n-> {label}")
+    print(f"   KerasHub shape : {keras_out.shape}")
+    print(f"   HF       shape : {hf_out.shape}")
+    print(f"   KerasHub[:5]   : {keras_out.reshape(-1)[:5]}")
+    print(f"   HF      [:5]   : {hf_out.reshape(-1)[:5]}")
+    print(f"   mean abs diff  : {abs_diff.mean():.8f}")
+    print(f"   max  abs diff  : {abs_diff.max():.8f}")
+    if np.allclose(keras_out, hf_out, atol=atol, rtol=rtol):
+        print(f"   -> match (atol={atol}, rtol={rtol})")
+    else:
+        mismatch = int(
+            np.sum(~np.isclose(keras_out, hf_out, atol=atol, rtol=rtol))
+        )
+        total = keras_out.size
+        print(
+            f"   -> differs beyond atol={atol}, rtol={rtol} "
+            f"(mismatched {mismatch}/{total}, {mismatch / total * 100:.2f}%)"
+        )
+
+
 def validate_output(keras_lm, hf_model, hf_processor, image):
-    """Compare parameter counts and greedy generation vs HuggingFace."""
+    """Compare parameter counts, per-component outputs, and generation.
+
+    The per-component checks (vision encoder, Q-Former, language-model
+    hidden states, and lm_head logits) feed *identical* normalized pixels
+    and token ids to both frameworks, so the reported difference reflects
+    only weight-conversion error and not preprocessing or tokenization.
+    """
+    backbone = keras_lm.backbone
+    lm = backbone.language_model
+    is_encoder_decoder = hasattr(lm, "encoder_transformer_layers")
+    lm_name = "Flan-T5" if is_encoder_decoder else "OPT"
+    num_query_tokens = backbone.num_query_tokens
+
     print("\n-> Comparing parameter counts.")
     keras_params = keras_lm.backbone.count_params()
     hf_params = hf_model.num_parameters()
@@ -61,12 +112,93 @@ def validate_output(keras_lm, hf_model, hf_processor, image):
         "embeddings, and KerasHub pads the vocabulary.)"
     )
 
-    print("\n-> Comparing greedy generation.")
-    max_new_tokens = 20
-
+    print("\n-> Comparing per-component outputs vs HuggingFace.")
+    # Feed both frameworks identical inputs: HF-normalized pixels (NCHW->NHWC)
+    # and HF token ids. This isolates weight-conversion error from any
+    # preprocessing / tokenization differences.
     hf_inputs = hf_processor(
         images=image, text=_PROMPT, return_tensors="pt", padding=False
     )
+    token_ids = hf_inputs["input_ids"].numpy().astype("int32")
+    padding_mask = hf_inputs["attention_mask"].numpy().astype("int32")
+    pixel_values = hf_inputs["pixel_values"]
+    keras_images = np.transpose(_to_np(pixel_values), (0, 2, 3, 1))
+
+    # Single HF forward pass; intermediate outputs are read off the result.
+    with torch.no_grad():
+        if is_encoder_decoder:
+            # Teacher-force a single decoder-start token (pad id 0 for T5).
+            decoder_input_ids = torch.zeros(
+                (token_ids.shape[0], 1), dtype=torch.long
+            )
+            hf_out = hf_model(
+                **hf_inputs,
+                decoder_input_ids=decoder_input_ids,
+                output_hidden_states=True,
+            )
+        else:
+            hf_out = hf_model(**hf_inputs, output_hidden_states=True)
+
+    # --- Vision encoder (ViT) ---
+    keras_vision = backbone.vision_encoder(keras_images)
+    _report_diff(
+        "Vision encoder (ViT) hidden states",
+        keras_vision,
+        hf_out.vision_outputs.last_hidden_state,
+    )
+
+    # --- Q-Former ---
+    keras_qformer = backbone.qformer(keras_vision)
+    _report_diff(
+        "Q-Former query outputs",
+        keras_qformer,
+        hf_out.qformer_outputs.last_hidden_state,
+    )
+
+    # --- Language model hidden states + lm_head logits ---
+    if is_encoder_decoder:
+        enc_hidden, enc_mask = lm.call_encoder(
+            token_ids, padding_mask, keras_qformer
+        )
+        decoder_input = np.zeros((token_ids.shape[0], 1), dtype="int32")
+        decoder_mask = np.ones((token_ids.shape[0], 1), dtype="int32")
+        keras_lm_hidden = lm.call_decoder(
+            decoder_input, decoder_mask, enc_hidden, enc_mask
+        )
+        keras_logits = lm.lm_head(keras_lm_hidden)
+        hf_lm_hidden = hf_out.language_model_outputs.decoder_hidden_states[-1]
+        hf_logits = hf_out.logits
+    else:
+        keras_inputs = {
+            "images": keras_images,
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+        }
+        # Backbone returns LM hidden states; the lm head is applied by the
+        # CausalLM functional model (which strips the query-token prefix).
+        keras_lm_hidden = _to_np(backbone(keras_inputs))
+        keras_lm_hidden = keras_lm_hidden[:, num_query_tokens:, :]
+        keras_logits = keras_lm(keras_inputs)
+        hf_lm_hidden = _to_np(
+            hf_out.language_model_outputs.hidden_states[-1]
+        )[:, num_query_tokens:, :]
+        hf_logits = _to_np(hf_out.logits)[:, num_query_tokens:, :]
+
+    _report_diff(
+        f"{lm_name} language-model hidden states (logits input)",
+        keras_lm_hidden,
+        hf_lm_hidden,
+    )
+    _report_diff(
+        f"{lm_name} lm_head logits",
+        keras_logits,
+        hf_logits,
+    )
+
+    print("\n-> Comparing greedy generation.")
+    max_new_tokens = 20
+
+    # `hf_inputs` (images + prompt) was built above for the component checks.
     with torch.no_grad():
         hf_generated = hf_model.generate(
             **hf_inputs,
