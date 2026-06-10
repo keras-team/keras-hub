@@ -4,7 +4,7 @@ tensorflow-text>=2.20.1
 
 # Torch cpu-only version.
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.1.0
+torch>=2.12.0+cpu
 torchvision>=0.16.0
 
 # Jax cpu-only version.
