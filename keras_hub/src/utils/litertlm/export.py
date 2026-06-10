@@ -210,15 +210,34 @@ def export_to_litertlm(
             dtype=dtype,
         )
         if has_vision:
-            base.update(
-                _build_vision_sample_inputs(
-                    batch_size=1,
-                    max_images=vision_cfg["max_images_per_prompt"],
-                    image_size=vision_cfg["image_size"],
-                    num_vision_tokens=vision_cfg["num_vision_tokens"],
-                    seq_len=seq_len,
-                )
+            vision_encoder = model.backbone.vision_encoder
+            is_gemma4_vision = (
+                hasattr(vision_encoder, "inputs")
+                and len(vision_encoder.inputs) == 2
+                and {inp.name for inp in vision_encoder.inputs}
+                == {"pixel_values", "pixel_position_ids"}
             )
+            if is_gemma4_vision:
+                base.update(
+                    _build_gemma4_vision_sample_inputs(
+                        batch_size=1,
+                        max_images=vision_cfg["max_images_per_prompt"],
+                        patch_size=vision_cfg.get("patch_size", 16),
+                        image_size=vision_cfg["image_size"],
+                        num_vision_tokens=vision_cfg["num_vision_tokens"],
+                        seq_len=seq_len,
+                    )
+                )
+            else:
+                base.update(
+                    _build_vision_sample_inputs(
+                        batch_size=1,
+                        max_images=vision_cfg["max_images_per_prompt"],
+                        image_size=vision_cfg["image_size"],
+                        num_vision_tokens=vision_cfg["num_vision_tokens"],
+                        seq_len=seq_len,
+                    )
+                )
         if has_audio:
             base.update(
                 _build_audio_sample_inputs(
@@ -227,6 +246,9 @@ def export_to_litertlm(
                     num_frames=audio_cfg["num_frames"],
                     num_audio_tokens=audio_cfg["num_audio_tokens"],
                     seq_len=seq_len,
+                    audio_input_feat_size=audio_cfg.get(
+                        "audio_input_feat_size", 128
+                    ),
                 )
             )
         prefill_inputs_map[seq_len] = base
@@ -258,6 +280,8 @@ def export_to_litertlm(
             images=None,
             vision_indices=None,
             vision_mask=None,
+            pixel_values=None,
+            pixel_position_ids=None,
             audio_mel=None,
             audio_mel_mask=None,
             audio_indices=None,
@@ -271,6 +295,8 @@ def export_to_litertlm(
                 images,
                 vision_indices,
                 vision_mask,
+                pixel_values,
+                pixel_position_ids,
                 audio_mel,
                 audio_mel_mask,
                 audio_indices,
@@ -452,10 +478,14 @@ def _get_audio_config(model):
     num_audio_tokens = getattr(
         backbone, "num_audio_tokens_per_clip", 0
     ) * max_clips
+    audio_input_feat_size = getattr(
+        preprocessor, "audio_input_feat_size", 128
+    )
     return {
         "max_clips_per_prompt": max_clips,
         "num_frames": num_frames,
         "num_audio_tokens": num_audio_tokens,
+        "audio_input_feat_size": audio_input_feat_size,
     }
 
 
@@ -527,17 +557,58 @@ def _build_vision_sample_inputs(
     }
 
 
+def _build_gemma4_vision_sample_inputs(
+    batch_size,
+    max_images,
+    patch_size,
+    image_size,
+    num_vision_tokens,
+    seq_len,
+):
+    """Create concrete Gemma4 vision sample tensors for a prefill signature.
+
+    Gemma4's vision encoder expects pre-processed patches
+    (``pixel_values`` + ``pixel_position_ids``) rather than raw RGB images.
+    """
+    device = "cpu"
+    num_patches = (image_size // patch_size) ** 2
+    patch_dim = patch_size * patch_size * 3
+    pixel_values = torch.zeros(
+        (batch_size, max_images, num_patches, patch_dim),
+        dtype=torch.float32,
+        device=device,
+    )
+    pixel_position_ids = torch.zeros(
+        (batch_size, max_images, num_patches, 2),
+        dtype=torch.int32,
+        device=device,
+    )
+    vision_indices = torch.zeros(
+        (batch_size, num_vision_tokens), dtype=torch.int32, device=device
+    )
+    vision_mask = torch.zeros(
+        (batch_size, seq_len), dtype=torch.int32, device=device
+    )
+    return {
+        "pixel_values": pixel_values,
+        "pixel_position_ids": pixel_position_ids,
+        "vision_indices": vision_indices,
+        "vision_mask": vision_mask,
+    }
+
+
 def _build_audio_sample_inputs(
     batch_size,
     max_clips,
     num_frames,
     num_audio_tokens,
     seq_len,
+    audio_input_feat_size=128,
 ):
     """Create concrete audio sample tensors for a prefill signature."""
     device = "cpu"
     audio_mel = torch.zeros(
-        (batch_size, max_clips, num_frames, 128),
+        (batch_size, max_clips, num_frames, audio_input_feat_size),
         dtype=torch.float32,
         device=device,
     )

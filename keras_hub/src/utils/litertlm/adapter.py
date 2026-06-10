@@ -66,6 +66,8 @@ class KerasHubLiteRTAdapter(nn.Module):
         images=None,
         vision_indices=None,
         vision_mask=None,
+        pixel_values=None,
+        pixel_position_ids=None,
         audio_mel=None,
         audio_mel_mask=None,
         audio_indices=None,
@@ -89,8 +91,26 @@ class KerasHubLiteRTAdapter(nn.Module):
 
         # Run vision encoder if images are provided.
         img_embeddings = None
-        if self.has_vision and images is not None:
-            img_embeddings = self.keras_model.backbone.vision_encoder(images)
+        if self.has_vision:
+            vision_encoder = self.keras_model.backbone.vision_encoder
+            # Gemma4 vision encoder expects pixel_values and pixel_position_ids.
+            # Detect via Functional model input names to avoid heavy imports.
+            is_gemma4_vision = (
+                hasattr(vision_encoder, "inputs")
+                and len(vision_encoder.inputs) == 2
+                and {inp.name for inp in vision_encoder.inputs}
+                == {"pixel_values", "pixel_position_ids"}
+            )
+            if is_gemma4_vision:
+                if pixel_values is not None and pixel_position_ids is not None:
+                    img_embeddings = vision_encoder(
+                        {
+                            "pixel_values": pixel_values,
+                            "pixel_position_ids": pixel_position_ids,
+                        }
+                    )
+            elif images is not None:
+                img_embeddings = vision_encoder(images)
 
         # Run audio encoder if audio mel is provided.
         audio_embeddings = None
