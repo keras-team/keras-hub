@@ -26,7 +26,7 @@ def get_mistral_config(backbone):
         "tie_word_embeddings": False,
         "use_cache": True,
         "sliding_window": backbone.sliding_window,
-        "torch_dtype": backbone.dtype_policy.name,
+        "torch_dtype": backbone.dtype_policy.compute_dtype,
     }
 
     return hf_config
