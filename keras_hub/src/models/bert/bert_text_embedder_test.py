@@ -130,20 +130,17 @@ class BertTextEmbedderTest(TestCase):
 
     def test_mean_pooling_respects_mask(self):
         """Test that mean pooling correctly ignores padding tokens."""
-        embedder = BertTextEmbedder(
-            backbone=self.backbone, normalize=False, pooling_mode="mean"
+        sequence_output = ops.convert_to_tensor(
+            [[[1.0, 2.0], [3.0, 4.0], [10.0, 20.0]]]
         )
-        input_1 = {
-            "token_ids": np.array([[1, 5, 6, 2, 0]], dtype="int32"),
-            "segment_ids": np.array([[0, 0, 0, 0, 0]], dtype="int32"),
-            "padding_mask": np.array([[1, 1, 1, 1, 0]], dtype="int32"),
-        }
-        input_2 = {
-            "token_ids": np.array([[1, 5, 6, 2, 0]], dtype="int32"),
-            "segment_ids": np.array([[0, 0, 0, 0, 0]], dtype="int32"),
-            "padding_mask": np.array([[1, 1, 1, 1, 1]], dtype="int32"),
-        }
-        output_1 = embedder(input_1)
-        output_2 = embedder(input_2)
-        self.assertEqual(output_1.shape, (1, 2))
-        self.assertEqual(output_2.shape, (1, 2))
+        mask_partial = np.array([[1, 1, 0]], dtype="int32")
+        mask_full = np.array([[1, 1, 1]], dtype="int32")
+
+        pooled_partial = BertTextEmbedder._mean_pooling(
+            sequence_output, mask_partial
+        )
+        pooled_full = BertTextEmbedder._mean_pooling(sequence_output, mask_full)
+
+        self.assertAllClose(pooled_partial, [[2.0, 3.0]])
+        self.assertAllClose(pooled_full, [[14.0 / 3, 26.0 / 3]], atol=1e-5)
+        self.assertNotAllClose(pooled_partial, pooled_full)
