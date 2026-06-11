@@ -145,7 +145,6 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
 
         images, text = self._parse_inputs(x)
 
-        from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
 
         if isinstance(self.tokenizer, T5Tokenizer):
             if not self.built:
