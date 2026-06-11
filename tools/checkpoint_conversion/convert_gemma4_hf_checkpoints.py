@@ -43,9 +43,6 @@ PRESET_MAP = {
     "gemma4_4b": "google/gemma-4-E4B",
     "gemma4_instruct_4b": "google/gemma-4-E4B-it",
     "gemma4_instruct_4b_assistant": "google/gemma-4-E4B-it-assistant",
-    "gemma4_12b": "google/gemma-4-12B",
-    "gemma4_instruct_12b": "google/gemma-4-12B-it",
-    "gemma4_instruct_12b_assistant": "google/gemma-4-12B-it-assistant",
     "gemma4_26b_a4b": "google/gemma-4-26B-A4B",
     "gemma4_instruct_26b_a4b": "google/gemma-4-26B-A4B-it",
     "gemma4_instruct_26b_a4b_assistant": "google/gemma-4-26B-A4B-it-assistant",
@@ -1392,14 +1389,13 @@ def _verify_model(
         _test_audio_preprocessor(
             preprocessor, raw_audio, hf_data_audio["input_features"]
         )
-        # Use generate_preprocess (same as text) to avoid a pre-existing
-        # MultiSegmentPacker / tf_text compatibility issue on PyTorch backend.
-        kh_inputs_audio = preprocessor.generate_preprocess(
+        kh_inputs_audio = preprocessor(
             {
                 "prompts": [PROMPT_AUDIO],
                 "audio": [raw_audio],
+                "responses": [""],
             },
-            sequence_length=hf_data_audio["logits"].shape[1],
+            sequence_length=hf_data_audio["logits"].shape[1] + 1,
         )
         _test_numerics(
             "audio (KH preproc)",
@@ -1422,15 +1418,16 @@ def _verify_model(
         raw_video_sub = hf_data_video["raw_video_sub"]
         hf_video_seq_len = hf_data_video["logits"].shape[1]
         saved_num_frames_per_video = preprocessor.num_frames_per_video
+        saved_packer_seq_len = preprocessor.packer.sequence_length
         preprocessor.num_frames_per_video = raw_video_sub.shape[0]
-        # Use generate_preprocess (same as text/audio) to avoid
-        # MultiSegmentPacker / tf_text compatibility issues on PyTorch backend.
-        kh_inputs_video = preprocessor.generate_preprocess(
+        preprocessor.packer.sequence_length = hf_video_seq_len + 1
+        kh_inputs_video = preprocessor(
             {
                 "prompts": [PROMPT_VIDEO],
                 "videos": [raw_video_sub],
+                "responses": [""],
             },
-            sequence_length=hf_video_seq_len,
+            sequence_length=hf_video_seq_len + 1,
         )
         # Test 1: end-to-end with KH preprocessor.
         _test_numerics(
@@ -1458,6 +1455,7 @@ def _verify_model(
                     hf_data_video["logits"],
                 )
         preprocessor.num_frames_per_video = saved_num_frames_per_video
+        preprocessor.packer.sequence_length = saved_packer_seq_len
 
     # ── 4. Generation comparison (all modalities) ─────────────────────────────
     gemma4_lm = keras_hub.models.Gemma4CausalLM(
