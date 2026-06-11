@@ -34,6 +34,7 @@ from keras_hub.src.utils.transformers import convert_sam3
 from keras_hub.src.utils.transformers import convert_smollm3
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_t5gemma2
+from keras_hub.src.utils.transformers import convert_tipsv2
 from keras_hub.src.utils.transformers import convert_vit
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
@@ -103,6 +104,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_t5gemma
         elif model_type == "t5gemma2":
             self.converter = convert_t5gemma2
+        elif model_type == "tipsv2":
+            self.converter = convert_tipsv2
         else:
             raise ValueError(
                 "KerasHub has no converter for huggingface/transformers models "

@@ -199,6 +199,9 @@ from keras_hub.src.models.swin_transformer.swin_transformer_image_converter impo
 from keras_hub.src.models.t5gemma2.t5gemma2_image_converter import (
     T5Gemma2ImageConverter as T5Gemma2ImageConverter,
 )
+from keras_hub.src.models.tipsv2.tipsv2_image_converter import (
+    TIPSv2ImageConverter as TIPSv2ImageConverter,
+)
 from keras_hub.src.models.vgg.vgg_image_converter import (
     VGGImageConverter as VGGImageConverter,
 )
