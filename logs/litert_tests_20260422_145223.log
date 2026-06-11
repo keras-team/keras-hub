@@ -1,0 +1,159 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.9, pytest-9.0.2, pluggy-1.6.0 -- /usr/local/google/home/hellorahul/projects/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /usr/local/google/home/hellorahul/projects/keras-hub
+configfile: pyproject.toml
+plugins: cov-7.0.0, jaxtyping-0.3.9, xdist-3.8.0
+created: 32/32 workers
+32 workers [72 items]
+
+scheduling tests via LoadScheduling
+
+keras_hub/src/models/albert/albert_text_classifier_test.py::AlbertTextClassifierTest::test_litert_export 
+keras_hub/src/models/basnet/basnet_test.py::BASNetTest::test_litert_export 
+keras_hub/src/models/flux/flux_backbone_test.py::FluxBackboneTest::test_litert_export 
+keras_hub/src/models/mit/mit_image_classifier_test.py::MiTImageClassifierTest::test_litert_export 
+keras_hub/src/models/llama/llama_causal_lm_test.py::LlamaCausalLMTest::test_litert_export 
+keras_hub/src/models/smollm3/smollm3_causal_lm_test.py::SmolLM3CausalLMTest::test_litert_export 
+keras_hub/src/models/deit/deit_image_classifier_test.py::DeiTImageClassifierTest::test_litert_export 
+keras_hub/src/models/electra/electra_backbone_test.py::ElectraBackboneTest::test_litert_export 
+keras_hub/src/models/f_net/f_net_text_classifier_test.py::FNetTextClassifierTest::test_litert_export 
+keras_hub/src/models/gemma3/gemma3_causal_lm_test.py::Gemma3CausalLMTest::test_litert_export 
+keras_hub/src/models/gemma4/gemma4_causal_lm_test.py::Gemma4CausalLMTest::test_litert_export 
+keras_hub/src/models/gpt_oss/gpt_oss_causal_lm_test.py::GptOssCausalLMTest::test_litert_export 
+keras_hub/src/models/dinov2/dinov2_backbone_test.py::DINOV2BackboneWithRegistersTest::test_litert_export 
+keras_hub/src/models/deberta_v3/deberta_v3_text_classifier_test.py::DebertaV3TextClassifierTest::test_litert_export 
+keras_hub/src/models/mobilenet/mobilenet_backbone_test.py::MobileNetBackboneTest::test_litert_export 
+keras_hub/src/models/cspnet/cspnet_image_classifier_test.py::CSPNetImageClassifierTest::test_litert_export 
+keras_hub/src/models/vae/vae_backbone_test.py::VAEBackboneTest::test_litert_export 
+keras_hub/src/models/roberta/roberta_text_classifier_test.py::RobertaTextClassifierTest::test_litert_export 
+[gw3] [  1%] SKIPPED keras_hub/src/models/basnet/basnet_test.py::BASNetTest::test_litert_export 
+keras_hub/src/models/gpt2/gpt2_causal_lm_test.py::GPT2CausalLMTest::test_litert_export 
+keras_hub/src/models/metaclip_2/metaclip_2_backbone_test.py::MetaCLIP2BackboneTest::test_litert_export 
+keras_hub/src/models/distil_bert/distil_bert_text_classifier_test.py::DistilBertTextClassifierTest::test_litert_export 
+keras_hub/src/models/mobilenetv5/mobilenetv5_image_classifier_test.py::MobileNetV5ImageClassifierTest::test_litert_export 
+keras_hub/src/models/parseq/parseq_causal_lm_test.py::PARSeqCausalLMTest::test_litert_export 
+keras_hub/src/models/qwen/qwen_causal_lm_test.py::QwenCausalLMTest::test_litert_export 
+keras_hub/src/models/resnet/resnet_image_classifier_test.py::ResNetImageClassifierTest::test_litert_export 
+keras_hub/src/models/siglip/siglip_backbone_test.py::SigLIPBackboneTest::test_litert_export 
+keras_hub/src/models/sam/sam_image_segmenter_test.py::SAMImageSegmenterTest::test_litert_export 
+keras_hub/src/models/opt/opt_causal_lm_test.py::OPTCausalLMTest::test_litert_export 
+keras_hub/src/models/bloom/bloom_causal_lm_test.py::BloomCausalLMTest::test_litert_export 
+keras_hub/src/models/qwen3_moe/qwen3_moe_causal_lm_test.py::Qwen3MoeCausalLMTest::test_litert_export 
+keras_hub/src/models/depth_anything/depth_anything_depth_estimator_test.py::DepthAnythingDepthEstimatorTest::test_litert_export 
+keras_hub/src/models/t5/t5_backbone_test.py::T5BackboneTest::test_litert_export 
+keras_hub/src/models/bert/bert_text_classifier_test.py::BertTextClassifierTest::test_litert_export 
+[gw27] [  2%] SKIPPED keras_hub/src/models/sam/sam_image_segmenter_test.py::SAMImageSegmenterTest::test_litert_export 
+keras_hub/src/models/sam3/sam3_pc_image_segmenter_test.py::SAM3PromptableConceptImageSegmenterTest::test_litert_export 
+[gw12] [  4%] PASSED keras_hub/src/models/f_net/f_net_text_classifier_test.py::FNetTextClassifierTest::test_litert_export 
+keras_hub/src/models/falcon/falcon_causal_lm_test.py::FalconCausalLMTest::test_litert_export 
+[gw14] [  5%] PASSED keras_hub/src/models/mobilenetv5/mobilenetv5_image_classifier_test.py::MobileNetV5ImageClassifierTest::test_litert_export 
+keras_hub/src/models/moonshine/moonshine_audio_to_text_test.py::MoonshineAudioToTextTest::test_litert_export 
+[gw14] [  6%] SKIPPED keras_hub/src/models/moonshine/moonshine_audio_to_text_test.py::MoonshineAudioToTextTest::test_litert_export 
+keras_hub/src/models/vit_det/vit_det_backbone_test.py::ViTDetBackboneTest::test_litert_export 
+[gw2] [  8%] PASSED keras_hub/src/models/albert/albert_text_classifier_test.py::AlbertTextClassifierTest::test_litert_export 
+keras_hub/src/models/bart/bart_seq_2_seq_lm_test.py::BartSeq2SeqLMTest::test_litert_export 
+[gw8] [  9%] PASSED keras_hub/src/models/distil_bert/distil_bert_text_classifier_test.py::DistilBertTextClassifierTest::test_litert_export 
+keras_hub/src/models/efficientnet/efficientnet_image_classifier_test.py::EfficientNetImageClassifierTest::test_litert_export 
+[gw18] [ 11%] PASSED keras_hub/src/models/llama/llama_causal_lm_test.py::LlamaCausalLMTest::test_litert_export 
+keras_hub/src/models/llama3/llama3_causal_lm_test.py::Llama3CausalLMTest::test_litert_export 
+[gw15] [ 12%] PASSED keras_hub/src/models/electra/electra_backbone_test.py::ElectraBackboneTest::test_litert_export 
+keras_hub/src/models/esm/esm_classifier_test.py::ESMProteinClassifierTest::test_litert_export 
+[gw9] [ 13%] PASSED keras_hub/src/models/dinov2/dinov2_backbone_test.py::DINOV2BackboneWithRegistersTest::test_litert_export 
+keras_hub/src/models/dinov3/dinov3_backbone_test.py::DINOV3BackboneTest::test_litert_export 
+[gw3] [ 15%] PASSED keras_hub/src/models/bert/bert_text_classifier_test.py::BertTextClassifierTest::test_litert_export 
+keras_hub/src/models/video_prism/video_prism_backbone_test.py::VideoPrismBackboneVideoOnlyTest::test_litert_export 
+[gw24] [ 16%] PASSED keras_hub/src/models/resnet/resnet_image_classifier_test.py::ResNetImageClassifierTest::test_litert_export 
+keras_hub/src/models/retinanet/retinanet_object_detector_test.py::RetinaNetObjectDetectorTest::test_litert_export 
+[gw6] [ 18%] PASSED keras_hub/src/models/deit/deit_image_classifier_test.py::DeiTImageClassifierTest::test_litert_export 
+keras_hub/src/models/densenet/densenet_image_classifier_test.py::DenseNetImageClassifierTest::test_litert_export 
+[gw5] [ 19%] PASSED keras_hub/src/models/deberta_v3/deberta_v3_text_classifier_test.py::DebertaV3TextClassifierTest::test_litert_export 
+keras_hub/src/models/deeplab_v3/deeplab_v3_segmenter_test.py::DeepLabV3ImageSegmenterTest::test_litert_export 
+[gw5] [ 20%] SKIPPED keras_hub/src/models/deeplab_v3/deeplab_v3_segmenter_test.py::DeepLabV3ImageSegmenterTest::test_litert_export 
+[gw16] [ 22%] PASSED keras_hub/src/models/gpt2/gpt2_causal_lm_test.py::GPT2CausalLMTest::test_litert_export 
+keras_hub/src/models/gpt_neo_x/gpt_neo_x_causal_lm_test.py::GPTNeoXCausalLMTest::test_litert_export 
+[gw22] [ 23%] PASSED keras_hub/src/models/opt/opt_causal_lm_test.py::OPTCausalLMTest::test_litert_export 
+keras_hub/src/models/pali_gemma/pali_gemma_causal_lm_test.py::PaliGemmaCausalLMTest::test_litert_export 
+[gw25] [ 25%] PASSED keras_hub/src/models/roberta/roberta_text_classifier_test.py::RobertaTextClassifierTest::test_litert_export 
+keras_hub/src/models/roformer_v2/roformer_v2_text_classifier_test.py::RoformerVTextClassifierTest::test_litert_export 
+[gw26] [ 26%] PASSED keras_hub/src/models/parseq/parseq_causal_lm_test.py::PARSeqCausalLMTest::test_litert_export 
+keras_hub/src/models/phi3/phi3_causal_lm_test.py::Phi3CausalLMTest::test_litert_export 
+[gw11] [ 27%] PASSED keras_hub/src/models/metaclip_2/metaclip_2_backbone_test.py::MetaCLIP2BackboneTest::test_litert_export 
+keras_hub/src/models/mistral/mistral_causal_lm_test.py::MistralCausalLMTest::test_litert_export 
+[gw0] [ 29%] PASSED keras_hub/src/models/bloom/bloom_causal_lm_test.py::BloomCausalLMTest::test_litert_export 
+keras_hub/src/models/clip/clip_backbone_test.py::CLIPBackboneTest::test_litert_export 
+[gw31] [ 30%] PASSED keras_hub/src/models/smollm3/smollm3_causal_lm_test.py::SmolLM3CausalLMTest::test_litert_export 
+keras_hub/src/models/stable_diffusion_3/stable_diffusion_3_text_to_image_test.py::StableDiffusion3TextToImageTest::test_litert_export 
+[gw31] [ 31%] SKIPPED keras_hub/src/models/stable_diffusion_3/stable_diffusion_3_text_to_image_test.py::StableDiffusion3TextToImageTest::test_litert_export 
+[gw16] [ 33%] SKIPPED keras_hub/src/models/gpt_neo_x/gpt_neo_x_causal_lm_test.py::GPTNeoXCausalLMTest::test_litert_export 
+[gw19] [ 34%] PASSED keras_hub/src/models/qwen/qwen_causal_lm_test.py::QwenCausalLMTest::test_litert_export 
+keras_hub/src/models/qwen3/qwen3_causal_lm_test.py::Qwen3CausalLMTest::test_litert_export 
+[gw23] [ 36%] PASSED keras_hub/src/models/qwen3_moe/qwen3_moe_causal_lm_test.py::Qwen3MoeCausalLMTest::test_litert_export 
+keras_hub/src/models/qwen_moe/qwen_moe_causal_lm_test.py::QwenMoeCausalLMTest::test_litert_export 
+[gw14] [ 37%] PASSED keras_hub/src/models/vit_det/vit_det_backbone_test.py::ViTDetBackboneTest::test_litert_export 
+keras_hub/src/models/whisper/whisper_backbone_test.py::WhisperBackboneTest::test_litert_export 
+[gw28] [ 38%] PASSED keras_hub/src/models/t5/t5_backbone_test.py::T5BackboneTest::test_litert_export 
+keras_hub/src/models/t5gemma/t5gemma_seq_2_seq_lm_test.py::T5GemmaSeq2SeqLMTest::test_litert_export 
+[gw30] [ 40%] PASSED keras_hub/src/models/siglip/siglip_backbone_test.py::SigLIPBackboneTest::test_litert_export 
+keras_hub/src/models/siglip/siglip_backbone_test.py::SigLIP2BackboneTest::test_litert_export 
+[gw3] [ 41%] PASSED keras_hub/src/models/video_prism/video_prism_backbone_test.py::VideoPrismBackboneVideoOnlyTest::test_litert_export 
+[gw15] [ 43%] PASSED keras_hub/src/models/esm/esm_classifier_test.py::ESMProteinClassifierTest::test_litert_export 
+[gw9] [ 44%] PASSED keras_hub/src/models/dinov3/dinov3_backbone_test.py::DINOV3BackboneTest::test_litert_export 
+[gw12] [ 45%] PASSED keras_hub/src/models/falcon/falcon_causal_lm_test.py::FalconCausalLMTest::test_litert_export 
+keras_hub/src/models/vit/vit_image_classifier_test.py::ViTImageClassifierTest::test_litert_export 
+[gw25] [ 47%] PASSED keras_hub/src/models/roformer_v2/roformer_v2_text_classifier_test.py::RoformerVTextClassifierTest::test_litert_export 
+[gw17] [ 48%] PASSED keras_hub/src/models/gpt_oss/gpt_oss_causal_lm_test.py::GptOssCausalLMTest::test_litert_export 
+keras_hub/src/models/hgnetv2/hgnetv2_image_classifier_test.py::HGNetV2ImageClassifierTest::test_litert_export 
+[gw26] [ 50%] PASSED keras_hub/src/models/phi3/phi3_causal_lm_test.py::Phi3CausalLMTest::test_litert_export 
+[gw20] [ 51%] PASSED keras_hub/src/models/mit/mit_image_classifier_test.py::MiTImageClassifierTest::test_litert_export 
+keras_hub/src/models/mixtral/mixtral_causal_lm_test.py::MixtralCausalLMTest::test_litert_export 
+[gw18] [ 52%] PASSED keras_hub/src/models/llama3/llama3_causal_lm_test.py::Llama3CausalLMTest::test_litert_export 
+keras_hub/src/models/xlnet/xlnet_backbone_test.py::XLNetTest::test_litert_export 
+[gw11] [ 54%] PASSED keras_hub/src/models/mistral/mistral_causal_lm_test.py::MistralCausalLMTest::test_litert_export 
+[gw1] [ 55%] PASSED keras_hub/src/models/depth_anything/depth_anything_depth_estimator_test.py::DepthAnythingDepthEstimatorTest::test_litert_export 
+keras_hub/src/models/dinov2/dinov2_backbone_test.py::DINOV2BackboneTest::test_litert_export 
+[gw4] [ 56%] PASSED keras_hub/src/models/cspnet/cspnet_image_classifier_test.py::CSPNetImageClassifierTest::test_litert_export 
+keras_hub/src/models/d_fine/d_fine_object_detector_test.py::DFineObjectDetectorTest::test_litert_export 
+[gw22] [ 58%] PASSED keras_hub/src/models/pali_gemma/pali_gemma_causal_lm_test.py::PaliGemmaCausalLMTest::test_litert_export 
+[gw19] [ 59%] PASSED keras_hub/src/models/qwen3/qwen3_causal_lm_test.py::Qwen3CausalLMTest::test_litert_export 
+[gw13] [ 61%] PASSED keras_hub/src/models/gemma3/gemma3_causal_lm_test.py::Gemma3CausalLMTest::test_litert_export 
+keras_hub/src/models/gemma3/gemma3_causal_lm_test.py::Gemma3CausalLMTest::test_litert_export_multimodal 
+[gw13] [ 62%] SKIPPED keras_hub/src/models/gemma3/gemma3_causal_lm_test.py::Gemma3CausalLMTest::test_litert_export_multimodal 
+[gw2] [ 63%] PASSED keras_hub/src/models/bart/bart_seq_2_seq_lm_test.py::BartSeq2SeqLMTest::test_litert_export 
+keras_hub/src/models/xception/xception_image_classifier_test.py::XceptionImageClassifierTest::test_litert_export 
+[gw23] [ 65%] PASSED keras_hub/src/models/qwen_moe/qwen_moe_causal_lm_test.py::QwenMoeCausalLMTest::test_litert_export 
+[gw0] [ 66%] PASSED keras_hub/src/models/clip/clip_backbone_test.py::CLIPBackboneTest::test_litert_export 
+[gw14] [ 68%] PASSED keras_hub/src/models/whisper/whisper_backbone_test.py::WhisperBackboneTest::test_litert_export 
+[gw12] [ 69%] PASSED keras_hub/src/models/vit/vit_image_classifier_test.py::ViTImageClassifierTest::test_litert_export 
+[gw10] [ 70%] PASSED keras_hub/src/models/gemma4/gemma4_causal_lm_test.py::Gemma4CausalLMTest::test_litert_export 
+keras_hub/src/models/gemma4/gemma4_causal_lm_test.py::Gemma4CausalLMTest::test_litert_export_multimodal 
+[gw10] [ 72%] SKIPPED keras_hub/src/models/gemma4/gemma4_causal_lm_test.py::Gemma4CausalLMTest::test_litert_export_multimodal 
+[gw18] [ 73%] PASSED keras_hub/src/models/xlnet/xlnet_backbone_test.py::XLNetTest::test_litert_export 
+[gw30] [ 75%] PASSED keras_hub/src/models/siglip/siglip_backbone_test.py::SigLIP2BackboneTest::test_litert_export 
+[gw17] [ 76%] PASSED keras_hub/src/models/hgnetv2/hgnetv2_image_classifier_test.py::HGNetV2ImageClassifierTest::test_litert_export 
+[gw20] [ 77%] PASSED keras_hub/src/models/mixtral/mixtral_causal_lm_test.py::MixtralCausalLMTest::test_litert_export 
+[gw28] [ 79%] PASSED keras_hub/src/models/t5gemma/t5gemma_seq_2_seq_lm_test.py::T5GemmaSeq2SeqLMTest::test_litert_export 
+[gw24] [ 80%] PASSED keras_hub/src/models/retinanet/retinanet_object_detector_test.py::RetinaNetObjectDetectorTest::test_litert_export 
+[gw1] [ 81%] PASSED keras_hub/src/models/dinov2/dinov2_backbone_test.py::DINOV2BackboneTest::test_litert_export 
+[gw21] [ 83%] PASSED keras_hub/src/models/mobilenet/mobilenet_backbone_test.py::MobileNetBackboneTest::test_litert_export 
+keras_hub/src/models/mobilenet/mobilenet_image_classifier_test.py::MobileNetImageClassifierTest::test_litert_export 
+[gw29] [ 84%] PASSED keras_hub/src/models/vae/vae_backbone_test.py::VAEBackboneTest::test_litert_export 
+keras_hub/src/models/vgg/vgg_image_classifier_test.py::VGGImageClassifierTest::test_litert_export 
+[gw29] [ 86%] SKIPPED keras_hub/src/models/vgg/vgg_image_classifier_test.py::VGGImageClassifierTest::test_litert_export 
+[gw2] [ 87%] PASSED keras_hub/src/models/xception/xception_image_classifier_test.py::XceptionImageClassifierTest::test_litert_export 
+[gw7] [ 88%] PASSED keras_hub/src/models/flux/flux_backbone_test.py::FluxBackboneTest::test_litert_export 
+keras_hub/src/models/gemma/gemma_causal_lm_test.py::GemmaCausalLMTest::test_litert_export 
+[gw7] [ 90%] PASSED keras_hub/src/models/gemma/gemma_causal_lm_test.py::GemmaCausalLMTest::test_litert_export 
+[gw21] [ 91%] PASSED keras_hub/src/models/mobilenet/mobilenet_image_classifier_test.py::MobileNetImageClassifierTest::test_litert_export 
+[gw8] [ 93%] PASSED keras_hub/src/models/efficientnet/efficientnet_image_classifier_test.py::EfficientNetImageClassifierTest::test_litert_export 
+keras_hub/src/models/xlm_roberta/xlm_roberta_text_classifier_test.py::XLMRobertaTextClassifierTest::test_litert_export 
+[gw8] [ 94%] PASSED keras_hub/src/models/xlm_roberta/xlm_roberta_text_classifier_test.py::XLMRobertaTextClassifierTest::test_litert_export 
+[gw27] [ 95%] PASSED keras_hub/src/models/sam3/sam3_pc_image_segmenter_test.py::SAM3PromptableConceptImageSegmenterTest::test_litert_export 
+keras_hub/src/models/video_prism/video_prism_backbone_test.py::VideoPrismBackboneTest::test_litert_export 
+[gw4] [ 97%] PASSED keras_hub/src/models/d_fine/d_fine_object_detector_test.py::DFineObjectDetectorTest::test_litert_export 
+[gw6] [ 98%] PASSED keras_hub/src/models/densenet/densenet_image_classifier_test.py::DenseNetImageClassifierTest::test_litert_export 
+[gw27] [100%] PASSED keras_hub/src/models/video_prism/video_prism_backbone_test.py::VideoPrismBackboneTest::test_litert_export 2026-04-22 14:52:24.493706: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+
+
+======================== 63 passed, 9 skipped in 45.91s ========================
