@@ -223,6 +223,26 @@ class Backbone(keras.Model):
                         layer.enable_lora(rank)
                         self._lora_enabled_layers.append(i)
 
+    def _get_lora_layer_path(self, layer):
+        """Get a stable path for a layer relative to the model root.
+
+        We use `layer.path` when available, which gives a unique identifier
+        for sublayers (e.g. `transformer_layer_0/self_attention_layer/query`).
+        This is more robust than integer indices, which can shift when a
+        model is reconstructed.
+
+        Raises:
+            ValueError: If `layer.path` is `None`. LoRA-enabled layers are
+                expected to be sublayers with a valid path.
+        """
+        if layer.path is None:
+            raise ValueError(
+                f"Layer '{layer.name}' does not have a `path` attribute. "
+                "LoRA-enabled layers must have a stable path for saving "
+                "and loading weights."
+            )
+        return layer.path
+
     def save_lora_weights(self, filepath):
         if not getattr(self, "_lora_enabled_layers", []):
             raise ValueError(
@@ -236,46 +256,93 @@ class Backbone(keras.Model):
             )
 
         store = keras.src.saving.saving_lib.H5IOStore(filepath, mode="w")
-        lora_store = store.make("lora")
-        lora_store["rank"] = self._lora_rank
-        # We cannot identify layers by name since names are non-unique,
-        # so we identify them by index in the topologically sorted list
-        # of layers that have weights.
-        all_layers = self._flatten_layers(include_self=False)
-        all_layers = [lyr for lyr in all_layers if lyr.weights]
-        for layer_index in self._lora_enabled_layers:
-            # We only lora the einsumdense layers,
-            # so the factored weights are always named `kernel`
-            layer = all_layers[layer_index]
-            inner_store = store.make(f"lora/{layer_index}")
-            inner_store["lora_kernel_a"] = layer.lora_kernel_a
-            inner_store["lora_kernel_b"] = layer.lora_kernel_b
-        store.close()
+        try:
+            lora_store = store.make("lora")
+            lora_store["rank"] = self._lora_rank
+            store.h5_file.create_dataset(
+                "lora/format_version", data="path_based_v1"
+            )
+            all_layers = self._flatten_layers(include_self=False)
+            all_layers = [lyr for lyr in all_layers if lyr.weights]
+            for layer_index in self._lora_enabled_layers:
+                layer = all_layers[layer_index]
+                path = self._get_lora_layer_path(layer)
+                inner_store = store.make(f"lora/{path}")
+                inner_store["lora_kernel_a"] = layer.lora_kernel_a
+                inner_store["lora_kernel_b"] = layer.lora_kernel_b
+        finally:
+            store.close()
 
     def load_lora_weights(self, filepath):
         store = keras.src.saving.saving_lib.H5IOStore(filepath, mode="r")
-        lora_store = store.get("lora")
-        rank = int(lora_store["rank"][()])
+        try:
+            lora_store = store.get("lora")
+            rank = int(lora_store["rank"][()])
 
-        if not getattr(self, "_lora_enabled_layers", []):
-            self.enable_lora(rank)
-        else:
-            if self._lora_rank != rank:
-                raise ValueError(
-                    f"The Lora rank expected by file '{filepath}' "
-                    f"is rank={rank}, but the model was called with "
-                    f"`.enable_lora(rank={self._lora_rank})`. "
-                    "Both ranks must match."
-                )
-        all_layers = self._flatten_layers(include_self=False)
-        all_layers = [lyr for lyr in all_layers if lyr.weights]
-        for layer_index in self._lora_enabled_layers:
-            layer = all_layers[layer_index]
-            lora_kernel_a = store.get(f"lora/{layer_index}")["lora_kernel_a"]
-            lora_kernel_b = store.get(f"lora/{layer_index}")["lora_kernel_b"]
-            layer.lora_kernel_a.assign(lora_kernel_a)
-            layer.lora_kernel_b.assign(lora_kernel_b)
-        store.close()
+            if not getattr(self, "_lora_enabled_layers", []):
+                self.enable_lora(rank)
+            else:
+                if self._lora_rank != rank:
+                    raise ValueError(
+                        f"The Lora rank expected by file '{filepath}' "
+                        f"is rank={rank}, but the model was called with "
+                        f"`.enable_lora(rank={self._lora_rank})`. "
+                        "Both ranks must match."
+                    )
+            all_layers = self._flatten_layers(include_self=False)
+            all_layers = [lyr for lyr in all_layers if lyr.weights]
+
+            # Build a map from stable path -> layer for all lora-enabled
+            # layers.
+            path_to_layer = {}
+            for layer in all_layers:
+                if hasattr(layer, "lora_kernel_a"):
+                    path = self._get_lora_layer_path(layer)
+                    if path in path_to_layer:
+                        raise ValueError(
+                            f"Duplicate LoRA layer path detected: {path}. "
+                            "Ensure all LoRA-enabled layers have unique "
+                            "paths."
+                        )
+                    path_to_layer[path] = layer
+
+            # Detect whether the file uses the new path-based format or the
+            # legacy index-based format by checking the stored format version.
+            h5_file = store.h5_file
+            lora_group = h5_file["lora"]
+            uses_path_keys = False
+            if "format_version" in lora_group:
+                version = lora_group["format_version"][()]
+                if isinstance(version, bytes):
+                    version = version.decode()
+                uses_path_keys = version == "path_based_v1"
+
+            if uses_path_keys:
+                for path, layer in path_to_layer.items():
+                    try:
+                        inner = store.get(f"lora/{path}")
+                        layer.lora_kernel_a.assign(inner["lora_kernel_a"])
+                        layer.lora_kernel_b.assign(inner["lora_kernel_b"])
+                    except KeyError as e:
+                        raise ValueError(
+                            f"Missing LoRA weights for layer path '{path}' "
+                            f"in file '{filepath}'."
+                        ) from e
+            else:
+                # Fallback to legacy index-based format for backward compat.
+                for layer_index in self._lora_enabled_layers:
+                    layer = all_layers[layer_index]
+                    try:
+                        inner = store.get(f"lora/{layer_index}")
+                        layer.lora_kernel_a.assign(inner["lora_kernel_a"])
+                        layer.lora_kernel_b.assign(inner["lora_kernel_b"])
+                    except KeyError as e:
+                        raise ValueError(
+                            f"Missing LoRA weights for layer index "
+                            f"{layer_index} in file '{filepath}'."
+                        ) from e
+        finally:
+            store.close()
 
     def export_to_transformers(self, path):
         """Export the backbone model to HuggingFace Transformers format.
