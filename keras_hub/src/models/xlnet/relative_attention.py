@@ -192,7 +192,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
             **self._get_common_kwargs_for_sublayer(),
         )
         self._output_dense.build(
-            self._value_dense.compute_output_shape(self._value_dim)
+            self._value_dense.compute_output_shape(self._value_shape)
         )
 
         einsum_equation, _, output_rank = _build_proj_equation(
