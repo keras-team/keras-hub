@@ -861,7 +861,9 @@ def _load_keras_hub_model(keras_hub_preset, is_audio_model):
     backbone = keras_hub.models.Gemma4UnifiedBackbone.from_preset(
         keras_hub_preset, dtype="float32"
     )
-    tokenizer = keras_hub.models.Gemma4Tokenizer.from_preset(keras_hub_preset)
+    tokenizer = keras_hub.models.Gemma4UnifiedTokenizer.from_preset(
+        keras_hub_preset
+    )
     preprocessor = (
         keras_hub.models.Gemma4UnifiedCausalLMPreprocessor.from_preset(
             keras_hub_preset

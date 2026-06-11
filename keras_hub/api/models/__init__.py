@@ -367,6 +367,9 @@ from keras_hub.src.models.gemma4_unified.gemma4_unified_causal_lm import (
 from keras_hub.src.models.gemma4_unified.gemma4_unified_causal_lm_preprocessor import (
     Gemma4UnifiedCausalLMPreprocessor as Gemma4UnifiedCausalLMPreprocessor,
 )
+from keras_hub.src.models.gemma4_unified.gemma4_unified_tokenizer import (
+    Gemma4UnifiedTokenizer as Gemma4UnifiedTokenizer,
+)
 from keras_hub.src.models.gemma4_unified.gemma4_unified_vision_embedder import (
     Gemma4UnifiedVisionEmbedder as Gemma4UnifiedVisionEmbedder,
 )
