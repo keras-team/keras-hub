@@ -33,12 +33,27 @@ def convert_backbone_config(transformers_config):
 
 
 def convert_weights(backbone, loader, transformers_config):
+    # Safely get weight_map, using .get() to avoid KeyError
     weight_map = (
-        loader.safetensor_config["weight_map"]
+        loader.safetensor_config.get("weight_map", {})
         if loader.safetensor_config
         else {}
     )
-    prefix = "model." if "model.embed_tokens.weight" in weight_map else ""
+
+    if weight_map:
+        # Multi-file sharded checkpoint: detect prefix from weight map
+        prefix = "model." if "model.embed_tokens.weight" in weight_map else ""
+    else:
+        # Single-file checkpoint: no weight_map available, fall back to
+        # architecture name. Base models (Qwen3Model, Qwen2Model) do NOT use
+        # the "model." prefix; task models (Qwen2ForCausalLM) DO.
+        architectures = transformers_config.get("architectures", [])
+        prefix = (
+            ""
+            if architectures
+            and any(arch.endswith("Model") for arch in architectures)
+            else "model."
+        )
 
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
