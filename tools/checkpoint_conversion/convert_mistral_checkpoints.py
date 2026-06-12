@@ -22,6 +22,7 @@ PRESET_MAP = {
     "mistral_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.1",
     "mistral_0.2_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.2",
     "mistral_0.3_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.3",
+    "magistral_small_2506_en": "mistralai/Magistral-Small-2506",
 }
 
 FLAGS = flags.FLAGS
@@ -32,6 +33,9 @@ flags.DEFINE_string(
 
 def convert_checkpoints(keras_hub_model, hf_model):
     config = hf_model.config
+    head_dim = getattr(config, "head_dim", None) or (
+        config.hidden_size // config.num_attention_heads
+    )
 
     keras_hub_model.token_embedding.embeddings.assign(
         hf_model.model.embed_tokens.weight.detach().cpu().numpy()
@@ -46,7 +50,7 @@ def convert_checkpoints(keras_hub_model, hf_model):
                 .self_attn.k_proj.weight.T.reshape(
                     config.hidden_size,
                     config.num_key_value_heads,
-                    config.hidden_size // config.num_attention_heads,
+                    head_dim,
                 )
                 .detach()
                 .cpu()
@@ -61,7 +65,7 @@ def convert_checkpoints(keras_hub_model, hf_model):
                 .self_attn.q_proj.weight.T.reshape(
                     config.hidden_size,
                     config.num_attention_heads,
-                    config.hidden_size // config.num_attention_heads,
+                    head_dim,
                 )
                 .detach()
                 .cpu()
@@ -76,7 +80,7 @@ def convert_checkpoints(keras_hub_model, hf_model):
                 .self_attn.v_proj.weight.T.reshape(
                     config.hidden_size,
                     config.num_key_value_heads,
-                    config.hidden_size // config.num_attention_heads,
+                    head_dim,
                 )
                 .detach()
                 .cpu()
@@ -90,7 +94,7 @@ def convert_checkpoints(keras_hub_model, hf_model):
                 hf_model.model.layers[i]
                 .self_attn.o_proj.weight.T.reshape(
                     config.num_attention_heads,
-                    config.hidden_size // config.num_attention_heads,
+                    head_dim,
                     config.hidden_size,
                 )
                 .detach()
@@ -225,6 +229,14 @@ def main(_):
         print("\n-> Huggingface model and tokenizer loaded")
 
         # === Load the KerasHub model ===
+        # `rope_theta` is nested under `rope_parameters` in transformers 5.x;
+        # older checkpoints expose it as a top-level attribute.
+        rope_parameters = (
+            getattr(hf_model.config, "rope_parameters", None) or {}
+        )
+        rope_theta = getattr(
+            hf_model.config, "rope_theta", None
+        ) or rope_parameters.get("rope_theta")
         backbone_kwargs = dict(
             vocabulary_size=hf_model.config.vocab_size,
             hidden_dim=hf_model.config.hidden_size,
@@ -233,8 +245,9 @@ def main(_):
             num_key_value_heads=hf_model.config.num_key_value_heads,
             intermediate_dim=hf_model.config.intermediate_size,
             sliding_window=hf_model.config.sliding_window,
+            head_dim=getattr(hf_model.config, "head_dim", None),
             layer_norm_epsilon=hf_model.config.rms_norm_eps,
-            rope_max_wavelength=hf_model.config.rope_theta,
+            rope_max_wavelength=rope_theta,
             dtype="float32",
         )
         keras_hub_backbone = MistralBackbone(**backbone_kwargs)
