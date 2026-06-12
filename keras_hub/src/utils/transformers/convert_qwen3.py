@@ -34,10 +34,9 @@ def convert_backbone_config(transformers_config):
 
 def convert_weights(backbone, loader, transformers_config):
     # Safely get weight_map, using .get() to avoid KeyError
+    safetensor_config = getattr(loader, "safetensor_config", None)
     weight_map = (
-        loader.safetensor_config.get("weight_map", {})
-        if loader.safetensor_config
-        else {}
+        safetensor_config.get("weight_map", {}) if safetensor_config else {}
     )
 
     if weight_map:

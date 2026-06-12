@@ -153,7 +153,7 @@ def _hf_embed(texts, hf_tokenizer, hf_model):
             return_tensors="pt",
             add_special_tokens=False,
         )
-        eos_col = torch.full((1, 1), eos_id)
+        eos_col = torch.full((1, 1), eos_id, dtype=torch.long)
         ones_col = torch.ones((1, 1), dtype=torch.long)
         input_ids = torch.cat([enc["input_ids"], eos_col], dim=1)
         attention_mask = torch.cat([enc["attention_mask"], ones_col], dim=1)
