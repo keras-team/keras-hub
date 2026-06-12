@@ -116,4 +116,19 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/qwen3-5/keras/qwen3_5_27b/1",
     },
+    # Qwen3.6 series presets
+    "qwen3_6_27b": {
+        "metadata": {
+            "description": (
+                "Instruction-tuned 27B model. Delivers highly efficient, "
+                "top-tier performance for complex reasoning, "
+                "advanced coding, and extensive multilingual "
+                "tasks. Optimized for fast inference and extended "
+                "context lengths."
+            ),
+            "params": 27356728560,
+            "path": "qwen3_5",
+        },
+        "kaggle_handle": "kaggle://keras/qwen3-6/keras/qwen3_6_27b/1",
+    },
 }

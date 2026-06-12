@@ -6,11 +6,16 @@ from keras_hub.src.tests.test_case import TestCase
 
 class OPTTokenizerTest(TestCase):
     def setUp(self):
-        self.vocab = ["<pad>", "</s>", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab += ["<pad>", "</s>"]
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
         self.input_data = [
             " airplane at airport</s>",
@@ -22,7 +27,14 @@ class OPTTokenizerTest(TestCase):
             cls=OPTTokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[[3, 4, 5, 3, 6, 1], [3, 4, 3, 6]],
+            expected_output=[
+                [23, 14, 24, 23, 16, 30],
+                [23, 14, 23, 16],
+            ],
+            expected_detokenize_output=[
+                " airplane at airport</s>",
+                " airplane airport",
+            ],
         )
 
     def test_errors_missing_special_tokens(self):

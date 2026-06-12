@@ -85,6 +85,16 @@ class ConvertHelpers(TestCase):
         self.assertTrue(is_tensor_type(outputs[1]))
         self.assertTrue(is_tensor_type(outputs[2]))
 
+    def test_python_native_outputs(self):
+        inputs = "hello world"
+        outputs = convert_preprocessing_outputs(inputs)
+        self.assertEqual(outputs, "hello world")
+        self.assertIsInstance(outputs, str)
+        inputs = ["hello", "world"]
+        outputs = convert_preprocessing_outputs(inputs)
+        self.assertEqual(outputs, ["hello", "world"])
+        self.assertIsInstance(outputs, list)
+
         def to_list(x):
             return ops.convert_to_numpy(x).tolist() if is_tensor_type(x) else x
 
