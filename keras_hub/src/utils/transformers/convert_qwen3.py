@@ -33,7 +33,12 @@ def convert_backbone_config(transformers_config):
 
 
 def convert_weights(backbone, loader, transformers_config):
-    prefix = "model." if "model.embed_tokens.weight" in loader else ""
+    weight_map = (
+        loader.safetensor_config["weight_map"]
+        if loader.safetensor_config
+        else {}
+    )
+    prefix = "model." if "model.embed_tokens.weight" in weight_map else ""
 
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,

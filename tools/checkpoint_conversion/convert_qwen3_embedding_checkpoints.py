@@ -3,7 +3,7 @@
 This script handles HuggingFace checkpoints that declare
 ``"architectures": ["Qwen3Model"]``, such as the Microsoft harrier-oss
 family.  Weight loading goes through
-``keras_hub.src.utils.transformers.convert_qwen3_embedding`` via the
+``keras_hub.src.utils.transformers.convert_qwen3`` via the
 standard KerasHub ``from_preset("hf://...")`` path.
 
 Validation reproduces the reference embedding pipeline entirely from the
@@ -335,7 +335,7 @@ def main(_):
     hf_preset = PRESET_MAP[preset]
 
     # Load backbone via KerasHub's from_preset.  The preset_loader routes
-    # Qwen3Model-architecture checkpoints to convert_qwen3_embedding.py
+    # Qwen3Model-architecture checkpoints to convert_qwen3.py
     # which handles the harrier weight-key prefix automatically.
     print(f"\nLoading Qwen3Backbone from hf://{hf_preset} ...")
     backbone = keras_hub.models.Qwen3Backbone.from_preset(f"hf://{hf_preset}")
@@ -351,9 +351,6 @@ def main(_):
         return
 
     # Save backbone preset.
-    # TODO: once the Qwen3TextEmbedder PR is merged, save a
-    # Qwen3TextEmbedder preset instead so the preprocessor and pooling
-    # configuration are included.
     backbone.save_to_preset(f"./{preset}")
     print(f"\n✅ Backbone preset saved to ./{preset}/")
 
