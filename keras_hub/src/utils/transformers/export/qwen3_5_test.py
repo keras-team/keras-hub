@@ -47,6 +47,8 @@ class TestQwen3_5Export(TestCase):
             "k": 14,
             " ": 15,
             "ck": 16,
+            "qu": 17,
+            "ic": 18,
         }
         merges = ["q u", "i c", "c k"]
 
