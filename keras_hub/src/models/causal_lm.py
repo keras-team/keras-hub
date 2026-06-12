@@ -1,6 +1,6 @@
 import itertools
-from functools import partial
 import warnings
+from functools import partial
 
 import keras
 from keras import ops
@@ -140,7 +140,9 @@ class CausalLM(Task):
             def wrapped_generate_function(inputs, stop_token_ids=None):
                 # Convert to numpy for OpenVINO backend
                 inputs = tree.map_structure(ops.convert_to_numpy, inputs)
-                return ov_infer(self, inputs, stop_token_ids, self.generate_step)
+                return ov_infer(
+                    self, inputs, stop_token_ids, self.generate_step
+                )
 
             self.generate_function = wrapped_generate_function
         if keras.config.backend() == "torch":
@@ -313,7 +315,8 @@ class CausalLM(Task):
                 Will default to the max configured `sequence_length` of the
                 `preprocessor`. If `preprocessor` is `None`, inputs should be
                 padded to the desired maximum length. In this case, `max_length`
-                is ignored and no modification (padding, truncation, or extension)
+                is ignored and no modification (padding, truncation,
+                or extension)
                 is performed.
             stop_token_ids: Optional. `None`, "auto", or tuple of token ids.
                 Defaults to "auto" which uses the
@@ -351,7 +354,9 @@ class CausalLM(Task):
                 stop_token_ids.append(self.preprocessor.tokenizer.end_token2_id)
 
         def preprocess(x):
-            return self.preprocessor.generate_preprocess(x, sequence_length=max_length)
+            return self.preprocessor.generate_preprocess(
+                x, sequence_length=max_length
+            )
 
         def distribute(x):
             """Distribute tensors according to the distribution library."""
@@ -413,31 +418,32 @@ class CausalLM(Task):
         if self.preprocessor is None and max_length is not None:
             warnings.warn(
                 "`max_length` is ignored when `preprocessor=None`. "
-                "Inputs must already be tokenized and padded to the final sequence length.",
+                "Inputs must already be tokenized and padded to the final "
+                "sequence length.",
                 stacklevel=2,
             )
-
             if isinstance(inputs, list) and len(inputs) > 0:
                 first_input = inputs[0]
-
                 token_array = (
                     first_input["token_ids"]
-                    if isinstance(first_input, dict) and "token_ids" in first_input
+                    if isinstance(first_input, dict)
+                    and "token_ids" in first_input
                     else first_input
                 )
+                try:
+                    token_tensor = ops.convert_to_tensor(token_array)
+                    shape = token_tensor.shape
+                except (ValueError, TypeError):
+                    shape = None
 
-                if hasattr(token_array, "shape") and len(token_array.shape) == 2:
-                    try:
-                        seq_len = token_array.shape[1]
-                        if seq_len is not None and max_length < seq_len:
-                            raise ValueError(
-                                f"`max_length={max_length}` is smaller than input sequence length "
-                                f"({seq_len}). Cannot generate with truncation."
-                            )
-                    except ValueError:
-                        raise
-                    except (IndexError, TypeError):
-                        pass
+                if shape is not None and len(shape) >= 1:
+                    seq_len = shape[-1]
+                    if seq_len is not None and max_length < seq_len:
+                        raise ValueError(
+                            f"`max_length={max_length}` is smaller than input"
+                            "sequence length "
+                            f"({seq_len}). Cannot generate with truncation."
+                        )
         if self.preprocessor is not None:
             inputs = [preprocess(x) for x in inputs]
 
