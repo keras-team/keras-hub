@@ -198,7 +198,10 @@ class CachedGemma3Attention(keras.layers.Layer):
                 kwargs = {"attn_logits_soft_cap": self.logit_soft_cap}
             else:
                 kwargs = {}
-            if self.num_key_value_groups > 1:
+            if (
+                self.num_key_value_groups > 1
+                and keras.config.backend() != "jax"
+            ):
                 k = ops.repeat(k, self.num_key_value_groups, axis=-2)
                 v = ops.repeat(v, self.num_key_value_groups, axis=-2)
             return ops.dot_product_attention(
