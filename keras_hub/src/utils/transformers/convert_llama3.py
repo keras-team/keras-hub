@@ -7,6 +7,11 @@ backbone_cls = Llama3Backbone
 
 
 def convert_backbone_config(transformers_config):
+    rope_theta = transformers_config.get("rope_parameters", {}).get(
+        "rope_theta"
+    )
+    if rope_theta is None:
+        rope_theta = transformers_config["rope_theta"]
     backbone_config = {
         "vocabulary_size": transformers_config["vocab_size"],
         "num_layers": transformers_config["num_hidden_layers"],
@@ -15,7 +20,7 @@ def convert_backbone_config(transformers_config):
         "intermediate_dim": transformers_config["intermediate_size"],
         "num_key_value_heads": transformers_config["num_key_value_heads"],
         "tie_word_embeddings": transformers_config["tie_word_embeddings"],
-        "rope_max_wavelength": transformers_config["rope_theta"],
+        "rope_max_wavelength": rope_theta,
     }
 
     if transformers_config.get("rope_scaling", None) is not None:
