@@ -28,6 +28,7 @@ from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
 from keras_hub.src.utils.transformers import convert_qwen3_5
+from keras_hub.src.utils.transformers import convert_qwen3_embedding
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_sam3
@@ -92,7 +93,11 @@ class TransformersPresetLoader(PresetLoader):
         elif model_type == "qwen3_moe":
             self.converter = convert_qwen3_moe
         elif model_type == "qwen3":
-            self.converter = convert_qwen3
+            architectures = self.config.get("architectures", [])
+            if "Qwen3Model" in architectures:
+                self.converter = convert_qwen3_embedding
+            else:
+                self.converter = convert_qwen3
         elif model_type == "qwen3_5":
             self.converter = convert_qwen3_5
         elif model_type == "sam3_video":

@@ -106,4 +106,16 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/qwen-3-embedding/keras/qwen3_embedding_8b_en/1",
     },
+    "harrier_oss_v1_0.6b_en": {
+        "metadata": {
+            "description": (
+                "Harrier OSS is a 28-layer Qwen3 model with 596M parameters, "
+                "optimized for efficiency and fast inference on "
+                "resource-constrained devices."
+            ),
+            "params": 596049920,
+            "path": "qwen3",
+        },
+        "kaggle_handle": "kaggle://keras/qwen-3-embedding/keras/harrier_oss_v1_0.6b_en/1",
+    },
 }
