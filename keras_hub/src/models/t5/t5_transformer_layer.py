@@ -162,3 +162,29 @@ class T5TransformerLayer(keras.layers.Layer):
             return x, position_bias
         else:
             return x
+
+    def compute_output_spec(
+        self,
+        hidden_states,
+        attention_mask=None,
+        position_bias=None,
+        encoder_hidden_states=None,
+        encoder_attention_mask=None,
+        use_causal_mask=False,
+        training=False,
+    ):
+        output = keras.KerasTensor(
+            shape=hidden_states.shape,
+            dtype=hidden_states.dtype,
+        )
+        if position_bias is not None:
+            new_position_bias = keras.KerasTensor(
+                shape=position_bias.shape,
+                dtype=position_bias.dtype,
+            )
+        else:
+            new_position_bias = keras.KerasTensor(
+                shape=(None, self.self_attention.num_heads, None, None),
+                dtype=hidden_states.dtype,
+            )
+        return output, new_position_bias

@@ -19,3 +19,9 @@ class T5LayerNorm(keras.layers.Layer):
         variance = ops.mean(ops.square(hidden_states), axis=-1, keepdims=True)
         hidden_states = hidden_states * ops.rsqrt(variance + self.epsilon)
         return self.weight * hidden_states
+
+    def compute_output_spec(self, hidden_states):
+        return keras.KerasTensor(
+            shape=hidden_states.shape,
+            dtype=hidden_states.dtype,
+        )
