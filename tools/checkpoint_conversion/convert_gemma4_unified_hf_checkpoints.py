@@ -1,9 +1,9 @@
 """Convert Gemma4 Unified HuggingFace checkpoints to KerasHub preset format.
 
 Usage:
-  python tools/checkpoint_conversion/convert_gemma4_unified_hf_checkpoints.py \
-      --preset gemma4_unified_instruct_12b \
-      --save_dtype bfloat16
+python tools/checkpoint_conversion/convert_gemma4_unified_hf_checkpoints.py \
+    --preset gemma4_unified_instruct_12b \
+    --save_dtype bfloat16
 """
 
 import gc
@@ -379,6 +379,14 @@ def _precompute_hf_outputs(
     if raw_video is not None and "pixel_values_videos" in hf_inputs:
         pv = hf_inputs["pixel_values_videos"]
         ret["num_video_frames"] = int(pv.shape[1])
+        # Flatten (num_videos, num_frames, ...) → (num_videos*num_frames, ...)
+        # to match KH backbone input shape (batch, num_clips, patches, dim).
+        ret["pixel_values_videos"] = (
+            pv.flatten(0, 1).detach().cpu().float().numpy()
+        )
+    if raw_video is not None and "video_position_ids" in hf_inputs:
+        vp = hf_inputs["video_position_ids"]
+        ret["video_position_ids"] = vp.flatten(0, 1).detach().cpu().numpy()
     return ret
 
 
@@ -454,74 +462,6 @@ def _precompute_all_hf_outputs(
         hf_data_video["raw_video_sub"] = raw_video_sub
 
     return hf_data_text, hf_data_image, hf_data_audio, hf_data_video
-
-
-# ── Input building ──────────────────────────────────────────────────────────
-
-
-def _build_preprocessor_free_inputs(
-    backbone, hf_data, image_placeholder_id, audio_placeholder_id=None
-):
-    """Build KH backbone inputs from HF-preprocessed data."""
-    token_ids = hf_data["input_ids"].astype(np.int32)
-    padding_mask = hf_data["attention_mask"].astype(np.int32)
-    batch_size = token_ids.shape[0]
-
-    if hf_data["pixel_values"] is not None:
-        pixel_values = hf_data["pixel_values"].astype(np.float32)[
-            :, np.newaxis, :, :
-        ]
-    else:
-        pixel_values = np.zeros((batch_size, 0, 1, 768), dtype=np.float32)
-
-    if hf_data["image_position_ids"] is not None:
-        pixel_position_ids = hf_data["image_position_ids"].astype(np.int32)[
-            :, np.newaxis, :, :
-        ]
-    else:
-        pixel_position_ids = np.zeros((batch_size, 0, 1, 2), dtype=np.int32)
-
-    vision_mask = (token_ids == image_placeholder_id).astype(np.int32)
-    vision_rows = [
-        np.where(vision_mask[index])[0].astype(np.int32)
-        for index in range(batch_size)
-    ]
-    max_vision_tokens = max((len(row) for row in vision_rows), default=0)
-    vision_indices = np.zeros((batch_size, max_vision_tokens), dtype=np.int32)
-    for index, row in enumerate(vision_rows):
-        vision_indices[index, : len(row)] = row
-
-    sequence_length = token_ids.shape[1]
-    position_ids = np.arange(sequence_length, dtype=np.int32)[np.newaxis, :]
-    position_ids = np.repeat(position_ids, batch_size, axis=0)
-
-    keras_hub_inputs = {
-        "token_ids": ops.convert_to_tensor(token_ids),
-        "padding_mask": ops.convert_to_tensor(padding_mask),
-        "pixel_values": ops.convert_to_tensor(pixel_values),
-        "pixel_position_ids": ops.convert_to_tensor(pixel_position_ids),
-        "position_ids": ops.convert_to_tensor(position_ids),
-        "vision_indices": ops.convert_to_tensor(vision_indices),
-        "vision_mask": ops.convert_to_tensor(vision_mask),
-    }
-
-    # Unified model doesn't use mel spectrograms — audio is raw waveform.
-    # Provide empty audio tensors for the backbone.
-    feat_size = 640  # default audio_samples_per_token
-    keras_hub_inputs["audio_mel"] = ops.convert_to_tensor(
-        np.zeros((batch_size, 0, 1, feat_size), dtype=np.float32)
-    )
-    keras_hub_inputs["audio_mel_mask"] = ops.convert_to_tensor(
-        np.zeros((batch_size, 0, 0), dtype=bool)
-    )
-    keras_hub_inputs["audio_indices"] = ops.convert_to_tensor(
-        np.zeros((batch_size, 0), dtype=np.int32)
-    )
-    keras_hub_inputs["audio_mask"] = ops.convert_to_tensor(
-        np.zeros((batch_size, sequence_length), dtype=np.int32)
-    )
-
-    return keras_hub_inputs
 
 
 # ── Verification helpers ────────────────────────────────────────────────────
@@ -959,16 +899,22 @@ def _verify_model(
         "text (KH preproc)", backbone, kh_inputs_text, hf_data_text["logits"]
     )
 
-    # Image: use HF-preprocessed pixel values.
-    kh_inputs_image = _build_preprocessor_free_inputs(
-        backbone, hf_data_image, tokenizer.image_placeholder_id
+    # Image: use KH preprocessor.
+    preprocessor.num_vision_tokens_per_image = actual_num_tokens
+    kh_inputs_image = preprocessor.generate_preprocess(
+        {
+            "prompts": [PROMPT_IMAGE],
+            "images": [raw_image],
+        },
+        sequence_length=hf_data_image["logits"].shape[1],
     )
     _test_numerics(
-        "image (HF preproc)",
+        "image (KH preproc)",
         backbone,
         kh_inputs_image,
         hf_data_image["logits"],
     )
+    preprocessor.num_vision_tokens_per_image = saved_num_tokens
 
     # Audio: feed through KH preprocessor.
     if is_audio_model and hf_data_audio is not None:
@@ -986,7 +932,6 @@ def _verify_model(
             hf_data_audio["logits"],
         )
 
-    # Video: end-to-end with KH preprocessor.
     if is_video_model and hf_data_video is not None:
         raw_video_sub = hf_data_video["raw_video_sub"]
         hf_video_seq_len = hf_data_video["logits"].shape[1]
@@ -999,6 +944,7 @@ def _verify_model(
             },
             sequence_length=hf_video_seq_len,
         )
+
         _test_numerics(
             "video (KH preproc)",
             backbone,

@@ -44,16 +44,13 @@ class Gemma4UnifiedVideoConverterTest(tf.test.TestCase):
 
         self.assertIn("pixel_values", outputs)
         self.assertIn("pixel_position_ids", outputs)
-
-        # max_patches = max_soft_tokens * pooling_kernel_size^2 = 1*9 = 9
-        # patch_dim   = 3 * patch_size^2                        = 3*16 = 48
         self.assertEqual(
             ops.shape(outputs["pixel_values"]),
-            (2, 2, 9, 48),
+            (2, 2, 1, 432),
         )
         self.assertEqual(
             ops.shape(outputs["pixel_position_ids"]),
-            (2, 2, 9, 2),
+            (2, 2, 1, 2),
         )
 
     def test_video_converter_list_input(self):
@@ -80,11 +77,11 @@ class Gemma4UnifiedVideoConverterTest(tf.test.TestCase):
         # Each video gets a batch dim of 1 added by _process_single_video.
         self.assertEqual(
             ops.shape(outputs[0]["pixel_values"]),
-            (1, 2, 9, 48),
+            (1, 2, 1, 432),
         )
         self.assertEqual(
             ops.shape(outputs[0]["pixel_position_ids"]),
-            (1, 2, 9, 2),
+            (1, 2, 1, 2),
         )
 
 

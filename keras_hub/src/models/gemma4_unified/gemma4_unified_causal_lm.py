@@ -20,8 +20,8 @@ except ImportError:
 
 @keras_hub_export("keras_hub.models.Gemma4UnifiedCausalLM")
 class Gemma4UnifiedCausalLM(CausalLM):
-    """An end-to-end multimodal Gemma4 Unified model for causal
-    language modeling.
+    """Multimodal Gemma4 Unified model for causal language
+    modeling.
 
     A causal language model (LM) predicts the next token based on previous
     tokens. This unified model uses an encoder-free architecture for
@@ -262,8 +262,7 @@ class Gemma4UnifiedCausalLM(CausalLM):
         else:
             per_layer_emb_flat = None
 
-        # Global scale: text positions → token_embedding * sqrt(hidden_dim);
-        # vision/audio positions remain at their pre-scaled embed magnitude.
+        # Global scale: multiply all embeddings by sqrt(hidden_dim).
         x = x * ops.cast(ops.sqrt(self.backbone.hidden_dim), x.dtype)
 
         # Per-layer model projection, computed after the global scale.
@@ -407,8 +406,7 @@ class Gemma4UnifiedCausalLM(CausalLM):
         audio_indices = inputs.get("audio_indices", None)
         audio_mask = inputs.get("audio_mask", None)
 
-        # Check if we have images: pixel_values shape is
-        # (batch, num_images, n**2, dim); num_images=0 for text-only.
+        # pixel_values: (B, num_images, n**2, dim); 0 for text-only.
         num_images = 0
         if (
             pixel_values is not None
@@ -439,8 +437,7 @@ class Gemma4UnifiedCausalLM(CausalLM):
             vision_mask = None
             vision_indices = None
 
-        # Check if we have audio: audio_mel is (B, clips, T, feat)
-        # or (clips, T, feat) unbatched.
+        # audio_mel shape: (B, clips, T, feat) or (clips, T, feat) unbatched.
         num_clips = 0
         if audio_mel is not None and hasattr(audio_mel, "shape"):
             if len(audio_mel.shape) == 4:
@@ -555,8 +552,7 @@ class Gemma4UnifiedCausalLM(CausalLM):
                 last_token_embedding = self.backbone.token_embedding(
                     last_token_id
                 )
-                # Scale by sqrt(hidden_dim) to match
-                # Gemma4TextScaledWordEmbedding.
+                # Scale to match Gemma4TextScaledWordEmbedding.
                 _embed_scale = ops.cast(
                     ops.sqrt(ops.cast(self.backbone.hidden_dim, "float32")),
                     last_token_embedding.dtype,

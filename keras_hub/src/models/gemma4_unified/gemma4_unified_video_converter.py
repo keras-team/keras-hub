@@ -55,14 +55,12 @@ class Gemma4UnifiedVideoConverter(VideoConverter):
         self.pooling_kernel_size = pooling_kernel_size
 
     def call(self, inputs):
-        # inputs can be a 5D tensor (batch, frames, height, width, channels)
-        # or a list of videos!
+        # inputs: 5D tensor (B, F, H, W, C) or list of 4D videos.
 
         if isinstance(inputs, list):
-            # Handle list of videos
+            # Handle list of videos.
             outputs = []
             for video in inputs:
-                # video is likely a 4D tensor (frames, height, width, channels)
                 out = self._process_single_video(video)
                 outputs.append(out)
             return outputs
@@ -110,7 +108,7 @@ class Gemma4UnifiedVideoConverter(VideoConverter):
             }
 
     def _process_single_video(self, video):
-        # video is 4D (frames, height, width, channels)
+        # video: 4D tensor (frames, H, W, C).
         shape = ops.shape(video)
         total_frames = shape[0]
 

@@ -9,17 +9,9 @@ from keras_hub.src.models.gemma4.gemma4_layers import Gemma4VNorm
 class Gemma4UnifiedVisionEmbedder(keras.Model):
     """Lightweight encoder-free vision embedder for Gemma4 Unified (12B).
 
-    Unlike the tower-based `Gemma4VisionEncoder` used by 2B/4B/26B/31B
-    models, this embedder projects pre-merged image patches directly into
-    the language model's hidden space. There is no separate ViT encoder.
-
-    Pipeline: `LN₁(patch_dim) → Dense(patch_dim → hidden_dim) → LN₂ →
-    + factorized_pos_emb → LN₃ → RMSNorm → Linear(hidden_dim → hidden_dim)`.
-
-    The positional embedding is **factorized**: separate learned embeddings
-    for X and Y axes, each of shape `(mm_posemb_size, hidden_dim)`. The
-    two axis embeddings are looked up independently and summed. Padding
-    positions (where `pixel_position_ids == -1`) are masked to zero.
+    Projects pre-merged image patches directly into the language model's
+    hidden space via LN → Dense → LN → pos_emb → LN →
+    RMSNorm → Linear.
 
     Args:
         hidden_dim: int. Output embedding dimension (must match the text

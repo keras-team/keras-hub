@@ -81,11 +81,7 @@ class Gemma4UnifiedCausalLMTest(TestCase, parameterized.TestCase):
             patch_size=4,
         )
         self.mock_audio_converter = Gemma4UnifiedAudioConverter(
-            num_mels=8,
-            num_fft_bins=8,
-            frame_length=8,
-            max_audio_length=1,
-            stride=2,
+            audio_samples_per_token=8,
             sampling_rate=100,
         )
         self.preprocessor = Gemma4UnifiedCausalLMPreprocessor(

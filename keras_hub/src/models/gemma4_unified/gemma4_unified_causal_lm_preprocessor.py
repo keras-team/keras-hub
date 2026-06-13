@@ -106,11 +106,11 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
     ```
 
     For use with generation, the layer also exposes two methods
-    `generate_preprocess()` and `generate_postprocess()`. When this
-    preprocessor is attached to a `keras_hub.models.Gemma4UnifiedCausalLM`
-    instance, these methods will be called implicitly in `generate()`. They can
-    also be called standalone (e.g. to precompute preprocessing inputs for
-    generation in a
+    `generate_preprocess()` and `generate_postprocess()`. When this preprocessor
+    is attached to a `keras_hub.models.Gemma4UnifiedCausalLM`
+    instance, these methods will be called implicitly in
+    `generate()`. They can also be called
+    standalone (e.g. to precompute preprocessing inputs for generation in a
     separate process).
 
     Args:
@@ -385,9 +385,10 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
         else:
             # Pad vision/audio indices to fixed capacity.
             if self.video_converter is not None:
-                max_vision_tokens = (
-                    self.num_frames_per_video
-                    * self.video_converter.max_soft_tokens
+                # Use the actual vision token count (not max_soft_tokens)
+                # to avoid including padding patches in the interleave.
+                max_vision_tokens = tf.reduce_max(
+                    tf.reduce_sum(tf.cast(vision_mask, tf.int32), axis=-1)
                 )
             elif self.image_converter is not None:
                 max_vision_tokens = (
@@ -572,19 +573,15 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
     def _preprocess_audio(self, audio, batched):
         """Converts raw audio into features for the audio encoder/embedder."""
         if not batched or (hasattr(audio, "shape") and len(audio.shape) == 1):
-            # Expand dims so rank >= 2
             audio = tf.expand_dims(audio, axis=0)
 
         if isinstance(audio, (list, np.ndarray)):
             # convert list of clips/waveform to Ragged
             audio = tf.ragged.constant(audio)
         elif hasattr(audio, "shape") and not hasattr(audio, "to_tensor"):
-            # Covert dense TF Tensor to Ragged for variable length handlers
-            # coords structure
             audio = tf.RaggedTensor.from_tensor(audio)
 
-        # Flatten clips per Sample if shape is (B, Clips, T) or just (B, T)
-        # Assuming simple 1 clip per prompt (B, T) Ragged Tensor
+        # Flatten to dense (B, T) for the audio converter.
         audio_tensor = audio.to_tensor(shape=[None, None], default_value=0.0)
 
         mel = self.audio_converter(audio_tensor)  # (B, Seq, Feat)
@@ -597,10 +594,9 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
         # Expand dims to model expectation of Clips step: (B, 1, Seq, Feat)
         mel = tf.expand_dims(mel, axis=1)
 
-        # Audio feature mask creation from Ragged tensor row lengths
+        # Audio feature mask from ragged row lengths.
         row_lengths = audio.row_lengths()
-        # Compute output lengths using ceiling division (converter pads
-        # partial frames).
+        # Ceiling division: converter pads partial frames.
         stride = self.audio_converter.stride
         output_lengths = tf.cast((row_lengths + stride - 1) // stride, tf.int32)
 
@@ -766,7 +762,8 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
             return tf.strings.regex_replace(prompts, vid_pattern, replacement)
 
         # Per-sample metadata from self.video_metadata attribute.
-        # Cannot pass through @preprocessing_function dict (converts to tensors).  # noqa: E501
+        # Cannot pass through @preprocessing_function dict
+        # (converts to tensors).
         if not isinstance(video_metadata, (list, tuple)):
             video_metadata = [video_metadata]
         vid_re = re.compile(vid_pattern)
@@ -886,7 +883,7 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
         if (
             audio is not None or audio_mel is not None
         ) and self.audio_converter is not None:
-            # audio_mel and audio_mel_mask were calculated earlier!
+            # audio_mel and audio_mel_mask were calculated earlier.
 
             # Clip audio_mel to match the number of available placeholders.
             placeholder_id = self._audio_placeholder_id

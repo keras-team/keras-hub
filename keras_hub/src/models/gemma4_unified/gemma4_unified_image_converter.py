@@ -19,20 +19,15 @@ _PADDING_SORT_SENTINEL = 1_000_000_000
 
 
 def _patches_merge_numpy(patches, positions_xy, length):
-    """Merge k×k groups of teacher patches into model patches (NumPy path).
-
-    Given `L` input patches of dimension `D = patch_size² × 3`, merge groups
-    of `k×k` spatially adjacent patches into `length` output patches of
-    dimension `(k × patch_size)² × 3`.
+    """Merge k×k groups of teacher patches into model patches (NumPy).
 
     Args:
-        patches: (batch, L, D)
-        positions_xy: (batch, L, 2)  — integer XY positions (-1 for padding)
-        length: target number of output patches (= max_soft_tokens)
+        patches: (batch, L, D) teacher patches.
+        positions_xy: (batch, L, 2) integer XY positions (-1 for padding).
+        length: target number of output patches (= max_soft_tokens).
 
     Returns:
-        merged_patches: (batch, length, k²×D)
-        merged_positions: (batch, length, 2)
+        Tuple of (merged_patches, merged_positions).
     """
 
     batch_size = patches.shape[0]
@@ -84,11 +79,11 @@ def _patches_merge_numpy(patches, positions_xy, length):
             length, k * patch_size * k * patch_size * 3
         )
 
-        # Compute merged positions. Mask out -1 padding; restore -1 for all-pad groups.  # noqa: E501
+        # Compute merged positions; mask -1 padding,
+        # restore -1 for all-pad groups.
         kernel_pos = pos[perm]  # (L, 2)
         kernel_pos = kernel_pos.reshape(length, k * k, 2)
         is_pad = (kernel_pos == -1).all(axis=-1, keepdims=True)
-        # Replace padding coords with large value for min, then divide.
         safe_pos = np.where(is_pad, np.iinfo(np.int32).max, kernel_pos)
         new_pos = (safe_pos // k).min(axis=1)
         # Restore -1 where all k² patches in a group were padding.
@@ -320,11 +315,7 @@ class Gemma4UnifiedImageConverter(ImageConverter):
         return outputs
 
     def _patches_merge_tf(self, patches, positions_xy, length):
-        """Merge k×k groups of teacher patches (TF graph-safe path).
-
-        This reimplements `_patches_merge_numpy` using pure `tf.*` ops
-        so it can execute inside `tf.data.Dataset.map` or `tf.function`.
-        """
+        """Merge k×k groups of teacher patches (TF graph-safe path)."""
         import tensorflow as tf
 
         ps = self.patch_size
@@ -364,7 +355,8 @@ class Gemma4UnifiedImageConverter(ImageConverter):
             kernel_ordered = tf.transpose(kernel_ordered, (0, 1, 3, 2, 4, 5))
             merged = tf.reshape(kernel_ordered, (length, k * ps * k * ps * 3))
 
-            # Compute merged positions; mask out -1 padding, restore for all-pad.  # noqa: E501
+            # Compute merged positions; mask out -1 padding,
+            # restore for all-pad.
             kernel_pos = tf.gather(pos, perm)
             kernel_pos = tf.reshape(kernel_pos, (length, k * k, 2))
             is_pad = tf.reduce_all(

@@ -181,8 +181,8 @@ class Gemma4UnifiedCausalLMPreprocessorTest(TestCase):
 
     def test_text_input_dummy_pixel_values_shape(self):
         preprocessor = Gemma4UnifiedCausalLMPreprocessor(**self.init_kwargs)
-        patch_size = self.image_converter.patch_size
-        expected_patch_dim = 3 * patch_size**2
+        model_patch_size = self.image_converter.model_patch_size
+        expected_patch_dim = 3 * model_patch_size**2
 
         input_data = {
             "prompts": ["the quick brown fox"],

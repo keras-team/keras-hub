@@ -25,8 +25,9 @@ class Gemma4UnifiedBackbone(Backbone):
 
     Compared to Gemma3, Gemma4 introduces:
 
-    * **Four norms per decoder block** — pre + post for both attention and FFW,
-      always enabled (no `use_post_*_norm` flags).
+    * **Four norms per decoder block** — pre + post for both
+      attention and FFW, always enabled (no `use_post_*_norm`
+      flags).
     * **Q / K / V normalisation** in attention always on.
     * **Attention scaling = 1.0** — Q/K normalisation provides stability
       instead of the classic `1/sqrt(head_dim)` scaling.
@@ -252,8 +253,8 @@ class Gemma4UnifiedBackbone(Backbone):
                 dtype=dtype,
                 name="per_layer_token_embedding",
             )
-            # Projects text embeddings → per-layer conditioning,
-            # scaled by hidden_dim**-0.5.
+            # Per-layer conditioning projection, scaled by
+            # hidden_dim**-0.5.
             self.per_layer_model_projection = keras.layers.Dense(
                 num_layers * hidden_size_per_layer_input,
                 use_bias=False,
@@ -375,7 +376,9 @@ class Gemma4UnifiedBackbone(Backbone):
                 rope_scaling_factor=rope_scaling_factor,
                 rope_partial_rotary_factor=layer_rope_partial,
                 use_bidirectional_attention=use_bidirectional_attention,
-                use_vision_bidirectional_attention=use_vision_bidirectional_attention,
+                use_vision_bidirectional_attention=(
+                    use_vision_bidirectional_attention
+                ),
                 is_global_attention=is_global,
                 global_head_dim=global_head_dim,
                 layer_norm_epsilon=layer_norm_epsilon,
@@ -495,7 +498,7 @@ class Gemma4UnifiedBackbone(Backbone):
                 vision_indices=audio_indices_input,
             )
 
-        # Force connection of audio_mask_input if unused elsewhere.
+        # Force audio_mask_input into the graph when unused elsewhere.
         if audio_encoder is not None and hidden_size_per_layer_input <= 0:
             dummy = ops.cast(audio_mask_input, x.dtype) * 0.0
             dummy = ops.expand_dims(dummy, axis=-1)
@@ -541,37 +544,28 @@ class Gemma4UnifiedBackbone(Backbone):
         _hpl = hidden_size_per_layer_input
         shared_kv_tensors = {}
 
-        # Compute block_sequence_ids for blockwise sliding-window masking.
+        # Per-token group IDs for bidirectional vision masking.
         block_sequence_ids = None
-        if vision_encoder is not None or audio_encoder is not None:
-            # Combine vision + audio masks.
-            if vision_encoder is not None and audio_encoder is not None:
-                is_multimodal = ops.logical_or(
-                    ops.cast(vision_mask_input, "bool"),
-                    ops.cast(audio_mask_input, "bool"),
-                )
-            elif vision_encoder is not None:
-                is_multimodal = ops.cast(vision_mask_input, "bool")
-            else:
-                is_multimodal = ops.cast(audio_mask_input, "bool")
+        if vision_encoder is not None:
+            is_vision = ops.cast(vision_mask_input, "bool")
 
-            # Detect start of each new multimodal block.
-            is_multimodal_int = ops.cast(is_multimodal, "int32")
-            padded_multimodal = ops.pad(
-                is_multimodal_int, [(0, 0), (1, 0)], constant_values=0
+            # Detect start of each new vision block.
+            is_vision_int = ops.cast(is_vision, "int32")
+            padded_vision = ops.pad(
+                is_vision_int, [(0, 0), (1, 0)], constant_values=0
             )
-            previous_multimodal = padded_multimodal[:, :-1]
+            previous_vision = padded_vision[:, :-1]
             new_block_starts = ops.cast(
                 ops.logical_and(
-                    is_multimodal,
-                    ops.logical_not(ops.cast(previous_multimodal, "bool")),
+                    is_vision,
+                    ops.logical_not(ops.cast(previous_vision, "bool")),
                 ),
                 "int32",
             )
             block_group_ids = ops.cumsum(new_block_starts, axis=-1) - 1
 
             block_sequence_ids = ops.where(
-                is_multimodal,
+                is_vision,
                 block_group_ids,
                 ops.full_like(block_group_ids, -1),
             )

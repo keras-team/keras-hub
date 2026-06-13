@@ -1,3 +1,10 @@
+"""Encoder-free audio converter for Gemma 4 Unified.
+
+Chunks raw 16 kHz waveforms into fixed-length frames of
+``audio_samples_per_token`` samples. Each frame becomes one audio
+soft-token whose feature vector is the raw waveform samples.
+"""
+
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -75,24 +82,11 @@ class Gemma4UnifiedAudioConverter(AudioConverter):
 
     @property
     def audio_subsampling_factor(self):
-        """Number of converter output frames per audio soft-token.
-
-        The unified model maps each output frame to exactly one token
-        (no conformer subsampling), so this is always ``1``.
-        """
+        """Output frames per audio soft-token (always 1, no subsampling)."""
         return 1
 
     def call(self, audio):
-        """Chunk raw waveform(s) into fixed-length frames.
-
-        Args:
-            audio: array of shape ``(num_samples,)`` or
-                ``(batch_size, num_samples)``.
-
-        Returns:
-            Tensor of shape ``(num_tokens, audio_samples_per_token)`` or
-            ``(batch_size, num_tokens, audio_samples_per_token)``.
-        """
+        """Chunk raw waveform(s) into fixed-length frames."""
         audio = ops.convert_to_tensor(audio, dtype=self.compute_dtype)
         rank_1_input = len(ops.shape(audio)) == 1
         if rank_1_input:
