@@ -7,6 +7,12 @@ backbone_cls = MistralBackbone
 
 
 def convert_backbone_config(transformers_config):
+    # `rope_theta` is nested under `rope_parameters` in transformers 5.x; older
+    # checkpoints expose it at the top level.
+    rope_parameters = transformers_config.get("rope_parameters") or {}
+    rope_theta = transformers_config.get("rope_theta") or rope_parameters.get(
+        "rope_theta"
+    )
     return {
         "vocabulary_size": transformers_config["vocab_size"],
         "num_layers": transformers_config["num_hidden_layers"],
@@ -14,9 +20,10 @@ def convert_backbone_config(transformers_config):
         "hidden_dim": transformers_config["hidden_size"],
         "intermediate_dim": transformers_config["intermediate_size"],
         "num_key_value_heads": transformers_config["num_key_value_heads"],
-        "rope_max_wavelength": transformers_config["rope_theta"],
+        "rope_max_wavelength": rope_theta,
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
-        "sliding_window": transformers_config["sliding_window"],
+        "sliding_window": transformers_config.get("sliding_window"),
+        "head_dim": transformers_config.get("head_dim"),
     }
 
 

@@ -42,6 +42,26 @@ class MistralBackboneTest(TestCase):
         # Reference value calculated using the PyTorch model
         self.assertEqual(model.count_params(), 2704)
 
+    def test_explicit_head_dim(self):
+        # Magistral-style config: `head_dim` is set explicitly and does not
+        # equal `hidden_dim // num_query_heads`. `sliding_window=None` is
+        # also exercised here.
+        kwargs = {
+            "vocabulary_size": 10,
+            "num_layers": 2,
+            "num_query_heads": 8,
+            "num_key_value_heads": 4,
+            "hidden_dim": 16,
+            "intermediate_dim": 8,
+            "sliding_window": None,
+            "head_dim": 4,
+        }
+        model = MistralBackbone(**kwargs)
+        output = model(self.input_data)
+        self.assertEqual(tuple(ops.shape(output)), (2, 5, 16))
+        attention = model.transformer_layers[0]._self_attention_layer
+        self.assertEqual(attention._head_dim, 4)
+
     @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
