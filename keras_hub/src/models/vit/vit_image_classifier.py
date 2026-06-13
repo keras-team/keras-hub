@@ -167,6 +167,7 @@ class ViTImageClassifier(ImageClassifier):
 
         # === config ===
         self.num_classes = num_classes
+        self.head_dtype = head_dtype
         self.pooling = pooling
         self.intermediate_dim = intermediate_dim
         self.activation = activation
@@ -182,6 +183,7 @@ class ViTImageClassifier(ImageClassifier):
                 "intermediate_dim": self.intermediate_dim,
                 "activation": self.activation,
                 "dropout": self.dropout,
+                "head_dtype": keras.dtype_policies.serialize(self.head_dtype),
             }
         )
         return config

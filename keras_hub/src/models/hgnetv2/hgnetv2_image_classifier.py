@@ -201,6 +201,7 @@ class HGNetV2ImageClassifier(ImageClassifier):
         self.pooling = pooling
         self.dropout = dropout
         self.num_classes = num_classes
+        self.head_dtype = head_dtype
 
     def get_config(self):
         config = Task.get_config(self)
@@ -211,6 +212,7 @@ class HGNetV2ImageClassifier(ImageClassifier):
                 "activation": self.activation,
                 "dropout": self.dropout,
                 "head_filters": self.head_filters,
+                "head_dtype": keras.dtype_policies.serialize(self.head_dtype),
             }
         )
         return config
