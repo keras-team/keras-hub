@@ -6,18 +6,38 @@ import pytest
 # OpenVINO supported test paths
 OPENVINO_SUPPORTED_PATHS = [
     "keras-hub/integration_tests",
+    "keras_hub/src/models/albert",
+    "keras_hub/src/models/bert",
+    "keras_hub/src/models/bloom",
+    "keras_hub/src/models/deberta_v3",
+    "keras_hub/src/models/distil_bert",
+    "keras_hub/src/models/electra",
+    "keras_hub/src/models/falcon",
     "keras_hub/src/models/gemma",
     "keras_hub/src/models/gpt2",
+    "keras_hub/src/models/gpt_oss",
+    "keras_hub/src/models/llama",
+    "keras_hub/src/models/llama3",
     "keras_hub/src/models/mistral",
+    "keras_hub/src/models/mixtral",
+    "keras_hub/src/models/opt",
+    "keras_hub/src/models/phi3",
+    "keras_hub/src/models/qwen",
+    "keras_hub/src/models/qwen3",
+    "keras_hub/src/models/qwen3_moe",
+    "keras_hub/src/models/qwen_moe",
+    "keras_hub/src/models/roberta",
+    "keras_hub/src/models/rwkv7",
+    "keras_hub/src/models/smollm3",
+    "keras_hub/src/models/t5",
+    "keras_hub/src/models/t5gemma",
+    "keras_hub/src/models/t5gemma2",
+    "keras_hub/src/models/xlm_roberta",
     "keras_hub/src/tokenizers",
 ]
 
 # OpenVINO specific test skips
-OPENVINO_SPECIFIC_SKIPPING_TESTS = {
-    "test_backbone_basics": "bfloat16 dtype not supported",
-    "test_score_loss": "Non-implemented roll operation",
-    "test_causal_lm_basics": "Missing ops and requires trainable backend",
-}
+OPENVINO_SPECIFIC_SKIPPING_TESTS = {}
 
 
 def pytest_addoption(parser):
