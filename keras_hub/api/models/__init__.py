@@ -355,6 +355,24 @@ from keras_hub.src.models.gemma4.gemma4_tokenizer import (
 from keras_hub.src.models.gemma4.gemma4_vision_encoder import (
     Gemma4VisionEncoder as Gemma4VisionEncoder,
 )
+from keras_hub.src.models.gemma4_unified.gemma4_unified_audio_embedder import (
+    Gemma4UnifiedAudioEmbedder as Gemma4UnifiedAudioEmbedder,
+)
+from keras_hub.src.models.gemma4_unified.gemma4_unified_backbone import (
+    Gemma4UnifiedBackbone as Gemma4UnifiedBackbone,
+)
+from keras_hub.src.models.gemma4_unified.gemma4_unified_causal_lm import (
+    Gemma4UnifiedCausalLM as Gemma4UnifiedCausalLM,
+)
+from keras_hub.src.models.gemma4_unified.gemma4_unified_causal_lm_preprocessor import (
+    Gemma4UnifiedCausalLMPreprocessor as Gemma4UnifiedCausalLMPreprocessor,
+)
+from keras_hub.src.models.gemma4_unified.gemma4_unified_tokenizer import (
+    Gemma4UnifiedTokenizer as Gemma4UnifiedTokenizer,
+)
+from keras_hub.src.models.gemma4_unified.gemma4_unified_vision_embedder import (
+    Gemma4UnifiedVisionEmbedder as Gemma4UnifiedVisionEmbedder,
+)
 from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone as GPT2Backbone
 from keras_hub.src.models.gpt2.gpt2_causal_lm import (
     GPT2CausalLM as GPT2CausalLM,
