@@ -5,6 +5,9 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_hub.src.utils.tensor_utils import (
+    convert_preprocessing_outputs_python,
+)
 from keras_hub.src.utils.tensor_utils import convert_to_list
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import in_tf_function
@@ -572,7 +575,23 @@ class MultiSegmentPacker(PreprocessingLayer):
         if not batched:
             token_ids = token_ids[0]
             segment_ids = segment_ids[0]
-        return (token_ids, segment_ids)
+
+        def _canonicalize_outputs(outputs, dtype=None):
+            flat_outputs = keras.tree.flatten(outputs)
+            if not flat_outputs:
+                return np.array(outputs, dtype=dtype or "int32")
+            first_element = flat_outputs[0]
+            if not isinstance(first_element, str):
+                return np.array(outputs, dtype=dtype or "int32")
+            else:
+                return outputs
+
+        return convert_preprocessing_outputs_python(
+            (
+                _canonicalize_outputs(token_ids),
+                _canonicalize_outputs(segment_ids),
+            )
+        )
 
     def call(
         self,
