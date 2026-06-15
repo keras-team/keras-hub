@@ -126,8 +126,18 @@ class ESMProteinClassifierPreprocessor(TextClassifierPreprocessor):
         )
 
     @preprocessing_function
-    def call(self, x, y=None, sample_weight=None):
-        x = self.tokenizer(x)
+    def _call_tf(self, x, y=None, sample_weight=None):
+        x = x if isinstance(x, tuple) else (x,)
+        x = tuple(self.tokenizer(segment) for segment in x)
+        token_ids = self.packer(x)
+        x = {
+            "token_ids": token_ids,
+        }
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def _call_python(self, x, y=None, sample_weight=None):
+        x = x if isinstance(x, tuple) else (x,)
+        x = tuple(self.tokenizer(segment) for segment in x)
         token_ids = self.packer(x)
         x = {
             "token_ids": token_ids,
