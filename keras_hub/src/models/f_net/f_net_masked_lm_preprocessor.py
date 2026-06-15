@@ -4,7 +4,6 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.f_net.f_net_backbone import FNetBackbone
 from keras_hub.src.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_hub.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
-from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_hub_export("keras_hub.models.FNetMaskedLMPreprocessor")
@@ -107,7 +106,6 @@ class FNetMaskedLMPreprocessor(MaskedLMPreprocessor):
     backbone_cls = FNetBackbone
     tokenizer_cls = FNetTokenizer
 
-    @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         output = super().call(x, y=y, sample_weight=sample_weight)
         x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(output)
