@@ -38,6 +38,7 @@ import torch
 from absl import app
 from absl import flags
 from huggingface_hub import hf_hub_download
+from keras import ops
 from transformers import AutoModel
 from transformers import AutoTokenizer
 
@@ -197,7 +198,9 @@ def validate_output(keras_embedder, hf_model_id):
 
     keras_q = keras_embedder.encode_text([query])
     keras_d = keras_embedder.encode_documents(documents)
-    keras_sims = keras_embedder.similarity(keras_q, keras_d)
+    keras_sims = ops.convert_to_numpy(
+        keras_embedder.similarity(keras_q, keras_d)
+    )
     keras_best = int(np.argmax(keras_sims))
 
     hf_q = _hf_encode(hf_model, hf_tokenizer, [query])
@@ -205,7 +208,7 @@ def validate_output(keras_embedder, hf_model_id):
     hf_sims = hf_q @ hf_d.T
     hf_best = int(np.argmax(hf_sims))
 
-    print(f"\nKerasHub sims: {keras_sims} -> Best: {documents[keras_best]}")
+    print(f"\nKerasHub sims: {keras_sims[0]} -> Best: {documents[keras_best]}")
     print(f"HF sims:       {hf_sims[0]} -> Best: {documents[hf_best]}")
     search_ok = keras_best == hf_best
 
