@@ -3,7 +3,12 @@ from keras_hub.src.models.qwen3_5.qwen3_5_backbone import Qwen3_5Backbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
-@keras_hub_export("keras_hub.models.Qwen3_5Tokenizer")
+@keras_hub_export(
+    [
+        "keras_hub.tokenizers.Qwen3_5Tokenizer",
+        "keras_hub.models.Qwen3_5Tokenizer",
+    ]
+)
 class Qwen3_5Tokenizer(BytePairTokenizer):
     """Tokenizer for Qwen3.5 models.
 

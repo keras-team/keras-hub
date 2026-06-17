@@ -90,6 +90,12 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
 )
+from keras_hub.src.models.qwen3.qwen3_tokenizer import (
+    Qwen3Tokenizer as Qwen3Tokenizer,
+)
+from keras_hub.src.models.qwen3_5.qwen3_5_tokenizer import (
+    Qwen3_5Tokenizer as Qwen3_5Tokenizer,
+)
 from keras_hub.src.models.qwen3_moe.qwen3_moe_tokenizer import (
     Qwen3MoeTokenizer as Qwen3MoeTokenizer,
 )
@@ -155,4 +161,3 @@ from keras_hub.src.tokenizers.word_piece_tokenizer import (
 from keras_hub.src.tokenizers.word_piece_tokenizer_trainer import (
     compute_word_piece_vocabulary as compute_word_piece_vocabulary,
 )
-from keras_hub.tokenizers import v2 as v2

@@ -7,12 +7,16 @@ from keras_hub.src.tests.test_case import TestCase
 
 class Qwen3MoeCausalLMPreprocessorTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab += ["<|im_end|>", "<|endoftext|>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<|im_end|>", "<|endoftext|>", "!"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.tokenizer = Qwen3MoeTokenizer(
             vocabulary=self.vocab,
             merges=self.merges,
@@ -30,10 +34,10 @@ class Qwen3MoeCausalLMPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[1, 3, 4, 2, 5, 6, 7, 7]],
+                    "token_ids": [[5, 17, 27, 26, 19, 2, 1, 1]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
                 },
-                [[3, 4, 2, 5, 6, 7, 7, 7]],
+                [[17, 27, 26, 19, 2, 1, 1, 1]],
                 [[1, 1, 1, 1, 1, 0, 0, 0]],
             ),
         )
@@ -46,21 +50,21 @@ class Qwen3MoeCausalLMPreprocessorTest(TestCase):
             add_end_token=True,
         )
         x, y, sw = preprocessor(input_data)
-        self.assertAllEqual(x["token_ids"], [[1, 3, 4, 2, 5, 6, 7, 7]] * 4)
+        self.assertAllEqual(x["token_ids"], [[5, 17, 27, 26, 19, 2, 1, 1]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0]] * 4)
-        self.assertAllEqual(y, [[3, 4, 2, 5, 6, 7, 7, 7]] * 4)
+        self.assertAllEqual(y, [[17, 27, 26, 19, 2, 1, 1, 1]] * 4)
         self.assertAllEqual(sw, [[1, 1, 1, 1, 1, 0, 0, 0]] * 4)
 
     def test_generate_preprocess(self):
         input_data = "airplane at airport"
         preprocessor = Qwen3MoeCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_preprocess(input_data)
-        self.assertAllEqual(x["token_ids"], [1, 3, 4, 2, 5, 7, 7, 7])
+        self.assertAllEqual(x["token_ids"], [5, 17, 27, 26, 19, 1, 1, 1])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
 
     def test_generate_postprocess(self):
         input_data = {
-            "token_ids": [1, 3, 4, 2, 5, 7, 7, 7],
+            "token_ids": [5, 17, 27, 26, 19, 1, 1, 1],
             "padding_mask": [1, 1, 1, 1, 1, 0, 0, 0],
         }
         preprocessor = Qwen3MoeCausalLMPreprocessor(**self.init_kwargs)

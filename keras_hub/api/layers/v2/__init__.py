@@ -7,6 +7,3 @@ since your modifications would be overwritten.
 from keras_hub.src.layers.preprocessing.v2.multi_segment_packer import (
     MultiSegmentPacker as MultiSegmentPacker,
 )
-from keras_hub.src.layers.preprocessing.v2.start_end_packer import (
-    StartEndPacker as StartEndPacker,
-)

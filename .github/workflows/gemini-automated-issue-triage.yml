@@ -58,7 +58,7 @@ jobs:
         id: 'get_issue_data'
         if: |-
           github.event_name == 'workflow_dispatch'
-        uses: 'actions/github-script@v7'
+        uses: 'actions/github-script@v9'
         with:
           github-token: '${{ secrets.GITHUB_TOKEN }}'
           script: |
@@ -74,11 +74,11 @@ jobs:
             return issue;
 
       - name: 'Checkout'
-        uses: 'actions/checkout@v4'
+        uses: 'actions/checkout@v6'
 
       - name: 'Get Repository Labels'
         id: 'get_labels'
-        uses: 'actions/github-script@v7'
+        uses: 'actions/github-script@v9'
         with:
           github-token: '${{ secrets.GITHUB_TOKEN }}'
           script: |-
@@ -114,7 +114,7 @@ jobs:
             ${{ github.event_name == 'workflow_dispatch' && steps.get_issue_data.outputs.title || github.event.issue.title }}
           ISSUE_BODY: >-
             ${{ github.event_name == 'workflow_dispatch' && steps.get_issue_data.outputs.body || github.event.issue.body }}
-        uses: 'actions/github-script@v7'
+        uses: 'actions/github-script@v9'
         with:
           github-token: '${{ secrets.GITHUB_TOKEN }}'
           script: |-
@@ -159,7 +159,7 @@ jobs:
         run: mkdir -p ~/.gemini
 
       - name: 'Run Gemini Issue Analysis & Response'
-        uses: 'google-github-actions/run-gemini-cli@a3bf79042542528e91937b3a3a6fbc4967ee3c31'
+        uses: 'google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489'
         id: 'gemini_issue_analysis'
         env:
           GITHUB_TOKEN: '' # Do not pass any auth token here
@@ -201,12 +201,12 @@ jobs:
             Your output must be a valid JSON object with the following schema:
             {
               "labels_to_set": ["label-name"],
-              "response_body": "Your response text here. Use markdown."
+              "triage_reason": "needs_info" | "support" | "irrelevant" | null
             }
 
             ## Guidelines
             - Output only the JSON object. Do not include any explanation or additional text before/after the JSON.
-            - Provide a helpful markdown response in `response_body`. Use the code context if applicable.
+            - Set `triage_reason` to 'needs_info' if you need more information (e.g. reproducible example). Set it to 'support' if it is a general support question. Set it to 'irrelevant' if the issue is irrelevant to Keras Hub. Set it to null if no automated comment is needed.
 
             Reference 1: Label Definitions
             - backend:jax: Issues related to running Keras with JAX backend.
@@ -231,56 +231,79 @@ jobs:
         env:
           ISSUE_NUMBER: '${{ github.event.issue.number || github.event.inputs.issue_number }}'
           LABELS_OUTPUT: '${{ steps.gemini_issue_analysis.outputs.summary }}'
-        uses: 'actions/github-script@v7'
+          ALLOWED_LABELS: '${{ steps.get_labels.outputs.available_labels }}'
+        uses: 'actions/github-script@v9'
         with:
           github-token: '${{ secrets.GITHUB_TOKEN }}'
           script: |
             const rawOutput = process.env.LABELS_OUTPUT;
+            const allowedLabelsEnv = process.env.ALLOWED_LABELS || '';
+            const ALLOWED_LABELS = allowedLabelsEnv.split(',').map(l => l.trim()).filter(Boolean);
+
             core.info(`Raw output from model: ${rawOutput}`);
-            let parsedLabels;
+            core.info(`Allowed labels: ${ALLOWED_LABELS.join(', ')}`);
+
+            let labelsToAdd = [];
+            let responseBody = '';
+
+            let parsed;
             try {
-              parsedLabels = JSON.parse(rawOutput);
-            } catch (jsonError) {
-              const jsonMatch = rawOutput.match(/```json\s*([\s\S]*?)\s*```/);
-              if (jsonMatch && jsonMatch[1]) {
-                parsedLabels = JSON.parse(jsonMatch[1].trim());
-              } else {
-                const jsonObjectMatch = rawOutput.match(/(\{[\s\S]*"labels_to_set"[\s\S]*\})/);
-                if (jsonObjectMatch) {
-                  parsedLabels = JSON.parse(jsonObjectMatch[0]);
-                } else {
-                  core.setFailed(`Output is not valid JSON.\nRaw output: ${rawOutput}`);
-                  return;
-                }
-              }
+              parsed = JSON.parse(rawOutput);
+            } catch (e) {
+              core.error("Failed to parse LLM output as JSON", e);
+              core.setFailed(`Failed to parse model output.\nRaw output: ${rawOutput}`);
+              return;
             }
 
-            const issueNumber = parseInt(process.env.ISSUE_NUMBER);
-            const labelsToAdd = parsedLabels.labels_to_set || [];
-            const responseBody = parsedLabels.response_body || '';
+            // 1. Strict Label Allowlist
+            const requestedLabels = parsed.labels_to_set || [];
+            labelsToAdd = requestedLabels.filter(label => ALLOWED_LABELS.includes(label));
+            
+            if (requestedLabels.length !== labelsToAdd.length) {
+              core.warn("Blocked unauthorized labels: " + requestedLabels.filter(l => !ALLOWED_LABELS.includes(l)).join(', '));
+            }
 
-            // Add Labels
+            // 2. Template-Based Comments (Avoid arbitrary LLM text)
+            const COMMENT_TEMPLATES = {
+              'needs_info': '@${author} Please provide a reproducible example so we can investigate this issue further.',
+              'support': '@${author} This repository is for bug reports and feature requests. For support questions, please use our discussion forum.',
+              'irrelevant': '@${author} This issue appears to be irrelevant to the Keras Hub repository. Please ensure you are posting in the correct repository.'
+            };
+
+            const issueNumber = parseInt(process.env.ISSUE_NUMBER);
+            const issueData = context.payload.issue || (await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            })).data;
+            const issueAuthor = issueData.user.login;
+
+            const triageReason = parsed.triage_reason; 
+            if (triageReason && COMMENT_TEMPLATES[triageReason]) {
+              responseBody = COMMENT_TEMPLATES[triageReason].replace('${author}', issueAuthor);
+            } else {
+              core.warn("Blocked arbitrary LLM response body or invalid triage reason: " + triageReason);
+            }
+
+            // Execute privileged actions
             if (labelsToAdd.length === 1) {
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issueNumber,
-                labels: labelsToAdd
+                labels: labelsToAdd,
               });
               core.info(`Successfully added labels for #${issueNumber}: ${labelsToAdd.join(', ')}`);
             } else if (labelsToAdd.length > 1) {
               core.warning(`Expected exactly 1 label, but got ${labelsToAdd.length}. Skipping labels.`);
             }
 
-            // Post Automated Response
             if (responseBody) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issueNumber,
-                body: responseBody
+                body: responseBody,
               });
               core.info(`Successfully posted automated response for #${issueNumber}`);
-            } else {
-              core.warning("No response_body found in model output.");
             }

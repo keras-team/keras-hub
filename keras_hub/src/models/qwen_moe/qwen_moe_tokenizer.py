@@ -4,7 +4,10 @@ from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
 @keras_hub_export(
-    "keras_hub.tokenizers.QwenMoeTokenizer",
+    [
+        "keras_hub.tokenizers.QwenMoeTokenizer",
+        "keras_hub.models.QwenMoeTokenizer",
+    ]
 )
 class QwenMoeTokenizer(BytePairTokenizer):
     """Tokenizer for Qwen Moe model.

@@ -1,4 +1,5 @@
 import hashlib
+import os
 import tarfile
 import zipfile
 
@@ -11,12 +12,32 @@ def get_md5_checksum(file_path):
     return md5_hash.hexdigest()
 
 
+def _is_within_directory(directory, target):
+    abs_directory = os.path.abspath(directory)
+    abs_target = os.path.abspath(os.path.join(abs_directory, target))
+    try:
+        return os.path.commonpath([abs_directory, abs_target]) == abs_directory
+    except ValueError:
+        return False
+
+
 def extract_files_from_archive(archive_file_path):
     if archive_file_path.endswith(".tar.gz"):
         with tarfile.open(archive_file_path, "r:gz") as tar:
+            for member in tar.getmembers():
+                if not _is_within_directory(".", member.name):
+                    raise Exception(
+                        f"Attempted Path Traversal in Tar File: {member.name}"
+                    )
             return tar.extractall()
     elif archive_file_path.endswith(".zip"):
         with zipfile.ZipFile(archive_file_path, "r") as zip_ref:
+            for member in zip_ref.infolist():
+                if not _is_within_directory(".", member.filename):
+                    raise Exception(
+                        "Attempted Path Traversal in Zip File: "
+                        f"{member.filename}"
+                    )
             return zip_ref.extractall()
 
 

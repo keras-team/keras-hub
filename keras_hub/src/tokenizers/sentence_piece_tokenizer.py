@@ -3,15 +3,17 @@ import binascii
 import os
 
 import keras
+import numpy as np
 from keras.src.saving import serialization_lib
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
-from keras_hub.src.utils.tensor_utils import tensor_to_list
 
 try:
     import tensorflow as tf
@@ -21,6 +23,10 @@ try:
     import tensorflow_text as tf_text
 except ImportError:
     tf_text = None
+try:
+    import sentencepiece as spm
+except ImportError:
+    spm = None
 
 VOCAB_FILENAME = "vocabulary.spm"
 
@@ -111,7 +117,10 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 f"Received: dtype={dtype}"
             )
 
-        super().__init__(dtype=dtype, **kwargs)
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            dtype=dtype, _allow_python_workflow=_allow_python_workflow, **kwargs
+        )
 
         self.proto = None
         self.sequence_length = sequence_length
@@ -129,10 +138,36 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         path = os.path.join(dir_path, VOCAB_FILENAME)
         self.set_proto(path)
 
+    def _set_proto_tf(self, proto):
+        assert_tf_libs_installed(self.__class__.__name__)
+        self._sentence_piece = tf_text.SentencepieceTokenizer(
+            model=proto,
+            out_type=self.compute_dtype,
+            add_bos=self.add_bos,
+            add_eos=self.add_eos,
+        )
+
+    def _set_proto_spm(self, proto):
+        self._sentence_piece_spm = spm.SentencePieceProcessor()
+        self._sentence_piece_spm.Init(
+            model_proto=proto,
+            out_type=str if is_string_dtype(self.compute_dtype) else int,
+            add_bos=self.add_bos,
+            add_eos=self.add_eos,
+            alpha=1.0,
+        )
+
     def set_proto(self, proto):
         if proto is None:
             self.proto = None
+            # _sentence_piece
             self._sentence_piece = None
+            # _sentence_piece_spm
+            self._sentence_piece_spm = None
+            self._vocabulary = None
+            self._vocabulary_size = None
+            self._token_to_id_map = None
+            self._unk_token_id = None
             return
 
         if isinstance(proto, str):
@@ -169,30 +204,72 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 f"Received unknown type: {type(proto)}"
             )
 
-        self._sentence_piece = tf_text.SentencepieceTokenizer(
-            model=proto_bytes,
-            out_type=self.compute_dtype,
-            add_bos=self.add_bos,
-            add_eos=self.add_eos,
+        # When using `SentencePieceTokenizer` with `tf.data`, it must be built
+        # outside the `tf.data` pipeline. So we always call `_set_proto_tf`.
+        try:
+            self._set_proto_tf(proto_bytes)
+        except ImportError:
+            pass
+
+        # Use native sentencepiece to extract vocabulary metadata.
+        # This avoids TF ops (.numpy()), making this code safe in
+        # any execution context.
+        if spm is None:
+            raise ImportError(
+                "SentencePieceTokenizer requires the `sentencepiece` package. "
+                "Please install it with `pip install sentencepiece`."
+            )
+        self._set_proto_spm(proto_bytes)
+
+        # Cache metadata for fast access.
+        self._vocabulary_size = int(self._sentence_piece_spm.vocab_size())
+        self._vocabulary = list(
+            self._sentence_piece_spm.IdToPiece(
+                list(range(self._vocabulary_size))
+            )
         )
+        self._token_to_id_map = {
+            token: id for id, token in enumerate(self._vocabulary)
+        }
+        self._unk_token_id = self._sentence_piece_spm.unk_id()
+
         # Keras cannot serialize a bytestring, so we base64 encode the model
         # byte array as a string for saving.
         self.proto = proto_bytes
         self._update_special_token_ids()
 
+    def _check_vocabulary(self):
+        if self.proto is None:
+            raise ValueError(
+                "No vocabulary has been set for SentencePieceTokenizer. Make "
+                "sure to pass a `proto` argument when creating the layer."
+            )
+
+    def _maybe_initialized_tf(self):
+        if getattr(self, "_sentence_piece", None) is None:
+            self._set_proto_tf(self.proto)
+
+    def _maybe_initialized_spm(self):
+        if getattr(self, "_sentence_piece_spm", None) is None:
+            self._set_proto_spm(self.proto)
+
     def vocabulary_size(self):
         """Get the integer size of the tokenizer vocabulary."""
         self._check_vocabulary()
-        return int(self._sentence_piece.vocab_size().numpy())
+        return self._vocabulary_size
 
     def get_vocabulary(self):
         """Get the tokenizer vocabulary."""
         self._check_vocabulary()
-        return tensor_to_list(
-            self._sentence_piece.id_to_string(
-                tf.range(int(self._sentence_piece.vocab_size().numpy()))
-            )
-        )
+        return list(self._vocabulary)
+
+    def _id_to_token_tf(self, id):
+        self._maybe_initialized_tf()
+        return self._vocabulary[id]
+
+    def _id_to_token_spm(self, id):
+        self._maybe_initialized_spm()
+        return self._sentence_piece_spm.IdToPiece(id)
 
     def id_to_token(self, id):
         """Convert an integer id to a string token."""
@@ -202,12 +279,199 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
                 f"Received: {id}"
             )
-        return tensor_to_list(self._sentence_piece.id_to_string(id))
+        if not self._allow_python_workflow or in_tf_function():
+            return self._id_to_token_tf(id)
+        else:
+            return self._id_to_token_spm(id)
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
         self._check_vocabulary()
-        return int(self._sentence_piece.string_to_id(token).numpy())
+        if hasattr(token, "numpy"):
+            token = token.numpy()
+        if isinstance(token, bytes):
+            token = token.decode("utf-8")
+        # Return unk_id for unknown tokens, matching the original
+        # SentencePiece `string_to_id()` behavior.
+        return self._token_to_id_map.get(token, self._unk_token_id)
+
+    @preprocessing_function
+    def _tokenize_tf(self, inputs):
+        self._maybe_initialized_tf()
+        inputs = tf.convert_to_tensor(inputs)
+        unbatched = inputs.shape.rank == 0
+        if unbatched:
+            inputs = tf.expand_dims(inputs, 0)
+
+        tokens = self._sentence_piece.tokenize(inputs)
+
+        # Convert to a dense output if `sequence_length` is set.
+        if self.sequence_length:
+            output_shape = tokens.shape.as_list()
+            output_shape[-1] = self.sequence_length
+            pad_token_id = getattr(self, "pad_token_id", 0)
+            tokens = tokens.to_tensor(
+                shape=output_shape, default_value=pad_token_id
+            )
+
+        # Convert to a dense output if input was a scalar.
+        if unbatched:
+            tokens = tf.squeeze(tokens, 0)
+            tf.ensure_shape(tokens, shape=[self.sequence_length])
+        return tokens
+
+    def _tokenize_spm(self, inputs):
+        self._maybe_initialized_spm()
+
+        def _canonicalize_tokenize_inputs(inputs):
+            if isinstance(inputs, (str, bytes)):
+                if isinstance(inputs, bytes):
+                    inputs = inputs.decode("utf-8")
+                return [inputs], False
+            elif isinstance(inputs, (tuple, list)):
+                inputs = list(inputs)
+                for i in range(len(inputs)):
+                    if isinstance(inputs[i], bytes):
+                        inputs[i] = inputs[i].decode("utf-8")
+                    elif not isinstance(inputs[i], str):
+                        raise ValueError(
+                            "If a list or tuple is provided as input, all "
+                            f"elements must be strings. Received: {inputs}"
+                        )
+                return inputs, True
+            elif (
+                isinstance(inputs, np.ndarray)
+                or keras.ops.is_tensor(inputs)
+                or (tf is not None and isinstance(inputs, tf.Tensor))
+            ):
+                inputs = keras.ops.convert_to_numpy(inputs)
+                if inputs.ndim == 0:
+                    val = inputs.item()
+                    if isinstance(val, bytes):
+                        val = val.decode("utf-8")
+                    return [val], False
+                elif inputs.ndim == 1:
+                    val_list = inputs.tolist()
+                    for i in range(len(val_list)):
+                        if isinstance(val_list[i], bytes):
+                            val_list[i] = val_list[i].decode("utf-8")
+                        elif not isinstance(val_list[i], str):
+                            raise ValueError(
+                                "If a array is provided as input, all elements "
+                                f"must be strings. Received: {inputs}"
+                            )
+                    return val_list, True
+                else:
+                    raise ValueError(
+                        f"Array must be 0 or 1 dimensional, got {inputs.shape}."
+                    )
+            else:
+                raise ValueError(
+                    "Input should be a string or a list of strings. "
+                    f"Received: {inputs}"
+                )
+
+        inputs, batched = _canonicalize_tokenize_inputs(inputs)
+        batched_tokens = self._sentence_piece_spm.Encode(
+            inputs, add_bos=self.add_bos, add_eos=self.add_eos
+        )
+
+        # Convert to a dense output if `sequence_length` is set.
+        if self.sequence_length:
+            # Truncate sequences to `sequence_length`.
+            batched_tokens = [
+                tokens[: self.sequence_length] for tokens in batched_tokens
+            ]
+            # Pad sequences to `sequence_length`.
+            pad_token_id = getattr(self, "pad_token_id", 0)
+            batched_tokens = [
+                tokens + [pad_token_id] * (self.sequence_length - len(tokens))
+                for tokens in batched_tokens
+            ]
+
+        if not batched:
+            batched_tokens = batched_tokens[0]
+        return batched_tokens
+
+    def tokenize(self, inputs):
+        self._check_vocabulary()
+        if not self._allow_python_workflow or in_tf_function():
+            return self._tokenize_tf(inputs)
+        else:
+            return self._tokenize_spm(inputs)
+
+    @preprocessing_function
+    def _detokenize_tf(self, inputs):
+        self._maybe_initialized_tf()
+        inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
+        # tf-text sentencepiece does not handle int64.
+        inputs = tf.cast(inputs, "int32")
+        outputs = self._sentence_piece.detokenize(inputs)
+        if unbatched:
+            outputs = tf.squeeze(outputs, 0)
+        return outputs
+
+    def _canonicalize_detokenize_spm_inputs(self, inputs):
+        if tf is not None and isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            if isinstance(inputs, tf.RaggedTensor):
+                inputs = inputs.to_list()
+            else:
+                inputs = np.array(inputs)
+        is_batched = True
+        if isinstance(inputs, int):
+            inputs = [[inputs]]
+            is_batched = False
+        elif isinstance(inputs, (tuple, list)):
+            if not inputs or isinstance(inputs[0], int):
+                # Unbatched list of ints.
+                inputs = [list(inputs)]
+                is_batched = False
+            else:
+                # Batched list of lists of ints.
+                inputs = [list(seq) for seq in inputs]
+        elif isinstance(inputs, np.ndarray) or keras.ops.is_tensor(inputs):
+            inputs = keras.ops.convert_to_numpy(inputs)
+            if inputs.ndim == 0:
+                inputs = [[inputs.item()]]
+                is_batched = False
+            elif inputs.ndim == 1:
+                inputs = [inputs.tolist()]
+                is_batched = False
+            elif inputs.ndim == 2:
+                inputs = inputs.tolist()
+            else:
+                raise ValueError(
+                    f"Array must be 0, 1 or 2 dimensional, got {inputs.shape}."
+                )
+        else:
+            raise ValueError(
+                "Input should be an integer, a list of integers, backend "
+                f"tensor or numpy array. Received: {inputs}"
+            )
+        return inputs, is_batched
+
+    def _detokenize_spm(self, inputs):
+        self._maybe_initialized_spm()
+        inputs, batched = self._canonicalize_detokenize_spm_inputs(inputs)
+        outputs = self._sentence_piece_spm.Decode(inputs)
+        if not batched:
+            outputs = outputs[0]
+        return outputs
+
+    def detokenize(self, inputs):
+        self._check_vocabulary()
+        if not self._allow_python_workflow or in_tf_function():
+            return self._detokenize_tf(inputs)
+        else:
+            return self._detokenize_spm(inputs)
+
+    def call(self, inputs, *args, training=None, **kwargs):
+        return self.tokenize(inputs, *args, **kwargs)
+
+    def compute_output_spec(self, input_spec):
+        return keras.KerasTensor(
+            input_spec.shape + (self.sequence_length,), dtype=self.compute_dtype
+        )
 
     def get_config(self):
         config = super().get_config()
@@ -220,54 +484,3 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             }
         )
         return config
-
-    def _check_vocabulary(self):
-        if self.proto is None:
-            raise ValueError(
-                "No vocabulary has been set for SentencePieceTokenizer. Make "
-                "sure to pass a `proto` argument when creating the layer."
-            )
-
-    @preprocessing_function
-    def tokenize(self, inputs):
-        self._check_vocabulary()
-        inputs = tf.convert_to_tensor(inputs)
-        unbatched = inputs.shape.rank == 0
-        if unbatched:
-            inputs = tf.expand_dims(inputs, 0)
-
-        if self._sentence_piece is None:
-            raise ValueError(
-                "No vocabulary has been set for SentencePieceTokenizer. Make "
-                "sure to pass a `vocabulary` argument when creating the layer."
-            )
-
-        tokens = self._sentence_piece.tokenize(inputs)
-
-        # Convert to a dense output if `sequence_length` is set.
-        if self.sequence_length:
-            output_shape = tokens.shape.as_list()
-            output_shape[-1] = self.sequence_length
-            tokens = tokens.to_tensor(shape=output_shape)
-
-        # Convert to a dense output if input was a scalar.
-        if unbatched:
-            tokens = tf.squeeze(tokens, 0)
-            tf.ensure_shape(tokens, shape=[self.sequence_length])
-        return tokens
-
-    @preprocessing_function
-    def detokenize(self, inputs):
-        self._check_vocabulary()
-        inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
-        # tf-text sentencepiece does not handle int64.
-        inputs = tf.cast(inputs, "int32")
-        outputs = self._sentence_piece.detokenize(inputs)
-        if unbatched:
-            outputs = tf.squeeze(outputs, 0)
-        return outputs
-
-    def compute_output_spec(self, input_spec):
-        return keras.KerasTensor(
-            input_spec.shape + (self.sequence_length,), dtype=self.compute_dtype
-        )

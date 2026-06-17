@@ -204,11 +204,11 @@ class Task(PipelineModel):
                 "The filename must end in `.weights.h5`. "
                 f"Received: filepath={filepath}"
             )
-        backbone_layer_ids = set(id(w) for w in self.backbone._flatten_layers())
+        backbone_layers = list(self.backbone._flatten_layers())
         keras.saving.load_weights(
             self,
             filepath,
-            objects_to_skip=backbone_layer_ids,
+            objects_to_skip=backbone_layers,
         )
 
     def has_task_weights(self):
@@ -224,7 +224,7 @@ class Task(PipelineModel):
                 f"Received: filepath={filepath}"
             )
 
-        backbone_layer_ids = set(id(w) for w in self.backbone._flatten_layers())
+        backbone_layers = list(self.backbone._flatten_layers())
         if not self.has_task_weights():
             raise ValueError(
                 f"Task {self} has no weights not in the `backbone`. "
@@ -233,7 +233,7 @@ class Task(PipelineModel):
         keras.saving.save_weights(
             self,
             filepath=filepath,
-            objects_to_skip=backbone_layer_ids,
+            objects_to_skip=backbone_layers,
         )
 
     def save_to_preset(self, preset_dir, max_shard_size=10):

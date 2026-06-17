@@ -38,6 +38,13 @@ from keras_hub.src.utils.transformers.export.llama3 import (
 )
 from keras_hub.src.utils.transformers.export.llama3 import (
     get_llama3_weights_map,
+# --- Mistral Utils ---
+from keras_hub.src.utils.transformers.export.mistral import get_mistral_config
+from keras_hub.src.utils.transformers.export.mistral import (
+    get_mistral_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.mistral import (
+    get_mistral_weights_map,
 )
 
 # --- Qwen Utils ---
@@ -47,11 +54,22 @@ from keras_hub.src.utils.transformers.export.qwen import (
 )
 from keras_hub.src.utils.transformers.export.qwen import get_qwen_weights_map
 
+# --- Qwen 3.5 Utils ---
+from keras_hub.src.utils.transformers.export.qwen3_5 import get_qwen3_5_config
+from keras_hub.src.utils.transformers.export.qwen3_5 import (
+    get_qwen3_5_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.qwen3_5 import (
+    get_qwen3_5_weights_map,
+)
+
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
     "Gemma3Backbone": get_gemma3_config,
     "Llama3Backbone": get_llama3_config,
+    "MistralBackbone": get_mistral_config,
     "QwenBackbone": get_qwen_config,
+    "Qwen3_5Backbone": get_qwen3_5_config,
     "GPT2Backbone": get_gpt2_config,
 }
 
@@ -59,7 +77,9 @@ MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
     "Gemma3Backbone": get_gemma3_weights_map,
     "Llama3Backbone": get_llama3_weights_map,
+    "MistralBackbone": get_mistral_weights_map,
     "QwenBackbone": get_qwen_weights_map,
+    "Qwen3_5Backbone": get_qwen3_5_weights_map,
     "GPT2Backbone": get_gpt2_weights_map,
 }
 
@@ -67,7 +87,9 @@ MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
     "Gemma3Tokenizer": get_gemma3_tokenizer_config,
     "Llama3Tokenizer": get_llama3_tokenizer_config,
+    "MistralTokenizer": get_mistral_tokenizer_config,
     "QwenTokenizer": get_qwen_tokenizer_config,
+    "Qwen3_5Tokenizer": get_qwen3_5_tokenizer_config,
     "GPT2Tokenizer": get_gpt2_tokenizer_config,
 }
 
@@ -226,8 +248,12 @@ def export_tokenizer(tokenizer, path):
 
     # Rename files to match Hugging Face expectations
 
-    # 1. SentencePiece Models (Gemma / Gemma 3)
-    if tokenizer_type in ["GemmaTokenizer", "Gemma3Tokenizer"]:
+    # 1. SentencePiece Models (Gemma / Gemma 3 / Mistral)
+    if tokenizer_type in [
+        "GemmaTokenizer",
+        "Gemma3Tokenizer",
+        "MistralTokenizer",
+    ]:
         vocab_spm_path = os.path.join(path, "vocabulary.spm")
         tokenizer_model_path = os.path.join(path, "tokenizer.model")
         if os.path.exists(vocab_spm_path):
@@ -235,8 +261,12 @@ def export_tokenizer(tokenizer, path):
         else:
             warnings.warn(f"{vocab_spm_path} not found.")
 
-    # 2. BPE Models (Qwen / GPT-2)
-    elif tokenizer_type in ["QwenTokenizer", "GPT2Tokenizer"]:
+    # 2. BPE Models (Qwen / Qwen 3.5 / GPT-2)
+    elif tokenizer_type in [
+        "QwenTokenizer",
+        "Qwen3_5Tokenizer",
+        "GPT2Tokenizer",
+    ]:
         vocab_json_path = os.path.join(path, "vocabulary.json")
         vocab_hf_path = os.path.join(path, "vocab.json")
         if os.path.exists(vocab_json_path):

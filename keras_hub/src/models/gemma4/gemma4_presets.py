@@ -14,7 +14,7 @@ backbone_presets = {
             "params": 5100000000,
             "path": "gemma4",
         },
-        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_2b/1",
+        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_2b/2",
     },
     "gemma4_instruct_2b": {
         "metadata": {
@@ -29,7 +29,7 @@ backbone_presets = {
             "params": 5100000000,
             "path": "gemma4",
         },
-        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_2b/1",
+        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_2b/2",
     },
     "gemma4_4b": {
         "metadata": {
@@ -43,7 +43,7 @@ backbone_presets = {
             "params": 7900000000,
             "path": "gemma4",
         },
-        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_4b/1",
+        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_4b/2",
     },
     "gemma4_instruct_4b": {
         "metadata": {
@@ -58,7 +58,7 @@ backbone_presets = {
             "params": 7900000000,
             "path": "gemma4",
         },
-        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_4b/1",
+        "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_4b/2",
     },
     "gemma4_26b_a4b": {
         "metadata": {
@@ -115,5 +115,73 @@ backbone_presets = {
             "path": "gemma4",
         },
         "kaggle_handle": "kaggle://keras/gemma4/keras/gemma4_instruct_31b/2",
+    },
+    "gemma4_instruct_2b_assistant": {
+        "metadata": {
+            "description": (
+                "Gemma 4 E2B MTP Assistant model: 4-layer speculative-decoding "
+                "assistant for the 2B-it model. Uses Multi-Token Prediction to "
+                "propose candidate tokens and achieve inference speedups. "
+                "This model must NOT be used standalone. It is designed "
+                "exclusively as a draft model to be passed to the target "
+                "model's generate() method via the assistant_model argument."
+            ),
+            "params": 77731332,
+            "path": "gemma4",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/gemma4/keras/gemma4_instruct_2b_assistant/1"
+        ),
+    },
+    "gemma4_instruct_4b_assistant": {
+        "metadata": {
+            "description": (
+                "Gemma 4 E4B MTP Assistant model: 4-layer speculative-decoding "
+                "assistant for the 4B-it model. Uses Multi-Token Prediction to "
+                "propose candidate tokens and achieve inference speedups. "
+                "This model must NOT be used standalone. It is designed "
+                "exclusively as a draft model to be passed to the target "
+                "model's generate() method via the assistant_model argument."
+            ),
+            "params": 77731332,
+            "path": "gemma4",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/gemma4/keras/gemma4_instruct_4b_assistant/1"
+        ),
+    },
+    "gemma4_instruct_26b_a4b_assistant": {
+        "metadata": {
+            "description": (
+                "Gemma 4 26B A4B MTP Assistant model: 4-layer speculative-"
+                "decoding assistant for the 26B MoE model. Uses Multi-Token "
+                "Prediction and a standard logit head to propose candidates. "
+                "This model must NOT be used standalone. It is designed "
+                "exclusively as a draft model to be passed to the target "
+                "model's generate() method via the assistant_model argument."
+            ),
+            "params": 412764420,
+            "path": "gemma4",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/gemma4/keras/gemma4_instruct_26b_a4b_assistant/1"
+        ),
+    },
+    "gemma4_instruct_31b_assistant": {
+        "metadata": {
+            "description": (
+                "Gemma 4 31B MTP Assistant model: 4-layer speculative-decoding "
+                "assistant for the 31B dense model. Uses Multi-Token "
+                "Prediction and a standard logit head to propose candidates. "
+                "This model must NOT be used standalone. It is designed "
+                "exclusively as a draft model to be passed to the target "
+                "model's generate() method via the assistant_model argument."
+            ),
+            "params": 454707460,
+            "path": "gemma4",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/gemma4/keras/gemma4_instruct_31b_assistant/1"
+        ),
     },
 }
