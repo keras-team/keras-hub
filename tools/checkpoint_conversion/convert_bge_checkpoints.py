@@ -42,7 +42,6 @@ from transformers import AutoModel
 from transformers import AutoTokenizer
 
 import keras_hub
-from keras_hub.src.models.bert.bert_text_embedder import BertTextEmbedder
 from keras_hub.src.utils.transformers.convert_bert import (
     convert_backbone_config,
 )
@@ -89,9 +88,9 @@ def _hf_encode(hf_model, hf_tokenizer, texts):
     with torch.no_grad():
         outputs = hf_model(**encoded)
     # CLS token (index 0), then L2 normalize.
-    cls_embeddings = outputs.last_hidden_state[:, 0, :].numpy()
+    cls_embeddings = outputs.last_hidden_state[:, 0, :].cpu().numpy()
     norms = np.linalg.norm(cls_embeddings, axis=1, keepdims=True)
-    return cls_embeddings / norms
+    return cls_embeddings / np.maximum(norms, 1e-12)
 
 
 def validate_output(keras_embedder, hf_model_id):
@@ -196,9 +195,9 @@ def validate_output(keras_embedder, hf_model_id):
     print(f"Query: {query}")
     print(f"Documents: {documents}")
 
-    keras_q = np.array(keras_embedder.predict([query]))
-    keras_d = np.array(keras_embedder.predict(documents))
-    keras_sims = keras_q @ keras_d.T
+    keras_q = keras_embedder.encode_text([query])
+    keras_d = keras_embedder.encode_documents(documents)
+    keras_sims = keras_embedder.similarity(keras_q, keras_d)
     keras_best = int(np.argmax(keras_sims))
 
     hf_q = _hf_encode(hf_model, hf_tokenizer, [query])
@@ -225,6 +224,10 @@ def validate_output(keras_embedder, hf_model_id):
         passed = False
     elif mean_diff > 1e-4:
         print(f"⚠️  WARN: Mean diff {mean_diff:.2e} > 1e-4 (FP32 variance)")
+
+    if max_diff > 1e-3:
+        print(f"❌ FAILED: Max diff {max_diff:.2e} exceeds 1e-3")
+        passed = False
 
     if not norms_ok:
         print("❌ FAILED: Embeddings are not unit-length")
@@ -301,7 +304,7 @@ def main(_):
             tokenizer=tokenizer,
             sequence_length=SEQUENCE_LENGTH,
         )
-        embedder = BertTextEmbedder(
+        embedder = keras_hub.models.BertTextEmbedder(
             backbone=backbone,
             preprocessor=preprocessor,
             pooling_mode="cls",
