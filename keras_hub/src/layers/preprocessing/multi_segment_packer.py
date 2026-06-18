@@ -520,6 +520,12 @@ class MultiSegmentPacker(PreprocessingLayer):
         add_end_value=True,
     ):
         def _get_type(inputs):
+            if self.start_value:
+                return type(self.start_value[0])
+            if self.end_value:
+                return type(self.end_value[0])
+            if self.pad_value is not None:
+                return type(self.pad_value)
             for segment in inputs:
                 for sequence in segment:
                     if sequence:
