@@ -967,6 +967,48 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 rtol=rtol,
             )
 
+    def _verify_litertlm_generation(
+        self,
+        litertlm_path,
+        prompt="hi",
+        max_num_tokens=8,
+    ):
+        """Load a ``.litertlm`` bundle with the LiteRT-LM runtime and generate.
+
+        This is a smoke test: with randomly initialized tiny models the output
+        text is meaningless, but the runtime must successfully produce a
+        non-empty response. It verifies that the tokenizer, metadata, and
+        prefill/decode graphs are consistent enough for the engine to execute.
+        """
+        try:
+            import litert_lm
+        except ImportError:
+            self.skipTest(
+                "End-to-end LiteRT-LM generation verification requires "
+                "`litert-lm`. Install it with: pip install litert-lm"
+            )
+
+        engine = litert_lm.Engine(
+            litertlm_path,
+            backend=litert_lm.Backend.CPU(),
+            max_num_tokens=max_num_tokens,
+        )
+        conversation = engine.create_conversation()
+        response = conversation.send_message(prompt)
+        self.assertIsInstance(response, dict)
+        self.assertIn("content", response)
+        contents = response["content"]
+        self.assertTrue(contents, "LiteRT-LM runtime returned empty content.")
+        texts = [
+            item.get("text", "")
+            for item in contents
+            if isinstance(item, dict) and item.get("type") == "text"
+        ]
+        self.assertTrue(
+            any(texts),
+            "LiteRT-LM runtime did not produce any text output.",
+        )
+
     def run_litertlm_export_test(
         self,
         cls=None,
@@ -976,6 +1018,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         prefill_seq_len=None,
         verify_numerics=True,
         verify_model_type=None,
+        verify_generation=False,
+        generation_prompt="hi",
+        generation_max_tokens=8,
         atol=1e-4,
         rtol=1e-4,
         **export_kwargs,
@@ -996,6 +1041,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 random weights.
             verify_model_type: Expected ``LlmMetadata`` oneof name, e.g.
                 ``"gemma3"``, ``"gemma4"`` or ``"generic_model"``.
+            verify_generation: Whether to load the exported bundle with the
+                LiteRT-LM Python runtime and run a short generation smoke
+                test. Useful for verifying tokenizer + metadata + runtime
+                consistency, even with dummy weights.
+            generation_prompt: Prompt used for the runtime smoke test.
+            generation_max_tokens: Maximum tokens to generate in the smoke
+                test.
             atol: Absolute tolerance for numeric parity.
             rtol: Relative tolerance for numeric parity.
             **export_kwargs: Additional arguments forwarded to
@@ -1129,6 +1181,18 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         _debug_print(
             f"[litertlm] numeric parity: "
             f"{time.perf_counter() - numeric_start:.2f}s"
+        )
+
+        generation_start = time.perf_counter()
+        if verify_generation:
+            self._verify_litertlm_generation(
+                path,
+                prompt=generation_prompt,
+                max_num_tokens=generation_max_tokens,
+            )
+        _debug_print(
+            f"[litertlm] runtime generation: "
+            f"{time.perf_counter() - generation_start:.2f}s"
         )
 
         _debug_print(
