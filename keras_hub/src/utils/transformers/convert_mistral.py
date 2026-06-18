@@ -1,6 +1,11 @@
 import numpy as np
 
 from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
+from keras_hub.src.models.mistral.mistral_tokenizer import (
+    MistralTiktokenTokenizer,
+)
+from keras_hub.src.models.mistral.mistral_tokenizer import MistralTokenizer
+from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
 
 backbone_cls = MistralBackbone
@@ -17,6 +22,7 @@ def convert_backbone_config(transformers_config):
         "rope_max_wavelength": transformers_config["rope_theta"],
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
         "sliding_window": transformers_config["sliding_window"],
+        "head_dim": transformers_config.get("head_dim", None),
     }
 
 
@@ -113,4 +119,8 @@ def convert_weights(backbone, loader, transformers_config):
 
 
 def convert_tokenizer(cls, preset, **kwargs):
-    return cls(get_file(preset, "tokenizer.model"), **kwargs)
+    if check_file_exists(preset, "tekken.json"):
+        return MistralTiktokenTokenizer(
+            get_file(preset, "tekken.json"), **kwargs
+        )
+    return MistralTokenizer(get_file(preset, "tokenizer.model"), **kwargs)
