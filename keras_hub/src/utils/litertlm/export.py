@@ -796,7 +796,10 @@ def _detect_llm_model_type(model):
         from keras_hub.src.models.llama.llama_causal_lm import LlamaCausalLM
 
         if isinstance(model, LlamaCausalLM):
-            return "llama"
+            # The LiteRT-LM LlmModelType protobuf does not define a dedicated
+            # "llama" field, so map Llama checkpoints to generic_model to keep
+            # the metadata oneof valid. See Section 7 of the design doc.
+            return "generic_model"
     except ImportError:
         pass
 
