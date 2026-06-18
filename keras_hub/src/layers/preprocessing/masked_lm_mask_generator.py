@@ -356,7 +356,10 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
 
         def _canonicalize_outputs(outputs, dtype=None):
             try:
-                return np.array(outputs, dtype=dtype or "int32")
+                arr = np.array(outputs, dtype=dtype or "int32")
+                if arr.dtype == object:
+                    return outputs
+                return arr
             except (ValueError, TypeError):
                 return outputs
 
