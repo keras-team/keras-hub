@@ -102,6 +102,31 @@ class KerasHubLiteRTAdapter(nn.Module):
         if self.has_vision:
             if self.separate_vision_encoder:
                 img_embeddings = mm_embedding
+                # Gemma4 interleaves image embeddings with shape
+                # (batch, num_images, tokens_per_image, hidden_dim). The separate
+                # vision encoder/adapter produces a flat (batch*num_images, ...)
+                # tensor, so reshape it back before passing to the language model.
+                if img_embeddings is not None:
+                    vision_encoder = self.keras_model.backbone.vision_encoder
+                    is_gemma4_vision = (
+                        hasattr(vision_encoder, "inputs")
+                        and len(vision_encoder.inputs) == 2
+                        and {inp.name for inp in vision_encoder.inputs}
+                        == {"pixel_values", "pixel_position_ids"}
+                    )
+                    if is_gemma4_vision:
+                        max_images = getattr(
+                            self.keras_model.preprocessor,
+                            "max_images_per_prompt",
+                            1,
+                        )
+                        batch_size = tokens.shape[0]
+                        img_embeddings = img_embeddings.reshape(
+                            batch_size,
+                            max_images,
+                            img_embeddings.shape[1],
+                            img_embeddings.shape[2],
+                        )
             else:
                 vision_encoder = self.keras_model.backbone.vision_encoder
                 # Gemma4 vision encoder expects pixel_values and pixel_position_ids.
