@@ -123,7 +123,10 @@ class ImageConverter(PreprocessingLayer):
             scale = [scale / s for s in std]
             offset = [-m / s for m, s in zip(kwargs.pop("mean"), std)]
 
-        super().__init__(**kwargs)
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            _allow_python_workflow=_allow_python_workflow, **kwargs
+        )
 
         if crop_to_aspect_ratio and pad_to_aspect_ratio:
             raise ValueError(
