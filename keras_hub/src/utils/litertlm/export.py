@@ -12,6 +12,8 @@ except ImportError:
     litert_torch = None
 
 from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
+from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
+from keras_hub.src.utils.litertlm.adapter import KerasHubVisionEncoderAdapter
 from keras_hub.src.utils.litertlm.adapter import _traceable_slice_update_scope
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
@@ -22,6 +24,7 @@ def export_to_litertlm(
     backend_constraint=None,
     prefill_seq_len=None,
     quant_config=None,
+    separate_vision_encoder=False,
     **kwargs,
 ):
     """Export a KerasHub CausalLM model to a LiteRT-LM bundle.
@@ -35,6 +38,13 @@ def export_to_litertlm(
     inputs are processed alongside text tokens.  The decode signature
     remains text-only because image KV-caches are already seeded after
     prefill.
+
+    When ``separate_vision_encoder=True`` and the model has a vision
+    encoder, the vision processing is split into three TFLite models:
+    ``VISION_ENCODER`` (raw images/patches -> features),
+    ``VISION_ADAPTER`` (features -> ``mm_embedding``), and
+    ``PREFILL_DECODE`` (text + ``mm_embedding`` -> KV caches/logits). This
+    matches the upstream LiteRT-LM multimodal runtime contract.
 
     **Bucketing:** ``prefill_seq_len`` accepts either a single ``int`` or a
     ``list[int]``. When a list is provided (e.g.
@@ -114,6 +124,11 @@ def export_to_litertlm(
             ``full_weight_only_recipe()``, or ``full_fp16_recipe()`` from
             ``litert_torch.generative.quantize.quant_recipes``. Defaults to
             ``None`` (no quantization, FP32).
+        separate_vision_encoder: bool. If ``True`` and the model has a vision
+            encoder, export the vision encoder and a no-op vision adapter as
+            separate ``VISION_ENCODER`` and ``VISION_ADAPTER`` TFLite models,
+            and have ``PREFILL_DECODE`` consume pre-computed ``mm_embedding``
+            tensors instead of raw images. Defaults to ``False``.
         **kwargs: Additional kwargs forwarded to ``litert_torch`` signature
             tracing.
 
@@ -169,6 +184,23 @@ def export_to_litertlm(
     has_vision = vision_cfg is not None
     has_audio = audio_cfg is not None
 
+    is_gemma4_vision = False
+    vision_output_dim = None
+    if has_vision:
+        vision_encoder = model.backbone.vision_encoder
+        is_gemma4_vision = (
+            hasattr(vision_encoder, "inputs")
+            and len(vision_encoder.inputs) == 2
+            and {inp.name for inp in vision_encoder.inputs}
+            == {"pixel_values", "pixel_position_ids"}
+        )
+        vision_output_dim = getattr(vision_encoder, "output_dim", None)
+        if separate_vision_encoder and vision_output_dim is None:
+            raise ValueError(
+                "LiteRT-LM separate vision encoder export requires "
+                "`vision_encoder.output_dim`."
+            )
+
     # Normalise prefill_seq_len to a sorted list.
     if prefill_seq_len is None:
         prefill_seq_lens = [cache_length]
@@ -212,14 +244,32 @@ def export_to_litertlm(
             dtype=dtype,
         )
         if has_vision:
-            vision_encoder = model.backbone.vision_encoder
-            is_gemma4_vision = (
-                hasattr(vision_encoder, "inputs")
-                and len(vision_encoder.inputs) == 2
-                and {inp.name for inp in vision_encoder.inputs}
-                == {"pixel_values", "pixel_position_ids"}
-            )
-            if is_gemma4_vision:
+            if separate_vision_encoder:
+                max_images = vision_cfg["max_images_per_prompt"]
+                num_vision_tokens = vision_cfg["num_vision_tokens"]
+                tokens_per_image = (
+                    num_vision_tokens // max_images if max_images else 1
+                )
+                base.update(
+                    {
+                        "mm_embedding": torch.zeros(
+                            (
+                                1 * max_images,
+                                tokens_per_image,
+                                vision_output_dim,
+                            ),
+                            dtype=dtype,
+                            device="cpu",
+                        ),
+                        "vision_indices": torch.zeros(
+                            (1, num_vision_tokens), dtype=torch.int32
+                        ),
+                        "vision_mask": torch.zeros(
+                            (1, seq_len), dtype=torch.int32
+                        ),
+                    }
+                )
+            elif is_gemma4_vision:
                 base.update(
                     _build_gemma4_vision_sample_inputs(
                         batch_size=1,
@@ -265,7 +315,12 @@ def export_to_litertlm(
         dtype=dtype,
     )
 
-    adapter = KerasHubLiteRTAdapter(model, num_layers, cache_length)
+    adapter = KerasHubLiteRTAdapter(
+        model,
+        num_layers,
+        cache_length,
+        separate_vision_encoder=(separate_vision_encoder and has_vision),
+    )
     adapter.eval()
 
     # Prefill and decode wrappers give litert_torch clean module boundaries.
@@ -324,6 +379,72 @@ def export_to_litertlm(
         )
 
     with _traceable_slice_update_scope():
+        # Optionally export the vision encoder and adapter as separate models.
+        if separate_vision_encoder and has_vision:
+            if is_gemma4_vision:
+                num_patches = (
+                    vision_cfg["image_size"] // vision_cfg.get("patch_size", 16)
+                ) ** 2
+                patch_dim = vision_cfg.get("patch_size", 16) ** 2 * 3
+                vision_encoder_inputs = {
+                    "pixel_values": torch.zeros(
+                        (
+                            1,
+                            vision_cfg["max_images_per_prompt"],
+                            num_patches,
+                            patch_dim,
+                        ),
+                        dtype=dtype,
+                        device="cpu",
+                    ),
+                    "pixel_position_ids": torch.zeros(
+                        (
+                            1,
+                            vision_cfg["max_images_per_prompt"],
+                            num_patches,
+                            2,
+                        ),
+                        dtype=torch.int32,
+                        device="cpu",
+                    ),
+                }
+            else:
+                vision_encoder_inputs = {
+                    "images": torch.zeros(
+                        (
+                            1,
+                            vision_cfg["max_images_per_prompt"],
+                            vision_cfg["image_size"],
+                            vision_cfg["image_size"],
+                            3,
+                        ),
+                        dtype=dtype,
+                        device="cpu",
+                    )
+                }
+            vision_adapter_inputs = {
+                "features": torch.zeros(
+                    (1 * max_images, tokens_per_image, vision_output_dim),
+                    dtype=dtype,
+                    device="cpu",
+                )
+            }
+            vision_encoder_adapter = KerasHubVisionEncoderAdapter(model).eval()
+            vision_adapter = KerasHubVisionAdapter().eval()
+
+            vision_encoder_edge = litert_torch.signature(
+                "vision_encoder",
+                vision_encoder_adapter,
+                sample_kwargs=vision_encoder_inputs,
+                **kwargs,
+            ).convert(quant_config=quant_config, lightweight_conversion=True)
+            vision_adapter_edge = litert_torch.signature(
+                "vision_adapter",
+                vision_adapter,
+                sample_kwargs=vision_adapter_inputs,
+                **kwargs,
+            ).convert(quant_config=quant_config, lightweight_conversion=True)
+
         # Chain one signature per prefill bucket.
         converter = None
         for seq_len in prefill_seq_lens:
@@ -359,8 +480,22 @@ def export_to_litertlm(
         )
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        tflite_path = os.path.join(temp_dir, "model.tflite")
-        edge_model.export(tflite_path)
+        if separate_vision_encoder and has_vision:
+            prefill_tflite_path = os.path.join(
+                temp_dir, "prefill_decode.tflite"
+            )
+            edge_model.export(prefill_tflite_path)
+            vision_encoder_tflite_path = os.path.join(
+                temp_dir, "vision_encoder.tflite"
+            )
+            vision_encoder_edge.export(vision_encoder_tflite_path)
+            vision_adapter_tflite_path = os.path.join(
+                temp_dir, "vision_adapter.tflite"
+            )
+            vision_adapter_edge.export(vision_adapter_tflite_path)
+        else:
+            prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
+            edge_model.export(prefill_tflite_path)
 
         tokenizer_path = _materialize_sentencepiece_tokenizer(
             tokenizer, temp_dir
@@ -385,10 +520,21 @@ def export_to_litertlm(
             )
         )
         builder.add_tflite_model(
-            tflite_path,
+            prefill_tflite_path,
             litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
             backend_constraint=backend_constraint,
         )
+        if separate_vision_encoder and has_vision:
+            builder.add_tflite_model(
+                vision_encoder_tflite_path,
+                litert_lm_builder.TfLiteModelType.VISION_ENCODER,
+                backend_constraint=backend_constraint,
+            )
+            builder.add_tflite_model(
+                vision_adapter_tflite_path,
+                litert_lm_builder.TfLiteModelType.VISION_ADAPTER,
+                backend_constraint=backend_constraint,
+            )
         builder.add_sentencepiece_tokenizer(tokenizer_path)
         builder.add_llm_metadata(meta_path)
 
