@@ -1100,7 +1100,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 llm_metadata,
                 "LlmMetadata section not found in .litertlm bundle.",
             )
-            actual_type = llm_metadata.WhichOneof("llm_model_type")
+            model_type_msg = llm_metadata.llm_model_type
+            actual_type = model_type_msg.WhichOneof("model_type")
             self.assertEqual(
                 actual_type,
                 verify_model_type,
