@@ -19,4 +19,3 @@ class T5LayerNorm(keras.layers.Layer):
         variance = ops.mean(ops.square(hidden_states), axis=-1, keepdims=True)
         hidden_states = hidden_states * ops.rsqrt(variance + self.epsilon)
         return self.weight * hidden_states
-
