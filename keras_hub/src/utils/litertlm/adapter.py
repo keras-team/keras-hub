@@ -240,7 +240,10 @@ def _traceable_slice_update_scope():
             start_indices = torch_core.convert_to_tensor(
                 start_indices, dtype="int64"
             )
-            starts = [start_indices.reshape(-1)[i] for i in range(start_indices.numel())]
+            starts = [
+                start_indices.reshape(-1)[i]
+                for i in range(start_indices.numel())
+            ]
 
         # Dimensions whose start is a tensor → potentially dynamic.
         tensor_dims = []
@@ -289,7 +292,10 @@ def _traceable_slice_update_scope():
             start_indices = torch_core.convert_to_tensor(
                 start_indices, dtype="int64"
             )
-            starts = [start_indices.reshape(-1)[i] for i in range(start_indices.numel())]
+            starts = [
+                start_indices.reshape(-1)[i]
+                for i in range(start_indices.numel())
+            ]
 
         if isinstance(shape, (list, tuple)):
             lengths = list(shape)

@@ -330,9 +330,7 @@ class TestLiteRTLmExport(TestCase):
             weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
         model.set_weights(weights)
 
-        path = os.path.join(
-            self.get_temp_dir(), "test_backend.litertlm"
-        )
+        path = os.path.join(self.get_temp_dir(), "test_backend.litertlm")
         model.export(
             path,
             format="litertlm",
@@ -408,6 +406,7 @@ class TestLiteRTLmExport(TestCase):
 
         def _save_to_preset(preset_dir):
             import shutil
+
             from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
             asset_dir = os.path.join(preset_dir, TOKENIZER_ASSET_DIR)
@@ -545,9 +544,7 @@ class TestLiteRTLmExport(TestCase):
         metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
             metadata_buf, 0
         )
-        tflite_path = os.path.join(
-            self.get_temp_dir(), "test_text_only.tflite"
-        )
+        tflite_path = os.path.join(self.get_temp_dir(), "test_text_only.tflite")
         for i in range(metadata.SectionMetadata().ObjectsLength()):
             obj = metadata.SectionMetadata().Objects(i)
             if (
@@ -594,6 +591,7 @@ class TestLiteRTLmExport(TestCase):
 
         def _save_to_preset(preset_dir):
             import shutil
+
             from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
             asset_dir = os.path.join(preset_dir, TOKENIZER_ASSET_DIR)
@@ -709,6 +707,7 @@ class TestLiteRTLmExport(TestCase):
 
         def _save_to_preset(preset_dir):
             import shutil
+
             from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
             asset_dir = os.path.join(preset_dir, TOKENIZER_ASSET_DIR)

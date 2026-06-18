@@ -186,7 +186,9 @@ def export_to_litertlm(
 
     # Multimodal models require cache_length == token_length due to how
     # Gemma3 computes bidirectional image attention masks. Enforce this.
-    if has_vision and any(seq_len != cache_length for seq_len in prefill_seq_lens):
+    if has_vision and any(
+        seq_len != cache_length for seq_len in prefill_seq_lens
+    ):
         raise ValueError(
             f"Multimodal LiteRT-LM export currently requires all "
             f"`prefill_seq_len` values ({prefill_seq_lens}) to match the "
@@ -366,7 +368,11 @@ def export_to_litertlm(
 
         meta_path = os.path.join(temp_dir, "llm_metadata.pb")
         _build_llm_metadata(
-            model, cache_length, meta_path, vision_cfg=vision_cfg, audio_cfg=audio_cfg
+            model,
+            cache_length,
+            meta_path,
+            vision_cfg=vision_cfg,
+            audio_cfg=audio_cfg,
         )
 
         litert_lm_builder = _import_litert_lm_builder()
@@ -450,9 +456,9 @@ def _get_vision_config(model):
     preprocessor = getattr(model, "preprocessor", None)
     max_images = getattr(preprocessor, "max_images_per_prompt", 1)
     image_size = getattr(backbone, "image_size", 224)
-    num_vision_tokens = getattr(
-        backbone, "num_vision_tokens_per_image", 0
-    ) * max_images
+    num_vision_tokens = (
+        getattr(backbone, "num_vision_tokens_per_image", 0) * max_images
+    )
     patch_size = getattr(vision_encoder, "patch_size", None)
     pool_size = getattr(vision_encoder, "pool_size", None)
     return {
@@ -475,12 +481,10 @@ def _get_audio_config(model):
     preprocessor = getattr(model, "preprocessor", None)
     max_clips = getattr(preprocessor, "max_audio_clips_per_prompt", 1)
     num_frames = getattr(preprocessor, "max_audio_frames", 100)
-    num_audio_tokens = getattr(
-        backbone, "num_audio_tokens_per_clip", 0
-    ) * max_clips
-    audio_input_feat_size = getattr(
-        preprocessor, "audio_input_feat_size", 128
+    num_audio_tokens = (
+        getattr(backbone, "num_audio_tokens_per_clip", 0) * max_clips
     )
+    audio_input_feat_size = getattr(preprocessor, "audio_input_feat_size", 128)
     return {
         "max_clips_per_prompt": max_clips,
         "num_frames": num_frames,
@@ -700,7 +704,9 @@ def _populate_audio_metadata(meta, model_type, audio_cfg, tokenizer):
         subtype.end_of_audio_token.token_str = "<audio|>"
 
 
-def _build_llm_metadata(model, max_num_tokens, path, vision_cfg=None, audio_cfg=None):
+def _build_llm_metadata(
+    model, max_num_tokens, path, vision_cfg=None, audio_cfg=None
+):
     """Serialize an ``LlmMetadata`` protobuf to *path*."""
     from litert_lm_builder.litertlm_builder import llm_metadata_pb2
 
@@ -747,9 +753,7 @@ def _detect_llm_model_type(model):
     """
     # Lazy imports to avoid heavy top-level dependencies.
     try:
-        from keras_hub.src.models.gemma4.gemma4_causal_lm import (
-            Gemma4CausalLM,
-        )
+        from keras_hub.src.models.gemma4.gemma4_causal_lm import Gemma4CausalLM
 
         if isinstance(model, Gemma4CausalLM):
             return "gemma4"
@@ -757,9 +761,7 @@ def _detect_llm_model_type(model):
         pass
 
     try:
-        from keras_hub.src.models.gemma3.gemma3_causal_lm import (
-            Gemma3CausalLM,
-        )
+        from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
 
         if isinstance(model, Gemma3CausalLM):
             return "gemma3"
