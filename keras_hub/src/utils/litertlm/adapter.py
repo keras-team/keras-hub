@@ -44,11 +44,18 @@ class KerasHubLiteRTAdapter(nn.Module):
     calls ``model.call_with_cache()``, and unstacks the result.
     """
 
-    def __init__(self, keras_model, num_layers, cache_length):
+    def __init__(
+        self,
+        keras_model,
+        num_layers,
+        cache_length,
+        separate_vision_encoder=False,
+    ):
         super().__init__()
         self.keras_model = keras_model
         self.num_layers = num_layers
         self.cache_length = cache_length
+        self.separate_vision_encoder = separate_vision_encoder
         self.has_vision = (
             hasattr(keras_model.backbone, "vision_encoder")
             and keras_model.backbone.vision_encoder is not None
@@ -72,6 +79,7 @@ class KerasHubLiteRTAdapter(nn.Module):
         audio_mel_mask=None,
         audio_indices=None,
         audio_mask=None,
+        mm_embedding=None,
         **kv_cache,
     ):
         """Prefill step – processes the full prompt at the given cache position.
@@ -92,25 +100,31 @@ class KerasHubLiteRTAdapter(nn.Module):
         # Run vision encoder if images are provided.
         img_embeddings = None
         if self.has_vision:
-            vision_encoder = self.keras_model.backbone.vision_encoder
-            # Gemma4 vision encoder expects pixel_values and pixel_position_ids.
-            # Detect via Functional model input names to avoid heavy imports.
-            is_gemma4_vision = (
-                hasattr(vision_encoder, "inputs")
-                and len(vision_encoder.inputs) == 2
-                and {inp.name for inp in vision_encoder.inputs}
-                == {"pixel_values", "pixel_position_ids"}
-            )
-            if is_gemma4_vision:
-                if pixel_values is not None and pixel_position_ids is not None:
-                    img_embeddings = vision_encoder(
-                        {
-                            "pixel_values": pixel_values,
-                            "pixel_position_ids": pixel_position_ids,
-                        }
-                    )
-            elif images is not None:
-                img_embeddings = vision_encoder(images)
+            if self.separate_vision_encoder:
+                img_embeddings = mm_embedding
+            else:
+                vision_encoder = self.keras_model.backbone.vision_encoder
+                # Gemma4 vision encoder expects pixel_values and pixel_position_ids.
+                # Detect via Functional model input names to avoid heavy imports.
+                is_gemma4_vision = (
+                    hasattr(vision_encoder, "inputs")
+                    and len(vision_encoder.inputs) == 2
+                    and {inp.name for inp in vision_encoder.inputs}
+                    == {"pixel_values", "pixel_position_ids"}
+                )
+                if is_gemma4_vision:
+                    if (
+                        pixel_values is not None
+                        and pixel_position_ids is not None
+                    ):
+                        img_embeddings = vision_encoder(
+                            {
+                                "pixel_values": pixel_values,
+                                "pixel_position_ids": pixel_position_ids,
+                            }
+                        )
+                elif images is not None:
+                    img_embeddings = vision_encoder(images)
 
         # Run audio encoder if audio mel is provided.
         audio_embeddings = None
@@ -211,6 +225,57 @@ class KerasHubLiteRTAdapter(nn.Module):
             outputs[f"kv_cache_k_{i}"] = cache[:, i, 0, ...]
             outputs[f"kv_cache_v_{i}"] = cache[:, i, 1, ...]
         return outputs
+
+
+class KerasHubVisionEncoderAdapter(nn.Module):
+    """Adapter that wraps a KerasHub vision encoder for separate export.
+
+    Gemma3 accepts raw ``images`` [B, N, H, W, 3]. Gemma4 accepts preprocessed
+    patches via ``pixel_values`` and ``pixel_position_ids``. The output is
+    always returned as a dictionary named ``features`` so that the LiteRT-LM
+    signature matches upstream tensor names.
+    """
+
+    def __init__(self, keras_model):
+        super().__init__()
+        self.vision_encoder = keras_model.backbone.vision_encoder
+
+    def forward(self, images=None, pixel_values=None, pixel_position_ids=None):
+        if pixel_values is not None and pixel_position_ids is not None:
+            out = self.vision_encoder(
+                {
+                    "pixel_values": pixel_values,
+                    "pixel_position_ids": pixel_position_ids,
+                }
+            )
+        elif images is not None:
+            out = self.vision_encoder(images)
+        else:
+            raise ValueError(
+                "Vision encoder export requires either ``images`` or "
+                "``pixel_values`` + ``pixel_position_ids``."
+            )
+
+        if isinstance(out, dict):
+            features = out.get("features")
+            if features is None:
+                features = next(iter(out.values()))
+        elif isinstance(out, (tuple, list)):
+            features = out[0]
+        else:
+            features = out
+        return {"features": features}
+
+
+class KerasHubVisionAdapter(nn.Module):
+    """No-op vision adapter exported as a separate LiteRT-LM model.
+
+    KerasHub already projects vision features inside the vision encoder, so
+    this adapter simply renames ``features`` to ``mm_embedding``.
+    """
+
+    def forward(self, features):
+        return {"mm_embedding": features}
 
 
 @contextlib.contextmanager

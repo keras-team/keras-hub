@@ -679,6 +679,139 @@ class TestLiteRTLmExport(TestCase):
         self.assertIn("vision_indices", prefill_inputs)
         self.assertIn("vision_mask", prefill_inputs)
 
+    def test_export_separate_vision_encoder_gemma3(self):
+        """Export Gemma3 with separate vision encoder/adapter models."""
+        import keras
+
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+        from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
+        from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
+            Gemma3CausalLMPreprocessor,
+        )
+        from keras_hub.src.models.gemma3.gemma3_image_converter import (
+            Gemma3ImageConverter,
+        )
+        from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+            Gemma3VisionEncoder,
+        )
+        from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import (
+            MockGemma3Tokenizer,
+        )
+
+        tokenizer = MockGemma3Tokenizer()
+        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
+        tokenizer.file_assets = ["vocabulary.spm"]
+
+        def _save_to_preset(preset_dir):
+            import shutil
+
+            from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
+
+            asset_dir = os.path.join(preset_dir, TOKENIZER_ASSET_DIR)
+            os.makedirs(asset_dir, exist_ok=True)
+            shutil.copy(proto, os.path.join(asset_dir, "vocabulary.spm"))
+
+        tokenizer.save_to_preset = _save_to_preset
+
+        image_converter = Gemma3ImageConverter(image_size=(16, 16))
+        preprocessor = Gemma3CausalLMPreprocessor(
+            image_converter=image_converter,
+            tokenizer=tokenizer,
+            sequence_length=20,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=4,
+        )
+        vision_encoder = Gemma3VisionEncoder(
+            image_size=16,
+            patch_size=4,
+            pool_size=2,
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            output_dim=8,
+        )
+        backbone = Gemma3Backbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            image_size=16,
+            num_layers=2,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            vision_encoder=vision_encoder,
+        )
+        model = Gemma3CausalLM(preprocessor=preprocessor, backbone=backbone)
+
+        rng = np.random.default_rng(42)
+        weights = model.get_weights()
+        for i in range(len(weights)):
+            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
+        model.set_weights(weights)
+
+        path = os.path.join(
+            self.get_temp_dir(), "test_separate_vision.litertlm"
+        )
+        model.export(
+            path,
+            format="litertlm",
+            prefill_seq_len=20,
+            separate_vision_encoder=True,
+        )
+
+        self.assertTrue(os.path.exists(path))
+        self.assertGreater(os.path.getsize(path), 0)
+
+        # Extract all TFLite models from the bundle.
+        with open(path, "rb") as f:
+            data = f.read()
+        header_end = struct.unpack("<Q", data[24:32])[0]
+        from litert_lm_builder import litertlm_core as core
+
+        metadata_buf = data[32:header_end]
+        metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
+            metadata_buf, 0
+        )
+
+        all_signatures = {}
+        model_idx = 0
+        for i in range(metadata.SectionMetadata().ObjectsLength()):
+            obj = metadata.SectionMetadata().Objects(i)
+            if (
+                core.any_section_data_type_to_string(obj.DataType())
+                != "TFLiteModel"
+            ):
+                continue
+            tflite_data = data[obj.BeginOffset() : obj.EndOffset()]
+            tflite_path = os.path.join(
+                self.get_temp_dir(),
+                f"test_separate_vision_{model_idx}.tflite",
+            )
+            model_idx += 1
+            with open(tflite_path, "wb") as f:
+                f.write(tflite_data)
+            interpreter = tf.lite.Interpreter(model_path=tflite_path)
+            all_signatures.update(interpreter._get_full_signature_list())
+
+        signature_names = set(all_signatures.keys())
+        self.assertIn("prefill", signature_names)
+        self.assertIn("decode", signature_names)
+        self.assertIn("vision_encoder", signature_names)
+        self.assertIn("vision_adapter", signature_names)
+
+        prefill_inputs = set(all_signatures["prefill"]["inputs"])
+        self.assertNotIn("images", prefill_inputs)
+        self.assertNotIn("pixel_values", prefill_inputs)
+        self.assertNotIn("pixel_position_ids", prefill_inputs)
+        self.assertIn("mm_embedding", prefill_inputs)
+
+        vision_encoder_inputs = set(all_signatures["vision_encoder"]["inputs"])
+        self.assertIn("images", vision_encoder_inputs)
+
     def test_export_multimodal_outputs_match_keras(self):
         """Verify multimodal Keras eager and TFLite outputs match."""
         import keras
