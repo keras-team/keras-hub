@@ -8,6 +8,9 @@ from keras_hub.src.models.llama.llama_rotary_embedding import (
 )
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
+from keras_hub.src.utils.keras_utils import running_on_gpu
+from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
 class LlamaAttention(keras.layers.Layer):
@@ -197,8 +200,20 @@ class LlamaAttention(keras.layers.Layer):
             )
         return self._softmax(attention_scores)
 
+    def _use_fused_attention_op(self):
+        if not fused_attention_op_available():
+            return False
+        if self.dropout > 0.0:
+            return False
+        if running_on_gpu():
+            return gpu_supports_fused_attention_op()
+        elif running_on_tpu():
+            return True
+        else:
+            return False
+
     def _compute_attention(self, query, key, value, attention_mask=None):
-        if fused_attention_op_available():
+        if self._use_fused_attention_op():
             # Use `dot_product_attention` with Flash Attention support if
             # available.
             if attention_mask is not None:
