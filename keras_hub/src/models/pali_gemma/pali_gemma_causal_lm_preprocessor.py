@@ -14,6 +14,7 @@ from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer,
 )
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -53,14 +54,7 @@ class PaliGemmaCausalLMPreprocessor(CausalLMPreprocessor):
         )
         self.built = True
 
-    @preprocessing_function
-    def call(
-        self,
-        x,
-        y=None,
-        sample_weight=None,
-        sequence_length=None,
-    ):
+    def _call_python(self, x, y=None, sample_weight=None, sequence_length=None):
         sequence_length = sequence_length or self.sequence_length
         images, prompts, responses = x["images"], x["prompts"], x["responses"]
         prompts = self.tokenizer(prompts)
@@ -90,22 +84,47 @@ class PaliGemmaCausalLMPreprocessor(CausalLMPreprocessor):
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     @preprocessing_function
-    def generate_preprocess(
+    def _call_tf(
+        self,
+        x,
+        y=None,
+        sample_weight=None,
+        sequence_length=None,
+    ):
+        return self._call_python(
+            x,
+            y=y,
+            sample_weight=sample_weight,
+            sequence_length=sequence_length,
+        )
+
+    def call(
+        self,
+        x,
+        y=None,
+        sample_weight=None,
+        sequence_length=None,
+    ):
+        if not self._allow_python_workflow or in_tf_function():
+            return self._call_tf(
+                x,
+                y=y,
+                sample_weight=sample_weight,
+                sequence_length=sequence_length,
+            )
+        else:
+            return self._call_python(
+                x,
+                y=y,
+                sample_weight=sample_weight,
+                sequence_length=sequence_length,
+            )
+
+    def _generate_preprocess_python(
         self,
         x,
         sequence_length=None,
     ):
-        """Convert strings to integer token input for generation.
-
-        Similar to calling the layer for training, this method takes in strings
-        or tensor strings, tokenizes and packs the input, and computes a padding
-        mask masking all inputs not filled in with a padded value.
-
-        Unlike calling the layer for training, this method does not compute
-        labels and will never append a `tokenizer.end_token_id` to the end of
-        the sequence (as generation is expected to continue at the end of the
-        inputted prompt).
-        """
         if not self.built:
             self.build(None)
         sequence_length = sequence_length or self.sequence_length
@@ -132,3 +151,42 @@ class PaliGemmaCausalLMPreprocessor(CausalLMPreprocessor):
             "response_mask": response_mask,
             "padding_mask": padding_mask,
         }
+
+    @preprocessing_function
+    def _generate_preprocess_tf(
+        self,
+        x,
+        sequence_length=None,
+    ):
+        return self._generate_preprocess_python(
+            x,
+            sequence_length=sequence_length,
+        )
+
+    @preprocessing_function
+    def generate_preprocess(
+        self,
+        x,
+        sequence_length=None,
+    ):
+        """Convert strings to integer token input for generation.
+
+        Similar to calling the layer for training, this method takes in strings
+        or tensor strings, tokenizes and packs the input, and computes a padding
+        mask masking all inputs not filled in with a padded value.
+
+        Unlike calling the layer for training, this method does not compute
+        labels and will never append a `tokenizer.end_token_id` to the end of
+        the sequence (as generation is expected to continue at the end of the
+        inputted prompt).
+        """
+        if not self._allow_python_workflow or in_tf_function():
+            return self._generate_preprocess_tf(
+                x,
+                sequence_length=sequence_length,
+            )
+        else:
+            return self._generate_preprocess_python(
+                x,
+                sequence_length=sequence_length,
+            )
