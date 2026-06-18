@@ -1,7 +1,6 @@
 import math
 
 import keras
-import ml_dtypes
 import numpy as np
 from keras import ops
 
@@ -18,95 +17,6 @@ from keras_hub.src.utils.python_utils import classproperty
 from keras_hub.src.utils.tensor_utils import check_bounding_box_support
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
-
-
-# TODO: Use `keras.layers.Resizing` once `antialias` is configurable.
-# https://github.com/keras-team/keras/pull/20972
-def _saturate_cast(x, dtype, backend_module):
-    def get_dtype_min_max(dtype):
-        if "bool" == dtype:
-            dtype_min = 0
-            dtype_max = 1
-        elif "int" in dtype:
-            dtype_min = ml_dtypes.iinfo(dtype).min
-            dtype_max = ml_dtypes.iinfo(dtype).max
-        else:
-            dtype_min = ml_dtypes.finfo(dtype).min
-            dtype_max = ml_dtypes.finfo(dtype).max
-        return dtype_min, dtype_max
-
-    dtype = keras.backend.standardize_dtype(dtype)
-    in_dtype = keras.backend.standardize_dtype(x.dtype)
-    in_min, in_max = get_dtype_min_max(in_dtype)
-    out_min, out_max = get_dtype_min_max(dtype)
-
-    min_limit = np.maximum(in_min, out_min).astype(in_dtype)
-    if min_limit < out_min:
-        min_limit = np.nextafter(min_limit, 0, dtype=in_dtype)
-    max_limit = np.minimum(in_max, out_max).astype(in_dtype)
-    if max_limit > out_max:
-        max_limit = np.nextafter(max_limit, 0, dtype=in_dtype)
-
-    x = backend_module.numpy.clip(x, min_limit, max_limit)
-    return backend_module.cast(x, dtype)
-
-
-class ResizingAntialiasConfigurable(keras.layers.Resizing):
-    """A preprocessing layer which resizes images.
-
-    This class is the same as `keras.layers.Resizing` but exposes `antialias` as
-    a configurable parameter.
-    """
-
-    def __init__(
-        self,
-        height,
-        width,
-        interpolation="bilinear",
-        antialias=False,
-        crop_to_aspect_ratio=False,
-        pad_to_aspect_ratio=False,
-        fill_mode="constant",
-        fill_value=0.0,
-        data_format=None,
-        **kwargs,
-    ):
-        super().__init__(
-            height=height,
-            width=width,
-            interpolation=interpolation,
-            crop_to_aspect_ratio=crop_to_aspect_ratio,
-            pad_to_aspect_ratio=pad_to_aspect_ratio,
-            fill_mode=fill_mode,
-            fill_value=fill_value,
-            data_format=data_format,
-            **kwargs,
-        )
-        self.antialias = bool(antialias)
-
-    def transform_images(self, images, transformation=None, training=True):
-        size = (self.height, self.width)
-        resized = self.backend.image.resize(
-            images,
-            size=size,
-            interpolation=self.interpolation,
-            antialias=self.antialias,  # Added.
-            data_format=self.data_format,
-            crop_to_aspect_ratio=self.crop_to_aspect_ratio,
-            pad_to_aspect_ratio=self.pad_to_aspect_ratio,
-            fill_mode=self.fill_mode,
-            fill_value=self.fill_value,
-        )
-        if resized.dtype == images.dtype:
-            return resized
-        if keras.backend.is_int_dtype(images.dtype):
-            resized = self.backend.numpy.round(resized)
-        return _saturate_cast(resized, images.dtype, self.backend)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({"antialias": self.antialias})
-        return config
 
 
 @keras_hub_export("keras_hub.layers.ImageConverter")
@@ -226,7 +136,7 @@ class ImageConverter(PreprocessingLayer):
         resizing_kwargs = {}
         if check_bounding_box_support():
             resizing_kwargs["bounding_box_format"] = bounding_box_format
-        self.resizing = ResizingAntialiasConfigurable(
+        self.resizing = keras.layers.Resizing(
             height=image_size[0] if image_size else None,
             width=image_size[1] if image_size else None,
             crop_to_aspect_ratio=crop_to_aspect_ratio,
@@ -262,8 +172,7 @@ class ImageConverter(PreprocessingLayer):
         self.resizing.height = value[0]
         self.resizing.width = value[1]
 
-    @preprocessing_function
-    def call(self, inputs):
+    def _call_python(self, inputs):
         if self.image_size is not None:
             inputs = self.resizing(inputs)
         # Allow dictionary input for handling bounding boxes.
@@ -286,6 +195,16 @@ class ImageConverter(PreprocessingLayer):
         else:
             inputs = x
         return inputs
+
+    @preprocessing_function
+    def _call_tf(self, inputs):
+        return self._call_python(inputs)
+
+    def call(self, inputs):
+        if not self._allow_python_workflow or in_tf_function():
+            return self._call_tf(inputs)
+        else:
+            return self._call_python(inputs)
 
     def _expand_non_channel_dims(self, value, inputs):
         """Expand non channel dims so value is broadcastable with inputs."""
