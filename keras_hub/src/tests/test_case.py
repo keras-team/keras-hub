@@ -3,7 +3,9 @@ import json
 import os
 import pathlib
 import re
+import struct
 import tempfile
+import time
 
 import keras
 import numpy as np
@@ -753,6 +755,384 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             if model is not None and cls is not None:
                 del model
             gc.collect()
+
+    def _extract_litertlm_tflite_interpreters(self, litertlm_path):
+        """Extract every TFLite model from a `.litertlm` bundle."""
+        from litert_lm_builder import litertlm_core as core
+
+        with open(litertlm_path, "rb") as f:
+            data = f.read()
+        header_end = struct.unpack("<Q", data[24:32])[0]
+        metadata_buf = data[32:header_end]
+        metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
+            metadata_buf, 0
+        )
+
+        interpreters = []
+        for i in range(metadata.SectionMetadata().ObjectsLength()):
+            obj = metadata.SectionMetadata().Objects(i)
+            if (
+                core.any_section_data_type_to_string(obj.DataType())
+                != "TFLiteModel"
+            ):
+                continue
+            tflite_data = data[obj.BeginOffset() : obj.EndOffset()]
+            tflite_path = os.path.join(
+                self.get_temp_dir(),
+                f"litertlm_model_{len(interpreters)}.tflite",
+            )
+            with open(tflite_path, "wb") as f:
+                f.write(tflite_data)
+            interpreters.append(tf.lite.Interpreter(model_path=tflite_path))
+        return interpreters
+
+    def _parse_litertlm_llm_metadata(self, litertlm_path):
+        """Parse the ``LlmMetadata`` protobuf from a `.litertlm` bundle."""
+        from litert_lm_builder import litertlm_core as core
+        from litert_lm_builder.runtime.proto import llm_metadata_pb2
+
+        with open(litertlm_path, "rb") as f:
+            data = f.read()
+        header_end = struct.unpack("<Q", data[24:32])[0]
+        metadata_buf = data[32:header_end]
+        metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
+            metadata_buf, 0
+        )
+
+        for i in range(metadata.SectionMetadata().ObjectsLength()):
+            obj = metadata.SectionMetadata().Objects(i)
+            if (
+                core.any_section_data_type_to_string(obj.DataType())
+                != "LlmMetadataProto"
+            ):
+                continue
+            llm_meta_buf = data[obj.BeginOffset() : obj.EndOffset()]
+            meta = llm_metadata_pb2.LlmMetadata()
+            meta.ParseFromString(llm_meta_buf)
+            return meta
+        return None
+
+    def _verify_litertlm_numerics(
+        self,
+        model,
+        interpreter,
+        input_data,
+        atol,
+        rtol,
+    ):
+        """Compare Keras eager and TFLite prefill/decode outputs."""
+        import torch
+
+        tokens_np = ops.convert_to_numpy(input_data)
+        if tokens_np.ndim != 2:
+            raise ValueError(
+                "`input_data` for LiteRT-LM numeric parity must be a 2-D "
+                f"token tensor. Received shape: {tokens_np.shape}"
+            )
+
+        B, T = tokens_np.shape
+        backbone = model.backbone
+        L = getattr(backbone, "num_layers", None)
+        if L is None:
+            raise ValueError("Model backbone must expose `num_layers`.")
+        H = getattr(
+            backbone,
+            "num_key_value_heads",
+            getattr(backbone, "num_heads", 1),
+        )
+        D = getattr(backbone, "head_dim", None)
+        if D is None:
+            hidden_dim = getattr(backbone, "hidden_dim", None)
+            num_qh = getattr(
+                backbone,
+                "num_query_heads",
+                getattr(backbone, "num_heads", None),
+            )
+            if hidden_dim is None or num_qh is None or num_qh <= 0:
+                raise ValueError(
+                    "Could not determine attention head dimension."
+                )
+            D = hidden_dim // num_qh
+
+        cache_length = getattr(backbone, "max_sequence_length", None)
+        if cache_length is None:
+            preprocessor = getattr(model, "preprocessor", None)
+            cache_length = getattr(preprocessor, "sequence_length", T)
+        if cache_length is None:
+            cache_length = T
+
+        # Find the best prefill signature (bucketed or single).
+        sig_list = list(interpreter._get_full_signature_list().keys())
+        prefill_sig = None
+        if "prefill" in sig_list:
+            prefill_sig = "prefill"
+        else:
+            matching = sorted(
+                [
+                    s
+                    for s in sig_list
+                    if s.startswith("prefill_") and int(s.split("_")[1]) >= T
+                ]
+            )
+            if matching:
+                prefill_sig = matching[0]
+        if prefill_sig is None:
+            self.fail("No usable prefill signature found for numeric parity.")
+
+        cache_keras = np.zeros((B, L, 2, cache_length, H, D), dtype=np.float32)
+        prefill_inputs = {
+            "tokens": tokens_np,
+            "input_pos": np.arange(T, dtype=np.int32),
+            "mask": np.ones((B, 1, T, cache_length), dtype=np.float32),
+        }
+        for i in range(L):
+            prefill_inputs[f"kv_cache_k_{i}"] = np.zeros(
+                (B, cache_length, H, D), dtype=np.float32
+            )
+            prefill_inputs[f"kv_cache_v_{i}"] = np.zeros(
+                (B, cache_length, H, D), dtype=np.float32
+            )
+
+        prefill_runner = interpreter.get_signature_runner(prefill_sig)
+        tflite_prefill_out = prefill_runner(**prefill_inputs)
+
+        # Keras prefill.
+        with torch.no_grad():
+            _, _, keras_cache = model.call_with_cache(
+                torch.from_numpy(tokens_np),
+                torch.from_numpy(cache_keras),
+                0,
+            )
+        keras_cache = keras_cache.numpy()
+
+        # Compare prefill KV caches.
+        for i in range(L):
+            self.assertAllClose(
+                keras_cache[:, i, 0, ...],
+                tflite_prefill_out[f"kv_cache_k_{i}"],
+                atol=atol,
+                rtol=rtol,
+            )
+            self.assertAllClose(
+                keras_cache[:, i, 1, ...],
+                tflite_prefill_out[f"kv_cache_v_{i}"],
+                atol=atol,
+                rtol=rtol,
+            )
+
+        # Single decode step at position 0.
+        decode_pos = 0
+        decode_token = tokens_np[:, decode_pos : decode_pos + 1].copy()
+        with torch.no_grad():
+            keras_logits_dec, _, keras_cache_dec = model.call_with_cache(
+                torch.from_numpy(decode_token),
+                torch.from_numpy(keras_cache),
+                decode_pos,
+            )
+        keras_logits_dec = keras_logits_dec.numpy()
+        keras_cache_dec = keras_cache_dec.numpy()
+
+        decode_inputs = {
+            "tokens": decode_token,
+            "input_pos": np.array([decode_pos], dtype=np.int32),
+            "mask": np.ones((B, 1, 1, cache_length), dtype=np.float32),
+        }
+        for i in range(L):
+            decode_inputs[f"kv_cache_k_{i}"] = tflite_prefill_out[
+                f"kv_cache_k_{i}"
+            ]
+            decode_inputs[f"kv_cache_v_{i}"] = tflite_prefill_out[
+                f"kv_cache_v_{i}"
+            ]
+        decode_runner = interpreter.get_signature_runner("decode")
+        tflite_dec_out = decode_runner(**decode_inputs)
+
+        self.assertAllClose(
+            keras_logits_dec,
+            tflite_dec_out["logits"],
+            atol=atol,
+            rtol=rtol,
+        )
+        for i in range(L):
+            self.assertAllClose(
+                keras_cache_dec[:, i, 0, ...],
+                tflite_dec_out[f"kv_cache_k_{i}"],
+                atol=atol,
+                rtol=rtol,
+            )
+            self.assertAllClose(
+                keras_cache_dec[:, i, 1, ...],
+                tflite_dec_out[f"kv_cache_v_{i}"],
+                atol=atol,
+                rtol=rtol,
+            )
+
+    def run_litertlm_export_test(
+        self,
+        cls=None,
+        init_kwargs=None,
+        model=None,
+        input_data=None,
+        prefill_seq_len=None,
+        verify_numerics=True,
+        verify_model_type=None,
+        atol=1e-4,
+        rtol=1e-4,
+        **export_kwargs,
+    ):
+        """Export a KerasHub model to LiteRT-LM and verify the bundle.
+
+        Args:
+            cls: Model class to instantiate if ``model`` is not provided.
+            init_kwargs: Initialization arguments for ``cls``.
+            model: Pre-built model instance. If provided, ``cls`` and
+                ``init_kwargs`` are ignored.
+            input_data: Token ids tensor for text-only numeric parity, or
+                ``None`` to skip numeric verification.
+            prefill_seq_len: Sequence length passed to ``model.export``. May be
+                an ``int`` or a list of bucket sizes.
+            verify_numerics: Whether to run Keras vs TFLite numeric parity. Set
+                to ``False`` for multimodal models or preset models with
+                random weights.
+            verify_model_type: Expected ``LlmMetadata`` oneof name, e.g.
+                ``"gemma3"``, ``"gemma4"`` or ``"generic_model"``.
+            atol: Absolute tolerance for numeric parity.
+            rtol: Relative tolerance for numeric parity.
+            **export_kwargs: Additional arguments forwarded to
+                ``model.export(..., format="litertlm", ...)``.
+        """
+
+        def _debug_print(msg):
+            print(msg)
+
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        import importlib.util
+
+        if importlib.util.find_spec("litert_torch") is None:
+            self.skipTest(
+                "LiteRT-LM export requires `litert-torch`. "
+                "Install it with: pip install litert-torch"
+            )
+
+        if importlib.util.find_spec("litert_lm_builder") is None:
+            self.skipTest(
+                "LiteRT-LM export requires `litert-lm-builder`. "
+                "Install it with: pip install litert-lm-builder"
+            )
+
+        total_start = time.perf_counter()
+
+        if model is None:
+            if cls is None or init_kwargs is None:
+                raise ValueError(
+                    "Either `model` or both `cls` and `init_kwargs` must be "
+                    "provided."
+                )
+            build_start = time.perf_counter()
+            model = cls(**init_kwargs)
+            _debug_print(
+                f"[litertlm] build model: "
+                f"{time.perf_counter() - build_start:.2f}s"
+            )
+        else:
+            _debug_print("[litertlm] build model: 0.00s")
+
+        path = os.path.join(self.get_temp_dir(), "model.litertlm")
+        if prefill_seq_len is not None:
+            export_kwargs.setdefault("prefill_seq_len", prefill_seq_len)
+
+        export_start = time.perf_counter()
+        model.export(path, format="litertlm", **export_kwargs)
+        _debug_print(
+            f"[litertlm] export: {time.perf_counter() - export_start:.2f}s"
+        )
+
+        self.assertTrue(os.path.exists(path))
+        self.assertGreater(os.path.getsize(path), 0)
+
+        extract_start = time.perf_counter()
+        interpreters = self._extract_litertlm_tflite_interpreters(path)
+        self.assertTrue(
+            interpreters,
+            "No TFLite model found in the .litertlm bundle.",
+        )
+        _debug_print(
+            f"[litertlm] extract tflite: "
+            f"{time.perf_counter() - extract_start:.2f}s"
+        )
+
+        sig_start = time.perf_counter()
+        all_signatures = {}
+        for interpreter in interpreters:
+            all_signatures.update(interpreter._get_full_signature_list())
+        prefill_sigs = [
+            name for name in all_signatures if name.startswith("prefill")
+        ]
+        self.assertTrue(
+            prefill_sigs,
+            f"No prefill signature found. Signatures: {list(all_signatures)}",
+        )
+        self.assertIn(
+            "decode",
+            all_signatures,
+            f"No decode signature found. Signatures: {list(all_signatures)}",
+        )
+
+        main_interpreter = None
+        for interpreter in interpreters:
+            sigs = interpreter._get_full_signature_list()
+            if any(s.startswith("prefill") for s in sigs) and "decode" in sigs:
+                main_interpreter = interpreter
+                break
+        if main_interpreter is None:
+            main_interpreter = interpreters[0]
+        _debug_print(
+            f"[litertlm] verify signatures: "
+            f"{time.perf_counter() - sig_start:.2f}s"
+        )
+
+        meta_start = time.perf_counter()
+        if verify_model_type is not None:
+            llm_metadata = self._parse_litertlm_llm_metadata(path)
+            self.assertIsNotNone(
+                llm_metadata,
+                "LlmMetadata section not found in .litertlm bundle.",
+            )
+            actual_type = llm_metadata.WhichOneof("llm_model_type")
+            self.assertEqual(
+                actual_type,
+                verify_model_type,
+                f"Expected LlmModelType '{verify_model_type}', "
+                f"got '{actual_type}'.",
+            )
+        _debug_print(
+            f"[litertlm] verify metadata: "
+            f"{time.perf_counter() - meta_start:.2f}s"
+        )
+
+        numeric_start = time.perf_counter()
+        if (
+            verify_numerics
+            and input_data is not None
+            and not isinstance(input_data, dict)
+        ):
+            self._verify_litertlm_numerics(
+                model,
+                main_interpreter,
+                input_data,
+                atol=atol,
+                rtol=rtol,
+            )
+        _debug_print(
+            f"[litertlm] numeric parity: "
+            f"{time.perf_counter() - numeric_start:.2f}s"
+        )
+
+        _debug_print(
+            f"[litertlm] total: {time.perf_counter() - total_start:.2f}s"
+        )
 
     def _compare_outputs(
         self,
