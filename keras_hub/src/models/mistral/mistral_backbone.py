@@ -52,7 +52,26 @@ class MistralBackbone(Backbone):
             attention layers. This controls the maximum cache size for the
             attention layers in each transformer decoder. Only `sliding_window`
             number of tokens are saved in the cache and used to generate the
-            next token. Defaults to `512`.
+            next token. Defaults to `512`. Pass `None` to disable sliding
+            window attention entirely (e.g. Magistral).
+        head_dim (int, optional): The size of each attention head. When
+            `None` (the default), falls back to `hidden_dim // num_query_heads`.
+            Set explicitly when the model's head size is not equal to
+            `hidden_dim // num_query_heads` — e.g. Magistral uses
+            `head_dim=128` with `hidden_dim=5120` and `num_query_heads=32`.
+        rope_type (str, optional): RoPE scaling type — one of `"linear"`,
+            `"dynamic"`, or `"yarn"`. Defaults to `"linear"` (no scaling).
+            Ministral 3 uses `"yarn"`.
+        rope_beta_fast (float, optional): YaRN `beta_fast`. Only used when
+            `rope_type="yarn"`. Defaults to `32.0`.
+        rope_beta_slow (float, optional): YaRN `beta_slow`. Only used when
+            `rope_type="yarn"`. Defaults to `1.0`.
+        rope_original_max_position_embeddings (int, optional): Original
+            context length used to compute the YaRN scaling. Only used when
+            `rope_type="yarn"`. Defaults to `4096`.
+        tie_word_embeddings (bool, optional): Whether the token embedding
+            matrix is shared with the output projection. Defaults to `False`.
+            Ministral 3 uses `True`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -98,6 +117,12 @@ class MistralBackbone(Backbone):
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
         sliding_window=512,
+        head_dim=None,
+        rope_type="linear",
+        rope_beta_fast=32.0,
+        rope_beta_slow=1.0,
+        rope_original_max_position_embeddings=4096,
+        tie_word_embeddings=False,
         dropout=0,
         dtype=None,
         **kwargs,
@@ -106,7 +131,7 @@ class MistralBackbone(Backbone):
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            tie_weights=False,
+            tie_weights=tie_word_embeddings,
             embeddings_initializer=_mistral_kernel_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
@@ -123,6 +148,13 @@ class MistralBackbone(Backbone):
                 activation=ops.silu,
                 kernel_initializer=_mistral_kernel_initializer(stddev=0.02),
                 sliding_window=sliding_window,
+                head_dim=head_dim,
+                rope_type=rope_type,
+                rope_beta_fast=rope_beta_fast,
+                rope_beta_slow=rope_beta_slow,
+                rope_original_max_position_embeddings=(
+                    rope_original_max_position_embeddings
+                ),
                 dropout=dropout,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
@@ -165,6 +197,14 @@ class MistralBackbone(Backbone):
         self.num_key_value_heads = num_key_value_heads
         self.rope_scaling_factor = rope_scaling_factor
         self.sliding_window = sliding_window
+        self.head_dim = head_dim
+        self.rope_type = rope_type
+        self.rope_beta_fast = rope_beta_fast
+        self.rope_beta_slow = rope_beta_slow
+        self.rope_original_max_position_embeddings = (
+            rope_original_max_position_embeddings
+        )
+        self.tie_word_embeddings = tie_word_embeddings
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
 
@@ -181,6 +221,14 @@ class MistralBackbone(Backbone):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "num_key_value_heads": self.num_key_value_heads,
                 "sliding_window": self.sliding_window,
+                "head_dim": self.head_dim,
+                "rope_type": self.rope_type,
+                "rope_beta_fast": self.rope_beta_fast,
+                "rope_beta_slow": self.rope_beta_slow,
+                "rope_original_max_position_embeddings": (
+                    self.rope_original_max_position_embeddings
+                ),
+                "tie_word_embeddings": self.tie_word_embeddings,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
             }

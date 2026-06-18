@@ -27,6 +27,11 @@ class CachedMistralAttention(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         sliding_window=512,
         dropout=0,
+        head_dim=None,
+        rope_type="linear",
+        rope_beta_fast=32.0,
+        rope_beta_slow=1.0,
+        rope_original_max_position_embeddings=4096,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -34,6 +39,7 @@ class CachedMistralAttention(keras.layers.Layer):
         self._num_key_value_heads = num_key_value_heads
         self._sliding_window = sliding_window
         self._dropout = dropout
+        self._head_dim = head_dim
 
         self._num_key_value_groups = num_query_heads // num_key_value_heads
         self._rope_max_wavelength = rope_max_wavelength
@@ -43,6 +49,12 @@ class CachedMistralAttention(keras.layers.Layer):
         )
 
         self._rope_scaling_factor = rope_scaling_factor
+        self._rope_type = rope_type
+        self._rope_beta_fast = rope_beta_fast
+        self._rope_beta_slow = rope_beta_slow
+        self._rope_original_max_position_embeddings = (
+            rope_original_max_position_embeddings
+        )
 
     def build(self, inputs_shape):
         # Einsum variables:
@@ -54,7 +66,8 @@ class CachedMistralAttention(keras.layers.Layer):
         # v = num key/value heads
         # h = head dim
         self._hidden_dim = inputs_shape[-1]
-        self._head_dim = self._hidden_dim // self._num_query_heads
+        if self._head_dim is None:
+            self._head_dim = self._hidden_dim // self._num_query_heads
         self._inv_norm_factor = 1.0 / math.sqrt(self._head_dim)
 
         self._query_dense = keras.layers.EinsumDense(
@@ -117,6 +130,12 @@ class CachedMistralAttention(keras.layers.Layer):
         self.rotary_embedding_layer = RotaryEmbedding(
             max_wavelength=self._rope_max_wavelength,
             scaling_factor=self._rope_scaling_factor,
+            rope_type=self._rope_type,
+            beta_fast=self._rope_beta_fast,
+            beta_slow=self._rope_beta_slow,
+            original_max_position_embeddings=(
+                self._rope_original_max_position_embeddings
+            ),
             dtype=self.dtype_policy,
         )
 
@@ -239,6 +258,13 @@ class CachedMistralAttention(keras.layers.Layer):
                 ),
                 "sliding_window": self._sliding_window,
                 "dropout": self._dropout,
+                "head_dim": self._head_dim,
+                "rope_type": self._rope_type,
+                "rope_beta_fast": self._rope_beta_fast,
+                "rope_beta_slow": self._rope_beta_slow,
+                "rope_original_max_position_embeddings": (
+                    self._rope_original_max_position_embeddings
+                ),
             }
         )
         return config
