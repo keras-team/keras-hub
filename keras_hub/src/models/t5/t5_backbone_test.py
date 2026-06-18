@@ -1,7 +1,9 @@
+import keras
 import pytest
 from keras import ops
 
 from keras_hub.src.models.t5.t5_backbone import T5Backbone
+from keras_hub.src.models.t5.t5_transformer_layer import T5TransformerLayer
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -31,6 +33,28 @@ class T5BackboneTest(TestCase):
                 "decoder_sequence_output": (2, 3, 2),
             },
         )
+
+    def test_transformer_layer_output_spec_matches_call(self):
+        layer = T5TransformerLayer(
+            is_decoder=False,
+            hidden_dim=2,
+            intermediate_dim=4,
+            key_value_dim=1,
+            dropout=0.0,
+            activation="relu",
+            layer_norm_epsilon=1e-6,
+            num_heads=2,
+            use_gated_activation=True,
+            use_relative_attention_bias=True,
+        )
+        hidden_states = ops.ones((2, 3, 2))
+        call_output = layer(hidden_states, position_bias=None)
+        spec_output = layer.compute_output_spec(
+            keras.KerasTensor(shape=(2, 3, 2)), position_bias=None
+        )
+        self.assertIsInstance(call_output, tuple)
+        self.assertIsInstance(spec_output, tuple)
+        self.assertLen(call_output, len(spec_output))
 
     @pytest.mark.large
     def test_saved_model(self):

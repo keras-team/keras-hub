@@ -158,10 +158,7 @@ class T5TransformerLayer(keras.layers.Layer):
         x = self.dropout_layer(x, training=training)
         x = x + residual
 
-        if position_bias is not None:
-            return x, position_bias
-        else:
-            return x
+        return x, position_bias
 
     def compute_output_spec(
         self,
