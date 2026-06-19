@@ -30,6 +30,7 @@ def export_to_litertlm(
     prefill_seq_len=None,
     quant_config=None,
     separate_vision_encoder=False,
+    hf_tokenizer_path=None,
     **kwargs,
 ):
     """Export a KerasHub CausalLM model to a LiteRT-LM bundle.
@@ -134,6 +135,11 @@ def export_to_litertlm(
             separate ``VISION_ENCODER`` and ``VISION_ADAPTER`` TFLite models,
             and have ``PREFILL_DECODE`` consume pre-computed ``mm_embedding``
             tensors instead of raw images. Defaults to ``False``.
+        hf_tokenizer_path: Optional str. Path to a HuggingFace ``tokenizer.json``
+            file to bundle instead of the model's native tokenizer. Use this for
+            BytePair / HuggingFace tokenizers that cannot be materialized as a
+            SentencePiece ``.spm`` file. When provided, the native tokenizer
+            validation is skipped. Defaults to ``None``.
         **kwargs: Additional kwargs forwarded to ``litert_torch`` signature
             tracing.
 
@@ -202,7 +208,20 @@ def export_to_litertlm(
             )
 
     tokenizer = _get_tokenizer(model)
-    _validate_sentencepiece_tokenizer(tokenizer)
+    if hf_tokenizer_path is not None:
+        hf_tokenizer_path = os.fspath(hf_tokenizer_path)
+        if not os.path.isfile(hf_tokenizer_path):
+            raise ValueError(
+                "`hf_tokenizer_path` must point to an existing file. "
+                f"Received: {hf_tokenizer_path!r}"
+            )
+        if not hf_tokenizer_path.endswith(".json"):
+            raise ValueError(
+                "`hf_tokenizer_path` must point to a `tokenizer.json` file. "
+                f"Received: {hf_tokenizer_path!r}"
+            )
+    else:
+        _validate_sentencepiece_tokenizer(tokenizer)
     cache_cfg = _get_cache_config(model)
     num_layers = cache_cfg["num_layers"]
     cache_length = cache_cfg["cache_length"]
@@ -532,9 +551,12 @@ def export_to_litertlm(
                 prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
                 edge_model.export(prefill_tflite_path)
 
-            tokenizer_path = _materialize_sentencepiece_tokenizer(
-                tokenizer, temp_dir
-            )
+            if hf_tokenizer_path is not None:
+                tokenizer_path = hf_tokenizer_path
+            else:
+                tokenizer_path = _materialize_sentencepiece_tokenizer(
+                    tokenizer, temp_dir
+                )
 
             meta_path = os.path.join(temp_dir, "llm_metadata.pb")
             _build_llm_metadata(
@@ -570,7 +592,10 @@ def export_to_litertlm(
                     litert_lm_builder.TfLiteModelType.VISION_ADAPTER,
                     backend_constraint=backend_constraint,
                 )
-            builder.add_sentencepiece_tokenizer(tokenizer_path)
+            if hf_tokenizer_path is not None:
+                builder.add_hf_tokenizer(tokenizer_path)
+            else:
+                builder.add_sentencepiece_tokenizer(tokenizer_path)
             builder.add_llm_metadata(meta_path)
 
             with open(path, "wb") as output_file:

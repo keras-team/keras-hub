@@ -146,6 +146,88 @@ class TestLiteRTLmExport(TestCase):
         self.assertIn("prefill_8", signatures)
         self.assertIn("decode", signatures)
 
+    def test_export_with_hf_tokenizer_path(self):
+        """Verify export with a user-provided HuggingFace tokenizer.json."""
+        import keras
+
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        try:
+            import litert_lm
+            import tokenizers
+        except ImportError:
+            self.skipTest(
+                "This test requires `litert-lm` and `tokenizers`."
+            )
+
+        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
+        tokenizer = GemmaTokenizer(proto=proto)
+        vocab_size = tokenizer.vocabulary_size()
+
+        # Build a tiny HuggingFace BPE tokenizer with the same vocab size.
+        vocab = {
+            "<pad>": 0,
+            "<s>": 1,
+            "</s>": 2,
+            "<unk>": 3,
+        }
+        for i in range(4, vocab_size):
+            vocab[f"tok{i}"] = i
+
+        hf_tokenizer = tokenizers.Tokenizer(
+            tokenizers.models.BPE(vocab=vocab, merges=[])
+        )
+        hf_tokenizer.pre_tokenizer = tokenizers.pre_tokenizers.Whitespace()
+        hf_tokenizer.add_special_tokens(["<pad>", "<s>", "</s>", "<unk>"])
+
+        hf_tokenizer_path = os.path.join(
+            self.get_temp_dir(), "tokenizer.json"
+        )
+        hf_tokenizer.save(hf_tokenizer_path)
+
+        backbone = GemmaBackbone(
+            vocabulary_size=vocab_size,
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=1,
+            hidden_dim=32,
+            head_dim=8,
+            intermediate_dim=64,
+            max_sequence_length=8,
+        )
+        preprocessor = GemmaCausalLMPreprocessor(
+            tokenizer=tokenizer, sequence_length=8
+        )
+        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
+
+        rng = np.random.default_rng(42)
+        weights = model.get_weights()
+        for i in range(len(weights)):
+            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
+        model.set_weights(weights)
+
+        path = os.path.join(self.get_temp_dir(), "test_hf_tokenizer.litertlm")
+        model.export(
+            path,
+            format="litertlm",
+            prefill_seq_len=8,
+            hf_tokenizer_path=hf_tokenizer_path,
+        )
+
+        self.assertTrue(os.path.exists(path))
+
+        # Smoke-test that the LiteRT-LM runtime can construct an Engine from
+        # the bundle. Full generation requires a real-world HF tokenizer; the
+        # synthetic one above is sufficient to prove `add_hf_tokenizer` was
+        # used and the bundle structure is valid.
+        engine = litert_lm.Engine(
+            path,
+            backend=litert_lm.Backend.CPU(),
+            max_num_tokens=4,
+        )
+        self.assertIsNotNone(engine)
+
     def test_export_outputs_match_keras(self):
         """Verify that exported TFLite outputs match Keras eager outputs."""
         import keras
