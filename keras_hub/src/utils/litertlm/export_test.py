@@ -23,6 +23,7 @@ from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
 
 
 @unittest.skipIf(
@@ -1042,3 +1043,10 @@ class TestLiteRTLmExport(TestCase):
                 atol=1e-4,
                 rtol=1e-4,
             )
+
+    def test_cpu_default_device_scope_restores_device(self):
+        """_cpu_default_device_scope restores the original default device."""
+        original = torch.get_default_device()
+        with _cpu_default_device_scope():
+            self.assertEqual(torch.get_default_device(), torch.device("cpu"))
+        self.assertEqual(torch.get_default_device(), original)
