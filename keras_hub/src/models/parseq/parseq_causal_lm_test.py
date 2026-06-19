@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 
@@ -127,3 +129,15 @@ class PARSeqCausalLMTest(TestCase):
             comparison_mode="statistical",
             output_thresholds={"*": {"max": 1e-3, "mean": 1e-4}},
         )
+
+    def test_litertlm_export_unsupported(self):
+        model = PARSeqCausalLM(**self.init_kwargs)
+        with self.assertRaisesRegex(
+            ValueError,
+            "LiteRT-LM export supports.*tokenizers",
+        ):
+            model.export(
+                os.path.join(self.get_temp_dir(), "model.litertlm"),
+                format="litertlm",
+                prefill_seq_len=8,
+            )

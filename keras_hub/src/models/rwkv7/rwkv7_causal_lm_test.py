@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch
 
 from keras import ops
@@ -117,3 +118,20 @@ class RWKV7CausalLMTest(TestCase):
             output = causal_lm.generate(prompt, max_length=16)
             except_output = [t + " " for t in prompt]
             self.assertEqual(except_output, output)
+
+    def test_litertlm_export_unsupported(self):
+        """
+        Test that exporting a tiny RWKV7 model to LiteRT-LM raises a
+        tokenizer-related ValueError, since RWKV7 tokenizers are not
+        supported.
+        """
+        model = RWKV7CausalLM(**self.init_kwargs)
+        with self.assertRaisesRegex(
+            ValueError,
+            "LiteRT-LM export supports.*tokenizers",
+        ):
+            model.export(
+                os.path.join(self.get_temp_dir(), "model.litertlm"),
+                format="litertlm",
+                prefill_seq_len=8,
+            )

@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch
 
 import pytest
@@ -43,6 +44,18 @@ class OPTCausalLMTest(TestCase):
         }
         self.train_data = ([" airplane at airport", " airplane at airport"],)
         self.input_data = self.preprocessor(*self.train_data)[0]
+
+    def test_litertlm_export_unsupported(self):
+        model = OPTCausalLM(**self.init_kwargs)
+        with self.assertRaisesRegex(
+            ValueError,
+            "Cannot infer HuggingFace tokenizer family.*Supported families",
+        ):
+            model.export(
+                os.path.join(self.get_temp_dir(), "model.litertlm"),
+                format="litertlm",
+                prefill_seq_len=8,
+            )
 
     def test_causal_lm_basics(self):
         self.run_task_test(

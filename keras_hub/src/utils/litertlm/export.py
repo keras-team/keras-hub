@@ -236,7 +236,15 @@ def export_to_litertlm(
             )
     elif _is_sentencepiece_tokenizer(tokenizer):
         _validate_sentencepiece_tokenizer(tokenizer)
-    elif not isinstance(tokenizer, BytePairTokenizer):
+    elif isinstance(tokenizer, BytePairTokenizer):
+        family = infer_hf_tokenizer_family(tokenizer)
+        if family is None:
+            raise ValueError(
+                "Cannot infer HuggingFace tokenizer family from "
+                f"{type(tokenizer).__module__}.{type(tokenizer).__name__}. "
+                "Supported families are 'gpt2', 'llama3', and 'qwen3'."
+            )
+    else:
         raise ValueError(
             "LiteRT-LM export supports SentencePiece tokenizers and known "
             "BytePair tokenizer families (gpt2, llama3, qwen3). Received: "
@@ -656,14 +664,26 @@ def _get_cache_config(model):
     num_kv_heads = getattr(backbone, "num_key_value_heads", None)
     if num_kv_heads is None:
         num_kv_heads = getattr(
-            backbone, "num_heads", getattr(backbone, "num_query_heads", 1)
+            backbone,
+            "num_query_heads",
+            getattr(
+                backbone,
+                "num_heads",
+                getattr(backbone, "num_attention_heads", 1),
+            ),
         )
 
     head_dim = getattr(backbone, "head_dim", None)
     if head_dim is None:
         hidden_dim = getattr(backbone, "hidden_dim", None)
         num_qh = getattr(
-            backbone, "num_query_heads", getattr(backbone, "num_heads", None)
+            backbone,
+            "num_query_heads",
+            getattr(
+                backbone,
+                "num_heads",
+                getattr(backbone, "num_attention_heads", None),
+            ),
         )
         if hidden_dim is not None and num_qh is not None and num_qh > 0:
             head_dim = hidden_dim // num_qh

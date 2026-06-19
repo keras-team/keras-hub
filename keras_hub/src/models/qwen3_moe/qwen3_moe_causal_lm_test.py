@@ -1,7 +1,7 @@
 import os
 from unittest.mock import patch
 
-os.environ["KERAS_BACKEND"] = "jax"
+os.environ["KERAS_BACKEND"] = "torch"
 
 import pytest
 from keras import ops
@@ -130,6 +130,18 @@ class Qwen3MoeCausalLMTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    def test_litertlm_export_unsupported(self):
+        model = Qwen3MoeCausalLM(**self.init_kwargs)
+        with self.assertRaisesRegex(
+            ValueError,
+            "Cannot infer HuggingFace tokenizer family",
+        ):
+            model.export(
+                os.path.join(self.get_temp_dir(), "model.litertlm"),
+                format="litertlm",
+                prefill_seq_len=8,
+            )
 
     @pytest.mark.extra_large
     def test_all_presets(self):

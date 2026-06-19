@@ -143,6 +143,36 @@ class Qwen3CausalLMTest(TestCase):
             output_thresholds={"*": {"max": 1e-3, "mean": 1e-5}},
         )
 
+    def test_litertlm_export(self):
+        # Use a sequence length of 8 so the requested prefill length fits in
+        # the KV cache without altering the existing test fixtures.
+        preprocessor = Qwen3CausalLMPreprocessor(
+            self.preprocessor.tokenizer,
+            sequence_length=8,
+        )
+        backbone = Qwen3Backbone(
+            vocabulary_size=preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            head_dim=2,
+            intermediate_dim=16,
+        )
+        init_kwargs = {
+            "preprocessor": preprocessor,
+            "backbone": backbone,
+        }
+        input_data = preprocessor(*self.train_data)[0]
+        self.run_litertlm_export_test(
+            cls=Qwen3CausalLM,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+            prefill_seq_len=8,
+            verify_model_type="qwen3",
+            verify_numerics=True,
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in Qwen3CausalLM.presets:

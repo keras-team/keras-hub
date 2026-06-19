@@ -144,6 +144,34 @@ class Llama3CausalLMTest(TestCase):
             output_thresholds={"*": {"max": 1e-3, "mean": 1e-5}},
         )
 
+    def test_litertlm_export(self):
+        """Test LiteRT-LM export for Llama3CausalLM with small test model."""
+        preprocessor = Llama3CausalLMPreprocessor(
+            Llama3Tokenizer(vocabulary=self.vocab, merges=self.merges),
+            sequence_length=8,
+        )
+        backbone = Llama3Backbone(
+            vocabulary_size=preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+        )
+        init_kwargs = {
+            "preprocessor": preprocessor,
+            "backbone": backbone,
+        }
+        input_data = preprocessor(*self.train_data)[0]
+        self.run_litertlm_export_test(
+            cls=Llama3CausalLM,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+            prefill_seq_len=8,
+            verify_model_type="generic_model",
+            verify_numerics=True,
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in Llama3CausalLM.presets:

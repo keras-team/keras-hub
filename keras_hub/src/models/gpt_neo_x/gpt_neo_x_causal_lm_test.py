@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch
 
 import pytest
@@ -122,3 +123,17 @@ class GPTNeoXCausalLMTest(TestCase):
                 "mean": 1e-4,
             },  # More lenient thresholds for numerical differences
         )
+
+    def test_litertlm_export_unsupported(self):
+        """GPT-NeoX tokenizer is not a supported LiteRT-LM family."""
+        model = GPTNeoXCausalLM(**self.init_kwargs)
+        with self.assertRaisesRegex(
+            ValueError,
+            "Cannot infer HuggingFace tokenizer family|"
+            "Supported families are 'gpt2', 'llama3', and 'qwen3'",
+        ):
+            model.export(
+                os.path.join(self.get_temp_dir(), "model.litertlm"),
+                format="litertlm",
+                prefill_seq_len=8,
+            )

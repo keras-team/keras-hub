@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch
 
 import pytest
@@ -174,6 +175,18 @@ class FalconCausalLMTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    def test_litertlm_export_unsupported(self):
+        model = FalconCausalLM(**self.init_kwargs)
+        with self.assertRaisesRegex(
+            ValueError,
+            "Cannot infer HuggingFace tokenizer family.*Supported families",
+        ):
+            model.export(
+                os.path.join(self.get_temp_dir(), "model.litertlm"),
+                format="litertlm",
+                prefill_seq_len=8,
+            )
 
     @pytest.mark.extra_large
     def test_all_presets(self):

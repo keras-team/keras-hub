@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch
 
 import pytest
@@ -126,6 +127,26 @@ class Qwen3_5CausalLMTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    def test_litertlm_export_unsupported(self):
+        # Use a preprocessor with sequence_length >= prefill_seq_len so the
+        # unsupported-tokenizer error is reached before cache-length checks.
+        preprocessor = Qwen3_5CausalLMPreprocessor(
+            Qwen3_5Tokenizer(vocabulary=self.vocab, merges=self.merges),
+            sequence_length=8,
+        )
+        init_kwargs = dict(self.init_kwargs)
+        init_kwargs["preprocessor"] = preprocessor
+        model = Qwen3_5CausalLM(**init_kwargs)
+        with self.assertRaisesRegex(
+            ValueError,
+            "Cannot infer HuggingFace tokenizer family.*Supported families",
+        ):
+            model.export(
+                os.path.join(self.get_temp_dir(), "model.litertlm"),
+                format="litertlm",
+                prefill_seq_len=8,
+            )
 
     @pytest.mark.extra_large
     def test_all_presets(self):
