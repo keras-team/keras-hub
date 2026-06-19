@@ -493,6 +493,12 @@ class CausalLM(Task):
                   ``CHANNELWISE`` (default), ``BLOCKWISE_32``,
                   ``BLOCKWISE_64``, ``BLOCKWISE_128``, or
                   ``BLOCKWISE_256``.
+                - ``separate_vision_encoder``: ``bool``. If ``True`` and the
+                  model has a vision encoder, export separate
+                  ``VISION_ENCODER`` and ``VISION_ADAPTER`` TFLite models so
+                  the main ``PREFILL_DECODE`` graph consumes pre-computed
+                  ``mm_embedding`` tensors instead of raw images. Defaults to
+                  ``False``.
 
         Returns:
             The exported artifact path.

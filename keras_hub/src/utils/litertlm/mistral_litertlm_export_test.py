@@ -1,6 +1,17 @@
 import os
+import unittest
 
 import numpy as np
+
+try:
+    import litert_torch
+except ImportError:
+    litert_torch = None
+
+try:
+    import litert_lm_builder
+except ImportError:
+    litert_lm_builder = None
 
 from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
 from keras_hub.src.models.mistral.mistral_causal_lm import MistralCausalLM
@@ -11,6 +22,16 @@ from keras_hub.src.models.mistral.mistral_tokenizer import MistralTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
+@unittest.skipIf(
+    litert_torch is None,
+    "LiteRT-LM export requires `litert-torch`. "
+    "Install it with: pip install litert-torch",
+)
+@unittest.skipIf(
+    litert_lm_builder is None,
+    "LiteRT-LM export requires `litert-lm-builder`. "
+    "Install it with: pip install litert-lm-builder",
+)
 class TestMistralLiteRTLmExport(TestCase):
     def test_mistral_litertlm_export_baked_in(self):
         proto = os.path.join(self.get_test_data_dir(), "mistral_test_vocab.spm")

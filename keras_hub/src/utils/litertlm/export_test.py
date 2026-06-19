@@ -298,7 +298,7 @@ class TestLiteRTLmExport(TestCase):
             )
 
     def test_export_with_backend_constraint(self):
-        """Verify export with an explicit backend_constraint succeeds."""
+        """Verify export with valid backend_constraints succeeds."""
         import keras
 
         if keras.config.backend() != "torch":
@@ -328,14 +328,18 @@ class TestLiteRTLmExport(TestCase):
             weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
         model.set_weights(weights)
 
-        path = os.path.join(self.get_temp_dir(), "test_backend.litertlm")
-        model.export(
-            path,
-            format="litertlm",
-            prefill_seq_len=8,
-            backend_constraint="cpu",
-        )
-        self.assertTrue(os.path.exists(path))
+        for backend in ("cpu", "gpu", "npu", "gpu_artisan"):
+            with self.subTest(backend=backend):
+                path = os.path.join(
+                    self.get_temp_dir(), f"test_backend_{backend}.litertlm"
+                )
+                model.export(
+                    path,
+                    format="litertlm",
+                    prefill_seq_len=8,
+                    backend_constraint=backend,
+                )
+                self.assertTrue(os.path.exists(path))
 
     def test_export_invalid_backend_constraint(self):
         """Verify invalid backend_constraint raises ValueError."""

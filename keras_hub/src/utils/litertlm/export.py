@@ -1022,9 +1022,13 @@ def _detect_llm_model_type(model):
             "Qwen3CausalLM",
             "qwen3",
         ),
-        # NOTE: LlmModelType does not have dedicated "llama" / "qwen2"
-        # fields; map those checkpoints to generic_model so the protobuf oneof
-        # stays valid.
+        (
+            "keras_hub.src.models.qwen.qwen_causal_lm",
+            "QwenCausalLM",
+            "qwen2p5",
+        ),
+        # NOTE: LlmModelType does not have a dedicated "llama" field; map
+        # Llama checkpoints to generic_model so the protobuf oneof stays valid.
         (
             "keras_hub.src.models.llama.llama_causal_lm",
             "LlamaCausalLM",
@@ -1053,6 +1057,8 @@ def _detect_llm_model_type(model):
         return "generic_model"
     if "Qwen3" in cls_name:
         return "qwen3"
+    if "Qwen" in cls_name:
+        return "qwen2p5"
     if "Llama" in cls_name:
         return "generic_model"
     return "generic_model"
