@@ -1,5 +1,7 @@
 import json
 
+from keras.src.saving import serialization_lib
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
@@ -7,6 +9,17 @@ from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 def _load_dict(dict_or_path):
     if isinstance(dict_or_path, str):
+        if serialization_lib.in_safe_mode():
+            raise ValueError(
+                "Requested the loading of a vocabulary file outside of the "
+                "model archive. This carries a potential risk of loading "
+                "arbitrary and sensitive files and thus it is disallowed "
+                "by default. If you trust the source of the artifact, you "
+                "can override this error by passing `safe_mode=False` to "
+                "the loading function, or calling "
+                "`keras.config.enable_unsafe_deserialization()`. "
+                f"Vocabulary file: '{dict_or_path}'"
+            )
         with open(dict_or_path, "r", encoding="utf-8") as f:
             dict_or_path = json.load(f)
     return dict_or_path
