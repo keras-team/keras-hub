@@ -52,16 +52,26 @@ def _run_vision_encoder(vision_encoder, images):
     features with shape ``[B * N, tokens_per_image, dim]``.
     """
     if not _encoder_expects_single_image(vision_encoder):
-        return vision_encoder(images)
+        out = vision_encoder(images)
+    else:
+        batch_size, num_images, height, width, channels = images.shape
+        flat_images = images.reshape(
+            batch_size * num_images, height, width, channels
+        )
+        out = vision_encoder(flat_images)
+    return _extract_vision_features(out)
 
-    batch_size, num_images, height, width, channels = images.shape
-    flat_images = images.reshape(
-        batch_size * num_images, height, width, channels
-    )
-    features = vision_encoder(flat_images)
-    if isinstance(features, (tuple, list)):
-        features = features[0]
-    return features
+
+def _extract_vision_features(out):
+    """Extract the feature tensor from a vision encoder output."""
+    if isinstance(out, dict):
+        features = out.get("features")
+        if features is None:
+            features = next(iter(out.values()))
+        return features
+    if isinstance(out, (tuple, list)):
+        return out[0]
+    return out
 
 
 class KerasHubLiteRTAdapter(nn.Module):
@@ -205,26 +215,11 @@ class KerasHubLiteRTAdapter(nn.Module):
             audio_mask=audio_mask,
             audio_indices=audio_indices,
         )
-        if self.cache_layout == "gemma3n":
-            # Gemma3n's attention mask computation requires the padding mask
-            # to span the full cache length, otherwise a seq_len shorter than
-            # cache_length causes a broadcasting error between the causal and
-            # padding masks. During export we always pass full-length valid
-            # tokens, so a ones mask of cache length is correct.
-            call_kwargs["padding_mask"] = torch.ones(
-                (tokens.shape[0], self.cache_length),
-                dtype=torch.bool,
-                device=tokens.device,
-            )
-        logits, _, updated_cache = self.keras_model.call_with_cache(
-            tokens,
-            cache,
-            cache_update_index,
-            **call_kwargs,
+        # Prefill returns only KV caches; LiteRT-LM extracts last-token logits
+        # via a dedicated decode step.
+        return self._call_with_cache(
+            tokens, cache, cache_update_index, call_kwargs, return_logits=False
         )
-        # Return ONLY the KV cache outputs (no logits).
-        outputs = self._unstack_kv_cache(updated_cache)
-        return outputs
 
     def forward_decode(self, tokens, input_pos, mask=None, **kv_cache):
         """Decode step – processes a single token at *input_pos*.
@@ -244,7 +239,20 @@ class KerasHubLiteRTAdapter(nn.Module):
             audio_mask=None,
             audio_indices=None,
         )
+        return self._call_with_cache(
+            tokens, cache, cache_update_index, call_kwargs, return_logits=True
+        )
+
+    def _call_with_cache(
+        self, tokens, cache, cache_update_index, call_kwargs, return_logits
+    ):
+        """Run ``keras_model.call_with_cache`` and return updated KV caches."""
         if self.cache_layout == "gemma3n":
+            # Gemma3n's attention mask computation requires the padding mask
+            # to span the full cache length, otherwise a seq_len shorter than
+            # cache_length causes a broadcasting error between the causal and
+            # padding masks. During export we always pass full-length valid
+            # tokens, so a ones mask of cache length is correct.
             call_kwargs["padding_mask"] = torch.ones(
                 (tokens.shape[0], self.cache_length),
                 dtype=torch.bool,
@@ -257,7 +265,8 @@ class KerasHubLiteRTAdapter(nn.Module):
             **call_kwargs,
         )
         outputs = self._unstack_kv_cache(updated_cache)
-        outputs["logits"] = logits
+        if return_logits:
+            outputs["logits"] = logits
         return outputs
 
     def _stack_kv_cache(self, kv_cache):
@@ -337,15 +346,7 @@ class KerasHubVisionEncoderAdapter(nn.Module):
                 "``pixel_values`` + ``pixel_position_ids``."
             )
 
-        if isinstance(out, dict):
-            features = out.get("features")
-            if features is None:
-                features = next(iter(out.values()))
-        elif isinstance(out, (tuple, list)):
-            features = out[0]
-        else:
-            features = out
-        return {"features": features}
+        return {"features": _extract_vision_features(out)}
 
 
 class KerasHubVisionAdapter(nn.Module):
@@ -357,6 +358,14 @@ class KerasHubVisionAdapter(nn.Module):
 
     def forward(self, features):
         return {"mm_embedding": features}
+
+
+def _normalize_start_indices(start_indices):
+    """Convert ``start_indices`` to a list preserving tensor elements."""
+    if isinstance(start_indices, (list, tuple)):
+        return list(start_indices)
+    start_indices = torch_core.convert_to_tensor(start_indices, dtype="int64")
+    return [start_indices.reshape(-1)[i] for i in range(start_indices.numel())]
 
 
 @contextlib.contextmanager
@@ -379,17 +388,7 @@ def _traceable_slice_update_scope():
         inputs = torch_core.convert_to_tensor(inputs)
         updates = torch_core.convert_to_tensor(updates)
 
-        # Normalise start_indices to a list while preserving types.
-        if isinstance(start_indices, (list, tuple)):
-            starts = list(start_indices)
-        else:
-            start_indices = torch_core.convert_to_tensor(
-                start_indices, dtype="int64"
-            )
-            starts = [
-                start_indices.reshape(-1)[i]
-                for i in range(start_indices.numel())
-            ]
+        starts = _normalize_start_indices(start_indices)
 
         # Dimensions whose start is a tensor → potentially dynamic.
         tensor_dims = []
@@ -431,17 +430,7 @@ def _traceable_slice_update_scope():
     def _patched_slice(inputs, start_indices, shape):
         inputs = torch_core.convert_to_tensor(inputs)
 
-        # Normalise start_indices and shape to lists while preserving types.
-        if isinstance(start_indices, (list, tuple)):
-            starts = list(start_indices)
-        else:
-            start_indices = torch_core.convert_to_tensor(
-                start_indices, dtype="int64"
-            )
-            starts = [
-                start_indices.reshape(-1)[i]
-                for i in range(start_indices.numel())
-            ]
+        starts = _normalize_start_indices(start_indices)
 
         if isinstance(shape, (list, tuple)):
             lengths = list(shape)
