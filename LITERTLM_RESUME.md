@@ -99,6 +99,27 @@ Works and returns text. With dummy-weight tiny models the output is meaningless 
 3. **Audio encoder separation** blocked upstream by `litert-torch` issue #1039.
 4. **BytePair / HuggingFace tokenizers** intentionally not supported. The LiteRT-LM / MediaPipe LLM Inference runtime contract only supports SentencePiece model protobuf files as the tokenizer model. BPE/HF tokenizers would need a lossy conversion to SentencePiece (the upstream `litert_torch/generative/tools/tokenizer_to_sentencepiece.py` notes ~1% token-ID mismatch for Llama3.2), which is out of scope for this PR.
 
+## Latest Test Result
+
+Full targeted LiteRT-LM suite (with `-n auto`):
+
+```bash
+CUDA_VISIBLE_DEVICES="" KERAS_BACKEND=torch pytest \
+  keras_hub/src/utils/litertlm/ \
+  keras_hub/src/models/gemma/gemma_causal_lm_test.py::GemmaCausalLMTest::test_litertlm_export \
+  keras_hub/src/models/gemma3/gemma3_causal_lm_test.py::Gemma3CausalLMTest::test_litertlm_export \
+  keras_hub/src/models/gemma3n/gemma3n_causal_lm_test.py::Gemma3nCausalLMTest::test_litertlm_export \
+  keras_hub/src/models/gemma4/gemma4_causal_lm_test.py::Gemma4CausalLMTest::test_litertlm_export \
+  keras_hub/src/models/llama/llama_causal_lm_test.py::LlamaCausalLMTest::test_litertlm_export \
+  keras_hub/src/models/mistral/mistral_causal_lm_test.py::MistralCausalLMTest::test_litertlm_export \
+  keras_hub/src/models/mixtral/mixtral_causal_lm_test.py::MixtralCausalLMTest::test_litertlm_export \
+  keras_hub/src/models/pali_gemma/pali_gemma_causal_lm_test.py::PaliGemmaCausalLMTest::test_litertlm_export \
+  keras_hub/src/models/phi3/phi3_causal_lm_test.py::Phi3CausalLMTest::test_litertlm_export \
+  -n auto -q
+```
+
+Result: **32 passed, 17 skipped, 4 subtests passed in 142.77s**.
+
 ## Pre-Commit Status
 
 Passed on changed files:

@@ -48,7 +48,7 @@ KERAS_BACKEND=torch pytest keras_hub/src/utils/litertlm/ \
 
 ## Last Test Result
 - `export_test.py`: 12 passed, 3 skipped, 4 subtests passed (57.53s)
-- Full targeted suite (iteration 15): 32 passed, 17 skipped, 4 subtests passed
+- Full targeted suite (iteration 15): **32 passed, 17 skipped, 4 subtests passed in 142.77s**
 
 ## Open Items / Known Gaps
 - Audio export for Gemma3n is not enabled end-to-end (audio encoder exists but
