@@ -558,10 +558,15 @@ def _traceable_one_hot_scope():
             output = torch_core.convert_to_tensor(output, dtype=dtype)
         dims = output.dim()
         if axis < 0:
-            axis = dims + axis + 1
-        if axis != -1 and axis != dims:
+            axis = dims + axis
+        if axis < 0 or axis >= dims:
+            raise ValueError(
+                f"`axis` {axis} is out of bounds for one-hot output with "
+                f"{dims} dimensions."
+            )
+        if axis != dims - 1:
             new_axes_order = list(range(dims))
-            new_axes_order[axis] = -1
+            new_axes_order[axis] = dims - 1
             for ax in range(axis + 1, dims):
                 new_axes_order[ax] -= 1
             output = output.permute(new_axes_order)

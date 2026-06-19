@@ -173,6 +173,19 @@ def export_to_litertlm(
             "Install it with: pip install litert-torch"
         )
 
+    if quant_config is not None and litert_torch is not None:
+        quant_config_cls = getattr(
+            getattr(litert_torch, "quantize", None), "quant_config", None
+        )
+        if quant_config_cls is not None and not isinstance(
+            quant_config, quant_config_cls.QuantConfig
+        ):
+            raise ValueError(
+                "`quant_config` must be an instance of "
+                "`litert_torch.quantize.quant_config.QuantConfig` or None. "
+                f"Received: {type(quant_config).__name__}."
+            )
+
     if backend_constraint is not None:
         if not isinstance(backend_constraint, str):
             raise ValueError(
@@ -661,7 +674,12 @@ def _get_vision_config(model):
         # PaliGemma exposes the per-image token count via
         # ``image_sequence_length`` rather than ``num_vision_tokens_per_image``.
         num_vision_tokens_per_image = getattr(
-            backbone, "image_sequence_length", 0
+            backbone, "image_sequence_length", None
+        )
+    if num_vision_tokens_per_image is None and preprocessor is not None:
+        # Gemma3/Gemma3n expose the per-image token count on the preprocessor.
+        num_vision_tokens_per_image = getattr(
+            preprocessor, "num_vision_tokens_per_image", 0
         )
     num_vision_tokens = num_vision_tokens_per_image * max_images
     patch_size = getattr(vision_encoder, "patch_size", None)
@@ -685,11 +703,20 @@ def _get_audio_config(model):
     if audio_encoder is None:
         return None
     preprocessor = getattr(model, "preprocessor", None)
-    max_clips = getattr(preprocessor, "max_audio_clips_per_prompt", 1)
+    max_clips = getattr(preprocessor, "max_audio_clips_per_prompt", None)
+    if max_clips is None:
+        # Gemma3n names this attribute ``max_audios_per_prompt``.
+        max_clips = getattr(preprocessor, "max_audios_per_prompt", 1)
     num_frames = getattr(preprocessor, "max_audio_frames", 100)
-    num_audio_tokens = (
-        getattr(backbone, "num_audio_tokens_per_clip", 0) * max_clips
+    num_audio_tokens_per_clip = getattr(
+        backbone, "num_audio_tokens_per_clip", None
     )
+    if num_audio_tokens_per_clip is None and preprocessor is not None:
+        # Gemma3n names this attribute ``num_audio_tokens_per_audio``.
+        num_audio_tokens_per_clip = getattr(
+            preprocessor, "num_audio_tokens_per_audio", 0
+        )
+    num_audio_tokens = num_audio_tokens_per_clip * max_clips
     audio_input_feat_size = getattr(preprocessor, "audio_input_feat_size", 128)
     return {
         "max_clips_per_prompt": max_clips,
