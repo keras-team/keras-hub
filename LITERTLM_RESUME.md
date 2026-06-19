@@ -126,7 +126,13 @@ CUDA_VISIBLE_DEVICES="" KERAS_BACKEND=torch pytest \
 
 Result: **28 passed, 18 skipped, 8 subtests passed in 76.93s** (all `keras_hub/src/utils/litertlm/` tests).
 
-Per-model `test_litertlm_export` suite (SentencePiece families): **9 passed in 78.24s**.
+Per-model `test_litertlm_export` suite (all 24 families): **24 passed in 102.92s**.
+
+## Pixel 9 Verification
+- `tiny_gemma3_bucketed.litertlm` (~500 KB): instrumented test **PASSED**
+- `gemma3_270m_it.litertlm` (~1 GB): instrumented test **PASSED**
+- HF-converted tiny GPT2 bundle: instrumented test **PASSED** (prompt `hi` → generated `hohohohohohohohohohohohohoho`)
+- `gemma3_270m_it_int4_bucketed_32_64_128.litertlm`: **FAILED** with `GATHER_ND failed to invoke` on device CPU delegate (INT4 runtime issue, not exporter).
 
 ## Pre-Commit Status
 

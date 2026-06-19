@@ -59,16 +59,23 @@ KERAS_BACKEND=torch pytest keras_hub/src/utils/litertlm/ \
 
 ## Last Test Result
 - `keras_hub/src/utils/litertlm/` full suite: **28 passed, 18 skipped, 8 subtests passed in 76.93s**
-- Per-model SentencePiece suite: **9 passed in 78.24s**
+- Per-model suite (all 24 families): **24 passed in 102.92s**
+
+## Pixel 9 Verification
+- `tiny_gemma3_bucketed.litertlm` (~500 KB): **PASSED**
+- `gemma3_270m_it.litertlm` (~1 GB): **PASSED**
+- `gemma3_270m_it_int4_bucketed_32_64_128.litertlm`: **FAILED** — `GATHER_ND` op fails on device CPU delegate (INT4 compatibility issue, not exporter issue).
+- HF-converted tiny GPT2 bundle (`tiny_gpt2_hf_char.litertlm`): **PASSED** — generated `hohohohohohohohohohohohohoho` from prompt `hi`.
 
 ## Open Items / Known Gaps
 - Audio export for Gemma3n is not enabled end-to-end (audio encoder exists but
   is not wired into the export sample inputs path for separate encoders).
 - Quantization configs are accepted but not covered by dedicated tests.
 - Externalized weights / streaming export is not supported.
-- Generation smoke test output with random weights is garbage (`<pad>` tokens);
-  it only verifies the runtime executes without error.
-- Pixel 9 end-to-end verification is pending for HF-converted bundles.
+- Generation smoke test output with random weights is garbage; it only verifies
+  the runtime executes without error.
+- INT4 weight-only models fail on Pixel 9 CPU delegate (`GATHER_ND` invoke
+  error).
 
 ## Key Files Changed
 - `keras_hub/src/utils/litertlm/export.py`
