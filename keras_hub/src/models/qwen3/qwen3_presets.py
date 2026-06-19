@@ -106,12 +106,13 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/qwen-3-embedding/keras/qwen3_embedding_8b_en/1",
     },
-    "harrier_oss_v1_0.6b_en": {
+    "harrier_embedding_oss_06b": {
         "metadata": {
             "description": (
-                "Harrier OSS is a 28-layer Qwen3 model with 596M parameters, "
-                "optimized for efficiency and fast inference on "
-                "resource-constrained devices."
+                "Microsoft harrier-oss-v1 0.6B multilingual text embedding "
+                "model based on the Qwen3-0.6B architecture, fine-tuned for "
+                "dense retrieval and semantic similarity across 94+ languages. "
+                "Achieves 69.0 on Multilingual MTEB v2."
             ),
             "params": 596049920,
             "path": "qwen3",
