@@ -110,4 +110,121 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/bert/keras/bert_tiny_en_uncased_sst2/5",
     },
+    # Sentence-transformer models (BERT backbone, fine-tuned for embeddings).
+    # "all-*" family: general-purpose sentence embedding models.
+    "all_minilm_l6_v2_en": {
+        "metadata": {
+            "description": (
+                "6-layer MiniLM sentence embedding model. Maps sentences "
+                "to 384-dimensional dense vectors. Trained on 1B+ sentence "
+                "pairs for semantic similarity, search, and clustering."
+            ),
+            "params": 22713216,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/sentence-transformers/keras/all_minilm_l6_v2_en/1",
+    },
+    "all_minilm_l6_v1_en": {
+        "metadata": {
+            "description": (
+                "6-layer MiniLM sentence embedding model (v1). Maps "
+                "sentences to 384-dimensional dense vectors."
+            ),
+            "params": 22713216,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/sentence-transformers/keras/all_minilm_l6_v1_en/1",
+    },
+    "all_minilm_l12_v2_en": {
+        "metadata": {
+            "description": (
+                "12-layer MiniLM sentence embedding model. Maps sentences "
+                "to 384-dimensional dense vectors. Higher accuracy than "
+                "the L6 variant with moderate speed tradeoff."
+            ),
+            "params": 33360000,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/sentence-transformers/keras/all_minilm_l12_v2_en/1",
+    },
+    # "paraphrase-*" family: optimized for paraphrase detection.
+    "paraphrase_minilm_l3_v2_en": {
+        "metadata": {
+            "description": (
+                "3-layer MiniLM model for paraphrase detection. Ultra-fast "
+                "with 384-dimensional sentence embeddings."
+            ),
+            "params": 17066496,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/sentence-transformers/keras/paraphrase_minilm_l3_v2_en/1",
+    },
+    "paraphrase_minilm_l6_v2_en": {
+        "metadata": {
+            "description": (
+                "6-layer MiniLM model for paraphrase detection. Fast "
+                "with 384-dimensional sentence embeddings."
+            ),
+            "params": 22713216,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/sentence-transformers/keras/paraphrase_minilm_l6_v2_en/1",
+    },
+    "paraphrase_minilm_l12_v2_en": {
+        "metadata": {
+            "description": (
+                "12-layer MiniLM model for paraphrase detection with "
+                "384-dimensional sentence embeddings."
+            ),
+            "params": 33360000,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/sentence-transformers/keras/paraphrase_minilm_l12_v2_en/1",
+    },
+    # "multi-qa-*" family: optimized for question answering / semantic search.
+    "multi_qa_minilm_l6_cos_v1_en": {
+        "metadata": {
+            "description": (
+                "6-layer MiniLM model for semantic search with cosine "
+                "similarity. Trained on 215M QA pairs."
+            ),
+            "params": 22713216,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/sentence-transformers/keras/multi_qa_minilm_l6_cos_v1_en/1",
+    },
+    "multi_qa_minilm_l6_dot_v1_en": {
+        "metadata": {
+            "description": (
+                "6-layer MiniLM model for semantic search with dot-product "
+                "similarity. Trained on 215M QA pairs."
+            ),
+            "params": 22713216,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/sentence-transformers/keras/multi_qa_minilm_l6_dot_v1_en/1",
+    },
+    # "msmarco-*" family: optimized for information retrieval.
+    "msmarco_minilm_l6_cos_v5_en": {
+        "metadata": {
+            "description": (
+                "6-layer MiniLM model for information retrieval with "
+                "cosine similarity. Trained on MS MARCO passage ranking."
+            ),
+            "params": 22713216,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/sentence-transformers/keras/msmarco_minilm_l6_cos_v5_en/1",
+    },
+    "msmarco_minilm_l12_cos_v5_en": {
+        "metadata": {
+            "description": (
+                "12-layer MiniLM model for information retrieval with "
+                "cosine similarity. Trained on MS MARCO passage ranking."
+            ),
+            "params": 33360000,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/sentence-transformers/keras/msmarco_minilm_l12_cos_v5_en/1",
+    },
 }

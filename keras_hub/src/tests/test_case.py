@@ -1016,9 +1016,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         train_data,
         expected_output_shape=None,
         batch_size=2,
+        compile_kwargs=None,
     ):
         """Run basic tests for a backbone, including compilation."""
         task = cls(**init_kwargs)
+        if compile_kwargs:
+            task.compile(**compile_kwargs)
         # Check serialization (without a full save).
         self.run_serialization_test(task)
         preprocessor = task.preprocessor

@@ -68,6 +68,12 @@ from keras_hub.src.models.bert.bert_text_classifier_preprocessor import (
 from keras_hub.src.models.bert.bert_text_classifier_preprocessor import (
     BertTextClassifierPreprocessor as BertTextClassifierPreprocessor,
 )
+from keras_hub.src.models.bert.bert_text_embedder import (
+    BertTextEmbedder as BertTextEmbedder,
+)
+from keras_hub.src.models.bert.bert_text_embedder_preprocessor import (
+    BertTextEmbedderPreprocessor as BertTextEmbedderPreprocessor,
+)
 from keras_hub.src.models.bert.bert_tokenizer import (
     BertTokenizer as BertTokenizer,
 )
@@ -845,6 +851,10 @@ from keras_hub.src.models.text_classifier import (
 )
 from keras_hub.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor as TextClassifierPreprocessor,
+)
+from keras_hub.src.models.text_embedder import TextEmbedder as TextEmbedder
+from keras_hub.src.models.text_embedder_preprocessor import (
+    TextEmbedderPreprocessor as TextEmbedderPreprocessor,
 )
 from keras_hub.src.models.text_to_image import TextToImage as TextToImage
 from keras_hub.src.models.text_to_image_preprocessor import (

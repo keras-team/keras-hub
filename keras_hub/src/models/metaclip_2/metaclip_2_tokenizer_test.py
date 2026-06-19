@@ -43,3 +43,16 @@ class MetaCLIP2TokenizerTest(TestCase):
             tokenizer.special_tokens, ["<s>", "<pad>", "</s>", "<unk>"]
         )
         self.assertEqual(tokenizer.special_token_ids, [0, 1, 2, 3])
+
+
+class MetaCLIP2TokenizerTFTest(MetaCLIP2TokenizerTest):
+    """Set `_allow_python_workflow=False` to test TF execution."""
+
+    def setUp(self):
+        super().setUp()
+        self.init_kwargs = {
+            "proto": os.path.join(
+                self.get_test_data_dir(), "xlm_roberta_test_vocab.spm"
+            ),
+            "_allow_python_workflow": False,
+        }
