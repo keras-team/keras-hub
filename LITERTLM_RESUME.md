@@ -2,7 +2,7 @@
 
 **Branch:** `pctablet505/torch-backend-litert-minimal-litertlm`  
 **PR:** https://github.com/keras-team/keras-hub/pull/2705  
-**Last updated:** 2026-06-18
+**Last updated:** 2026-06-19
 
 ## Quick Start
 
@@ -74,6 +74,9 @@ Key packages:
 - `litert-torch==0.9.1`
 - `litert-lm==0.10.0`
 - `litert-lm-builder==0.13.0`
+
+System notes:
+- `libvulkan1` is required so `litert_lm.Engine` can load the CPU/GPU delegate in runtime smoke tests (`sudo apt install libvulkan1`).
 
 ## Verified End-to-End Generation in Python
 

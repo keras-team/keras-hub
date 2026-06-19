@@ -138,8 +138,8 @@ class TestGemma3nLiteRTLmExport(TestCase):
     def test_gemma3n_litertlm_export_baked_in_vision(self):
         model = self._build_vision_text_model()
         self._set_random_weights(model)
-        # `run_litertlm_export_test` will generate random image input data
-        # when input_data is None for a multimodal model.
+        # `input_data=None` skips the text-only numeric parity check; the
+        # exporter builds its own vision sample inputs from the vision config.
         self.run_litertlm_export_test(
             model=model,
             input_data=None,

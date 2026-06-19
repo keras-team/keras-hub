@@ -633,13 +633,24 @@ def _get_vision_config(model):
 
     image_size = getattr(backbone, "image_size", None)
     if image_size is None:
-        # Gemma3n stores the vision input shape inside the encoder config.
-        vision_encoder_config = getattr(backbone, "vision_encoder_config", {})
-        image_shape = vision_encoder_config.get("image_shape")
-        if image_shape is not None:
-            image_size = image_shape[0]
+        # Gemma3n does not set backbone.image_size; read from the preprocessor
+        # image converter first, then fall back to the encoder config.
+        image_converter = getattr(preprocessor, "image_converter", None)
+        if image_converter is not None:
+            image_size = getattr(image_converter, "image_size", None)
+        if image_size is None:
+            vision_encoder_config = getattr(
+                backbone, "vision_encoder_config", {}
+            )
+            image_shape = vision_encoder_config.get("image_shape")
+            if image_shape is not None:
+                image_size = image_shape[0]
     if image_size is None:
         image_size = 224
+    # Image converters may report a (height, width) tuple; downstream code
+    # currently assumes a square image, so use the height as the size.
+    if isinstance(image_size, (list, tuple)):
+        image_size = image_size[0]
 
     num_vision_tokens_per_image = getattr(
         backbone, "num_vision_tokens_per_image", None
