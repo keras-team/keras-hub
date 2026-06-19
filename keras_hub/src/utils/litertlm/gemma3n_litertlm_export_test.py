@@ -24,7 +24,19 @@ from keras_hub.src.tests.mocks.mock_gemma3n_tokenizer import (
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
+try:
+    import litert_torch
+except ImportError:
+    litert_torch = None
 
+try:
+    import litert_lm_builder
+except ImportError:
+    litert_lm_builder = None
+
+
+@unittest.skipIf(litert_torch is None, "Requires litert-torch.")
+@unittest.skipIf(litert_lm_builder is None, "Requires litert-lm-builder.")
 class TestGemma3nLiteRTLmExport(TestCase):
     def setUp(self):
         self.tokenizer = MockGemma3nTokenizer()
@@ -130,7 +142,7 @@ class TestGemma3nLiteRTLmExport(TestCase):
             model=model,
             input_data=input_data,
             prefill_seq_len=4,
-            verify_model_type="gemma3",
+            verify_model_type="gemma3n",
             verify_numerics=False,
             verify_generation=False,
         )
@@ -144,7 +156,7 @@ class TestGemma3nLiteRTLmExport(TestCase):
             model=model,
             input_data=None,
             prefill_seq_len=20,
-            verify_model_type="gemma3",
+            verify_model_type="gemma3n",
             verify_numerics=False,
             verify_generation=False,
         )
@@ -162,7 +174,7 @@ class TestGemma3nLiteRTLmExport(TestCase):
             model=model,
             input_data=None,
             prefill_seq_len=20,
-            verify_model_type="gemma3",
+            verify_model_type="gemma3n",
             verify_numerics=False,
             verify_generation=False,
             separate_vision_encoder=True,

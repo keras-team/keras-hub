@@ -1,5 +1,6 @@
 """Export KerasHub CausalLM models to LiteRT-LM `.litertlm` bundles."""
 
+import inspect
 import os
 import tempfile
 
@@ -153,6 +154,7 @@ def export_to_litertlm(
             f"Current backend: {keras.config.backend()}."
         )
 
+    path = os.fspath(path)
     if not path.endswith(".litertlm"):
         raise ValueError(
             "LiteRT-LM export requires a filepath ending in `.litertlm`. "
@@ -165,9 +167,21 @@ def export_to_litertlm(
             "method."
         )
 
+    if litert_torch is None:
+        raise ImportError(
+            "LiteRT-LM export requires `litert-torch`. "
+            "Install it with: pip install litert-torch"
+        )
+
     if backend_constraint is not None:
+        if not isinstance(backend_constraint, str):
+            raise ValueError(
+                "`backend_constraint` must be a string or None. "
+                f"Received: {backend_constraint!r}"
+            )
+        backend_constraint = backend_constraint.lower()
         valid_backends = {"cpu", "gpu", "npu", "gpu_artisan"}
-        if backend_constraint.lower() not in valid_backends:
+        if backend_constraint not in valid_backends:
             raise ValueError(
                 f"Invalid backend_constraint: {backend_constraint!r}. "
                 f"Must be one of {sorted(valid_backends)}."
@@ -203,16 +217,44 @@ def export_to_litertlm(
                 "LiteRT-LM separate vision encoder export requires "
                 "`vision_encoder.output_dim` or `vision_encoder.num_classes`."
             )
+    elif separate_vision_encoder:
+        raise ValueError(
+            "`separate_vision_encoder=True` requires a model with a vision "
+            "encoder."
+        )
+
+    # Gemma3n runs vision/audio encoders inside the backbone and expects raw
+    # pixel_values / input_features, so a separate vision encoder is not
+    # meaningful for that architecture.
+    if separate_vision_encoder and has_vision:
+        call_params = set(inspect.signature(model.call_with_cache).parameters)
+        if "pixel_values" in call_params:
+            raise ValueError(
+                "`separate_vision_encoder=True` is not supported for models "
+                "that expect raw `pixel_values` (e.g. Gemma3n)."
+            )
 
     # Normalise prefill_seq_len to a sorted list.
     if prefill_seq_len is None:
         prefill_seq_lens = [cache_length]
     elif isinstance(prefill_seq_len, int):
         prefill_seq_lens = [prefill_seq_len]
-    else:
+    elif isinstance(prefill_seq_len, (list, tuple)):
+        if not prefill_seq_len:
+            raise ValueError("`prefill_seq_len` cannot be an empty list.")
         prefill_seq_lens = sorted(set(prefill_seq_len))
+    else:
+        raise ValueError(
+            "`prefill_seq_len` must be an int or a list of ints. "
+            f"Received: {prefill_seq_len!r}"
+        )
 
     for seq_len in prefill_seq_lens:
+        if not isinstance(seq_len, int) or seq_len <= 0:
+            raise ValueError(
+                "`prefill_seq_len` values must be positive integers. "
+                f"Received: {seq_len!r}"
+            )
         if seq_len > cache_length:
             raise ValueError(
                 f"prefill_seq_len ({seq_len}) cannot exceed "
@@ -348,12 +390,6 @@ def export_to_litertlm(
 
     prefill_adapter = _PrefillAdapter(adapter).eval()
     decode_adapter = _DecodeAdapter(adapter).eval()
-
-    if litert_torch is None:
-        raise ImportError(
-            "LiteRT-LM export requires `litert-torch`. "
-            "Install it with: pip install litert-torch"
-        )
 
     with _traceable_slice_update_scope(), _traceable_one_hot_scope():
         # Optionally export the vision encoder and adapter as separate models.
@@ -940,6 +976,11 @@ def _detect_llm_model_type(model):
             "gemma4",
         ),
         (
+            "keras_hub.src.models.gemma3n.gemma3n_causal_lm",
+            "Gemma3nCausalLM",
+            "gemma3n",
+        ),
+        (
             "keras_hub.src.models.gemma3.gemma3_causal_lm",
             "Gemma3CausalLM",
             "gemma3",
@@ -954,13 +995,9 @@ def _detect_llm_model_type(model):
             "Qwen3CausalLM",
             "qwen3",
         ),
-        (
-            "keras_hub.src.models.qwen2.qwen2_causal_lm",
-            "Qwen2CausalLM",
-            "qwen2p5",
-        ),
-        # NOTE: LlmModelType does not have a dedicated "llama" field; map
-        # Llama checkpoints to generic_model so the protobuf oneof stays valid.
+        # NOTE: LlmModelType does not have dedicated "llama" / "qwen2"
+        # fields; map those checkpoints to generic_model so the protobuf oneof
+        # stays valid.
         (
             "keras_hub.src.models.llama.llama_causal_lm",
             "LlamaCausalLM",
@@ -981,14 +1018,14 @@ def _detect_llm_model_type(model):
     cls_name = type(model).__name__
     if "Gemma4" in cls_name:
         return "gemma4"
+    if "Gemma3n" in cls_name:
+        return "gemma3n"
     if "Gemma3" in cls_name:
         return "gemma3"
     if "Gemma" in cls_name:
         return "generic_model"
     if "Qwen3" in cls_name:
         return "qwen3"
-    if "Qwen2" in cls_name:
-        return "qwen2p5"
     if "Llama" in cls_name:
         return "generic_model"
     return "generic_model"
@@ -999,6 +1036,13 @@ def _torch_dtype_from_model(model):
     compute_dtype = getattr(model, "compute_dtype", None)
     if compute_dtype is None:
         compute_dtype = getattr(model.backbone, "compute_dtype", "float32")
+    # compute_dtype may be a string, a Keras DTypePolicy, or a torch dtype.
+    if hasattr(compute_dtype, "name"):
+        compute_dtype = compute_dtype.name
+    elif hasattr(compute_dtype, "value"):
+        compute_dtype = compute_dtype.value
+    elif isinstance(compute_dtype, torch.dtype):
+        return compute_dtype
     torch_dtype = getattr(torch, compute_dtype, None)
     if torch_dtype is None:
         raise ValueError(

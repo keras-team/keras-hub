@@ -834,12 +834,22 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         backbone = model.backbone
         L = getattr(backbone, "num_layers", None)
         if L is None:
-            raise ValueError("Model backbone must expose `num_layers`.")
+            L = getattr(backbone, "num_hidden_layers", None)
+        if L is None:
+            raise ValueError(
+                "Model backbone must expose `num_layers` or "
+                "`num_hidden_layers`."
+            )
         H = getattr(
             backbone,
             "num_key_value_heads",
-            getattr(backbone, "num_heads", 1),
+            getattr(backbone, "num_heads", None),
         )
+        if H is None:
+            raise ValueError(
+                "Model backbone must expose `num_key_value_heads` or "
+                "`num_heads`."
+            )
         D = getattr(backbone, "head_dim", None)
         if D is None:
             hidden_dim = getattr(backbone, "hidden_dim", None)
@@ -861,6 +871,19 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         if cache_length is None:
             cache_length = T
 
+        # Gemma3n uses a different KV-cache axis order than standard models.
+        cache_layout = (
+            "gemma3n"
+            if type(backbone).__name__.startswith("Gemma3n")
+            else "standard"
+        )
+        if cache_layout == "gemma3n":
+            keras_cache_shape = (B, L, 2, H, cache_length, D)
+            per_layer_shape = (B, H, cache_length, D)
+        else:
+            keras_cache_shape = (B, L, 2, cache_length, H, D)
+            per_layer_shape = (B, cache_length, H, D)
+
         # Find the best prefill signature (bucketed or single).
         sig_list = list(interpreter._get_full_signature_list().keys())
         prefill_sig = None
@@ -879,7 +902,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         if prefill_sig is None:
             self.fail("No usable prefill signature found for numeric parity.")
 
-        cache_keras = np.zeros((B, L, 2, cache_length, H, D), dtype=np.float32)
+        cache_keras = np.zeros(keras_cache_shape, dtype=np.float32)
         prefill_inputs = {
             "tokens": tokens_np,
             "input_pos": np.arange(T, dtype=np.int32),
@@ -887,10 +910,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         }
         for i in range(L):
             prefill_inputs[f"kv_cache_k_{i}"] = np.zeros(
-                (B, cache_length, H, D), dtype=np.float32
+                per_layer_shape, dtype=np.float32
             )
             prefill_inputs[f"kv_cache_v_{i}"] = np.zeros(
-                (B, cache_length, H, D), dtype=np.float32
+                per_layer_shape, dtype=np.float32
             )
 
         prefill_runner = interpreter.get_signature_runner(prefill_sig)

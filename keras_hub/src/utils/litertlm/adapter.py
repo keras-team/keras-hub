@@ -162,10 +162,25 @@ class KerasHubLiteRTAdapter(nn.Module):
         # The first element of input_pos is the start position.
         cache_update_index = input_pos[0]
 
+        # Determine whether the underlying model expects raw multimodal tensors
+        # (Gemma3n-style) or pre-computed embeddings (Gemma3/Gemma4/PaliGemma).
+        call_params = set(
+            inspect.signature(
+                self.keras_model.call_with_cache
+            ).parameters.keys()
+        )
+        expects_pixel_values = "pixel_values" in call_params
+        expects_input_features = "input_features" in call_params
+
         # Run vision encoder if images are provided.
         img_embeddings = None
+        pixel_values_out = None
         if self.has_vision:
-            if self.separate_vision_encoder:
+            if expects_pixel_values:
+                # Gemma3n runs the vision encoder inside the backbone; pass the
+                # raw preprocessed images through.
+                pixel_values_out = images
+            elif self.separate_vision_encoder:
                 img_embeddings = mm_embedding
                 # Gemma4 interleaves image embeddings with shape
                 # (batch, num_images, tokens_per_image, hidden_dim).
@@ -202,10 +217,17 @@ class KerasHubLiteRTAdapter(nn.Module):
 
         # Run audio encoder if audio mel is provided.
         audio_embeddings = None
+        input_features_out = None
+        input_features_mask_out = None
         if self.has_audio and audio_mel is not None:
-            audio_embeddings = self.keras_model.backbone.audio_encoder(
-                audio_mel, audio_mel_mask
-            )
+            if expects_input_features:
+                # Gemma3n runs the audio encoder inside the backbone.
+                input_features_out = audio_mel
+                input_features_mask_out = audio_mel_mask
+            else:
+                audio_embeddings = self.keras_model.backbone.audio_encoder(
+                    audio_mel, audio_mel_mask
+                )
 
         call_kwargs = self._build_call_with_cache_kwargs(
             img_embeddings=img_embeddings,
@@ -214,6 +236,9 @@ class KerasHubLiteRTAdapter(nn.Module):
             audio_embeddings=audio_embeddings,
             audio_mask=audio_mask,
             audio_indices=audio_indices,
+            pixel_values=pixel_values_out,
+            input_features=input_features_out,
+            input_features_mask=input_features_mask_out,
         )
         # Prefill returns only KV caches; LiteRT-LM extracts last-token logits
         # via a dedicated decode step.
@@ -285,6 +310,9 @@ class KerasHubLiteRTAdapter(nn.Module):
         audio_embeddings=None,
         audio_mask=None,
         audio_indices=None,
+        pixel_values=None,
+        input_features=None,
+        input_features_mask=None,
     ):
         """Build kwargs dict for ``call_with_cache`` based on its signature."""
         sig = inspect.signature(self.keras_model.call_with_cache)
@@ -292,6 +320,8 @@ class KerasHubLiteRTAdapter(nn.Module):
         kwargs = {}
         if "img_embeddings" in params:
             kwargs["img_embeddings"] = img_embeddings
+        if "pixel_values" in params:
+            kwargs["pixel_values"] = pixel_values
         if "vision_mask" in params:
             kwargs["vision_mask"] = vision_mask
         if "padding_mask" in params:
@@ -302,6 +332,10 @@ class KerasHubLiteRTAdapter(nn.Module):
             kwargs["cache_update_mask"] = None
         if "audio_embeddings" in params:
             kwargs["audio_embeddings"] = audio_embeddings
+        if "input_features" in params:
+            kwargs["input_features"] = input_features
+        if "input_features_mask" in params:
+            kwargs["input_features_mask"] = input_features_mask
         if "audio_mask" in params:
             kwargs["audio_mask"] = audio_mask
         if "audio_indices" in params:
@@ -365,6 +399,11 @@ def _normalize_start_indices(start_indices):
     if isinstance(start_indices, (list, tuple)):
         return list(start_indices)
     start_indices = torch_core.convert_to_tensor(start_indices, dtype="int64")
+    if start_indices.ndim != 1:
+        raise ValueError(
+            "`start_indices` must be a 1-D tensor or a list/tuple of ints. "
+            f"Received shape: {tuple(start_indices.shape)}."
+        )
     return [start_indices.reshape(-1)[i] for i in range(start_indices.numel())]
 
 
@@ -518,6 +557,8 @@ def _traceable_one_hot_scope():
         if dtype is not None:
             output = torch_core.convert_to_tensor(output, dtype=dtype)
         dims = output.dim()
+        if axis < 0:
+            axis = dims + axis + 1
         if axis != -1 and axis != dims:
             new_axes_order = list(range(dims))
             new_axes_order[axis] = -1

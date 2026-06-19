@@ -1,4 +1,5 @@
 import os
+import unittest
 
 import numpy as np
 
@@ -19,7 +20,19 @@ from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
+try:
+    import litert_torch
+except ImportError:
+    litert_torch = None
 
+try:
+    import litert_lm_builder
+except ImportError:
+    litert_lm_builder = None
+
+
+@unittest.skipIf(litert_torch is None, "Requires litert-torch.")
+@unittest.skipIf(litert_lm_builder is None, "Requires litert-lm-builder.")
 class TestPaliGemmaLiteRTLmExport(TestCase):
     def _build_tiny_model(self):
         proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
