@@ -1,5 +1,6 @@
 import copy
 import os
+import shutil
 from unittest.mock import patch
 
 import keras
@@ -320,6 +321,42 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
             expected_output_shape=expected_output_shape,
             comparison_mode="statistical",
             output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
+        )
+
+    def test_litertlm_export(self):
+        """Test LiteRT-LM export for multimodal Gemma4CausalLM."""
+        # LiteRT-LM export requires a SentencePiece tokenizer asset. Patch
+        # the mock tokenizer used by this test so it can be bundled.
+        self.tokenizer.file_assets = ["vocabulary.spm"]
+        vocab_src = os.path.join(
+            self.get_test_data_dir(), "gemma4_test_vocab.spm"
+        )
+
+        def _save_to_preset(preset_dir):
+            tokenizer_asset_dir = os.path.join(
+                preset_dir, "assets", "tokenizer"
+            )
+            os.makedirs(tokenizer_asset_dir, exist_ok=True)
+            shutil.copy(
+                vocab_src,
+                os.path.join(tokenizer_asset_dir, "vocabulary.spm"),
+            )
+
+        self.tokenizer.save_to_preset = _save_to_preset
+
+        input_data = self.input_data.copy()
+        if "padding_mask" in input_data:
+            input_data["padding_mask"] = ops.cast(
+                input_data["padding_mask"], "int32"
+            )
+
+        self.run_litertlm_export_test(
+            cls=Gemma4CausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=input_data,
+            prefill_seq_len=20,
+            verify_model_type="gemma4",
+            verify_numerics=False,
         )
 
     @pytest.mark.kaggle_key_required

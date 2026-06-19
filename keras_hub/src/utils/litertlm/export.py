@@ -720,7 +720,15 @@ def _get_audio_config(model):
             preprocessor, "num_audio_tokens_per_audio", 0
         )
     num_audio_tokens = num_audio_tokens_per_clip * max_clips
-    audio_input_feat_size = getattr(preprocessor, "audio_input_feat_size", 128)
+    audio_input_feat_size = getattr(preprocessor, "audio_input_feat_size", None)
+    if audio_input_feat_size is None and preprocessor is not None:
+        audio_converter = getattr(preprocessor, "audio_converter", None)
+        if audio_converter is not None:
+            audio_input_feat_size = getattr(
+                audio_converter, "feature_size", 128
+            )
+    if audio_input_feat_size is None:
+        audio_input_feat_size = 128
     return {
         "max_clips_per_prompt": max_clips,
         "num_frames": num_frames,
