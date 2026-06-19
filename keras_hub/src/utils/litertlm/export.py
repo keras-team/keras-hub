@@ -7,6 +7,17 @@ import tempfile
 import keras
 import torch
 
+from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
+    SentencePieceTokenizer,
+)
+from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
+    infer_hf_tokenizer_family,
+)
+from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
+    materialize_hf_tokenizer_json,
+)
+
 try:
     import litert_torch
 except ImportError:
@@ -135,11 +146,14 @@ def export_to_litertlm(
             separate ``VISION_ENCODER`` and ``VISION_ADAPTER`` TFLite models,
             and have ``PREFILL_DECODE`` consume pre-computed ``mm_embedding``
             tensors instead of raw images. Defaults to ``False``.
-        hf_tokenizer_path: Optional str. Path to a HuggingFace ``tokenizer.json``
-            file to bundle instead of the model's native tokenizer. Use this for
-            BytePair / HuggingFace tokenizers that cannot be materialized as a
-            SentencePiece ``.spm`` file. When provided, the native tokenizer
-            validation is skipped. Defaults to ``None``.
+        hf_tokenizer_path: Optional str. Path to a HuggingFace
+            ``tokenizer.json`` file to bundle instead of the model's native
+            tokenizer. Use this for BytePair / HuggingFace tokenizers that
+            cannot be materialized as a SentencePiece ``.spm`` file. When
+            provided, the native tokenizer validation is skipped. If ``None``,
+            SentencePiece tokenizers are bundled as ``.spm`` and known BytePair
+            tokenizer families (gpt2, llama3, qwen3) are automatically
+            converted to ``tokenizer.json``. Defaults to ``None``.
         **kwargs: Additional kwargs forwarded to ``litert_torch`` signature
             tracing.
 
@@ -220,8 +234,14 @@ def export_to_litertlm(
                 "`hf_tokenizer_path` must point to a `tokenizer.json` file. "
                 f"Received: {hf_tokenizer_path!r}"
             )
-    else:
+    elif _is_sentencepiece_tokenizer(tokenizer):
         _validate_sentencepiece_tokenizer(tokenizer)
+    elif not isinstance(tokenizer, BytePairTokenizer):
+        raise ValueError(
+            "LiteRT-LM export supports SentencePiece tokenizers and known "
+            "BytePair tokenizer families (gpt2, llama3, qwen3). Received: "
+            f"{type(tokenizer).__module__}.{type(tokenizer).__name__}."
+        )
     cache_cfg = _get_cache_config(model)
     num_layers = cache_cfg["num_layers"]
     cache_length = cache_cfg["cache_length"]
@@ -553,10 +573,15 @@ def export_to_litertlm(
 
             if hf_tokenizer_path is not None:
                 tokenizer_path = hf_tokenizer_path
-            else:
+                use_hf_tokenizer = True
+            elif _is_sentencepiece_tokenizer(tokenizer):
                 tokenizer_path = _materialize_sentencepiece_tokenizer(
                     tokenizer, temp_dir
                 )
+                use_hf_tokenizer = False
+            else:
+                tokenizer_path = _materialize_hf_tokenizer(tokenizer, temp_dir)
+                use_hf_tokenizer = True
 
             meta_path = os.path.join(temp_dir, "llm_metadata.pb")
             _build_llm_metadata(
@@ -592,7 +617,7 @@ def export_to_litertlm(
                     litert_lm_builder.TfLiteModelType.VISION_ADAPTER,
                     backend_constraint=backend_constraint,
                 )
-            if hf_tokenizer_path is not None:
+            if use_hf_tokenizer:
                 builder.add_hf_tokenizer(tokenizer_path)
             else:
                 builder.add_sentencepiece_tokenizer(tokenizer_path)
@@ -931,6 +956,14 @@ def _get_tokenizer(model):
     return tokenizer
 
 
+def _is_sentencepiece_tokenizer(tokenizer):
+    """Return ``True`` if *tokenizer* is SentencePiece-compatible."""
+    if isinstance(tokenizer, SentencePieceTokenizer):
+        return True
+    file_assets = set(getattr(tokenizer, "file_assets", []) or [])
+    return "vocabulary.spm" in file_assets
+
+
 def _validate_sentencepiece_tokenizer(tokenizer):
     file_assets = set(getattr(tokenizer, "file_assets", []) or [])
     if "vocabulary.spm" not in file_assets:
@@ -952,6 +985,16 @@ def _materialize_sentencepiece_tokenizer(tokenizer, temp_dir):
             f"{tokenizer_path}."
         )
     return tokenizer_path
+
+
+def _detect_hf_tokenizer_family(tokenizer):
+    """Return the HF tokenizer family for a KerasHub tokenizer, or ``None``."""
+    return infer_hf_tokenizer_family(tokenizer)
+
+
+def _materialize_hf_tokenizer(tokenizer, temp_dir):
+    """Convert a KerasHub BytePair tokenizer and write ``tokenizer.json``."""
+    return materialize_hf_tokenizer_json(tokenizer, temp_dir)
 
 
 def _populate_vision_metadata(meta, model_type, vision_cfg, tokenizer):

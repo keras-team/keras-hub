@@ -1,5 +1,7 @@
+import json
 import os
 import struct
+import tempfile
 import unittest
 
 import numpy as np
@@ -16,14 +18,40 @@ try:
 except ImportError:
     litert_lm_builder = None
 
+try:
+    import tokenizers
+except ImportError:
+    tokenizers = None
+
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
 from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
     GemmaCausalLMPreprocessor,
 )
 from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
+from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone
+from keras_hub.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
+from keras_hub.src.models.gpt2.gpt2_causal_lm_preprocessor import (
+    GPT2CausalLMPreprocessor,
+)
+from keras_hub.src.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
+from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
+from keras_hub.src.models.llama3.llama3_causal_lm import Llama3CausalLM
+from keras_hub.src.models.llama3.llama3_causal_lm_preprocessor import (
+    Llama3CausalLMPreprocessor,
+)
+from keras_hub.src.models.llama3.llama3_tokenizer import Llama3Tokenizer
+from keras_hub.src.models.qwen3.qwen3_backbone import Qwen3Backbone
+from keras_hub.src.models.qwen3.qwen3_causal_lm import Qwen3CausalLM
+from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
+    Qwen3CausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen3.qwen3_tokenizer import Qwen3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
+from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
+    convert_byte_pair_to_hf,
+)
 
 
 @unittest.skipIf(
@@ -157,9 +185,7 @@ class TestLiteRTLmExport(TestCase):
             import litert_lm
             import tokenizers
         except ImportError:
-            self.skipTest(
-                "This test requires `litert-lm` and `tokenizers`."
-            )
+            self.skipTest("This test requires `litert-lm` and `tokenizers`.")
 
         proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
         tokenizer = GemmaTokenizer(proto=proto)
@@ -181,9 +207,7 @@ class TestLiteRTLmExport(TestCase):
         hf_tokenizer.pre_tokenizer = tokenizers.pre_tokenizers.Whitespace()
         hf_tokenizer.add_special_tokens(["<pad>", "<s>", "</s>", "<unk>"])
 
-        hf_tokenizer_path = os.path.join(
-            self.get_temp_dir(), "tokenizer.json"
-        )
+        hf_tokenizer_path = os.path.join(self.get_temp_dir(), "tokenizer.json")
         hf_tokenizer.save(hf_tokenizer_path)
 
         backbone = GemmaBackbone(
@@ -1126,6 +1150,187 @@ class TestLiteRTLmExport(TestCase):
                 rtol=1e-4,
             )
 
+    def test_export_gpt2_with_auto_hf_tokenizer(self):
+        """Export a tiny GPT2 model with auto-converted HF tokenizer."""
+        import keras
+
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        vocab = {
+            "<|endoftext|>": 0,
+            "h": 1,
+            "i": 2,
+            "Ġ": 3,
+            "Ġh": 4,
+            "e": 5,
+            "l": 6,
+            "o": 7,
+            "w": 8,
+            "r": 9,
+            "d": 10,
+            "t": 11,
+            "s": 12,
+            "a": 13,
+            "b": 14,
+            "ab": 15,
+            "n": 16,
+            "k": 17,
+            "u": 18,
+            "m": 19,
+        }
+        merges = ["a b"]
+        tokenizer = GPT2Tokenizer(vocabulary=vocab, merges=merges)
+
+        backbone = GPT2Backbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_heads=4,
+            hidden_dim=32,
+            intermediate_dim=64,
+            max_sequence_length=8,
+        )
+        preprocessor = GPT2CausalLMPreprocessor(
+            tokenizer=tokenizer, sequence_length=8
+        )
+        model = GPT2CausalLM(backbone=backbone, preprocessor=preprocessor)
+
+        rng = np.random.default_rng(42)
+        weights = model.get_weights()
+        for i in range(len(weights)):
+            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
+        model.set_weights(weights)
+
+        path = os.path.join(self.get_temp_dir(), "test_gpt2_auto_hf.litertlm")
+        model.export(path, format="litertlm", prefill_seq_len=8)
+        self.assertTrue(os.path.exists(path))
+
+        self._verify_litertlm_generation(path, prompt="hi", max_num_tokens=4)
+
+    def test_export_llama3_with_auto_hf_tokenizer(self):
+        """Export a tiny Llama3 model with auto-converted HF tokenizer."""
+        import keras
+
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        vocab = {
+            "<|endoftext|>": 0,
+            "<|begin_of_text|>": 1,
+            "<|end_of_text|>": 2,
+            "<|start_header_id|>": 3,
+            "<|end_header_id|>": 4,
+            "<|eot_id|>": 5,
+            "h": 6,
+            "i": 7,
+            "Ġ": 8,
+            "Ġh": 9,
+            "e": 10,
+            "l": 11,
+            "o": 12,
+            "w": 13,
+            "r": 14,
+            "d": 15,
+            "t": 16,
+            "s": 17,
+            "a": 18,
+            "b": 19,
+            "ab": 20,
+            "n": 21,
+            "k": 22,
+            "u": 23,
+            "m": 24,
+        }
+        merges = ["a b"]
+        tokenizer = Llama3Tokenizer(vocabulary=vocab, merges=merges)
+
+        backbone = Llama3Backbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=1,
+            hidden_dim=32,
+            intermediate_dim=64,
+            max_sequence_length=8,
+        )
+        preprocessor = Llama3CausalLMPreprocessor(
+            tokenizer=tokenizer, sequence_length=8
+        )
+        model = Llama3CausalLM(backbone=backbone, preprocessor=preprocessor)
+
+        rng = np.random.default_rng(42)
+        weights = model.get_weights()
+        for i in range(len(weights)):
+            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
+        model.set_weights(weights)
+
+        path = os.path.join(self.get_temp_dir(), "test_llama3_auto_hf.litertlm")
+        model.export(path, format="litertlm", prefill_seq_len=8)
+        self.assertTrue(os.path.exists(path))
+
+        self._verify_litertlm_generation(path, prompt="hi", max_num_tokens=4)
+
+    def test_export_qwen3_with_auto_hf_tokenizer(self):
+        """Export a tiny Qwen3 model with auto-converted HF tokenizer."""
+        import keras
+
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        vocab = {
+            "<|endoftext|>": 0,
+            "<|im_end|>": 1,
+            "h": 2,
+            "i": 3,
+            "Ġ": 4,
+            "Ġh": 5,
+            "e": 6,
+            "l": 7,
+            "o": 8,
+            "w": 9,
+            "r": 10,
+            "d": 11,
+            "t": 12,
+            "s": 13,
+            "a": 14,
+            "b": 15,
+            "ab": 16,
+            "n": 17,
+            "k": 18,
+            "u": 19,
+            "m": 20,
+        }
+        merges = ["a b"]
+        tokenizer = Qwen3Tokenizer(vocabulary=vocab, merges=merges)
+
+        backbone = Qwen3Backbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=1,
+            head_dim=8,
+            hidden_dim=32,
+            intermediate_dim=64,
+            max_sequence_length=8,
+        )
+        preprocessor = Qwen3CausalLMPreprocessor(
+            tokenizer=tokenizer,
+            sequence_length=8,
+            add_start_token=False,
+        )
+        model = Qwen3CausalLM(backbone=backbone, preprocessor=preprocessor)
+
+        rng = np.random.default_rng(42)
+        weights = model.get_weights()
+        for i in range(len(weights)):
+            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
+        model.set_weights(weights)
+
+        path = os.path.join(self.get_temp_dir(), "test_qwen3_auto_hf.litertlm")
+        model.export(path, format="litertlm", prefill_seq_len=8)
+        self.assertTrue(os.path.exists(path))
+
+        self._verify_litertlm_generation(path, prompt="hi", max_num_tokens=4)
 
 
 class TestLiteRTLmAdapterHelpers(TestCase):
@@ -1135,3 +1340,67 @@ class TestLiteRTLmAdapterHelpers(TestCase):
         with _cpu_default_device_scope():
             self.assertEqual(torch.get_default_device(), torch.device("cpu"))
         self.assertEqual(torch.get_default_device(), original)
+
+
+@unittest.skipIf(
+    tokenizers is None,
+    "BytePair-to-HF tokenizer roundtrip test requires `tokenizers`.",
+)
+class TestBytePairToHFTokenizer(TestCase):
+    def test_byte_pair_to_hf_tokenizer_roundtrip(self):
+        """Verify converted tokenizer.json round-trips through HF tokenizers."""
+        import keras
+
+        if keras.config.backend() != "torch":
+            self.skipTest(
+                "BytePair tokenizer roundtrip requires torch backend."
+            )
+
+        vocab = {
+            "<|endoftext|>": 0,
+            "h": 1,
+            "i": 2,
+            "Ġ": 3,
+            "Ġh": 4,
+            "e": 5,
+            "l": 6,
+            "o": 7,
+            "w": 8,
+            "r": 9,
+            "d": 10,
+            "t": 11,
+            "s": 12,
+            "a": 13,
+            "b": 14,
+            "ab": 15,
+            "hello": 16,
+            "Ġworld": 17,
+        }
+        merges = ["a b"]
+        tokenizer = GPT2Tokenizer(vocabulary=vocab, merges=merges)
+
+        hf_dict = convert_byte_pair_to_hf(tokenizer, "gpt2")
+        with tempfile.NamedTemporaryFile(
+            suffix=".json", delete=False, mode="w", encoding="utf-8"
+        ) as f:
+            json.dump(hf_dict, f, ensure_ascii=False, indent=2)
+            hf_tokenizer_path = f.name
+
+        hf_tokenizer = tokenizers.Tokenizer.from_file(hf_tokenizer_path)
+
+        for text in ["hello", "hello world", "hi", "a b"]:
+            with self.subTest(text=text):
+                keras_ids = list(tokenizer(text))
+                hf_ids = hf_tokenizer.encode(text).ids
+                self.assertEqual(
+                    keras_ids,
+                    hf_ids,
+                    f"Token ids differ for {text!r}",
+                )
+                keras_text = tokenizer.detokenize(keras_ids)
+                hf_text = hf_tokenizer.decode(hf_ids)
+                self.assertEqual(
+                    keras_text,
+                    hf_text,
+                    f"Detokenized text differs for {text!r}",
+                )
