@@ -4,7 +4,7 @@
 **Branch:** `torch-backend-litert-minimal-litertlm`
 **Fork remote:** `pctablet505/keras-hub`
 **Upstream PR:** https://github.com/keras-team/keras-hub/pull/2705
-**Latest commit:** `5da3a11` (Iteration 13)
+**Latest commit:** `4249813` (Iteration 14)
 
 ## Goal
 Add a PyTorch-backend LiteRT-LM export path for KerasHub CausalLM models,
@@ -47,8 +47,8 @@ KERAS_BACKEND=torch pytest keras_hub/src/utils/litertlm/ \
 ```
 
 ## Last Test Result
-- `export_test.py`: 12 passed, 2 skipped, 4 subtests passed (56.15s)
-- Full targeted suite (iteration 13): 31 passed, 16 skipped, 4 subtests passed
+- `export_test.py`: 12 passed, 3 skipped, 4 subtests passed (57.53s)
+- Full targeted suite (iteration 15): 32 passed, 17 skipped, 4 subtests passed
 
 ## Open Items / Known Gaps
 - Audio export for Gemma3n is not enabled end-to-end (audio encoder exists but

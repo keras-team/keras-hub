@@ -1044,6 +1044,9 @@ class TestLiteRTLmExport(TestCase):
                 rtol=1e-4,
             )
 
+
+
+class TestLiteRTLmAdapterHelpers(TestCase):
     def test_cpu_default_device_scope_restores_device(self):
         """_cpu_default_device_scope restores the original default device."""
         original = torch.get_default_device()
