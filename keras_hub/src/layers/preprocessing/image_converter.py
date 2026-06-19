@@ -176,6 +176,21 @@ class ImageConverter(PreprocessingLayer):
         self.resizing.width = value[1]
 
     def _call_python(self, inputs):
+        def canonicalize(x):
+            if isinstance(x, dict):
+                return {k: canonicalize(v) for k, v in x.items()}
+            if isinstance(x, tuple):
+                return tuple(canonicalize(v) for v in x)
+            if isinstance(x, list):
+                try:
+                    return ops.convert_to_tensor(np.array(x))
+                except ValueError:
+                    return [ops.convert_to_tensor(item) for item in x]
+            if isinstance(x, np.ndarray):
+                return ops.convert_to_tensor(x)
+            return x
+
+        inputs = canonicalize(inputs)
         if self.image_size is not None:
             inputs = self.resizing(inputs)
         # Allow dictionary input for handling bounding boxes.
