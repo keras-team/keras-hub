@@ -51,12 +51,14 @@ class KerasHubLiteRTAdapter(nn.Module):
         num_layers,
         cache_length,
         separate_vision_encoder=False,
+        cache_layout="standard",
     ):
         super().__init__()
         self.keras_model = keras_model
         self.num_layers = num_layers
         self.cache_length = cache_length
         self.separate_vision_encoder = separate_vision_encoder
+        self.cache_layout = cache_layout
         self.vision_encoder = getattr(
             keras_model.backbone, "vision_encoder", None
         ) or getattr(keras_model.backbone, "vit_encoder", None)
@@ -64,9 +66,6 @@ class KerasHubLiteRTAdapter(nn.Module):
         self.has_audio = (
             hasattr(keras_model.backbone, "audio_encoder")
             and keras_model.backbone.audio_encoder is not None
-        )
-        self._is_gemma3n = type(keras_model.backbone).__name__.startswith(
-            "Gemma3n"
         )
 
     def forward_prefill(
@@ -170,11 +169,12 @@ class KerasHubLiteRTAdapter(nn.Module):
             audio_mask=audio_mask,
             audio_indices=audio_indices,
         )
-        if self._is_gemma3n:
+        if self.cache_layout == "gemma3n":
             # Gemma3n's attention mask computation requires the padding mask
             # to span the full cache length, otherwise a seq_len shorter than
             # cache_length causes a broadcasting error between the causal and
-            # padding masks.
+            # padding masks. During export we always pass full-length valid
+            # tokens, so a ones mask of cache length is correct.
             call_kwargs["padding_mask"] = torch.ones(
                 (tokens.shape[0], self.cache_length),
                 dtype=torch.bool,
@@ -208,7 +208,7 @@ class KerasHubLiteRTAdapter(nn.Module):
             audio_mask=None,
             audio_indices=None,
         )
-        if self._is_gemma3n:
+        if self.cache_layout == "gemma3n":
             call_kwargs["padding_mask"] = torch.ones(
                 (tokens.shape[0], self.cache_length),
                 dtype=torch.bool,
@@ -547,11 +547,10 @@ def _traceable_one_hot_scope():
         x_clamped = torch.clamp(x, min=0)
         output = (
             x_clamped.unsqueeze(-1)
-            == torch.arange(
-                num_classes, dtype=torch.long, device=x_clamped.device
-            )
+            == torch.arange(num_classes, dtype=torch.long, device=x.device)
         ).long()
-        output = torch_backend_nn.where(x.unsqueeze(-1) >= 0, output, zero)
+        # Preserve original behavior for negative indices.
+        output = torch.where(x.unsqueeze(-1) >= 0, output, zero)
         if dtype is not None:
             output = torch_core.convert_to_tensor(output, dtype=dtype)
         dims = output.dim()

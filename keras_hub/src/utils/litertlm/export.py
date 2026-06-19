@@ -330,6 +330,7 @@ def export_to_litertlm(
         num_layers,
         cache_length,
         separate_vision_encoder=(separate_vision_encoder and has_vision),
+        cache_layout=cache_layout,
     )
     adapter.eval()
 
@@ -602,10 +603,11 @@ def _get_cache_config(model):
 
     # Gemma3n uses a [B, L, 2, H, T, D] cache layout, whereas most other
     # KerasHub models use [B, L, 2, T, H, D].  We detect this from the
-    # backbone class name so the adapter can transpose as needed.
-    cache_layout = "btl_2htd"
+    # backbone class name so the adapter can build sample inputs with the
+    # correct per-layer cache shape.
+    cache_layout = "standard"
     if type(backbone).__name__.startswith("Gemma3n"):
-        cache_layout = "btl_2thd"
+        cache_layout = "gemma3n"
 
     return {
         "num_layers": num_layers,
@@ -628,7 +630,17 @@ def _get_vision_config(model):
         return None
     preprocessor = getattr(model, "preprocessor", None)
     max_images = getattr(preprocessor, "max_images_per_prompt", 1)
-    image_size = getattr(backbone, "image_size", 224)
+
+    image_size = getattr(backbone, "image_size", None)
+    if image_size is None:
+        # Gemma3n stores the vision input shape inside the encoder config.
+        vision_encoder_config = getattr(backbone, "vision_encoder_config", {})
+        image_shape = vision_encoder_config.get("image_shape")
+        if image_shape is not None:
+            image_size = image_shape[0]
+    if image_size is None:
+        image_size = 224
+
     num_vision_tokens_per_image = getattr(
         backbone, "num_vision_tokens_per_image", None
     )
@@ -682,9 +694,15 @@ def _build_sample_inputs(
     num_kv_heads,
     head_dim,
     dtype=torch.float32,
-    cache_layout="btl_2thd",
+    cache_layout="standard",
 ):
-    """Create concrete sample tensors for one signature."""
+    """Create concrete sample tensors for one signature.
+
+    ``cache_layout`` controls the per-layer KV-cache shape:
+
+    - ``"standard"``: ``[batch_size, cache_length, num_kv_heads, head_dim]``
+    - ``"gemma3n"``: ``[batch_size, num_kv_heads, cache_length, head_dim]``
+    """
     device = "cpu"
     tokens = torch.zeros(
         (batch_size, seq_len), dtype=torch.int32, device=device
@@ -698,7 +716,7 @@ def _build_sample_inputs(
         device=device,
     )
     kv_cache = {}
-    if cache_layout == "btl_2thd":
+    if cache_layout == "gemma3n":
         shape = (batch_size, num_kv_heads, cache_length, head_dim)
     else:
         shape = (batch_size, cache_length, num_kv_heads, head_dim)

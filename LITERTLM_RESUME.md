@@ -42,6 +42,7 @@ pre-commit run --files keras_hub/src/utils/litertlm/adapter.py keras_hub/src/uti
     - Optional end-to-end generation smoke test via `litert_lm.Engine`
 12. **Broad test matrix** for tiny random-weight models:
     - Gemma, Gemma3, Gemma4, Mistral, Mixtral, Phi3, Llama, PaliGemma, Gemma3n
+    - Gemma3n text-only and baked-in vision tests pass
     - Gemma3n separate-vision-encoder test is skipped (MobileNetV5 projection is inside the backbone)
 13. **Torch-export-friendly `one_hot` patch** to avoid the unlowerable `aten._assert_async.msg` op introduced by `torch.nn.functional.one_hot` in torch >= 2.12.
 
@@ -91,7 +92,7 @@ Works and returns text. With dummy-weight tiny models the output is meaningless 
 ## Known Issues / Blockers
 
 1. **JAX CI failures** on `keras-stable` are unrelated to this PR. Failures are in `samplers/*_sampler_test.py` and `utils/transformers/export/gemma*_test.py` due to int64/int32 mismatch in `dynamic_update_slice` / `dynamic_slice`.
-2. **Gemma3n separate vision encoder** not supported yet — MobileNetV5 does not expose a single projected vision dimension; Gemma3n applies reshape / sqrt-scaling / `embed_vision` inside the backbone after the encoder.
+2. **Gemma3n separate vision encoder** not supported yet — MobileNetV5 does not expose a single projected vision dimension; Gemma3n applies reshape / sqrt-scaling / `embed_vision` inside the backbone after the encoder. Baked-in (single-model) Gemma3n vision export works.
 3. **Audio encoder separation** blocked upstream by `litert-torch` issue #1039.
 4. **BytePair / HuggingFace tokenizers** intentionally not supported. The LiteRT-LM / MediaPipe LLM Inference runtime contract only supports SentencePiece model protobuf files as the tokenizer model. BPE/HF tokenizers would need a lossy conversion to SentencePiece (the upstream `litert_torch/generative/tools/tokenizer_to_sentencepiece.py` notes ~1% token-ID mismatch for Llama3.2), which is out of scope for this PR.
 

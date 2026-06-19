@@ -135,6 +135,20 @@ class TestGemma3nLiteRTLmExport(TestCase):
             verify_generation=False,
         )
 
+    def test_gemma3n_litertlm_export_baked_in_vision(self):
+        model = self._build_vision_text_model()
+        self._set_random_weights(model)
+        # `run_litertlm_export_test` will generate random image input data
+        # when input_data is None for a multimodal model.
+        self.run_litertlm_export_test(
+            model=model,
+            input_data=None,
+            prefill_seq_len=20,
+            verify_model_type="gemma3",
+            verify_numerics=False,
+            verify_generation=False,
+        )
+
     @unittest.skip(
         "Gemma3n separate vision encoder export is not yet supported. "
         "MobileNetV5 does not expose a single projected vision dimension, "
