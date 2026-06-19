@@ -14,6 +14,8 @@ except ImportError:
 from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
 from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
 from keras_hub.src.utils.litertlm.adapter import KerasHubVisionEncoderAdapter
+from keras_hub.src.utils.litertlm.adapter import _get_vision_encoder
+from keras_hub.src.utils.litertlm.adapter import _is_gemma4_vision_encoder
 from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_slice_update_scope
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
@@ -189,15 +191,8 @@ def export_to_litertlm(
     is_gemma4_vision = False
     vision_output_dim = None
     if has_vision:
-        vision_encoder = getattr(
-            model.backbone, "vision_encoder", None
-        ) or getattr(model.backbone, "vit_encoder", None)
-        is_gemma4_vision = (
-            hasattr(vision_encoder, "inputs")
-            and len(vision_encoder.inputs) == 2
-            and {inp.name for inp in vision_encoder.inputs}
-            == {"pixel_values", "pixel_position_ids"}
-        )
+        vision_encoder = _get_vision_encoder(model.backbone)
+        is_gemma4_vision = _is_gemma4_vision_encoder(vision_encoder)
         vision_output_dim = getattr(vision_encoder, "output_dim", None)
         if vision_output_dim is None:
             # PaliGemma's ViT uses ``num_classes`` as the projected vision
@@ -340,45 +335,16 @@ def export_to_litertlm(
             super().__init__()
             self.base = base
 
-        def forward(
-            self,
-            tokens,
-            input_pos,
-            mask=None,
-            images=None,
-            vision_indices=None,
-            vision_mask=None,
-            pixel_values=None,
-            pixel_position_ids=None,
-            audio_mel=None,
-            audio_mel_mask=None,
-            audio_indices=None,
-            audio_mask=None,
-            **kv_cache,
-        ):
-            return self.base.forward_prefill(
-                tokens,
-                input_pos,
-                mask,
-                images,
-                vision_indices,
-                vision_mask,
-                pixel_values,
-                pixel_position_ids,
-                audio_mel,
-                audio_mel_mask,
-                audio_indices,
-                audio_mask,
-                **kv_cache,
-            )
+        def forward(self, *args, **kwargs):
+            return self.base.forward_prefill(*args, **kwargs)
 
     class _DecodeAdapter(torch.nn.Module):
         def __init__(self, base):
             super().__init__()
             self.base = base
 
-        def forward(self, tokens, input_pos, mask=None, **kv_cache):
-            return self.base.forward_decode(tokens, input_pos, mask, **kv_cache)
+        def forward(self, *args, **kwargs):
+            return self.base.forward_decode(*args, **kwargs)
 
     prefill_adapter = _PrefillAdapter(adapter).eval()
     decode_adapter = _DecodeAdapter(adapter).eval()
@@ -963,59 +929,53 @@ def _detect_llm_model_type(model):
     """Return the LiteRT-LM LlmModelType name for *model*.
 
     Uses ``isinstance`` checks where possible to avoid mis-identifying
-    user-defined subclasses.
+    user-defined subclasses, then falls back to a class-name heuristic.
     """
     # Lazy imports to avoid heavy top-level dependencies.
-    try:
-        from keras_hub.src.models.gemma4.gemma4_causal_lm import Gemma4CausalLM
+    # (module_path, class_name, model_type)
+    _MODEL_TYPE_MAPPING = (
+        (
+            "keras_hub.src.models.gemma4.gemma4_causal_lm",
+            "Gemma4CausalLM",
+            "gemma4",
+        ),
+        (
+            "keras_hub.src.models.gemma3.gemma3_causal_lm",
+            "Gemma3CausalLM",
+            "gemma3",
+        ),
+        (
+            "keras_hub.src.models.gemma.gemma_causal_lm",
+            "GemmaCausalLM",
+            "generic_model",
+        ),
+        (
+            "keras_hub.src.models.qwen3.qwen3_causal_lm",
+            "Qwen3CausalLM",
+            "qwen3",
+        ),
+        (
+            "keras_hub.src.models.qwen2.qwen2_causal_lm",
+            "Qwen2CausalLM",
+            "qwen2p5",
+        ),
+        # NOTE: LlmModelType does not have a dedicated "llama" field; map
+        # Llama checkpoints to generic_model so the protobuf oneof stays valid.
+        (
+            "keras_hub.src.models.llama.llama_causal_lm",
+            "LlamaCausalLM",
+            "generic_model",
+        ),
+    )
 
-        if isinstance(model, Gemma4CausalLM):
-            return "gemma4"
-    except ImportError:
-        pass
-
-    try:
-        from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
-
-        if isinstance(model, Gemma3CausalLM):
-            return "gemma3"
-    except ImportError:
-        pass
-
-    try:
-        from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
-
-        if isinstance(model, GemmaCausalLM):
-            return "generic_model"
-    except ImportError:
-        pass
-
-    try:
-        from keras_hub.src.models.qwen3.qwen3_causal_lm import Qwen3CausalLM
-
-        if isinstance(model, Qwen3CausalLM):
-            return "qwen3"
-    except ImportError:
-        pass
-
-    try:
-        from keras_hub.src.models.qwen2.qwen2_causal_lm import Qwen2CausalLM
-
-        if isinstance(model, Qwen2CausalLM):
-            return "qwen2p5"
-    except ImportError:
-        pass
-
-    try:
-        from keras_hub.src.models.llama.llama_causal_lm import LlamaCausalLM
-
-        if isinstance(model, LlamaCausalLM):
-            # The LiteRT-LM LlmModelType protobuf does not define a dedicated
-            # "llama" field, so map Llama checkpoints to generic_model to keep
-            # the metadata oneof valid. See Section 7 of the design doc.
-            return "generic_model"
-    except ImportError:
-        pass
+    for module_path, class_name, model_type in _MODEL_TYPE_MAPPING:
+        try:
+            module = __import__(module_path, fromlist=[class_name])
+            cls = getattr(module, class_name)
+            if isinstance(model, cls):
+                return model_type
+        except ImportError:
+            pass
 
     # Fallback to class-name heuristic for models not explicitly imported.
     cls_name = type(model).__name__
@@ -1029,8 +989,6 @@ def _detect_llm_model_type(model):
         return "qwen3"
     if "Qwen2" in cls_name:
         return "qwen2p5"
-    # NOTE: LlmModelType does not have a dedicated "llama" field; fall back
-    # to generic_model so that the protobuf oneof stays valid.
     if "Llama" in cls_name:
         return "generic_model"
     return "generic_model"

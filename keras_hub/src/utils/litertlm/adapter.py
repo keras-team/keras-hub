@@ -10,6 +10,60 @@ from keras.src.backend.torch import nn as torch_backend_nn
 from torch import nn
 
 
+def _get_vision_encoder(backbone):
+    """Return the vision encoder from a backbone, or ``None``."""
+    return getattr(backbone, "vision_encoder", None) or getattr(
+        backbone, "vit_encoder", None
+    )
+
+
+def _is_gemma4_vision_encoder(vision_encoder):
+    """Return ``True`` if *vision_encoder* uses Gemma4 patch inputs."""
+    return (
+        hasattr(vision_encoder, "inputs")
+        and len(vision_encoder.inputs) == 2
+        and {inp.name for inp in vision_encoder.inputs}
+        == {"pixel_values", "pixel_position_ids"}
+    )
+
+
+def _encoder_expects_single_image(vision_encoder):
+    """Return ``True`` if the vision encoder takes one image at a time.
+
+    Gemma3 accepts a batched stack of images with shape
+    ``[B, N, H, W, 3]``. PaliGemma's ViT only accepts ``[B, H, W, 3]``. We
+    detect this from the Functional model's input spec: a single-image
+    encoder has one input whose shape (including the batch dimension) is
+    4-D.
+    """
+    if not hasattr(vision_encoder, "inputs"):
+        return False
+    if len(vision_encoder.inputs) != 1:
+        return False
+    return len(vision_encoder.inputs[0].shape) == 4
+
+
+def _run_vision_encoder(vision_encoder, images):
+    """Run the vision encoder, reshaping inputs if necessary.
+
+    For encoders that expect a single image per sample (e.g. PaliGemma),
+    the LiteRT-LM runtime contract still passes ``[B, N, H, W, 3]``. We
+    collapse the batch and image dimensions, run the encoder, and return
+    features with shape ``[B * N, tokens_per_image, dim]``.
+    """
+    if not _encoder_expects_single_image(vision_encoder):
+        return vision_encoder(images)
+
+    batch_size, num_images, height, width, channels = images.shape
+    flat_images = images.reshape(
+        batch_size * num_images, height, width, channels
+    )
+    features = vision_encoder(flat_images)
+    if isinstance(features, (tuple, list)):
+        features = features[0]
+    return features
+
+
 class KerasHubLiteRTAdapter(nn.Module):
     """Adapter that wraps a KerasHub CausalLM for LiteRT-LM export.
 
@@ -59,9 +113,7 @@ class KerasHubLiteRTAdapter(nn.Module):
         self.cache_length = cache_length
         self.separate_vision_encoder = separate_vision_encoder
         self.cache_layout = cache_layout
-        self.vision_encoder = getattr(
-            keras_model.backbone, "vision_encoder", None
-        ) or getattr(keras_model.backbone, "vit_encoder", None)
+        self.vision_encoder = _get_vision_encoder(keras_model.backbone)
         self.has_vision = self.vision_encoder is not None
         self.has_audio = (
             hasattr(keras_model.backbone, "audio_encoder")
@@ -110,49 +162,33 @@ class KerasHubLiteRTAdapter(nn.Module):
                 # The separate vision encoder/adapter produces a flat
                 # (batch*num_images, ...) tensor, so reshape it back before
                 # passing to the language model.
-                if img_embeddings is not None:
-                    is_gemma4_vision = (
-                        hasattr(self.vision_encoder, "inputs")
-                        and len(self.vision_encoder.inputs) == 2
-                        and {inp.name for inp in self.vision_encoder.inputs}
-                        == {"pixel_values", "pixel_position_ids"}
+                if img_embeddings is not None and _is_gemma4_vision_encoder(
+                    self.vision_encoder
+                ):
+                    max_images = getattr(
+                        self.keras_model.preprocessor,
+                        "max_images_per_prompt",
+                        1,
                     )
-                    if is_gemma4_vision:
-                        max_images = getattr(
-                            self.keras_model.preprocessor,
-                            "max_images_per_prompt",
-                            1,
-                        )
-                        batch_size = tokens.shape[0]
-                        img_embeddings = img_embeddings.reshape(
-                            batch_size,
-                            max_images,
-                            img_embeddings.shape[1],
-                            img_embeddings.shape[2],
-                        )
-            else:
-                # Gemma4 vision encoder expects pixel_values and
-                # pixel_position_ids. Detect via Functional model input names
-                # to avoid heavy imports.
-                is_gemma4_vision = (
-                    hasattr(self.vision_encoder, "inputs")
-                    and len(self.vision_encoder.inputs) == 2
-                    and {inp.name for inp in self.vision_encoder.inputs}
-                    == {"pixel_values", "pixel_position_ids"}
+                    batch_size = tokens.shape[0]
+                    img_embeddings = img_embeddings.reshape(
+                        batch_size,
+                        max_images,
+                        img_embeddings.shape[1],
+                        img_embeddings.shape[2],
+                    )
+            elif _is_gemma4_vision_encoder(self.vision_encoder):
+                if pixel_values is not None and pixel_position_ids is not None:
+                    img_embeddings = self.vision_encoder(
+                        {
+                            "pixel_values": pixel_values,
+                            "pixel_position_ids": pixel_position_ids,
+                        }
+                    )
+            elif images is not None:
+                img_embeddings = _run_vision_encoder(
+                    self.vision_encoder, images
                 )
-                if is_gemma4_vision:
-                    if (
-                        pixel_values is not None
-                        and pixel_position_ids is not None
-                    ):
-                        img_embeddings = self.vision_encoder(
-                            {
-                                "pixel_values": pixel_values,
-                                "pixel_position_ids": pixel_position_ids,
-                            }
-                        )
-                elif images is not None:
-                    img_embeddings = self._run_vision_encoder(images)
 
         # Run audio encoder if audio mel is provided.
         audio_embeddings = None
@@ -271,46 +307,6 @@ class KerasHubLiteRTAdapter(nn.Module):
             outputs[f"kv_cache_v_{i}"] = cache[:, i, 1, ...]
         return outputs
 
-    def _vision_encoder_expects_single_image(self):
-        """Return ``True`` if the vision encoder takes one image at a time.
-
-        Gemma3 accepts a batched stack of images with shape
-        ``[B, N, H, W, 3]``. PaliGemma's ViT only accepts ``[B, H, W, 3]``. We
-        detect this from the Functional model's input spec: a single-image
-        encoder has one input whose shape (including the batch dimension) is
-        4-D.
-        """
-        if not hasattr(self.vision_encoder, "inputs"):
-            return False
-        if len(self.vision_encoder.inputs) != 1:
-            return False
-        return len(self.vision_encoder.inputs[0].shape) == 4
-
-    def _run_vision_encoder(self, images):
-        """Run the vision encoder, reshaping inputs if necessary.
-
-        For encoders that expect a single image per sample (e.g. PaliGemma),
-        the LiteRT-LM runtime contract still passes ``[B, N, H, W, 3]``. We
-        collapse the batch and image dimensions, run the encoder, and return
-        features with shape ``[B * N, tokens_per_image, dim]``.
-        """
-        if not self._vision_encoder_expects_single_image():
-            return self.vision_encoder(images)
-
-        original_shape = list(images.shape)
-        batch_size = original_shape[0]
-        num_images = original_shape[1]
-        height = original_shape[2]
-        width = original_shape[3]
-        channels = original_shape[4]
-        flat_images = images.reshape(
-            batch_size * num_images, height, width, channels
-        )
-        features = self.vision_encoder(flat_images)
-        if isinstance(features, (tuple, list)):
-            features = features[0]
-        return features
-
 
 class KerasHubVisionEncoderAdapter(nn.Module):
     """Adapter that wraps a KerasHub vision encoder for separate export.
@@ -323,16 +319,7 @@ class KerasHubVisionEncoderAdapter(nn.Module):
 
     def __init__(self, keras_model):
         super().__init__()
-        self.vision_encoder = getattr(
-            keras_model.backbone, "vision_encoder", None
-        ) or getattr(keras_model.backbone, "vit_encoder", None)
-
-    def _encoder_expects_single_image(self):
-        if not hasattr(self.vision_encoder, "inputs"):
-            return False
-        if len(self.vision_encoder.inputs) != 1:
-            return False
-        return len(self.vision_encoder.inputs[0].shape) == 4
+        self.vision_encoder = _get_vision_encoder(keras_model.backbone)
 
     def forward(self, images=None, pixel_values=None, pixel_position_ids=None):
         if pixel_values is not None and pixel_position_ids is not None:
@@ -343,19 +330,7 @@ class KerasHubVisionEncoderAdapter(nn.Module):
                 }
             )
         elif images is not None:
-            if self._encoder_expects_single_image():
-                original_shape = list(images.shape)
-                batch_size = original_shape[0]
-                num_images = original_shape[1]
-                height = original_shape[2]
-                width = original_shape[3]
-                channels = original_shape[4]
-                flat_images = images.reshape(
-                    batch_size * num_images, height, width, channels
-                )
-                out = self.vision_encoder(flat_images)
-            else:
-                out = self.vision_encoder(images)
+            out = _run_vision_encoder(self.vision_encoder, images)
         else:
             raise ValueError(
                 "Vision encoder export requires either ``images`` or "
