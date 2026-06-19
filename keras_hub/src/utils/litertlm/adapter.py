@@ -6,6 +6,7 @@ import inspect
 
 import torch
 from keras.src.backend.torch import core as torch_core
+from keras.src.backend.torch import nn as torch_backend_nn
 from torch import nn
 
 
@@ -63,6 +64,9 @@ class KerasHubLiteRTAdapter(nn.Module):
         self.has_audio = (
             hasattr(keras_model.backbone, "audio_encoder")
             and keras_model.backbone.audio_encoder is not None
+        )
+        self._is_gemma3n = type(keras_model.backbone).__name__.startswith(
+            "Gemma3n"
         )
 
     def forward_prefill(
@@ -166,6 +170,16 @@ class KerasHubLiteRTAdapter(nn.Module):
             audio_mask=audio_mask,
             audio_indices=audio_indices,
         )
+        if self._is_gemma3n:
+            # Gemma3n's attention mask computation requires the padding mask
+            # to span the full cache length, otherwise a seq_len shorter than
+            # cache_length causes a broadcasting error between the causal and
+            # padding masks.
+            call_kwargs["padding_mask"] = torch.ones(
+                (tokens.shape[0], self.cache_length),
+                dtype=torch.bool,
+                device=tokens.device,
+            )
         logits, _, updated_cache = self.keras_model.call_with_cache(
             tokens,
             cache,
@@ -194,6 +208,12 @@ class KerasHubLiteRTAdapter(nn.Module):
             audio_mask=None,
             audio_indices=None,
         )
+        if self._is_gemma3n:
+            call_kwargs["padding_mask"] = torch.ones(
+                (tokens.shape[0], self.cache_length),
+                dtype=torch.bool,
+                device=tokens.device,
+            )
         logits, _, updated_cache = self.keras_model.call_with_cache(
             tokens,
             cache,
@@ -500,3 +520,51 @@ def _traceable_slice_update_scope():
     finally:
         torch_core.slice_update = original_slice_update
         torch_core.slice = original_slice
+
+
+@contextlib.contextmanager
+def _traceable_one_hot_scope():
+    """Patch Keras torch-backend ``one_hot`` to avoid ``aten._assert_async``.
+
+    ``torch.nn.functional.one_hot`` inserts runtime assertions that class
+    values are non-negative.  Under ``torch.export`` these become
+    ``aten._assert_async.msg`` ops, which ``litert_torch`` cannot lower.
+
+    This patch implements one-hot via equality against ``torch.arange``,
+    which produces the same result for non-negative indices and does not
+    introduce unlowerable assertions.
+    """
+    original_one_hot = torch_backend_nn.one_hot
+
+    def _patched_one_hot(x, num_classes, axis=-1, dtype=None, sparse=False):
+        if sparse:
+            raise ValueError(
+                "Unsupported value `sparse=True` with torch backend"
+            )
+        x = torch_core.convert_to_tensor(x, dtype=torch.long)
+        zero = torch_core.convert_to_tensor(0, dtype=torch.long)
+
+        x_clamped = torch.clamp(x, min=0)
+        output = (
+            x_clamped.unsqueeze(-1)
+            == torch.arange(
+                num_classes, dtype=torch.long, device=x_clamped.device
+            )
+        ).long()
+        output = torch_backend_nn.where(x.unsqueeze(-1) >= 0, output, zero)
+        if dtype is not None:
+            output = torch_core.convert_to_tensor(output, dtype=dtype)
+        dims = output.dim()
+        if axis != -1 and axis != dims:
+            new_axes_order = list(range(dims))
+            new_axes_order[axis] = -1
+            for ax in range(axis + 1, dims):
+                new_axes_order[ax] -= 1
+            output = output.permute(new_axes_order)
+        return output
+
+    torch_backend_nn.one_hot = _patched_one_hot
+    try:
+        yield
+    finally:
+        torch_backend_nn.one_hot = original_one_hot

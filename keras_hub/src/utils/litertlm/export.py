@@ -14,6 +14,7 @@ except ImportError:
 from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
 from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
 from keras_hub.src.utils.litertlm.adapter import KerasHubVisionEncoderAdapter
+from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_slice_update_scope
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
@@ -177,6 +178,7 @@ def export_to_litertlm(
     cache_length = cache_cfg["cache_length"]
     num_kv_heads = cache_cfg["num_kv_heads"]
     head_dim = cache_cfg["head_dim"]
+    cache_layout = cache_cfg["cache_layout"]
 
     # Detect multimodal capabilities.
     vision_cfg = _get_vision_config(model)
@@ -248,6 +250,7 @@ def export_to_litertlm(
             num_kv_heads=num_kv_heads,
             head_dim=head_dim,
             dtype=dtype,
+            cache_layout=cache_layout,
         )
         if has_vision:
             if separate_vision_encoder:
@@ -319,6 +322,7 @@ def export_to_litertlm(
         num_kv_heads=num_kv_heads,
         head_dim=head_dim,
         dtype=dtype,
+        cache_layout=cache_layout,
     )
 
     adapter = KerasHubLiteRTAdapter(
@@ -384,7 +388,7 @@ def export_to_litertlm(
             "Install it with: pip install litert-torch"
         )
 
-    with _traceable_slice_update_scope():
+    with _traceable_slice_update_scope(), _traceable_one_hot_scope():
         # Optionally export the vision encoder and adapter as separate models.
         if separate_vision_encoder and has_vision:
             if is_gemma4_vision:
@@ -551,9 +555,16 @@ def export_to_litertlm(
 
 
 def _get_cache_config(model):
-    """Extract KV-cache dimensions from the model."""
+    """Extract KV-cache dimensions and layout from the model."""
     backbone = model.backbone
-    num_layers = backbone.num_layers
+    num_layers = getattr(backbone, "num_layers", None)
+    if num_layers is None:
+        num_layers = getattr(backbone, "num_hidden_layers", None)
+    if num_layers is None:
+        raise ValueError(
+            "Could not determine number of layers from model backbone. "
+            "Expected `backbone.num_layers` or `backbone.num_hidden_layers`."
+        )
 
     cache_length = getattr(backbone, "max_sequence_length", None)
     if cache_length is None:
@@ -589,11 +600,19 @@ def _get_cache_config(model):
             "`backbone.hidden_dim` and `backbone.num_query_heads`."
         )
 
+    # Gemma3n uses a [B, L, 2, H, T, D] cache layout, whereas most other
+    # KerasHub models use [B, L, 2, T, H, D].  We detect this from the
+    # backbone class name so the adapter can transpose as needed.
+    cache_layout = "btl_2htd"
+    if type(backbone).__name__.startswith("Gemma3n"):
+        cache_layout = "btl_2thd"
+
     return {
         "num_layers": num_layers,
         "cache_length": cache_length,
         "num_kv_heads": num_kv_heads,
         "head_dim": head_dim,
+        "cache_layout": cache_layout,
     }
 
 
@@ -663,6 +682,7 @@ def _build_sample_inputs(
     num_kv_heads,
     head_dim,
     dtype=torch.float32,
+    cache_layout="btl_2thd",
 ):
     """Create concrete sample tensors for one signature."""
     device = "cpu"
@@ -678,8 +698,11 @@ def _build_sample_inputs(
         device=device,
     )
     kv_cache = {}
-    for i in range(num_layers):
+    if cache_layout == "btl_2thd":
+        shape = (batch_size, num_kv_heads, cache_length, head_dim)
+    else:
         shape = (batch_size, cache_length, num_kv_heads, head_dim)
+    for i in range(num_layers):
         kv_cache[f"kv_cache_k_{i}"] = torch.zeros(
             shape, dtype=dtype, device=device
         )

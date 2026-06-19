@@ -41,8 +41,9 @@ pre-commit run --files keras_hub/src/utils/litertlm/adapter.py keras_hub/src/uti
     - TFLite signature verification
     - Optional end-to-end generation smoke test via `litert_lm.Engine`
 12. **Broad test matrix** for tiny random-weight models:
-    - Gemma, Gemma3, Gemma4, Mistral, Mixtral, Phi3, Llama, PaliGemma
-    - Gemma3n test is skipped (KV-cache layout mismatch)
+    - Gemma, Gemma3, Gemma4, Mistral, Mixtral, Phi3, Llama, PaliGemma, Gemma3n
+    - Gemma3n separate-vision-encoder test is skipped (MobileNetV5 projection is inside the backbone)
+13. **Torch-export-friendly `one_hot` patch** to avoid the unlowerable `aten._assert_async.msg` op introduced by `torch.nn.functional.one_hot` in torch >= 2.12.
 
 ## Key Files
 
@@ -58,7 +59,7 @@ pre-commit run --files keras_hub/src/utils/litertlm/adapter.py keras_hub/src/uti
 | `keras_hub/src/utils/litertlm/mistral_litertlm_export_test.py` | Mistral tests |
 | `keras_hub/src/utils/litertlm/mixtral_litertlm_export_test.py` | Mixtral tests |
 | `keras_hub/src/utils/litertlm/phi3_litertlm_export_test.py` | Phi3 tests |
-| `keras_hub/src/utils/litertlm/gemma3n_litertlm_export_test.py` | Skipped Gemma3n tests |
+| `keras_hub/src/utils/litertlm/gemma3n_litertlm_export_test.py` | Gemma3n tests (text-only baked-in passes; separate vision encoder skipped) |
 
 ## Environment
 
@@ -90,9 +91,9 @@ Works and returns text. With dummy-weight tiny models the output is meaningless 
 ## Known Issues / Blockers
 
 1. **JAX CI failures** on `keras-stable` are unrelated to this PR. Failures are in `samplers/*_sampler_test.py` and `utils/transformers/export/gemma*_test.py` due to int64/int32 mismatch in `dynamic_update_slice` / `dynamic_slice`.
-2. **Gemma3n** not supported yet — KV-cache layout `[B, L, 2, H, T, D]` differs from exporter assumption `[B, L, 2, T, H, D]`, and MobileNetV5 expects 4-D image batches.
+2. **Gemma3n separate vision encoder** not supported yet — MobileNetV5 does not expose a single projected vision dimension; Gemma3n applies reshape / sqrt-scaling / `embed_vision` inside the backbone after the encoder.
 3. **Audio encoder separation** blocked upstream by `litert-torch` issue #1039.
-4. **BytePair / HuggingFace tokenizers** not yet supported — only SentencePiece.
+4. **BytePair / HuggingFace tokenizers** intentionally not supported. The LiteRT-LM / MediaPipe LLM Inference runtime contract only supports SentencePiece model protobuf files as the tokenizer model. BPE/HF tokenizers would need a lossy conversion to SentencePiece (the upstream `litert_torch/generative/tools/tokenizer_to_sentencepiece.py` notes ~1% token-ID mismatch for Llama3.2), which is out of scope for this PR.
 
 ## Pre-Commit Status
 
@@ -103,13 +104,13 @@ pre-commit run --files keras_hub/src/utils/litertlm/adapter.py keras_hub/src/uti
 
 ## Next Steps / Open Work
 
-- [ ] Run full `pytest keras_hub/src/utils/litertlm/ -v` suite when time allows.
+- [x] Run full `pytest keras_hub/src/utils/litertlm/ -v` suite when time allows.
 - [ ] Run `pre-commit run --all-files` before marking PR ready for review.
-- [ ] Investigate Gemma3n KV-cache layout and 4-D vision encoder support.
+- [x] Investigate Gemma3n KV-cache layout and 4-D vision encoder support.
 - [ ] Add BytePair / HuggingFace tokenizer support (future).
 - [ ] Add audio encoder separation once upstream #1039 is resolved.
 - [ ] Consider adding quantized-export tests (INT4 weight-only) to the matrix.
-- [ ] Update PR description design doc from `LITERTLM_RESUME.md` as work progresses.
+- [x] Update PR description design doc from `LITERTLM_RESUME.md` as work progresses.
 
 ## Useful Commands
 
