@@ -122,27 +122,33 @@ class KerasHubLiteRTAdapter(nn.Module):
         self.cache_length = cache_length
         self.separate_vision_encoder = separate_vision_encoder
         self.cache_layout = cache_layout
+
         vision_encoder = _get_vision_encoder(keras_model.backbone)
         self.has_vision = vision_encoder is not None
+        self.is_gemma4_vision = (
+            vision_encoder is not None
+            and _is_gemma4_vision_encoder(vision_encoder)
+        )
         # When exporting a separate vision encoder, keep the vision tower out of
         # the PREFILL_DECODE graph so its weights are not duplicated in the main
-        # model. We still need to know whether it is Gemma4-style for reshape.
-        if separate_vision_encoder:
-            self.vision_encoder = None
-            self.is_gemma4_vision = (
-                vision_encoder is not None
-                and _is_gemma4_vision_encoder(vision_encoder)
-            )
-        else:
-            self.vision_encoder = vision_encoder
-            self.is_gemma4_vision = (
-                vision_encoder is not None
-                and _is_gemma4_vision_encoder(vision_encoder)
-            )
+        # model. The cached `is_gemma4_vision` flag still guides reshape logic.
+        self.vision_encoder = (
+            None if separate_vision_encoder else vision_encoder
+        )
+
         self.has_audio = (
             hasattr(keras_model.backbone, "audio_encoder")
             and keras_model.backbone.audio_encoder is not None
         )
+
+        # Cache the call_with_cache signature so we don't re-inspect it on every
+        # forward pass during export tracing.
+        call_params = set(
+            inspect.signature(keras_model.call_with_cache).parameters.keys()
+        )
+        self._call_with_cache_params = call_params
+        self._expects_pixel_values = "pixel_values" in call_params
+        self._expects_input_features = "input_features" in call_params
 
     def forward_prefill(
         self,
@@ -166,7 +172,7 @@ class KerasHubLiteRTAdapter(nn.Module):
         (no logits).  The runtime extracts the last-token logits internally
         via a dedicated decode step.
 
-        ``input_pos`` is a 1-D int64 tensor (e.g. ``[0, 1, 2, ...]`` for the
+        ``input_pos`` is a 1-D int32 tensor (e.g. ``[0, 1, 2, ...]`` for the
         first turn, or ``[N, N+1, ...]`` for subsequent turns).  The first
         element is used as the cache-update index so that prefill appends to
         the existing cache instead of overwriting from position 0.
@@ -175,21 +181,11 @@ class KerasHubLiteRTAdapter(nn.Module):
         # The first element of input_pos is the start position.
         cache_update_index = input_pos[0]
 
-        # Determine whether the underlying model expects raw multimodal tensors
-        # (Gemma3n-style) or pre-computed embeddings (Gemma3/Gemma4/PaliGemma).
-        call_params = set(
-            inspect.signature(
-                self.keras_model.call_with_cache
-            ).parameters.keys()
-        )
-        expects_pixel_values = "pixel_values" in call_params
-        expects_input_features = "input_features" in call_params
-
         # Run vision encoder if images are provided.
         img_embeddings = None
         pixel_values_out = None
         if self.has_vision:
-            if expects_pixel_values:
+            if self._expects_pixel_values:
                 # Gemma3n runs the vision encoder inside the backbone; pass the
                 # raw preprocessed images through.
                 pixel_values_out = images
@@ -231,7 +227,7 @@ class KerasHubLiteRTAdapter(nn.Module):
         input_features_out = None
         input_features_mask_out = None
         if self.has_audio and audio_mel is not None:
-            if expects_input_features:
+            if self._expects_input_features:
                 # Gemma3n runs the audio encoder inside the backbone.
                 input_features_out = audio_mel
                 input_features_mask_out = audio_mel_mask
@@ -326,8 +322,7 @@ class KerasHubLiteRTAdapter(nn.Module):
         input_features_mask=None,
     ):
         """Build kwargs dict for ``call_with_cache`` based on its signature."""
-        sig = inspect.signature(self.keras_model.call_with_cache)
-        params = set(sig.parameters.keys())
+        params = self._call_with_cache_params
         kwargs = {}
         if "img_embeddings" in params:
             kwargs["img_embeddings"] = img_embeddings
