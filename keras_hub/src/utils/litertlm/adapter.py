@@ -10,6 +10,17 @@ from keras.src.backend.torch import nn as torch_backend_nn
 from torch import nn
 
 
+@contextlib.contextmanager
+def _cpu_default_device_scope():
+    """Temporarily force PyTorch's default device to CPU."""
+    original_device = torch.get_default_device()
+    torch.set_default_device("cpu")
+    try:
+        yield
+    finally:
+        torch.set_default_device(original_device)
+
+
 def _get_vision_encoder(backbone):
     """Return the vision encoder from a backbone, or ``None``."""
     return getattr(backbone, "vision_encoder", None) or getattr(

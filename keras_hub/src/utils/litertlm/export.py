@@ -15,6 +15,7 @@ except ImportError:
 from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
 from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
 from keras_hub.src.utils.litertlm.adapter import KerasHubVisionEncoderAdapter
+from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
 from keras_hub.src.utils.litertlm.adapter import _get_vision_encoder
 from keras_hub.src.utils.litertlm.adapter import _is_gemma4_vision_encoder
 from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
@@ -288,18 +289,87 @@ def export_to_litertlm(
         )
 
     dtype = _torch_dtype_from_model(model)
+    with _cpu_default_device_scope():
+        prefill_inputs_map = {}
+        for seq_len in prefill_seq_lens:
+            base = _build_sample_inputs(
+                batch_size=1,
+                seq_len=seq_len,
+                num_layers=num_layers,
+                cache_length=cache_length,
+                num_kv_heads=num_kv_heads,
+                head_dim=head_dim,
+                dtype=dtype,
+                cache_layout=cache_layout,
+            )
+            if has_vision:
+                if separate_vision_encoder:
+                    max_images = vision_cfg["max_images_per_prompt"]
+                    num_vision_tokens = vision_cfg["num_vision_tokens"]
+                    tokens_per_image = (
+                        num_vision_tokens // max_images if max_images else 1
+                    )
+                    base.update(
+                        {
+                            "mm_embedding": torch.zeros(
+                                (
+                                    1 * max_images,
+                                    tokens_per_image,
+                                    vision_output_dim,
+                                ),
+                                dtype=dtype,
+                                device="cpu",
+                            ),
+                            "vision_indices": torch.zeros(
+                                (1, num_vision_tokens), dtype=torch.int32
+                            ),
+                            "vision_mask": torch.zeros(
+                                (1, seq_len), dtype=torch.int32
+                            ),
+                        }
+                    )
+                elif is_gemma4_vision:
+                    base.update(
+                        _build_gemma4_vision_sample_inputs(
+                            batch_size=1,
+                            max_images=vision_cfg["max_images_per_prompt"],
+                            patch_size=vision_cfg.get("patch_size", 16),
+                            image_size=vision_cfg["image_size"],
+                            num_vision_tokens=vision_cfg["num_vision_tokens"],
+                            seq_len=seq_len,
+                            dtype=dtype,
+                        )
+                    )
+                else:
+                    base.update(
+                        _build_vision_sample_inputs(
+                            batch_size=1,
+                            max_images=vision_cfg["max_images_per_prompt"],
+                            image_size=vision_cfg["image_size"],
+                            num_vision_tokens=vision_cfg["num_vision_tokens"],
+                            seq_len=seq_len,
+                            dtype=dtype,
+                        )
+                    )
+            if has_audio:
+                base.update(
+                    _build_audio_sample_inputs(
+                        batch_size=1,
+                        max_clips=audio_cfg["max_clips_per_prompt"],
+                        num_frames=audio_cfg["num_frames"],
+                        num_audio_tokens=audio_cfg["num_audio_tokens"],
+                        seq_len=seq_len,
+                        audio_input_feat_size=audio_cfg.get(
+                            "audio_input_feat_size", 128
+                        ),
+                        dtype=dtype,
+                    )
+                )
+            prefill_inputs_map[seq_len] = base
 
-    # LiteRT-LM export traces on CPU regardless of whether a GPU is available;
-    # forcing CPU default device prevents accidental GPU placement of new
-    # tensors during torch.export and keeps exported graphs CPU-compatible.
-    torch.set_default_device("cpu")
-
-    # Build sample inputs for each prefill bucket and the decode signature.
-    prefill_inputs_map = {}
-    for seq_len in prefill_seq_lens:
-        base = _build_sample_inputs(
+        decode_inputs = _build_sample_inputs(
             batch_size=1,
-            seq_len=seq_len,
+            seq_len=1,
             num_layers=num_layers,
             cache_length=cache_length,
             num_kv_heads=num_kv_heads,
@@ -307,275 +377,206 @@ def export_to_litertlm(
             dtype=dtype,
             cache_layout=cache_layout,
         )
-        if has_vision:
-            if separate_vision_encoder:
-                max_images = vision_cfg["max_images_per_prompt"]
-                num_vision_tokens = vision_cfg["num_vision_tokens"]
-                tokens_per_image = (
-                    num_vision_tokens // max_images if max_images else 1
-                )
-                base.update(
-                    {
-                        "mm_embedding": torch.zeros(
+
+        adapter = KerasHubLiteRTAdapter(
+            model,
+            num_layers,
+            cache_length,
+            separate_vision_encoder=(separate_vision_encoder and has_vision),
+            cache_layout=cache_layout,
+        )
+        adapter.eval()
+
+        # Prefill and decode wrappers give litert_torch clean module boundaries.
+        class _PrefillAdapter(torch.nn.Module):
+            def __init__(self, base):
+                super().__init__()
+                self.base = base
+
+            def forward(self, *args, **kwargs):
+                return self.base.forward_prefill(*args, **kwargs)
+
+        class _DecodeAdapter(torch.nn.Module):
+            def __init__(self, base):
+                super().__init__()
+                self.base = base
+
+            def forward(self, *args, **kwargs):
+                return self.base.forward_decode(*args, **kwargs)
+
+        prefill_adapter = _PrefillAdapter(adapter).eval()
+        decode_adapter = _DecodeAdapter(adapter).eval()
+
+        with _traceable_slice_update_scope(), _traceable_one_hot_scope():
+            # Optionally export the vision encoder and adapter as separate
+            # models.
+            if separate_vision_encoder and has_vision:
+                if is_gemma4_vision:
+                    patch_size = vision_cfg.get("patch_size", 16)
+                    num_patches = (vision_cfg["image_size"] // patch_size) ** 2
+                    patch_dim = patch_size**2 * 3
+                    vision_encoder_inputs = {
+                        "pixel_values": torch.zeros(
                             (
-                                1 * max_images,
-                                tokens_per_image,
-                                vision_output_dim,
+                                1,
+                                vision_cfg["max_images_per_prompt"],
+                                num_patches,
+                                patch_dim,
                             ),
                             dtype=dtype,
                             device="cpu",
                         ),
-                        "vision_indices": torch.zeros(
-                            (1, num_vision_tokens), dtype=torch.int32
-                        ),
-                        "vision_mask": torch.zeros(
-                            (1, seq_len), dtype=torch.int32
+                        "pixel_position_ids": torch.zeros(
+                            (
+                                1,
+                                vision_cfg["max_images_per_prompt"],
+                                num_patches,
+                                2,
+                            ),
+                            dtype=torch.int32,
+                            device="cpu",
                         ),
                     }
-                )
-            elif is_gemma4_vision:
-                base.update(
-                    _build_gemma4_vision_sample_inputs(
-                        batch_size=1,
-                        max_images=vision_cfg["max_images_per_prompt"],
-                        patch_size=vision_cfg.get("patch_size", 16),
-                        image_size=vision_cfg["image_size"],
-                        num_vision_tokens=vision_cfg["num_vision_tokens"],
-                        seq_len=seq_len,
-                        dtype=dtype,
-                    )
-                )
-            else:
-                base.update(
-                    _build_vision_sample_inputs(
-                        batch_size=1,
-                        max_images=vision_cfg["max_images_per_prompt"],
-                        image_size=vision_cfg["image_size"],
-                        num_vision_tokens=vision_cfg["num_vision_tokens"],
-                        seq_len=seq_len,
-                        dtype=dtype,
-                    )
-                )
-        if has_audio:
-            base.update(
-                _build_audio_sample_inputs(
-                    batch_size=1,
-                    max_clips=audio_cfg["max_clips_per_prompt"],
-                    num_frames=audio_cfg["num_frames"],
-                    num_audio_tokens=audio_cfg["num_audio_tokens"],
-                    seq_len=seq_len,
-                    audio_input_feat_size=audio_cfg.get(
-                        "audio_input_feat_size", 128
-                    ),
-                    dtype=dtype,
-                )
-            )
-        prefill_inputs_map[seq_len] = base
-
-    decode_inputs = _build_sample_inputs(
-        batch_size=1,
-        seq_len=1,
-        num_layers=num_layers,
-        cache_length=cache_length,
-        num_kv_heads=num_kv_heads,
-        head_dim=head_dim,
-        dtype=dtype,
-        cache_layout=cache_layout,
-    )
-
-    adapter = KerasHubLiteRTAdapter(
-        model,
-        num_layers,
-        cache_length,
-        separate_vision_encoder=(separate_vision_encoder and has_vision),
-        cache_layout=cache_layout,
-    )
-    adapter.eval()
-
-    # Prefill and decode wrappers give litert_torch clean module boundaries.
-    class _PrefillAdapter(torch.nn.Module):
-        def __init__(self, base):
-            super().__init__()
-            self.base = base
-
-        def forward(self, *args, **kwargs):
-            return self.base.forward_prefill(*args, **kwargs)
-
-    class _DecodeAdapter(torch.nn.Module):
-        def __init__(self, base):
-            super().__init__()
-            self.base = base
-
-        def forward(self, *args, **kwargs):
-            return self.base.forward_decode(*args, **kwargs)
-
-    prefill_adapter = _PrefillAdapter(adapter).eval()
-    decode_adapter = _DecodeAdapter(adapter).eval()
-
-    with _traceable_slice_update_scope(), _traceable_one_hot_scope():
-        # Optionally export the vision encoder and adapter as separate models.
-        if separate_vision_encoder and has_vision:
-            if is_gemma4_vision:
-                num_patches = (
-                    vision_cfg["image_size"] // vision_cfg.get("patch_size", 16)
-                ) ** 2
-                patch_dim = vision_cfg.get("patch_size", 16) ** 2 * 3
-                vision_encoder_inputs = {
-                    "pixel_values": torch.zeros(
-                        (
-                            1,
-                            vision_cfg["max_images_per_prompt"],
-                            num_patches,
-                            patch_dim,
-                        ),
-                        dtype=dtype,
-                        device="cpu",
-                    ),
-                    "pixel_position_ids": torch.zeros(
-                        (
-                            1,
-                            vision_cfg["max_images_per_prompt"],
-                            num_patches,
-                            2,
-                        ),
-                        dtype=torch.int32,
-                        device="cpu",
-                    ),
-                }
-            else:
-                vision_encoder_inputs = {
-                    "images": torch.zeros(
-                        (
-                            1,
-                            vision_cfg["max_images_per_prompt"],
-                            vision_cfg["image_size"],
-                            vision_cfg["image_size"],
-                            3,
-                        ),
+                else:
+                    vision_encoder_inputs = {
+                        "images": torch.zeros(
+                            (
+                                1,
+                                vision_cfg["max_images_per_prompt"],
+                                vision_cfg["image_size"],
+                                vision_cfg["image_size"],
+                                3,
+                            ),
+                            dtype=dtype,
+                            device="cpu",
+                        )
+                    }
+                vision_adapter_inputs = {
+                    "features": torch.zeros(
+                        (1 * max_images, tokens_per_image, vision_output_dim),
                         dtype=dtype,
                         device="cpu",
                     )
                 }
-            vision_adapter_inputs = {
-                "features": torch.zeros(
-                    (1 * max_images, tokens_per_image, vision_output_dim),
-                    dtype=dtype,
-                    device="cpu",
-                )
-            }
-            vision_encoder_adapter = KerasHubVisionEncoderAdapter(model).eval()
-            vision_adapter = KerasHubVisionAdapter().eval()
+                vision_encoder_adapter = KerasHubVisionEncoderAdapter(
+                    model
+                ).eval()
+                vision_adapter = KerasHubVisionAdapter().eval()
 
-            vision_encoder_edge = litert_torch.signature(
-                "vision_encoder",
-                vision_encoder_adapter,
-                sample_kwargs=vision_encoder_inputs,
-                **kwargs,
-            ).convert(quant_config=quant_config, lightweight_conversion=True)
-            vision_adapter_edge = litert_torch.signature(
-                "vision_adapter",
-                vision_adapter,
-                sample_kwargs=vision_adapter_inputs,
-                **kwargs,
-            ).convert(quant_config=quant_config, lightweight_conversion=True)
-
-        # Chain one signature per prefill bucket.
-        converter = None
-        for seq_len in prefill_seq_lens:
-            sig_name = (
-                "prefill"
-                if len(prefill_seq_lens) == 1
-                else f"prefill_{seq_len}"
-            )
-            if converter is None:
-                converter = litert_torch.signature(
-                    sig_name,
-                    prefill_adapter,
-                    sample_kwargs=prefill_inputs_map[seq_len],
+                vision_encoder_edge = litert_torch.signature(
+                    "vision_encoder",
+                    vision_encoder_adapter,
+                    sample_kwargs=vision_encoder_inputs,
                     **kwargs,
+                ).convert(
+                    quant_config=quant_config, lightweight_conversion=True
                 )
+                vision_adapter_edge = litert_torch.signature(
+                    "vision_adapter",
+                    vision_adapter,
+                    sample_kwargs=vision_adapter_inputs,
+                    **kwargs,
+                ).convert(
+                    quant_config=quant_config, lightweight_conversion=True
+                )
+
+            # Chain one signature per prefill bucket.
+            converter = None
+            for seq_len in prefill_seq_lens:
+                sig_name = (
+                    "prefill"
+                    if len(prefill_seq_lens) == 1
+                    else f"prefill_{seq_len}"
+                )
+                if converter is None:
+                    converter = litert_torch.signature(
+                        sig_name,
+                        prefill_adapter,
+                        sample_kwargs=prefill_inputs_map[seq_len],
+                        **kwargs,
+                    )
+                else:
+                    converter = converter.signature(
+                        sig_name,
+                        prefill_adapter,
+                        sample_kwargs=prefill_inputs_map[seq_len],
+                        **kwargs,
+                    )
+
+            converter = converter.signature(
+                "decode",
+                decode_adapter,
+                sample_kwargs=decode_inputs,
+                **kwargs,
+            )
+
+            edge_model = converter.convert(
+                quant_config=quant_config, lightweight_conversion=True
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            if separate_vision_encoder and has_vision:
+                prefill_tflite_path = os.path.join(
+                    temp_dir, "prefill_decode.tflite"
+                )
+                edge_model.export(prefill_tflite_path)
+                vision_encoder_tflite_path = os.path.join(
+                    temp_dir, "vision_encoder.tflite"
+                )
+                vision_encoder_edge.export(vision_encoder_tflite_path)
+                vision_adapter_tflite_path = os.path.join(
+                    temp_dir, "vision_adapter.tflite"
+                )
+                vision_adapter_edge.export(vision_adapter_tflite_path)
             else:
-                converter = converter.signature(
-                    sig_name,
-                    prefill_adapter,
-                    sample_kwargs=prefill_inputs_map[seq_len],
-                    **kwargs,
+                prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
+                edge_model.export(prefill_tflite_path)
+
+            tokenizer_path = _materialize_sentencepiece_tokenizer(
+                tokenizer, temp_dir
+            )
+
+            meta_path = os.path.join(temp_dir, "llm_metadata.pb")
+            _build_llm_metadata(
+                model,
+                cache_length,
+                meta_path,
+                vision_cfg=vision_cfg,
+                audio_cfg=audio_cfg,
+            )
+
+            litert_lm_builder = _import_litert_lm_builder()
+            builder = litert_lm_builder.LitertLmFileBuilder()
+            builder.add_system_metadata(
+                litert_lm_builder.Metadata(
+                    key="Authors",
+                    value="KerasHub",
+                    dtype=litert_lm_builder.DType.STRING,
                 )
-
-        converter = converter.signature(
-            "decode",
-            decode_adapter,
-            sample_kwargs=decode_inputs,
-            **kwargs,
-        )
-
-        edge_model = converter.convert(
-            quant_config=quant_config, lightweight_conversion=True
-        )
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        if separate_vision_encoder and has_vision:
-            prefill_tflite_path = os.path.join(
-                temp_dir, "prefill_decode.tflite"
-            )
-            edge_model.export(prefill_tflite_path)
-            vision_encoder_tflite_path = os.path.join(
-                temp_dir, "vision_encoder.tflite"
-            )
-            vision_encoder_edge.export(vision_encoder_tflite_path)
-            vision_adapter_tflite_path = os.path.join(
-                temp_dir, "vision_adapter.tflite"
-            )
-            vision_adapter_edge.export(vision_adapter_tflite_path)
-        else:
-            prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
-            edge_model.export(prefill_tflite_path)
-
-        tokenizer_path = _materialize_sentencepiece_tokenizer(
-            tokenizer, temp_dir
-        )
-
-        meta_path = os.path.join(temp_dir, "llm_metadata.pb")
-        _build_llm_metadata(
-            model,
-            cache_length,
-            meta_path,
-            vision_cfg=vision_cfg,
-            audio_cfg=audio_cfg,
-        )
-
-        litert_lm_builder = _import_litert_lm_builder()
-        builder = litert_lm_builder.LitertLmFileBuilder()
-        builder.add_system_metadata(
-            litert_lm_builder.Metadata(
-                key="Authors",
-                value="KerasHub",
-                dtype=litert_lm_builder.DType.STRING,
-            )
-        )
-        builder.add_tflite_model(
-            prefill_tflite_path,
-            litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
-            backend_constraint=backend_constraint,
-        )
-        if separate_vision_encoder and has_vision:
-            builder.add_tflite_model(
-                vision_encoder_tflite_path,
-                litert_lm_builder.TfLiteModelType.VISION_ENCODER,
-                backend_constraint=backend_constraint,
             )
             builder.add_tflite_model(
-                vision_adapter_tflite_path,
-                litert_lm_builder.TfLiteModelType.VISION_ADAPTER,
+                prefill_tflite_path,
+                litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
                 backend_constraint=backend_constraint,
             )
-        builder.add_sentencepiece_tokenizer(tokenizer_path)
-        builder.add_llm_metadata(meta_path)
+            if separate_vision_encoder and has_vision:
+                builder.add_tflite_model(
+                    vision_encoder_tflite_path,
+                    litert_lm_builder.TfLiteModelType.VISION_ENCODER,
+                    backend_constraint=backend_constraint,
+                )
+                builder.add_tflite_model(
+                    vision_adapter_tflite_path,
+                    litert_lm_builder.TfLiteModelType.VISION_ADAPTER,
+                    backend_constraint=backend_constraint,
+                )
+            builder.add_sentencepiece_tokenizer(tokenizer_path)
+            builder.add_llm_metadata(meta_path)
 
-        with open(path, "wb") as output_file:
-            builder.build(output_file)
+            with open(path, "wb") as output_file:
+                builder.build(output_file)
 
-    return path
+        return path
 
 
 def _get_cache_config(model):
