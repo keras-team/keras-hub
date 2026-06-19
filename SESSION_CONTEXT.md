@@ -4,29 +4,40 @@
 **Branch:** `torch-backend-litert-minimal-litertlm`
 **Fork remote:** `pctablet505/keras-hub`
 **Upstream PR:** https://github.com/keras-team/keras-hub/pull/2705
-**Latest commit:** `4249813` (Iteration 14)
+**Latest commit:** `c1b17ed` (HF tokenizer support)
 
 ## Goal
 Add a PyTorch-backend LiteRT-LM export path for KerasHub CausalLM models,
-with dedicated tests for all supported model families.
+with dedicated tests for all supported model families, including BytePair
+families via HuggingFace tokenizer conversion.
 
 ## Current Status
-- All supported CausalLM families have `test_litertlm_export` in their model
-  test files.
+- All SentencePiece-supported CausalLM families have `test_litertlm_export` in
+  their model test files.
 - CPU-only export tracing is enforced via `_cpu_default_device_scope()` and
   restored after export.
 - Runtime generation smoke test is wired into `test_export_tiny_gemma`.
 - Design doc (PR body) contains supported/unsupported model table and
   architecture notes.
+- HuggingFace tokenizer support added:
+  - `hf_tokenizer_path` user override.
+  - Auto-conversion for GPT2, Llama3, Qwen3 BytePair tokenizers.
 
-## Supported Models (SentencePiece CausalLM)
+## Supported Models
+
+### SentencePiece
 - Gemma, Gemma3, Gemma3n, Gemma4
 - Llama, Mistral, Mixtral
 - PaliGemma, Phi3
 
+### Auto-converted BytePair → HF tokenizer.json
+- GPT2, Llama3, Qwen3
+
+### User-provided HF tokenizer.json
+- Any BytePair family (Bloom, Falcon, GPTNeoX, GPT-OSS, OPT, Qwen variants,
+  SmolLM3, etc.) via `hf_tokenizer_path`.
+
 ## Unsupported Models
-- BytePair tokenizer families: Bloom, Falcon, GPT2, GPTNeoX, GPT-OSS,
-  Llama3, OPT, Qwen variants, SmolLM3
 - Non-transformer: RWKV7
 - Non-generative: PARSeq
 
@@ -47,8 +58,8 @@ KERAS_BACKEND=torch pytest keras_hub/src/utils/litertlm/ \
 ```
 
 ## Last Test Result
-- `export_test.py`: 12 passed, 3 skipped, 4 subtests passed (57.53s)
-- Full targeted suite (iteration 15): **32 passed, 17 skipped, 4 subtests passed in 142.77s**
+- `keras_hub/src/utils/litertlm/` full suite: **28 passed, 18 skipped, 8 subtests passed in 76.93s**
+- Per-model SentencePiece suite: **9 passed in 78.24s**
 
 ## Open Items / Known Gaps
 - Audio export for Gemma3n is not enabled end-to-end (audio encoder exists but
@@ -57,14 +68,16 @@ KERAS_BACKEND=torch pytest keras_hub/src/utils/litertlm/ \
 - Externalized weights / streaming export is not supported.
 - Generation smoke test output with random weights is garbage (`<pad>` tokens);
   it only verifies the runtime executes without error.
+- Pixel 9 end-to-end verification is pending for HF-converted bundles.
 
 ## Key Files Changed
 - `keras_hub/src/utils/litertlm/export.py`
 - `keras_hub/src/utils/litertlm/adapter.py`
+- `keras_hub/src/utils/litertlm/hf_tokenizer_converter.py` (new)
 - `keras_hub/src/utils/litertlm/export_test.py`
 - `keras_hub/src/tests/test_case.py`
 - `keras_hub/src/tests/mocks/mock_gemma3_tokenizer.py`
-- Model test files for the 9 supported families
+- Model test files for the 9 supported SentencePiece families
 
 ## Environment
 - Backend: PyTorch (`KERAS_BACKEND=torch`)

@@ -41,10 +41,15 @@ pre-commit run --files keras_hub/src/utils/litertlm/adapter.py keras_hub/src/uti
     - TFLite signature verification
     - Optional end-to-end generation smoke test via `litert_lm.Engine`
 12. **Broad test matrix** for tiny random-weight models:
-    - Gemma, Gemma3, Gemma4, Mistral, Mixtral, Phi3, Llama, PaliGemma, Gemma3n
+    - SentencePiece families: Gemma, Gemma3, Gemma4, Mistral, Mixtral, Phi3, Llama, PaliGemma, Gemma3n
+    - HF-converted BytePair families: GPT2, Llama3, Qwen3
     - Gemma3n text-only and baked-in vision tests pass
     - Gemma3n separate-vision-encoder test is skipped (MobileNetV5 projection is inside the backbone)
 13. **Torch-export-friendly `one_hot` patch** to avoid the unlowerable `aten._assert_async.msg` op introduced by `torch.nn.functional.one_hot` in torch >= 2.12.
+14. **HuggingFace tokenizer support**:
+    - `hf_tokenizer_path` argument for user-provided `tokenizer.json`
+    - Auto-conversion of KerasHub `BytePairTokenizer` to HF `tokenizer.json` for GPT2, Llama3, Qwen3
+    - New converter module: `keras_hub/src/utils/litertlm/hf_tokenizer_converter.py`
 
 ## Key Files
 
@@ -52,8 +57,9 @@ pre-commit run --files keras_hub/src/utils/litertlm/adapter.py keras_hub/src/uti
 |------|---------|
 | `keras_hub/src/utils/litertlm/export.py` | Main export pipeline |
 | `keras_hub/src/utils/litertlm/adapter.py` | PyTorch adapter, separate vision encoders/adapters |
+| `keras_hub/src/utils/litertlm/hf_tokenizer_converter.py` | BytePair → HF `tokenizer.json` converter |
 | `keras_hub/src/tests/test_case.py` | `run_litertlm_export_test` helper |
-| `keras_hub/src/utils/litertlm/export_test.py` | Core tests (Gemma, Gemma3, bucketing, parity) |
+| `keras_hub/src/utils/litertlm/export_test.py` | Core tests (Gemma, Gemma3, bucketing, parity, HF tokenizer) |
 | `keras_hub/src/utils/litertlm/gemma4_litertlm_export_test.py` | Gemma4 tests |
 | `keras_hub/src/utils/litertlm/pali_gemma_litertlm_export_test.py` | PaliGemma tests |
 | `keras_hub/src/utils/litertlm/llama_litertlm_export_test.py` | Llama tests |
@@ -118,7 +124,9 @@ CUDA_VISIBLE_DEVICES="" KERAS_BACKEND=torch pytest \
   -n auto -q
 ```
 
-Result: **32 passed, 17 skipped, 4 subtests passed in 142.77s**.
+Result: **28 passed, 18 skipped, 8 subtests passed in 76.93s** (all `keras_hub/src/utils/litertlm/` tests).
+
+Per-model `test_litertlm_export` suite (SentencePiece families): **9 passed in 78.24s**.
 
 ## Pre-Commit Status
 
