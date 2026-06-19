@@ -187,7 +187,9 @@ def export_to_litertlm(
     is_gemma4_vision = False
     vision_output_dim = None
     if has_vision:
-        vision_encoder = model.backbone.vision_encoder
+        vision_encoder = getattr(
+            model.backbone, "vision_encoder", None
+        ) or getattr(model.backbone, "vit_encoder", None)
         is_gemma4_vision = (
             hasattr(vision_encoder, "inputs")
             and len(vision_encoder.inputs) == 2
@@ -195,10 +197,14 @@ def export_to_litertlm(
             == {"pixel_values", "pixel_position_ids"}
         )
         vision_output_dim = getattr(vision_encoder, "output_dim", None)
+        if vision_output_dim is None:
+            # PaliGemma's ViT uses ``num_classes`` as the projected vision
+            # dimension instead of ``output_dim``.
+            vision_output_dim = getattr(vision_encoder, "num_classes", None)
         if separate_vision_encoder and vision_output_dim is None:
             raise ValueError(
                 "LiteRT-LM separate vision encoder export requires "
-                "`vision_encoder.output_dim`."
+                "`vision_encoder.output_dim` or `vision_encoder.num_classes`."
             )
 
     # Normalise prefill_seq_len to a sorted list.
@@ -596,21 +602,31 @@ def _get_vision_config(model):
     backbone = getattr(model, "backbone", None)
     if backbone is None:
         return None
-    vision_encoder = getattr(backbone, "vision_encoder", None)
+    vision_encoder = getattr(backbone, "vision_encoder", None) or getattr(
+        backbone, "vit_encoder", None
+    )
     if vision_encoder is None:
         return None
     preprocessor = getattr(model, "preprocessor", None)
     max_images = getattr(preprocessor, "max_images_per_prompt", 1)
     image_size = getattr(backbone, "image_size", 224)
-    num_vision_tokens = (
-        getattr(backbone, "num_vision_tokens_per_image", 0) * max_images
+    num_vision_tokens_per_image = getattr(
+        backbone, "num_vision_tokens_per_image", None
     )
+    if num_vision_tokens_per_image is None:
+        # PaliGemma exposes the per-image token count via
+        # ``image_sequence_length`` rather than ``num_vision_tokens_per_image``.
+        num_vision_tokens_per_image = getattr(
+            backbone, "image_sequence_length", 0
+        )
+    num_vision_tokens = num_vision_tokens_per_image * max_images
     patch_size = getattr(vision_encoder, "patch_size", None)
     pool_size = getattr(vision_encoder, "pool_size", None)
     return {
         "max_images_per_prompt": max_images,
         "image_size": image_size,
         "num_vision_tokens": num_vision_tokens,
+        "num_vision_tokens_per_image": num_vision_tokens_per_image,
         "patch_size": patch_size,
         "pool_size": pool_size,
     }
