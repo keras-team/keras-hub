@@ -337,6 +337,7 @@ def export_to_litertlm(
                         image_size=vision_cfg["image_size"],
                         num_vision_tokens=vision_cfg["num_vision_tokens"],
                         seq_len=seq_len,
+                        dtype=dtype,
                     )
                 )
             else:
@@ -347,6 +348,7 @@ def export_to_litertlm(
                         image_size=vision_cfg["image_size"],
                         num_vision_tokens=vision_cfg["num_vision_tokens"],
                         seq_len=seq_len,
+                        dtype=dtype,
                     )
                 )
         if has_audio:
@@ -360,6 +362,7 @@ def export_to_litertlm(
                     audio_input_feat_size=audio_cfg.get(
                         "audio_input_feat_size", 128
                     ),
+                    dtype=dtype,
                 )
             )
         prefill_inputs_map[seq_len] = base
@@ -777,12 +780,13 @@ def _build_vision_sample_inputs(
     image_size,
     num_vision_tokens,
     seq_len,
+    dtype=torch.float32,
 ):
     """Create concrete vision sample tensors for a prefill signature."""
     device = "cpu"
     images = torch.zeros(
         (batch_size, max_images, image_size, image_size, 3),
-        dtype=torch.float32,
+        dtype=dtype,
         device=device,
     )
     vision_indices = torch.zeros(
@@ -805,6 +809,7 @@ def _build_gemma4_vision_sample_inputs(
     image_size,
     num_vision_tokens,
     seq_len,
+    dtype=torch.float32,
 ):
     """Create concrete Gemma4 vision sample tensors for a prefill signature.
 
@@ -816,7 +821,7 @@ def _build_gemma4_vision_sample_inputs(
     patch_dim = patch_size * patch_size * 3
     pixel_values = torch.zeros(
         (batch_size, max_images, num_patches, patch_dim),
-        dtype=torch.float32,
+        dtype=dtype,
         device=device,
     )
     pixel_position_ids = torch.zeros(
@@ -845,12 +850,13 @@ def _build_audio_sample_inputs(
     num_audio_tokens,
     seq_len,
     audio_input_feat_size=128,
+    dtype=torch.float32,
 ):
     """Create concrete audio sample tensors for a prefill signature."""
     device = "cpu"
     audio_mel = torch.zeros(
         (batch_size, max_clips, num_frames, audio_input_feat_size),
-        dtype=torch.float32,
+        dtype=dtype,
         device=device,
     )
     audio_mel_mask = torch.zeros(
