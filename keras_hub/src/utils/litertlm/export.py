@@ -750,11 +750,6 @@ def _build_sample_inputs(
     input_pos = torch.arange(seq_len, dtype=torch.int32, device=device)
     if seq_len == 1:
         input_pos = torch.zeros((1,), dtype=torch.int32, device=device)
-    mask = torch.ones(
-        (batch_size, 1, seq_len, cache_length),
-        dtype=dtype,
-        device=device,
-    )
     kv_cache = {}
     if cache_layout == "gemma3n":
         shape = (batch_size, num_kv_heads, cache_length, head_dim)
@@ -771,7 +766,6 @@ def _build_sample_inputs(
     sample = {
         "tokens": tokens,
         "input_pos": input_pos,
-        "mask": mask,
     }
     sample.update(kv_cache)
     return sample

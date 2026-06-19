@@ -83,7 +83,6 @@ class KerasHubLiteRTAdapter(nn.Module):
     Text-only inputs:
         tokens:       int32 [batch, seq_len]
         input_pos:    int32 [seq_len]   (position indices)
-        mask:         optional float mask (ignored by most models)
         kv_cache_k_0, kv_cache_v_0, ...: per-layer KV caches
 
     Multimodal prefill inputs (when model has a vision/audio encoder):
@@ -123,8 +122,23 @@ class KerasHubLiteRTAdapter(nn.Module):
         self.cache_length = cache_length
         self.separate_vision_encoder = separate_vision_encoder
         self.cache_layout = cache_layout
-        self.vision_encoder = _get_vision_encoder(keras_model.backbone)
-        self.has_vision = self.vision_encoder is not None
+        vision_encoder = _get_vision_encoder(keras_model.backbone)
+        self.has_vision = vision_encoder is not None
+        # When exporting a separate vision encoder, keep the vision tower out of
+        # the PREFILL_DECODE graph so its weights are not duplicated in the main
+        # model. We still need to know whether it is Gemma4-style for reshape.
+        if separate_vision_encoder:
+            self.vision_encoder = None
+            self.is_gemma4_vision = (
+                vision_encoder is not None
+                and _is_gemma4_vision_encoder(vision_encoder)
+            )
+        else:
+            self.vision_encoder = vision_encoder
+            self.is_gemma4_vision = (
+                vision_encoder is not None
+                and _is_gemma4_vision_encoder(vision_encoder)
+            )
         self.has_audio = (
             hasattr(keras_model.backbone, "audio_encoder")
             and keras_model.backbone.audio_encoder is not None
@@ -134,7 +148,6 @@ class KerasHubLiteRTAdapter(nn.Module):
         self,
         tokens,
         input_pos,
-        mask=None,
         images=None,
         vision_indices=None,
         vision_mask=None,
@@ -187,9 +200,7 @@ class KerasHubLiteRTAdapter(nn.Module):
                 # The separate vision encoder/adapter produces a flat
                 # (batch*num_images, ...) tensor, so reshape it back before
                 # passing to the language model.
-                if img_embeddings is not None and _is_gemma4_vision_encoder(
-                    self.vision_encoder
-                ):
+                if img_embeddings is not None and self.is_gemma4_vision:
                     max_images = getattr(
                         self.keras_model.preprocessor,
                         "max_images_per_prompt",
@@ -202,7 +213,7 @@ class KerasHubLiteRTAdapter(nn.Module):
                         img_embeddings.shape[1],
                         img_embeddings.shape[2],
                     )
-            elif _is_gemma4_vision_encoder(self.vision_encoder):
+            elif self.is_gemma4_vision:
                 if pixel_values is not None and pixel_position_ids is not None:
                     img_embeddings = self.vision_encoder(
                         {
@@ -246,7 +257,7 @@ class KerasHubLiteRTAdapter(nn.Module):
             tokens, cache, cache_update_index, call_kwargs, return_logits=False
         )
 
-    def forward_decode(self, tokens, input_pos, mask=None, **kv_cache):
+    def forward_decode(self, tokens, input_pos, **kv_cache):
         """Decode step – processes a single token at *input_pos*.
 
         ``input_pos`` is a scalar int32 tensor (e.g. ``[3]``).  It is passed

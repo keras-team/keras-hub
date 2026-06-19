@@ -906,7 +906,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         prefill_inputs = {
             "tokens": tokens_np,
             "input_pos": np.arange(T, dtype=np.int32),
-            "mask": np.ones((B, 1, T, cache_length), dtype=np.float32),
         }
         for i in range(L):
             prefill_inputs[f"kv_cache_k_{i}"] = np.zeros(
@@ -958,7 +957,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         decode_inputs = {
             "tokens": decode_token,
             "input_pos": np.array([decode_pos], dtype=np.int32),
-            "mask": np.ones((B, 1, 1, cache_length), dtype=np.float32),
         }
         for i in range(L):
             decode_inputs[f"kv_cache_k_{i}"] = tflite_prefill_out[

@@ -223,7 +223,6 @@ class TestLiteRTLmExport(TestCase):
         prefill_inputs = {
             "tokens": tokens_np,
             "input_pos": np.arange(T, dtype=np.int32),
-            "mask": np.ones((B, 1, T, T), dtype=np.float32),
         }
         for i in range(L):
             prefill_inputs[f"kv_cache_k_{i}"] = cache_keras[:, i, 0, ...]
@@ -265,7 +264,6 @@ class TestLiteRTLmExport(TestCase):
         decode_inputs = {
             "tokens": decode_token,
             "input_pos": np.array([decode_pos], dtype=np.int32),
-            "mask": np.ones((B, 1, 1, T), dtype=np.float32),
         }
         for i in range(L):
             decode_inputs[f"kv_cache_k_{i}"] = tflite_prefill_out[
@@ -961,7 +959,6 @@ class TestLiteRTLmExport(TestCase):
             "images": images_np,
             "vision_indices": vision_indices_np,
             "vision_mask": vision_mask_np,
-            "mask": np.ones((B, 1, T, T), dtype=np.float32),
         }
         for i in range(L):
             prefill_inputs[f"kv_cache_k_{i}"] = cache_keras[:, i, 0, ...]
@@ -1005,7 +1002,6 @@ class TestLiteRTLmExport(TestCase):
         decode_inputs = {
             "tokens": decode_token,
             "input_pos": np.array([decode_pos], dtype=np.int32),
-            "mask": np.ones((B, 1, 1, T), dtype=np.float32),
         }
         for i in range(L):
             decode_inputs[f"kv_cache_k_{i}"] = tflite_prefill_out[
