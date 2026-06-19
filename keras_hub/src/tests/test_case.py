@@ -1009,6 +1009,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 "`litert-lm`. Install it with: pip install litert-lm"
             )
 
+        # Keep the smoke test focused on functional failures; LiteRT runtime
+        # accelerator-enumeration logs are not actionable here.
+        litert_lm.set_min_log_severity(litert_lm.LogSeverity.ERROR)
+
         engine = litert_lm.Engine(
             litertlm_path,
             backend=litert_lm.Backend.CPU(),

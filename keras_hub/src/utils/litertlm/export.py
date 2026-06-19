@@ -289,6 +289,11 @@ def export_to_litertlm(
 
     dtype = _torch_dtype_from_model(model)
 
+    # LiteRT-LM export traces on CPU regardless of whether a GPU is available;
+    # forcing CPU default device prevents accidental GPU placement of new
+    # tensors during torch.export and keeps exported graphs CPU-compatible.
+    torch.set_default_device("cpu")
+
     # Build sample inputs for each prefill bucket and the decode signature.
     prefill_inputs_map = {}
     for seq_len in prefill_seq_lens:

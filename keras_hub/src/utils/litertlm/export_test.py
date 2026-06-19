@@ -73,6 +73,10 @@ class TestLiteRTLmExport(TestCase):
         self.assertTrue(os.path.exists(path))
         self.assertGreater(os.path.getsize(path), 0)
 
+        # Runtime smoke test: the exported bundle must load in the LiteRT-LM
+        # executor and produce non-empty text, even with random weights.
+        self._verify_litertlm_generation(path)
+
     def test_export_with_bucketing(self):
         """Verify that multiple prefill_seq_len creates multiple signatures."""
         import keras
