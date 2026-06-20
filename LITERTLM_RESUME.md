@@ -2,7 +2,7 @@
 
 **Branch:** `pctablet505/torch-backend-litert-minimal-litertlm`  
 **PR:** https://github.com/keras-team/keras-hub/pull/2705  
-**Last updated:** 2026-06-19
+**Last updated:** 2026-06-20
 
 ## Quick Start
 
@@ -77,11 +77,12 @@ source /home/pctablet505/Projects/gemmademo-litert-export/.venv/bin/activate
 Key packages:
 - `keras` from GitHub master
 - `keras-hub` from local repo (editable)
-- `litert-torch==0.9.1`
+- `litert-torch==0.10.0`
 - `litert-lm==0.10.0`
 - `litert-lm-builder==0.13.0`
 
 System notes:
+- Run tests with `CUDA_VISIBLE_DEVICES=""` to keep the `litert_torch` JAX bridge on CPU and avoid device-mismatch / aliasing issues.
 - `libvulkan1` is required so `litert_lm.Engine` can load the CPU/GPU delegate in runtime smoke tests (`sudo apt install libvulkan1`).
 
 ## Verified End-to-End Generation in Python
@@ -98,12 +99,26 @@ print(conversation.send_message("What is the capital of France?"))
 
 Works and returns text. With dummy-weight tiny models the output is meaningless but proves the bundle loads.
 
+## Recent Root-Cause Fixes
+
+1. **`litert_torch` constant-deduplication bug (keras-hub side workaround)**
+   - `litert_torch.backend.inline_consts._tensor_fingerprint` caches constants by `(device, shape, stride, untyped_storage().data_ptr())`. The `data_ptr()` is an ephemeral address that can be reused for distinct constants and can alias key/value projection weights that share backing storage.
+   - `adapter.py` now monkey-patches `_tensor_fingerprint` to use `id(tensor.untyped_storage())` plus `tensor.storage_offset()`, keeping distinct weights distinct without requiring a local edit of `litert-torch`.
+
+2. **TFLite output-buffer aliasing for KV caches**
+   - The exported decode step was returning KV-cache tensors that TFLite could alias with intermediate activation buffers, causing sporadic corruption of cached key/value values (observed as large mismatches in the multimodal parity test).
+   - `_call_with_cache` now clones the stacked updated cache before unstacking, and `_unstack_kv_cache` clones each per-layer slice, so the returned KV-cache outputs are independent buffers.
+   - The `slice_update` patch was switched from `index_copy_` (in-place scatter on a cloned base) to a `torch.where`-based scatter into a full-shaped zero buffer, avoiding in-place mutations that the TFLite runtime may fuse into aliased buffers.
+
+3. **Environment-sensitive device mismatches**
+   - Tests must be run with `CUDA_VISIBLE_DEVICES=""`. When a non-functional CUDA device is visible, the `litert_torch` JAX bridge can place tracers on `cuda:0` while PyTorch sample inputs stay on CPU, causing `Unhandled FakeTensor Device Propagation` errors and nondeterministic numeric mismatches.
+
 ## Known Issues / Blockers
 
 1. **JAX CI failures** on `keras-stable` are unrelated to this PR. Failures are in `samplers/*_sampler_test.py` and `utils/transformers/export/gemma*_test.py` due to int64/int32 mismatch in `dynamic_update_slice` / `dynamic_slice`.
 2. **Gemma3n separate vision encoder** not supported yet — MobileNetV5 does not expose a single projected vision dimension; Gemma3n applies reshape / sqrt-scaling / `embed_vision` inside the backbone after the encoder. Baked-in (single-model) Gemma3n vision export works.
 3. **Audio encoder separation** blocked upstream by `litert-torch` issue #1039.
-4. **BytePair / HuggingFace tokenizers** intentionally not supported. The LiteRT-LM / MediaPipe LLM Inference runtime contract only supports SentencePiece model protobuf files as the tokenizer model. BPE/HF tokenizers would need a lossy conversion to SentencePiece (the upstream `litert_torch/generative/tools/tokenizer_to_sentencepiece.py` notes ~1% token-ID mismatch for Llama3.2), which is out of scope for this PR.
+4. **BytePair / HuggingFace tokenizers** intentionally not supported as first-class LiteRT-LM tokenizer models. The runtime contract primarily supports SentencePiece protobuf files. BPE/HF tokenizers would need a lossy conversion to SentencePiece (the upstream `litert_torch/generative/tools/tokenizer_to_sentencepiece.py` notes ~1% token-ID mismatch for Llama3.2), which is out of scope for this PR. The exporter still bundles auto-converted HF `tokenizer.json` files for GPT2/Llama3/Qwen3 when a BPE tokenizer is provided.
 
 ## Latest Test Result
 
@@ -124,9 +139,9 @@ CUDA_VISIBLE_DEVICES="" KERAS_BACKEND=torch pytest \
   -n auto -q
 ```
 
-Result: **28 passed, 18 skipped, 8 subtests passed in 76.93s** (all `keras_hub/src/utils/litertlm/` tests).
+Result (2026-06-20): **28 passed, 18 skipped, 8 subtests passed in 236.18s** (all `keras_hub/src/utils/litertlm/` tests).
 
-Per-model `test_litertlm_export` suite (all 24 families): **24 passed in 102.92s**.
+Per-model `test_litertlm_export` suite (supported families): **12 passed in ~3m 45s** across Gemma, Gemma3, Gemma3n, Gemma4, Llama, Mistral, Mixtral, PaliGemma, Phi3, Qwen3, Llama3, GPT2.
 
 ## Pixel 9 Verification
 - `tiny_gemma3_bucketed.litertlm` (~500 KB): instrumented test **PASSED**
@@ -143,9 +158,10 @@ pre-commit run --files keras_hub/src/utils/litertlm/adapter.py keras_hub/src/uti
 
 ## Next Steps / Open Work
 
-- [x] Run full `pytest keras_hub/src/utils/litertlm/ -v` suite when time allows.
+- [x] Run full `pytest keras_hub/src/utils/litertlm/ -v` suite.
 - [ ] Run `pre-commit run --all-files` before marking PR ready for review.
 - [x] Investigate Gemma3n KV-cache layout and 4-D vision encoder support.
+- [x] Fix core `export_test.py` numeric parity failures (constant dedup + buffer aliasing).
 - [ ] Add BytePair / HuggingFace tokenizer support (future).
 - [ ] Add audio encoder separation once upstream #1039 is resolved.
 - [ ] Consider adding quantized-export tests (INT4 weight-only) to the matrix.

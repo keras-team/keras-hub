@@ -756,6 +756,33 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 del model
             gc.collect()
 
+    def _create_tflite_interpreter(self, tflite_path):
+        """Create a TFLite interpreter for verifying LiteRT-LM bundles.
+
+        We avoid XNNPACK because `litert_torch` bundles may contain ops/shapes
+        that the XNNPACK delegate cannot reshape at prepare time. We use the
+        built-in op resolver without default delegates so all LiteRT-LM ops
+        (including CUMSUM for multimodal models) remain available.
+        """
+        try:
+            from ai_edge_litert.interpreter import Interpreter
+            from ai_edge_litert.interpreter import OpResolverType
+
+            return Interpreter(
+                model_path=tflite_path,
+                experimental_op_resolver_type=OpResolverType.BUILTIN_WITHOUT_DEFAULT_DELEGATES,
+            )
+        except Exception:
+            pass
+        try:
+            return tf.lite.Interpreter(
+                model_path=tflite_path,
+                experimental_op_resolver_type=tf.lite.experimental.OpResolverType.BUILTIN_WITHOUT_DEFAULT_DELEGATES,
+            )
+        except Exception:
+            pass
+        return tf.lite.Interpreter(model_path=tflite_path)
+
     def _extract_litertlm_tflite_interpreters(self, litertlm_path):
         """Extract every TFLite model from a `.litertlm` bundle."""
         from litert_lm_builder import litertlm_core as core
@@ -783,7 +810,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             )
             with open(tflite_path, "wb") as f:
                 f.write(tflite_data)
-            interpreters.append(tf.lite.Interpreter(model_path=tflite_path))
+            interpreters.append(self._create_tflite_interpreter(tflite_path))
         return interpreters
 
     def _parse_litertlm_llm_metadata(self, litertlm_path):
@@ -1191,18 +1218,33 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         )
 
         numeric_start = time.perf_counter()
-        if (
-            verify_numerics
-            and input_data is not None
-            and not isinstance(input_data, dict)
-        ):
-            self._verify_litertlm_numerics(
-                model,
-                main_interpreter,
-                input_data,
-                atol=atol,
-                rtol=rtol,
-            )
+        if verify_numerics and input_data is not None:
+            numeric_input = input_data
+            if isinstance(input_data, dict):
+                numeric_input = input_data.get("token_ids")
+            if numeric_input is not None:
+                # Skip numeric parity for multimodal inputs; the helper only
+                # validates text token prefill/decode KV-cache parity.
+                text_only_keys = {"token_ids", "padding_mask"}
+                if isinstance(
+                    input_data, dict
+                ) and not text_only_keys.issuperset(input_data.keys()):
+                    _debug_print(
+                        "[litertlm] numeric parity skipped: multimodal input"
+                    )
+                else:
+                    # The exported TFLite prefill signature is traced with
+                    # batch_size=1, so numeric parity must use a single sample.
+                    numeric_input = ops.convert_to_numpy(numeric_input)
+                    if numeric_input.ndim >= 2 and numeric_input.shape[0] > 1:
+                        numeric_input = numeric_input[:1]
+                    self._verify_litertlm_numerics(
+                        model,
+                        main_interpreter,
+                        numeric_input,
+                        atol=atol,
+                        rtol=rtol,
+                    )
         _debug_print(
             f"[litertlm] numeric parity: "
             f"{time.perf_counter() - numeric_start:.2f}s"

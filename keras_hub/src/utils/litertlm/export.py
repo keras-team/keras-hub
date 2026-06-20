@@ -29,6 +29,9 @@ from keras_hub.src.utils.litertlm.adapter import KerasHubVisionEncoderAdapter
 from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
 from keras_hub.src.utils.litertlm.adapter import _get_vision_encoder
 from keras_hub.src.utils.litertlm.adapter import _is_gemma4_vision_encoder
+from keras_hub.src.utils.litertlm.adapter import (
+    _traceable_dot_product_attention_scope,
+)
 from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_slice_update_scope
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
@@ -454,7 +457,11 @@ def export_to_litertlm(
         prefill_adapter = _PrefillAdapter(adapter).eval()
         decode_adapter = _DecodeAdapter(adapter).eval()
 
-        with _traceable_slice_update_scope(), _traceable_one_hot_scope():
+        with (
+            _traceable_slice_update_scope(),
+            _traceable_one_hot_scope(),
+            _traceable_dot_product_attention_scope(),
+        ):
             # Optionally export the vision encoder and adapter as separate
             # models.
             if separate_vision_encoder and has_vision:
@@ -558,7 +565,7 @@ def export_to_litertlm(
             )
 
             edge_model = converter.convert(
-                quant_config=quant_config, lightweight_conversion=True
+                quant_config=quant_config, lightweight_conversion=False
             )
 
         with tempfile.TemporaryDirectory() as temp_dir:

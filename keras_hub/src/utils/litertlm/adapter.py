@@ -3,22 +3,56 @@ LiteRT-LM."""
 
 import contextlib
 import inspect
+import threading
+import unittest.mock
 
 import torch
+from keras.src import backend
 from keras.src.backend.torch import core as torch_core
 from keras.src.backend.torch import nn as torch_backend_nn
 from torch import nn
 
+try:
+    from litert_torch.backend import inline_consts as _litert_inline_consts
+
+    def _tensor_fingerprint(tensor):
+        # The default implementation hashes by untyped_storage().data_ptr(),
+        # which is an ephemeral address that can alias distinct views.
+        # Distinct KerasHub EinsumDense weights (e.g. key/value projections)
+        # may share a single backing storage with different offsets, so we
+        # include the storage identity and offset to keep them distinct.
+        return (
+            str(tensor.device),
+            tensor.shape,
+            tensor.stride(),
+            id(tensor.untyped_storage()),
+            tensor.storage_offset(),
+        )
+
+    _litert_inline_consts._tensor_fingerprint = _tensor_fingerprint
+except Exception:  # pragma: no cover - litert_torch may not be installed
+    pass
+
+# Global lock serializing export-time mutations of PyTorch's default device.
+# This keeps _cpu_default_device_scope thread-safe without changing semantics.
+_DEFAULT_DEVICE_LOCK = threading.Lock()
+
 
 @contextlib.contextmanager
 def _cpu_default_device_scope():
-    """Temporarily force PyTorch's default device to CPU."""
-    original_device = torch.get_default_device()
-    torch.set_default_device("cpu")
-    try:
-        yield
-    finally:
-        torch.set_default_device(original_device)
+    """Temporarily force PyTorch's default device to CPU.
+
+    A module-level lock serializes this scope so concurrent exports (or
+    exports running alongside GPU work) cannot observe a partially-applied
+    default device.
+    """
+    with _DEFAULT_DEVICE_LOCK:
+        original_device = torch.get_default_device()
+        torch.set_default_device("cpu")
+        try:
+            yield
+        finally:
+            torch.set_default_device(original_device)
 
 
 def _get_vision_encoder(backbone):
@@ -307,18 +341,25 @@ class KerasHubLiteRTAdapter(nn.Module):
             cache_update_index,
             **call_kwargs,
         )
-        outputs = self._unstack_kv_cache(updated_cache)
+        # Clone the updated cache before unstacking so that TFLite does not
+        # alias the returned KV-cache outputs with activation buffers.
+        outputs = self._unstack_kv_cache(updated_cache.clone())
         if return_logits:
             outputs["logits"] = logits
         return outputs
 
     def _stack_kv_cache(self, kv_cache):
-        """Stack flat ``kv_cache_k_N`` / ``kv_cache_v_N`` into Keras format."""
+        """Stack flat ``kv_cache_k_N`` / ``kv_cache_v_N`` into Keras format.
+
+        The returned tensor is cloned so that downstream in-place cache
+        updates do not corrupt the input/output buffers that TFLite may
+        alias.
+        """
         k_list = [kv_cache[f"kv_cache_k_{i}"] for i in range(self.num_layers)]
         v_list = [kv_cache[f"kv_cache_v_{i}"] for i in range(self.num_layers)]
         k_stack = torch.stack(k_list, dim=1)
         v_stack = torch.stack(v_list, dim=1)
-        return torch.stack([k_stack, v_stack], dim=2)
+        return torch.stack([k_stack, v_stack], dim=2).clone()
 
     def _build_call_with_cache_kwargs(
         self,
@@ -360,11 +401,17 @@ class KerasHubLiteRTAdapter(nn.Module):
         return kwargs
 
     def _unstack_kv_cache(self, cache):
-        """Split Keras cache back into per-layer output tensors."""
+        """Split Keras cache back into per-layer output tensors.
+
+        Each slice is cloned so that TFLite cannot alias the returned KV
+        cache tensors with intermediate activation buffers. LiteRT-LM
+        allocates dedicated output buffers for these tensors, so the clone
+        is only a trace-time guard against aliasing in the exported graph.
+        """
         outputs = {}
         for i in range(self.num_layers):
-            outputs[f"kv_cache_k_{i}"] = cache[:, i, 0, ...]
-            outputs[f"kv_cache_v_{i}"] = cache[:, i, 1, ...]
+            outputs[f"kv_cache_k_{i}"] = cache[:, i, 0, ...].clone()
+            outputs[f"kv_cache_v_{i}"] = cache[:, i, 1, ...].clone()
         return outputs
 
 
@@ -421,7 +468,128 @@ def _normalize_start_indices(start_indices):
             "`start_indices` must be a 1-D tensor or a list/tuple of ints. "
             f"Received shape: {tuple(start_indices.shape)}."
         )
-    return [start_indices.reshape(-1)[i] for i in range(start_indices.numel())]
+    return list(start_indices.reshape(-1).unbind())
+
+
+def _make_patched_slice_update(original_slice_update):
+    """Return a traceable ``slice_update`` replacement."""
+
+    def _patched_slice_update(inputs, start_indices, updates):
+        inputs = torch_core.convert_to_tensor(inputs)
+        updates = torch_core.convert_to_tensor(updates)
+
+        starts = _normalize_start_indices(start_indices)
+
+        # Dimensions whose start is a tensor → potentially dynamic.
+        tensor_dims = [
+            dim
+            for dim, start in enumerate(starts)
+            if isinstance(start, torch.Tensor)
+        ]
+
+        if len(tensor_dims) == 1:
+            dim = tensor_dims[0]
+            start = starts[dim].reshape(()).long()
+            update_len = updates.size(dim)
+
+            # Build a boolean mask over the updated dimension and use
+            # ``torch.where`` to select the updates. This avoids in-place
+            # scatter ops that can alias input/output buffers in the TFLite
+            # runtime and produce corrupted KV-cache outputs.
+            dim_len = inputs.size(dim)
+            positions = torch.arange(
+                dim_len, dtype=torch.int64, device=inputs.device
+            )
+            mask_1d = (positions >= start) & (positions < start + update_len)
+            # Reshape the 1-D mask to broadcast against ``inputs``.
+            mask_shape = [1] * inputs.ndim
+            mask_shape[dim] = dim_len
+            mask = mask_1d.view(mask_shape).broadcast_to(inputs.shape)
+
+            # Scatter ``updates`` into a full-shaped zero buffer so that it
+            # can be selected by the mask without requiring dynamic-length
+            # concatenation.
+            update_indices = (
+                torch.arange(
+                    update_len, dtype=torch.int64, device=inputs.device
+                )
+                + start
+            )
+            updates_padded = torch.zeros_like(inputs).index_copy_(
+                dim, update_indices, updates
+            )
+            return torch.where(mask, updates_padded, inputs)
+
+        if len(tensor_dims) > 1:
+            raise RuntimeError(
+                "slice_update patch does not support multiple dynamic start "
+                f"indices. Dynamic dims: {tensor_dims}."
+            )
+
+        # All starts are plain Python ints → direct slice assignment.
+        # We avoid the original Keras implementation because it converts
+        # the starts to a tensor and calls ``.item()``, which breaks under
+        # ``torch.export`` on older Keras versions (< 3.15).
+        outputs = torch.clone(inputs)
+        slices = tuple(
+            slice(start, start + size)
+            for start, size in zip(starts, updates.shape)
+        )
+        outputs[slices] = updates
+        return outputs
+
+    return _patched_slice_update
+
+
+def _make_patched_slice(original_slice):
+    """Return a traceable ``slice`` replacement."""
+
+    def _patched_slice(inputs, start_indices, shape):
+        inputs = torch_core.convert_to_tensor(inputs)
+
+        starts = _normalize_start_indices(start_indices)
+
+        if isinstance(shape, (list, tuple)):
+            lengths = list(shape)
+        else:
+            shape = torch_core.convert_to_tensor(shape, dtype="int64")
+            lengths = list(shape.reshape(-1).unbind())
+
+        # Dimensions whose start is a tensor → potentially dynamic.
+        tensor_dims = [
+            dim
+            for dim, start in enumerate(starts)
+            if isinstance(start, torch.Tensor)
+        ]
+
+        # No dynamic starts → fall back to the original implementation.
+        if len(tensor_dims) == 0:
+            return original_slice(inputs, starts, lengths)
+
+        # Single dynamic dimension → use index_select to avoid unbacked
+        # symbols in torch.export.
+        if len(tensor_dims) == 1:
+            dim = tensor_dims[0]
+            start = starts[dim].reshape(())
+            length = lengths[dim]
+
+            # Build the selection indices dynamically.
+            indices = torch.arange(
+                length, dtype=torch.int64, device=inputs.device
+            )
+            indices = indices + start
+            result = torch.index_select(inputs, dim, indices)
+
+            # Apply static slicing for the remaining dimensions.
+            for d, (s, l) in enumerate(zip(starts, lengths)):
+                if d != dim and (s != 0 or l != result.shape[d]):
+                    result = torch.narrow(result, d, s, l)
+            return result
+
+        # Multiple dynamic dimensions – fall back (will likely fail in export).
+        return original_slice(inputs, starts, lengths)
+
+    return _patched_slice
 
 
 @contextlib.contextmanager
@@ -436,161 +604,178 @@ def _traceable_slice_update_scope():
     * Tensor starts (dynamic) with ``update_len == 1`` → ``index_copy_``.
     * All-Python-int starts (constant) → direct slice assignment without
       calling ``.item()`` or the original Keras logic.
+
+    Uses ``unittest.mock.patch.object`` so restoration is reliable even when
+    an exception escapes.
     """
     original_slice_update = torch_core.slice_update
     original_slice = torch_core.slice
+    with unittest.mock.patch.object(
+        torch_core,
+        "slice_update",
+        _make_patched_slice_update(original_slice_update),
+    ):
+        with unittest.mock.patch.object(
+            torch_core,
+            "slice",
+            _make_patched_slice(original_slice),
+        ):
+            yield
 
-    def _patched_slice_update(inputs, start_indices, updates):
-        inputs = torch_core.convert_to_tensor(inputs)
-        updates = torch_core.convert_to_tensor(updates)
 
-        starts = _normalize_start_indices(start_indices)
+def _traceable_dot_product_attention(
+    query,
+    key,
+    value,
+    bias=None,
+    mask=None,
+    scale=None,
+    is_causal=False,
+    flash_attention=None,
+    attn_logits_soft_cap=None,
+):
+    """Traceable replacement for Keras torch-backend ``dot_product_attention``.
 
-        # Dimensions whose start is a tensor → potentially dynamic.
-        tensor_dims = []
-        for dim, start in enumerate(starts):
-            if isinstance(start, torch.Tensor):
-                tensor_dims.append(dim)
+    ``torch.nn.functional.scaled_dot_product_attention`` lowers to fused ATen
+    ops such as ``aten._scaled_dot_product_efficient_attention`` that
+    ``litert_torch`` cannot translate to TFLite.  This implementation expands
+    attention to a plain ``matmul`` + ``softmax`` + ``matmul`` sequence that
+    ``litert_torch`` handles well.
 
-        # Single dynamic dimension → loop over index_copy_ (works for any
-        # update_len because update_len is a constant at export time).
-        if len(tensor_dims) == 1:
-            dim = tensor_dims[0]
-            update_len = updates.shape[dim]
-            start = starts[dim].reshape(())
+    The function mirrors Keras's ``dot_product_attention`` signature and shape
+    convention: inputs are ``[batch, seq_len, num_heads, head_dim]`` and the
+    output is returned in the same layout.
+    """
+    del flash_attention  # Fused flash attention is not exportable.
 
-            outputs = torch.clone(inputs)
-            for i in range(update_len):
-                index = (start + i).reshape(()).unsqueeze(0)
-                update_slice = updates.select(dim, i).unsqueeze(dim)
-                outputs.index_copy_(dim, index, update_slice)
-            return outputs
+    query = torch_core.convert_to_tensor(query)
+    key = torch_core.convert_to_tensor(key)
+    value = torch_core.convert_to_tensor(value)
 
-        if len(tensor_dims) > 1:
-            raise RuntimeError(
-                "slice_update patch does not support multiple dynamic start "
-                f"indices. Dynamic dims: {tensor_dims}."
+    compute_dtype = backend.result_type(query.dtype, key.dtype, value.dtype)
+    query = torch_core.cast(query, compute_dtype)
+    key = torch_core.cast(key, compute_dtype)
+    value = torch_core.cast(value, compute_dtype)
+
+    if scale is None:
+        scale = float(query.shape[-1]) ** -0.5
+    scale = torch_core.convert_to_tensor(scale, dtype=compute_dtype)
+
+    if mask is not None:
+        mask = torch_core.convert_to_tensor(mask, dtype="bool")
+        if is_causal:
+            q_len, kv_len = query.shape[1], key.shape[1]
+            causal_mask = torch.tril(
+                torch.ones(
+                    (q_len, kv_len), dtype=torch.bool, device=mask.device
+                )
             )
+            mask = torch.logical_and(mask, causal_mask)
+        is_causal = False
+    elif is_causal:
+        q_len, kv_len = query.shape[1], key.shape[1]
+        mask = torch.tril(
+            torch.ones((q_len, kv_len), dtype=torch.bool, device=query.device)
+        )
 
-        # All starts are plain Python ints → direct slice assignment.
-        # We avoid the original Keras implementation because it converts
-        # the starts to a tensor and calls ``.item()``, which breaks under
-        # ``torch.export`` on older Keras versions (< 3.15).
-        outputs = torch.clone(inputs)
-        slices = []
-        for start, size in zip(starts, updates.shape):
-            slices.append(slice(start, start + size))
-        outputs[slices] = updates
-        return outputs
+    # Move heads to the batch dimension to match SDPA's score layout
+    # [batch, num_heads, seq_len, head_dim].
+    query = query.transpose(1, 2)
+    key = key.transpose(1, 2)
+    value = value.transpose(1, 2)
 
-    def _patched_slice(inputs, start_indices, shape):
-        inputs = torch_core.convert_to_tensor(inputs)
+    scores = torch.matmul(query, key.transpose(-2, -1)) * scale
 
-        starts = _normalize_start_indices(start_indices)
+    if bias is not None:
+        scores = scores + torch_core.convert_to_tensor(
+            bias, dtype=compute_dtype
+        )
 
-        if isinstance(shape, (list, tuple)):
-            lengths = list(shape)
-        else:
-            shape = torch_core.convert_to_tensor(shape, dtype="int64")
-            lengths = [shape.reshape(-1)[i] for i in range(shape.numel())]
+    if mask is not None:
+        large_neg = torch.tensor(
+            torch.finfo(scores.dtype).min,
+            dtype=scores.dtype,
+            device=scores.device,
+        )
+        scores = torch.where(mask, scores, large_neg)
 
-        # Dimensions whose start is a tensor → potentially dynamic.
-        tensor_dims = []
-        for dim, start in enumerate(starts):
-            if isinstance(start, torch.Tensor):
-                tensor_dims.append(dim)
+    if attn_logits_soft_cap is not None:
+        cap = torch_core.convert_to_tensor(
+            attn_logits_soft_cap, dtype=compute_dtype
+        )
+        scores = torch.tanh(scores / cap) * cap
 
-        # No dynamic starts → fall back to the original implementation.
-        if len(tensor_dims) == 0:
-            return original_slice(inputs, starts, lengths)
+    attn = torch.softmax(scores, dim=-1)
+    output = torch.matmul(attn, value)
+    return output.transpose(1, 2)
 
-        # Single dynamic dimension → use index_select to avoid unbacked
-        # symbols in torch.export.
-        if len(tensor_dims) == 1:
-            dim = tensor_dims[0]
-            start = starts[dim].reshape(())
-            length = lengths[dim]
 
-            # Build the selection indices dynamically.
-            if isinstance(length, int):
-                indices = torch.arange(
-                    length, dtype=torch.int64, device=inputs.device
-                )
-            else:
-                # length is a SymInt or tensor – try arange with it.
-                indices = torch.arange(
-                    length, dtype=torch.int64, device=inputs.device
-                )
-            indices = indices + start
-            result = torch.index_select(inputs, dim, indices)
+@contextlib.contextmanager
+def _traceable_dot_product_attention_scope():
+    """Temporarily patch Keras torch-backend ``dot_product_attention``.
 
-            # Apply static slicing for the remaining dimensions.
-            for d, (s, l) in enumerate(zip(starts, lengths)):
-                if d != dim and (s != 0 or l != result.shape[d]):
-                    result = torch.narrow(result, d, s, l)
-            return result
-
-        # Multiple dynamic dimensions – fall back (will likely fail in export).
-        return original_slice(inputs, starts, lengths)
-
-    torch_core.slice_update = _patched_slice_update
-    torch_core.slice = _patched_slice
-    try:
+    Uses ``unittest.mock.patch.object`` so restoration is reliable even when
+    an exception escapes.
+    """
+    with unittest.mock.patch.object(
+        torch_backend_nn,
+        "dot_product_attention",
+        _traceable_dot_product_attention,
+    ):
         yield
-    finally:
-        torch_core.slice_update = original_slice_update
-        torch_core.slice = original_slice
+
+
+def _patched_one_hot(x, num_classes, axis=-1, dtype=None, sparse=False):
+    """Traceable replacement for Keras torch-backend ``one_hot``.
+
+    ``torch.nn.functional.one_hot`` inserts runtime assertions that class
+    values are non-negative. Under ``torch.export`` these become
+    ``aten._assert_async.msg`` ops, which ``litert_torch`` cannot lower.
+
+    This implementation uses equality against ``torch.arange``, which produces
+    the same result for non-negative indices and does not introduce
+    unlowerable assertions. Negative indices are preserved as all-zero vectors,
+    matching the original behavior.
+    """
+    if sparse:
+        raise ValueError("Unsupported value `sparse=True` with torch backend")
+    x = torch_core.convert_to_tensor(x, dtype=torch.long)
+    zero = torch_core.convert_to_tensor(0, dtype=torch.long)
+
+    x_clamped = torch.clamp(x, min=0)
+    output = (
+        x_clamped.unsqueeze(-1)
+        == torch.arange(num_classes, dtype=torch.long, device=x.device)
+    ).long()
+    # Preserve original behavior for negative indices.
+    output = torch.where(x.unsqueeze(-1) >= 0, output, zero)
+    if dtype is not None:
+        output = torch_core.convert_to_tensor(output, dtype=dtype)
+    dims = output.dim()
+    if axis < 0:
+        axis = dims + axis
+    if axis < 0 or axis >= dims:
+        raise ValueError(
+            f"`axis` {axis} is out of bounds for one-hot output with "
+            f"{dims} dimensions."
+        )
+    if axis != dims - 1:
+        new_axes_order = list(range(dims))
+        new_axes_order[axis] = dims - 1
+        for ax in range(axis + 1, dims):
+            new_axes_order[ax] -= 1
+        output = output.permute(new_axes_order)
+    return output
 
 
 @contextlib.contextmanager
 def _traceable_one_hot_scope():
-    """Patch Keras torch-backend ``one_hot`` to avoid ``aten._assert_async``.
+    """Temporarily patch Keras torch-backend ``one_hot`` for torch.export.
 
-    ``torch.nn.functional.one_hot`` inserts runtime assertions that class
-    values are non-negative.  Under ``torch.export`` these become
-    ``aten._assert_async.msg`` ops, which ``litert_torch`` cannot lower.
-
-    This patch implements one-hot via equality against ``torch.arange``,
-    which produces the same result for non-negative indices and does not
-    introduce unlowerable assertions.
+    Uses ``unittest.mock.patch.object`` so restoration is reliable even when
+    an exception escapes.
     """
-    original_one_hot = torch_backend_nn.one_hot
-
-    def _patched_one_hot(x, num_classes, axis=-1, dtype=None, sparse=False):
-        if sparse:
-            raise ValueError(
-                "Unsupported value `sparse=True` with torch backend"
-            )
-        x = torch_core.convert_to_tensor(x, dtype=torch.long)
-        zero = torch_core.convert_to_tensor(0, dtype=torch.long)
-
-        x_clamped = torch.clamp(x, min=0)
-        output = (
-            x_clamped.unsqueeze(-1)
-            == torch.arange(num_classes, dtype=torch.long, device=x.device)
-        ).long()
-        # Preserve original behavior for negative indices.
-        output = torch.where(x.unsqueeze(-1) >= 0, output, zero)
-        if dtype is not None:
-            output = torch_core.convert_to_tensor(output, dtype=dtype)
-        dims = output.dim()
-        if axis < 0:
-            axis = dims + axis
-        if axis < 0 or axis >= dims:
-            raise ValueError(
-                f"`axis` {axis} is out of bounds for one-hot output with "
-                f"{dims} dimensions."
-            )
-        if axis != dims - 1:
-            new_axes_order = list(range(dims))
-            new_axes_order[axis] = dims - 1
-            for ax in range(axis + 1, dims):
-                new_axes_order[ax] -= 1
-            output = output.permute(new_axes_order)
-        return output
-
-    torch_backend_nn.one_hot = _patched_one_hot
-    try:
+    with unittest.mock.patch.object(
+        torch_backend_nn, "one_hot", _patched_one_hot
+    ):
         yield
-    finally:
-        torch_backend_nn.one_hot = original_one_hot
