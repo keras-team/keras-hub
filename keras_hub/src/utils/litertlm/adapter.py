@@ -10,6 +10,7 @@ import torch
 from keras.src import backend
 from keras.src.backend.torch import core as torch_core
 from keras.src.backend.torch import nn as torch_backend_nn
+from keras.src.backend.torch import numpy as torch_backend_numpy
 from torch import nn
 
 
@@ -798,5 +799,61 @@ def _traceable_one_hot_scope():
     """
     with unittest.mock.patch.object(
         torch_backend_nn, "one_hot", _patched_one_hot
+    ):
+        yield
+
+
+def _is_scalar_integer(value):
+    """Return ``True`` if *value* is a scalar integer (Python or numpy)."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return True
+    # Accept 0-D numpy integer arrays / tensors with a single integer value.
+    if hasattr(value, "dtype") and hasattr(value, "ndim"):
+        return value.ndim == 0 and "int" in str(value.dtype)
+    return False
+
+
+def _traceable_repeat(x, repeats, axis=None):
+    """Traceable replacement for Keras torch-backend ``numpy.repeat``.
+
+    ``torch.repeat_interleave`` lowers to ``aten.repeat_interleave.Tensor``,
+    which ``litert_torch`` cannot translate to TFLite. For the common case of
+    repeating a tensor by a scalar integer along a single axis (e.g. GQA
+    key/value head repetition), this implementation uses
+    ``unsqueeze + expand + reshape``, which ``litert_torch`` handles.
+    """
+    x = torch_core.convert_to_tensor(x)
+
+    if axis is not None and _is_scalar_integer(repeats):
+        repeats = int(repeats)
+        if repeats < 0:
+            raise ValueError("`repeats` must be non-negative.")
+        if repeats == 1:
+            return x
+        if axis < 0:
+            axis = x.ndim + axis
+        shape = list(x.shape)
+        x = x.unsqueeze(axis + 1)
+        expand_shape = [-1] * x.ndim
+        expand_shape[axis + 1] = repeats
+        x = x.expand(expand_shape)
+        new_shape = list(shape)
+        new_shape[axis] = shape[axis] * repeats
+        return x.reshape(new_shape)
+
+    # Fall back to the original implementation for list/tuple repeats or
+    # dynamic repeat counts.
+    return torch_backend_numpy.repeat(x, repeats, axis=axis)
+
+
+@contextlib.contextmanager
+def _traceable_repeat_scope():
+    """Temporarily patch Keras torch-backend ``repeat`` for torch.export.
+
+    Uses ``unittest.mock.patch.object`` so restoration is reliable even when
+    an exception escapes.
+    """
+    with unittest.mock.patch.object(
+        torch_backend_numpy, "repeat", _traceable_repeat
     ):
         yield

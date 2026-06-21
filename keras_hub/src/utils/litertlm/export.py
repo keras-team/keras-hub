@@ -36,6 +36,7 @@ from keras_hub.src.utils.litertlm.adapter import (
     _traceable_dot_product_attention_scope,
 )
 from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
+from keras_hub.src.utils.litertlm.adapter import _traceable_repeat_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_slice_update_scope
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
@@ -175,12 +176,6 @@ def export_to_litertlm(
         ImportError: If ``litert-torch`` or ``litert-lm-builder`` are not
             installed.
     """
-    if keras.config.backend() != "torch":
-        raise ValueError(
-            "LiteRT-LM export is only supported with the PyTorch backend. "
-            f"Current backend: {keras.config.backend()}."
-        )
-
     path = os.fspath(path)
     if not path.endswith(".litertlm"):
         raise ValueError(
@@ -256,6 +251,17 @@ def export_to_litertlm(
             "BytePair tokenizer families (gpt2, llama3, qwen3). Received: "
             f"{type(tokenizer).__module__}.{type(tokenizer).__name__}."
         )
+
+    # LiteRT-LM export relies on litert_torch, which only supports the
+    # PyTorch Keras backend. Surface this early, but only after tokenizer
+    # validation so that ``test_litertlm_export_unsupported`` tests on other
+    # backends still receive the tokenizer-specific error they assert.
+    if keras.config.backend() != "torch":
+        raise ValueError(
+            "LiteRT-LM export is only supported with the PyTorch backend. "
+            f"Current backend: {keras.config.backend()}."
+        )
+
     cache_cfg = _get_cache_config(model)
     num_layers = cache_cfg["num_layers"]
     cache_length = cache_cfg["cache_length"]
@@ -464,6 +470,7 @@ def export_to_litertlm(
             _traceable_slice_update_scope(),
             _traceable_one_hot_scope(),
             _traceable_dot_product_attention_scope(),
+            _traceable_repeat_scope(),
         ):
             # Optionally export the vision encoder and adapter as separate
             # models.

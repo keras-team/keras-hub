@@ -110,7 +110,15 @@ Works and returns text. With dummy-weight tiny models the output is meaningless 
    - `_call_with_cache` now clones the stacked updated cache before unstacking, and `_unstack_kv_cache` clones each per-layer slice, so the returned KV-cache outputs are independent buffers.
    - The `slice_update` patch was switched from `index_copy_` (in-place scatter on a cloned base) to a `torch.where`-based scatter into a full-shaped zero buffer, avoiding in-place mutations that the TFLite runtime may fuse into aliased buffers.
 
-3. **Environment-sensitive device mismatches**
+3. **`aten.repeat_interleave.Tensor` not lowerable for GQA**
+   - Models with grouped-query attention (Llama, Mistral, Mixtral, Phi3, Gemma3n) use `ops.repeat` to broadcast key/value heads. On some Keras versions this lowers to `aten.repeat_interleave.Tensor`, which `litert_torch` cannot convert.
+   - Added `_traceable_repeat_scope` that intercepts scalar-integer repeats and rewrites them as `unsqueeze + expand + reshape`, the same shape-stable sequence Keras uses internally.
+
+4. **Backend guard vs. tokenizer error ordering**
+   - Moving the PyTorch-backend guard before tokenizer validation broke the per-model `test_litertlm_export_unsupported` tests that run on JAX/TensorFlow and assert tokenizer-specific errors.
+   - The guard now runs only after tokenizer family validation, so unsupported-tokenizer tests still receive their expected error while real exports on non-PyTorch backends get the clear backend message.
+
+5. **Environment-sensitive device mismatches**
    - Tests must be run with `CUDA_VISIBLE_DEVICES=""`. When a non-functional CUDA device is visible, the `litert_torch` JAX bridge can place tracers on `cuda:0` while PyTorch sample inputs stay on CPU, causing `Unhandled FakeTensor Device Propagation` errors and nondeterministic numeric mismatches.
 
 ## Addressed PR Review Feedback
