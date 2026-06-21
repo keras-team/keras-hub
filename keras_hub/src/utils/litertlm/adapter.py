@@ -12,26 +12,47 @@ from keras.src.backend.torch import core as torch_core
 from keras.src.backend.torch import nn as torch_backend_nn
 from torch import nn
 
-try:
-    from litert_torch.backend import inline_consts as _litert_inline_consts
 
-    def _tensor_fingerprint(tensor):
-        # The default implementation hashes by untyped_storage().data_ptr(),
-        # which is an ephemeral address that can alias distinct views.
-        # Distinct KerasHub EinsumDense weights (e.g. key/value projections)
-        # may share a single backing storage with different offsets, so we
-        # include the storage identity and offset to keep them distinct.
-        return (
-            str(tensor.device),
-            tensor.shape,
-            tensor.stride(),
-            id(tensor.untyped_storage()),
-            tensor.storage_offset(),
-        )
+def _tensor_fingerprint(tensor):
+    """Return a stable fingerprint for a torch constant tensor.
 
+    The default ``litert_torch`` implementation hashes by
+    ``untyped_storage().data_ptr()``, which is an ephemeral address that can
+    alias distinct views or be reused after a tensor is freed. Distinct
+    KerasHub EinsumDense weights (e.g. key/value projections) may also share a
+    single backing storage with different offsets, so this version uses the
+    storage identity and offset to keep them distinct.
+    """
+    return (
+        str(tensor.device),
+        tensor.shape,
+        tensor.stride(),
+        id(tensor.untyped_storage()),
+        tensor.storage_offset(),
+    )
+
+
+@contextlib.contextmanager
+def _litert_constant_fingerprint_scope():
+    """Temporarily patch litert_torch's constant cache fingerprint.
+
+    The patch is applied only inside this scope, so importing ``adapter.py``
+    does not produce global side effects. If ``litert_torch`` is not installed,
+    the scope is a no-op.
+    """
+    try:
+        from litert_torch.backend import inline_consts as _litert_inline_consts
+    except Exception:  # pragma: no cover - litert_torch may not be installed
+        yield
+        return
+
+    original = _litert_inline_consts._tensor_fingerprint
     _litert_inline_consts._tensor_fingerprint = _tensor_fingerprint
-except Exception:  # pragma: no cover - litert_torch may not be installed
-    pass
+    try:
+        yield
+    finally:
+        _litert_inline_consts._tensor_fingerprint = original
+
 
 # Global lock serializing export-time mutations of PyTorch's default device.
 # This keeps _cpu_default_device_scope thread-safe without changing semantics.

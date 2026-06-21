@@ -101,9 +101,9 @@ Works and returns text. With dummy-weight tiny models the output is meaningless 
 
 ## Recent Root-Cause Fixes
 
-1. **`litert_torch` constant-deduplication bug (keras-hub side workaround)**
+1. **`litert_torch` constant-deduplication bug (scoped keras-hub workaround)**
    - `litert_torch.backend.inline_consts._tensor_fingerprint` caches constants by `(device, shape, stride, untyped_storage().data_ptr())`. The `data_ptr()` is an ephemeral address that can be reused for distinct constants and can alias key/value projection weights that share backing storage.
-   - `adapter.py` now monkey-patches `_tensor_fingerprint` to use `id(tensor.untyped_storage())` plus `tensor.storage_offset()`, keeping distinct weights distinct without requiring a local edit of `litert-torch`.
+   - `adapter.py` provides a scoped context manager (`_litert_constant_fingerprint_scope`) that patches `_tensor_fingerprint` to use `id(tensor.untyped_storage())` plus `tensor.storage_offset()`. The patch is applied only during `converter.convert()`, avoiding import-time global side effects.
 
 2. **TFLite output-buffer aliasing for KV caches**
    - The exported decode step was returning KV-cache tensors that TFLite could alias with intermediate activation buffers, causing sporadic corruption of cached key/value values (observed as large mismatches in the multimodal parity test).
@@ -112,6 +112,13 @@ Works and returns text. With dummy-weight tiny models the output is meaningless 
 
 3. **Environment-sensitive device mismatches**
    - Tests must be run with `CUDA_VISIBLE_DEVICES=""`. When a non-functional CUDA device is visible, the `litert_torch` JAX bridge can place tracers on `cuda:0` while PyTorch sample inputs stay on CPU, causing `Unhandled FakeTensor Device Propagation` errors and nondeterministic numeric mismatches.
+
+## Addressed PR Review Feedback
+
+1. **Hardcoded Float32 KV caches** — KV-cache sample tensors and TFLite I/O specs already derive their dtype from `model.compute_dtype` via `_torch_dtype_from_model`; default `float32` arguments are only fallback values for the helper builders.
+2. **Internal LiteRT API dependency** — The `llm_metadata_pb2` import is now wrapped in a `try/except` with a descriptive error message and an explanatory code comment.
+3. **Backend guardrails** — `export_to_litertlm` raises `ValueError` immediately when `keras.config.backend() != "torch"`.
+4. **Global side effects from patching** — The `_tensor_fingerprint` patch is no longer applied at import time; it is scoped to the `converter.convert()` call via `_litert_constant_fingerprint_scope`. Existing `slice_update`, `one_hot`, and SDPA replacements already use `unittest.mock.patch.object` context managers.
 
 ## Known Issues / Blockers
 
@@ -139,9 +146,9 @@ CUDA_VISIBLE_DEVICES="" KERAS_BACKEND=torch pytest \
   -n auto -q
 ```
 
-Result (2026-06-20): **28 passed, 18 skipped, 8 subtests passed in 236.18s** (all `keras_hub/src/utils/litertlm/` tests).
+Result (2026-06-20, after review fixes): **28 passed, 18 skipped, 8 subtests passed in 238.82s** (all `keras_hub/src/utils/litertlm/` tests).
 
-Per-model `test_litertlm_export` suite (supported families): **12 passed in ~3m 45s** across Gemma, Gemma3, Gemma3n, Gemma4, Llama, Mistral, Mixtral, PaliGemma, Phi3, Qwen3, Llama3, GPT2.
+Per-model `test_litertlm_export` suite (supported families): **12 passed in 173.93s** across Gemma, Gemma3, Gemma3n, Gemma4, Llama, Mistral, Mixtral, PaliGemma, Phi3, Qwen3, Llama3, GPT2.
 
 ## Pixel 9 Verification
 - `tiny_gemma3_bucketed.litertlm` (~500 KB): instrumented test **PASSED**

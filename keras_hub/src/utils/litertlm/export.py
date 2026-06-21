@@ -30,6 +30,9 @@ from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
 from keras_hub.src.utils.litertlm.adapter import _get_vision_encoder
 from keras_hub.src.utils.litertlm.adapter import _is_gemma4_vision_encoder
 from keras_hub.src.utils.litertlm.adapter import (
+    _litert_constant_fingerprint_scope,
+)
+from keras_hub.src.utils.litertlm.adapter import (
     _traceable_dot_product_attention_scope,
 )
 from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
@@ -564,9 +567,10 @@ def export_to_litertlm(
                 **kwargs,
             )
 
-            edge_model = converter.convert(
-                quant_config=quant_config, lightweight_conversion=False
-            )
+            with _litert_constant_fingerprint_scope():
+                edge_model = converter.convert(
+                    quant_config=quant_config, lightweight_conversion=False
+                )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             if separate_vision_encoder and has_vision:
@@ -1060,7 +1064,18 @@ def _build_llm_metadata(
     model, max_num_tokens, path, vision_cfg=None, audio_cfg=None
 ):
     """Serialize an ``LlmMetadata`` protobuf to *path*."""
-    from litert_lm_builder.litertlm_builder import llm_metadata_pb2
+    # The protobuf lives under an internal-looking subpackage of
+    # ``litert-lm-builder``. This is the only way the upstream package exposes
+    # the metadata schema, so we import defensively and surface a clear error
+    # if the internal layout changes.
+    try:
+        from litert_lm_builder.litertlm_builder import llm_metadata_pb2
+    except ImportError as e:
+        raise ImportError(
+            "LiteRT-LM export requires the metadata protobuf from "
+            "`litert-lm-builder`. The internal module layout appears to have "
+            "changed. Please verify your `litert-lm-builder` installation."
+        ) from e
 
     meta = llm_metadata_pb2.LlmMetadata()
 
