@@ -187,6 +187,26 @@ class ImageConverterTest(TestCase):
         test_image = np.random.rand(100, 100, 3) * 255
         self.assertAllClose(restored(test_image), converter(test_image))
 
+    def test_inhomogeneous_batch(self):
+        if not self._allow_python_workflow:
+            self.skipTest("TF workflow does not support inhomogeneous batches.")
+        converter = ImageConverter(
+            image_size=(4, 4),
+            scale=1 / 255.0,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        inputs = [
+            np.ones((10, 10, 3)) * 255.0,
+            np.ones((20, 20, 3)) * 128.0,
+        ]
+        outputs = converter(inputs)
+        self.assertIsInstance(outputs, list)
+        self.assertEqual(len(outputs), 2)
+        self.assertEqual(ops.shape(outputs[0]), (4, 4, 3))
+        self.assertEqual(ops.shape(outputs[1]), (4, 4, 3))
+        self.assertAllClose(outputs[0], ops.ones((4, 4, 3)))
+        self.assertAllClose(outputs[1], ops.ones((4, 4, 3)) * (128.0 / 255.0))
+
 
 class ImageConverterTFTest(ImageConverterTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
