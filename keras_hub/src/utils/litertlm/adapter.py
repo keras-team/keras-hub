@@ -577,25 +577,41 @@ def _make_patched_slice(original_slice):
             shape = torch_core.convert_to_tensor(shape, dtype="int64")
             lengths = list(shape.reshape(-1).unbind())
 
-        # Dimensions whose start is a tensor → potentially dynamic.
-        tensor_dims = [
+        def _is_dynamic(value):
+            # ``torch.SymInt`` values are not plain Python ints and require
+            # tensor-based slicing to avoid data-dependent guards.
+            return isinstance(value, torch.Tensor) or isinstance(
+                value, torch.SymInt
+            )
+
+        # Dimensions whose start or length is dynamic.
+        dynamic_dims = [
             dim
-            for dim, start in enumerate(starts)
-            if isinstance(start, torch.Tensor)
+            for dim, (start, length) in enumerate(zip(starts, lengths))
+            if _is_dynamic(start) or _is_dynamic(length)
         ]
 
-        # No dynamic starts → fall back to the original implementation.
-        if len(tensor_dims) == 0:
-            return original_slice(inputs, starts, lengths)
+        # No dynamic values → use Python slice objects directly.
+        if len(dynamic_dims) == 0:
+            slices = tuple(
+                slice(start, start + length)
+                for start, length in zip(starts, lengths)
+            )
+            return inputs[slices]
 
-        # Single dynamic dimension → use index_select to avoid unbacked
-        # symbols in torch.export.
-        if len(tensor_dims) == 1:
-            dim = tensor_dims[0]
-            start = starts[dim].reshape(())
+        # Single dynamic dimension → build indices with ``torch.arange`` and
+        # use ``index_select``. This keeps the output shape symbolic and avoids
+        # unbacked symbols that ``torch.export`` cannot resolve.
+        if len(dynamic_dims) == 1:
+            dim = dynamic_dims[0]
+            start = starts[dim]
+            if not isinstance(start, torch.Tensor):
+                start = torch_core.convert_to_tensor(
+                    start, dtype="int64", device=inputs.device
+                )
+            start = start.reshape(())
             length = lengths[dim]
 
-            # Build the selection indices dynamically.
             indices = torch.arange(
                 length, dtype=torch.int64, device=inputs.device
             )
