@@ -154,9 +154,10 @@ CUDA_VISIBLE_DEVICES="" KERAS_BACKEND=torch pytest \
   -n auto -q
 ```
 
-Result (2026-06-20, after review fixes): **28 passed, 18 skipped, 8 subtests passed in 238.82s** (all `keras_hub/src/utils/litertlm/` tests).
-
-Per-model `test_litertlm_export` suite (supported families): **12 passed in 173.93s** across Gemma, Gemma3, Gemma3n, Gemma4, Llama, Mistral, Mixtral, PaliGemma, Phi3, Qwen3, Llama3, GPT2.
+Result (2026-06-21, after CI fixes):
+- Local `keras_hub/src/utils/litertlm/` suite: **28 passed, 18 skipped, 8 subtests passed in 237.47s**.
+- Local per-model `test_litertlm_export` suite (supported families): **12 passed in 172.82s** across Gemma, Gemma3, Gemma3n, Gemma4, Llama, Mistral, Mixtral, PaliGemma, Phi3, Qwen3, Llama3, GPT2.
+- GitHub CI for PR #2705: **Torch (keras-stable) pass**, **TensorFlow (keras-stable) pass**, **OpenVINO (keras-nightly) pass**, **Check the code format pass**. JAX jobs still fail with the pre-existing int64/int32 `dynamic_update_slice` / `dynamic_slice` mismatch (unrelated to LiteRT-LM; passes locally with Keras 3.15).
 
 ## Pixel 9 Verification
 - `tiny_gemma3_bucketed.litertlm` (~500 KB): instrumented test **PASSED**
