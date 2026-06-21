@@ -7,9 +7,6 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
-from keras_hub.src.utils.tensor_utils import (
-    convert_preprocessing_outputs_python,
-)
 from keras_hub.src.utils.tensor_utils import convert_to_list
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import in_tf_function
@@ -359,11 +356,11 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
                 arr = np.array(outputs, dtype=dtype or "int32")
                 if arr.dtype == object:
                     return outputs
-                return arr
+                return keras.ops.convert_to_tensor(arr)
             except (ValueError, TypeError):
                 return outputs
 
-        outputs = {
+        return {
             "token_ids": _canonicalize_outputs(out_token_ids, "int32"),
             "mask_positions": _canonicalize_outputs(
                 out_mask_positions, "int32"
@@ -371,7 +368,6 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
             "mask_ids": _canonicalize_outputs(out_mask_ids, "int32"),
             "mask_weights": _canonicalize_outputs(out_mask_weights, "float32"),
         }
-        return convert_preprocessing_outputs_python(outputs)
 
     def call(self, inputs):
         if not self._allow_python_workflow or in_tf_function():
