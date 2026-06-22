@@ -189,25 +189,6 @@ def export_to_litertlm(
             "method."
         )
 
-    if litert_torch is None:
-        raise ImportError(
-            "LiteRT-LM export requires `litert-torch`. "
-            "Install it with: pip install litert-torch"
-        )
-
-    if quant_config is not None and litert_torch is not None:
-        quant_config_cls = getattr(
-            getattr(litert_torch, "quantize", None), "quant_config", None
-        )
-        if quant_config_cls is not None and not isinstance(
-            quant_config, quant_config_cls.QuantConfig
-        ):
-            raise ValueError(
-                "`quant_config` must be an instance of "
-                "`litert_torch.quantize.quant_config.QuantConfig` or None. "
-                f"Received: {type(quant_config).__name__}."
-            )
-
     if backend_constraint is not None:
         if not isinstance(backend_constraint, str):
             raise ValueError(
@@ -253,14 +234,35 @@ def export_to_litertlm(
         )
 
     # LiteRT-LM export relies on litert_torch, which only supports the
-    # PyTorch Keras backend. Surface this early, but only after tokenizer
-    # validation so that ``test_litertlm_export_unsupported`` tests on other
-    # backends still receive the tokenizer-specific error they assert.
+    # PyTorch Keras backend. Surface the backend error early, but only after
+    # tokenizer validation so that ``test_litertlm_export_unsupported`` tests
+    # on other backends still receive the tokenizer-specific error they assert.
     if keras.config.backend() != "torch":
         raise ValueError(
             "LiteRT-LM export is only supported with the PyTorch backend. "
             f"Current backend: {keras.config.backend()}."
         )
+
+    # Now that tokenizer and backend checks are done, require the optional
+    # litert-torch/litert-lm-builder packages for the actual export.
+    if litert_torch is None:
+        raise ImportError(
+            "LiteRT-LM export requires `litert-torch`. "
+            "Install it with: pip install litert-torch"
+        )
+
+    if quant_config is not None:
+        quant_config_cls = getattr(
+            getattr(litert_torch, "quantize", None), "quant_config", None
+        )
+        if quant_config_cls is not None and not isinstance(
+            quant_config, quant_config_cls.QuantConfig
+        ):
+            raise ValueError(
+                "`quant_config` must be an instance of "
+                "`litert_torch.quantize.quant_config.QuantConfig` or None. "
+                f"Received: {type(quant_config).__name__}."
+            )
 
     cache_cfg = _get_cache_config(model)
     num_layers = cache_cfg["num_layers"]
