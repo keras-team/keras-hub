@@ -1,4 +1,5 @@
 import keras
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras import ops
 
 
@@ -310,7 +311,7 @@ class Gemma4ClippableEinsumDense(keras.layers.Layer):
         self.output_shape = output_shape
         self.use_clipped_linears = use_clipped_linears
         self.kernel_initializer = kernel_initializer
-        self.dense = keras.layers.EinsumDense(
+        self.dense = EinsumDense(
             equation,
             output_shape=output_shape,
             kernel_initializer=kernel_initializer,

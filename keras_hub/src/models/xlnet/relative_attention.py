@@ -2,6 +2,7 @@ import math
 import string
 
 import keras
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras import ops
 
 _CHR_IDX = string.ascii_lowercase
@@ -135,7 +136,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             free_dims, bound_dims=1, output_dims=2
         )
-        self._query_dense = keras.layers.EinsumDense(
+        self._query_dense = EinsumDense(
             einsum_equation,
             output_shape=_get_output_shape(
                 output_rank - 1, [self._num_heads, self._key_dim]
@@ -150,7 +151,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             len(self._key_shape) - 1, bound_dims=1, output_dims=2
         )
-        self._key_dense = keras.layers.EinsumDense(
+        self._key_dense = EinsumDense(
             einsum_equation,
             output_shape=_get_output_shape(
                 output_rank - 1, [self._num_heads, self._key_dim]
@@ -165,7 +166,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             len(self._value_shape) - 1, bound_dims=1, output_dims=2
         )
-        self._value_dense = keras.layers.EinsumDense(
+        self._value_dense = EinsumDense(
             einsum_equation,
             output_shape=_get_output_shape(
                 output_rank - 1, [self._num_heads, self._value_dim]
@@ -181,7 +182,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
         _, _, output_rank = _build_proj_equation(
             free_dims, bound_dims=2, output_dims=1
         )
-        self._output_dense = keras.layers.EinsumDense(
+        self._output_dense = EinsumDense(
             "ibnd,hnd->ibh",
             output_shape=_get_output_shape(
                 output_rank - 1, [self._query_shape[-1]]
@@ -198,7 +199,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
         einsum_equation, _, output_rank = _build_proj_equation(
             len(self._key_shape) - 1, bound_dims=1, output_dims=2
         )
-        self._encoding_dense = keras.layers.EinsumDense(
+        self._encoding_dense = EinsumDense(
             einsum_equation,
             output_shape=_get_output_shape(
                 output_rank - 1, [self._num_heads, self._key_dim]
