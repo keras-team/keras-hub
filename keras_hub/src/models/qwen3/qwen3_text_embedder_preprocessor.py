@@ -56,7 +56,7 @@ class Qwen3TextEmbedderPreprocessor(TextEmbedderPreprocessor):
     Directly calling the layer on data.
     ```python
     preprocessor = keras_hub.models.Qwen3TextEmbedderPreprocessor.from_preset(
-        "harrier_oss_v1_0.6b_en",
+        "harrier_embedding_oss_06b",
     )
 
     # Tokenize and pack a single sentence.
@@ -69,7 +69,7 @@ class Qwen3TextEmbedderPreprocessor(TextEmbedderPreprocessor):
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_hub.models.Qwen3TextEmbedderPreprocessor.from_preset(
-        "harrier_oss_v1_0.6b_en",
+        "harrier_embedding_oss_06b",
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
