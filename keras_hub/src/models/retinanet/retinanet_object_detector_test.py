@@ -109,3 +109,17 @@ class RetinaNetObjectDetectorTest(TestCase):
             input_data=self.images,
         )
 
+    def test_litert_export(self):
+        input_data = self.images
+
+        self.run_litert_export_test(
+            cls=RetinaNetObjectDetector,
+            init_kwargs=self.init_kwargs,
+            input_data=input_data,
+            comparison_mode="statistical",
+            output_thresholds={
+                "enc_topk_logits": {"max": 5.0, "mean": 0.05},
+                "logits": {"max": 2.0, "mean": 0.05},
+                "*": {"max": 1.5, "mean": 0.05},
+            },
+        )

@@ -114,6 +114,13 @@ class GptOssCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=GptOssCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
     def test_litertlm_export_unsupported(self):
         self.run_litertlm_export_test(
             cls=GptOssCausalLM,

@@ -65,6 +65,20 @@ class ResNetImageClassifierTest(TestCase):
             input_data=self.images,
         )
 
+    def test_litert_export(self):
+        """Test LiteRT export for ResNetImageClassifier with small test
+        model."""
+        model = ResNetImageClassifier(**self.init_kwargs)
+        expected_output_shape = (2, 2)  # 2 images, 2 classes
+
+        self.run_litert_export_test(
+            model=model,
+            input_data=self.images,
+            expected_output_shape=expected_output_shape,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 5e-5, "mean": 1e-5}},
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in ResNetImageClassifier.presets:
