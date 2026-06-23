@@ -13,13 +13,6 @@ from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
-from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
-    infer_hf_tokenizer_family,
-)
-from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
-    materialize_hf_tokenizer_json,
-)
-
 from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
 from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
 from keras_hub.src.utils.litertlm.adapter import KerasHubVisionEncoderAdapter
@@ -29,23 +22,27 @@ from keras_hub.src.utils.litertlm.adapter import _is_gemma4_vision_encoder
 from keras_hub.src.utils.litertlm.adapter import (
     _litert_constant_fingerprint_scope,
 )
+from keras_hub.src.utils.litertlm.adapter import _traceable_arange_scope
 from keras_hub.src.utils.litertlm.adapter import (
     _traceable_dot_product_attention_scope,
 )
-from keras_hub.src.utils.litertlm.adapter import _traceable_arange_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_repeat_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_scatter_update_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_slice_update_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_take_scope
+from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
+    infer_hf_tokenizer_family,
+)
+from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
+    materialize_hf_tokenizer_json,
+)
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
 # ``litert_torch`` is an optional dependency. Use ``find_spec`` to check for
 # availability without importing it at module level, because importing
 # ``litert_torch`` has the side effect of enabling ``jax_enable_x64``.
-_LITERT_TORCH_AVAILABLE = (
-    importlib.util.find_spec("litert_torch") is not None
-)
+_LITERT_TORCH_AVAILABLE = importlib.util.find_spec("litert_torch") is not None
 
 
 @contextlib.contextmanager
@@ -529,7 +526,9 @@ def export_to_litertlm(
                 if separate_vision_encoder and has_vision:
                     if is_gemma4_vision:
                         patch_size = vision_cfg.get("patch_size", 16)
-                        num_patches = (vision_cfg["image_size"] // patch_size) ** 2
+                        num_patches = (
+                            vision_cfg["image_size"] // patch_size
+                        ) ** 2
                         patch_dim = patch_size**2 * 3
                         vision_encoder_inputs = {
                             "pixel_values": torch.zeros(
@@ -569,7 +568,11 @@ def export_to_litertlm(
                         }
                     vision_adapter_inputs = {
                         "features": torch.zeros(
-                            (1 * max_images, tokens_per_image, vision_output_dim),
+                            (
+                                1 * max_images,
+                                tokens_per_image,
+                                vision_output_dim,
+                            ),
                             dtype=dtype,
                             device="cpu",
                         )

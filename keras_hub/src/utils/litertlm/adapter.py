@@ -782,9 +782,8 @@ def _patched_one_hot(x, num_classes, axis=-1, dtype=None, sparse=False):
         raise ValueError("Unsupported value `sparse=True` with torch backend")
     x = torch_core.convert_to_tensor(x, dtype=torch.int32)
     x_clamped = torch.clamp(x, min=0)
-    output = (
-        x_clamped.unsqueeze(-1)
-        == torch.arange(num_classes, dtype=torch.int32, device=x.device)
+    output = x_clamped.unsqueeze(-1) == torch.arange(
+        num_classes, dtype=torch.int32, device=x.device
     )
     # Preserve original behavior for negative indices.
     zero = torch.zeros_like(output)
@@ -864,7 +863,6 @@ def _traceable_take_scope():
     lowering expects int32 indices consistent with the traced function
     signature, so we keep indices in int32 for the embedding-lookup case.
     """
-    original_take = torch_backend_numpy.take
 
     def _patched_take(x, indices, axis=None):
         x = torch_core.convert_to_tensor(x)
@@ -886,9 +884,7 @@ def _traceable_take_scope():
         out = torch.index_select(x, dim=axis, index=indices).squeeze(axis)
         return out.reshape(shape)
 
-    with unittest.mock.patch.object(
-        torch_backend_numpy, "take", _patched_take
-    ):
+    with unittest.mock.patch.object(torch_backend_numpy, "take", _patched_take):
         yield
 
 
@@ -900,7 +896,6 @@ def _traceable_scatter_update_scope():
     TFLite scatter lowering expects int32 indices, so we keep them in int32
     during export.
     """
-    original_scatter_update = torch_core.scatter_update
 
     def _patched_scatter_update(inputs, indices, updates, reduction=None):
         inputs = torch_core.convert_to_tensor(inputs)

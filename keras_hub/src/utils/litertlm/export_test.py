@@ -8,18 +8,6 @@ import unittest
 import numpy as np
 import torch
 
-_LITERT_TORCH_AVAILABLE = (
-    importlib.util.find_spec("litert_torch") is not None
-)
-_LITERT_LM_BUILDER_AVAILABLE = (
-    importlib.util.find_spec("litert_lm_builder") is not None
-)
-
-try:
-    import tokenizers
-except ImportError:
-    tokenizers = None
-
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
 from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
@@ -49,6 +37,16 @@ from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
 from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
     convert_byte_pair_to_hf,
 )
+
+_LITERT_TORCH_AVAILABLE = importlib.util.find_spec("litert_torch") is not None
+_LITERT_LM_BUILDER_AVAILABLE = (
+    importlib.util.find_spec("litert_lm_builder") is not None
+)
+
+try:
+    import tokenizers
+except ImportError:
+    tokenizers = None
 
 
 @unittest.skipIf(
