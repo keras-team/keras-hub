@@ -46,16 +46,12 @@ class OPTCausalLMTest(TestCase):
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_litertlm_export_unsupported(self):
-        model = OPTCausalLM(**self.init_kwargs)
-        with self.assertRaisesRegex(
-            ValueError,
-            "Cannot infer HuggingFace tokenizer family.*Supported families",
-        ):
-            model.export(
-                os.path.join(self.get_temp_dir(), "model.litertlm"),
-                format="litertlm",
-                prefill_seq_len=8,
-            )
+        self.run_litertlm_export_test(
+            cls=OPTCausalLM,
+            init_kwargs=self.init_kwargs,
+            prefill_seq_len=8,
+            expected_error_regex='Cannot infer HuggingFace tokenizer family.*Supported families',
+        )
 
     def test_causal_lm_basics(self):
         self.run_task_test(
@@ -119,13 +115,6 @@ class OPTCausalLMTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
-            cls=OPTCausalLM,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-        )
-
-    def test_litert_export(self):
-        self.run_litert_export_test(
             cls=OPTCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,

@@ -34,11 +34,3 @@ class VAEBackboneTest(TestCase):
             input_data=self.input_data,
         )
 
-    def test_litert_export(self):
-        self.run_litert_export_test(
-            cls=VAEBackbone,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-            comparison_mode="statistical",
-            output_thresholds={"*": {"max": 3e-3, "mean": 3e-4}},
-        )

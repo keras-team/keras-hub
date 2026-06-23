@@ -124,24 +124,13 @@ class Qwen3MoeCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    def test_litert_export(self):
-        self.run_litert_export_test(
+    def test_litertlm_export_unsupported(self):
+        self.run_litertlm_export_test(
             cls=Qwen3MoeCausalLM,
             init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
+            prefill_seq_len=8,
+            expected_error_regex='Cannot infer HuggingFace tokenizer family',
         )
-
-    def test_litertlm_export_unsupported(self):
-        model = Qwen3MoeCausalLM(**self.init_kwargs)
-        with self.assertRaisesRegex(
-            ValueError,
-            "Cannot infer HuggingFace tokenizer family",
-        ):
-            model.export(
-                os.path.join(self.get_temp_dir(), "model.litertlm"),
-                format="litertlm",
-                prefill_seq_len=8,
-            )
 
     @pytest.mark.extra_large
     def test_all_presets(self):

@@ -32,9 +32,12 @@ from keras_hub.src.utils.litertlm.adapter import (
 from keras_hub.src.utils.litertlm.adapter import (
     _traceable_dot_product_attention_scope,
 )
+from keras_hub.src.utils.litertlm.adapter import _traceable_arange_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_repeat_scope
+from keras_hub.src.utils.litertlm.adapter import _traceable_scatter_update_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_slice_update_scope
+from keras_hub.src.utils.litertlm.adapter import _traceable_take_scope
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
 # ``litert_torch`` is an optional dependency. Use ``find_spec`` to check for
@@ -280,6 +283,15 @@ def export_to_litertlm(
     # Import ``litert_torch`` inside a context manager that preserves the JAX
     # x64 setting. Importing ``litert_torch`` unconditionally enables
     # ``jax_enable_x64``, which leaks into dtype-sensitive JAX tests elsewhere.
+    # LiteRT-LM's JAX bridge defaults to the TPU platform if one is visible,
+    # but export must run on CPU so it does not contend with other processes
+    # using the TPU. We update the JAX config before any backend access; the
+    # environment variable alone is not enough if JAX was imported before
+    # ``keras_hub.src`` set it.
+    import jax
+
+    jax.config.update("jax_platforms", "cpu")
+
     with _preserve_jax_x64_state():
         import litert_torch
 
@@ -508,6 +520,9 @@ def export_to_litertlm(
                 _traceable_one_hot_scope(),
                 _traceable_dot_product_attention_scope(),
                 _traceable_repeat_scope(),
+                _traceable_arange_scope(),
+                _traceable_take_scope(),
+                _traceable_scatter_update_scope(),
             ):
                 # Optionally export the vision encoder and adapter as separate
                 # models.

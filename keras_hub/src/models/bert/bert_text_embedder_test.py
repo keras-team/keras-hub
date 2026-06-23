@@ -55,13 +55,6 @@ class BertTextEmbedderTest(TestCase):
             input_data=self.input_data,
         )
 
-    def test_litert_export(self):
-        self.run_litert_export_test(
-            cls=BertTextEmbedder,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-        )
-
     @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(

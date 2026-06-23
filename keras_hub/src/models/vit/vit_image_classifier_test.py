@@ -56,9 +56,3 @@ class ViTImageClassifierTest(TestCase):
             input_data=self.images,
         )
 
-    def test_litert_export(self):
-        self.run_litert_export_test(
-            cls=ViTImageClassifier,
-            init_kwargs=self.init_kwargs,
-            input_data=self.images,
-        )

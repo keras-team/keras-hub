@@ -511,7 +511,7 @@ def _make_patched_slice_update(original_slice_update):
 
         if len(tensor_dims) == 1:
             dim = tensor_dims[0]
-            start = starts[dim].reshape(()).long()
+            start = starts[dim].reshape(()).int()
             update_len = updates.size(dim)
 
             # Build a boolean mask over the updated dimension and use
@@ -520,7 +520,7 @@ def _make_patched_slice_update(original_slice_update):
             # runtime and produce corrupted KV-cache outputs.
             dim_len = inputs.size(dim)
             positions = torch.arange(
-                dim_len, dtype=torch.int64, device=inputs.device
+                dim_len, dtype=torch.int32, device=inputs.device
             )
             mask_1d = (positions >= start) & (positions < start + update_len)
             # Reshape the 1-D mask to broadcast against ``inputs``.
@@ -533,7 +533,7 @@ def _make_patched_slice_update(original_slice_update):
             # concatenation.
             update_indices = (
                 torch.arange(
-                    update_len, dtype=torch.int64, device=inputs.device
+                    update_len, dtype=torch.int32, device=inputs.device
                 )
                 + start
             )
@@ -607,13 +607,13 @@ def _make_patched_slice(original_slice):
             start = starts[dim]
             if not isinstance(start, torch.Tensor):
                 start = torch_core.convert_to_tensor(
-                    start, dtype="int64", device=inputs.device
+                    start, dtype="int32", device=inputs.device
                 )
             start = start.reshape(())
             length = lengths[dim]
 
             indices = torch.arange(
-                length, dtype=torch.int64, device=inputs.device
+                length, dtype=torch.int32, device=inputs.device
             )
             indices = indices + start
             result = torch.index_select(inputs, dim, indices)
@@ -774,21 +774,24 @@ def _patched_one_hot(x, num_classes, axis=-1, dtype=None, sparse=False):
     the same result for non-negative indices and does not introduce
     unlowerable assertions. Negative indices are preserved as all-zero vectors,
     matching the original behavior.
+
+    Integer tensors are kept in int32 so the exported MLIR remains compatible
+    with ``litert_torch``'s i32-based TFLite lowering.
     """
     if sparse:
         raise ValueError("Unsupported value `sparse=True` with torch backend")
-    x = torch_core.convert_to_tensor(x, dtype=torch.long)
-    zero = torch_core.convert_to_tensor(0, dtype=torch.long)
-
+    x = torch_core.convert_to_tensor(x, dtype=torch.int32)
     x_clamped = torch.clamp(x, min=0)
     output = (
         x_clamped.unsqueeze(-1)
-        == torch.arange(num_classes, dtype=torch.long, device=x.device)
-    ).long()
+        == torch.arange(num_classes, dtype=torch.int32, device=x.device)
+    )
     # Preserve original behavior for negative indices.
+    zero = torch.zeros_like(output)
     output = torch.where(x.unsqueeze(-1) >= 0, output, zero)
-    if dtype is not None:
-        output = torch_core.convert_to_tensor(output, dtype=dtype)
+    if dtype is None:
+        dtype = "float32"
+    output = torch_core.convert_to_tensor(output, dtype=dtype)
     dims = output.dim()
     if axis < 0:
         axis = dims + axis
@@ -815,6 +818,123 @@ def _traceable_one_hot_scope():
     """
     with unittest.mock.patch.object(
         torch_backend_nn, "one_hot", _patched_one_hot
+    ):
+        yield
+
+
+@contextlib.contextmanager
+def _traceable_arange_scope():
+    """Patch Keras torch-backend ``arange`` to default integer ranges to int32.
+
+    ``torch.arange`` returns int64 for integer arguments. ``litert_torch``'s
+    i64-to-i32 conversion pass does not always propagate through nested
+    ``func.call`` boundaries, so integer ranges produced inside the model
+    (e.g. position-embedding indices) must be int32 from the start.
+    """
+    from keras.src.backend.common import dtypes as keras_dtypes
+
+    original_arange = torch_backend_numpy.arange
+
+    def _patched_arange(start, stop=None, step=None, dtype=None):
+        if dtype is None:
+            dtypes_to_resolve = [
+                getattr(start, "dtype", type(start)),
+            ]
+            if stop is not None:
+                dtypes_to_resolve.append(getattr(stop, "dtype", type(stop)))
+            if step is not None:
+                dtypes_to_resolve.append(getattr(step, "dtype", type(step)))
+            resolved = keras_dtypes.result_type(*dtypes_to_resolve)
+            if str(resolved).startswith("int"):
+                dtype = torch.int32
+        return original_arange(start, stop=stop, step=step, dtype=dtype)
+
+    with unittest.mock.patch.object(
+        torch_backend_numpy, "arange", _patched_arange
+    ):
+        yield
+
+
+@contextlib.contextmanager
+def _traceable_take_scope():
+    """Patch Keras torch-backend ``take`` to keep embedding indices as int32.
+
+    The default implementation casts integer indices to int64 before calling
+    ``torch.nn.functional.embedding``. ``litert_torch``'s TFLite embedding
+    lowering expects int32 indices consistent with the traced function
+    signature, so we keep indices in int32 for the embedding-lookup case.
+    """
+    original_take = torch_backend_numpy.take
+
+    def _patched_take(x, indices, axis=None):
+        x = torch_core.convert_to_tensor(x)
+        indices = torch_core.convert_to_tensor(indices, dtype=torch.int32)
+        x_dim = x.shape[axis] if axis is not None else x.shape[0]
+        indices = torch.where(
+            indices < 0,
+            indices + x_dim,
+            indices,
+        )
+        if x.ndim == 2 and axis == 0:
+            return torch.nn.functional.embedding(indices, x)
+        if axis is None:
+            x = torch.reshape(x, (-1,))
+            axis = 0
+        axis = torch_backend_numpy.canonicalize_axis(axis, x.ndim)
+        shape = x.shape[:axis] + indices.shape + x.shape[axis + 1 :]
+        indices = indices.ravel()
+        out = torch.index_select(x, dim=axis, index=indices).squeeze(axis)
+        return out.reshape(shape)
+
+    with unittest.mock.patch.object(
+        torch_backend_numpy, "take", _patched_take
+    ):
+        yield
+
+
+@contextlib.contextmanager
+def _traceable_scatter_update_scope():
+    """Patch Keras torch-backend ``scatter_update`` to keep indices int32.
+
+    The default implementation casts indices to int64. ``litert_torch``'s
+    TFLite scatter lowering expects int32 indices, so we keep them in int32
+    during export.
+    """
+    original_scatter_update = torch_core.scatter_update
+
+    def _patched_scatter_update(inputs, indices, updates, reduction=None):
+        inputs = torch_core.convert_to_tensor(inputs)
+        indices = torch_core.convert_to_tensor(indices, dtype=torch.int32)
+        updates = torch_core.convert_to_tensor(updates, dtype=inputs.dtype)
+        indices = torch.transpose(indices, 0, 1)
+        idx = tuple(indices)
+
+        outputs = torch.clone(inputs)
+        if reduction is None:
+            outputs[idx] = updates
+        elif reduction == "add":
+            outputs.index_put_(idx, updates, accumulate=True)
+        elif reduction == "max":
+            indices_t = indices.T
+            for i in range(indices_t.shape[0]):
+                idx = tuple(indices_t[i])
+                outputs[idx] = torch.maximum(outputs[idx], updates[i])
+        elif reduction == "min":
+            indices_t = indices.T
+            for i in range(indices_t.shape[0]):
+                idx = tuple(indices_t[i])
+                outputs[idx] = torch.minimum(outputs[idx], updates[i])
+        elif reduction == "mul":
+            indices_t = indices.T
+            for i in range(indices_t.shape[0]):
+                idx = tuple(indices_t[i])
+                outputs[idx] = outputs[idx] * updates[i]
+        else:
+            raise ValueError(f"Unsupported reduction: {reduction}")
+        return outputs
+
+    with unittest.mock.patch.object(
+        torch_core, "scatter_update", _patched_scatter_update
     ):
         yield
 

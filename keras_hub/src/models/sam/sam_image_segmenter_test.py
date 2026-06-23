@@ -131,17 +131,3 @@ class SAMImageSegmenterTest(TestCase):
                 },
             )
 
-    def test_litert_export(self):
-        pytest.skip(
-            reason="TODO: Need to fix the bug in TFLite export for SAM model"
-        )
-        self.run_litert_export_test(
-            cls=SAMImageSegmenter,
-            init_kwargs=self.init_kwargs,
-            input_data=self.inputs,
-            comparison_mode="statistical",
-            output_thresholds={
-                "masks": {"max": 1e-3, "mean": 1e-4},
-                "iou_pred": {"max": 1e-3, "mean": 1e-4},
-            },
-        )

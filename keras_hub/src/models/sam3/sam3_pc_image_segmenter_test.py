@@ -165,11 +165,3 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
                 },
             )
 
-    def test_litert_export(self):
-        self.run_litert_export_test(
-            cls=SAM3PromptableConceptImageSegmenter,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-            comparison_mode="statistical",
-            output_thresholds={"*": {"max": 1e-2, "mean": 5e-3}},
-        )

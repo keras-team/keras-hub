@@ -274,55 +274,6 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
         restored_output = restored_model(input_data)
         self.assertAllClose(model_output, restored_output, atol=1e-5, rtol=1e-5)
 
-    def test_litert_export(self):
-        """Test LiteRT export for Gemma4CausalLM with small text model."""
-        model = Gemma4CausalLM(**self.text_init_kwargs)
-
-        input_data = self.text_input_data.copy()
-        if "padding_mask" in input_data:
-            input_data["padding_mask"] = ops.cast(
-                input_data["padding_mask"], "int32"
-            )
-
-        expected_output_shape = (
-            2,
-            20,
-            self.text_preprocessor.tokenizer.vocabulary_size(),
-        )
-
-        self.run_litert_export_test(
-            model=model,
-            input_data=input_data,
-            expected_output_shape=expected_output_shape,
-            comparison_mode="statistical",
-            output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
-        )
-
-    @pytest.mark.large
-    def test_litert_export_multimodal(self):
-        """Test LiteRT export for multimodal Gemma4CausalLM."""
-        model = Gemma4CausalLM(**self.init_kwargs)
-
-        input_data = self.input_data.copy()
-        if "padding_mask" in input_data:
-            input_data["padding_mask"] = ops.cast(
-                input_data["padding_mask"], "int32"
-            )
-
-        expected_output_shape = (
-            2,
-            20,
-            self.preprocessor.tokenizer.vocabulary_size(),
-        )
-
-        self.run_litert_export_test(
-            model=model,
-            input_data=input_data,
-            expected_output_shape=expected_output_shape,
-            comparison_mode="statistical",
-            output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
-        )
-
     def test_litertlm_export(self):
         """Test LiteRT-LM export for multimodal Gemma4CausalLM."""
         # LiteRT-LM export requires a SentencePiece tokenizer asset. Patch

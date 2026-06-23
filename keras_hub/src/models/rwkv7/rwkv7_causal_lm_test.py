@@ -125,13 +125,9 @@ class RWKV7CausalLMTest(TestCase):
         tokenizer-related ValueError, since RWKV7 tokenizers are not
         supported.
         """
-        model = RWKV7CausalLM(**self.init_kwargs)
-        with self.assertRaisesRegex(
-            ValueError,
-            "LiteRT-LM export supports.*tokenizers",
-        ):
-            model.export(
-                os.path.join(self.get_temp_dir(), "model.litertlm"),
-                format="litertlm",
-                prefill_seq_len=8,
-            )
+        self.run_litertlm_export_test(
+            cls=RWKV7CausalLM,
+            init_kwargs=self.init_kwargs,
+            prefill_seq_len=8,
+            expected_error_regex='LiteRT-LM export supports.*tokenizers',
+        )
