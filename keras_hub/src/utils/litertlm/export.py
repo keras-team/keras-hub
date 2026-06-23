@@ -287,6 +287,9 @@ def export_to_litertlm(
     # ``keras_hub.src`` set it.
     import jax
 
+    # Force JAX to initialize on CPU for both tracing and the LiteRT-Torch
+    # runtime. This is intentionally left as "cpu" because ``litert_torch``
+    # may use JAX after this function returns.
     jax.config.update("jax_platforms", "cpu")
 
     with _preserve_jax_x64_state():
@@ -661,7 +664,9 @@ def export_to_litertlm(
                 )
                 use_hf_tokenizer = False
             else:
-                tokenizer_path = _materialize_hf_tokenizer(tokenizer, temp_dir)
+                tokenizer_path = materialize_hf_tokenizer_json(
+                    tokenizer, temp_dir
+                )
                 use_hf_tokenizer = True
 
             meta_path = os.path.join(temp_dir, "llm_metadata.pb")
@@ -1080,16 +1085,6 @@ def _materialize_sentencepiece_tokenizer(tokenizer, temp_dir):
     return tokenizer_path
 
 
-def _detect_hf_tokenizer_family(tokenizer):
-    """Return the HF tokenizer family for a KerasHub tokenizer, or ``None``."""
-    return infer_hf_tokenizer_family(tokenizer)
-
-
-def _materialize_hf_tokenizer(tokenizer, temp_dir):
-    """Convert a KerasHub BytePair tokenizer and write ``tokenizer.json``."""
-    return materialize_hf_tokenizer_json(tokenizer, temp_dir)
-
-
 def _populate_vision_metadata(meta, model_type, vision_cfg, tokenizer):
     """Populate vision-related fields in the LlmMetadata protobuf."""
     image_size = vision_cfg.get("image_size", 224)
@@ -1154,7 +1149,7 @@ def _build_llm_metadata(
         eot_id = tokenizer.token_to_id("<end_of_turn>")
         if eot_id is not None:
             meta.stop_tokens.add().token_ids.ids.append(int(eot_id))
-    except Exception:
+    except (KeyError, ValueError):
         pass
 
     meta.max_num_tokens = int(max_num_tokens)

@@ -5,7 +5,6 @@ import pathlib
 import re
 import struct
 import tempfile
-import time
 
 import keras
 import numpy as np
@@ -1129,9 +1128,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 ``model.export(..., format="litertlm", ...)``.
         """
 
-        def _debug_print(msg):
-            print(msg)
-
         if keras.config.backend() != "torch":
             self.skipTest("LiteRT-LM export requires the PyTorch backend.")
 
@@ -1149,48 +1145,29 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 "Install it with: pip install litert-lm-builder"
             )
 
-        total_start = time.perf_counter()
-
         if model is None:
             if cls is None or init_kwargs is None:
                 raise ValueError(
                     "Either `model` or both `cls` and `init_kwargs` must be "
                     "provided."
                 )
-            build_start = time.perf_counter()
             model = cls(**init_kwargs)
-            _debug_print(
-                f"[litertlm] build model: "
-                f"{time.perf_counter() - build_start:.2f}s"
-            )
-        else:
-            _debug_print("[litertlm] build model: 0.00s")
 
         path = os.path.join(self.get_temp_dir(), "model.litertlm")
         if prefill_seq_len is not None:
             export_kwargs.setdefault("prefill_seq_len", prefill_seq_len)
 
-        export_start = time.perf_counter()
         model.export(path, format="litertlm", **export_kwargs)
-        _debug_print(
-            f"[litertlm] export: {time.perf_counter() - export_start:.2f}s"
-        )
 
         self.assertTrue(os.path.exists(path))
         self.assertGreater(os.path.getsize(path), 0)
 
-        extract_start = time.perf_counter()
         interpreters = self._extract_litertlm_tflite_interpreters(path)
         self.assertTrue(
             interpreters,
             "No TFLite model found in the .litertlm bundle.",
         )
-        _debug_print(
-            f"[litertlm] extract tflite: "
-            f"{time.perf_counter() - extract_start:.2f}s"
-        )
 
-        sig_start = time.perf_counter()
         all_signatures = {}
         for interpreter in interpreters:
             all_signatures.update(interpreter._get_full_signature_list())
@@ -1215,12 +1192,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 break
         if main_interpreter is None:
             main_interpreter = interpreters[0]
-        _debug_print(
-            f"[litertlm] verify signatures: "
-            f"{time.perf_counter() - sig_start:.2f}s"
-        )
 
-        meta_start = time.perf_counter()
         if verify_model_type is not None:
             llm_metadata = self._parse_litertlm_llm_metadata(path)
             self.assertIsNotNone(
@@ -1235,12 +1207,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 f"Expected LlmModelType '{verify_model_type}', "
                 f"got '{actual_type}'.",
             )
-        _debug_print(
-            f"[litertlm] verify metadata: "
-            f"{time.perf_counter() - meta_start:.2f}s"
-        )
 
-        numeric_start = time.perf_counter()
         if verify_numerics and input_data is not None:
             numeric_input = input_data
             if isinstance(input_data, dict):
@@ -1249,13 +1216,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 # Skip numeric parity for multimodal inputs; the helper only
                 # validates text token prefill/decode KV-cache parity.
                 text_only_keys = {"token_ids", "padding_mask"}
-                if isinstance(
+                is_text_only = not isinstance(
                     input_data, dict
-                ) and not text_only_keys.issuperset(input_data.keys()):
-                    _debug_print(
-                        "[litertlm] numeric parity skipped: multimodal input"
-                    )
-                else:
+                ) or text_only_keys.issuperset(input_data.keys())
+                if is_text_only:
                     # The exported TFLite prefill signature is traced with
                     # batch_size=1, so numeric parity must use a single sample.
                     numeric_input = ops.convert_to_numpy(numeric_input)
@@ -1268,26 +1232,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                         atol=atol,
                         rtol=rtol,
                     )
-        _debug_print(
-            f"[litertlm] numeric parity: "
-            f"{time.perf_counter() - numeric_start:.2f}s"
-        )
 
-        generation_start = time.perf_counter()
         if verify_generation:
             self._verify_litertlm_generation(
                 path,
                 prompt=generation_prompt,
                 max_num_tokens=generation_max_tokens,
             )
-        _debug_print(
-            f"[litertlm] runtime generation: "
-            f"{time.perf_counter() - generation_start:.2f}s"
-        )
-
-        _debug_print(
-            f"[litertlm] total: {time.perf_counter() - total_start:.2f}s"
-        )
 
     def _compare_outputs(
         self,

@@ -20,7 +20,6 @@ When performing code reviews on pull requests, you must strictly adhere to the f
 - **Validation**: Every component must be validated against the original model's implementation. Numerical equivalence is a primary requirement, demonstrated via Colab notebooks.
 - **Reusability**: Prioritize using existing layers from `keras.layers` and `keras_hub.layers` before implementing custom logic.
 - **Backend Agnostic**: All code must be keras 3 backend-agnostic, supporting TensorFlow, JAX, and PyTorch backends.
-- **Model license**: The model must use a permissive license, such as MIT or Apache. If the model is under a copyleft license, the PR must flag this immediately, and the pull request should be marked to be closed.
 
 ## Directory and File Structure
 
