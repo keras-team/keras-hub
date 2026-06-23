@@ -7,6 +7,11 @@ backbone_cls = Qwen3MoeBackbone
 
 
 def convert_backbone_config(transformers_config):
+    rope_theta = transformers_config.get("rope_parameters", {}).get(
+        "rope_theta"
+    )
+    if rope_theta is None:
+        rope_theta = transformers_config["rope_theta"]
     return {
         "vocabulary_size": transformers_config["vocab_size"],
         "hidden_dim": transformers_config["hidden_size"],
@@ -21,7 +26,7 @@ def convert_backbone_config(transformers_config):
         "norm_top_k_prob": transformers_config["norm_topk_prob"],
         "decoder_sparse_step": transformers_config["decoder_sparse_step"],
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
-        "rope_max_wavelength": transformers_config["rope_theta"],
+        "rope_max_wavelength": rope_theta,
         "sliding_window_size": transformers_config["sliding_window"],
         "router_aux_loss_coefficient": transformers_config[
             "router_aux_loss_coef"

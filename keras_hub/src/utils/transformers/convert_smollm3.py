@@ -7,6 +7,11 @@ backbone_cls = SmolLM3Backbone
 
 
 def convert_backbone_config(transformers_config):
+    rope_theta = transformers_config.get("rope_parameters", {}).get(
+        "rope_theta"
+    )
+    if rope_theta is None:
+        rope_theta = transformers_config["rope_theta"]
     return {
         "vocabulary_size": transformers_config["vocab_size"],
         "hidden_dim": transformers_config["hidden_size"],
@@ -20,7 +25,7 @@ def convert_backbone_config(transformers_config):
         "max_position_embeddings": transformers_config[
             "max_position_embeddings"
         ],
-        "rope_theta": transformers_config["rope_theta"],
+        "rope_theta": rope_theta,
         # partial_rotary_factor is not explicitly in config.json
         # but is inherited from the default value in the
         # `_compute_default_rope_parameters()` function
