@@ -1,5 +1,4 @@
 import itertools
-import warnings
 from functools import partial
 
 import keras
@@ -313,11 +312,10 @@ class CausalLM(Task):
                 structure expected the `backbone` model.
             max_length: Optional. int. The max length of the generated sequence.
                 Will default to the max configured `sequence_length` of the
-                `preprocessor`. If `preprocessor` is `None`, inputs should be
-                padded to the desired maximum length. In this case, `max_length`
-                is ignored and no modification (padding, truncation,
-                or extension)
-                is performed.
+                `preprocessor`.If `preprocessor` is None,
+                this argument is not supported because sequence length
+                must already be fully defined by the input tensor shape.
+                In this case, a ValueError is raised.
             stop_token_ids: Optional. `None`, "auto", or tuple of token ids.
                 Defaults to "auto" which uses the
                 `preprocessor.tokenizer.end_token_id`. Not specifying a
@@ -416,34 +414,13 @@ class CausalLM(Task):
         inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
 
         if self.preprocessor is None and max_length is not None:
-            warnings.warn(
-                "`max_length` is ignored when `preprocessor=None`. "
-                "Inputs must already be tokenized and padded to the final "
-                "sequence length.",
-                stacklevel=2,
+            raise ValueError(
+                "`max_length` has no effect when `preprocessor=None`. "
+                "Inputs should already be tokenized and padded to the "
+                "desired maximum length. Either attach a preprocessor "
+                "or remove the `max_length` argument."
             )
-            if isinstance(inputs, list) and len(inputs) > 0:
-                first_input = inputs[0]
-                token_array = (
-                    first_input["token_ids"]
-                    if isinstance(first_input, dict)
-                    and "token_ids" in first_input
-                    else first_input
-                )
-                try:
-                    token_tensor = ops.convert_to_tensor(token_array)
-                    shape = token_tensor.shape
-                except (ValueError, TypeError):
-                    shape = None
 
-                if shape is not None and len(shape) >= 1:
-                    seq_len = shape[-1]
-                    if seq_len is not None and max_length < seq_len:
-                        raise ValueError(
-                            f"`max_length={max_length}` is smaller than input"
-                            "sequence length "
-                            f"({seq_len}). Cannot generate with truncation."
-                        )
         if self.preprocessor is not None:
             inputs = [preprocess(x) for x in inputs]
 
