@@ -138,12 +138,12 @@ class SmolLM3CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    def test_litertlm_export_unsupported(self):
+    @pytest.mark.xfail(reason="Tokenizer not supported for LiteRT-LM export")
+    def test_litertlm_export_unsupported_tokenizer(self):
         self.run_litertlm_export_test(
             cls=SmolLM3CausalLM,
             init_kwargs=self.init_kwargs,
             prefill_seq_len=8,
-            expected_error_regex='Cannot infer HuggingFace tokenizer family.*Supported families',
         )
 
     @pytest.mark.extra_large

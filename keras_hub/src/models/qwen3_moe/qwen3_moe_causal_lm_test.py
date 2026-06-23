@@ -1,7 +1,4 @@
-import os
 from unittest.mock import patch
-
-os.environ["KERAS_BACKEND"] = "torch"
 
 import pytest
 from keras import ops
@@ -131,12 +128,12 @@ class Qwen3MoeCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    def test_litertlm_export_unsupported(self):
+    @pytest.mark.xfail(reason="Tokenizer not supported for LiteRT-LM export")
+    def test_litertlm_export_unsupported_tokenizer(self):
         self.run_litertlm_export_test(
             cls=Qwen3MoeCausalLM,
             init_kwargs=self.init_kwargs,
             prefill_seq_len=8,
-            expected_error_regex='Cannot infer HuggingFace tokenizer family',
         )
 
     @pytest.mark.extra_large

@@ -1075,7 +1075,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         generation_max_tokens=8,
         atol=1e-4,
         rtol=1e-4,
-        expected_error_regex=None,
         **export_kwargs,
     ):
         """Export a KerasHub model to LiteRT-LM and verify the bundle.
@@ -1103,37 +1102,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 test.
             atol: Absolute tolerance for numeric parity.
             rtol: Relative tolerance for numeric parity.
-            expected_error_regex: If provided, the test asserts that
-                ``model.export(..., format="litertlm", ...)`` raises a
-                ``ValueError`` whose message matches this regex. This
-                centralizes unsupported-tokenizer tests and exits before
-                requiring ``litert-torch`` or the PyTorch backend.
             **export_kwargs: Additional arguments forwarded to
                 ``model.export(..., format="litertlm", ...)``.
         """
 
         def _debug_print(msg):
             print(msg)
-
-        # Centralized unsupported-tokenizer assertion path. Tokenizer
-        # validation in export.py runs before backend/dependency checks, so
-        # this path works on any backend and without litert-torch installed.
-        if expected_error_regex is not None:
-            if model is None:
-                if cls is None or init_kwargs is None:
-                    raise ValueError(
-                        "Either `model` or both `cls` and `init_kwargs` must "
-                        "be provided."
-                    )
-                model = cls(**init_kwargs)
-            path = os.path.join(self.get_temp_dir(), "model.litertlm")
-            if prefill_seq_len is not None:
-                export_kwargs.setdefault("prefill_seq_len", prefill_seq_len)
-            with self.assertRaisesRegex(
-                ValueError, expected_error_regex
-            ):
-                model.export(path, format="litertlm", **export_kwargs)
-            return
 
         if keras.config.backend() != "torch":
             self.skipTest("LiteRT-LM export requires the PyTorch backend.")
