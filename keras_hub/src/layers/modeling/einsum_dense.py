@@ -1,10 +1,8 @@
 import keras
 from keras import ops
 
-from keras_hub.src.api_export import keras_hub_export
 
-
-@keras_hub_export("keras_hub.layers.EinsumDense")
+@keras.saving.register_keras_serializable(package="keras_hub")
 class EinsumDense(keras.layers.EinsumDense):
     """EinsumDense subclass that keeps LoRA weights in float32.
 
@@ -13,12 +11,29 @@ class EinsumDense(keras.layers.EinsumDense):
     underflow in low precision, producing near-zero updates. This subclass
     re-creates the LoRA variables in float32 after the parent initialises
     them, and casts them back to compute_dtype inside ``call()``.
+
+    This is an internal, keras-hub specific workaround (not a public API)
+    similar to keras-team/keras#22559.
     """
 
     def enable_lora(
-        self, rank, a_initializer="he_uniform", b_initializer="zeros"
+        self,
+        rank,
+        lora_alpha=None,
+        a_initializer="he_uniform",
+        b_initializer="zeros",
     ):
-        super().enable_lora(rank, a_initializer, b_initializer)
+        # NOTE: keras.layers.EinsumDense.enable_lora has the signature
+        # (rank, lora_alpha, a_initializer, b_initializer). Forward by keyword
+        # so the initializers are never mistakenly bound to ``lora_alpha`` (a
+        # bug that left ``lora_alpha`` as the string "he_uniform" and crashed
+        # the kernel property with `unsupported operand type(s) for /`).
+        super().enable_lora(
+            rank,
+            lora_alpha=lora_alpha,
+            a_initializer=a_initializer,
+            b_initializer=b_initializer,
+        )
 
         # Determine the dtype string regardless of whether .dtype is a
         # string or an object with a .name attribute.
@@ -38,8 +53,12 @@ class EinsumDense(keras.layers.EinsumDense):
             if self.lora_kernel_b in self._trainable_variables:
                 self._trainable_variables.remove(self.lora_kernel_b)
 
-            original_a_regularizer = getattr(self.lora_kernel_a, "regularizer", None)
-            original_b_regularizer = getattr(self.lora_kernel_b, "regularizer", None)
+            original_a_regularizer = getattr(
+                self.lora_kernel_a, "regularizer", None
+            )
+            original_b_regularizer = getattr(
+                self.lora_kernel_b, "regularizer", None
+            )
 
             self.lora_kernel_a = self.add_weight(
                 name="lora_kernel_a",

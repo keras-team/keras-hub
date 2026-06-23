@@ -1,6 +1,7 @@
 import keras
-from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras import ops
+
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 
 
 class RMSNormalization(keras.layers.Layer):

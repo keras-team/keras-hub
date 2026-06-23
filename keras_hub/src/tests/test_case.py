@@ -366,7 +366,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             return
 
         def _get_supported_layers(mode):
-            supported_layers = [keras.layers.Dense, EinsumDense]
+            # Include both the stock `keras.layers.EinsumDense` (e.g. the dense
+            # sublayers created inside `keras.layers.MultiHeadAttention`) and
+            # the keras-hub `EinsumDense` subclass used by attention layers.
+            supported_layers = [
+                keras.layers.Dense,
+                keras.layers.EinsumDense,
+                EinsumDense,
+            ]
             if mode == "int8":
                 supported_layers.append(keras.layers.Embedding)
                 supported_layers.append(ReversibleEmbedding)
