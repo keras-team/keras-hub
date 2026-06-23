@@ -5,26 +5,32 @@ This module provides the necessary wrappers to ensure vLLM processes tokens
 identically to the native KerasHub environment.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
+from keras import ops
 from keras_hub import models
 
 
 class KerasVLLMTokenizerAdapter:
     """Adapts a Keras Hub Tokenizer to the interface expected by vLLM.
-    
-    To ensure complete numerical and logical consistency, the vLLM runner 
+
+    To ensure complete numerical and logical consistency, the vLLM runner
     uses the exact tokenizer assets provided by the KerasHub preset.
     """
 
-    def __init__(self, preset_name: str):
+    def __init__(self, preset_or_tokenizer: Union[str, Any]):
         """Initializes the tokenizer wrapper for vLLM.
-        
+
         Args:
-            preset_name: The name of the KerasHub preset to load.
+            preset_or_tokenizer: The name of the KerasHub preset to load or
+                a loaded Tokenizer.
         """
-        self.preset_name = preset_name
-        self.tokenizer = models.Tokenizer.from_preset(preset_name)
+        if isinstance(preset_or_tokenizer, str):
+            self.preset_name = preset_or_tokenizer
+            self.tokenizer = models.Tokenizer.from_preset(preset_or_tokenizer)
+        else:
+            self.preset_name = getattr(preset_or_tokenizer, "name", "unknown")
+            self.tokenizer = preset_or_tokenizer
 
     @property
     def is_fast(self) -> bool:
@@ -37,6 +43,7 @@ class KerasVLLMTokenizerAdapter:
         return self.tokenizer.vocabulary_size()
 
     def __len__(self) -> int:
+        """Returns the vocabulary size when length is requested."""
         return self.vocab_size
 
     @property
@@ -67,16 +74,16 @@ class KerasVLLMTokenizerAdapter:
 
     def get_vocab(self) -> Dict[str, int]:
         """Returns a dictionary mapping tokens to integer IDs.
-        
+
         vLLM expects this to construct its tokenizer cache keys.
-        
+
         Returns:
             A dictionary mapping strings to their token IDs.
         """
         if hasattr(self.tokenizer, "get_vocabulary"):
             vocab_list = self.tokenizer.get_vocabulary()
             return {token: idx for idx, token in enumerate(vocab_list)}
-        
+
         # Fallback if get_vocabulary is not exposed
         vocab = {}
         for i in range(self.vocab_size):
@@ -88,29 +95,27 @@ class KerasVLLMTokenizerAdapter:
 
     def encode(self, text: str, **kwargs: Any) -> List[int]:
         """Converts text to token IDs using the native Keras Hub tokenizer.
-        
+
         Args:
             text: The text to encode.
             **kwargs: Additional keyword arguments.
-            
+
         Returns:
             A list of token IDs.
         """
-        from keras import ops
         token_ids = self.tokenizer(text)
         return ops.convert_to_numpy(token_ids).tolist()
 
     def decode(self, token_ids: List[int], **kwargs: Any) -> str:
         """Converts token IDs back to text using the native Keras Hub tokenizer.
-        
+
         Args:
             token_ids: A list of token IDs.
             **kwargs: Additional keyword arguments.
-            
+
         Returns:
             The decoded string.
         """
-        from keras import ops
         text = self.tokenizer.detokenize(token_ids)
         try:
             np_text = ops.convert_to_numpy(text)

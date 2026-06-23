@@ -73,11 +73,40 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         cache=None,
         cache_update_index=None,
         training=None,
+        **kwargs,
     ):
         if key is None:
             key = value
 
         query = self._query_dense(query)
+
+        # Dispatch to vLLM Native Paged Attention if active in the context
+        from keras_hub.src.vllm.context import get_vllm_context
+        vllm_ctx = get_vllm_context()
+        
+        if vllm_ctx is not None and vllm_ctx.paged_attention_func is not None:
+            # We must be running under vLLM's inference engine
+            key_update = self._key_dense(key)
+            value_update = self._value_dense(value)
+            
+            kv_cache = kwargs.get("kv_cache", None)
+            
+            attention_output = vllm_ctx.paged_attention_func(
+                query,
+                key_update,
+                value_update,
+                kv_cache,
+                vllm_ctx.slot_mapping,
+                vllm_ctx.block_tables,
+                vllm_ctx.attention_metadata,
+                self.key_dim,
+                self.num_heads,
+                getattr(self, "key_value_num_heads", self.num_heads),
+                getattr(self, "logit_soft_cap", None),
+            )
+            
+            attention_output = self._output_dense(attention_output)
+            return (attention_output, cache) if cache is not None else attention_output
 
         # If cache is not `None`, we will use the cache to compute the final key
         # and value tensors. If `cache_update_index` is not None, we will first
