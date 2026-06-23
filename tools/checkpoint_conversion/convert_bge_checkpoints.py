@@ -1,15 +1,8 @@
 """
 Convert HuggingFace BAAI/bge-*-en-v1.5 checkpoints to KerasHub format.
 
-BGE (BAAI General Embedding) models are standard BERT encoders fine-tuned for
-dense retrieval. Embeddings are computed as the CLS token output followed by
-L2 normalization. This maps exactly to:
-    BertTextEmbedder(
-        backbone=backbone,
-        preprocessor=preprocessor,
-        pooling_mode="cls",
-        normalize=True,
-    )
+This script loads weights from HuggingFace BGE model and converts them to 
+KerasHub's BertTextEmbedder format with numerical parity verification.
 
 Setup:
 ```shell
@@ -48,6 +41,10 @@ from keras_hub.src.utils.transformers.convert_bert import (
 )
 from keras_hub.src.utils.transformers.convert_bert import convert_tokenizer
 from keras_hub.src.utils.transformers.convert_bert import convert_weights
+from keras_hub.src.utils.transformers.convert_bert import (
+    load_preprocessor_config,
+)
+from keras_hub.src.utils.transformers.convert_bert import load_task_config
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
 FLAGS = flags.FLAGS
@@ -65,13 +62,20 @@ flags.DEFINE_string(
 )
 
 PRESET_MAP = {
+    "bge_small_en": "BAAI/bge-small-en",
+    "bge_base_en": "BAAI/bge-base-en",
+    "bge_large_en": "BAAI/bge-large-en",
     "bge_small_en_v1.5": "BAAI/bge-small-en-v1.5",
     "bge_base_en_v1.5": "BAAI/bge-base-en-v1.5",
     "bge_large_en_v1.5": "BAAI/bge-large-en-v1.5",
+    "bge_small_zh": "BAAI/bge-small-zh",
+    "bge_base_zh": "BAAI/bge-base-zh",
+    "bge_large_zh": "BAAI/bge-large-zh",
+    "bge_small_zh_v1.5": "BAAI/bge-small-zh-v1.5",
+    "bge_base_zh_v1.5": "BAAI/bge-base-zh-v1.5",
+    "bge_large_zh_v1.5": "BAAI/bge-large-zh-v1.5",
+    "llm_embedder": "BAAI/llm-embedder",
 }
-
-# BGE standardizes on sequence_length=512.
-SEQUENCE_LENGTH = 512
 
 
 def _hf_encode(hf_model, hf_tokenizer, texts):
@@ -83,7 +87,6 @@ def _hf_encode(hf_model, hf_tokenizer, texts):
         texts,
         padding=True,
         truncation=True,
-        max_length=SEQUENCE_LENGTH,
         return_tensors="pt",
     )
     with torch.no_grad():
@@ -265,7 +268,6 @@ def main(_):
 
     print(f"\n{'=' * 60}")
     print(f"Converting: {hf_model_id} -> {preset}")
-    print("Pooling: CLS token + L2 normalization")
     print(f"{'=' * 60}\n")
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -278,6 +280,24 @@ def main(_):
         )
         with open(config_path, "r") as f:
             transformers_config = json.load(f)
+
+        # Download sentence-transformer config files.
+        print("Downloading sentence-transformer config files...")
+        hf_hub_download(hf_model_id, "modules.json", local_dir=temp_dir)
+        hf_hub_download(
+            hf_model_id, "1_Pooling/config.json", local_dir=temp_dir
+        )
+        hf_hub_download(
+            hf_model_id, "sentence_bert_config.json", local_dir=temp_dir
+        )
+
+        # Load pooling/normalization and sequence-length from config files.
+        task_config = load_task_config(temp_dir, transformers_config)
+        preprocessor_config = load_preprocessor_config(
+            temp_dir, transformers_config
+        )
+        print(f"Task config: {task_config}")
+        print(f"Preprocessor config: {preprocessor_config}")
 
         # Build KerasHub backbone from HF config.
         keras_config = convert_backbone_config(transformers_config)
@@ -302,16 +322,15 @@ def main(_):
         )
         tokenizer = convert_tokenizer(keras_hub.models.BertTokenizer, temp_dir)
 
-        # Assemble BertTextEmbedder with BGE settings.
+        # Assemble BertTextEmbedder from loaded configs.
         preprocessor = keras_hub.models.BertTextEmbedderPreprocessor(
             tokenizer=tokenizer,
-            sequence_length=SEQUENCE_LENGTH,
+            **preprocessor_config,
         )
         embedder = keras_hub.models.BertTextEmbedder(
             backbone=backbone,
             preprocessor=preprocessor,
-            pooling_mode="cls",
-            normalize=True,
+            **task_config,
         )
 
         # Validate.
