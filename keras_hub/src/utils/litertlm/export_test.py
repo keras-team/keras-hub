@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 import struct
@@ -7,15 +8,12 @@ import unittest
 import numpy as np
 import torch
 
-try:
-    import litert_torch
-except ImportError:
-    litert_torch = None
-
-try:
-    import litert_lm_builder
-except ImportError:
-    litert_lm_builder = None
+_LITERT_TORCH_AVAILABLE = (
+    importlib.util.find_spec("litert_torch") is not None
+)
+_LITERT_LM_BUILDER_AVAILABLE = (
+    importlib.util.find_spec("litert_lm_builder") is not None
+)
 
 try:
     import tokenizers
@@ -54,12 +52,12 @@ from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
 
 
 @unittest.skipIf(
-    litert_torch is None,
+    not _LITERT_TORCH_AVAILABLE,
     "LiteRT-LM export requires `litert-torch`. "
     "Install it with: pip install litert-torch",
 )
 @unittest.skipIf(
-    litert_lm_builder is None,
+    not _LITERT_LM_BUILDER_AVAILABLE,
     "LiteRT-LM export requires `litert-lm-builder`. "
     "Install it with: pip install litert-lm-builder",
 )

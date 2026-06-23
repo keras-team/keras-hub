@@ -1,8 +1,16 @@
+import importlib.util
 import os
 import shutil
 import unittest
 
 import numpy as np
+
+_LITERT_TORCH_AVAILABLE = (
+    importlib.util.find_spec("litert_torch") is not None
+)
+_LITERT_LM_BUILDER_AVAILABLE = (
+    importlib.util.find_spec("litert_lm_builder") is not None
+)
 
 from keras_hub.src.models.gemma3n.gemma3n_backbone import Gemma3nBackbone
 from keras_hub.src.models.gemma3n.gemma3n_causal_lm import Gemma3nCausalLM
@@ -24,19 +32,16 @@ from keras_hub.src.tests.mocks.mock_gemma3n_tokenizer import (
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
-try:
-    import litert_torch
-except ImportError:
-    litert_torch = None
-
-try:
-    import litert_lm_builder
-except ImportError:
-    litert_lm_builder = None
 
 
-@unittest.skipIf(litert_torch is None, "Requires litert-torch.")
-@unittest.skipIf(litert_lm_builder is None, "Requires litert-lm-builder.")
+@unittest.skipIf(
+    not _LITERT_TORCH_AVAILABLE,
+    "Requires litert-torch.",
+)
+@unittest.skipIf(
+    not _LITERT_LM_BUILDER_AVAILABLE,
+    "Requires litert-lm-builder.",
+)
 class TestGemma3nLiteRTLmExport(TestCase):
     def setUp(self):
         self.tokenizer = MockGemma3nTokenizer()

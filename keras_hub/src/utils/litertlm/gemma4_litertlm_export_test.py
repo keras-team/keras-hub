@@ -1,18 +1,16 @@
+import importlib.util
 import os
 import unittest
 
 import numpy as np
 import tensorflow as tf
 
-try:
-    import litert_torch
-except ImportError:
-    litert_torch = None
-
-try:
-    import litert_lm_builder
-except ImportError:
-    litert_lm_builder = None
+_LITERT_TORCH_AVAILABLE = (
+    importlib.util.find_spec("litert_torch") is not None
+)
+_LITERT_LM_BUILDER_AVAILABLE = (
+    importlib.util.find_spec("litert_lm_builder") is not None
+)
 
 from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.models.gemma4.gemma4_causal_lm import Gemma4CausalLM
@@ -30,12 +28,12 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 @unittest.skipIf(
-    litert_torch is None,
+    not _LITERT_TORCH_AVAILABLE,
     "LiteRT-LM export requires `litert-torch`. "
     "Install it with: pip install litert-torch",
 )
 @unittest.skipIf(
-    litert_lm_builder is None,
+    not _LITERT_LM_BUILDER_AVAILABLE,
     "LiteRT-LM export requires `litert-lm-builder`. "
     "Install it with: pip install litert-lm-builder",
 )

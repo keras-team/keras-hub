@@ -7,28 +7,21 @@ This module is imported whenever any ``keras_hub.src.*`` submodule is loaded.
 def _patch_keras_ops_for_jax_x64():
     """Work around JAX x64 mixed-index dtype errors for slice ops.
 
-    KerasHub assumes the standard Keras/JAX 32-bit default dtype regime. Some
-    downstream dependencies may enable ``JAX_ENABLE_X64``, which causes Python
-    scalars and unqualified ``jnp`` creation routines to produce ``int64`` and
-    ``float64`` values. That in turn breaks KerasHub's control-flow ops
-    (``cond``/``while_loop`` branches with mismatched dtypes) and many layers
-    that expect ``int32``/``float32`` tensors.
+    Under ``JAX_ENABLE_X64=1`` (or any JAX configuration where Python integers
+    are canonicalized to ``int64``), passing a list like ``[0, index]`` to
+    ``keras.ops.slice`` / ``keras.ops.slice_update`` can produce
+    ``TypeError: index arguments to dynamic_slice must be integers of the same
+    type, got: int64, int32`` when ``index`` is an ``int32`` tracer.
 
-    We therefore disable x64 at import time, and additionally normalize
-    ``keras.ops.slice`` / ``keras.ops.slice_update`` start indices to a
-    homogeneous ``int32`` array so that KerasHub's many slice call sites
-    continue to work even if x64 is enabled externally.
+    We normalize the start indices to a homogeneous ``int32`` array so that
+    KerasHub's many ``ops.slice`` / ``ops.slice_update`` call sites continue to
+    work regardless of the active JAX integer dtype configuration.
     """
     try:
-        import jax
+        import jax.numpy as jnp
     except ImportError:
         return
 
-    # Ensure the standard 32-bit default dtype regime. This must happen before
-    # any JAX arrays are created.
-    jax.config.update("jax_enable_x64", False)
-
-    import jax.numpy as jnp
     import keras
 
     _orig_slice = keras.ops.slice

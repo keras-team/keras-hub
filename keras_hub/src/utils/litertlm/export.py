@@ -1,5 +1,7 @@
 """Export KerasHub CausalLM models to LiteRT-LM `.litertlm` bundles."""
 
+import contextlib
+import importlib.util
 import inspect
 import os
 import tempfile
@@ -18,11 +20,6 @@ from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
     materialize_hf_tokenizer_json,
 )
 
-try:
-    import litert_torch
-except ImportError:
-    litert_torch = None
-
 from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
 from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
 from keras_hub.src.utils.litertlm.adapter import KerasHubVisionEncoderAdapter
@@ -39,6 +36,35 @@ from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_repeat_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_slice_update_scope
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
+
+# ``litert_torch`` is an optional dependency. Use ``find_spec`` to check for
+# availability without importing it at module level, because importing
+# ``litert_torch`` has the side effect of enabling ``jax_enable_x64``.
+_LITERT_TORCH_AVAILABLE = (
+    importlib.util.find_spec("litert_torch") is not None
+)
+
+
+@contextlib.contextmanager
+def _preserve_jax_x64_state():
+    """Preserve the JAX ``jax_enable_x64`` flag around ``litert_torch`` usage.
+
+    ``litert_torch`` internally imports JAX and unconditionally enables
+    ``jax_enable_x64``. This breaks dtype-sensitive JAX tests elsewhere in the
+    same process. We save the original setting and restore it after conversion.
+    """
+    try:
+        import jax
+    except ImportError:
+        jax = None
+        original_x64 = None
+    else:
+        original_x64 = jax.config.jax_enable_x64
+    try:
+        yield
+    finally:
+        if jax is not None:
+            jax.config.update("jax_enable_x64", original_x64)
 
 
 def export_to_litertlm(
@@ -245,24 +271,30 @@ def export_to_litertlm(
 
     # Now that tokenizer and backend checks are done, require the optional
     # litert-torch/litert-lm-builder packages for the actual export.
-    if litert_torch is None:
+    if not _LITERT_TORCH_AVAILABLE:
         raise ImportError(
             "LiteRT-LM export requires `litert-torch`. "
             "Install it with: pip install litert-torch"
         )
 
-    if quant_config is not None:
-        quant_config_cls = getattr(
-            getattr(litert_torch, "quantize", None), "quant_config", None
-        )
-        if quant_config_cls is not None and not isinstance(
-            quant_config, quant_config_cls.QuantConfig
-        ):
-            raise ValueError(
-                "`quant_config` must be an instance of "
-                "`litert_torch.quantize.quant_config.QuantConfig` or None. "
-                f"Received: {type(quant_config).__name__}."
+    # Import ``litert_torch`` inside a context manager that preserves the JAX
+    # x64 setting. Importing ``litert_torch`` unconditionally enables
+    # ``jax_enable_x64``, which leaks into dtype-sensitive JAX tests elsewhere.
+    with _preserve_jax_x64_state():
+        import litert_torch
+
+        if quant_config is not None:
+            quant_config_cls = getattr(
+                getattr(litert_torch, "quantize", None), "quant_config", None
             )
+            if quant_config_cls is not None and not isinstance(
+                quant_config, quant_config_cls.QuantConfig
+            ):
+                raise ValueError(
+                    "`quant_config` must be an instance of "
+                    "`litert_torch.quantize.quant_config.QuantConfig` or None. "
+                    f"Received: {type(quant_config).__name__}."
+                )
 
     cache_cfg = _get_cache_config(model)
     num_layers = cache_cfg["num_layers"]
@@ -468,118 +500,121 @@ def export_to_litertlm(
         prefill_adapter = _PrefillAdapter(adapter).eval()
         decode_adapter = _DecodeAdapter(adapter).eval()
 
-        with (
-            _traceable_slice_update_scope(),
-            _traceable_one_hot_scope(),
-            _traceable_dot_product_attention_scope(),
-            _traceable_repeat_scope(),
-        ):
-            # Optionally export the vision encoder and adapter as separate
-            # models.
-            if separate_vision_encoder and has_vision:
-                if is_gemma4_vision:
-                    patch_size = vision_cfg.get("patch_size", 16)
-                    num_patches = (vision_cfg["image_size"] // patch_size) ** 2
-                    patch_dim = patch_size**2 * 3
-                    vision_encoder_inputs = {
-                        "pixel_values": torch.zeros(
-                            (
-                                1,
-                                vision_cfg["max_images_per_prompt"],
-                                num_patches,
-                                patch_dim,
+        with _preserve_jax_x64_state():
+            import litert_torch
+
+            with (
+                _traceable_slice_update_scope(),
+                _traceable_one_hot_scope(),
+                _traceable_dot_product_attention_scope(),
+                _traceable_repeat_scope(),
+            ):
+                # Optionally export the vision encoder and adapter as separate
+                # models.
+                if separate_vision_encoder and has_vision:
+                    if is_gemma4_vision:
+                        patch_size = vision_cfg.get("patch_size", 16)
+                        num_patches = (vision_cfg["image_size"] // patch_size) ** 2
+                        patch_dim = patch_size**2 * 3
+                        vision_encoder_inputs = {
+                            "pixel_values": torch.zeros(
+                                (
+                                    1,
+                                    vision_cfg["max_images_per_prompt"],
+                                    num_patches,
+                                    patch_dim,
+                                ),
+                                dtype=dtype,
+                                device="cpu",
                             ),
-                            dtype=dtype,
-                            device="cpu",
-                        ),
-                        "pixel_position_ids": torch.zeros(
-                            (
-                                1,
-                                vision_cfg["max_images_per_prompt"],
-                                num_patches,
-                                2,
+                            "pixel_position_ids": torch.zeros(
+                                (
+                                    1,
+                                    vision_cfg["max_images_per_prompt"],
+                                    num_patches,
+                                    2,
+                                ),
+                                dtype=torch.int32,
+                                device="cpu",
                             ),
-                            dtype=torch.int32,
-                            device="cpu",
-                        ),
-                    }
-                else:
-                    vision_encoder_inputs = {
-                        "images": torch.zeros(
-                            (
-                                1,
-                                vision_cfg["max_images_per_prompt"],
-                                vision_cfg["image_size"],
-                                vision_cfg["image_size"],
-                                3,
-                            ),
+                        }
+                    else:
+                        vision_encoder_inputs = {
+                            "images": torch.zeros(
+                                (
+                                    1,
+                                    vision_cfg["max_images_per_prompt"],
+                                    vision_cfg["image_size"],
+                                    vision_cfg["image_size"],
+                                    3,
+                                ),
+                                dtype=dtype,
+                                device="cpu",
+                            )
+                        }
+                    vision_adapter_inputs = {
+                        "features": torch.zeros(
+                            (1 * max_images, tokens_per_image, vision_output_dim),
                             dtype=dtype,
                             device="cpu",
                         )
                     }
-                vision_adapter_inputs = {
-                    "features": torch.zeros(
-                        (1 * max_images, tokens_per_image, vision_output_dim),
-                        dtype=dtype,
-                        device="cpu",
-                    )
-                }
-                vision_encoder_adapter = KerasHubVisionEncoderAdapter(
-                    model
-                ).eval()
-                vision_adapter = KerasHubVisionAdapter().eval()
+                    vision_encoder_adapter = KerasHubVisionEncoderAdapter(
+                        model
+                    ).eval()
+                    vision_adapter = KerasHubVisionAdapter().eval()
 
-                vision_encoder_edge = litert_torch.signature(
-                    "vision_encoder",
-                    vision_encoder_adapter,
-                    sample_kwargs=vision_encoder_inputs,
-                    **kwargs,
-                ).convert(
-                    quant_config=quant_config, lightweight_conversion=True
-                )
-                vision_adapter_edge = litert_torch.signature(
-                    "vision_adapter",
-                    vision_adapter,
-                    sample_kwargs=vision_adapter_inputs,
-                    **kwargs,
-                ).convert(
-                    quant_config=quant_config, lightweight_conversion=True
-                )
-
-            # Chain one signature per prefill bucket.
-            converter = None
-            for seq_len in prefill_seq_lens:
-                sig_name = (
-                    "prefill"
-                    if len(prefill_seq_lens) == 1
-                    else f"prefill_{seq_len}"
-                )
-                if converter is None:
-                    converter = litert_torch.signature(
-                        sig_name,
-                        prefill_adapter,
-                        sample_kwargs=prefill_inputs_map[seq_len],
+                    vision_encoder_edge = litert_torch.signature(
+                        "vision_encoder",
+                        vision_encoder_adapter,
+                        sample_kwargs=vision_encoder_inputs,
                         **kwargs,
+                    ).convert(
+                        quant_config=quant_config, lightweight_conversion=True
                     )
-                else:
-                    converter = converter.signature(
-                        sig_name,
-                        prefill_adapter,
-                        sample_kwargs=prefill_inputs_map[seq_len],
+                    vision_adapter_edge = litert_torch.signature(
+                        "vision_adapter",
+                        vision_adapter,
+                        sample_kwargs=vision_adapter_inputs,
                         **kwargs,
+                    ).convert(
+                        quant_config=quant_config, lightweight_conversion=True
                     )
 
-            converter = converter.signature(
-                "decode",
-                decode_adapter,
-                sample_kwargs=decode_inputs,
-                **kwargs,
-            )
+                # Chain one signature per prefill bucket.
+                converter = None
+                for seq_len in prefill_seq_lens:
+                    sig_name = (
+                        "prefill"
+                        if len(prefill_seq_lens) == 1
+                        else f"prefill_{seq_len}"
+                    )
+                    if converter is None:
+                        converter = litert_torch.signature(
+                            sig_name,
+                            prefill_adapter,
+                            sample_kwargs=prefill_inputs_map[seq_len],
+                            **kwargs,
+                        )
+                    else:
+                        converter = converter.signature(
+                            sig_name,
+                            prefill_adapter,
+                            sample_kwargs=prefill_inputs_map[seq_len],
+                            **kwargs,
+                        )
 
-            with _litert_constant_fingerprint_scope():
-                edge_model = converter.convert(
-                    quant_config=quant_config, lightweight_conversion=False
+                converter = converter.signature(
+                    "decode",
+                    decode_adapter,
+                    sample_kwargs=decode_inputs,
+                    **kwargs,
                 )
+
+                with _litert_constant_fingerprint_scope():
+                    edge_model = converter.convert(
+                        quant_config=quant_config, lightweight_conversion=False
+                    )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             if separate_vision_encoder and has_vision:
