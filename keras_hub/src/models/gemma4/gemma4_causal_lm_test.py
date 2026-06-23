@@ -1,6 +1,5 @@
 import copy
 import os
-import shutil
 from unittest.mock import patch
 
 import keras
@@ -327,22 +326,10 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
         """Test LiteRT-LM export for multimodal Gemma4CausalLM."""
         # LiteRT-LM export requires a SentencePiece tokenizer asset. Patch
         # the mock tokenizer used by this test so it can be bundled.
-        self.tokenizer.file_assets = ["vocabulary.spm"]
-        vocab_src = os.path.join(
-            self.get_test_data_dir(), "gemma4_test_vocab.spm"
+        self._attach_sentencepiece_tokenizer_asset(
+            self.tokenizer,
+            os.path.join(self.get_test_data_dir(), "gemma4_test_vocab.spm"),
         )
-
-        def _save_to_preset(preset_dir):
-            tokenizer_asset_dir = os.path.join(
-                preset_dir, "assets", "tokenizer"
-            )
-            os.makedirs(tokenizer_asset_dir, exist_ok=True)
-            shutil.copy(
-                vocab_src,
-                os.path.join(tokenizer_asset_dir, "vocabulary.spm"),
-            )
-
-        self.tokenizer.save_to_preset = _save_to_preset
 
         input_data = self.input_data.copy()
         if "padding_mask" in input_data:

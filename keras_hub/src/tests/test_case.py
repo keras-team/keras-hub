@@ -839,6 +839,29 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             return meta
         return None
 
+    def _attach_sentencepiece_tokenizer_asset(
+        self, tokenizer, proto_path, asset_name="vocabulary.spm"
+    ):
+        """Attach a test SentencePiece proto asset to a tokenizer.
+
+        LiteRT-LM export needs the tokenizer to declare its file assets and
+        know how to copy them into a preset directory. Test mock tokenizers do
+        not have a real preset asset, so this helper wires a single proto file
+        into ``tokenizer.save_to_preset`` for export-time bundling.
+        """
+        import shutil
+
+        from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
+
+        tokenizer.file_assets = [asset_name]
+
+        def _save_to_preset(preset_dir):
+            asset_dir = os.path.join(preset_dir, TOKENIZER_ASSET_DIR)
+            os.makedirs(asset_dir, exist_ok=True)
+            shutil.copy(proto_path, os.path.join(asset_dir, asset_name))
+
+        tokenizer.save_to_preset = _save_to_preset
+
     def _verify_litertlm_numerics(
         self,
         model,

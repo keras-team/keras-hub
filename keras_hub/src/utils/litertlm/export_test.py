@@ -509,19 +509,10 @@ class TestLiteRTLmExport(TestCase):
         )
 
         tokenizer = MockGemma3Tokenizer()
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer.file_assets = ["vocabulary.spm"]
-
-        def _save_to_preset(preset_dir):
-            import shutil
-
-            from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
-
-            asset_dir = os.path.join(preset_dir, TOKENIZER_ASSET_DIR)
-            os.makedirs(asset_dir, exist_ok=True)
-            shutil.copy(proto, os.path.join(asset_dir, "vocabulary.spm"))
-
-        tokenizer.save_to_preset = _save_to_preset
+        self._attach_sentencepiece_tokenizer_asset(
+            tokenizer,
+            os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm"),
+        )
 
         image_converter = Gemma3ImageConverter(image_size=(16, 16))
         preprocessor = Gemma3CausalLMPreprocessor(
@@ -693,20 +684,10 @@ class TestLiteRTLmExport(TestCase):
         )
 
         tokenizer = MockGemma3Tokenizer()
-        # Monkey-patch so the mock tokenizer passes SentencePiece validation.
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer.file_assets = ["vocabulary.spm"]
-
-        def _save_to_preset(preset_dir):
-            import shutil
-
-            from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
-
-            asset_dir = os.path.join(preset_dir, TOKENIZER_ASSET_DIR)
-            os.makedirs(asset_dir, exist_ok=True)
-            shutil.copy(proto, os.path.join(asset_dir, "vocabulary.spm"))
-
-        tokenizer.save_to_preset = _save_to_preset
+        self._attach_sentencepiece_tokenizer_asset(
+            tokenizer,
+            os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm"),
+        )
 
         image_converter = Gemma3ImageConverter(image_size=(16, 16))
         preprocessor = Gemma3CausalLMPreprocessor(
@@ -810,19 +791,10 @@ class TestLiteRTLmExport(TestCase):
         )
 
         tokenizer = MockGemma3Tokenizer()
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer.file_assets = ["vocabulary.spm"]
-
-        def _save_to_preset(preset_dir):
-            import shutil
-
-            from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
-
-            asset_dir = os.path.join(preset_dir, TOKENIZER_ASSET_DIR)
-            os.makedirs(asset_dir, exist_ok=True)
-            shutil.copy(proto, os.path.join(asset_dir, "vocabulary.spm"))
-
-        tokenizer.save_to_preset = _save_to_preset
+        self._attach_sentencepiece_tokenizer_asset(
+            tokenizer,
+            os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm"),
+        )
 
         image_converter = Gemma3ImageConverter(image_size=(16, 16))
         preprocessor = Gemma3CausalLMPreprocessor(
@@ -943,19 +915,10 @@ class TestLiteRTLmExport(TestCase):
         )
 
         tokenizer = MockGemma3Tokenizer()
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer.file_assets = ["vocabulary.spm"]
-
-        def _save_to_preset(preset_dir):
-            import shutil
-
-            from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
-
-            asset_dir = os.path.join(preset_dir, TOKENIZER_ASSET_DIR)
-            os.makedirs(asset_dir, exist_ok=True)
-            shutil.copy(proto, os.path.join(asset_dir, "vocabulary.spm"))
-
-        tokenizer.save_to_preset = _save_to_preset
+        self._attach_sentencepiece_tokenizer_asset(
+            tokenizer,
+            os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm"),
+        )
 
         image_converter = Gemma3ImageConverter(image_size=(16, 16))
         preprocessor = Gemma3CausalLMPreprocessor(
