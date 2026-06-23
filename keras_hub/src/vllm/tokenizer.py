@@ -78,7 +78,13 @@ class KerasVLLMTokenizerAdapter:
             return {token: idx for idx, token in enumerate(vocab_list)}
         
         # Fallback if get_vocabulary is not exposed
-        return {str(i): i for i in range(self.vocab_size)}
+        vocab = {}
+        for i in range(self.vocab_size):
+            try:
+                vocab[self.tokenizer.id_to_token(i)] = i
+            except Exception:
+                vocab[str(i)] = i
+        return vocab
 
     def encode(self, text: str, **kwargs: Any) -> List[int]:
         """Converts text to token IDs using the native Keras Hub tokenizer.

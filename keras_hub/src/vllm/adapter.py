@@ -5,17 +5,23 @@ This module provides the necessary wrappers to translate vLLM's internal state
 and PyTorch/XLA tensors into Keras backend-agnostic operations (JAX natively).
 """
 
+import numpy as np
 import torch
 from keras import ops
 from typing import Any, List, Optional, Tuple
 
 from keras_hub import models
 
+try:
+    import tpu_inference.models.common.model_loader as ml
+except ImportError:
+    ml = None
+
 _CURRENT_ADAPTER = None
 
 
 def _to_jax(tensor: Any) -> Any:
-    """Converts a torch/torchax tensor to a Keras backend tensor.
+    """Converts a torch/torchax tensor to a Keras backend tensor via DLPack.
     
     Args:
         tensor: A `torch.Tensor` or `torchax` tensor.
@@ -25,13 +31,12 @@ def _to_jax(tensor: Any) -> Any:
     """
     if hasattr(tensor, "_elem"):
         return tensor._elem
-    if hasattr(tensor, "cpu"):
-        return ops.convert_to_tensor(tensor.cpu().numpy())
-    return ops.convert_to_tensor(tensor)
+    import jax
+    return jax.dlpack.from_dlpack(torch.utils.dlpack.to_dlpack(tensor.contiguous()))
 
 
 def _to_torch(backend_tensor: Any, original_tensor: Any) -> torch.Tensor:
-    """Converts a Keras backend tensor back to a torch/torchax tensor safely.
+    """Converts a Keras backend tensor back to a torch tensor via DLPack safely.
     
     Args:
         backend_tensor: A Keras backend tensor (JAX array).
@@ -40,66 +45,12 @@ def _to_torch(backend_tensor: Any, original_tensor: Any) -> torch.Tensor:
     Returns:
         A PyTorch tensor mirroring the backend tensor.
     """
-    import numpy as np
-    
-    dtype_map = {
-        "bfloat16": torch.bfloat16,
-        "float32": torch.float32,
-        "float16": torch.float16,
-        "int32": torch.int32,
-    }
-    dtype_str = str(getattr(backend_tensor, "dtype", "float32"))
-    torch_dtype = dtype_map.get(dtype_str, torch.float32)
-    
-    np_array = ops.convert_to_numpy(backend_tensor)
-    
     if hasattr(original_tensor, "_elem"):
-        tensor = torch.empty(
-            np_array.shape, dtype=torch_dtype, device=original_tensor.device
-        )
-        # Assuming the backend is JAX, _elem expects the JAX array directly
-        tensor._elem = backend_tensor 
-        return tensor
-        
-    return torch.from_numpy(np_array).to(torch_dtype).to(original_tensor.device)
+        # We assume the backend_tensor is already a JAX array compatible with _elem
+        return backend_tensor
 
-
-def _get_registered_vllm_model(vllm_config: Any, rng: Any, mesh: Any) -> Tuple:
-    """Returns the overridden model execution hooks for vLLM.
-    
-    Args:
-        vllm_config: The vLLM configuration object.
-        rng: The JAX PRNG key.
-        mesh: The JAX device mesh.
-        
-    Returns:
-        A tuple of functions and states expected by vLLM's TPU runner.
-    """
-    global _CURRENT_ADAPTER
-    if _CURRENT_ADAPTER is None:
-        raise RuntimeError("No KerasVLLMAdapter instantiated.")
-        
-    return (
-        _CURRENT_ADAPTER._vllm_jit_model,
-        _CURRENT_ADAPTER._vllm_compute_logits_fn,
-        None,
-        None,
-        {},
-        None,
-        _CURRENT_ADAPTER,
-    )
-
-
-def _register_vllm_tpu_inference_hooks() -> None:
-    """Overrides vLLM's tpu_inference to use this adapter natively."""
-    try:
-        import tpu_inference.models.common.model_loader as ml
-        ml.get_vllm_model = _get_registered_vllm_model
-    except (ImportError, AttributeError):
-        # We allow this to silently pass because tpu_inference may not be 
-        # present in all vLLM installations.
-        pass
-
+    import jax
+    return torch.utils.dlpack.from_dlpack(jax.dlpack.to_dlpack(backend_tensor))
 
 class KerasVLLMAdapter(torch.nn.Module):
     """Adapter that wraps a Keras Hub CausalLM for vLLM.
@@ -116,53 +67,66 @@ class KerasVLLMAdapter(torch.nn.Module):
         quant_config: Optional[Any] = None,
         **kwargs: Any,
     ):
-        """Initializes the adapter and loads the underlying KerasHub model.
-        
-        Args:
-            config: The model configuration provided by vLLM.
-            cache_config: Optional cache configuration.
-            quant_config: Optional quantization configuration.
-            **kwargs: Additional keyword arguments.
-        """
+        """Initializes the adapter and loads the underlying KerasHub model."""
         super().__init__()
         self.config = config
-        self.preset_name = getattr(config, "keras_hub_preset", "gemma_2b_en")
-        
-        # Load the model using Keras Hub's native preset mechanism.
-        # We pass preprocessor=None to avoid initializing TensorFlow Text.
-        self.model = models.CausalLM.from_preset(
-            self.preset_name, preprocessor=None
-        )
-        
-        self._configure_vllm_architecture_whitelist()
-        
-        # Keep track of the current adapter for the global hook registration
-        global _CURRENT_ADAPTER
-        _CURRENT_ADAPTER = self
-        _register_vllm_tpu_inference_hooks()
+        self.preset_name = getattr(config, "keras_hub_preset", None)
+        if self.preset_name is None:
+            raise ValueError("The vLLM config must specify keras_hub_preset to load the correct Keras Hub model.")
+            
+        self._resolve_vllm_architecture()
+        self.model = models.CausalLM.from_preset(self.preset_name, preprocessor=None)
 
-    def _configure_vllm_architecture_whitelist(self) -> None:
-        """Configures the architecture to pass strict whitelist validations."""
+    def _resolve_vllm_architecture(self) -> None:
+        """Resolves and sets the corresponding vLLM architecture based on the preset."""
         if hasattr(self.config, "architectures"):
-            self.config.architectures = ["LlamaForCausalLM"]
+            # Dynamically map the Keras Hub preset architecture to vLLM's architecture if possible
+            preset_name = self.preset_name.lower()
+            if "gemma" in preset_name:
+                self.config.architectures = ["GemmaForCausalLM"]
+            elif "llama" in preset_name:
+                self.config.architectures = ["LlamaForCausalLM"]
+            elif "mistral" in preset_name:
+                self.config.architectures = ["MistralForCausalLM"]
+            elif "qwen" in preset_name:
+                self.config.architectures = ["Qwen2ForCausalLM"]
+            else:
+                self.config.architectures = ["LlamaForCausalLM"]  # Generic fallback
 
-    def _vllm_jit_model(self, *args: Any, **kwargs: Any) -> Tuple:
+    def get_vllm_model(self, vllm_config: Any, rng: Any, mesh: Any) -> Tuple:
+        """Object-oriented hook for vLLM's TPU runner.
+        
+        Returns a tuple of functions and configurations expected by vLLM.
+        """
+        return (
+            self._vllm_jit_model,
+            self._vllm_compute_logits_fn,
+            None,
+            None,
+            {},
+            None,
+            self,
+        )
+
+    def _vllm_jit_model(self, vllm_config: Any, kv_caches: List[torch.Tensor], input_ids: torch.Tensor, *args: Any, **kwargs: Any) -> Tuple:
         """Bound JIT model function for vLLM's execution engine."""
-        kv_caches = args[1]
-        input_ids = args[2]
         hidden_states = self.forward_step(
             input_ids, kv_caches, attention_metadata=None
         )
         return kv_caches, hidden_states, None
 
-    def _vllm_compute_logits_fn(self, *args: Any, **kwargs: Any) -> torch.Tensor:
+    def _vllm_compute_logits_fn(self, hidden_states: torch.Tensor, *args: Any, **kwargs: Any) -> torch.Tensor:
         """Bound logits computation function for vLLM's execution engine."""
-        hidden_states = args[0] if args else None
         return self.compute_logits(hidden_states)
 
-    def embed_input_ids(self, *args: Any, **kwargs: Any) -> None:
-        """Embeds input IDs. Required by vLLM interface but handled natively."""
-        pass
+    def embed_input_ids(self, input_ids: torch.Tensor) -> torch.Tensor:
+        """Embeds input IDs. 
+        
+        Required by vLLM interface but handled natively within the Keras Hub 
+        backbone. We return the input_ids as-is or raise NotImplementedError 
+        if explicitly invoked, to prevent silent failures.
+        """
+        raise NotImplementedError("Embedding is handled internally by Keras Hub backbone.")
 
     def forward(
         self,
@@ -209,21 +173,74 @@ class KerasVLLMAdapter(torch.nn.Module):
         Returns:
             Output hidden states before the LM head.
         """
-        jax_input_ids = _to_jax(input_ids)
-        
-        if len(jax_input_ids.shape) == 1:
-            jax_input_ids = ops.expand_dims(jax_input_ids, axis=-1)
+        is_prompt = getattr(attention_metadata, "is_prompt", False)
+        if is_prompt and hasattr(attention_metadata, "seq_lens"):
+            seq_lens = attention_metadata.seq_lens
+            max_seq_len = max(seq_lens)
+            batch_size = len(seq_lens)
+            padded_ids = torch.zeros((batch_size, max_seq_len), dtype=input_ids.dtype, device=input_ids.device)
+            start_idx = 0
+            for i, l in enumerate(seq_lens):
+                padded_ids[i, :l] = input_ids[start_idx:start_idx+l]
+                start_idx += l
+            jax_input_ids = _to_jax(padded_ids)
+        else:
+            jax_input_ids = _to_jax(input_ids)
+            if len(jax_input_ids.shape) == 1:
+                jax_input_ids = ops.expand_dims(jax_input_ids, axis=-1)
 
         x = self.model.backbone.token_embedding(jax_input_ids)
         
         hidden_dim = self.model.backbone.hidden_dim
         x = x * ops.cast(ops.sqrt(hidden_dim), x.dtype)
         
-        padding_mask = ops.ones_like(jax_input_ids, dtype="bool")
-        for layer in self.model.backbone.transformer_layers:
-            x = layer(x, padding_mask=padding_mask)
+        if is_prompt and hasattr(attention_metadata, "seq_lens"):
+            # Use proper padding mask during prefill
+            padding_mask_torch = torch.zeros((batch_size, max_seq_len), dtype=torch.bool, device=input_ids.device)
+            for i, l in enumerate(seq_lens):
+                padding_mask_torch[i, :l] = True
+            padding_mask = _to_jax(padding_mask_torch)
+        else:
+            padding_mask = ops.ones_like(jax_input_ids, dtype="bool")
+        
+        # If kv_caches is provided, we use Keras Hub's native caching mechanism.
+        # This bridges vLLM's cache manager with Keras Hub's transformer layers.
+        # positions usually represents the current cache update index for generation.
+        cache_update_index = positions[:, 0] if len(positions.shape) > 1 else positions
+        
+        updated_kv_caches = []
+        for i, layer in enumerate(self.model.backbone.transformer_layers):
+            if kv_caches is not None and len(kv_caches) > i:
+                # _to_jax will zero-copy wrap the DLPack tensor into a JAX array
+                cache_tensor = _to_jax(kv_caches[i])
+                x, next_cache = layer(
+                    x,
+                    padding_mask=padding_mask,
+                    cache=cache_tensor,
+                    cache_update_index=cache_update_index,
+                )
+                # Store the updated cache to be returned or updated in-place
+                updated_kv_caches.append(next_cache)
+            else:
+                x = layer(x, padding_mask=padding_mask)
+                
+        # If we updated caches, we need to map them back to torch tensors
+        if updated_kv_caches:
+            for i, next_cache in enumerate(updated_kv_caches):
+                # We do an in-place copy back to the original PyTorch tensor
+                # to satisfy vLLM's memory management
+                updated_torch = _to_torch(next_cache, input_ids)
+                kv_caches[i].copy_(updated_torch)
             
         hidden_states = self.model.backbone.layer_norm(x)
+
+        if is_prompt and hasattr(attention_metadata, "seq_lens"):
+            # Flatten the padded output back to 1D valid tokens only
+            hidden_states_torch = _to_torch(hidden_states, input_ids)
+            flattened = []
+            for i, l in enumerate(seq_lens):
+                flattened.append(hidden_states_torch[i, :l, :])
+            return torch.cat(flattened, dim=0)
 
         if len(hidden_states.shape) == 3 and hidden_states.shape[1] == 1:
             hidden_states = ops.squeeze(hidden_states, axis=1)

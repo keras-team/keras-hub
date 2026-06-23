@@ -1,4 +1,4 @@
-import kinetic
+# import kinetic
 import os
 import sys
 import time
@@ -86,26 +86,11 @@ def run_integration_scenario(queue, prompts, max_new_tokens):
         
         register_keras_hub_models()
         
-        temp_dir = tempfile.mkdtemp()
-        config_dict = {
-            "architectures": ["KerasVLLMAdapter"],
-            "model_type": "gemma2",
-            "vocab_size": 256000,
-            "hidden_size": 2304,
-            "num_hidden_layers": 26,
-            "num_attention_heads": 8,
-            "num_key_value_heads": 4,
-            "head_dim": 256,
-            "max_position_embeddings": 8192,
-            "_name_or_path": "keras_hub:gemma_2b_en",
-            "keras_hub_preset": "gemma_2b_en",
-            "torch_dtype": "float16",
-        }
-        with open(os.path.join(temp_dir, "config.json"), "w") as f:
-            json.dump(config_dict, f)
+        from keras_hub.src.vllm.registry import setup_vllm_model
+        model_dir = setup_vllm_model("gemma_2b_en", dtype="float16")
         
         print("Loading Keras Hub model into vLLM...")
-        llm = LLM(model=temp_dir, tensor_parallel_size=1)
+        llm = LLM(model=model_dir, tensor_parallel_size=1)
         sampling_params = SamplingParams(temperature=0.0, max_tokens=max_new_tokens)
         
         start_time = time.time()
@@ -118,10 +103,9 @@ def run_integration_scenario(queue, prompts, max_new_tokens):
         import traceback
         queue.put((0.0, [], traceback.format_exc()))
 
-@kinetic.run(
-    accelerator="tpu-v5litepod-1",
-    volumes={"/app/keras-hub": kinetic.data.Data(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../..")))}
-)
+#@kinetic.run(
+    #accelerator="tpu-v5litepod-1",
+#)
 def run_benchmark():
     import os
     import sys
@@ -139,8 +123,6 @@ def run_benchmark():
     os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.4"
 
     print("Dynamically installing dependencies...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", "/app/keras-hub", "keras", "kagglehub"])
-    sys.path.insert(0, "/app/keras-hub")
 
     import kagglehub
 
@@ -246,3 +228,4 @@ if __name__ == "__main__":
         
     print(f"\nResults successfully saved to {results_path} !")
 
+if __name__ == "__main__": run_benchmark()
