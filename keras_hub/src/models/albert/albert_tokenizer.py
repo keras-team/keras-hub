@@ -84,3 +84,75 @@ class AlbertTokenizer(SentencePieceTokenizer):
         self._add_special_token("[CLS]", "start_token")
         self._add_special_token("[SEP]", "end_token")
         super().__init__(proto=proto, **kwargs)
+
+    def detokenize(self, inputs):
+        if not hasattr(self, "special_tokens_map"):
+            self.special_tokens_map = {
+                self.cls_token_id: "[CLS]",
+                self.sep_token_id: "[SEP]",
+                self.pad_token_id: "<pad>",
+                self.mask_token_id: "[MASK]",
+            }
+            self.special_tokens_map = {
+                k: v for k, v in self.special_tokens_map.items() if k is not None
+            }
+
+        import tensorflow as tf
+        
+        if not tf.executing_eagerly():
+            return super().detokenize(inputs)
+            
+        inputs_tensor = tf.convert_to_tensor(inputs)
+        inputs_list = inputs_tensor.numpy().tolist()
+        
+        is_scalar = False
+        if isinstance(inputs_list, int):
+            inputs_list = [[inputs_list]]
+            is_scalar = True
+        elif len(inputs_list) > 0 and isinstance(inputs_list[0], int):
+            inputs_list = [inputs_list]
+            is_scalar = True
+
+        decoded_outputs = []
+        for seq in inputs_list:
+            words = []
+            current_chunk = []
+            for token_id in seq:
+                if token_id in self.special_tokens_map:
+                    if current_chunk:
+                        decoded_chunk = super(AlbertTokenizer, self).detokenize(current_chunk)
+                        if hasattr(decoded_chunk, "numpy"):
+                            decoded_chunk = decoded_chunk.numpy()
+                        if isinstance(decoded_chunk, bytes):
+                            words.append(decoded_chunk.decode('utf-8'))
+                        elif isinstance(decoded_chunk, list) and len(decoded_chunk) > 0 and isinstance(decoded_chunk[0], bytes):
+                            words.append(decoded_chunk[0].decode('utf-8'))
+                        elif isinstance(decoded_chunk, list):
+                            words.append(str(decoded_chunk[0]))
+                        elif isinstance(decoded_chunk, str):
+                            words.append(decoded_chunk)
+                        else:
+                            words.append(decoded_chunk[0].decode('utf-8') if hasattr(decoded_chunk[0], 'decode') else str(decoded_chunk[0]))
+                        current_chunk = []
+                    words.append(self.special_tokens_map[token_id])
+                else:
+                    current_chunk.append(token_id)
+            if current_chunk:
+                decoded_chunk = super(AlbertTokenizer, self).detokenize(current_chunk)
+                if hasattr(decoded_chunk, "numpy"):
+                    decoded_chunk = decoded_chunk.numpy()
+                if isinstance(decoded_chunk, bytes):
+                    words.append(decoded_chunk.decode('utf-8'))
+                elif isinstance(decoded_chunk, list) and len(decoded_chunk) > 0 and isinstance(decoded_chunk[0], bytes):
+                    words.append(decoded_chunk[0].decode('utf-8'))
+                elif isinstance(decoded_chunk, list):
+                    words.append(str(decoded_chunk[0]))
+                elif isinstance(decoded_chunk, str):
+                    words.append(decoded_chunk)
+                else:
+                    words.append(decoded_chunk[0].decode('utf-8') if hasattr(decoded_chunk[0], 'decode') else str(decoded_chunk[0]))
+            decoded_outputs.append(" ".join(words).strip())
+
+        if is_scalar:
+            return tf.convert_to_tensor(decoded_outputs[0])
+        return tf.convert_to_tensor(decoded_outputs)
