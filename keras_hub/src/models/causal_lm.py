@@ -243,11 +243,12 @@ class CausalLM(Task):
             return x, False
 
         if isinstance(inputs, dict):
-            is_scalar = []
+            # is_scalar = []
             for key in inputs:
-                inputs[key], scalar_flag = normalize(inputs[key])
-                is_scalar.append(scalar_flag)
-            input_is_scalar = all(is_scalar)
+                inputs[key], input_is_scalar = normalize(inputs[key])
+            #     inputs[key], scalar_flag = normalize(inputs[key])
+            #     is_scalar.append(scalar_flag)
+            # input_is_scalar = all(is_scalar)
         else:
             inputs, input_is_scalar = normalize(inputs)
 
@@ -331,34 +332,26 @@ class CausalLM(Task):
                 this option is set to True, only the newly generated text is
                 returned.
         """
-        if self.preprocessor is None and max_length is not None:
-            raise ValueError(
-                "`max_length` has no effect when `preprocessor=None`. "
-                "Inputs should already be tokenized and padded to the "
-                "desired maximum length. Either attach a preprocessor "
-                "or remove the `max_length` argument."
-            )
+        if max_length is None and self.preprocessor is not None:
+            max_length = getattr(self.preprocessor, "sequence_length", None)
+
         # Setup our three main passes.
         # 1. Optionally preprocessing strings to dense integer tensors.
         # 2. Generate new tokens via a compiled function on dense tensors.
         # 3. Optionally postprocess dense integer tensors back to string.
         generate_function = self.make_generate_function()
 
-        if self.preprocessor is None and stop_token_ids == "auto":
-            raise ValueError(
-                "A `preprocessor` must be attached to the model if "
-                '`stop_token_ids="auto"`. Currently `preprocessor=None`. To '
-                "call `generate()` with preprocessing detached, either pass "
-                "`stop_token_ids=None` to always generate until `max_length` "
-                "or pass a tuple of token ids that should terminate generation "
-                "as `stop_token_ids`."
-            )
-        elif stop_token_ids == "auto":
-            stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
-            # Some models like Llama3 use two end tokens: <|eot_id|> in
-            # "instruct" versions and <|end_of_text|> in others.
-            if hasattr(self.preprocessor.tokenizer, "end_token2_id"):
-                stop_token_ids.append(self.preprocessor.tokenizer.end_token2_id)
+        if stop_token_ids == "auto":
+            if self.preprocessor is not None:
+                stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
+                # Some models like Llama3 use two end tokens: <|eot_id|> in
+                # "instruct" versions and <|end_of_text|> in others.
+                if hasattr(self.preprocessor.tokenizer, "end_token2_id"):
+                    stop_token_ids.append(
+                        self.preprocessor.tokenizer.end_token2_id
+                    )
+            else:
+                stop_token_ids = None
 
         def preprocess(x):
             return self.preprocessor.generate_preprocess(
@@ -385,7 +378,7 @@ class CausalLM(Task):
 
             return tree.map_structure(_distribute_tensor, x)
 
-        def generate(x):
+        def run_generate(x):
             return generate_function(x, stop_token_ids=stop_token_ids)
 
         def strip_prompt_function(x, prompt):
@@ -394,7 +387,6 @@ class CausalLM(Task):
             y = {}
             prompt_mask = prompt["padding_mask"]
             seq_len = ops.shape(prompt_mask)[1]
-            # seq_len = prompt_mask.shape[1]
 
             # We need to shift every output sequence by the size of the prompt.
             shifts = -ops.sum(ops.cast(prompt_mask, "int"), axis=1) % seq_len
@@ -409,7 +401,8 @@ class CausalLM(Task):
             # the sequence and the generated text is at the beginning. We mask
             # it to retain the generated text only.
             y["padding_mask"] = ops.logical_xor(
-                roll_sequence(prompt_mask), roll_sequence(x["padding_mask"])
+                roll_sequence(prompt_mask),
+                roll_sequence(x["padding_mask"]),
             )
             # we assume the mask is enough and there is no need to zero-out the
             # values
@@ -429,9 +422,11 @@ class CausalLM(Task):
         inputs = [distribute(x) for x in inputs]
 
         if strip_prompt:
-            outputs = [strip_prompt_function(generate(x), x) for x in inputs]
+            outputs = [
+                strip_prompt_function(run_generate(x), x) for x in inputs
+            ]
         else:
-            outputs = [generate(x) for x in inputs]
+            outputs = [run_generate(x) for x in inputs]
 
         if self.preprocessor is not None:
             outputs = [postprocess(x) for x in outputs]
