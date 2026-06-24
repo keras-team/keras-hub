@@ -418,9 +418,7 @@ class CausalLM(Task):
         inputs = [distribute(x) for x in inputs]
 
         if strip_prompt:
-            outputs = [
-                strip_prompt_function(run_generate(x), x) for x in inputs
-            ]
+            outputs = [strip_prompt_function(run_generate(x), x) for x in inputs]
         else:
             outputs = [run_generate(x) for x in inputs]
 
