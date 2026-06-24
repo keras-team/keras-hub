@@ -243,12 +243,8 @@ class CausalLM(Task):
             return x, False
 
         if isinstance(inputs, dict):
-            # is_scalar = []
             for key in inputs:
                 inputs[key], input_is_scalar = normalize(inputs[key])
-            #     inputs[key], scalar_flag = normalize(inputs[key])
-            #     is_scalar.append(scalar_flag)
-            # input_is_scalar = all(is_scalar)
         else:
             inputs, input_is_scalar = normalize(inputs)
 
