@@ -397,8 +397,7 @@ class CausalLM(Task):
             # the sequence and the generated text is at the beginning. We mask
             # it to retain the generated text only.
             y["padding_mask"] = ops.logical_xor(
-                roll_sequence(prompt_mask),
-                roll_sequence(x["padding_mask"]),
+                roll_sequence(prompt_mask), roll_sequence(x["padding_mask"]),
             )
             # we assume the mask is enough and there is no need to zero-out the
             # values
