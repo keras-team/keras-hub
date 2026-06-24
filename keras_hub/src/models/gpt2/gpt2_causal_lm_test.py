@@ -247,12 +247,9 @@ class GPT2CausalLMTest(TestCase):
 
     def test_generate_max_length_with_no_preprocessor_raises(self):
         causal_lm = GPT2CausalLM(**self.init_kwargs)
+        prompt = " airplane at airport"
+        inputs = causal_lm.preprocessor.generate_preprocess([prompt])
         causal_lm.preprocessor = None
-        inputs = {
-            "token_ids": ops.array([[15496, 995, 0, 0]]),
-            "padding_mask": ops.array([[1, 1, 0, 0]]),
-        }
-
         with self.assertRaisesRegex(
             ValueError,
             "`max_length` has no effect when `preprocessor=None`",

@@ -243,8 +243,11 @@ class CausalLM(Task):
             return x, False
 
         if isinstance(inputs, dict):
+            is_scalar = []
             for key in inputs:
-                inputs[key], input_is_scalar = normalize(inputs[key])
+                inputs[key], scalar_flag = normalize(inputs[key])
+                is_scalar.append(scalar_flag)
+            input_is_scalar = all(is_scalar)
         else:
             inputs, input_is_scalar = normalize(inputs)
 
@@ -312,10 +315,9 @@ class CausalLM(Task):
                 structure expected the `backbone` model.
             max_length: Optional. int. The max length of the generated sequence.
                 Will default to the max configured `sequence_length` of the
-                `preprocessor`.If `preprocessor` is None,
-                this argument is not supported because sequence length
-                must already be fully defined by the input tensor shape.
-                In this case, a ValueError is raised.
+                `preprocessor`. When `preprocessor` is None, this value still
+                controls the generation length and is applied directly during
+                decoding.
             stop_token_ids: Optional. `None`, "auto", or tuple of token ids.
                 Defaults to "auto" which uses the
                 `preprocessor.tokenizer.end_token_id`. Not specifying a
@@ -329,6 +331,13 @@ class CausalLM(Task):
                 this option is set to True, only the newly generated text is
                 returned.
         """
+        if self.preprocessor is None and max_length is not None:
+            raise ValueError(
+                "`max_length` has no effect when `preprocessor=None`. "
+                "Inputs should already be tokenized and padded to the "
+                "desired maximum length. Either attach a preprocessor "
+                "or remove the `max_length` argument."
+            )
         # Setup our three main passes.
         # 1. Optionally preprocessing strings to dense integer tensors.
         # 2. Generate new tokens via a compiled function on dense tensors.
@@ -384,7 +393,8 @@ class CausalLM(Task):
             # response, in a batch-friendly fashion.
             y = {}
             prompt_mask = prompt["padding_mask"]
-            seq_len = prompt_mask.shape[1]
+            seq_len = ops.shape(prompt_mask)[1]
+            # seq_len = prompt_mask.shape[1]
 
             # We need to shift every output sequence by the size of the prompt.
             shifts = -ops.sum(ops.cast(prompt_mask, "int"), axis=1) % seq_len
@@ -412,14 +422,6 @@ class CausalLM(Task):
 
         # Normalize inputs, apply our three passes, and normalize outputs.
         inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
-
-        if self.preprocessor is None and max_length is not None:
-            raise ValueError(
-                "`max_length` has no effect when `preprocessor=None`. "
-                "Inputs should already be tokenized and padded to the "
-                "desired maximum length. Either attach a preprocessor "
-                "or remove the `max_length` argument."
-            )
 
         if self.preprocessor is not None:
             inputs = [preprocess(x) for x in inputs]
