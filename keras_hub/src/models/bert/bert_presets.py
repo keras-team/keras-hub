@@ -227,4 +227,19 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/sentence-transformers/keras/msmarco_minilm_l12_cos_v5_en/1",
     },
+    # "multilingual-e5-*" family: multilingual dense retrieval models.
+    "multilingual_e5_small": {
+        "metadata": {
+            "description": (
+                "12-layer multilingual E5 embedding model with 384-dimensional "
+                "vectors. Fine-tuned for dense retrieval across 100+ languages "
+                "using weakly-supervised contrastive pre-training. "
+                "Prefix inputs with 'query: ' for queries and 'passage: ' "
+                "for documents."
+            ),
+            "params": 117653760,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/multilingual-e5/keras/multilingual_e5_small/1",
+    },
 }
