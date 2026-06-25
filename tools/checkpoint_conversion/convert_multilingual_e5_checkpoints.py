@@ -112,7 +112,7 @@ CROSS_LINGUAL_TRIPLETS = [
 def _hf_mean_pool(outputs, attention_mask):
     """Mean-pool HuggingFace token embeddings weighted by attention mask."""
     token_embeds = outputs.last_hidden_state
-    mask = attention_mask.unsqueeze(-1).expand(token_embeds.size()).float()
+    mask = attention_mask.unsqueeze(-1).float()
     sum_embeds = torch.sum(token_embeds * mask, dim=1)
     sum_mask = torch.clamp(mask.sum(dim=1), min=1e-9)
     embeddings = sum_embeds / sum_mask
