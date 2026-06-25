@@ -54,6 +54,21 @@ class DeepLabV3Test(TestCase):
             atol=0.00001,
         )
 
+    def test_inference_does_not_update_batch_norm(self):
+        # #2495: inference must not put BatchNorm in training mode.
+        backbone = DeepLabV3Backbone(**self.init_kwargs)
+        bns = [
+            layer
+            for layer in backbone._flatten_layers()
+            if isinstance(layer, keras.layers.BatchNormalization)
+        ]
+        before = [keras.ops.convert_to_numpy(bn.moving_mean) for bn in bns]
+        backbone(self.input_data)  # default (inference) call
+        for bn, prev in zip(bns, before):
+            self.assertAllClose(
+                keras.ops.convert_to_numpy(bn.moving_mean), prev
+            )
+
 
 class SpatialPyramidPoolingTest(TestCase):
     def test_layer_behaviors(self):

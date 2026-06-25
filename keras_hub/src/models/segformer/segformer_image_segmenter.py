@@ -141,17 +141,17 @@ class SegFormerImageSegmenter(ImageSegmenter):
         self.output_segmentation_head = keras.layers.Conv2D(
             filters=num_classes, kernel_size=1, strides=1
         )
-        self.resizing = keras.layers.Resizing(
-            height=inputs.shape[1],
-            width=inputs.shape[2],
-            interpolation="bilinear",
-        )
 
         # === Functional Model ===
         x = self.backbone(inputs)
         x = self.dropout(x)
         x = self.output_segmentation_head(x)
-        output = self.resizing(x)
+        # Resize op for consistency with `SegFormerBackbone` (#2495).
+        output = keras.ops.image.resize(
+            x,
+            size=(inputs.shape[1], inputs.shape[2]),
+            interpolation="bilinear",
+        )
 
         super().__init__(
             inputs=inputs,

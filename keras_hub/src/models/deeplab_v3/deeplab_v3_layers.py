@@ -183,13 +183,15 @@ class SpatialPyramidPooling(keras.layers.Layer):
             height, width = image_shape[1], image_shape[2]
         else:
             height, width = image_shape[2], image_shape[3]
-        result[-1] = keras.layers.Resizing(
-            height,
-            width,
+        # Resize op, not a `Resizing` layer; the layer defaults `training=True`
+        # and leaks via the call-context, putting downstream BatchNorm in
+        # training mode at inference (#2495).
+        result[-1] = ops.image.resize(
+            result[-1],
+            size=(height, width),
             interpolation="bilinear",
             data_format=self.data_format,
-            name="resizing",
-        )(result[-1])
+        )
 
         result = ops.concatenate(result, axis=self.channel_axis)
         return self.projection(result)
