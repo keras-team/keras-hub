@@ -178,9 +178,10 @@ class Gemma3CausalLM(CausalLM):
             x = text_embeddings
 
         # Each decoder layer has a cache; we update them separately.
+        # Cache is a tuple of per-layer (key, value) pairs — no stacking.
         caches = []
         for i, transformer_layer in enumerate(self.backbone.transformer_layers):
-            current_cache = cache[:, i, ...]
+            current_cache = cache[i]
             x, next_cache = transformer_layer(
                 x,
                 cache=current_cache,
@@ -190,7 +191,7 @@ class Gemma3CausalLM(CausalLM):
                 cache_update_mask=cache_update_mask,
             )
             caches.append(next_cache)
-        cache = ops.stack(caches, axis=1)
+        cache = tuple(caches)
         hidden_states = x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
@@ -212,8 +213,15 @@ class Gemma3CausalLM(CausalLM):
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_key_value_heads
         head_dim = self.backbone.head_dim
-        shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
-        cache = ops.zeros(shape, dtype=self.compute_dtype)
+        # Allocate per-layer (key, value) caches as a tuple.
+        layer_shape = [batch_size, max_length, num_heads, head_dim]
+        cache = tuple(
+            (
+                ops.zeros(layer_shape, dtype=self.compute_dtype),
+                ops.zeros(layer_shape, dtype=self.compute_dtype),
+            )
+            for _ in range(num_layers)
+        )
         # Seed the cache.
         logits, hidden_states, cache = self.call_with_cache(
             token_ids=token_ids,
