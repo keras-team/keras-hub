@@ -161,9 +161,13 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
 
     def detokenize(self, inputs):
         if not hasattr(self, "special_tokens_map"):
-            self.special_tokens_map = {}
-            for token, id_val in zip(self.special_tokens, self.special_token_ids):
-                if id_val is not None: self.special_tokens_map[id_val] = token
+            self.special_tokens_map = {
+                self.cls_token_id: "[CLS]",
+                self.sep_token_id: "[SEP]",
+                self.pad_token_id: "[PAD]",
+                self.mask_token_id: "[MASK]",
+            }
+            self.special_tokens_map = {k: v for k, v in self.special_tokens_map.items() if k is not None}
 
         import tensorflow as tf
         if not tf.executing_eagerly():
