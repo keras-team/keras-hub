@@ -93,66 +93,35 @@ class AlbertTokenizer(SentencePieceTokenizer):
                 self.pad_token_id: "<pad>",
                 self.mask_token_id: "[MASK]",
             }
-            self.special_tokens_map = {
-                k: v for k, v in self.special_tokens_map.items() if k is not None
-            }
+            self.special_tokens_map = {k: v for k, v in self.special_tokens_map.items() if k is not None}
 
         import tensorflow as tf
-        
         if not tf.executing_eagerly():
             return super().detokenize(inputs)
             
-        inputs_tensor = tf.convert_to_tensor(inputs)
-        inputs_list = inputs_tensor.numpy().tolist()
-        
-        is_scalar = False
-        if isinstance(inputs_list, int):
-            inputs_list = [[inputs_list]]
-            is_scalar = True
-        elif len(inputs_list) > 0 and isinstance(inputs_list[0], int):
-            inputs_list = [inputs_list]
-            is_scalar = True
+        inputs_list = tf.convert_to_tensor(inputs).numpy().tolist()
+        is_scalar = isinstance(inputs_list, int) or (len(inputs_list) > 0 and isinstance(inputs_list[0], int))
+        if is_scalar: inputs_list = [inputs_list] if isinstance(inputs_list, list) else [[inputs_list]]
 
         decoded_outputs = []
         for seq in inputs_list:
-            words = []
-            current_chunk = []
+            words, current_chunk = [], []
+            def decode_and_append():
+                if current_chunk:
+                    decoded = super(self.__class__, self).detokenize(current_chunk)
+                    if hasattr(decoded, "numpy"): decoded = decoded.numpy()
+                    if isinstance(decoded, list) and len(decoded) > 0: decoded = decoded[0]
+                    if isinstance(decoded, bytes): decoded = decoded.decode('utf-8')
+                    words.append(str(decoded))
+                    current_chunk.clear()
+
             for token_id in seq:
                 if token_id in self.special_tokens_map:
-                    if current_chunk:
-                        decoded_chunk = super(AlbertTokenizer, self).detokenize(current_chunk)
-                        if hasattr(decoded_chunk, "numpy"):
-                            decoded_chunk = decoded_chunk.numpy()
-                        if isinstance(decoded_chunk, bytes):
-                            words.append(decoded_chunk.decode('utf-8'))
-                        elif isinstance(decoded_chunk, list) and len(decoded_chunk) > 0 and isinstance(decoded_chunk[0], bytes):
-                            words.append(decoded_chunk[0].decode('utf-8'))
-                        elif isinstance(decoded_chunk, list):
-                            words.append(str(decoded_chunk[0]))
-                        elif isinstance(decoded_chunk, str):
-                            words.append(decoded_chunk)
-                        else:
-                            words.append(decoded_chunk[0].decode('utf-8') if hasattr(decoded_chunk[0], 'decode') else str(decoded_chunk[0]))
-                        current_chunk = []
+                    decode_and_append()
                     words.append(self.special_tokens_map[token_id])
                 else:
                     current_chunk.append(token_id)
-            if current_chunk:
-                decoded_chunk = super(AlbertTokenizer, self).detokenize(current_chunk)
-                if hasattr(decoded_chunk, "numpy"):
-                    decoded_chunk = decoded_chunk.numpy()
-                if isinstance(decoded_chunk, bytes):
-                    words.append(decoded_chunk.decode('utf-8'))
-                elif isinstance(decoded_chunk, list) and len(decoded_chunk) > 0 and isinstance(decoded_chunk[0], bytes):
-                    words.append(decoded_chunk[0].decode('utf-8'))
-                elif isinstance(decoded_chunk, list):
-                    words.append(str(decoded_chunk[0]))
-                elif isinstance(decoded_chunk, str):
-                    words.append(decoded_chunk)
-                else:
-                    words.append(decoded_chunk[0].decode('utf-8') if hasattr(decoded_chunk[0], 'decode') else str(decoded_chunk[0]))
+            decode_and_append()
             decoded_outputs.append(" ".join(words).strip())
 
-        if is_scalar:
-            return tf.convert_to_tensor(decoded_outputs[0])
-        return tf.convert_to_tensor(decoded_outputs)
+        return tf.convert_to_tensor(decoded_outputs[0]) if is_scalar else tf.convert_to_tensor(decoded_outputs)
