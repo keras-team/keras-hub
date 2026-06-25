@@ -19,9 +19,6 @@ from keras_hub.src.utils.litertlm.adapter import KerasHubVisionEncoderAdapter
 from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
 from keras_hub.src.utils.litertlm.adapter import _get_vision_encoder
 from keras_hub.src.utils.litertlm.adapter import _is_gemma4_vision_encoder
-from keras_hub.src.utils.litertlm.adapter import (
-    _litert_constant_fingerprint_scope,
-)
 from keras_hub.src.utils.litertlm.adapter import _traceable_arange_scope
 from keras_hub.src.utils.litertlm.adapter import (
     _traceable_dot_product_attention_scope,
@@ -31,9 +28,6 @@ from keras_hub.src.utils.litertlm.adapter import _traceable_repeat_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_scatter_update_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_slice_update_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_take_scope
-from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
-    infer_hf_tokenizer_family,
-)
 from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
     materialize_hf_tokenizer_json,
 )
@@ -184,9 +178,9 @@ def export_to_litertlm(
             tokenizer. Use this for BytePair / HuggingFace tokenizers that
             cannot be materialized as a SentencePiece ``.spm`` file. When
             provided, the native tokenizer validation is skipped. If ``None``,
-            SentencePiece tokenizers are bundled as ``.spm`` and known BytePair
-            tokenizer families (gpt2, llama3, qwen3) are automatically
-            converted to ``tokenizer.json``. Defaults to ``None``.
+            SentencePiece tokenizers are bundled as ``.spm`` and any
+            ``BytePairTokenizer`` subclass is automatically converted to
+            ``tokenizer.json``. Defaults to ``None``.
         **kwargs: Additional kwargs forwarded to ``litert_torch`` signature
             tracing.
 
@@ -245,17 +239,12 @@ def export_to_litertlm(
     elif _is_sentencepiece_tokenizer(tokenizer):
         _validate_sentencepiece_tokenizer(tokenizer)
     elif isinstance(tokenizer, BytePairTokenizer):
-        family = infer_hf_tokenizer_family(tokenizer)
-        if family is None:
-            raise ValueError(
-                "Cannot infer HuggingFace tokenizer family from "
-                f"{type(tokenizer).__module__}.{type(tokenizer).__name__}. "
-                "Supported families are 'gpt2', 'llama3', and 'qwen3'."
-            )
+        # Any BytePairTokenizer subclass can be converted to HF tokenizer.json.
+        pass
     else:
         raise ValueError(
-            "LiteRT-LM export supports SentencePiece tokenizers and known "
-            "BytePair tokenizer families (gpt2, llama3, qwen3). Received: "
+            "LiteRT-LM export supports SentencePiece tokenizers and any "
+            "BytePairTokenizer subclass. Received: "
             f"{type(tokenizer).__module__}.{type(tokenizer).__name__}."
         )
 
@@ -517,8 +506,8 @@ def export_to_litertlm(
 
             with (
                 _traceable_slice_update_scope(),
-                _traceable_one_hot_scope(),
                 _traceable_dot_product_attention_scope(),
+                _traceable_one_hot_scope(),
                 _traceable_repeat_scope(),
                 _traceable_arange_scope(),
                 _traceable_take_scope(),
@@ -632,10 +621,9 @@ def export_to_litertlm(
                     **kwargs,
                 )
 
-                with _litert_constant_fingerprint_scope():
-                    edge_model = converter.convert(
-                        quant_config=quant_config, lightweight_conversion=False
-                    )
+                edge_model = converter.convert(
+                    quant_config=quant_config, lightweight_conversion=False
+                )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             if separate_vision_encoder and has_vision:

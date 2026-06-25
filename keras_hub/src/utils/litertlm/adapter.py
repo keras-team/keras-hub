@@ -7,53 +7,9 @@ import threading
 import unittest.mock
 
 import torch
-from keras.src import backend
 from keras.src.backend.torch import core as torch_core
-from keras.src.backend.torch import nn as torch_backend_nn
 from keras.src.backend.torch import numpy as torch_backend_numpy
 from torch import nn
-
-
-def _tensor_fingerprint(tensor):
-    """Return a stable fingerprint for a torch constant tensor.
-
-    The default ``litert_torch`` implementation hashes by
-    ``untyped_storage().data_ptr()``, which is an ephemeral address that can
-    alias distinct views or be reused after a tensor is freed. Distinct
-    KerasHub EinsumDense weights (e.g. key/value projections) may also share a
-    single backing storage with different offsets, so this version uses the
-    storage identity and offset to keep them distinct.
-    """
-    return (
-        str(tensor.device),
-        tensor.shape,
-        tensor.stride(),
-        id(tensor.untyped_storage()),
-        tensor.storage_offset(),
-    )
-
-
-@contextlib.contextmanager
-def _litert_constant_fingerprint_scope():
-    """Temporarily patch litert_torch's constant cache fingerprint.
-
-    The patch is applied only inside this scope, so importing ``adapter.py``
-    does not produce global side effects. If ``litert_torch`` is not installed,
-    the scope is a no-op.
-    """
-    try:
-        from litert_torch.backend import inline_consts as _litert_inline_consts
-    except Exception:  # pragma: no cover - litert_torch may not be installed
-        yield
-        return
-
-    original = _litert_inline_consts._tensor_fingerprint
-    _litert_inline_consts._tensor_fingerprint = _tensor_fingerprint
-    try:
-        yield
-    finally:
-        _litert_inline_consts._tensor_fingerprint = original
-
 
 # Global lock serializing export-time mutations of PyTorch's default device.
 # This keeps _cpu_default_device_scope thread-safe without changing semantics.
@@ -493,76 +449,6 @@ def _normalize_start_indices(start_indices):
     return list(start_indices.reshape(-1).unbind())
 
 
-def _make_patched_slice_update(original_slice_update):
-    """Return a traceable ``slice_update`` replacement."""
-
-    def _patched_slice_update(inputs, start_indices, updates):
-        inputs = torch_core.convert_to_tensor(inputs)
-        updates = torch_core.convert_to_tensor(updates)
-
-        starts = _normalize_start_indices(start_indices)
-
-        # Dimensions whose start is a tensor → potentially dynamic.
-        tensor_dims = [
-            dim
-            for dim, start in enumerate(starts)
-            if isinstance(start, torch.Tensor)
-        ]
-
-        if len(tensor_dims) == 1:
-            dim = tensor_dims[0]
-            start = starts[dim].reshape(()).int()
-            update_len = updates.size(dim)
-
-            # Build a boolean mask over the updated dimension and use
-            # ``torch.where`` to select the updates. This avoids in-place
-            # scatter ops that can alias input/output buffers in the TFLite
-            # runtime and produce corrupted KV-cache outputs.
-            dim_len = inputs.size(dim)
-            positions = torch.arange(
-                dim_len, dtype=torch.int32, device=inputs.device
-            )
-            mask_1d = (positions >= start) & (positions < start + update_len)
-            # Reshape the 1-D mask to broadcast against ``inputs``.
-            mask_shape = [1] * inputs.ndim
-            mask_shape[dim] = dim_len
-            mask = mask_1d.view(mask_shape).broadcast_to(inputs.shape)
-
-            # Scatter ``updates`` into a full-shaped zero buffer so that it
-            # can be selected by the mask without requiring dynamic-length
-            # concatenation.
-            update_indices = (
-                torch.arange(
-                    update_len, dtype=torch.int32, device=inputs.device
-                )
-                + start
-            )
-            updates_padded = torch.zeros_like(inputs).index_copy_(
-                dim, update_indices, updates
-            )
-            return torch.where(mask, updates_padded, inputs)
-
-        if len(tensor_dims) > 1:
-            raise RuntimeError(
-                "slice_update patch does not support multiple dynamic start "
-                f"indices. Dynamic dims: {tensor_dims}."
-            )
-
-        # All starts are plain Python ints → direct slice assignment.
-        # We avoid the original Keras implementation because it converts
-        # the starts to a tensor and calls ``.item()``, which breaks under
-        # ``torch.export`` on older Keras versions (< 3.15).
-        outputs = torch.clone(inputs)
-        slices = tuple(
-            slice(start, start + size)
-            for start, size in zip(starts, updates.shape)
-        )
-        outputs[slices] = updates
-        return outputs
-
-    return _patched_slice_update
-
-
 def _make_patched_slice(original_slice):
     """Return a traceable ``slice`` replacement."""
 
@@ -632,33 +518,22 @@ def _make_patched_slice(original_slice):
 
 @contextlib.contextmanager
 def _traceable_slice_update_scope():
-    """Temporarily patch Keras torch-backend ``slice_update`` for torch.export.
+    """Temporarily patch Keras torch-backend ``slice`` for torch.export.
 
-    Keras ``ops.slice_update`` converts tensor ``start_indices`` to Python
-    ints via ``.tolist()``, which fails during ``torch.export.export`` when
-    the index is a dynamic tensor (e.g. the decode position).
-
-    This patch replaces the implementation entirely for the export window:
-    * Tensor starts (dynamic) with ``update_len == 1`` → ``index_copy_``.
-    * All-Python-int starts (constant) → direct slice assignment without
-      calling ``.item()`` or the original Keras logic.
+    Keras ``ops.slice`` can introduce unbacked symbols during
+    ``torch.export.export`` for dynamic start/length values. This patch keeps
+    slicing traceable for the common single-dynamic-dimension case.
 
     Uses ``unittest.mock.patch.object`` so restoration is reliable even when
     an exception escapes.
     """
-    original_slice_update = torch_core.slice_update
     original_slice = torch_core.slice
     with unittest.mock.patch.object(
         torch_core,
-        "slice_update",
-        _make_patched_slice_update(original_slice_update),
+        "slice",
+        _make_patched_slice(original_slice),
     ):
-        with unittest.mock.patch.object(
-            torch_core,
-            "slice",
-            _make_patched_slice(original_slice),
-        ):
-            yield
+        yield
 
 
 def _traceable_dot_product_attention(
@@ -684,6 +559,8 @@ def _traceable_dot_product_attention(
     convention: inputs are ``[batch, seq_len, num_heads, head_dim]`` and the
     output is returned in the same layout.
     """
+    from keras.src import backend
+
     del flash_attention  # Fused flash attention is not exportable.
 
     query = torch_core.convert_to_tensor(query)
@@ -755,6 +632,8 @@ def _traceable_dot_product_attention_scope():
     Uses ``unittest.mock.patch.object`` so restoration is reliable even when
     an exception escapes.
     """
+    from keras.src.backend.torch import nn as torch_backend_nn
+
     with unittest.mock.patch.object(
         torch_backend_nn,
         "dot_product_attention",
@@ -815,6 +694,8 @@ def _traceable_one_hot_scope():
     Uses ``unittest.mock.patch.object`` so restoration is reliable even when
     an exception escapes.
     """
+    from keras.src.backend.torch import nn as torch_backend_nn
+
     with unittest.mock.patch.object(
         torch_backend_nn, "one_hot", _patched_one_hot
     ):
