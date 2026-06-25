@@ -154,48 +154,8 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         inputs = [
             [id for id in seqs if id != self.mask_token_id] for seqs in inputs
         ]
-        outputs = self._sentence_piece_spm.Decode(inputs)
+        outputs = super()._detokenize_spm(inputs)
         if not batched:
             outputs = outputs[0]
         return outputs
 
-    def detokenize(self, inputs):
-        if not hasattr(self, "special_tokens_map"):
-            self.special_tokens_map = {
-                self.cls_token_id: "[CLS]",
-                self.sep_token_id: "[SEP]",
-                self.pad_token_id: "[PAD]",
-                self.mask_token_id: "[MASK]",
-            }
-            self.special_tokens_map = {k: v for k, v in self.special_tokens_map.items() if k is not None}
-
-        import tensorflow as tf
-        if not tf.executing_eagerly():
-            return super().detokenize(inputs)
-            
-        inputs_list = tf.convert_to_tensor(inputs).numpy().tolist()
-        is_scalar = isinstance(inputs_list, int) or (len(inputs_list) > 0 and isinstance(inputs_list[0], int))
-        if is_scalar: inputs_list = [inputs_list] if isinstance(inputs_list, list) else [[inputs_list]]
-
-        decoded_outputs = []
-        for seq in inputs_list:
-            words, current_chunk = [], []
-            def decode_and_append():
-                if current_chunk:
-                    decoded = super(self.__class__, self).detokenize(current_chunk)
-                    if hasattr(decoded, "numpy"): decoded = decoded.numpy()
-                    if isinstance(decoded, list) and len(decoded) > 0: decoded = decoded[0]
-                    if isinstance(decoded, bytes): decoded = decoded.decode('utf-8')
-                    words.append(str(decoded))
-                    current_chunk.clear()
-
-            for token_id in seq:
-                if token_id in self.special_tokens_map:
-                    decode_and_append()
-                    words.append(self.special_tokens_map[token_id])
-                else:
-                    current_chunk.append(token_id)
-            decode_and_append()
-            decoded_outputs.append(" ".join(words).strip())
-
-        return tf.convert_to_tensor(decoded_outputs[0]) if is_scalar else tf.convert_to_tensor(decoded_outputs)
