@@ -235,8 +235,8 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     def detokenize(self, inputs):
         if not hasattr(self, "special_tokens_map"):
             self.special_tokens_map = {
-                self.cls_token_id: "<s>",
-                self.sep_token_id: "</s>",
+                self.start_token_id: "<s>",
+                self.end_token_id: "</s>",
                 self.pad_token_id: "<pad>",
                 self.mask_token_id: "<mask>",
             }
