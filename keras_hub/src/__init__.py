@@ -14,8 +14,11 @@ def _patch_keras_ops_for_jax_x64():
     type, got: int64, int32`` when ``index`` is an ``int32`` tracer.
 
     We normalize the start indices to a homogeneous ``int32`` array so that
-    KerasHub's many ``ops.slice`` / ``ops.slice_update`` call sites continue to
-    work regardless of the active JAX integer dtype configuration.
+    KerasHub's many ``ops.slice`` / ``ops.slice_update`` call sites continue
+    to work regardless of the active JAX integer dtype configuration.
+
+    This patch is only installed when the active backend is JAX, so torch/TF
+    imports of ``keras_hub`` do not mutate ``keras.ops``.
     """
     try:
         import jax.numpy as jnp
@@ -23,6 +26,11 @@ def _patch_keras_ops_for_jax_x64():
         return
 
     import keras
+
+    # Only install the wrapper when the active backend is JAX. Torch/TF
+    # imports of keras_hub should leave keras.ops untouched.
+    if keras.config.backend() != "jax":
+        return
 
     _orig_slice = keras.ops.slice
     _orig_slice_update = keras.ops.slice_update

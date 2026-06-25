@@ -499,6 +499,13 @@ class CausalLM(Task):
                   the main ``PREFILL_DECODE`` graph consumes pre-computed
                   ``mm_embedding`` tensors instead of raw images. Defaults to
                   ``False``.
+                - ``hf_tokenizer_path``: Optional ``str``. Path to a
+                  user-provided HuggingFace ``tokenizer.json`` file. When
+                  provided, it is bundled directly and native tokenizer
+                  validation is skipped. Defaults to ``None``.
+                - ``**kwargs``: Any remaining keyword arguments are forwarded
+                  to ``litert_torch.signature(...)`` for advanced signature
+                  customization.
 
         Returns:
             The exported artifact path.

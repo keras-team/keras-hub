@@ -73,9 +73,11 @@ def export_to_litertlm(
 ):
     """Export a KerasHub CausalLM model to a LiteRT-LM bundle.
 
-    This exports the model with ``prefill`` and ``decode`` signatures
-    required by the LiteRT-LM executor, bundles the SentencePiece tokenizer,
-    and writes an ``LlmMetadata`` protobuf into the ``.litertlm`` artifact.
+    This exports the model with ``prefill`` and ``decode`` signatures required by
+    the LiteRT-LM executor, bundles the tokenizer (SentencePiece ``.spm`` for
+    SentencePiece models, or a HuggingFace ``tokenizer.json`` produced by
+    auto-converting any ``BytePairTokenizer`` subclass), and writes an
+    ``LlmMetadata`` protobuf into the ``.litertlm`` artifact.
 
     **Multimodal:** When the model has a ``vision_encoder`` (e.g. Gemma3),
     the vision encoder is baked into the prefill signature so that image
@@ -1135,7 +1137,8 @@ def _build_llm_metadata(
 
     try:
         eot_id = tokenizer.token_to_id("<end_of_turn>")
-        if eot_id is not None:
+        unk_id = getattr(tokenizer, "_unk_token_id", None)
+        if eot_id is not None and eot_id != unk_id:
             meta.stop_tokens.add().token_ids.ids.append(int(eot_id))
     except (KeyError, ValueError):
         pass

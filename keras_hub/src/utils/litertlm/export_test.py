@@ -1385,7 +1385,13 @@ class TestBytePairToHFTokenizer(TestCase):
 
         hf_tokenizer = tokenizers.Tokenizer.from_file(hf_tokenizer_path)
 
-        for text in ["hello", "hello world", "hi", "a b"]:
+        for text in [
+            "hello",
+            "hello world",
+            "hi",
+            "a b",
+            "12345 and 67890",
+        ]:
             with self.subTest(text=text):
                 keras_ids = list(tokenizer(text))
                 hf_ids = hf_tokenizer.encode(text).ids
