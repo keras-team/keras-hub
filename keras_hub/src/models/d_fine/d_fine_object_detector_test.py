@@ -199,3 +199,43 @@ class DFineObjectDetectorTest(TestCase):
                 "*": {"max": 1.0, "mean": 0.03},
             },
         )
+
+    @pytest.mark.skipif(
+        keras.config.backend() != "torch",
+        reason="torch.export is only available on the torch backend.",
+    )
+    def test_torch_export_static_shapes(self):
+        # #2495: D-Fine must export via torch.export with static shapes.
+        import torch
+
+        size = self.input_size
+        hgnetv2_backbone = HGNetV2Backbone(
+            stem_channels=[3, 8, 8],
+            stackwise_stage_filters=self.stackwise_stage_filters,
+            apply_downsample=self.apply_downsample,
+            use_lightweight_conv_block=self.use_lightweight_conv_block,
+            depths=[1, 1],
+            hidden_sizes=[16, 32],
+            embedding_size=8,
+            use_learnable_affine_block=True,
+            hidden_act="relu",
+            image_shape=(size, size, 3),
+            out_features=["stage1", "stage2"],
+            data_format="channels_last",
+        )
+        backbone = DFineBackbone(
+            **{
+                **self.base_backbone_kwargs,
+                "backbone": hgnetv2_backbone,
+                "image_shape": (size, size, 3),
+            }
+        )
+        detector = DFineObjectDetector(
+            backbone=backbone,
+            num_classes=4,
+            bounding_box_format=self.bounding_box_format,
+        )
+        exported = torch.export.export(
+            detector, (torch.from_numpy(self.images),), strict=False
+        )
+        exported.run_decompositions()  # must not raise
