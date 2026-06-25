@@ -147,12 +147,13 @@ class QwenMoeCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.xfail(reason="Tokenizer not supported for LiteRT-LM export")
-    def test_litertlm_export_unsupported_tokenizer(self):
+    def test_litertlm_export(self):
         self.run_litertlm_export_test(
             cls=QwenMoeCausalLM,
             init_kwargs=self.init_kwargs,
-            prefill_seq_len=8,
+            input_data=self.input_data,
+            verify_model_type="qwen2p5",
+            verify_numerics=True,
         )
 
     @pytest.mark.extra_large

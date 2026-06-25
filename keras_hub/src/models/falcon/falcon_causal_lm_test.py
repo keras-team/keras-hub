@@ -175,12 +175,16 @@ class FalconCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.xfail(reason="Tokenizer not supported for LiteRT-LM export")
-    def test_litertlm_export_unsupported_tokenizer(self):
+    @pytest.mark.xfail(
+        strict=False, reason="Non-tokenizer LiteRT-LM runtime gap"
+    )
+    def test_litertlm_export(self):
         self.run_litertlm_export_test(
             cls=FalconCausalLM,
             init_kwargs=self.init_kwargs,
-            prefill_seq_len=8,
+            input_data=self.input_data,
+            verify_model_type="generic_model",
+            verify_numerics=True,
         )
 
     @pytest.mark.extra_large

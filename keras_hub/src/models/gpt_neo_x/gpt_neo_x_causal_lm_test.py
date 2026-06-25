@@ -123,11 +123,11 @@ class GPTNeoXCausalLMTest(TestCase):
             },  # More lenient thresholds for numerical differences
         )
 
-    @pytest.mark.xfail(reason="Tokenizer not supported for LiteRT-LM export")
-    def test_litertlm_export_unsupported_tokenizer(self):
-        """GPT-NeoX tokenizer is not a supported LiteRT-LM family."""
+    def test_litertlm_export(self):
         self.run_litertlm_export_test(
             cls=GPTNeoXCausalLM,
             init_kwargs=self.init_kwargs,
-            prefill_seq_len=8,
+            input_data=self.input_data,
+            verify_model_type="generic_model",
+            verify_numerics=True,
         )

@@ -44,12 +44,13 @@ class OPTCausalLMTest(TestCase):
         self.train_data = ([" airplane at airport", " airplane at airport"],)
         self.input_data = self.preprocessor(*self.train_data)[0]
 
-    @pytest.mark.xfail(reason="Tokenizer not supported for LiteRT-LM export")
-    def test_litertlm_export_unsupported_tokenizer(self):
+    def test_litertlm_export(self):
         self.run_litertlm_export_test(
             cls=OPTCausalLM,
             init_kwargs=self.init_kwargs,
-            prefill_seq_len=8,
+            input_data=self.input_data,
+            verify_model_type="generic_model",
+            verify_numerics=True,
         )
 
     def test_causal_lm_basics(self):

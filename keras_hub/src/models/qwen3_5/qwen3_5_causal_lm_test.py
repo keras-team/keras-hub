@@ -127,20 +127,16 @@ class Qwen3_5CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.xfail(reason="Tokenizer not supported for LiteRT-LM export")
-    def test_litertlm_export_unsupported_tokenizer(self):
-        # Use a preprocessor with sequence_length >= prefill_seq_len so the
-        # unsupported-tokenizer error is reached before cache-length checks.
-        preprocessor = Qwen3_5CausalLMPreprocessor(
-            Qwen3_5Tokenizer(vocabulary=self.vocab, merges=self.merges),
-            sequence_length=8,
-        )
-        init_kwargs = dict(self.init_kwargs)
-        init_kwargs["preprocessor"] = preprocessor
+    @pytest.mark.xfail(
+        strict=False, reason="Non-tokenizer LiteRT-LM runtime gap"
+    )
+    def test_litertlm_export(self):
         self.run_litertlm_export_test(
             cls=Qwen3_5CausalLM,
-            init_kwargs=init_kwargs,
-            prefill_seq_len=8,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            verify_model_type="qwen3",
+            verify_numerics=True,
         )
 
     @pytest.mark.extra_large
