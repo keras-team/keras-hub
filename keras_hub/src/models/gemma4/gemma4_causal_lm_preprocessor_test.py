@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 import tensorflow as tf
@@ -8,6 +10,7 @@ from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
 from keras_hub.src.models.gemma4.gemma4_image_converter import (
     Gemma4ImageConverter,
 )
+from keras_hub.src.models.gemma4.gemma4_tokenizer import Gemma4Tokenizer
 from keras_hub.src.models.gemma4.gemma4_video_converter import (
     Gemma4VideoConverter,
 )
@@ -312,6 +315,49 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertEqual(
             expanded_cleared.numpy()[0], expanded_default.numpy()[0]
         )
+
+    def test_generate_preprocess_with_python_only_tokenizer(self):
+        # Regression test for the Python-only tokenizer workflow, which returns
+        # list[list[int]] with varying lengths and previously crashed in the
+        # multimodal branch on `tf.shape(prompts)[0]`.
+        proto_path = os.path.join(
+            self.get_test_data_dir(), "gemma4_test_vocab.spm"
+        )
+        tokenizer = Gemma4Tokenizer(proto=proto_path)
+        image_converter = Gemma4ImageConverter(image_size=(4, 4), patch_size=4)
+        preprocessor = Gemma4CausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=image_converter,
+            sequence_length=20,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=5,
+        )
+        # Prompts tokenize to different lengths -> non-rectangular list.
+        prompts = ["the quick brown fox", "the quick"]
+        output = preprocessor.generate_preprocess(prompts, sequence_length=20)
+        self.assertEqual(output["token_ids"].shape[0], 2)
+        self.assertEqual(output["padding_mask"].shape[0], 2)
+
+    def test_call_with_python_only_tokenizer(self):
+        # Regression test for mixed rectangular/non-rectangular segments from
+        # the Python-only tokenizer workflow.
+        proto_path = os.path.join(
+            self.get_test_data_dir(), "gemma4_test_vocab.spm"
+        )
+        tokenizer = Gemma4Tokenizer(proto=proto_path)
+        preprocessor = Gemma4CausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=None,
+            sequence_length=20,
+            max_images_per_prompt=0,
+            num_vision_tokens_per_image=0,
+        )
+        input_data = {
+            "prompts": ["the quick brown fox", "the quick"],
+            "responses": ["round", "round"],
+        }
+        output = preprocessor(input_data)
+        self.assertEqual(output[0]["token_ids"].shape[0], 2)
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
