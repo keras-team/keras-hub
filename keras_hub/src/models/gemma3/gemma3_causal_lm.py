@@ -145,7 +145,10 @@ class Gemma3CausalLM(CausalLM):
 
         Args:
             token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
-            cache: a dense float Tensor, the cache of key and value.
+            cache: a tuple of per-layer caches, one entry per transformer
+                layer. Each entry is a `(key, value)` tuple, where `key` and
+                `value` are dense float Tensors with shape
+                `(batch_size, max_length, num_key_value_heads, head_dim)`.
             cache_update_index: int, or int Tensor. The index of current inputs
                 in the whole sequence.
             img_embeddings: a dense float Tensor with shape
@@ -157,7 +160,8 @@ class Gemma3CausalLM(CausalLM):
             A (logits, hidden_states, cache) tuple. Where `logits` is the
             language model logits for the input token_ids, `hidden_states` is
             the final hidden representation of the input tokens, and `cache` is
-            the decoding cache.
+            the updated decoding cache, in the same tuple-of-tuples format as
+            the `cache` argument.
         """
 
         text_embeddings = self.backbone.token_embedding(token_ids)
