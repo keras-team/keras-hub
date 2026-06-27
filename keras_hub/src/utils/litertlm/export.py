@@ -7,7 +7,11 @@ import os
 import tempfile
 
 import keras
-import torch
+
+try:
+    import torch
+except ImportError:
+    torch = None
 
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
@@ -33,10 +37,72 @@ from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
 )
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
+# Special token strings used when populating vision/audio metadata. Keeping
+# them as named constants makes it easy to audit which tokens each model
+# family expects and avoids scattering literals through the metadata helpers.
+_GEMMA3_START_OF_IMAGE_TOKEN = "<start_of_image>"
+_GEMMA3_END_OF_IMAGE_TOKEN = "<end_of_image>"
+_GEMMA4_START_OF_IMAGE_TOKEN = "<|image>"
+_GEMMA4_END_OF_IMAGE_TOKEN = "<image|>"
+_AUDIO_START_TOKEN = "<|audio>"
+_AUDIO_END_TOKEN = "<audio|>"
+
 # ``litert_torch`` is an optional dependency. Use ``find_spec`` to check for
 # availability without importing it at module level, because importing
 # ``litert_torch`` has the side effect of enabling ``jax_enable_x64``.
 _LITERT_TORCH_AVAILABLE = importlib.util.find_spec("litert_torch") is not None
+
+# (module_path, class_name, model_type). Imported lazily inside
+# ``_detect_llm_model_type`` to avoid heavy top-level dependencies.
+_MODEL_TYPE_MAPPING = (
+    (
+        "keras_hub.src.models.gemma4.gemma4_causal_lm",
+        "Gemma4CausalLM",
+        "gemma4",
+    ),
+    (
+        "keras_hub.src.models.gemma3n.gemma3n_causal_lm",
+        "Gemma3nCausalLM",
+        "gemma3n",
+    ),
+    (
+        "keras_hub.src.models.gemma3.gemma3_causal_lm",
+        "Gemma3CausalLM",
+        "gemma3",
+    ),
+    (
+        "keras_hub.src.models.gemma.gemma_causal_lm",
+        "GemmaCausalLM",
+        "generic_model",
+    ),
+    (
+        "keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm",
+        "Qwen3MoeCausalLM",
+        "qwen3",
+    ),
+    (
+        "keras_hub.src.models.qwen3.qwen3_causal_lm",
+        "Qwen3CausalLM",
+        "qwen3",
+    ),
+    (
+        "keras_hub.src.models.qwen_moe.qwen_moe_causal_lm",
+        "QwenMoeCausalLM",
+        "qwen2p5",
+    ),
+    (
+        "keras_hub.src.models.qwen.qwen_causal_lm",
+        "QwenCausalLM",
+        "qwen2p5",
+    ),
+    # NOTE: LlmModelType does not have a dedicated "llama" field; map
+    # Llama checkpoints to generic_model so the protobuf oneof stays valid.
+    (
+        "keras_hub.src.models.llama.llama_causal_lm",
+        "LlamaCausalLM",
+        "generic_model",
+    ),
+)
 
 
 @contextlib.contextmanager
@@ -73,8 +139,9 @@ def export_to_litertlm(
 ):
     """Export a KerasHub CausalLM model to a LiteRT-LM bundle.
 
-    This exports the model with ``prefill`` and ``decode`` signatures required by
-    the LiteRT-LM executor, bundles the tokenizer (SentencePiece ``.spm`` for
+    This exports the model with ``prefill`` and ``decode`` signatures
+    required by the LiteRT-LM executor, bundles the tokenizer (SentencePiece
+    ``.spm`` for
     SentencePiece models, or a HuggingFace ``tokenizer.json`` produced by
     auto-converting any ``BytePairTokenizer`` subclass), and writes an
     ``LlmMetadata`` protobuf into the ``.litertlm`` artifact.
@@ -250,6 +317,15 @@ def export_to_litertlm(
             f"{type(tokenizer).__module__}.{type(tokenizer).__name__}."
         )
 
+    # PyTorch is required for tracing and for building sample inputs. Surface
+    # this before the backend check so a JAX/TF caller without torch installed
+    # gets a clear message instead of a raw ``ModuleNotFoundError``.
+    if torch is None:
+        raise ImportError(
+            "LiteRT-LM export requires PyTorch. "
+            "Install it with: pip install torch"
+        )
+
     # LiteRT-LM export relies on litert_torch, which only supports the
     # PyTorch Keras backend. Surface the backend error early, but only after
     # tokenizer validation so that ``test_litertlm_export_unsupported`` tests
@@ -276,12 +352,16 @@ def export_to_litertlm(
     # using the TPU. We update the JAX config before any backend access; the
     # environment variable alone is not enough if JAX was imported before
     # ``keras_hub.src`` set it.
-    import jax
+    try:
+        import jax
+    except ImportError:
+        jax = None
 
     # Force JAX to initialize on CPU for both tracing and the LiteRT-Torch
     # runtime. This is intentionally left as "cpu" because ``litert_torch``
     # may use JAX after this function returns.
-    jax.config.update("jax_platforms", "cpu")
+    if jax is not None:
+        jax.config.update("jax_platforms", "cpu")
 
     with _preserve_jax_x64_state():
         import litert_torch
@@ -344,6 +424,15 @@ def export_to_litertlm(
                 "that expect raw `pixel_values` (e.g. Gemma3n)."
             )
 
+    # Hoist vision shape values that are used both when building prefill inputs
+    # and when exporting a separate vision encoder/adapter. Keeping them outside
+    # the loop prevents accidental scope leakage and makes the loop body easier
+    # to read.
+    if has_vision:
+        max_images = vision_cfg["max_images_per_prompt"]
+        num_vision_tokens = vision_cfg["num_vision_tokens"]
+        tokens_per_image = num_vision_tokens // max_images if max_images else 1
+
     # Normalise prefill_seq_len to a sorted list.
     if prefill_seq_len is None:
         prefill_seq_lens = [cache_length]
@@ -400,11 +489,6 @@ def export_to_litertlm(
             )
             if has_vision:
                 if separate_vision_encoder:
-                    max_images = vision_cfg["max_images_per_prompt"]
-                    num_vision_tokens = vision_cfg["num_vision_tokens"]
-                    tokens_per_image = (
-                        num_vision_tokens // max_images if max_images else 1
-                    )
                     base.update(
                         {
                             "mm_embedding": torch.zeros(
@@ -428,10 +512,10 @@ def export_to_litertlm(
                     base.update(
                         _build_gemma4_vision_sample_inputs(
                             batch_size=1,
-                            max_images=vision_cfg["max_images_per_prompt"],
+                            max_images=max_images,
                             patch_size=vision_cfg.get("patch_size", 16),
                             image_size=vision_cfg["image_size"],
-                            num_vision_tokens=vision_cfg["num_vision_tokens"],
+                            num_vision_tokens=num_vision_tokens,
                             seq_len=seq_len,
                             dtype=dtype,
                         )
@@ -440,9 +524,9 @@ def export_to_litertlm(
                     base.update(
                         _build_vision_sample_inputs(
                             batch_size=1,
-                            max_images=vision_cfg["max_images_per_prompt"],
+                            max_images=max_images,
                             image_size=vision_cfg["image_size"],
-                            num_vision_tokens=vision_cfg["num_vision_tokens"],
+                            num_vision_tokens=num_vision_tokens,
                             seq_len=seq_len,
                             dtype=dtype,
                         )
@@ -528,7 +612,7 @@ def export_to_litertlm(
                             "pixel_values": torch.zeros(
                                 (
                                     1,
-                                    vision_cfg["max_images_per_prompt"],
+                                    max_images,
                                     num_patches,
                                     patch_dim,
                                 ),
@@ -538,7 +622,7 @@ def export_to_litertlm(
                             "pixel_position_ids": torch.zeros(
                                 (
                                     1,
-                                    vision_cfg["max_images_per_prompt"],
+                                    max_images,
                                     num_patches,
                                     2,
                                 ),
@@ -551,7 +635,7 @@ def export_to_litertlm(
                             "images": torch.zeros(
                                 (
                                     1,
-                                    vision_cfg["max_images_per_prompt"],
+                                    max_images,
                                     vision_cfg["image_size"],
                                     vision_cfg["image_size"],
                                     3,
@@ -808,7 +892,11 @@ def _get_vision_config(model):
             if image_shape is not None:
                 image_size = image_shape[0]
     if image_size is None:
-        image_size = 224
+        raise ValueError(
+            "Could not determine vision image size. Searched "
+            "`backbone.image_size`, `preprocessor.image_converter.image_size`, "
+            "and `backbone.vision_encoder_config.image_shape[0]`."
+        )
     # Image converters may report a (height, width) tuple; downstream code
     # currently assumes a square image, so use the height as the size.
     if isinstance(image_size, (list, tuple)):
@@ -826,7 +914,14 @@ def _get_vision_config(model):
     if num_vision_tokens_per_image is None and preprocessor is not None:
         # Gemma3/Gemma3n expose the per-image token count on the preprocessor.
         num_vision_tokens_per_image = getattr(
-            preprocessor, "num_vision_tokens_per_image", 0
+            preprocessor, "num_vision_tokens_per_image", None
+        )
+    if num_vision_tokens_per_image is None:
+        raise ValueError(
+            "Could not determine `num_vision_tokens_per_image`. Searched "
+            "`backbone.num_vision_tokens_per_image`, "
+            "`backbone.image_sequence_length`, and "
+            "`preprocessor.num_vision_tokens_per_image`."
         )
     num_vision_tokens = num_vision_tokens_per_image * max_images
     patch_size = getattr(vision_encoder, "patch_size", None)
@@ -888,7 +983,7 @@ def _build_sample_inputs(
     cache_length,
     num_kv_heads,
     head_dim,
-    dtype=torch.float32,
+    dtype=None,
     cache_layout="standard",
 ):
     """Create concrete sample tensors for one signature.
@@ -898,6 +993,8 @@ def _build_sample_inputs(
     - ``"standard"``: ``[batch_size, cache_length, num_kv_heads, head_dim]``
     - ``"gemma3n"``: ``[batch_size, num_kv_heads, cache_length, head_dim]``
     """
+    if dtype is None:
+        dtype = torch.float32
     device = "cpu"
     tokens = torch.zeros(
         (batch_size, seq_len), dtype=torch.int32, device=device
@@ -932,9 +1029,11 @@ def _build_vision_sample_inputs(
     image_size,
     num_vision_tokens,
     seq_len,
-    dtype=torch.float32,
+    dtype=None,
 ):
     """Create concrete vision sample tensors for a prefill signature."""
+    if dtype is None:
+        dtype = torch.float32
     device = "cpu"
     images = torch.zeros(
         (batch_size, max_images, image_size, image_size, 3),
@@ -961,13 +1060,15 @@ def _build_gemma4_vision_sample_inputs(
     image_size,
     num_vision_tokens,
     seq_len,
-    dtype=torch.float32,
+    dtype=None,
 ):
     """Create concrete Gemma4 vision sample tensors for a prefill signature.
 
     Gemma4's vision encoder expects pre-processed patches
     (``pixel_values`` + ``pixel_position_ids``) rather than raw RGB images.
     """
+    if dtype is None:
+        dtype = torch.float32
     device = "cpu"
     num_patches = (image_size // patch_size) ** 2
     patch_dim = patch_size * patch_size * 3
@@ -1002,9 +1103,11 @@ def _build_audio_sample_inputs(
     num_audio_tokens,
     seq_len,
     audio_input_feat_size=128,
-    dtype=torch.float32,
+    dtype=None,
 ):
     """Create concrete audio sample tensors for a prefill signature."""
+    if dtype is None:
+        dtype = torch.float32
     device = "cpu"
     audio_mel = torch.zeros(
         (batch_size, max_clips, num_frames, audio_input_feat_size),
@@ -1083,14 +1186,14 @@ def _populate_vision_metadata(meta, model_type, vision_cfg, tokenizer):
 
     if model_type in ("gemma3", "gemma3n"):
         subtype = getattr(meta.llm_model_type, model_type)
-        subtype.start_of_image_token.token_str = "<start_of_image>"
-        subtype.end_of_image_token.token_str = "<end_of_image>"
+        subtype.start_of_image_token.token_str = _GEMMA3_START_OF_IMAGE_TOKEN
+        subtype.end_of_image_token.token_str = _GEMMA3_END_OF_IMAGE_TOKEN
         subtype.image_tensor_height = image_size
         subtype.image_tensor_width = image_size
     elif model_type == "gemma4":
         subtype = meta.llm_model_type.gemma4
-        subtype.start_of_image_token.token_str = "<|image>"
-        subtype.end_of_image_token.token_str = "<image|>"
+        subtype.start_of_image_token.token_str = _GEMMA4_START_OF_IMAGE_TOKEN
+        subtype.end_of_image_token.token_str = _GEMMA4_END_OF_IMAGE_TOKEN
         if patch_size is not None:
             subtype.patch_width = patch_size
             subtype.patch_height = patch_size
@@ -1103,8 +1206,8 @@ def _populate_audio_metadata(meta, model_type, audio_cfg, tokenizer):
     """Populate audio-related fields in the LlmMetadata protobuf."""
     if model_type in ("gemma3n", "gemma4"):
         subtype = getattr(meta.llm_model_type, model_type)
-        subtype.start_of_audio_token.token_str = "<|audio>"
-        subtype.end_of_audio_token.token_str = "<audio|>"
+        subtype.start_of_audio_token.token_str = _AUDIO_START_TOKEN
+        subtype.end_of_audio_token.token_str = _AUDIO_END_TOKEN
 
 
 def _build_llm_metadata(
@@ -1135,13 +1238,19 @@ def _build_llm_metadata(
     if end_id is not None:
         meta.stop_tokens.add().token_ids.ids.append(int(end_id))
 
-    try:
-        eot_id = tokenizer.token_to_id("<end_of_turn>")
-        unk_id = getattr(tokenizer, "_unk_token_id", None)
-        if eot_id is not None and eot_id != unk_id:
-            meta.stop_tokens.add().token_ids.ids.append(int(eot_id))
-    except (KeyError, ValueError):
-        pass
+    # ``<end_of_turn>`` is an optional stop token for some Gemma/SentencePiece
+    # tokenizers. Only look it up when the tokenizer exposes ``token_to_id``,
+    # and swallow the specific lookup-failure exceptions so a missing special
+    # token does not abort export.
+    if hasattr(tokenizer, "token_to_id"):
+        try:
+            eot_id = tokenizer.token_to_id("<end_of_turn>")
+        except (KeyError, ValueError):
+            eot_id = None
+        if eot_id is not None:
+            unk_id = getattr(tokenizer, "_unk_token_id", None)
+            if eot_id != unk_id:
+                meta.stop_tokens.add().token_ids.ids.append(int(eot_id))
 
     meta.max_num_tokens = int(max_num_tokens)
 
@@ -1163,51 +1272,10 @@ def _build_llm_metadata(
 def _detect_llm_model_type(model):
     """Return the LiteRT-LM LlmModelType name for *model*.
 
-    Uses ``isinstance`` checks where possible to avoid mis-identifying
-    user-defined subclasses, then falls back to a class-name heuristic.
+    Uses ``isinstance`` checks against the module-level
+    ``_MODEL_TYPE_MAPPING`` to avoid mis-identifying user-defined
+    subclasses. Unrecognized models map to ``"generic_model"``.
     """
-    # Lazy imports to avoid heavy top-level dependencies.
-    # (module_path, class_name, model_type)
-    _MODEL_TYPE_MAPPING = (
-        (
-            "keras_hub.src.models.gemma4.gemma4_causal_lm",
-            "Gemma4CausalLM",
-            "gemma4",
-        ),
-        (
-            "keras_hub.src.models.gemma3n.gemma3n_causal_lm",
-            "Gemma3nCausalLM",
-            "gemma3n",
-        ),
-        (
-            "keras_hub.src.models.gemma3.gemma3_causal_lm",
-            "Gemma3CausalLM",
-            "gemma3",
-        ),
-        (
-            "keras_hub.src.models.gemma.gemma_causal_lm",
-            "GemmaCausalLM",
-            "generic_model",
-        ),
-        (
-            "keras_hub.src.models.qwen3.qwen3_causal_lm",
-            "Qwen3CausalLM",
-            "qwen3",
-        ),
-        (
-            "keras_hub.src.models.qwen.qwen_causal_lm",
-            "QwenCausalLM",
-            "qwen2p5",
-        ),
-        # NOTE: LlmModelType does not have a dedicated "llama" field; map
-        # Llama checkpoints to generic_model so the protobuf oneof stays valid.
-        (
-            "keras_hub.src.models.llama.llama_causal_lm",
-            "LlamaCausalLM",
-            "generic_model",
-        ),
-    )
-
     for module_path, class_name, model_type in _MODEL_TYPE_MAPPING:
         try:
             module = __import__(module_path, fromlist=[class_name])
@@ -1217,22 +1285,6 @@ def _detect_llm_model_type(model):
         except ImportError:
             pass
 
-    # Fallback to class-name heuristic for models not explicitly imported.
-    cls_name = type(model).__name__
-    if "Gemma4" in cls_name:
-        return "gemma4"
-    if "Gemma3n" in cls_name:
-        return "gemma3n"
-    if "Gemma3" in cls_name:
-        return "gemma3"
-    if "Gemma" in cls_name:
-        return "generic_model"
-    if "Qwen3" in cls_name:
-        return "qwen3"
-    if "Qwen" in cls_name:
-        return "qwen2p5"
-    if "Llama" in cls_name:
-        return "generic_model"
     return "generic_model"
 
 
