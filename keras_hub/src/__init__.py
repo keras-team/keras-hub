@@ -36,12 +36,9 @@ def _patch_keras_ops_for_jax_x64():
     _orig_slice_update = keras.ops.slice_update
 
     def _normalize_start_indices(start_indices):
-        # Only JAX is strict about mixed Python-int / tracer dtypes.
-        if keras.config.backend() != "jax":
-            return start_indices
+        # ``jnp.asarray`` accepts Python ints and tracers and returns a
+        # single homogeneous array, satisfying lax.dynamic_slice/update.
         try:
-            # ``jnp.asarray`` accepts Python ints and tracers and returns a
-            # single homogeneous array, satisfying lax.dynamic_slice/update.
             return jnp.asarray(start_indices, dtype=jnp.int32)
         except Exception:
             return start_indices

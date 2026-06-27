@@ -519,6 +519,10 @@ class CausalLM(Task):
                 backend_constraint=kwargs.pop("backend_constraint", None),
                 prefill_seq_len=kwargs.pop("prefill_seq_len", None),
                 quant_config=kwargs.pop("quant_config", None),
+                separate_vision_encoder=kwargs.pop(
+                    "separate_vision_encoder", False
+                ),
+                hf_tokenizer_path=kwargs.pop("hf_tokenizer_path", None),
                 **kwargs,
             )
         return super().export(
