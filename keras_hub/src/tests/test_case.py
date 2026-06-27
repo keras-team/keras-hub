@@ -1160,6 +1160,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             model = cls(**init_kwargs)
 
         if isinstance(input_data, dict) and "padding_mask" in input_data:
+            input_data = dict(input_data)
             input_data["padding_mask"] = ops.convert_to_numpy(
                 ops.cast(input_data["padding_mask"], "int32")
             )

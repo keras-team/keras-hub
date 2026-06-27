@@ -316,40 +316,6 @@ class TestLiteRTLmExport(TestCase):
                 backend_constraint="invalid_backend",
             )
 
-    def test_export_rejects_non_torch_backend(self):
-        """The exporter raises a clear error on non-PyTorch backends."""
-        import keras
-
-        if keras.config.backend() == "torch":
-            self.skipTest("This test only runs on non-PyTorch backends.")
-
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer = GemmaTokenizer(proto=proto)
-        backbone = GemmaBackbone(
-            vocabulary_size=tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=1,
-            hidden_dim=32,
-            head_dim=8,
-            intermediate_dim=64,
-            max_sequence_length=8,
-        )
-        preprocessor = GemmaCausalLMPreprocessor(
-            tokenizer=tokenizer, sequence_length=8
-        )
-        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
-
-        with self.assertRaisesRegex(
-            ValueError,
-            "LiteRT-LM export is only supported with the PyTorch backend",
-        ):
-            model.export(
-                os.path.join(self.get_temp_dir(), "test.litertlm"),
-                format="litertlm",
-                prefill_seq_len=8,
-            )
-
     def test_export_multimodal_bucketing_raises(self):
         """Verify multimodal export rejects mismatched prefill_seq_len."""
         from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
@@ -1024,3 +990,37 @@ class TestBytePairToHFTokenizer(TestCase):
                     hf_text,
                     f"Detokenized text differs for {text!r}",
                 )
+
+
+class TestLiteRTLmExportBackendChecks(TestCase):
+    def test_export_rejects_non_torch_backend(self):
+        """The exporter raises a clear error on non-PyTorch backends."""
+        if keras.config.backend() == "torch":
+            self.skipTest("This test only runs on non-PyTorch backends.")
+
+        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
+        tokenizer = GemmaTokenizer(proto=proto)
+        backbone = GemmaBackbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=1,
+            hidden_dim=32,
+            head_dim=8,
+            intermediate_dim=64,
+            max_sequence_length=8,
+        )
+        preprocessor = GemmaCausalLMPreprocessor(
+            tokenizer=tokenizer, sequence_length=8
+        )
+        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "LiteRT-LM export is only supported with the PyTorch backend",
+        ):
+            model.export(
+                os.path.join(self.get_temp_dir(), "test.litertlm"),
+                format="litertlm",
+                prefill_seq_len=8,
+            )

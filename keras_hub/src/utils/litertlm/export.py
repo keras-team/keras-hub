@@ -17,21 +17,6 @@ from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
-from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
-from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
-from keras_hub.src.utils.litertlm.adapter import KerasHubVisionEncoderAdapter
-from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
-from keras_hub.src.utils.litertlm.adapter import _get_vision_encoder
-from keras_hub.src.utils.litertlm.adapter import _is_gemma4_vision_encoder
-from keras_hub.src.utils.litertlm.adapter import _traceable_arange_scope
-from keras_hub.src.utils.litertlm.adapter import (
-    _traceable_dot_product_attention_scope,
-)
-from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
-from keras_hub.src.utils.litertlm.adapter import _traceable_repeat_scope
-from keras_hub.src.utils.litertlm.adapter import _traceable_scatter_update_scope
-from keras_hub.src.utils.litertlm.adapter import _traceable_slice_scope
-from keras_hub.src.utils.litertlm.adapter import _traceable_take_scope
 from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
     materialize_hf_tokenizer_json,
 )
@@ -245,14 +230,14 @@ def _validate_export_args(
     tokenizer,
     backend_constraint,
     hf_tokenizer_path,
-    quant_config,
     prefill_seq_len,
 ):
-    """Fail fast on invalid export arguments and import ``litert_torch`` once.
+    """Fail fast on invalid export arguments.
 
-    Returns a tuple of ``(prefill_seq_lens, litert_torch)`` so the caller can
-    reuse the already-imported module for tracing, keeping the
-    ``jax_enable_x64`` side effect under a single preserve/restore context.
+    Returns the normalized list of prefill sequence lengths. Importing
+    ``litert_torch`` is deferred to the orchestrator so that the JAX
+    ``jax_enable_x64`` side effect can be kept under one preserve/restore
+    context that covers both import and tracing.
     """
     if not path.endswith(".litertlm"):
         raise ValueError(
@@ -331,14 +316,6 @@ def _validate_export_args(
             "Install it with: pip install litert-torch"
         )
 
-    # Import ``litert_torch`` inside a context manager that preserves the JAX
-    # x64 setting. Importing ``litert_torch`` unconditionally enables
-    # ``jax_enable_x64``, which leaks into dtype-sensitive JAX tests elsewhere.
-    with _preserve_jax_x64_state():
-        import litert_torch
-
-        _validate_quant_config(quant_config)
-
     # Normalise prefill_seq_len to a sorted list. Cache-length checks are left
     # to the orchestrator because ``cache_length`` is not known until after
     # ``_get_cache_config`` runs.
@@ -364,7 +341,7 @@ def _validate_export_args(
                     f"Received: {seq_len!r}"
                 )
 
-    return prefill_seq_lens, litert_torch
+    return prefill_seq_lens
 
 
 def _build_prefill_inputs(
@@ -575,6 +552,24 @@ def _trace_and_convert(
     **kwargs,
 ):
     """Trace prefill/decode (and optional vision) signatures and convert."""
+    # Defer torch-specific adapter imports until the backend has been verified
+    # as torch, so that non-torch callers get the friendly backend error.
+    from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
+    from keras_hub.src.utils.litertlm.adapter import (
+        KerasHubVisionEncoderAdapter,
+    )
+    from keras_hub.src.utils.litertlm.adapter import _traceable_arange_scope
+    from keras_hub.src.utils.litertlm.adapter import (
+        _traceable_dot_product_attention_scope,
+    )
+    from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
+    from keras_hub.src.utils.litertlm.adapter import _traceable_repeat_scope
+    from keras_hub.src.utils.litertlm.adapter import (
+        _traceable_scatter_update_scope,
+    )
+    from keras_hub.src.utils.litertlm.adapter import _traceable_slice_scope
+    from keras_hub.src.utils.litertlm.adapter import _traceable_take_scope
+
     with (
         _traceable_slice_scope(),
         _traceable_dot_product_attention_scope(),
@@ -822,13 +817,12 @@ def export_to_litertlm(
     """
     path = os.fspath(path)
     tokenizer = _get_tokenizer(model)
-    prefill_seq_lens, litert_torch = _validate_export_args(
+    prefill_seq_lens = _validate_export_args(
         model,
         path,
         tokenizer,
         backend_constraint,
         hf_tokenizer_path,
-        quant_config,
         prefill_seq_len,
     )
 
@@ -843,6 +837,13 @@ def export_to_litertlm(
         jax = None
     if jax is not None:
         jax.config.update("jax_platforms", "cpu")
+
+    # Defer torch-specific adapter imports until after the backend check so
+    # that a JAX/TF caller without torch gets the friendly backend error.
+    from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
+    from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
+    from keras_hub.src.utils.litertlm.adapter import _get_vision_encoder
+    from keras_hub.src.utils.litertlm.adapter import _is_gemma4_vision_encoder
 
     cache_cfg = _get_cache_config(model)
     num_layers = cache_cfg["num_layers"]
@@ -965,27 +966,31 @@ def export_to_litertlm(
         prefill_adapter = _PrefillAdapter(adapter).eval()
         decode_adapter = _DecodeAdapter(adapter).eval()
 
-        edge_model, vision_encoder_edge, vision_adapter_edge = (
-            _trace_and_convert(
-                litert_torch,
-                model,
-                prefill_adapter,
-                decode_adapter,
-                prefill_inputs_map,
-                decode_inputs,
-                prefill_seq_lens,
-                quant_config,
-                separate_vision_encoder,
-                has_vision,
-                is_gemma4_vision,
-                vision_cfg,
-                vision_output_dim,
-                max_images,
-                tokens_per_image,
-                dtype,
-                **kwargs,
+        with _preserve_jax_x64_state():
+            import litert_torch
+
+            _validate_quant_config(quant_config)
+            edge_model, vision_encoder_edge, vision_adapter_edge = (
+                _trace_and_convert(
+                    litert_torch,
+                    model,
+                    prefill_adapter,
+                    decode_adapter,
+                    prefill_inputs_map,
+                    decode_inputs,
+                    prefill_seq_lens,
+                    quant_config,
+                    separate_vision_encoder,
+                    has_vision,
+                    is_gemma4_vision,
+                    vision_cfg,
+                    vision_output_dim,
+                    max_images,
+                    tokens_per_image,
+                    dtype,
+                    **kwargs,
+                )
             )
-        )
 
     with tempfile.TemporaryDirectory() as temp_dir:
         _assemble_bundle(
@@ -1390,7 +1395,7 @@ def _materialize_sentencepiece_tokenizer(tokenizer, temp_dir):
 
 def _populate_vision_metadata(meta, model_type, vision_cfg, tokenizer):
     """Populate vision-related fields in the LlmMetadata protobuf."""
-    image_size = vision_cfg.get("image_size", 224)
+    image_size = vision_cfg["image_size"]
     patch_size = vision_cfg.get("patch_size")
     pool_size = vision_cfg.get("pool_size")
 
