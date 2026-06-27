@@ -30,7 +30,7 @@ from keras_hub.src.utils.litertlm.adapter import (
 from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_repeat_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_scatter_update_scope
-from keras_hub.src.utils.litertlm.adapter import _traceable_slice_update_scope
+from keras_hub.src.utils.litertlm.adapter import _traceable_slice_scope
 from keras_hub.src.utils.litertlm.adapter import _traceable_take_scope
 from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
     materialize_hf_tokenizer_json,
@@ -576,7 +576,7 @@ def _trace_and_convert(
 ):
     """Trace prefill/decode (and optional vision) signatures and convert."""
     with (
-        _traceable_slice_update_scope(),
+        _traceable_slice_scope(),
         _traceable_dot_product_attention_scope(),
         _traceable_one_hot_scope(),
         _traceable_repeat_scope(),

@@ -7,13 +7,27 @@ import threading
 import unittest.mock
 
 import torch
+from keras.src import backend
+from keras.src.backend.common import dtypes as keras_dtypes
 from keras.src.backend.torch import core as torch_core
+from keras.src.backend.torch import nn as torch_backend_nn
 from keras.src.backend.torch import numpy as torch_backend_numpy
 from torch import nn
 
 # Global lock serializing export-time mutations of PyTorch's default device.
 # This keeps _cpu_default_device_scope thread-safe without changing semantics.
 _DEFAULT_DEVICE_LOCK = threading.Lock()
+
+
+def _make_scope(module, attr, replacement):
+    """Build a context manager that patches ``module.attr`` to *replacement*."""
+
+    @contextlib.contextmanager
+    def _scope():
+        with unittest.mock.patch.object(module, attr, replacement):
+            yield
+
+    return _scope
 
 
 @contextlib.contextmanager
@@ -204,60 +218,21 @@ class KerasHubLiteRTAdapter(nn.Module):
         # The first element of input_pos is the start position.
         cache_update_index = input_pos[0]
 
-        # Run vision encoder if images are provided.
-        img_embeddings = None
-        pixel_values_out = None
-        if self.has_vision:
-            if self._expects_pixel_values:
-                # Gemma3n runs the vision encoder inside the backbone; pass the
-                # raw preprocessed images through.
-                pixel_values_out = images
-            elif self.separate_vision_encoder:
-                img_embeddings = mm_embedding
-                # Gemma4 interleaves image embeddings with shape
-                # (batch, num_images, tokens_per_image, hidden_dim).
-                # The separate vision encoder/adapter produces a flat
-                # (batch*num_images, ...) tensor, so reshape it back before
-                # passing to the language model.
-                if img_embeddings is not None and self.is_gemma4_vision:
-                    max_images = getattr(
-                        self.keras_model.preprocessor,
-                        "max_images_per_prompt",
-                        1,
-                    )
-                    batch_size = tokens.shape[0]
-                    img_embeddings = img_embeddings.reshape(
-                        batch_size,
-                        max_images,
-                        img_embeddings.shape[1],
-                        img_embeddings.shape[2],
-                    )
-            elif self.is_gemma4_vision:
-                if pixel_values is not None and pixel_position_ids is not None:
-                    img_embeddings = self.vision_encoder(
-                        {
-                            "pixel_values": pixel_values,
-                            "pixel_position_ids": pixel_position_ids,
-                        }
-                    )
-            elif images is not None:
-                img_embeddings = _run_vision_encoder(
-                    self.vision_encoder, images
-                )
-
-        # Run audio encoder if audio mel is provided.
-        audio_embeddings = None
-        input_features_out = None
-        input_features_mask_out = None
-        if self.has_audio and audio_mel is not None:
-            if self._expects_input_features:
-                # Gemma3n runs the audio encoder inside the backbone.
-                input_features_out = audio_mel
-                input_features_mask_out = audio_mel_mask
-            else:
-                audio_embeddings = self.keras_model.backbone.audio_encoder(
-                    audio_mel, audio_mel_mask
-                )
+        img_embeddings, pixel_values_out = self._prepare_image_embeddings(
+            tokens=tokens,
+            images=images,
+            pixel_values=pixel_values,
+            pixel_position_ids=pixel_position_ids,
+            mm_embedding=mm_embedding,
+        )
+        (
+            audio_embeddings,
+            input_features_out,
+            input_features_mask_out,
+        ) = self._prepare_audio_embeddings(
+            audio_mel=audio_mel,
+            audio_mel_mask=audio_mel_mask,
+        )
 
         call_kwargs = self._build_call_with_cache_kwargs(
             img_embeddings=img_embeddings,
@@ -275,6 +250,86 @@ class KerasHubLiteRTAdapter(nn.Module):
         return self._call_with_cache(
             tokens, cache, cache_update_index, call_kwargs, return_logits=False
         )
+
+    def _prepare_image_embeddings(
+        self,
+        tokens,
+        images,
+        pixel_values,
+        pixel_position_ids,
+        mm_embedding,
+    ):
+        """Return ``(img_embeddings, pixel_values_out)`` for prefill.
+
+        Only one of the two return values is non-``None`` for a given model
+        signature:
+
+        - Gemma3n expects raw ``pixel_values`` (returned as the second tuple
+          item).
+        - Separate-vision-encoder exports consume pre-computed
+          ``mm_embedding``.
+        - Gemma4 accepts preprocessed patch tensors.
+        - Other vision encoders (Gemma3, PaliGemma) accept raw ``images``.
+        """
+        if not self.has_vision:
+            return None, None
+
+        if self._expects_pixel_values:
+            # Gemma3n runs the vision encoder inside the backbone; pass the
+            # raw preprocessed images through.
+            return None, images
+
+        if self.separate_vision_encoder:
+            img_embeddings = mm_embedding
+            # Gemma4 interleaves image embeddings with shape
+            # (batch, num_images, tokens_per_image, hidden_dim).
+            # The separate vision encoder/adapter produces a flat
+            # (batch*num_images, ...) tensor, so reshape it back before
+            # passing to the language model.
+            if img_embeddings is not None and self.is_gemma4_vision:
+                max_images = getattr(
+                    self.keras_model.preprocessor,
+                    "max_images_per_prompt",
+                    1,
+                )
+                batch_size = tokens.shape[0]
+                img_embeddings = img_embeddings.reshape(
+                    batch_size,
+                    max_images,
+                    img_embeddings.shape[1],
+                    img_embeddings.shape[2],
+                )
+            return img_embeddings, None
+
+        if self.is_gemma4_vision:
+            if pixel_values is not None and pixel_position_ids is not None:
+                img_embeddings = self.vision_encoder(
+                    {
+                        "pixel_values": pixel_values,
+                        "pixel_position_ids": pixel_position_ids,
+                    }
+                )
+                return _extract_vision_features(img_embeddings), None
+            return None, None
+
+        if images is not None:
+            return _run_vision_encoder(self.vision_encoder, images), None
+
+        return None, None
+
+    def _prepare_audio_embeddings(self, audio_mel, audio_mel_mask):
+        """Return audio embeddings and optional input feature tensors."""
+        if not self.has_audio or audio_mel is None:
+            return None, None, None
+
+        if self._expects_input_features:
+            # Gemma3n runs the audio encoder inside the backbone.
+            return None, audio_mel, audio_mel_mask
+
+        audio_embeddings = self.keras_model.backbone.audio_encoder(
+            audio_mel, audio_mel_mask
+        )
+        return audio_embeddings, None, None
 
     def forward_decode(self, tokens, input_pos, **kv_cache):
         """Decode step – processes a single token at *input_pos*.
@@ -353,30 +408,20 @@ class KerasHubLiteRTAdapter(nn.Module):
     ):
         """Build kwargs dict for ``call_with_cache`` based on its signature."""
         params = self._call_with_cache_params
-        kwargs = {}
-        if "img_embeddings" in params:
-            kwargs["img_embeddings"] = img_embeddings
-        if "pixel_values" in params:
-            kwargs["pixel_values"] = pixel_values
-        if "vision_mask" in params:
-            kwargs["vision_mask"] = vision_mask
-        if "padding_mask" in params:
-            kwargs["padding_mask"] = None
-        if "vision_indices" in params:
-            kwargs["vision_indices"] = vision_indices
-        if "cache_update_mask" in params:
-            kwargs["cache_update_mask"] = None
-        if "audio_embeddings" in params:
-            kwargs["audio_embeddings"] = audio_embeddings
-        if "input_features" in params:
-            kwargs["input_features"] = input_features
-        if "input_features_mask" in params:
-            kwargs["input_features_mask"] = input_features_mask
-        if "audio_mask" in params:
-            kwargs["audio_mask"] = audio_mask
-        if "audio_indices" in params:
-            kwargs["audio_indices"] = audio_indices
-        return kwargs
+        values = {
+            "img_embeddings": img_embeddings,
+            "pixel_values": pixel_values,
+            "vision_mask": vision_mask,
+            "padding_mask": None,
+            "vision_indices": vision_indices,
+            "cache_update_mask": None,
+            "audio_embeddings": audio_embeddings,
+            "input_features": input_features,
+            "input_features_mask": input_features_mask,
+            "audio_mask": audio_mask,
+            "audio_indices": audio_indices,
+        }
+        return {k: v for k, v in values.items() if k in params}
 
     def _unstack_kv_cache(self, cache):
         """Split Keras cache back into per-layer output tensors.
@@ -510,14 +555,23 @@ def _make_patched_slice(original_slice):
                     result = torch.narrow(result, d, s, l)
             return result
 
-        # Multiple dynamic dimensions – fall back (will likely fail in export).
-        return original_slice(inputs, starts, lengths)
+        # Multiple dynamic dimensions are not supported for LiteRT-LM export
+        # because ``torch.export`` cannot resolve the resulting unbacked
+        # symbols. Fail fast with an actionable message instead of falling
+        # back to the original implementation and producing a cryptic export
+        # error.
+        raise NotImplementedError(
+            "Slicing with multiple dynamic dimensions is not supported for "
+            "LiteRT-LM export. Received dynamic dims "
+            f"{dynamic_dims}. Consider materializing start/length values as "
+            "static ints or simplifying the slice operation."
+        )
 
     return _patched_slice
 
 
 @contextlib.contextmanager
-def _traceable_slice_update_scope():
+def _traceable_slice_scope():
     """Temporarily patch Keras torch-backend ``slice`` for torch.export.
 
     Keras ``ops.slice`` can introduce unbacked symbols during
@@ -534,6 +588,11 @@ def _traceable_slice_update_scope():
         _make_patched_slice(original_slice),
     ):
         yield
+
+
+# Back-compat alias: the scope patches ``torch_core.slice``, not
+# ``slice_update``, so the canonical name is ``_traceable_slice_scope``.
+_traceable_slice_update_scope = _traceable_slice_scope
 
 
 def _traceable_dot_product_attention(
@@ -559,8 +618,6 @@ def _traceable_dot_product_attention(
     convention: inputs are ``[batch, seq_len, num_heads, head_dim]`` and the
     output is returned in the same layout.
     """
-    from keras.src import backend
-
     del flash_attention  # Fused flash attention is not exportable.
 
     query = torch_core.convert_to_tensor(query)
@@ -625,21 +682,9 @@ def _traceable_dot_product_attention(
     return output.transpose(1, 2)
 
 
-@contextlib.contextmanager
-def _traceable_dot_product_attention_scope():
-    """Temporarily patch Keras torch-backend ``dot_product_attention``.
-
-    Uses ``unittest.mock.patch.object`` so restoration is reliable even when
-    an exception escapes.
-    """
-    from keras.src.backend.torch import nn as torch_backend_nn
-
-    with unittest.mock.patch.object(
-        torch_backend_nn,
-        "dot_product_attention",
-        _traceable_dot_product_attention,
-    ):
-        yield
+_traceable_dot_product_attention_scope = _make_scope(
+    torch_backend_nn, "dot_product_attention", _traceable_dot_product_attention
+)
 
 
 def _patched_one_hot(x, num_classes, axis=-1, dtype=None, sparse=False):
@@ -687,23 +732,17 @@ def _patched_one_hot(x, num_classes, axis=-1, dtype=None, sparse=False):
     return output
 
 
-@contextlib.contextmanager
-def _traceable_one_hot_scope():
-    """Temporarily patch Keras torch-backend ``one_hot`` for torch.export.
-
-    Uses ``unittest.mock.patch.object`` so restoration is reliable even when
-    an exception escapes.
-    """
-    from keras.src.backend.torch import nn as torch_backend_nn
-
-    with unittest.mock.patch.object(
-        torch_backend_nn, "one_hot", _patched_one_hot
-    ):
-        yield
+_traceable_one_hot_scope = _make_scope(
+    torch_backend_nn, "one_hot", _patched_one_hot
+)
 
 
-@contextlib.contextmanager
-def _traceable_arange_scope():
+# Capture the original ``arange`` at module load so the patched version can
+# delegate to it without closing over a local variable.
+_ORIGINAL_ARANGE = torch_backend_numpy.arange
+
+
+def _patched_arange(start, stop=None, step=None, dtype=None):
     """Patch Keras torch-backend ``arange`` to default integer ranges to int32.
 
     ``torch.arange`` returns int64 for integer arguments. ``litert_torch``'s
@@ -711,32 +750,26 @@ def _traceable_arange_scope():
     ``func.call`` boundaries, so integer ranges produced inside the model
     (e.g. position-embedding indices) must be int32 from the start.
     """
-    from keras.src.backend.common import dtypes as keras_dtypes
-
-    original_arange = torch_backend_numpy.arange
-
-    def _patched_arange(start, stop=None, step=None, dtype=None):
-        if dtype is None:
-            dtypes_to_resolve = [
-                getattr(start, "dtype", type(start)),
-            ]
-            if stop is not None:
-                dtypes_to_resolve.append(getattr(stop, "dtype", type(stop)))
-            if step is not None:
-                dtypes_to_resolve.append(getattr(step, "dtype", type(step)))
-            resolved = keras_dtypes.result_type(*dtypes_to_resolve)
-            if str(resolved).startswith("int"):
-                dtype = torch.int32
-        return original_arange(start, stop=stop, step=step, dtype=dtype)
-
-    with unittest.mock.patch.object(
-        torch_backend_numpy, "arange", _patched_arange
-    ):
-        yield
+    if dtype is None:
+        dtypes_to_resolve = [
+            getattr(start, "dtype", type(start)),
+        ]
+        if stop is not None:
+            dtypes_to_resolve.append(getattr(stop, "dtype", type(stop)))
+        if step is not None:
+            dtypes_to_resolve.append(getattr(step, "dtype", type(step)))
+        resolved = keras_dtypes.result_type(*dtypes_to_resolve)
+        if str(resolved).startswith("int"):
+            dtype = torch.int32
+    return _ORIGINAL_ARANGE(start, stop=stop, step=step, dtype=dtype)
 
 
-@contextlib.contextmanager
-def _traceable_take_scope():
+_traceable_arange_scope = _make_scope(
+    torch_backend_numpy, "arange", _patched_arange
+)
+
+
+def _patched_take(x, indices, axis=None):
     """Patch Keras torch-backend ``take`` to keep embedding indices as int32.
 
     The default implementation casts integer indices to int64 before calling
@@ -744,75 +777,68 @@ def _traceable_take_scope():
     lowering expects int32 indices consistent with the traced function
     signature, so we keep indices in int32 for the embedding-lookup case.
     """
-
-    def _patched_take(x, indices, axis=None):
-        x = torch_core.convert_to_tensor(x)
-        indices = torch_core.convert_to_tensor(indices, dtype=torch.int32)
-        x_dim = x.shape[axis] if axis is not None else x.shape[0]
-        indices = torch.where(
-            indices < 0,
-            indices + x_dim,
-            indices,
-        )
-        if x.ndim == 2 and axis == 0:
-            return torch.nn.functional.embedding(indices, x)
-        if axis is None:
-            x = torch.reshape(x, (-1,))
-            axis = 0
-        axis = torch_backend_numpy.canonicalize_axis(axis, x.ndim)
-        shape = x.shape[:axis] + indices.shape + x.shape[axis + 1 :]
-        indices = indices.ravel()
-        out = torch.index_select(x, dim=axis, index=indices).squeeze(axis)
-        return out.reshape(shape)
-
-    with unittest.mock.patch.object(torch_backend_numpy, "take", _patched_take):
-        yield
+    x = torch_core.convert_to_tensor(x)
+    indices = torch_core.convert_to_tensor(indices, dtype=torch.int32)
+    x_dim = x.shape[axis] if axis is not None else x.shape[0]
+    indices = torch.where(
+        indices < 0,
+        indices + x_dim,
+        indices,
+    )
+    if x.ndim == 2 and axis == 0:
+        return torch.nn.functional.embedding(indices, x)
+    if axis is None:
+        x = torch.reshape(x, (-1,))
+        axis = 0
+    axis = torch_backend_numpy.canonicalize_axis(axis, x.ndim)
+    shape = x.shape[:axis] + indices.shape + x.shape[axis + 1 :]
+    indices = indices.ravel()
+    out = torch.index_select(x, dim=axis, index=indices).squeeze(axis)
+    return out.reshape(shape)
 
 
-@contextlib.contextmanager
-def _traceable_scatter_update_scope():
+_traceable_take_scope = _make_scope(torch_backend_numpy, "take", _patched_take)
+
+
+_SCATTER_UPDATE_REDUCTION_OPS = {
+    "max": torch.maximum,
+    "min": torch.minimum,
+    "mul": lambda a, b: a * b,
+}
+
+
+def _patched_scatter_update(inputs, indices, updates, reduction=None):
     """Patch Keras torch-backend ``scatter_update`` to keep indices int32.
 
     The default implementation casts indices to int64. ``litert_torch``'s
     TFLite scatter lowering expects int32 indices, so we keep them in int32
     during export.
     """
+    inputs = torch_core.convert_to_tensor(inputs)
+    indices = torch_core.convert_to_tensor(indices, dtype=torch.int32)
+    updates = torch_core.convert_to_tensor(updates, dtype=inputs.dtype)
+    indices = torch.transpose(indices, 0, 1)
+    idx = tuple(indices)
 
-    def _patched_scatter_update(inputs, indices, updates, reduction=None):
-        inputs = torch_core.convert_to_tensor(inputs)
-        indices = torch_core.convert_to_tensor(indices, dtype=torch.int32)
-        updates = torch_core.convert_to_tensor(updates, dtype=inputs.dtype)
-        indices = torch.transpose(indices, 0, 1)
-        idx = tuple(indices)
+    outputs = torch.clone(inputs)
+    if reduction is None:
+        outputs[idx] = updates
+    elif reduction == "add":
+        outputs.index_put_(idx, updates, accumulate=True)
+    elif reduction in _SCATTER_UPDATE_REDUCTION_OPS:
+        op_fn = _SCATTER_UPDATE_REDUCTION_OPS[reduction]
+        indices_t = indices.T
+        for i in range(indices_t.shape[0]):
+            idx_i = tuple(indices_t[i])
+            outputs[idx_i] = op_fn(outputs[idx_i], updates[i])
+    else:
+        raise ValueError(f"Unsupported reduction: {reduction}")
+    return outputs
 
-        outputs = torch.clone(inputs)
-        if reduction is None:
-            outputs[idx] = updates
-        elif reduction == "add":
-            outputs.index_put_(idx, updates, accumulate=True)
-        elif reduction == "max":
-            indices_t = indices.T
-            for i in range(indices_t.shape[0]):
-                idx = tuple(indices_t[i])
-                outputs[idx] = torch.maximum(outputs[idx], updates[i])
-        elif reduction == "min":
-            indices_t = indices.T
-            for i in range(indices_t.shape[0]):
-                idx = tuple(indices_t[i])
-                outputs[idx] = torch.minimum(outputs[idx], updates[i])
-        elif reduction == "mul":
-            indices_t = indices.T
-            for i in range(indices_t.shape[0]):
-                idx = tuple(indices_t[i])
-                outputs[idx] = outputs[idx] * updates[i]
-        else:
-            raise ValueError(f"Unsupported reduction: {reduction}")
-        return outputs
 
-    with unittest.mock.patch.object(
-        torch_core, "scatter_update", _patched_scatter_update
-    ):
-        yield
+_traceable_scatter_update_scope = _make_scope(
+    torch_core, "scatter_update", _patched_scatter_update
+)
 
 
 def _is_scalar_integer(value):
@@ -858,14 +884,6 @@ def _traceable_repeat(x, repeats, axis=None):
     return torch_backend_numpy.repeat(x, repeats, axis=axis)
 
 
-@contextlib.contextmanager
-def _traceable_repeat_scope():
-    """Temporarily patch Keras torch-backend ``repeat`` for torch.export.
-
-    Uses ``unittest.mock.patch.object`` so restoration is reliable even when
-    an exception escapes.
-    """
-    with unittest.mock.patch.object(
-        torch_backend_numpy, "repeat", _traceable_repeat
-    ):
-        yield
+_traceable_repeat_scope = _make_scope(
+    torch_backend_numpy, "repeat", _traceable_repeat
+)
