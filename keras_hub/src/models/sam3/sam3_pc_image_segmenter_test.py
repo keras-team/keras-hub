@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 
@@ -165,11 +166,21 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
                 },
             )
 
-    @pytest.mark.skip(
-        reason="TODO: SAM3 LiteRT export fails during TFLite conversion: "
-        "'tfl.zeros_like' does not support bool (i1) operands."
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        strict=False,
+        reason=(
+            "Upstream litert-torch limitation: SAM3 uses torchvision::nms "
+            "which is not registered in the torch.export op set and cannot "
+            "be lowered by litert-torch."
+        ),
     )
     def test_litert_export(self):
+        if keras.backend.backend() == "tensorflow":
+            self.skipTest(
+                "SAM3 LiteRT export fails during TFLite conversion: "
+                "'tfl.zeros_like' does not support bool (i1) operands."
+            )
         self.run_litert_export_test(
             cls=SAM3PromptableConceptImageSegmenter,
             init_kwargs=self.init_kwargs,

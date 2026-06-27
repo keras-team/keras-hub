@@ -577,6 +577,56 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 flex_ops.add(custom_code)
         return flex_ops
 
+    @staticmethod
+    def _build_litert_torch_input_signature(input_data):
+        """Build a concrete input signature for torch-backend LiteRT export.
+
+        The torch export path does not support dynamic shapes, so it needs a
+        fully specified `keras.InputSpec` tree derived from the sample data.
+        """
+
+        def _to_numpy(x):
+            if hasattr(x, "detach"):
+                return x.detach().cpu().numpy()
+            if hasattr(x, "numpy") and not isinstance(x, np.ndarray):
+                return x.numpy()
+            return x
+
+        def _to_spec(x):
+            x = _to_numpy(x)
+            dtype = np.dtype(x.dtype)
+            if dtype == np.dtype("float64"):
+                dtype = np.dtype("float32")
+            elif dtype == np.dtype("int64"):
+                dtype = np.dtype("int32")
+            return keras.InputSpec(shape=x.shape, dtype=dtype.name)
+
+        return [tree.map_structure(_to_spec, input_data)]
+
+    @staticmethod
+    def _map_litert_torch_inputs(converted_input_data, sig_inputs):
+        """Map dict inputs to their torch-export signature input names.
+
+        Depending on the litert-torch version, a flattened dict input is
+        named either with the original key suffixed (`args_0_<key>`) or
+        purely positionally (`args_0`, `args_1`, ...). Prefer an exact key
+        match; otherwise fall back to positional order (the model's input
+        definition order, which the test ``input_data`` mirrors).
+        """
+        keys = list(converted_input_data.keys())
+        stripped = {re.sub(r"^args_\d+_", "", n): n for n in sig_inputs}
+        if all(key in stripped for key in keys):
+            return {stripped[key]: converted_input_data[key] for key in keys}
+
+        def _index(name):
+            match = re.search(r"\d+", name)
+            return int(match.group()) if match else 0
+
+        ordered = sorted(sig_inputs, key=_index)
+        return {
+            ordered[i]: converted_input_data[key] for i, key in enumerate(keys)
+        }
+
     def run_litert_export_test(
         self,
         cls=None,
@@ -615,8 +665,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 model.export(), such as allow_custom_ops=True or
                 enable_select_tf_ops=True.
         """
-        # The rewritten TF LiteRT export path (ExportArchive -> SavedModel ->
-        # tf.lite.TFLiteConverter.from_saved_model) requires Keras >= 3.15.
+        # The rewritten LiteRT export path requires Keras >= 3.15 on both the
+        # TensorFlow (ExportArchive -> SavedModel) and torch (litert-torch)
+        # backends.
         if packaging.version.Version(
             keras.__version__
         ) < packaging.version.Version("3.15.0"):
@@ -624,8 +675,22 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         # Extract comparison_mode from export_kwargs if provided
         comparison_mode = export_kwargs.pop("comparison_mode", "strict")
-        if keras.backend.backend() != "tensorflow":
-            self.skipTest("LiteRT export only supports TensorFlow backend")
+        backend = keras.backend.backend()
+        if backend not in ("tensorflow", "torch"):
+            self.skipTest(
+                "LiteRT export only supports the TensorFlow and torch backends"
+            )
+
+        # The torch export path is provided by the optional litert-torch
+        # package.
+        if backend == "torch":
+            try:
+                import litert_torch  # noqa: F401
+            except (ImportError, ModuleNotFoundError):
+                self.skipTest(
+                    "litert-torch is required for LiteRT export with the "
+                    "torch backend"
+                )
 
         # Use the ai-edge-litert interpreter exclusively. The legacy
         # tf.lite.Interpreter is deprecated and removed in recent TensorFlow
@@ -652,6 +717,16 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
                 export_path = os.path.join(temp_dir, "model.tflite")
+
+                # The torch export path needs a concrete input signature, since
+                # it does not support dynamic shapes.
+                if (
+                    backend == "torch"
+                    and "input_signature" not in export_kwargs
+                ):
+                    export_kwargs["input_signature"] = (
+                        self._build_litert_torch_input_signature(input_data)
+                    )
 
                 # Step 1: Export model and get Keras output
                 model.export(export_path, format="litert", **export_kwargs)
@@ -702,18 +777,29 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
                 # Verify input signature
                 if isinstance(input_data, dict):
-                    expected_inputs = set(input_data.keys())
-                    actual_inputs = set(sig_inputs)
-                    # Check that all expected inputs are in the signature
-                    # (allow signature to have additional optional inputs)
-                    missing_inputs = expected_inputs - actual_inputs
-                    if missing_inputs:
-                        self.fail(
-                            f"Missing inputs in SignatureDef: "
-                            f"{sorted(missing_inputs)}. "
-                            f"Expected: {sorted(expected_inputs)}, "
-                            f"SignatureDef has: {sorted(actual_inputs)}"
+                    if backend == "torch":
+                        # torch export renames inputs to `args_0_<key>`, so we
+                        # only check the input count here.
+                        self.assertEqual(
+                            len(input_data),
+                            len(sig_inputs),
+                            f"Input count mismatch: model has "
+                            f"{len(input_data)} inputs but SignatureDef has "
+                            f"{len(sig_inputs)}: {sig_inputs}",
                         )
+                    else:
+                        expected_inputs = set(input_data.keys())
+                        actual_inputs = set(sig_inputs)
+                        # Check that all expected inputs are in the signature
+                        # (allow signature to have additional optional inputs)
+                        missing_inputs = expected_inputs - actual_inputs
+                        if missing_inputs:
+                            self.fail(
+                                f"Missing inputs in SignatureDef: "
+                                f"{sorted(missing_inputs)}. "
+                                f"Expected: {sorted(expected_inputs)}, "
+                                f"SignatureDef has: {sorted(actual_inputs)}"
+                            )
                 else:
                     # For numpy arrays, just verify we have exactly one input
                     # (since we're passing a single tensor)
@@ -748,6 +834,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 # Convert input data dtypes to match TFLite expectations
                 def convert_for_tflite(x):
                     """Convert tensor/array to TFLite-compatible dtypes."""
+                    if hasattr(x, "detach"):
+                        x = x.detach().cpu().numpy()
                     if hasattr(x, "dtype"):
                         if isinstance(x, np.ndarray):
                             if x.dtype == bool:
@@ -773,7 +861,27 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     converted_input_data = tree.map_structure(
                         convert_for_tflite, input_data
                     )
-                    litert_output = runner(**converted_input_data)
+                    if backend == "torch":
+                        # litert-torch renames dict inputs (positionally as
+                        # `args_<n>` or as `args_<n>_<key>`); map them back and
+                        # cast to the interpreter's expected dtype.
+                        runner_kwargs = self._map_litert_torch_inputs(
+                            converted_input_data, sig_inputs
+                        )
+                        expected_dtypes = {
+                            d["name"]: d["dtype"]
+                            for d in interpreter.get_input_details()
+                        }
+                        for sig_name, value in list(runner_kwargs.items()):
+                            for dname, dtype in expected_dtypes.items():
+                                if sig_name in dname and value.dtype != dtype:
+                                    runner_kwargs[sig_name] = value.astype(
+                                        dtype
+                                    )
+                                    break
+                        litert_output = runner(**runner_kwargs)
+                    else:
+                        litert_output = runner(**converted_input_data)
                 else:
                     # For single tensor inputs, get the input name
                     sig_inputs = serving_sig.get("inputs", [])
