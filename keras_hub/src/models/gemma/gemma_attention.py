@@ -97,9 +97,16 @@ class CachedGemmaAttention(keras.layers.Layer):
 
         self.built = True
 
-    def _apply_rope(self, x, start_index):
-        """Rope rotate q or k."""
-        x = self.rope_layer(x, start_index=start_index)
+    def _apply_rope(self, x, start_index, positions=None):
+        """Rope rotate q or k.
+
+        If ``positions`` is given (vLLM serving), rotate at those absolute
+        positions instead of a contiguous range from ``start_index``.
+        """
+        if positions is not None:
+            x = self.rope_layer(x, positions=positions)
+        else:
+            x = self.rope_layer(x, start_index=start_index)
         # Gemma uses a different layout for positional embeddings.
         # The transformation below ensures the embeddings are numerically
         # equivalent to the original gemma implementation.
@@ -236,6 +243,54 @@ class CachedGemmaAttention(keras.layers.Layer):
     ):
         query = self.query_dense(x)
         query = self._apply_rope(query, cache_update_index)
+
+        # Dispatch to vLLM's native Pallas paged-attention when serving on TPU.
+        from keras_hub.src.vllm.context import get_vllm_context
+
+        vllm_ctx = get_vllm_context()
+        if vllm_ctx is not None and vllm_ctx.paged_attention_func is not None:
+            from keras_hub.src.vllm.attention import maybe_vllm_paged_attention
+
+            # Apply RoPE at vLLM's per-token absolute positions (not a scalar
+            # start_index) for correct paged / continuous-batched decode.
+            positions = getattr(vllm_ctx, "positions", None)
+            if positions is not None:
+                positions = ops.reshape(positions, (-1, 1))
+                query = self._apply_rope(
+                    self.query_dense(x), cache_update_index, positions=positions
+                )
+                key = self._apply_rope(
+                    self.key_dense(x), cache_update_index, positions=positions
+                )
+            else:
+                key = self._apply_rope(self.key_dense(x), cache_update_index)
+            value = self.value_dense(x)
+
+            # Match Gemma's own query normalization (the kernel applies `scale`,
+            # so we pass it raw rather than pre-scaling the query).
+            if self.query_head_dim_normalize:
+                scale = 1.0 / np.sqrt(self.head_dim)
+            else:
+                scale = 1.0 / np.sqrt(self.hidden_dim // self.num_query_heads)
+            sliding_window = (
+                self.sliding_window_size
+                if self.use_sliding_window_attention
+                else None
+            )
+
+            attention_vec, new_kv_cache = maybe_vllm_paged_attention(
+                query,
+                key,
+                value,
+                cache,
+                scale,
+                sliding_window=sliding_window,
+                soft_cap=getattr(self, "logit_soft_cap", None),
+            )
+            attention_output = self.output_dense(attention_vec)
+            if cache is not None or new_kv_cache is not None:
+                return attention_output, new_kv_cache
+            return attention_output
 
         if cache is not None:
             key_cache = cache[:, 0, ...]

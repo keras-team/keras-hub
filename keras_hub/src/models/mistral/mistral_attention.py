@@ -148,6 +148,39 @@ class CachedMistralAttention(keras.layers.Layer):
             key = self.rotary_embedding_layer(key, start_index=start_index)
             return key, value
 
+        # Dispatch to vLLM's native Pallas paged-attention when serving on TPU.
+        # Pass key/value before GQA expansion; the kernel handles grouped-query
+        # attention via the inferred num_kv_heads.
+        from keras_hub.src.vllm.context import get_vllm_context
+
+        vllm_ctx = get_vllm_context()
+        if vllm_ctx is not None and vllm_ctx.paged_attention_func is not None:
+            from keras_hub.src.vllm.attention import maybe_vllm_paged_attention
+
+            # Apply RoPE with vLLM's per-token absolute positions rather than a
+            # scalar start_index, so paged / continuous-batched decode rotates
+            # each token at its true position. Falls back to the start_index
+            # rope (computed above) if positions aren't available.
+            positions = getattr(vllm_ctx, "positions", None)
+            if positions is not None:
+                positions = ops.reshape(positions, (-1, 1))
+                query = self.rotary_embedding_layer(
+                    self._query_dense(hidden_states), positions=positions
+                )
+                key = self.rotary_embedding_layer(
+                    self._key_dense(hidden_states), positions=positions
+                )
+                value = self._value_dense(hidden_states)
+            else:
+                key, value = _compute_key_value(hidden_states)
+            attention_output, new_kv_cache = maybe_vllm_paged_attention(
+                query, key, value, cache, self._inv_norm_factor
+            )
+            attention_output = self._output_dense(attention_output)
+            if cache is not None or new_kv_cache is not None:
+                return attention_output, new_kv_cache
+            return attention_output
+
         if cache is not None:
             key_cache = cache[:, 0, ...]
             value_cache = cache[:, 1, ...]
