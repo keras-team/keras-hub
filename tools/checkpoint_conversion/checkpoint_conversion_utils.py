@@ -1,5 +1,6 @@
 import hashlib
 import os
+import sys
 import tarfile
 import zipfile
 
@@ -29,6 +30,13 @@ def extract_files_from_archive(archive_file_path):
                     raise Exception(
                         f"Attempted Path Traversal in Tar File: {member.name}"
                     )
+                if member.islnk() or member.issym():
+                    if not _is_within_directory(".", member.linkname):
+                        raise Exception(
+                            f"Attempted Path Traversal via Symlink in Tar File: {member.name}"
+                        )
+            if sys.version_info >= (3, 12):
+                return tar.extractall(filter="data")
             return tar.extractall()
     elif archive_file_path.endswith(".zip"):
         with zipfile.ZipFile(archive_file_path, "r") as zip_ref:
