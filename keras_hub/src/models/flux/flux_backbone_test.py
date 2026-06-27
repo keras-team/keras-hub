@@ -1,4 +1,5 @@
 import pytest
+from keras import backend
 from keras import ops
 
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
@@ -84,6 +85,15 @@ class FluxBackboneTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        condition=backend.backend() == "torch",
+        strict=False,
+        reason=(
+            "Upstream torch.export limitation: Flux's attention reshape uses "
+            "a dynamic num_heads value, causing GuardOnDataDependentSymNode. "
+            "Will pass once torch.export supports data-dependent shapes here."
+        ),
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=FluxBackbone,

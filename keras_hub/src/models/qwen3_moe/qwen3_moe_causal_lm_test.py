@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 os.environ["KERAS_BACKEND"] = "jax"
 
+import keras
 import pytest
 from keras import ops
 
@@ -124,6 +125,15 @@ class Qwen3MoeCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        strict=False,
+        reason=(
+            "Upstream litert-torch limitation: Qwen3-MoE's MoE routing emits "
+            "aten._assert_async, which torch.export / litert-torch cannot "
+            "lower ('Lowering not found: aten._assert_async.msg')."
+        ),
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=Qwen3MoeCausalLM,

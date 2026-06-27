@@ -143,6 +143,15 @@ class QwenMoeCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        strict=False,
+        reason=(
+            "Upstream litert-torch limitation: Qwen-MoE's MoE routing emits "
+            "aten._assert_async, which torch.export / litert-torch cannot "
+            "lower ('Lowering not found: aten._assert_async.msg')."
+        ),
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=QwenMoeCausalLM,
