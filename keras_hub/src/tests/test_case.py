@@ -569,9 +569,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             custom_code = model.OperatorCodes(i).CustomCode()
             if custom_code is None:
                 continue
-            if isinstance(custom_code, (bytes, bytearray)):
-                custom_code = custom_code.decode("utf-8")
-            if custom_code.startswith("Flex"):
+            if isinstance(custom_code, (bytes, bytearray, memoryview)):
+                custom_code = bytes(custom_code).decode(
+                    "utf-8", errors="replace"
+                )
+            if isinstance(custom_code, str) and custom_code.startswith("Flex"):
                 flex_ops.add(custom_code)
         return flex_ops
 
