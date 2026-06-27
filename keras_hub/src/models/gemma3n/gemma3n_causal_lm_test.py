@@ -458,16 +458,10 @@ class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
             "backbone": self.multimodal_backbone,
         }
 
-        input_data = self.multimodal_input_data.copy()
-        if "padding_mask" in input_data:
-            input_data["padding_mask"] = ops.cast(
-                input_data["padding_mask"], "int32"
-            )
-
         self.run_litertlm_export_test(
             cls=Gemma3nCausalLM,
             init_kwargs=init_kwargs,
-            input_data=input_data,
+            input_data=self.multimodal_input_data,
             prefill_seq_len=30,
             verify_model_type="gemma3n",
             verify_numerics=False,

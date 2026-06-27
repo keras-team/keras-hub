@@ -1,10 +1,10 @@
 import importlib.util
 import json
 import os
-import struct
 import tempfile
 import unittest
 
+import keras
 import numpy as np
 import torch
 
@@ -49,6 +49,10 @@ except ImportError:
     tokenizers = None
 
 
+@unittest.skipUnless(
+    keras.config.backend() == "torch",
+    "LiteRT-LM export requires the PyTorch backend.",
+)
 @unittest.skipIf(
     not _LITERT_TORCH_AVAILABLE,
     "LiteRT-LM export requires `litert-torch`. "
@@ -60,17 +64,12 @@ except ImportError:
     "Install it with: pip install litert-lm-builder",
 )
 class TestLiteRTLmExport(TestCase):
-    def test_export_tiny_gemma(self):
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
+    def setUp(self):
+        super().setUp()
         proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer = GemmaTokenizer(proto=proto)
-
-        backbone = GemmaBackbone(
-            vocabulary_size=tokenizer.vocabulary_size(),
+        self.tokenizer = GemmaTokenizer(proto=proto)
+        self.backbone = GemmaBackbone(
+            vocabulary_size=self.tokenizer.vocabulary_size(),
             num_layers=2,
             num_query_heads=4,
             num_key_value_heads=1,
@@ -79,20 +78,24 @@ class TestLiteRTLmExport(TestCase):
             intermediate_dim=64,
             max_sequence_length=8,
         )
-        preprocessor = GemmaCausalLMPreprocessor(
-            tokenizer=tokenizer, sequence_length=8
+        self.preprocessor = GemmaCausalLMPreprocessor(
+            tokenizer=self.tokenizer, sequence_length=8
         )
-        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
+        self.model = GemmaCausalLM(
+            backbone=self.backbone, preprocessor=self.preprocessor
+        )
+        self._set_random_weights(self.model)
 
-        # Set random weights for determinism.
-        rng = np.random.default_rng(42)
+    def _set_random_weights(self, model, seed=42):
+        rng = np.random.default_rng(seed)
         weights = model.get_weights()
         for i in range(len(weights)):
             weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
         model.set_weights(weights)
 
+    def test_export_tiny_gemma(self):
         path = os.path.join(self.get_temp_dir(), "test.litertlm")
-        model.export(path, format="litertlm", prefill_seq_len=8)
+        self.model.export(path, format="litertlm", prefill_seq_len=8)
 
         self.assertTrue(os.path.exists(path))
         self.assertGreater(os.path.getsize(path), 0)
@@ -103,37 +106,8 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_with_bucketing(self):
         """Verify that multiple prefill_seq_len creates multiple signatures."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer = GemmaTokenizer(proto=proto)
-
-        backbone = GemmaBackbone(
-            vocabulary_size=tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=1,
-            hidden_dim=32,
-            head_dim=8,
-            intermediate_dim=64,
-            max_sequence_length=8,
-        )
-        preprocessor = GemmaCausalLMPreprocessor(
-            tokenizer=tokenizer, sequence_length=8
-        )
-        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
-
-        rng = np.random.default_rng(42)
-        weights = model.get_weights()
-        for i in range(len(weights)):
-            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
-        model.set_weights(weights)
-
         path = os.path.join(self.get_temp_dir(), "test_buckets.litertlm")
-        model.export(
+        self.model.export(
             path,
             format="litertlm",
             prefill_seq_len=[4, 8],
@@ -141,29 +115,12 @@ class TestLiteRTLmExport(TestCase):
 
         self.assertTrue(os.path.exists(path))
 
-        # Extract TFLite and verify signatures.
-        with open(path, "rb") as f:
-            data = f.read()
-        header_end = struct.unpack("<Q", data[24:32])[0]
-        from litert_lm_builder import litertlm_core as core
-
-        metadata_buf = data[32:header_end]
-        metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
-            metadata_buf, 0
-        )
-        tflite_path = os.path.join(self.get_temp_dir(), "test_buckets.tflite")
-        for i in range(metadata.SectionMetadata().ObjectsLength()):
-            obj = metadata.SectionMetadata().Objects(i)
-            if (
-                core.any_section_data_type_to_string(obj.DataType())
-                == "TFLiteModel"
-            ):
-                tflite_data = data[obj.BeginOffset() : obj.EndOffset()]
-                with open(tflite_path, "wb") as f:
-                    f.write(tflite_data)
-
-        interpreter = self._create_tflite_interpreter(tflite_path)
-        signatures = list(interpreter._get_full_signature_list().keys())
+        # Extract TFLite from all bucketed interpreters and verify signatures.
+        interpreters = self._extract_litertlm_tflite_interpreters(path)
+        all_signatures = {}
+        for interpreter in interpreters:
+            all_signatures.update(interpreter._get_full_signature_list())
+        signatures = list(all_signatures.keys())
 
         self.assertIn("prefill_4", signatures)
         self.assertIn("prefill_8", signatures)
@@ -171,20 +128,13 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_with_hf_tokenizer_path(self):
         """Verify export with a user-provided HuggingFace tokenizer.json."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
         try:
             import litert_lm
             import tokenizers
         except ImportError:
             self.skipTest("This test requires `litert-lm` and `tokenizers`.")
 
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer = GemmaTokenizer(proto=proto)
-        vocab_size = tokenizer.vocabulary_size()
+        vocab_size = self.tokenizer.vocabulary_size()
 
         # Build a tiny HuggingFace BPE tokenizer with the same vocab size.
         vocab = {
@@ -205,29 +155,8 @@ class TestLiteRTLmExport(TestCase):
         hf_tokenizer_path = os.path.join(self.get_temp_dir(), "tokenizer.json")
         hf_tokenizer.save(hf_tokenizer_path)
 
-        backbone = GemmaBackbone(
-            vocabulary_size=vocab_size,
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=1,
-            hidden_dim=32,
-            head_dim=8,
-            intermediate_dim=64,
-            max_sequence_length=8,
-        )
-        preprocessor = GemmaCausalLMPreprocessor(
-            tokenizer=tokenizer, sequence_length=8
-        )
-        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
-
-        rng = np.random.default_rng(42)
-        weights = model.get_weights()
-        for i in range(len(weights)):
-            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
-        model.set_weights(weights)
-
         path = os.path.join(self.get_temp_dir(), "test_hf_tokenizer.litertlm")
-        model.export(
+        self.model.export(
             path,
             format="litertlm",
             prefill_seq_len=8,
@@ -249,74 +178,27 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_outputs_match_keras(self):
         """Verify that exported TFLite outputs match Keras eager outputs."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer = GemmaTokenizer(proto=proto)
-
-        backbone = GemmaBackbone(
-            vocabulary_size=tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=1,
-            hidden_dim=32,
-            head_dim=8,
-            intermediate_dim=64,
-            max_sequence_length=8,
-        )
-        preprocessor = GemmaCausalLMPreprocessor(
-            tokenizer=tokenizer, sequence_length=8
-        )
-        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
-
-        rng = np.random.default_rng(42)
-        weights = model.get_weights()
-        for i in range(len(weights)):
-            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
-        model.set_weights(weights)
-
         # Export
         litertlm_path = os.path.join(self.get_temp_dir(), "verify.litertlm")
-        model.export(litertlm_path, format="litertlm", prefill_seq_len=8)
+        self.model.export(litertlm_path, format="litertlm", prefill_seq_len=8)
 
         # Extract TFLite
-        with open(litertlm_path, "rb") as f:
-            data = f.read()
-        header_end = struct.unpack("<Q", data[24:32])[0]
-        from litert_lm_builder import litertlm_core as core
-
-        metadata_buf = data[32:header_end]
-        metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
-            metadata_buf, 0
-        )
-        tflite_path = os.path.join(self.get_temp_dir(), "verify.tflite")
-        for i in range(metadata.SectionMetadata().ObjectsLength()):
-            obj = metadata.SectionMetadata().Objects(i)
-            if (
-                core.any_section_data_type_to_string(obj.DataType())
-                == "TFLiteModel"
-            ):
-                tflite_data = data[obj.BeginOffset() : obj.EndOffset()]
-                with open(tflite_path, "wb") as f:
-                    f.write(tflite_data)
-
-        interpreter = self._create_tflite_interpreter(tflite_path)
+        interpreter = self._extract_litertlm_tflite_interpreters(litertlm_path)[
+            0
+        ]
 
         B, T, L = 1, 8, 2
-        H = backbone.num_key_value_heads
-        D = backbone.head_dim
+        H = self.backbone.num_key_value_heads
+        D = self.backbone.head_dim
         tokens_np = (
             np.arange(1, 1 + T, dtype=np.int32).reshape(B, T)
-            % tokenizer.vocabulary_size()
+            % self.tokenizer.vocabulary_size()
         )
         cache_keras = np.zeros((B, L, 2, T, H, D), dtype=np.float32)
 
         # Keras prefill
         with torch.no_grad():
-            keras_logits, _, keras_cache = model.call_with_cache(
+            keras_logits, _, keras_cache = self.model.call_with_cache(
                 torch.from_numpy(tokens_np),
                 torch.from_numpy(cache_keras),
                 0,
@@ -357,7 +239,7 @@ class TestLiteRTLmExport(TestCase):
         decode_pos = 3
         decode_token = tokens_np[:, decode_pos : decode_pos + 1].copy()
         with torch.no_grad():
-            keras_logits_dec, _, keras_cache_dec = model.call_with_cache(
+            keras_logits_dec, _, keras_cache_dec = self.model.call_with_cache(
                 torch.from_numpy(decode_token),
                 torch.from_numpy(keras_cache),
                 decode_pos,
@@ -405,41 +287,12 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_with_backend_constraint(self):
         """Verify export with valid backend_constraints succeeds."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer = GemmaTokenizer(proto=proto)
-
-        backbone = GemmaBackbone(
-            vocabulary_size=tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=1,
-            hidden_dim=32,
-            head_dim=8,
-            intermediate_dim=64,
-            max_sequence_length=8,
-        )
-        preprocessor = GemmaCausalLMPreprocessor(
-            tokenizer=tokenizer, sequence_length=8
-        )
-        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
-
-        rng = np.random.default_rng(42)
-        weights = model.get_weights()
-        for i in range(len(weights)):
-            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
-        model.set_weights(weights)
-
         for backend in ("cpu", "gpu", "npu", "gpu_artisan"):
             with self.subTest(backend=backend):
                 path = os.path.join(
                     self.get_temp_dir(), f"test_backend_{backend}.litertlm"
                 )
-                model.export(
+                self.model.export(
                     path,
                     format="litertlm",
                     prefill_seq_len=8,
@@ -449,29 +302,6 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_invalid_backend_constraint(self):
         """Verify invalid backend_constraint raises ValueError."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer = GemmaTokenizer(proto=proto)
-
-        backbone = GemmaBackbone(
-            vocabulary_size=tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=1,
-            hidden_dim=32,
-            head_dim=8,
-            intermediate_dim=64,
-            max_sequence_length=8,
-        )
-        preprocessor = GemmaCausalLMPreprocessor(
-            tokenizer=tokenizer, sequence_length=8
-        )
-        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
-
         path = os.path.join(
             self.get_temp_dir(), "test_invalid_backend.litertlm"
         )
@@ -479,7 +309,7 @@ class TestLiteRTLmExport(TestCase):
             ValueError,
             "Invalid backend_constraint",
         ):
-            model.export(
+            self.model.export(
                 path,
                 format="litertlm",
                 prefill_seq_len=8,
@@ -522,11 +352,6 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_multimodal_bucketing_raises(self):
         """Verify multimodal export rejects mismatched prefill_seq_len."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
         from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
         from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
         from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
@@ -590,105 +415,22 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_model_type_metadata(self):
         """Verify the .litertlm metadata contains the correct model type."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer = GemmaTokenizer(proto=proto)
-
-        backbone = GemmaBackbone(
-            vocabulary_size=tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=1,
-            hidden_dim=32,
-            head_dim=8,
-            intermediate_dim=64,
-            max_sequence_length=8,
-        )
-        preprocessor = GemmaCausalLMPreprocessor(
-            tokenizer=tokenizer, sequence_length=8
-        )
-        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
-
-        rng = np.random.default_rng(42)
-        weights = model.get_weights()
-        for i in range(len(weights)):
-            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
-        model.set_weights(weights)
-
         path = os.path.join(self.get_temp_dir(), "test_metadata.litertlm")
-        model.export(path, format="litertlm", prefill_seq_len=8)
+        self.model.export(path, format="litertlm", prefill_seq_len=8)
 
-        with open(path, "rb") as f:
-            data = f.read()
-        header_end = struct.unpack("<Q", data[24:32])[0]
-        from litert_lm_builder import litertlm_core as core
-
-        metadata_buf = data[32:header_end]
-        metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
-            metadata_buf, 0
-        )
-        # The LiteRT-LM metadata should contain section metadata.
-        self.assertGreater(metadata.SectionMetadata().ObjectsLength(), 0)
+        llm_metadata = self._parse_litertlm_llm_metadata(path)
+        self.assertIsNotNone(llm_metadata)
+        model_type_msg = llm_metadata.llm_model_type
+        actual_type = model_type_msg.WhichOneof("model_type")
+        self.assertEqual(actual_type, "generic_model")
 
     def test_text_only_model_has_no_vision_inputs(self):
         """Verify text-only models do not expose vision inputs in signatures."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
-        proto = os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm")
-        tokenizer = GemmaTokenizer(proto=proto)
-
-        backbone = GemmaBackbone(
-            vocabulary_size=tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=1,
-            hidden_dim=32,
-            head_dim=8,
-            intermediate_dim=64,
-            max_sequence_length=8,
-        )
-        preprocessor = GemmaCausalLMPreprocessor(
-            tokenizer=tokenizer, sequence_length=8
-        )
-        model = GemmaCausalLM(backbone=backbone, preprocessor=preprocessor)
-
-        rng = np.random.default_rng(42)
-        weights = model.get_weights()
-        for i in range(len(weights)):
-            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
-        model.set_weights(weights)
-
         path = os.path.join(self.get_temp_dir(), "test_text_only.litertlm")
-        model.export(path, format="litertlm", prefill_seq_len=8)
+        self.model.export(path, format="litertlm", prefill_seq_len=8)
 
-        with open(path, "rb") as f:
-            data = f.read()
-        header_end = struct.unpack("<Q", data[24:32])[0]
-        from litert_lm_builder import litertlm_core as core
-
-        metadata_buf = data[32:header_end]
-        metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
-            metadata_buf, 0
-        )
-        tflite_path = os.path.join(self.get_temp_dir(), "test_text_only.tflite")
-        for i in range(metadata.SectionMetadata().ObjectsLength()):
-            obj = metadata.SectionMetadata().Objects(i)
-            if (
-                core.any_section_data_type_to_string(obj.DataType())
-                == "TFLiteModel"
-            ):
-                tflite_data = data[obj.BeginOffset() : obj.EndOffset()]
-                with open(tflite_path, "wb") as f:
-                    f.write(tflite_data)
-
-        interpreter = self._create_tflite_interpreter(tflite_path)
+        interpreters = self._extract_litertlm_tflite_interpreters(path)
+        interpreter = interpreters[0]
         prefill_sig = interpreter._get_full_signature_list()["prefill"]
         prefill_inputs = set(prefill_sig["inputs"])
         self.assertNotIn("images", prefill_inputs)
@@ -697,11 +439,6 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_multimodal_tiny_gemma3(self):
         """Export a tiny Gemma3 vision+text model and verify structure."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
         from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
         from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
         from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
@@ -753,13 +490,7 @@ class TestLiteRTLmExport(TestCase):
             vision_encoder=vision_encoder,
         )
         model = Gemma3CausalLM(preprocessor=preprocessor, backbone=backbone)
-
-        # Set random weights for determinism.
-        rng = np.random.default_rng(42)
-        weights = model.get_weights()
-        for i in range(len(weights)):
-            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
-        model.set_weights(weights)
+        self._set_random_weights(model)
 
         path = os.path.join(self.get_temp_dir(), "test_multimodal.litertlm")
         model.export(path, format="litertlm", prefill_seq_len=20)
@@ -768,29 +499,7 @@ class TestLiteRTLmExport(TestCase):
         self.assertGreater(os.path.getsize(path), 0)
 
         # Extract TFLite and verify signatures contain vision inputs.
-        with open(path, "rb") as f:
-            data = f.read()
-        header_end = struct.unpack("<Q", data[24:32])[0]
-        from litert_lm_builder import litertlm_core as core
-
-        metadata_buf = data[32:header_end]
-        metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
-            metadata_buf, 0
-        )
-        tflite_path = os.path.join(
-            self.get_temp_dir(), "test_multimodal.tflite"
-        )
-        for i in range(metadata.SectionMetadata().ObjectsLength()):
-            obj = metadata.SectionMetadata().Objects(i)
-            if (
-                core.any_section_data_type_to_string(obj.DataType())
-                == "TFLiteModel"
-            ):
-                tflite_data = data[obj.BeginOffset() : obj.EndOffset()]
-                with open(tflite_path, "wb") as f:
-                    f.write(tflite_data)
-
-        interpreter = self._create_tflite_interpreter(tflite_path)
+        interpreter = self._extract_litertlm_tflite_interpreters(path)[0]
         signatures = list(interpreter._get_full_signature_list().keys())
 
         self.assertIn("prefill", signatures)
@@ -804,11 +513,6 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_separate_vision_encoder_gemma3(self):
         """Export Gemma3 with separate vision encoder/adapter models."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
         from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
         from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
         from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
@@ -860,12 +564,7 @@ class TestLiteRTLmExport(TestCase):
             vision_encoder=vision_encoder,
         )
         model = Gemma3CausalLM(preprocessor=preprocessor, backbone=backbone)
-
-        rng = np.random.default_rng(42)
-        weights = model.get_weights()
-        for i in range(len(weights)):
-            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
-        model.set_weights(weights)
+        self._set_random_weights(model)
 
         path = os.path.join(
             self.get_temp_dir(), "test_separate_vision.litertlm"
@@ -881,34 +580,9 @@ class TestLiteRTLmExport(TestCase):
         self.assertGreater(os.path.getsize(path), 0)
 
         # Extract all TFLite models from the bundle.
-        with open(path, "rb") as f:
-            data = f.read()
-        header_end = struct.unpack("<Q", data[24:32])[0]
-        from litert_lm_builder import litertlm_core as core
-
-        metadata_buf = data[32:header_end]
-        metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
-            metadata_buf, 0
-        )
-
+        interpreters = self._extract_litertlm_tflite_interpreters(path)
         all_signatures = {}
-        model_idx = 0
-        for i in range(metadata.SectionMetadata().ObjectsLength()):
-            obj = metadata.SectionMetadata().Objects(i)
-            if (
-                core.any_section_data_type_to_string(obj.DataType())
-                != "TFLiteModel"
-            ):
-                continue
-            tflite_data = data[obj.BeginOffset() : obj.EndOffset()]
-            tflite_path = os.path.join(
-                self.get_temp_dir(),
-                f"test_separate_vision_{model_idx}.tflite",
-            )
-            model_idx += 1
-            with open(tflite_path, "wb") as f:
-                f.write(tflite_data)
-            interpreter = self._create_tflite_interpreter(tflite_path)
+        for interpreter in interpreters:
             all_signatures.update(interpreter._get_full_signature_list())
 
         signature_names = set(all_signatures.keys())
@@ -928,11 +602,6 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_multimodal_outputs_match_keras(self):
         """Verify multimodal Keras eager and TFLite outputs match."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
         from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
         from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
         from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
@@ -984,12 +653,7 @@ class TestLiteRTLmExport(TestCase):
             vision_encoder=vision_encoder,
         )
         model = Gemma3CausalLM(preprocessor=preprocessor, backbone=backbone)
-
-        rng = np.random.default_rng(42)
-        weights = model.get_weights()
-        for i in range(len(weights)):
-            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
-        model.set_weights(weights)
+        self._set_random_weights(model)
 
         # Export
         litertlm_path = os.path.join(
@@ -998,29 +662,9 @@ class TestLiteRTLmExport(TestCase):
         model.export(litertlm_path, format="litertlm", prefill_seq_len=20)
 
         # Extract TFLite
-        with open(litertlm_path, "rb") as f:
-            data = f.read()
-        header_end = struct.unpack("<Q", data[24:32])[0]
-        from litert_lm_builder import litertlm_core as core
-
-        metadata_buf = data[32:header_end]
-        metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
-            metadata_buf, 0
-        )
-        tflite_path = os.path.join(
-            self.get_temp_dir(), "verify_multimodal.tflite"
-        )
-        for i in range(metadata.SectionMetadata().ObjectsLength()):
-            obj = metadata.SectionMetadata().Objects(i)
-            if (
-                core.any_section_data_type_to_string(obj.DataType())
-                == "TFLiteModel"
-            ):
-                tflite_data = data[obj.BeginOffset() : obj.EndOffset()]
-                with open(tflite_path, "wb") as f:
-                    f.write(tflite_data)
-
-        interpreter = self._create_tflite_interpreter(tflite_path)
+        interpreter = self._extract_litertlm_tflite_interpreters(litertlm_path)[
+            0
+        ]
 
         B, T, L = 1, 20, 2
         H = backbone.num_key_value_heads
@@ -1149,11 +793,6 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_gpt2_with_auto_hf_tokenizer(self):
         """Export a tiny GPT2 model with auto-converted HF tokenizer."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
         vocab = {
             "<|endoftext|>": 0,
             "h": 1,
@@ -1192,11 +831,7 @@ class TestLiteRTLmExport(TestCase):
         )
         model = GPT2CausalLM(backbone=backbone, preprocessor=preprocessor)
 
-        rng = np.random.default_rng(42)
-        weights = model.get_weights()
-        for i in range(len(weights)):
-            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
-        model.set_weights(weights)
+        self._set_random_weights(model)
 
         path = os.path.join(self.get_temp_dir(), "test_gpt2_auto_hf.litertlm")
         model.export(path, format="litertlm", prefill_seq_len=8)
@@ -1206,11 +841,6 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_llama3_with_auto_hf_tokenizer(self):
         """Export a tiny Llama3 model with auto-converted HF tokenizer."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
         vocab = {
             "<|endoftext|>": 0,
             "<|begin_of_text|>": 1,
@@ -1255,11 +885,7 @@ class TestLiteRTLmExport(TestCase):
         )
         model = Llama3CausalLM(backbone=backbone, preprocessor=preprocessor)
 
-        rng = np.random.default_rng(42)
-        weights = model.get_weights()
-        for i in range(len(weights)):
-            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
-        model.set_weights(weights)
+        self._set_random_weights(model)
 
         path = os.path.join(self.get_temp_dir(), "test_llama3_auto_hf.litertlm")
         model.export(path, format="litertlm", prefill_seq_len=8)
@@ -1269,11 +895,6 @@ class TestLiteRTLmExport(TestCase):
 
     def test_export_qwen3_with_auto_hf_tokenizer(self):
         """Export a tiny Qwen3 model with auto-converted HF tokenizer."""
-        import keras
-
-        if keras.config.backend() != "torch":
-            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
-
         vocab = {
             "<|endoftext|>": 0,
             "<|im_end|>": 1,
@@ -1317,11 +938,7 @@ class TestLiteRTLmExport(TestCase):
         )
         model = Qwen3CausalLM(backbone=backbone, preprocessor=preprocessor)
 
-        rng = np.random.default_rng(42)
-        weights = model.get_weights()
-        for i in range(len(weights)):
-            weights[i] = rng.random(weights[i].shape).astype(weights[i].dtype)
-        model.set_weights(weights)
+        self._set_random_weights(model)
 
         path = os.path.join(self.get_temp_dir(), "test_qwen3_auto_hf.litertlm")
         model.export(path, format="litertlm", prefill_seq_len=8)

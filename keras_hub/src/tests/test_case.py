@@ -782,8 +782,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             pass
         return tf.lite.Interpreter(model_path=tflite_path)
 
-    def _extract_litertlm_tflite_interpreters(self, litertlm_path):
-        """Extract every TFLite model from a `.litertlm` bundle."""
+    def _parse_litertlm_bundle(self, litertlm_path):
+        """Read a `.litertlm` bundle and return its raw data + metadata table.
+
+        Returns:
+            A tuple of ``(data, metadata)`` where ``data`` is the bundle bytes
+            and ``metadata`` is the parsed ``LiteRTLMMetaData`` flatbuffer.
+        """
         from litert_lm_builder import litertlm_core as core
 
         with open(litertlm_path, "rb") as f:
@@ -793,6 +798,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
             metadata_buf, 0
         )
+        return data, metadata
+
+    def _extract_litertlm_tflite_interpreters(self, litertlm_path):
+        """Extract every TFLite model from a `.litertlm` bundle."""
+        from litert_lm_builder import litertlm_core as core
+
+        data, metadata = self._parse_litertlm_bundle(litertlm_path)
 
         interpreters = []
         for i in range(metadata.SectionMetadata().ObjectsLength()):
@@ -817,13 +829,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         from litert_lm_builder import litertlm_core as core
         from litert_lm_builder.runtime.proto import llm_metadata_pb2
 
-        with open(litertlm_path, "rb") as f:
-            data = f.read()
-        header_end = struct.unpack("<Q", data[24:32])[0]
-        metadata_buf = data[32:header_end]
-        metadata = core.schema.LiteRTLMMetaData.GetRootAsLiteRTLMMetaData(
-            metadata_buf, 0
-        )
+        data, metadata = self._parse_litertlm_bundle(litertlm_path)
 
         for i in range(metadata.SectionMetadata().ObjectsLength()):
             obj = metadata.SectionMetadata().Objects(i)
@@ -1152,6 +1158,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     "provided."
                 )
             model = cls(**init_kwargs)
+
+        if isinstance(input_data, dict) and "padding_mask" in input_data:
+            input_data["padding_mask"] = ops.convert_to_numpy(
+                ops.cast(input_data["padding_mask"], "int32")
+            )
 
         path = os.path.join(self.get_temp_dir(), "model.litertlm")
         if prefill_seq_len is not None:
