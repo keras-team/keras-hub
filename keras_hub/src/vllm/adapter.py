@@ -252,20 +252,17 @@ class KerasVLLMAdapter(torch.nn.Module):
     def _get_state_mapping(self) -> List[Tuple[Any, Any]]:
         """Builds the Keras StatelessScope state mapping from the patched buffers.
 
-        The weight buffers are immutable after load, so the (variable -> JAX
-        array) mapping is built once and cached. Without this, every decode step
-        re-ran a DLPack conversion over all of the model's weight buffers
-        (hundreds of tensors for a 2B model) on the host before any TPU compute
-        could start — a dominant per-token overhead.
+        Rebuilt on every call. Under vLLM's jitted step function the weight
+        buffers are JAX tracers, so caching the (variable -> JAX array) list on
+        the instance and reusing it across the prefill -> decode trace boundary
+        leaks a tracer (UnexpectedTracerError on the embedding). `forward()` runs
+        *inside* the jitted step function, so this conversion happens at trace
+        time only — rebuilding it has no per-token runtime cost.
         """
-        cached = getattr(self, "_state_mapping_cache", None)
-        if cached is None:
-            cached = [
-                (v, _to_jax(getattr(self, name)))
-                for v, name in self.keras_variable_mapping
-            ]
-            self._state_mapping_cache = cached
-        return cached
+        return [
+            (v, _to_jax(getattr(self, name)))
+            for v, name in self.keras_variable_mapping
+        ]
 
     def forward(self, *args: Any, **kwargs: Any) -> torch.Tensor:
         """Forward pass for vLLM.
