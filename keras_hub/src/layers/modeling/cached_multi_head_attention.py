@@ -79,6 +79,28 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
 
         query = self._query_dense(query)
 
+        # Dispatch to vLLM's native Pallas paged-attention when serving on TPU.
+        from keras_hub.src.vllm.context import get_vllm_context
+
+        vllm_ctx = get_vllm_context()
+        if vllm_ctx is not None and vllm_ctx.paged_attention_func is not None:
+            from keras_hub.src.vllm.attention import maybe_vllm_paged_attention
+
+            # `cache` carries vLLM's paged KV cache for this layer (set by the
+            # adapter from the vLLM model-wrapper context). Softmax scale defaults
+            # to 1/sqrt(head_dim), matching Keras MHA.
+            attention_output, new_kv_cache = maybe_vllm_paged_attention(
+                query,
+                self._key_dense(key),
+                self._value_dense(value),
+                cache,
+                float(self.key_dim) ** -0.5,
+            )
+            attention_output = self._output_dense(attention_output)
+            if cache is not None or new_kv_cache is not None:
+                return attention_output, new_kv_cache
+            return attention_output
+
         # If cache is not `None`, we will use the cache to compute the final key
         # and value tensors. If `cache_update_index` is not None, we will first
         # update the cache before use. To do this, we first call the
