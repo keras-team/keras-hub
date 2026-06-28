@@ -553,6 +553,30 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 f"{keras_type}, LiteRT returns {litert_type}"
             )
 
+    def _litert_flex_ops(self, model_bytes):
+        """Return the set of FLEX (SelectTf) op codes in a `.tflite` model.
+
+        The Keras TF LiteRT export path enables `SELECT_TF_OPS`, which emits
+        FLEX ops as TFLite `CUSTOM` operators whose custom code starts with
+        `"Flex"` (e.g. `FlexRoll`). The ai-edge-litert interpreter cannot run
+        these, so callers skip numeric verification when any are present.
+        """
+        from ai_edge_litert import schema_py_generated as schema
+
+        model = schema.Model.GetRootAsModel(model_bytes, 0)
+        flex_ops = set()
+        for i in range(model.OperatorCodesLength()):
+            custom_code = model.OperatorCodes(i).CustomCode()
+            if custom_code is None:
+                continue
+            if isinstance(custom_code, (bytes, bytearray, memoryview)):
+                custom_code = bytes(custom_code).decode(
+                    "utf-8", errors="replace"
+                )
+            if isinstance(custom_code, str) and custom_code.startswith("Flex"):
+                flex_ops.add(custom_code)
+        return flex_ops
+
     def run_litert_export_test(
         self,
         cls=None,
@@ -591,26 +615,27 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 model.export(), such as allow_custom_ops=True or
                 enable_select_tf_ops=True.
         """
-        # Skip test if Keras version is less than 3.13
+        # The rewritten TF LiteRT export path (ExportArchive -> SavedModel ->
+        # tf.lite.TFLiteConverter.from_saved_model) requires Keras >= 3.15.
         if packaging.version.Version(
             keras.__version__
-        ) < packaging.version.Version("3.13.0"):
-            self.skipTest("LiteRT export requires Keras >= 3.13")
-
-        self.skipTest(
-            "#TODO: [#2572] Re-enable LiteRT tests after a new tf release. "
-            "Can't test with tf 2.20 due to tf.lite module deprecation."
-        )
+        ) < packaging.version.Version("3.15.0"):
+            self.skipTest("LiteRT export requires Keras >= 3.15")
 
         # Extract comparison_mode from export_kwargs if provided
         comparison_mode = export_kwargs.pop("comparison_mode", "strict")
         if keras.backend.backend() != "tensorflow":
             self.skipTest("LiteRT export only supports TensorFlow backend")
 
+        # Use the ai-edge-litert interpreter exclusively. The legacy
+        # tf.lite.Interpreter is deprecated and removed in recent TensorFlow
+        # releases, so we intentionally do not fall back to it.
         try:
             from ai_edge_litert.interpreter import Interpreter
         except ImportError:
-            Interpreter = tf.lite.Interpreter
+            self.skipTest(
+                "LiteRT export tests require the 'ai-edge-litert' package."
+            )
 
         if output_thresholds is None:
             output_thresholds = {"*": {"max": 10.0, "mean": 0.1}}
@@ -632,6 +657,22 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 model.export(export_path, format="litert", **export_kwargs)
                 self.assertTrue(os.path.exists(export_path))
                 self.assertGreater(os.path.getsize(export_path), 0)
+
+                # The Keras TF exporter enables SELECT_TF_OPS, so the converted
+                # model may contain FLEX ops that the ai-edge-litert interpreter
+                # cannot execute. Verify numerics only when the model is free of
+                # FLEX ops; export and signature structure are checked either
+                # way.
+                with open(export_path, "rb") as f:
+                    flex_ops = self._litert_flex_ops(f.read())
+                run_inference = not flex_ops
+                if flex_ops:
+                    print(
+                        f"[litert] {type(model).__name__}: skipping numeric "
+                        f"verification; converted model uses FLEX ops "
+                        f"{sorted(flex_ops)} not runnable by ai-edge-litert."
+                    )
+                verify_numerics = verify_numerics and run_inference
 
                 keras_output = model(input_data) if verify_numerics else None
 
@@ -693,6 +734,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                             f"{sorted(expected_outputs)}, "
                             f"but SignatureDef has {sorted(actual_outputs)}"
                         )
+
+                # When the model contains FLEX ops, ai-edge-litert cannot run
+                # inference, so stop after validating export + signature.
+                if not run_inference:
+                    return
 
                 # Step 3: Run LiteRT inference
                 os.remove(export_path)

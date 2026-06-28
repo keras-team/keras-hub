@@ -165,6 +165,10 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
                 },
             )
 
+    @pytest.mark.skip(
+        reason="TODO: SAM3 LiteRT export fails during TFLite conversion: "
+        "'tfl.zeros_like' does not support bool (i1) operands."
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=SAM3PromptableConceptImageSegmenter,

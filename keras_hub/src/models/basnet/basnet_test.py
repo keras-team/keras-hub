@@ -54,7 +54,10 @@ class BASNetTest(TestCase):
             input_data=self.images,
         )
 
-    @pytest.mark.skip(reason="TODO: Bug with BASNet liteRT export")
+    @pytest.mark.skip(
+        reason="TODO: BASNet LiteRT export fails with 'symbolic tf.Tensor used "
+        "as a Python bool' while tracing the model for export."
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=BASNetImageSegmenter,
