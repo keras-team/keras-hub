@@ -154,6 +154,16 @@ def convert_weights(backbone, loader, transformers_config):
 
 def convert_tokenizer(cls, preset, **kwargs):
     transformers_config = load_json(preset, HF_TOKENIZER_CONFIG_FILE)
+    # Some BERT-architecture models (e.g. multilingual-e5) ship an XLM-RoBERTa
+    # SentencePiece tokenizer instead of a WordPiece vocab.txt.
+    if "XLMRoberta" in transformers_config.get("tokenizer_class", ""):
+        from keras_hub.src.models.xlm_roberta.xlm_roberta_tokenizer import (
+            XLMRobertaTokenizer,
+        )
+
+        return XLMRobertaTokenizer(
+            proto=get_file(preset, "sentencepiece.bpe.model"), **kwargs
+        )
     return cls(
         get_file(preset, "vocab.txt"),
         lowercase=transformers_config["do_lower_case"],
