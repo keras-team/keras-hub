@@ -11,7 +11,6 @@ from keras_hub.src.models.xlm_roberta.xlm_roberta_backbone import (
 from keras_hub.src.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )
-from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_hub_export("keras_hub.models.XLMRobertaMaskedLMPreprocessor")
@@ -126,7 +125,6 @@ class XLMRobertaMaskedLMPreprocessor(MaskedLMPreprocessor):
         )
         self.built = True
 
-    @preprocessing_function
     def call(self, x, y=None, sample_weight=None):
         output = super().call(x, y=y, sample_weight=sample_weight)
         x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(output)

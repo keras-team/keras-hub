@@ -7,11 +7,18 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class MultiSegmentPackerTest(TestCase):
+    def setUp(self):
+        super().setUp()
+        self._allow_python_workflow = True
+
     def test_trim_single_input_ints(self):
         # right padding
         input_data = np.arange(3, 10)
         packer = MultiSegmentPacker(
-            sequence_length=8, start_value=1, end_value=2
+            sequence_length=8,
+            start_value=1,
+            end_value=2,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer(input_data)
         self.assertAllEqual(token_ids, [1, 3, 4, 5, 6, 7, 8, 2])
@@ -24,6 +31,7 @@ class MultiSegmentPackerTest(TestCase):
             start_value=1,
             end_value=2,
             padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer(input_data)
         self.assertAllEqual(token_ids, [1, 3, 4, 5, 6, 7, 8, 2])
@@ -33,7 +41,10 @@ class MultiSegmentPackerTest(TestCase):
         # right padding
         input_data = ["a", "b", "c", "d"]
         packer = MultiSegmentPacker(
-            sequence_length=5, start_value="[CLS]", end_value="[SEP]"
+            sequence_length=5,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer(input_data)
         self.assertAllEqual(token_ids, ["[CLS]", "a", "b", "c", "[SEP]"])
@@ -45,6 +56,7 @@ class MultiSegmentPackerTest(TestCase):
             start_value="[CLS]",
             end_value="[SEP]",
             padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer(input_data)
         self.assertAllEqual(token_ids, ["[CLS]", "a", "b", "c", "[SEP]"])
@@ -59,6 +71,7 @@ class MultiSegmentPackerTest(TestCase):
             start_value="[CLS]",
             end_value="[SEP]",
             truncate="round_robin",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -73,6 +86,7 @@ class MultiSegmentPackerTest(TestCase):
             end_value="[SEP]",
             truncate="round_robin",
             padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -89,6 +103,7 @@ class MultiSegmentPackerTest(TestCase):
             start_value="[CLS]",
             end_value="[SEP]",
             truncate="waterfall",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -103,6 +118,7 @@ class MultiSegmentPackerTest(TestCase):
             end_value="[SEP]",
             truncate="waterfall",
             padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -119,6 +135,7 @@ class MultiSegmentPackerTest(TestCase):
             start_value="[CLS]",
             end_value="[SEP]",
             truncate="round_robin",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -143,6 +160,7 @@ class MultiSegmentPackerTest(TestCase):
             end_value="[SEP]",
             truncate="round_robin",
             padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -169,6 +187,7 @@ class MultiSegmentPackerTest(TestCase):
             start_value="[CLS]",
             end_value="[SEP]",
             truncate="waterfall",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -193,6 +212,7 @@ class MultiSegmentPackerTest(TestCase):
             end_value="[SEP]",
             truncate="waterfall",
             padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -215,7 +235,11 @@ class MultiSegmentPackerTest(TestCase):
         seq1 = ["a"]
         seq2 = ["x"]
         packer = MultiSegmentPacker(
-            6, start_value="[CLS]", end_value="[SEP]", pad_value="[PAD]"
+            6,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            pad_value="[PAD]",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -231,6 +255,7 @@ class MultiSegmentPackerTest(TestCase):
             end_value="[SEP]",
             pad_value="[PAD]",
             padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -248,6 +273,7 @@ class MultiSegmentPackerTest(TestCase):
             start_value="[CLS]",
             end_value="[SEP]",
             pad_value="[PAD]",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -272,6 +298,7 @@ class MultiSegmentPackerTest(TestCase):
             end_value="[SEP]",
             pad_value="[PAD]",
             padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -300,6 +327,7 @@ class MultiSegmentPackerTest(TestCase):
             sep_value=["</s>", "</s>"],
             pad_value="<pad>",
             truncate="round_robin",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -326,6 +354,7 @@ class MultiSegmentPackerTest(TestCase):
             pad_value="<pad>",
             truncate="round_robin",
             padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         token_ids, segment_ids = packer((seq1, seq2))
         self.assertAllEqual(
@@ -351,6 +380,7 @@ class MultiSegmentPackerTest(TestCase):
             start_value="[CLS]",
             end_value="[SEP]",
             truncate="waterfall",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         cloned_packer = MultiSegmentPacker.from_config(
             original_packer.get_config()
@@ -359,3 +389,11 @@ class MultiSegmentPackerTest(TestCase):
         cloned_token_ids, cloned_segment_ids = cloned_packer((seq1, seq2))
         self.assertAllEqual(token_ids, cloned_token_ids)
         self.assertAllEqual(segment_ids, cloned_segment_ids)
+
+
+class MultiSegmentPackerTFTest(MultiSegmentPackerTest):
+    """Set `_allow_python_workflow=False` to test TF execution."""
+
+    def setUp(self):
+        super().setUp()
+        self._allow_python_workflow = False

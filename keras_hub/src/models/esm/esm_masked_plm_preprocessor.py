@@ -130,7 +130,19 @@ class ESMMaskedPLMPreprocessor(MaskedLMPreprocessor):
         )
 
     @preprocessing_function
-    def call(self, x, y=None, sample_weight=None):
+    def _call_tf(self, x, y=None, sample_weight=None):
+        x = self.tokenizer(x)
+        token_ids = self.packer(x)
+        masker_outputs = self.masker(token_ids)
+        x = {
+            "token_ids": masker_outputs["token_ids"],
+            "mask_positions": masker_outputs["mask_positions"],
+        }
+        y = masker_outputs["mask_ids"]
+        sample_weight = masker_outputs["mask_weights"]
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def _call_python(self, x, y=None, sample_weight=None):
         x = self.tokenizer(x)
         token_ids = self.packer(x)
         masker_outputs = self.masker(token_ids)

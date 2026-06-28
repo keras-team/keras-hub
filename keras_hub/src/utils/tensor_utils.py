@@ -325,6 +325,29 @@ def strip_to_ragged(token_ids, mask, ids_to_strip):
     return tf.ragged.boolean_mask(token_ids, mask)
 
 
+def strip_to_ragged_python(token_ids, mask, ids_to_strip):
+    """Remove masked and special tokens using numpy and Python."""
+    if keras.ops.is_tensor(token_ids):
+        token_ids = keras.ops.convert_to_numpy(token_ids).astype("int32")
+    if keras.ops.is_tensor(mask):
+        mask = keras.ops.convert_to_numpy(mask).astype("bool")
+    if not isinstance(token_ids, np.ndarray):
+        token_ids = np.array(token_ids, dtype="int32")
+    if not isinstance(mask, np.ndarray):
+        mask = np.array(mask, dtype="bool")
+
+    for id in ids_to_strip:
+        mask = mask & (token_ids != id)
+    if token_ids.ndim == 1:
+        token_ids = token_ids[mask].tolist()
+    else:
+        ragged_ids = []
+        for i in range(token_ids.shape[0]):
+            ragged_ids.append(token_ids[i][mask[i]].tolist())
+        token_ids = ragged_ids
+    return token_ids
+
+
 def assert_tf_installed(symbol_name):
     if tf is None:
         raise ImportError(
