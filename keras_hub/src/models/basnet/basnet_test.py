@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 
@@ -54,8 +55,13 @@ class BASNetTest(TestCase):
             input_data=self.images,
         )
 
-    @pytest.mark.skip(reason="TODO: Bug with BASNet liteRT export")
     def test_litert_export(self):
+        if keras.backend.backend() != "torch":
+            self.skipTest(
+                "BASNet LiteRT export fails on the TensorFlow backend "
+                "('symbolic tf.Tensor used as a Python bool'); enabled on "
+                "torch."
+            )
         self.run_litert_export_test(
             cls=BASNetImageSegmenter,
             init_kwargs=self.init_kwargs,
