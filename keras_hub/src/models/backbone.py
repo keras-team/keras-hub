@@ -238,16 +238,20 @@ class Backbone(keras.Model):
         store = keras.src.saving.saving_lib.H5IOStore(filepath, mode="w")
         lora_store = store.make("lora")
         lora_store["rank"] = self._lora_rank
-        # We cannot identify layers by name since names are non-unique,
-        # so we identify them by index in the topologically sorted list
-        # of layers that have weights.
+        # We identify each layer by its `path` rather than by its position in
+        # the flattened layer list. Layer names are non-unique, and integer
+        # positions are not stable: the topologically sorted list of layers
+        # that have weights can be ordered differently when a model is rebuilt,
+        # which previously caused LoRA weights to be restored into the wrong
+        # layers (see #2701). A layer's `path` is both unique and stable across
+        # reconstructions of the same architecture.
         all_layers = self._flatten_layers(include_self=False)
         all_layers = [lyr for lyr in all_layers if lyr.weights]
         for layer_index in self._lora_enabled_layers:
             # We only lora the einsumdense layers,
             # so the factored weights are always named `kernel`
             layer = all_layers[layer_index]
-            inner_store = store.make(f"lora/{layer_index}")
+            inner_store = store.make(f"lora/{layer.path}")
             inner_store["lora_kernel_a"] = layer.lora_kernel_a
             inner_store["lora_kernel_b"] = layer.lora_kernel_b
         store.close()
@@ -271,10 +275,15 @@ class Backbone(keras.Model):
         all_layers = [lyr for lyr in all_layers if lyr.weights]
         for layer_index in self._lora_enabled_layers:
             layer = all_layers[layer_index]
-            lora_kernel_a = store.get(f"lora/{layer_index}")["lora_kernel_a"]
-            lora_kernel_b = store.get(f"lora/{layer_index}")["lora_kernel_b"]
-            layer.lora_kernel_a.assign(lora_kernel_a)
-            layer.lora_kernel_b.assign(lora_kernel_b)
+            # Prefer the stable, path-based key. Fall back to the legacy
+            # integer-index key so `.lora.h5` files saved by older versions
+            # still load.
+            if f"lora/{layer.path}" in store.h5_file:
+                inner_store = store.get(f"lora/{layer.path}")
+            else:
+                inner_store = store.get(f"lora/{layer_index}")
+            layer.lora_kernel_a.assign(inner_store["lora_kernel_a"])
+            layer.lora_kernel_b.assign(inner_store["lora_kernel_b"])
         store.close()
 
     def export_to_transformers(self, path):
