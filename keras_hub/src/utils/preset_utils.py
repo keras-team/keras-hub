@@ -124,7 +124,6 @@ def find_subclass(preset, cls, backbone_cls):
 
 def get_file(preset, path):
     """Download a preset file in necessary and return the local path."""
-    # TODO: Add tests for FileNotFound exceptions.
     if not isinstance(preset, str):
         raise ValueError(
             f"A preset identifier must be a string. Received: preset={preset}"

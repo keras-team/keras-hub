@@ -14,6 +14,7 @@ from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
+from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import upload_preset
 
 
@@ -193,3 +194,10 @@ class PresetUtilsTest(TestCase):
         # Verify error handling.
         with self.assertRaisesRegex(ValueError, "is an invalid json"):
             upload_preset("kaggle://test/test/test", local_preset_dir)
+
+    def test_get_file_raises_file_not_found(self):
+        local_dir = self.get_temp_dir()
+        fake_path = "does_not_exist.json"
+
+        with self.assertRaises(FileNotFoundError):
+            get_file(local_dir, fake_path)
