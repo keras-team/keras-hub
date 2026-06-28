@@ -11,4 +11,7 @@ torchvision>=0.16.0
 # Jax.
 jax[cpu]
 
+# LiteRT (for the model.export(format="litert") tests).
+ai-edge-litert
+
 -r requirements-common.txt
