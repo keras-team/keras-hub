@@ -31,7 +31,6 @@ from transformers import InstructBlipForConditionalGeneration  # noqa: E402
 from transformers import InstructBlipProcessor  # noqa: E402
 
 import keras_hub  # noqa: E402
-from keras_hub.src.models.causal_lm import CausalLM  # noqa: E402
 
 PRESET_MAP = {
     "blip2_opt_2_7b": "Salesforce/blip2-opt-2.7b",
@@ -272,11 +271,19 @@ def validate_output(keras_lm, hf_model, hf_processor, image):
     ].strip()
 
     keras_lm.compile(sampler="greedy")
-    keras_output = keras_lm.generate(
-        {"images": np.array(image), "text": [_PROMPT]},
-        max_length=max_new_tokens + 64,
-        strip_prompt=True,
-    )
+    if is_encoder_decoder:
+        # Seq2Seq: the prompt feeds the encoder and the decoder generates the
+        # answer from scratch, so there is no prompt prefix to strip.
+        keras_output = keras_lm.generate(
+            {"images": np.array(image), "encoder_text": [_PROMPT]},
+            max_length=max_new_tokens + 64,
+        )
+    else:
+        keras_output = keras_lm.generate(
+            {"images": np.array(image), "text": [_PROMPT]},
+            max_length=max_new_tokens + 64,
+            strip_prompt=True,
+        )
     keras_text = (
         keras_output[0]
         if isinstance(keras_output, (list, tuple))
@@ -297,6 +304,15 @@ def main(_):
     os.makedirs(preset, exist_ok=True)
 
     is_instructblip = preset.startswith("instructblip")
+    # The Flan-T5 variant is encoder-decoder and must be packaged as a
+    # `BLIP2Seq2SeqLM` task so its `task.json` matches at load time (otherwise
+    # the separate `lm_head` task weight is silently skipped on reload).
+    is_seq2seq = "flan_t5" in preset
+    task_cls = (
+        keras_hub.models.BLIP2Seq2SeqLM
+        if is_seq2seq
+        else keras_hub.models.BLIP2CausalLM
+    )
 
     print(f"\n-> Loading HF model: {hf_model_name}")
     if is_instructblip:
@@ -313,9 +329,7 @@ def main(_):
 
     print("\n-> Loading KerasHub model from the HF preset.")
     # BLIP-2 / Flan-T5 must run in float32 (or bf16) — fp16 overflows to NaN.
-    keras_lm = keras_hub.models.BLIP2CausalLM.from_preset(
-        f"hf://{hf_model_name}", dtype="float32"
-    )
+    keras_lm = task_cls.from_preset(f"hf://{hf_model_name}", dtype="float32")
 
     image = Image.open(requests.get(_IMAGE_URL, stream=True).raw).convert("RGB")
 
@@ -335,7 +349,7 @@ def main(_):
     gc.collect()
 
     print("\n-> Verifying preset reload.")
-    CausalLM.from_preset(preset)
+    task_cls.from_preset(preset)
     print("-> Preset reload verified.")
 
 
