@@ -14,6 +14,10 @@ from keras_hub.src.utils.tensor_utils import any_equal
 class BLIP2CausalLM(CausalLM):
     """An end-to-end multimodal BLIP-2 model for causal language modeling.
 
+    This is the decoder-only BLIP-2 task, used by the OPT and Vicuna language
+    model variants. For the encoder-decoder (Flan-T5) variant, use
+    `keras_hub.models.BLIP2Seq2SeqLM` instead.
+
     A causal language model (LM) predicts the next token based on previous
     tokens. This task setup can be used to train the model unsupervised on
     images and plain text inputs, or to autoregressively generate plain text
@@ -54,13 +58,8 @@ class BLIP2CausalLM(CausalLM):
         hidden_states = backbone(inputs)
         lm = backbone.language_model
 
-        is_encoder_decoder = hasattr(lm, "encoder_transformer_layers")
-        if is_encoder_decoder:
-            text_hidden_states = hidden_states
-        else:
-            text_hidden_states = hidden_states[
-                :, backbone.num_query_tokens :, :
-            ]
+        # Drop the visual-prefix positions; only text positions produce logits.
+        text_hidden_states = hidden_states[:, backbone.num_query_tokens :, :]
 
         if hasattr(lm, "lm_head") and lm.lm_head is not None:
             outputs = lm.lm_head(text_hidden_states)
@@ -255,7 +254,6 @@ class BLIP2CausalLM(CausalLM):
         qformer_padding_mask = inputs.get("qformer_padding_mask")
         num_visual = self.backbone.num_query_tokens
         lm = self.backbone.language_model
-        is_encoder_decoder = hasattr(lm, "encoder_transformer_layers")
 
         if images is not None:
             projected_features = self._encode_images(
@@ -264,38 +262,18 @@ class BLIP2CausalLM(CausalLM):
         else:
             projected_features = None
 
-        if is_encoder_decoder and images is not None:
-            vis_features = self.backbone.vision_encoder(images)
-            qformer_features = self.backbone.qformer(vis_features)
-        else:
-            qformer_features = None
-
         use_cache = hasattr(lm, "call_with_cache")
 
-        encoder_hidden_states = None
-        encoder_attention_mask = None
         if use_cache:
             hidden_states, cache = self._build_cache(
                 token_ids, projected_features, padding_mask
             )
         else:
-            if is_encoder_decoder:
-                encoder_hidden_states, encoder_attention_mask = lm.call_encoder(
-                    token_ids, padding_mask, qformer_features
-                )
-                hidden_states = lm.call_decoder(
-                    token_ids,
-                    padding_mask,
-                    encoder_hidden_states,
-                    encoder_attention_mask,
-                )
-            else:
-                hidden_states = self.backbone(inputs)
+            hidden_states = self.backbone(inputs)
             cache = None
 
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         index = ops.min(row_lengths)
-        initial_index = index
 
         def next(prompt, cache, index):
             batch_size = ops.shape(prompt)[0]
@@ -309,53 +287,6 @@ class BLIP2CausalLM(CausalLM):
                     cache=cache,
                     cache_update_index=cache_update_index,
                     projected_features=None,
-                )
-            elif is_encoder_decoder:
-                # ops.slice requires static shapes; use ops.take with dynamic
-                # indices so the output shape is always (batch, seq_len).
-                seq_len = prompt.shape[1]
-                positions = ops.cast(ops.arange(seq_len), "int32")
-                gen_indices = ops.minimum(
-                    positions + initial_index, seq_len - 1
-                )
-                gen_part = ops.take(prompt, gen_indices, axis=1)
-                valid = ops.cast(
-                    positions < ops.cast(seq_len - initial_index, "int32"),
-                    "int32",
-                )
-                gen_part = gen_part * valid[None, :]
-
-                dec_start = ops.zeros((batch_size, 1), dtype="int32")
-                decoder_input = ops.concatenate([dec_start, gen_part], axis=1)
-                dec_start_mask = ops.ones((batch_size, 1), dtype="int32")
-                decoder_mask = ops.concatenate(
-                    [dec_start_mask, ops.cast(gen_part != 0, "int32")], axis=1
-                )
-
-                enc_batch = ops.shape(encoder_hidden_states)[0]
-
-                def repeat_for_beams(x):
-                    if ops.shape(x)[0] == batch_size:
-                        return x
-                    return ops.repeat(x, batch_size // enc_batch, axis=0)
-
-                hidden_out = lm.call_decoder(
-                    decoder_input,
-                    decoder_mask,
-                    repeat_for_beams(encoder_hidden_states),
-                    repeat_for_beams(encoder_attention_mask),
-                )
-                all_logits = lm.lm_head(hidden_out)
-                decoder_pos = index - initial_index
-                logits = ops.slice(
-                    all_logits,
-                    [0, decoder_pos, 0],
-                    [prompt.shape[0], 1, all_logits.shape[-1]],
-                )
-                hidden_states = ops.slice(
-                    hidden_out,
-                    [0, decoder_pos, 0],
-                    [prompt.shape[0], 1, hidden_out.shape[-1]],
                 )
             else:
                 current_inputs = {

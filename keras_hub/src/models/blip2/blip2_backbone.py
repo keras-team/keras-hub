@@ -74,15 +74,30 @@ class BLIP2Backbone(Backbone):
 
         multimodal = self.vision_encoder is not None
 
+        # Encoder-decoder language models (Flan-T5) follow the keras-hub
+        # seq2seq convention and name their encoder inputs
+        # `encoder_token_ids` / `encoder_padding_mask`; decoder-only language
+        # models (OPT, Vicuna) keep the plain `token_ids` / `padding_mask`.
+        is_encoder_decoder = hasattr(
+            self.language_model, "encoder_transformer_layers"
+        )
+        if is_encoder_decoder:
+            token_ids_name, padding_mask_name = (
+                "encoder_token_ids",
+                "encoder_padding_mask",
+            )
+        else:
+            token_ids_name, padding_mask_name = "token_ids", "padding_mask"
+
         token_ids_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
+            shape=(None,), dtype="int32", name=token_ids_name
         )
         padding_mask_input = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
+            shape=(None,), dtype="int32", name=padding_mask_name
         )
         inputs = {
-            "token_ids": token_ids_input,
-            "padding_mask": padding_mask_input,
+            token_ids_name: token_ids_input,
+            padding_mask_name: padding_mask_input,
         }
 
         if multimodal:
@@ -124,14 +139,14 @@ class BLIP2Backbone(Backbone):
         else:
             query_embeddings = None
 
+        # The language model itself always consumes `token_ids` /
+        # `padding_mask` for its (encoder) input; the backbone maps the
+        # externally exposed names onto these.
         lm_inputs = {
             "token_ids": token_ids_input,
             "padding_mask": padding_mask_input,
         }
 
-        is_encoder_decoder = hasattr(
-            self.language_model, "encoder_transformer_layers"
-        )
         if is_encoder_decoder:
             decoder_token_ids_input = keras.Input(
                 shape=(None,), dtype="int32", name="decoder_token_ids"
