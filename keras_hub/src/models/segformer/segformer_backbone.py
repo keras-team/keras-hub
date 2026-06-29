@@ -103,9 +103,6 @@ class SegFormerBackbone(Backbone):
                 )
             )
 
-        self.resizing = keras.layers.Resizing(
-            height, width, interpolation="bilinear"
-        )
         self.concat = keras.layers.Concatenate(axis=-1)
         self.linear_fuse = keras.Sequential(
             [
@@ -125,7 +122,11 @@ class SegFormerBackbone(Backbone):
             zip(image_encoder.hidden_dims, features)
         ):
             out = self.mlp_blocks[index](features[feature])
-            out = self.resizing(out)
+            # Resize op, not a `Resizing` layer, which would leak its
+            # `training=True` default to the downstream BatchNorm (#2495).
+            out = keras.ops.image.resize(
+                out, size=(height, width), interpolation="bilinear"
+            )
             multi_layer_outs.append(out)
 
         # Concat now-equal feature maps
