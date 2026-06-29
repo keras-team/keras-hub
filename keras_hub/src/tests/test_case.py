@@ -14,6 +14,7 @@ from keras import ops
 from keras import tree
 from keras.layers import ReversibleEmbedding
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.tensor_utils import is_float_dtype
@@ -365,7 +366,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             return
 
         def _get_supported_layers(mode):
-            supported_layers = [keras.layers.Dense, keras.layers.EinsumDense]
+            # Include both the stock `keras.layers.EinsumDense` (e.g. the dense
+            # sublayers created inside `keras.layers.MultiHeadAttention`) and
+            # the keras-hub `EinsumDense` subclass used by attention layers.
+            supported_layers = [
+                keras.layers.Dense,
+                keras.layers.EinsumDense,
+                EinsumDense,
+            ]
             if mode == "int8":
                 supported_layers.append(keras.layers.Embedding)
                 supported_layers.append(ReversibleEmbedding)

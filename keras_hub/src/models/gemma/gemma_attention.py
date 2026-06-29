@@ -4,6 +4,7 @@ import keras
 import numpy as np
 from keras import ops
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
@@ -47,7 +48,7 @@ class CachedGemmaAttention(keras.layers.Layer):
     def build(self, inputs_shape):
         self.hidden_dim = inputs_shape[-1]
 
-        self.query_dense = keras.layers.EinsumDense(
+        self.query_dense = EinsumDense(
             "btd,ndh->btnh",
             output_shape=(None, self.num_query_heads, self.head_dim),
             kernel_initializer=self._kernel_initializer,
@@ -56,7 +57,7 @@ class CachedGemmaAttention(keras.layers.Layer):
         )
         self.query_dense.build(inputs_shape)
 
-        self.key_dense = keras.layers.EinsumDense(
+        self.key_dense = EinsumDense(
             "bsd,kdh->bskh",
             output_shape=(None, self.num_key_value_heads, self.head_dim),
             kernel_initializer=self._kernel_initializer,
@@ -65,7 +66,7 @@ class CachedGemmaAttention(keras.layers.Layer):
         )
         self.key_dense.build(inputs_shape)
 
-        self.value_dense = keras.layers.EinsumDense(
+        self.value_dense = EinsumDense(
             "bsd,kdh->bskh",
             output_shape=(None, self.num_key_value_heads, self.head_dim),
             kernel_initializer=self._kernel_initializer,
@@ -79,7 +80,7 @@ class CachedGemmaAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
         )
 
-        self.output_dense = keras.layers.EinsumDense(
+        self.output_dense = EinsumDense(
             equation="btnh,nhd->btd",
             output_shape=(None, self.hidden_dim),
             kernel_initializer=self._kernel_initializer,

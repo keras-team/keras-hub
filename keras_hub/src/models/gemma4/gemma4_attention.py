@@ -3,6 +3,7 @@ import inspect
 import keras
 from keras import ops
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.models.gemma4.gemma4_layers import Gemma4ClippableEinsumDense
 from keras_hub.src.models.gemma4.gemma4_layers import Gemma4VNorm
@@ -93,7 +94,7 @@ class Gemma4TextAttention(keras.layers.Layer):
     def build(self, inputs_shape):
         self.hidden_dim = inputs_shape[-1]
 
-        self.query_dense = keras.layers.EinsumDense(
+        self.query_dense = EinsumDense(
             "btd,ndh->btnh",
             output_shape=(None, self.num_query_heads, self.head_dim),
             kernel_initializer=self._kernel_initializer,
@@ -105,7 +106,7 @@ class Gemma4TextAttention(keras.layers.Layer):
         # KV-shared layers borrow K/V from the source layer at runtime and do
         # not own their own projections.
         if not self.is_kv_shared_layer:
-            self.key_dense = keras.layers.EinsumDense(
+            self.key_dense = EinsumDense(
                 "bsd,kdh->bskh",
                 output_shape=(None, self.effective_num_kv_heads, self.head_dim),
                 kernel_initializer=self._kernel_initializer,
@@ -117,7 +118,7 @@ class Gemma4TextAttention(keras.layers.Layer):
             # When attention_k_eq_v, V reuses K's projection — no separate
             # weight.
             if not self.attention_k_eq_v:
-                self.value_dense = keras.layers.EinsumDense(
+                self.value_dense = EinsumDense(
                     "bsd,kdh->bskh",
                     output_shape=(
                         None,
@@ -175,7 +176,7 @@ class Gemma4TextAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
         )
 
-        self.output_dense = keras.layers.EinsumDense(
+        self.output_dense = EinsumDense(
             equation="btnh,nhd->btd",
             output_shape=(None, self.hidden_dim),
             kernel_initializer=self._kernel_initializer,

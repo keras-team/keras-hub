@@ -3,6 +3,7 @@ import math
 import keras
 from keras import ops
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.models.qwen3.qwen3_layernorm import Qwen3LayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
@@ -75,7 +76,7 @@ class Qwen3Attention(keras.layers.Layer):
             self.head_dim = hidden_dim // self.num_query_heads
 
         self._inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
-        self._query_dense = keras.layers.EinsumDense(
+        self._query_dense = EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, self.head_dim),
             kernel_initializer=self.kernel_initializer,
@@ -92,7 +93,7 @@ class Qwen3Attention(keras.layers.Layer):
         )
         self._query_dense_layer_norm.build(inputs_shape)
 
-        self._key_dense = keras.layers.EinsumDense(
+        self._key_dense = EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
@@ -113,7 +114,7 @@ class Qwen3Attention(keras.layers.Layer):
         )
         self._key_dense_layer_norm.build(inputs_shape)
 
-        self._value_dense = keras.layers.EinsumDense(
+        self._value_dense = EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
@@ -137,7 +138,7 @@ class Qwen3Attention(keras.layers.Layer):
             dtype=self.dtype_policy,
         )
 
-        self._output_dense = keras.layers.EinsumDense(
+        self._output_dense = EinsumDense(
             equation="bquh,uhm->bqm",
             output_shape=(None, hidden_dim),
             kernel_initializer=self.kernel_initializer,
