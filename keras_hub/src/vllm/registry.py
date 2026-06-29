@@ -171,6 +171,47 @@ def _export_hf_tokenizer(tokenizer, temp_dir: str) -> bool:
     return True
 
 
+def _copy_preset_tokenizer_json(preset: str, temp_dir: str) -> bool:
+    """Fallback: copy the preset's own HF ``tokenizer.json`` into ``temp_dir``.
+
+    Some presets (e.g. ``gpt2_large_en``) ship a ready-made fast-tokenizer
+    ``tokenizer.json`` but omit the ``vocabulary.json`` that KerasHub's
+    ``Tokenizer.from_preset`` needs, so the normal export path can't run. vLLM
+    loads ``tokenizer.json`` directly, so this keeps raw-text prompts working.
+    Returns True only if the copied tokenizer round-trips.
+    """
+    try:
+        from keras_hub.src.utils import preset_utils
+
+        src = preset_utils.get_file(preset, "tokenizer.json")
+    except Exception as e:  # noqa: BLE001
+        logging.warning("No preset tokenizer.json for %r: %s", preset, e)
+        return False
+    if not src or not os.path.exists(src):
+        return False
+    shutil.copyfile(src, os.path.join(temp_dir, "tokenizer.json"))
+    cfg_path = os.path.join(temp_dir, "tokenizer_config.json")
+    if not os.path.exists(cfg_path):
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "tokenizer_class": "PreTrainedTokenizerFast",
+                    "clean_up_tokenization_spaces": False,
+                },
+                f,
+            )
+    try:
+        from transformers import AutoTokenizer
+
+        reloaded = AutoTokenizer.from_pretrained(temp_dir)
+        if len(reloaded("hello world").get("input_ids", [])) > 0:
+            return True
+        logging.warning("Preset tokenizer.json for %r produced empty output.", preset)
+    except Exception as e:  # noqa: BLE001
+        logging.warning("Preset tokenizer.json unusable for %r: %s", preset, e)
+    return False
+
+
 def _register_model_architecture() -> None:
     """Registers KerasVLLMAdapter with vLLM's internal model registry."""
     try:
@@ -223,31 +264,52 @@ def setup_vllm_model(preset: str, dtype: str = "float16") -> str:
     # (e.g. GPT-2's 50257 vs. Gemma's 256000).
     vocab_size = None
     eos_token_id = None
+    tokenizer = None
+    # Load the KerasHub tokenizer (best effort) for vocab_size / eos and as the
+    # primary HF-export source.
     try:
         from keras_hub import models
 
         tokenizer = models.Tokenizer.from_preset(preset)
         vocab_size = int(tokenizer.vocabulary_size())
         eos_token_id = getattr(tokenizer, "end_token_id", None)
-        # Export HF-format tokenizer files so vLLM can accept raw-text prompts.
-        # If unsupported (e.g. SentencePiece), pass skip_tokenizer_init=True to
-        # LLM(...) and feed token IDs tokenized with the KerasHub tokenizer.
-        if _export_hf_tokenizer(tokenizer, temp_dir):
-            logging.info("Exported HF tokenizer assets for preset %r.", preset)
-        else:
-            logging.warning(
-                "Could not export an HF tokenizer for preset %r; use "
-                "skip_tokenizer_init=True + pre-tokenized input.",
-                preset,
-            )
-    except Exception as e:  # noqa: BLE001 - fall back to a sane default
+    except Exception as e:  # noqa: BLE001
         logging.warning(
-            "Could not infer vocab_size for preset %r (%s); falling back to a "
-            "default. Set it explicitly if memory profiling looks wrong.",
-            preset,
-            e,
+            "Could not load KerasHub tokenizer for preset %r (%s).", preset, e
         )
-        vocab_size = 50272 if "opt" in preset_lower else 256000
+
+    # Export an HF tokenizer so vLLM accepts raw text. Prefer the KerasHub
+    # tokenizer; if that's unavailable/fails, fall back to the preset's own
+    # tokenizer.json (some presets ship it without vocabulary.json).
+    exported = False
+    if tokenizer is not None:
+        try:
+            exported = _export_hf_tokenizer(tokenizer, temp_dir)
+        except Exception as e:  # noqa: BLE001
+            logging.warning("HF tokenizer export failed for %r: %s", preset, e)
+    if not exported:
+        exported = _copy_preset_tokenizer_json(preset, temp_dir)
+    if exported:
+        logging.info("Exported HF tokenizer assets for preset %r.", preset)
+    else:
+        logging.warning(
+            "Could not export an HF tokenizer for preset %r; use "
+            "skip_tokenizer_init=True + pre-tokenized input.",
+            preset,
+        )
+
+    # Sane vocab_size default by family when it couldn't be inferred (vLLM uses
+    # it for KV-cache memory profiling, so the gemma default mis-sizes GPT-2/OPT).
+    if vocab_size is None:
+        if "gpt2" in preset_lower or "gpt_2" in preset_lower:
+            vocab_size = 50257
+        elif "opt" in preset_lower:
+            vocab_size = 50272
+        else:
+            vocab_size = 256000
+        logging.warning(
+            "vocab_size not inferred for %r; defaulting to %d.", preset, vocab_size
+        )
 
     config_dict = {
         "architectures": ["KerasVLLMAdapter"],
