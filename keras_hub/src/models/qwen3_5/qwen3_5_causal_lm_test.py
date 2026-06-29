@@ -127,6 +127,18 @@ class Qwen3_5CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        strict=False, reason="Non-tokenizer LiteRT-LM runtime gap"
+    )
+    def test_litertlm_export(self):
+        self.run_litertlm_export_test(
+            cls=Qwen3_5CausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            verify_model_type="qwen3",
+            verify_numerics=True,
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in Qwen3_5CausalLM.presets:

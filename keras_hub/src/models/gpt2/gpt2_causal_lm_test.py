@@ -137,6 +137,17 @@ class GPT2CausalLMTest(TestCase):
             output_thresholds={"*": {"max": 1e-3, "mean": 1e-5}},
         )
 
+    def test_litertlm_export(self):
+        """Test LiteRT-LM export for GPT2CausalLM with small test model."""
+        self.run_litertlm_export_test(
+            cls=GPT2CausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            prefill_seq_len=8,
+            verify_model_type="generic_model",
+            verify_numerics=True,
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in GPT2CausalLM.presets:

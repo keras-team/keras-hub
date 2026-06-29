@@ -114,6 +114,16 @@ class MixtralCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    def test_litertlm_export(self):
+        self.run_litertlm_export_test(
+            cls=MixtralCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            prefill_seq_len=8,
+            verify_model_type="generic_model",
+            verify_numerics=True,
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in MixtralCausalLM.presets:

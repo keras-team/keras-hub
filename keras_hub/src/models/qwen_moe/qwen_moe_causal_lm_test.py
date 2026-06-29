@@ -1,7 +1,4 @@
-import os
 from unittest.mock import patch
-
-os.environ["KERAS_BACKEND"] = "jax"
 
 import keras
 import pytest
@@ -148,6 +145,15 @@ class QwenMoeCausalLMTest(TestCase):
             cls=QwenMoeCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
+        )
+
+    def test_litertlm_export(self):
+        self.run_litertlm_export_test(
+            cls=QwenMoeCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            verify_model_type="qwen2p5",
+            verify_numerics=True,
         )
 
     @pytest.mark.extra_large

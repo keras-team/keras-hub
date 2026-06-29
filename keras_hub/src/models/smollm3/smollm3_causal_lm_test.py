@@ -137,6 +137,18 @@ class SmolLM3CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        strict=True, reason="Non-tokenizer LiteRT-LM runtime gap"
+    )
+    def test_litertlm_export(self):
+        self.run_litertlm_export_test(
+            cls=SmolLM3CausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            verify_model_type="generic_model",
+            verify_numerics=True,
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in SmolLM3CausalLM.presets:

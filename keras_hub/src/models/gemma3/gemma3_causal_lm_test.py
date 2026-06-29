@@ -253,6 +253,17 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
             output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
         )
 
+    def test_litertlm_export(self):
+        """Test LiteRT-LM export for Gemma3CausalLM with small test model."""
+        self.run_litertlm_export_test(
+            cls=Gemma3CausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            prefill_seq_len=20,
+            verify_model_type="gemma3",
+            verify_numerics=False,
+        )
+
     @pytest.mark.large
     def test_litert_export_multimodal(self):
         """Test LiteRT export for multimodal Gemma3CausalLM with small test

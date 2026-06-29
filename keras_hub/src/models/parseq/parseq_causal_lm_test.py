@@ -127,3 +127,11 @@ class PARSeqCausalLMTest(TestCase):
             comparison_mode="statistical",
             output_thresholds={"*": {"max": 1e-3, "mean": 1e-4}},
         )
+
+    @pytest.mark.xfail(reason="Tokenizer not supported for LiteRT-LM export")
+    def test_litertlm_export_unsupported_tokenizer(self):
+        self.run_litertlm_export_test(
+            cls=PARSeqCausalLM,
+            init_kwargs=self.init_kwargs,
+            prefill_seq_len=8,
+        )

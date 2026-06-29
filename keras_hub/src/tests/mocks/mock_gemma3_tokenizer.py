@@ -1,3 +1,5 @@
+import os
+
 import tensorflow as tf
 
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
@@ -24,6 +26,17 @@ class MockGemma3Tokenizer(Tokenizer):
             )
 
         super().__init__(dtype=dtype, **kwargs)
+
+        # LiteRT-LM export requires a SentencePiece-compatible asset. Load a
+        # real test proto so save_assets() can materialize vocabulary.spm.
+        test_data_dir = os.path.join(
+            os.path.dirname(__file__), "..", "test_data"
+        )
+        with open(
+            os.path.join(test_data_dir, "gemma3_test_vocab.spm"), "rb"
+        ) as f:
+            self.proto = f.read()
+        self.file_assets = ["vocabulary.spm"]
 
         self.vocabulary = [
             "<pad>",
@@ -153,3 +166,8 @@ class MockGemma3Tokenizer(Tokenizer):
 
     def __call__(self, inputs):
         return self.tokenize(inputs)
+
+    def save_assets(self, dir_path):
+        path = os.path.join(dir_path, "vocabulary.spm")
+        with open(path, "wb") as file:
+            file.write(self.proto)

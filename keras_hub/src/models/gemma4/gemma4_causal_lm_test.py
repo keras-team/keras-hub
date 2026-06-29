@@ -322,6 +322,24 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
             output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
         )
 
+    def test_litertlm_export(self):
+        """Test LiteRT-LM export for multimodal Gemma4CausalLM."""
+        # LiteRT-LM export requires a SentencePiece tokenizer asset. Patch
+        # the mock tokenizer used by this test so it can be bundled.
+        self._attach_sentencepiece_tokenizer_asset(
+            self.tokenizer,
+            os.path.join(self.get_test_data_dir(), "gemma4_test_vocab.spm"),
+        )
+
+        self.run_litertlm_export_test(
+            cls=Gemma4CausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            prefill_seq_len=20,
+            verify_model_type="gemma4",
+            verify_numerics=False,
+        )
+
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):

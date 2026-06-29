@@ -1,4 +1,5 @@
 import copy
+import os
 from unittest.mock import patch
 
 import keras
@@ -429,4 +430,39 @@ class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
                 20,
                 preprocessor.tokenizer.vocabulary_size(),
             ),
+        )
+
+    def test_litertlm_export(self):
+        """Test LiteRT-LM export for Gemma3nCausalLM with small test model."""
+        from keras_hub.src.models.gemma3n.gemma3n_tokenizer import (
+            Gemma3nTokenizer,
+        )
+
+        tokenizer = Gemma3nTokenizer(
+            proto=os.path.join(
+                self.get_test_data_dir(), "gemma3n_test_vocab.spm"
+            )
+        )
+        preprocessor = Gemma3nCausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=self.image_converter,
+            audio_converter=self.audio_converter,
+            sequence_length=30,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=4,
+            max_audios_per_prompt=2,
+            num_audio_tokens_per_audio=3,
+        )
+        init_kwargs = {
+            "preprocessor": preprocessor,
+            "backbone": self.multimodal_backbone,
+        }
+
+        self.run_litertlm_export_test(
+            cls=Gemma3nCausalLM,
+            init_kwargs=init_kwargs,
+            input_data=self.multimodal_input_data,
+            prefill_seq_len=30,
+            verify_model_type="gemma3n",
+            verify_numerics=False,
         )
