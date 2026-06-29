@@ -16,6 +16,7 @@ device = torch.device("cpu")
 # Force PyTorch to use CPU
 torch.set_default_device(device)
 
+import keras  # noqa: E402
 from keras import ops  # noqa: E402
 from transformers import AutoModelForCausalLM  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
@@ -129,10 +130,13 @@ def main(_):
     preset = FLAGS.preset
     hf_preset = PRESET_MAP[preset]
 
+    keras.config.set_dtype_policy("float32")
+
     # === Load the Huggingface model ===
     hf_model = AutoModelForCausalLM.from_pretrained(
         hf_preset,
         device_map=device,
+        torch_dtype=torch.float32,
     )
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
     hf_model.eval()
