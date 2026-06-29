@@ -45,20 +45,20 @@ class MistralBackboneTest(TestCase):
     def test_explicit_head_dim(self):
         # Magistral-style config: `head_dim` is set explicitly and does not
         # equal `hidden_dim // num_query_heads`. `sliding_window=None` is
-        # also exercised here.
-        kwargs = {
-            "vocabulary_size": 10,
-            "num_layers": 2,
-            "num_query_heads": 8,
-            "num_key_value_heads": 4,
-            "hidden_dim": 16,
-            "intermediate_dim": 8,
+        # also exercised here. Run the full backbone test so the new path
+        # gets serialization and precision coverage.
+        init_kwargs = {
+            **self.init_kwargs,
             "sliding_window": None,
             "head_dim": 4,
         }
-        model = MistralBackbone(**kwargs)
-        output = model(self.input_data)
-        self.assertEqual(tuple(ops.shape(output)), (2, 5, 16))
+        self.run_backbone_test(
+            cls=MistralBackbone,
+            init_kwargs=init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(2, 5, 16),
+        )
+        model = MistralBackbone(**init_kwargs)
         attention = model.transformer_layers[0]._self_attention_layer
         self.assertEqual(attention._head_dim, 4)
 
