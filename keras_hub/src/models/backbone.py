@@ -1,10 +1,71 @@
 import keras
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.utils.preset_utils import builtin_presets
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
+
+
+def _dorafy_einsum_dense_layer(layer, rank, lora_alpha):
+    """Enable DoRA on a single `EinsumDense` layer.
+
+    DoRA decomposes the pretrained kernel into a magnitude vector `m` and a
+    directional matrix. The direction is updated via LoRA's low-rank factors,
+    and the magnitude is a free parameter initialized to the column-wise L2
+    norms of the original kernel.
+
+    This function:
+      1. Enables LoRA on the layer (adding `lora_kernel_a` / `lora_kernel_b`).
+      2. Adds a trainable `dora_magnitude` weight of shape
+         `(kernel.shape[-1],)` initialized to the column norms of the frozen
+         base kernel.
+      3. Replaces the layer's `call` with a DoRA forward that rescales the
+         LoRA-merged kernel to column-unit norm and multiplies by magnitude.
+    """
+    layer.enable_lora(rank, lora_alpha=lora_alpha)
+    base_kernel = layer._kernel
+    # Column norms of the pretrained kernel. The last axis of the kernel is
+    # the output dim; all other axes collapse into the "row" direction.
+    reduce_axes = tuple(range(len(base_kernel.shape) - 1))
+    initial_magnitude = ops.norm(base_kernel, axis=reduce_axes)
+    layer._tracker.unlock()
+    layer.dora_magnitude = layer.add_weight(
+        name="dora_magnitude",
+        shape=(base_kernel.shape[-1],),
+        initializer="zeros",
+        trainable=True,
+    )
+    layer._tracker.lock()
+    layer.dora_magnitude.assign(initial_magnitude)
+    layer.dora_enabled = True
+    layer.dora_reduce_axes = reduce_axes
+    _install_dora_call(layer)
+
+
+def _install_dora_call(layer):
+    """Replace `layer.call` with a DoRA-aware forward."""
+    equation = layer.equation
+    reduce_axes = layer.dora_reduce_axes
+    eps = 1e-6
+
+    def dora_call(inputs, training=None):
+        # `layer.kernel` already includes the LoRA update.
+        merged = layer.kernel
+        norms = ops.norm(merged, axis=reduce_axes, keepdims=True)
+        # `norms` has shape `(1, ..., 1, output_dim)`, which broadcasts with
+        # `merged` `(..., output_dim)` and `dora_magnitude` `(output_dim,)`
+        # without needing a squeeze.
+        effective = (layer.dora_magnitude / (norms + eps)) * merged
+        x = ops.einsum(equation, inputs, effective)
+        if layer.bias is not None:
+            x = ops.add(x, layer.bias)
+        if layer.activation is not None:
+            x = layer.activation(x)
+        return x
+
+    layer.call = dora_call
 
 
 @keras_hub_export("keras_hub.models.Backbone")
@@ -192,6 +253,10 @@ class Backbone(keras.Model):
         """Returns list of layer names which are to be LoRA-fied."""
         return ["query_dense", "value_dense", "query", "value"]
 
+    def default_dora_layer_names(self):
+        """Returns list of layer names which are to be DoRA-fied."""
+        return self.default_lora_layer_names()
+
     def enable_lora(self, rank, target_layer_names=None):
         """Enable Lora on the backbone.
 
@@ -275,6 +340,115 @@ class Backbone(keras.Model):
             lora_kernel_b = store.get(f"lora/{layer_index}")["lora_kernel_b"]
             layer.lora_kernel_a.assign(lora_kernel_a)
             layer.lora_kernel_b.assign(lora_kernel_b)
+        store.close()
+
+    def enable_dora(self, rank, target_layer_names=None, lora_alpha=None):
+        """Enable DoRA on the backbone.
+
+        DoRA (Weight-Decomposed Low-Rank Adaptation, Liu et al., 2024)
+        decomposes each target weight matrix into a magnitude vector and a
+        directional matrix, and only trains the magnitude vector together with
+        a LoRA update on the direction. Calling this method will freeze all
+        weights on the backbone, enable LoRA on the target `EinsumDense`
+        layers, and add a trainable `dora_magnitude` weight on each so that
+        the effective kernel at forward time is
+        `m * (W_0 + s * B @ A) / ||W_0 + s * B @ A||_c`, where `||.||_c` is
+        the column-wise L2 norm of the combined kernel.
+
+        Args:
+            rank: int. The rank of the LoRA factorization used for the
+                directional update.
+            target_layer_names: list of strings, optional. The names of the
+                layers to DoRA-fy. Defaults to
+                `backbone.default_dora_layer_names()`.
+            lora_alpha: int, optional. The alpha scaling factor for the LoRA
+                update (scale = `lora_alpha / rank`). Defaults to `rank`,
+                giving a scale of 1.
+
+        Example:
+        ```python
+        backbone = keras_hub.models.GemmaBackbone.from_preset("gemma_2b_en")
+        backbone.enable_dora(rank=4)
+        ```
+        """
+        if target_layer_names is None:
+            target_layer_names = self.default_dora_layer_names()
+        self.trainable = True
+        self._dora_enabled_layers = []
+        self._dora_rank = rank
+        self._dora_lora_alpha = lora_alpha if lora_alpha is not None else rank
+        all_layers = list(self._flatten_layers(include_self=False))
+        for layer in all_layers:
+            layer.trainable = False
+        all_layers = [lyr for lyr in all_layers if lyr.weights]
+        target_names = set(target_layer_names)
+        for i, layer in enumerate(all_layers):
+            if layer.name in target_names and hasattr(layer, "enable_lora"):
+                layer.trainable = True
+                _dorafy_einsum_dense_layer(layer, rank, self._dora_lora_alpha)
+                self._dora_enabled_layers.append(i)
+
+    def save_dora_weights(self, filepath):
+        """Save DoRA factors and magnitudes to `filepath`.
+
+        The file must end in `.dora.h5`. Only the trained DoRA state
+        (`lora_kernel_a`, `lora_kernel_b`, and `dora_magnitude` per enabled
+        layer) is saved — the frozen base weights are not written.
+        """
+        if not getattr(self, "_dora_enabled_layers", []):
+            raise ValueError(
+                "There are no dora-enabled layers in this model. "
+                "Make sure to call `.enable_dora(rank)` first."
+            )
+        if not str(filepath).endswith(".dora.h5"):
+            raise ValueError(
+                "The filename must end in `.dora.h5`. "
+                f"Received: filepath={filepath}"
+            )
+
+        store = keras.src.saving.saving_lib.H5IOStore(filepath, mode="w")
+        dora_store = store.make("dora")
+        dora_store["rank"] = self._dora_rank
+        dora_store["lora_alpha"] = self._dora_lora_alpha
+        all_layers = self._flatten_layers(include_self=False)
+        all_layers = [lyr for lyr in all_layers if lyr.weights]
+        for layer_index in self._dora_enabled_layers:
+            layer = all_layers[layer_index]
+            inner_store = store.make(f"dora/{layer_index}")
+            inner_store["lora_kernel_a"] = layer.lora_kernel_a
+            inner_store["lora_kernel_b"] = layer.lora_kernel_b
+            inner_store["dora_magnitude"] = layer.dora_magnitude
+        store.close()
+
+    def load_dora_weights(self, filepath):
+        """Load DoRA factors and magnitudes from `filepath`.
+
+        If DoRA has not been enabled yet, this will enable it with the rank
+        recorded in the file.
+        """
+        store = keras.src.saving.saving_lib.H5IOStore(filepath, mode="r")
+        dora_store = store.get("dora")
+        rank = int(dora_store["rank"][()])
+        lora_alpha = int(dora_store["lora_alpha"][()])
+
+        if not getattr(self, "_dora_enabled_layers", []):
+            self.enable_dora(rank, lora_alpha=lora_alpha)
+        else:
+            if self._dora_rank != rank:
+                raise ValueError(
+                    f"The DoRA rank expected by file '{filepath}' "
+                    f"is rank={rank}, but the model was called with "
+                    f"`.enable_dora(rank={self._dora_rank})`. "
+                    "Both ranks must match."
+                )
+        all_layers = self._flatten_layers(include_self=False)
+        all_layers = [lyr for lyr in all_layers if lyr.weights]
+        for layer_index in self._dora_enabled_layers:
+            layer = all_layers[layer_index]
+            inner = store.get(f"dora/{layer_index}")
+            layer.lora_kernel_a.assign(inner["lora_kernel_a"])
+            layer.lora_kernel_b.assign(inner["lora_kernel_b"])
+            layer.dora_magnitude.assign(inner["dora_magnitude"])
         store.close()
 
     def export_to_transformers(self, path):
