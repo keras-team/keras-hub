@@ -26,7 +26,17 @@ class FNetTokenizerTest(TestCase):
 
     def test_detokenize(self):
         tokenizer = FNetTokenizer(**self.init_kwargs)
-        input_data = [[tokenizer.cls_token_id, 5, 10, 6, 8, tokenizer.sep_token_id, tokenizer.pad_token_id]]
+        input_data = [
+            [
+                tokenizer.cls_token_id,
+                5,
+                10,
+                6,
+                8,
+                tokenizer.sep_token_id,
+                tokenizer.pad_token_id,
+            ]
+        ]
         output = tokenizer.detokenize(input_data)
         self.assertAllEqual(output, ["[CLS] the quick brown fox [SEP] <pad>"])
 

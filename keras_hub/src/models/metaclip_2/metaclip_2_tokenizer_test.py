@@ -27,7 +27,17 @@ class MetaCLIP2TokenizerTest(TestCase):
 
     def test_detokenize(self):
         tokenizer = MetaCLIP2Tokenizer(**self.init_kwargs)
-        input_data = [[tokenizer.start_token_id, 6, 11, 7, 9, tokenizer.end_token_id, tokenizer.pad_token_id]]
+        input_data = [
+            [
+                tokenizer.start_token_id,
+                6,
+                11,
+                7,
+                9,
+                tokenizer.end_token_id,
+                tokenizer.pad_token_id,
+            ]
+        ]
         output = tokenizer.detokenize(input_data)
         self.assertAllEqual(output, ["the quick brown fox"])
 

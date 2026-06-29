@@ -24,7 +24,16 @@ class T5TokenizerTest(TestCase):
 
     def test_detokenize(self):
         tokenizer = T5Tokenizer(**self.init_kwargs)
-        input_data = [[tokenizer.end_token_id, 4, 9, 5, 7, tokenizer.pad_token_id]]
+        input_data = [
+            [
+                tokenizer.end_token_id,
+                4,
+                9,
+                5,
+                7,
+                tokenizer.pad_token_id,
+            ]
+        ]
         output = tokenizer.detokenize(input_data)
         self.assertAllEqual(output, ["</s> the quick brown fox <pad>"])
 
