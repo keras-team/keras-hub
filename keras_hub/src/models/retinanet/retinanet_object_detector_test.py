@@ -117,9 +117,12 @@ class RetinaNetObjectDetectorTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=input_data,
             comparison_mode="statistical",
+            # The model outputs `bbox_regression`/`cls_logits`; the previous
+            # `enc_topk_logits`/`logits` keys were copy-pasted from D-FINE and
+            # never matched. Conversion is accurate, so assert tightly. (#2495)
             output_thresholds={
-                "enc_topk_logits": {"max": 5.0, "mean": 0.05},
-                "logits": {"max": 2.0, "mean": 0.05},
-                "*": {"max": 1.5, "mean": 0.05},
+                "bbox_regression": {"max": 0.05, "mean": 0.005},
+                "cls_logits": {"max": 0.05, "mean": 0.005},
+                "*": {"max": 0.05, "mean": 0.005},
             },
         )
