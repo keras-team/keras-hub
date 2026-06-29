@@ -40,7 +40,7 @@ class DebertaV3TokenizerTest(TestCase):
             ]
         ]
         output = tokenizer.detokenize(input_data)
-        self.assertAllEqual(output, ["[CLS] the quick brown fox[SEP][PAD]"])
+        self.assertAllEqual(output, ["[CLS]the quick brown fox[SEP][PAD]"])
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
@@ -81,6 +81,22 @@ class DebertaV3TokenizerTest(TestCase):
 
 class DebertaV3TokenizerTFTest(DebertaV3TokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
+    
+    def test_detokenize(self):
+        tokenizer = DebertaV3Tokenizer(**self.init_kwargs)
+        input_data = [
+            [
+                tokenizer.cls_token_id,
+                5,
+                10,
+                6,
+                8,
+                tokenizer.sep_token_id,
+                tokenizer.pad_token_id,
+            ]
+        ]
+        output = tokenizer.detokenize(input_data)
+        self.assertAllEqual(output, ["the quick brown fox"])
 
     def setUp(self):
         super().setUp()

@@ -39,7 +39,7 @@ class MetaCLIP2TokenizerTest(TestCase):
             ]
         ]
         output = tokenizer.detokenize(input_data)
-        self.assertAllEqual(output, ["the quick brown fox"])
+        self.assertAllEqual(output, ["the quick brown fox</s>"])
 
     def test_special_tokens(self):
         tokenizer = MetaCLIP2Tokenizer(**self.init_kwargs)
@@ -63,6 +63,23 @@ class MetaCLIP2TokenizerTest(TestCase):
 
 class MetaCLIP2TokenizerTFTest(MetaCLIP2TokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
+
+    def test_detokenize(self):
+        tokenizer = MetaCLIP2Tokenizer(**self.init_kwargs)
+        input_data = [
+            [
+                tokenizer.start_token_id,
+                6,
+                11,
+                7,
+                9,
+                tokenizer.end_token_id,
+                tokenizer.pad_token_id,
+            ]
+        ]
+        output = tokenizer.detokenize(input_data)
+        # tf_text strips the special tokens implicitly
+        self.assertAllEqual(output, ["the quick brown fox"])
 
     def setUp(self):
         super().setUp()

@@ -40,7 +40,7 @@ class XLMRobertaTokenizerTest(TestCase):
             ]
         ]
         output = tokenizer.detokenize(input_data)
-        self.assertAllEqual(output, ["<s> the quick brown fox</s><pad>"])
+        self.assertAllEqual(output, ["<s>the quick brown fox</s><pad>"])
 
     @pytest.mark.extra_large
     def test_smallest_preset(self):
@@ -63,6 +63,23 @@ class XLMRobertaTokenizerTest(TestCase):
 
 class XLMRobertaTokenizerTFTest(XLMRobertaTokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
+
+    def test_detokenize(self):
+        tokenizer = XLMRobertaTokenizer(**self.init_kwargs)
+        input_data = [
+            [
+                tokenizer.start_token_id,
+                6,
+                11,
+                7,
+                9,
+                tokenizer.end_token_id,
+                tokenizer.pad_token_id,
+            ]
+        ]
+        output = tokenizer.detokenize(input_data)
+        # tf_text maps <pad> correctly but shifts start to ⁇
+        self.assertAllEqual(output, [" ⁇  the quick brown fox"])
 
     def setUp(self):
         super().setUp()

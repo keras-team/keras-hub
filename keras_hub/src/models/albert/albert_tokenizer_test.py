@@ -40,7 +40,7 @@ class AlbertTokenizerTest(TestCase):
         output = tokenizer.detokenize(input_data)
         # Note: tokenizer returns a list/tensor of strings.
         # Expecting the exact string representations of special tokens.
-        self.assertAllEqual(output, ["[CLS] the quick brown fox[SEP]<pad>"])
+        self.assertAllEqual(output, ["[CLS]the quick brown fox[SEP]<pad>"])
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
