@@ -60,4 +60,3 @@ class FNetTokenizer(SentencePieceTokenizer):
         self._add_special_token("[CLS]", "start_token")
         self._add_special_token("[SEP]", "end_token")
         super().__init__(proto=proto, **kwargs)
-

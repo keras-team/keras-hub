@@ -74,4 +74,3 @@ class T5Tokenizer(SentencePieceTokenizer):
         self._add_special_token("</s>", "start_token")
         self._add_special_token("<pad>", "pad_token")
         super().__init__(proto=proto, **kwargs)
-
