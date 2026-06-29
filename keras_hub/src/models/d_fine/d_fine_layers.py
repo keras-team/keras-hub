@@ -1562,8 +1562,11 @@ class DFineFeatureAggregationBlock(keras.layers.Layer):
 
     def call(self, input_features, training=None):
         conv1_out = self.conv1(input_features, training=training)
+        # Integer split, not `[conv_dim, conv_dim]`: `keras.ops.split` reads a
+        # list as cumulative indices, giving a 0-width chunk and dynamic split
+        # sizes that break torch.export. `conv1` outputs `2 * conv_dim`. (#2495)
         split_features_tensor = keras.ops.split(
-            conv1_out, [self.conv_dim, self.conv_dim], axis=self.channel_axis
+            conv1_out, 2, axis=self.channel_axis
         )
         split_features = list(split_features_tensor)
         branch1 = self.csp_rep1(split_features[-1], training=training)

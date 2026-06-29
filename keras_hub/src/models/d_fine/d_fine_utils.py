@@ -225,27 +225,16 @@ def multi_scale_deformable_attention_v2(
     flattened_value = keras.ops.reshape(
         permuted_value, (-1, hidden_dim, seq_len)
     )
-    value_chunk_sizes = keras.ops.array(slice_sizes, dtype="int32")
-    cum_sizes = keras.ops.concatenate(
-        [
-            keras.ops.zeros((1,), dtype="int32"),
-            keras.ops.cumsum(value_chunk_sizes),
-        ]
-    )
+    # Static per-level slicing: `slice_sizes` are static ints, avoiding the
+    # dynamic `ops.slice`/`ops.shape` that breaks torch.export. (#2495)
     values = []
+    value_offset = 0
     for i in range(len(spatial_shapes)):
-        start = cum_sizes[i]
-        current_slice_size = slice_sizes[i]
-        dynamic_slice_start_indices = (0, 0, start)
-        dynamic_slice_shape = (
-            keras.ops.shape(flattened_value)[0],
-            keras.ops.shape(flattened_value)[1],
-            current_slice_size,
+        size = slice_sizes[i]
+        values.append(
+            flattened_value[:, :, value_offset : value_offset + size]
         )
-        sliced_value = keras.ops.slice(
-            flattened_value, dynamic_slice_start_indices, dynamic_slice_shape
-        )
-        values.append(sliced_value)
+        value_offset += size
     if method == "default":
         sampling_grids = 2 * sampling_locations - 1
     elif method == "discrete":
@@ -264,27 +253,15 @@ def multi_scale_deformable_attention_v2(
             num_points_from_shape,
         ),
     )
-    cum_points = keras.ops.concatenate(
-        [
-            keras.ops.zeros((1,), dtype="int32"),
-            keras.ops.cumsum(keras.ops.array(num_points, dtype="int32")),
-        ]
-    )
+    # Same as above: static Python offsets from the static `num_points` list.
     sampling_grids = []
+    point_offset = 0
     for i in range(num_levels):
-        start = cum_points[i]
-        current_level_num_points = num_points[i]
-        slice_start_indices = (0, 0, start, 0)
-        slice_shape = (
-            keras.ops.shape(flattened_sampling_grids)[0],
-            keras.ops.shape(flattened_sampling_grids)[1],
-            current_level_num_points,
-            keras.ops.shape(flattened_sampling_grids)[3],
+        pts = num_points[i]
+        sampling_grids.append(
+            flattened_sampling_grids[:, :, point_offset : point_offset + pts, :]
         )
-        sliced_grid = keras.ops.slice(
-            flattened_sampling_grids, slice_start_indices, slice_shape
-        )
-        sampling_grids.append(sliced_grid)
+        point_offset += pts
     sampling_values = []
     for level_id in range(num_levels):
         if spatial_shapes is not None and len(spatial_shapes) == num_levels:
