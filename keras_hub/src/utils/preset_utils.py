@@ -124,7 +124,6 @@ def find_subclass(preset, cls, backbone_cls):
 
 def get_file(preset, path):
     """Download a preset file in necessary and return the local path."""
-    # TODO: Add tests for FileNotFound exceptions.
     if not isinstance(preset, str):
         raise ValueError(
             f"A preset identifier must be a string. Received: preset={preset}"
@@ -272,7 +271,13 @@ def tf_copy_gfile_to_cache(preset, path):
 
     url = os.path.join(preset, path)
     model_dir = preset.replace("://", "_").replace("-", "_").replace("/", "_")
-    local_path = os.path.join(base_dir, "models", model_dir, path)
+    target_dir = os.path.abspath(os.path.join(base_dir, "models", model_dir))
+    local_path = os.path.abspath(os.path.join(target_dir, path))
+
+    if os.path.commonpath([target_dir, local_path]) != target_dir:
+        raise ValueError(
+            f"Invalid path: '{path}'. It escapes the target directory."
+        )
 
     if not os.path.exists(local_path):
         print_msg(f"Downloading data from {url}")
@@ -903,7 +908,7 @@ class KerasPresetSaver:
         # Save preprocessor.
         if task.preprocessor and hasattr(task.preprocessor, "save_to_preset"):
             task.preprocessor.save_to_preset(self.preset_dir)
-        else:
+        elif task.preprocessor is not None:
             # Allow saving a `keras.Layer` that is not a preprocessor subclass.
             self.save_preprocessor(task.preprocessor)
 
@@ -942,8 +947,8 @@ class KerasPresetSaver:
         tasks = list_subclasses(Task)
         tasks = filter(lambda x: x.backbone_cls is type(layer), tasks)
         tasks = [task.__base__.__name__ for task in tasks]
-        # Keep task list alphabetical.
-        tasks = sorted(tasks)
+        # Keep task list alphabetical and deduplicated.
+        tasks = sorted(set(tasks))
 
         keras_version = keras.version() if hasattr(keras, "version") else None
         metadata = {

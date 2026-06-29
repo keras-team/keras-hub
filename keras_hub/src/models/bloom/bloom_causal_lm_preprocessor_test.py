@@ -9,12 +9,16 @@ from keras_hub.src.tests.test_case import TestCase
 
 class BloomCausalLMPreprocessorTest(TestCase):
     def setUp(self):
-        self.vocab = ["<pad>", "<s>", "</s>"]
-        self.vocab += ["!", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<unk>", "<s>", "</s>", "<pad>", "!"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.tokenizer = BloomTokenizer(
             vocabulary=self.vocab,
             merges=self.merges,
@@ -32,10 +36,10 @@ class BloomCausalLMPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[1, 4, 6, 7, 5, 8, 2, 0]],
+                    "token_ids": [[3, 7, 19, 29, 28, 21, 1, 2]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 0]],
                 },
-                [[4, 6, 7, 5, 8, 2, 0, 0]],  # Pass through labels.
+                [[7, 19, 29, 28, 21, 1, 2, 2]],  # Pass through labels.
                 [[1, 1, 1, 1, 1, 1, 0, 0]],  # Pass through sample_weights.
             ),
         )
@@ -49,21 +53,21 @@ class BloomCausalLMPreprocessorTest(TestCase):
             add_end_token=False,
         )
         x, y, sw = preprocessor(input_data)
-        self.assertAllEqual(x["token_ids"], [[4, 6, 7, 5, 8, 0, 0, 0]] * 4)
+        self.assertAllEqual(x["token_ids"], [[7, 19, 29, 28, 21, 2, 2, 2]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 1, 0, 0, 0]] * 4)
-        self.assertAllEqual(y, [[6, 7, 5, 8, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(y, [[19, 29, 28, 21, 2, 2, 2, 2]] * 4)
         self.assertAllEqual(sw, [[1, 1, 1, 1, 0, 0, 0, 0]] * 4)
 
     def test_generate_preprocess(self):
         input_data = "airplane at airport"
         preprocessor = BloomCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_preprocess(input_data)
-        self.assertAllEqual(x["token_ids"], [1, 4, 6, 7, 5, 8, 0, 0])
+        self.assertAllEqual(x["token_ids"], [3, 7, 19, 29, 28, 21, 2, 2])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0])
 
     def test_generate_postprocess(self):
         input_data = {
-            "token_ids": [1, 4, 6, 7, 5, 8, 0, 0],
+            "token_ids": [3, 7, 19, 29, 28, 21, 2, 2],
             "padding_mask": [1, 1, 1, 1, 1, 1, 0, 0],
         }
         preprocessor = BloomCausalLMPreprocessor(**self.init_kwargs)

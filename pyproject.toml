@@ -33,7 +33,7 @@ dependencies = [
     "packaging",
     "regex",
     "rich",
-    "kagglehub",
+    "kagglehub!=1.0.1",
     "sentencepiece",
     "tokenizers",
     "tensorflow-text;platform_system != 'Windows'",

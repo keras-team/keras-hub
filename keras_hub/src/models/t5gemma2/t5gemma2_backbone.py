@@ -467,6 +467,10 @@ class T5Gemma2Backbone(Backbone):
             self.num_vision_tokens_per_image = (
                 self.vision_encoder.num_vision_tokens_per_image
             )
+            # Re-assign EOI variables after super().__init__() to trigger
+            # automatic tracking by the Functional model for serialization.
+            self.encoder_eoi_embedding = self.encoder_eoi_embedding
+            self.decoder_eoi_embedding = self.decoder_eoi_embedding
 
     def get_config(self):
         config = super().get_config()

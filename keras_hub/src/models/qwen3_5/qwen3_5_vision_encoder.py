@@ -532,6 +532,32 @@ class Qwen3_5VisionEncoder(keras.Model):
             name="merger",
         )
 
+    def build(self, input_shape=None):
+        """Build all sublayers explicitly.
+
+        This ensures all weight variables are created immediately, so
+        they can be accessed for serialization/export without needing
+        a forward pass first.
+        """
+        if not self.patch_embed.built:
+            self.patch_embed.build(
+                (
+                    None,
+                    self.temporal_patch_size,
+                    self.patch_size,
+                    self.patch_size,
+                    self.in_channels,
+                )
+            )
+        if not self.pos_embed.built:
+            self.pos_embed.build((None,))
+        for blk in self.blocks:
+            if not blk.built:
+                blk.build((None, self.hidden_size))
+        if not self.merger.built:
+            self.merger.build((None, self.hidden_size))
+        super().build(input_shape)
+
     def _fast_pos_embed_interpolate(self, grid_thw):
         """Bilinear interpolation of absolute position embeddings.
 

@@ -82,6 +82,10 @@ class Seq2SeqLMPreprocessor(Preprocessor):
         self.encoder_sequence_length = encoder_sequence_length
         self.decoder_sequence_length = decoder_sequence_length
 
+        # TODO(hongyu): Since `Seq2SeqLMPreprocessor` requires TF workflow, we
+        # currently disable the Python workflow for `Seq2SeqLMPreprocessor`.
+        self.tokenizer._allow_python_workflow = False
+
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
         # assets have loaded when restoring a saved model.

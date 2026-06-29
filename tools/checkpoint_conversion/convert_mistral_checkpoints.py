@@ -228,15 +228,19 @@ def main(_):
         hf_model.eval()
         print("\n-> Huggingface model and tokenizer loaded")
 
+        rope_max_wavelength = None
+        if hasattr(hf_model.config, "rope_parameters") and getattr(
+            hf_model.config, "rope_parameters"
+        ):
+            rope_params = getattr(hf_model.config, "rope_parameters")
+            if isinstance(rope_params, dict):
+                rope_max_wavelength = rope_params.get("rope_theta")
+            else:
+                rope_max_wavelength = getattr(rope_params, "rope_theta", None)
+        if rope_max_wavelength is None:
+            rope_max_wavelength = hf_model.config.rope_theta
+
         # === Load the KerasHub model ===
-        # `rope_theta` is nested under `rope_parameters` in transformers 5.x;
-        # older checkpoints expose it as a top-level attribute.
-        rope_parameters = (
-            getattr(hf_model.config, "rope_parameters", None) or {}
-        )
-        rope_theta = getattr(
-            hf_model.config, "rope_theta", None
-        ) or rope_parameters.get("rope_theta")
         backbone_kwargs = dict(
             vocabulary_size=hf_model.config.vocab_size,
             hidden_dim=hf_model.config.hidden_size,
@@ -247,7 +251,7 @@ def main(_):
             sliding_window=hf_model.config.sliding_window,
             head_dim=getattr(hf_model.config, "head_dim", None),
             layer_norm_epsilon=hf_model.config.rms_norm_eps,
-            rope_max_wavelength=rope_theta,
+            rope_max_wavelength=rope_max_wavelength,
             dtype="float32",
         )
         keras_hub_backbone = MistralBackbone(**backbone_kwargs)

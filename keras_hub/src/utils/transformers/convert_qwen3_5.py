@@ -110,7 +110,18 @@ def convert_backbone_config(transformers_config):
 
     # rope_theta and partial_rotary_factor are nested under
     # rope_parameters in the HF config.
-    rope_params = transformers_config["rope_parameters"]
+    rope_params = transformers_config.get("rope_parameters", {})
+    rope_theta = rope_params.get("rope_theta")
+    if rope_theta is None:
+        rope_theta = transformers_config["rope_theta"]
+
+    # explicit access for partial_rotary_factor to raise KeyError if missing.
+    if "rope_parameters" in transformers_config:
+        partial_rotary_factor = transformers_config["rope_parameters"][
+            "partial_rotary_factor"
+        ]
+    else:
+        partial_rotary_factor = transformers_config["partial_rotary_factor"]
 
     # M-RoPE section lives inside rope_parameters in HF config.
     mrope_section = rope_params.get("mrope_section", None)
@@ -155,8 +166,8 @@ def convert_backbone_config(transformers_config):
         "num_key_value_heads": transformers_config["num_key_value_heads"],
         "intermediate_dim": transformers_config["intermediate_size"],
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
-        "rope_max_wavelength": rope_params["rope_theta"],
-        "partial_rotary_factor": rope_params["partial_rotary_factor"],
+        "rope_max_wavelength": rope_theta,
+        "partial_rotary_factor": partial_rotary_factor,
         "tie_word_embeddings": tie_word_embeddings,
         "layer_types": layer_types,
         "linear_num_key_heads": transformers_config["linear_num_key_heads"],
@@ -358,25 +369,6 @@ def convert_weights(backbone, loader, transformers_config):
     ):
         vis = backbone.vision_encoder
         vis_prefix = "model.visual"
-
-        # Explicitly build sublayers since they use lazy build().
-        if not vis.patch_embed.built:
-            vis.patch_embed.build(
-                (
-                    None,
-                    vis.temporal_patch_size,
-                    vis.patch_size,
-                    vis.patch_size,
-                    vis.in_channels,
-                )
-            )
-        if not vis.pos_embed.built:
-            vis.pos_embed.build((None,))
-        for blk in vis.blocks:
-            if not blk.built:
-                blk.build((None, vis.hidden_size))
-        if not vis.merger.built:
-            vis.merger.build((None, vis.hidden_size))
 
         # Patch embedding Conv3D.
         # HF: (hidden_size, in_channels, temporal, patch, patch)

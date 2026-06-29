@@ -207,9 +207,57 @@ def convert_preprocessing_outputs(x):
     def convert(x):
         if x is None:
             return x
-        if isinstance(x, tf.RaggedTensor) or x.dtype == tf.string:
+        if isinstance(x, tf.RaggedTensor):
             return tensor_to_list(x)
-        dtype = keras.backend.standardize_dtype(x.dtype)
+        dtype = getattr(x, "dtype", None)
+
+        if dtype is None:
+            return x
+
+        if dtype == tf.string:
+            return tensor_to_list(x)
+
+        dtype = keras.backend.standardize_dtype(dtype)
+        return ops.convert_to_tensor(x, dtype=dtype)
+
+    return keras.tree.map_structure(convert, x)
+
+
+def convert_preprocessing_outputs_python(x):
+    """Convert outputs after preprocessing to a backend agnostic format.
+
+    This function is used to convert `tf.Tensor` and `tf.RaggedTensor` output
+    from preprocessing layers to either:
+
+    - The correct tensor type for the Keras backend framework.
+    - Python lists, in the case of string data.
+
+    Examples:
+    ```python
+    # A batch of three samples each with two string segments.
+    x = (["hi", "yo", "hey"], ["bye", "ciao", ""])
+    keras_hub.utils.convert_preprocessing_outputs_python(x)
+
+    # A batch of features in a dictionary.
+    x = {
+        "text": ["hi", "hello", "hey"],
+        "images": np.ones((3, 64, 64, 3)),
+        "labels": [1, 0, 1],
+    }
+    keras_hub.utils.convert_preprocessing_outputs_python(x)
+    ```
+    """
+    if in_no_convert_scope():
+        return x
+
+    def convert(x):
+        if x is None:
+            return x
+        if isinstance(x, (str, bytes)):
+            return x
+        dtype = None
+        if hasattr(x, "dtype"):
+            dtype = keras.backend.standardize_dtype(x.dtype)
         return ops.convert_to_tensor(x, dtype=dtype)
 
     return keras.tree.map_structure(convert, x)

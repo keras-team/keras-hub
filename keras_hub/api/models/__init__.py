@@ -68,6 +68,12 @@ from keras_hub.src.models.bert.bert_text_classifier_preprocessor import (
 from keras_hub.src.models.bert.bert_text_classifier_preprocessor import (
     BertTextClassifierPreprocessor as BertTextClassifierPreprocessor,
 )
+from keras_hub.src.models.bert.bert_text_embedder import (
+    BertTextEmbedder as BertTextEmbedder,
+)
+from keras_hub.src.models.bert.bert_text_embedder_preprocessor import (
+    BertTextEmbedderPreprocessor as BertTextEmbedderPreprocessor,
+)
 from keras_hub.src.models.bert.bert_tokenizer import (
     BertTokenizer as BertTokenizer,
 )
@@ -333,6 +339,9 @@ from keras_hub.src.models.gemma3n.gemma3n_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.gemma3n.gemma3n_tokenizer import (
     Gemma3nTokenizer as Gemma3nTokenizer,
+)
+from keras_hub.src.models.gemma4.gemma4_assistant_causal_lm import (
+    Gemma4AssistantCausalLM as Gemma4AssistantCausalLM,
 )
 from keras_hub.src.models.gemma4.gemma4_audio_encoder import (
     Gemma4AudioEncoder as Gemma4AudioEncoder,
@@ -797,6 +806,15 @@ from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image im
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_text_to_image_preprocessor import (
     StableDiffusion3TextToImagePreprocessor as StableDiffusion3TextToImagePreprocessor,
 )
+from keras_hub.src.models.swin_transformer.swin_transformer_backbone import (
+    SwinTransformerBackbone as SwinTransformerBackbone,
+)
+from keras_hub.src.models.swin_transformer.swin_transformer_image_classifier import (
+    SwinTransformerImageClassifier as SwinTransformerImageClassifier,
+)
+from keras_hub.src.models.swin_transformer.swin_transformer_image_classifier_preprocessor import (
+    SwinTransformerImageClassifierPreprocessor as SwinTransformerImageClassifierPreprocessor,
+)
 from keras_hub.src.models.t5.t5_backbone import T5Backbone as T5Backbone
 from keras_hub.src.models.t5.t5_preprocessor import (
     T5Preprocessor as T5Preprocessor,
@@ -833,6 +851,10 @@ from keras_hub.src.models.text_classifier import (
 )
 from keras_hub.src.models.text_classifier_preprocessor import (
     TextClassifierPreprocessor as TextClassifierPreprocessor,
+)
+from keras_hub.src.models.text_embedder import TextEmbedder as TextEmbedder
+from keras_hub.src.models.text_embedder_preprocessor import (
+    TextEmbedderPreprocessor as TextEmbedderPreprocessor,
 )
 from keras_hub.src.models.text_to_image import TextToImage as TextToImage
 from keras_hub.src.models.text_to_image_preprocessor import (

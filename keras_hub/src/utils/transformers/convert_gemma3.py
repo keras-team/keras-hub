@@ -56,7 +56,9 @@ def convert_backbone_config(transformers_config):
     # global rotary embedding. `rope_parameters` is optional and not used
     # by HF for global scaling when `rope_scaling` is None.
     rope_scaling = transformer_config.get("rope_scaling", None)
-    rope_params = transformer_config.get("rope_parameters") or {}
+    rope_params = transformer_config.get("rope_parameters", {})
+    if rope_params is None:
+        rope_params = {}
 
     if rope_scaling is not None:
         rope_global_config = rope_scaling or {}
