@@ -1,5 +1,6 @@
 import os
 
+import keras
 import numpy as np
 import pytest
 
@@ -124,6 +125,84 @@ class TestBackbone(TestCase):
         self.assertTrue(
             os.path.exists(os.path.join(export_path, "config.json"))
         )
+
+    def test_lora_save_load_path_based(self):
+        """Test that LoRA save/load uses stable path-based keys.
+
+        Regression test for https://github.com/keras-team/keras-hub/issues/2701.
+        Using integer indices into a weight-filtered layer list is fragile
+        when loading into a newly constructed model. We now key LoRA weights
+        by the layer's `path` attribute, which is stable across model
+        reconstructions.
+        """
+        save_dir = self.get_temp_dir()
+        lora_filepath = os.path.join(save_dir, "lora.lora.h5")
+
+        backbone = BertBackbone.from_preset(
+            "bert_tiny_en_uncased", load_weights=True
+        )
+        backbone.enable_lora(rank=4)
+
+        data = {
+            "token_ids": np.ones(shape=(2, 10), dtype="int32"),
+            "segment_ids": np.zeros(shape=(2, 10), dtype="int32"),
+            "padding_mask": np.ones(shape=(2, 10), dtype="int32"),
+        }
+
+        ref_out = backbone(data)
+        backbone.save_lora_weights(lora_filepath)
+
+        # New backbone from preset (reconstructs model fresh).
+        new_backbone = BertBackbone.from_preset(
+            "bert_tiny_en_uncased", load_weights=True
+        )
+        new_backbone.enable_lora(rank=4)
+        new_backbone.load_lora_weights(lora_filepath)
+
+        new_out = new_backbone(data)
+        self.assertAllClose(ref_out, new_out)
+
+    def test_lora_save_load_backward_compat(self):
+        """Test that legacy index-based LoRA files still load correctly."""
+        save_dir = self.get_temp_dir()
+        lora_filepath = os.path.join(save_dir, "lora_old.lora.h5")
+
+        backbone = BertBackbone.from_preset(
+            "bert_tiny_en_uncased", load_weights=True
+        )
+        backbone.enable_lora(rank=4)
+
+        data = {
+            "token_ids": np.ones(shape=(2, 10), dtype="int32"),
+            "segment_ids": np.zeros(shape=(2, 10), dtype="int32"),
+            "padding_mask": np.ones(shape=(2, 10), dtype="int32"),
+        }
+
+        ref_out = backbone(data)
+
+        # Manually write an old-style index-based file.
+        store = keras.src.saving.saving_lib.H5IOStore(lora_filepath, mode="w")
+        store.make("lora")["rank"] = backbone._lora_rank
+        all_layers = [
+            lyr
+            for lyr in backbone._flatten_layers(include_self=False)
+            if lyr.weights
+        ]
+        for layer_index in backbone._lora_enabled_layers:
+            layer = all_layers[layer_index]
+            inner = store.make(f"lora/{layer_index}")
+            inner["lora_kernel_a"] = layer.lora_kernel_a
+            inner["lora_kernel_b"] = layer.lora_kernel_b
+        store.close()
+
+        new_backbone = BertBackbone.from_preset(
+            "bert_tiny_en_uncased", load_weights=True
+        )
+        new_backbone.enable_lora(rank=4)
+        new_backbone.load_lora_weights(lora_filepath)
+
+        new_out = new_backbone(data)
+        self.assertAllClose(ref_out, new_out)
 
     def test_export_unsupported_model(self):
         backbone_config = {
