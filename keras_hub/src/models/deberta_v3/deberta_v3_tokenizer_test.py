@@ -40,7 +40,7 @@ class DebertaV3TokenizerTest(TestCase):
             ]
         ]
         output = tokenizer.detokenize(input_data)
-        self.assertAllEqual(output, ["[CLS] the quick brown fox [SEP] [PAD]"])
+        self.assertAllEqual(output, ["[CLS] the quick brown fox[SEP][PAD]"])
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):

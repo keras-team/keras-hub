@@ -40,7 +40,7 @@ class XLMRobertaTokenizerTest(TestCase):
             ]
         ]
         output = tokenizer.detokenize(input_data)
-        self.assertAllEqual(output, ["<s> the quick brown fox </s> <pad>"])
+        self.assertAllEqual(output, ["<s> the quick brown fox</s><pad>"])
 
     @pytest.mark.extra_large
     def test_smallest_preset(self):

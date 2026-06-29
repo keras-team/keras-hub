@@ -452,19 +452,9 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def _decode_with_special_tokens(self, inputs):
         try:
-            keras_hub_special_ids = set(self.special_token_ids)
-            special_ids = set()
-            for kid in keras_hub_special_ids:
-                token_str = self.id_to_token(kid)
-                # Get the underlying SPM ID for this special token
-                spm_id = SentencePieceTokenizer.token_to_id(self, token_str)
-                if spm_id != self._unk_token_id or token_str == "<unk>":
-                    special_ids.add(spm_id)
+            special_ids = set(self.special_token_ids)
         except ValueError:
             special_ids = set()
-
-        if not special_ids:
-            return self._sentence_piece_spm.Decode(inputs)
 
         outputs = []
         for seq in inputs:
@@ -479,13 +469,12 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             for token_id in seq:
                 if token_id in special_ids:
                     decode_and_append()
-                    # Use base class to get the string from the SPM ID
-                    words.append(SentencePieceTokenizer.id_to_token(self, token_id))
+                    words.append(self.id_to_token(token_id))
                 else:
                     current_chunk.append(token_id)
             decode_and_append()
             
-            outputs.append(" ".join(words).strip())
+            outputs.append("".join(words))
             
         return outputs
 

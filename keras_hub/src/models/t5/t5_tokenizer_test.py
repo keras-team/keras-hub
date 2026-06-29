@@ -35,7 +35,7 @@ class T5TokenizerTest(TestCase):
             ]
         ]
         output = tokenizer.detokenize(input_data)
-        self.assertAllEqual(output, ["</s> the quick brown fox <pad>"])
+        self.assertAllEqual(output, ["</s> the quick brown fox<pad>"])
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
