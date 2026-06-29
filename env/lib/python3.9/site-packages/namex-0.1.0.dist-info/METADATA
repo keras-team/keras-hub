@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: namex
+Version: 0.1.0
+Summary: A simple utility to separate the implementation of your Python package and its public API surface.
+Author: Francois Chollet
+Author-email: francois.chollet@gmail.com
+License-File: LICENSE
+Dynamic: author
+Dynamic: author-email
+Dynamic: license-file
+Dynamic: summary

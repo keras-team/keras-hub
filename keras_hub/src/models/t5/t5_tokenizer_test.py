@@ -22,6 +22,12 @@ class T5TokenizerTest(TestCase):
             expected_output=[[4, 9, 5, 7], [4, 6, 8, 10]],
         )
 
+    def test_detokenize(self):
+        tokenizer = T5Tokenizer(**self.init_kwargs)
+        input_data = [[tokenizer.end_token_id, 4, 9, 5, 7, tokenizer.pad_token_id]]
+        output = tokenizer.detokenize(input_data)
+        self.assertAllEqual(output, ["</s> the quick brown fox <pad>"])
+
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             T5Tokenizer(

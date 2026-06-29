@@ -227,7 +227,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
             return new_ids
 
         processed_inputs = [process(ids) for ids in inputs]
-        outputs = super()._detokenize_spm(processed_inputs)
+        outputs = self._decode_with_special_tokens(processed_inputs)
         if not batched:
             outputs = outputs[0]
         return outputs

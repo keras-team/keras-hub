@@ -220,7 +220,7 @@ class MetaCLIP2Tokenizer(SentencePieceTokenizer):
             ]
 
         processed_inputs = [process(ids) for ids in inputs]
-        outputs = self._sentence_piece_spm.Decode(processed_inputs)
+        outputs = self._decode_with_special_tokens(processed_inputs)
         if not batched:
             outputs = outputs[0]
         return outputs
