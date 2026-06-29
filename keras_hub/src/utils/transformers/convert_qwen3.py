@@ -136,7 +136,7 @@ def convert_tokenizer(cls, preset, **kwargs):
 
     # Load all special tokens with the exception of "reserved" ones.
     special_tokens = set()
-    for token in tokenizer_config.get("added_tokens") or []:
+    for token in tokenizer_config["added_tokens"]:
         if not token["content"].startswith("<|reserved_special_token_"):
             vocab[token["content"]] = token["id"]
             special_tokens.add(token["content"])
