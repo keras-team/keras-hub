@@ -151,6 +151,7 @@ class ImageClassifier(Task):
         self.activation = activation
         self.pooling = pooling
         self.dropout = dropout
+        self.head_dtype = head_dtype
 
     def get_config(self):
         # Backbone serialized in `super`
@@ -161,6 +162,7 @@ class ImageClassifier(Task):
                 "pooling": self.pooling,
                 "activation": self.activation,
                 "dropout": self.dropout,
+                "head_dtype": keras.dtype_policies.serialize(self.head_dtype),
             }
         )
         return config
