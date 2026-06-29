@@ -7,6 +7,11 @@ backbone_cls = Qwen3Backbone
 
 
 def convert_backbone_config(transformers_config):
+    rope_theta = transformers_config.get("rope_parameters", {}).get(
+        "rope_theta"
+    )
+    if rope_theta is None:
+        rope_theta = transformers_config["rope_theta"]
     return {
         "vocabulary_size": transformers_config["vocab_size"],
         "head_dim": transformers_config["head_dim"],
@@ -16,7 +21,7 @@ def convert_backbone_config(transformers_config):
         "num_key_value_heads": transformers_config["num_key_value_heads"],
         "intermediate_dim": transformers_config["intermediate_size"],
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
-        "rope_max_wavelength": transformers_config["rope_theta"],
+        "rope_max_wavelength": rope_theta,
         "sliding_window_size": transformers_config.get("sliding_window")
         if transformers_config.get("use_sliding_window")
         else None,

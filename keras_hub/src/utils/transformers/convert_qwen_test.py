@@ -1,44 +1,33 @@
 import pytest
 
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.qwen3.qwen3_backbone import Qwen3Backbone
+from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.transformers import convert_qwen3
+from keras_hub.src.utils.transformers import convert_qwen
 
 
-class TestQwen3Converter(TestCase):
-    @pytest.mark.extra_large
-    def test_backbone_from_hf_preset(self):
-        model = Qwen3Backbone.from_preset(
-            "hf://microsoft/harrier-oss-v1-0.6b",
-            load_weights=False,
-        )
-        # harrier: hidden_dim=1024, num_layers=28
-        self.assertEqual(model.hidden_dim, 1024)
-        self.assertEqual(model.num_layers, 28)
-
+class TestQwenConverter(TestCase):
     @pytest.mark.extra_large
     def test_convert_tiny_preset(self):
-        model = Qwen3Backbone.from_preset(
-            "hf://yujiepan/qwen3-tiny-random",
+        model = QwenBackbone.from_preset(
+            "hf://yujiepan/qwen2-tiny-random",
             load_weights=False,
         )
-        self.assertIsInstance(model, Qwen3Backbone)
+        self.assertIsInstance(model, QwenBackbone)
 
     @pytest.mark.large
     def test_class_detection(self):
         model = Backbone.from_preset(
-            "hf://yujiepan/qwen3-tiny-random",
+            "hf://yujiepan/qwen2-tiny-random",
             load_weights=False,
         )
-        self.assertIsInstance(model, Qwen3Backbone)
+        self.assertIsInstance(model, QwenBackbone)
 
-    def test_qwen3_rope_theta(self):
+    def test_qwen_rope_theta(self):
         # transformers < 5 format
         transformers_config = {
             "vocab_size": 100,
             "hidden_size": 32,
-            "head_dim": 8,
             "num_hidden_layers": 2,
             "num_attention_heads": 4,
             "num_key_value_heads": 2,
@@ -49,14 +38,10 @@ class TestQwen3Converter(TestCase):
             "sliding_window": 4096,
             "tie_word_embeddings": True,
         }
-        keras_config = convert_qwen3.convert_backbone_config(
-            transformers_config
-        )
+        keras_config = convert_qwen.convert_backbone_config(transformers_config)
         self.assertEqual(keras_config["rope_max_wavelength"], 10000.0)
 
         # transformers >= 5 format
         transformers_config["rope_parameters"] = {"rope_theta": 20000.0}
-        keras_config = convert_qwen3.convert_backbone_config(
-            transformers_config
-        )
+        keras_config = convert_qwen.convert_backbone_config(transformers_config)
         self.assertEqual(keras_config["rope_max_wavelength"], 20000.0)

@@ -80,6 +80,20 @@ def convert_checkpoints(hf_model):
     if encoder_config.hidden_activation == "gelu_pytorch_tanh":
         encoder_config.hidden_activation = "gelu_approximate"
     keras.config.set_floatx("float32")
+
+    # rope_theta extraction
+    rope_max_wavelength = None
+    if hasattr(decoder_config, "rope_parameters") and getattr(
+        decoder_config, "rope_parameters"
+    ):
+        rope_params = getattr(decoder_config, "rope_parameters")
+        if isinstance(rope_params, dict):
+            rope_max_wavelength = rope_params.get("rope_theta")
+        else:
+            rope_max_wavelength = getattr(rope_params, "rope_theta", None)
+    if rope_max_wavelength is None:
+        rope_max_wavelength = decoder_config.rope_theta
+
     keras_hub_model = keras_hub.models.T5GemmaBackbone(
         vocabulary_size=decoder_config.vocab_size,
         encoder_hidden_dim=encoder_config.hidden_size,
@@ -110,7 +124,7 @@ def convert_checkpoints(hf_model):
         cross_attention_hidden_size=encoder_config.hidden_size,
         attn_logit_softcapping=decoder_config.attn_logit_softcapping,
         final_logit_softcapping=decoder_config.final_logit_softcapping,
-        rope_max_wavelength=decoder_config.rope_theta,
+        rope_max_wavelength=rope_max_wavelength,
         dtype="float32",
     )
 
