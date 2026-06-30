@@ -94,19 +94,30 @@ def convert_backbone_config(transformers_config):
     we build the vision encoder, Q-Former and language model here and return
     them as constructor kwargs.
 
-    HuggingFace serializes only non-default values, so on disk the nested
-    ``vision_config``, ``qformer_config`` and ``text_config`` are almost empty.
-    Each field is read straight from the raw config dict with its HuggingFace
-    default as the fallback (``Blip2VisionConfig`` / ``Blip2QFormerConfig`` and
-    the per-variant ``OPTConfig`` / ``T5Config`` / ``LlamaConfig``), so a pruned
-    key resolves to the same value the model was trained with.
+    Structural fields are read with direct ``[...]`` indexing so the converter
+    fails loudly with a ``KeyError`` if HuggingFace renames or drops a key we
+    depend on, instead of silently substituting a stale default.
+
+    The exception is the nested ``vision_config`` and ``qformer_config``:
+    HuggingFace serializes a sub-config as a diff against its defaults, and
+    BLIP-2 / InstructBLIP set no non-default vision or Q-Former fields, so on
+    disk these objects hold only ``model_type``. Their structural keys are
+    never present, so they keep ``.get(key, default)`` with the
+    ``Blip2VisionConfig`` / ``Blip2QFormerConfig`` default (recovering them
+    via the raw dict is impossible without the rejected ``Blip2Config``
+    reconstruction). ``text_config`` is serialized in full, so its structural
+    fields are indexed directly; only keys HuggingFace prunes there (OPT
+    ``dropout`` / ``max_position_embeddings``) or that vary by model revision
+    (LLaMA-1 ``rope_theta`` / ``num_key_value_heads``) keep ``.get``.
     """
     is_instruct = _is_instructblip(transformers_config)
     vision_config = transformers_config["vision_config"]
     qformer_config = transformers_config["qformer_config"]
     text_config = transformers_config["text_config"]
-    num_query_tokens = transformers_config.get("num_query_tokens", 32)
+    num_query_tokens = transformers_config["num_query_tokens"]
 
+    # vision_config / qformer_config are pruned to `model_type` on disk (see
+    # above), so every structural field falls back to its HuggingFace default.
     vision_dim = vision_config.get("hidden_size", 1408)
     vision_encoder = BLIP2VisionEncoder(
         image_size=vision_config.get("image_size", 224),
@@ -146,19 +157,21 @@ def convert_backbone_config(transformers_config):
         ),
     )
 
+    # text_config is serialized in full, so structural fields are indexed
+    # directly. `.get` is kept only for keys HuggingFace prunes (OPT dropout /
+    # max_position_embeddings) or that vary by model revision (LLaMA-1 omits
+    # rope_theta / num_key_value_heads and relies on the architecture defaults).
     model_type = text_config["model_type"]
     if model_type == "llama":
-        num_attention_heads = text_config.get("num_attention_heads", 32)
+        num_attention_heads = text_config["num_attention_heads"]
         language_model = BLIP2Vicuna(
-            vocabulary_size=text_config.get("vocab_size", 32000),
-            num_layers=text_config.get("num_hidden_layers", 32),
+            vocabulary_size=text_config["vocab_size"],
+            num_layers=text_config["num_hidden_layers"],
             num_query_heads=num_attention_heads,
-            hidden_dim=text_config.get("hidden_size", 4096),
-            intermediate_dim=text_config.get("intermediate_size", 11008),
+            hidden_dim=text_config["hidden_size"],
+            intermediate_dim=text_config["intermediate_size"],
             num_query_tokens=num_query_tokens,
             qformer_hidden_dim=qformer_hidden_dim,
-            # Vicuna-7B is LLaMA-1; older LlamaConfig revisions omit these and
-            # rely on the architecture defaults.
             rope_max_wavelength=text_config.get("rope_theta", 10000.0),
             num_key_value_heads=text_config.get(
                 "num_key_value_heads", num_attention_heads
@@ -167,11 +180,11 @@ def convert_backbone_config(transformers_config):
         )
     elif model_type == "opt":
         language_model = BLIP2CustomOPT(
-            vocabulary_size=text_config.get("vocab_size", 50272),
-            num_layers=text_config.get("num_hidden_layers", 12),
-            num_heads=text_config.get("num_attention_heads", 12),
-            hidden_dim=text_config.get("hidden_size", 768),
-            intermediate_dim=text_config.get("ffn_dim", 3072),
+            vocabulary_size=text_config["vocab_size"],
+            num_layers=text_config["num_hidden_layers"],
+            num_heads=text_config["num_attention_heads"],
+            hidden_dim=text_config["hidden_size"],
+            intermediate_dim=text_config["ffn_dim"],
             num_query_tokens=num_query_tokens,
             dropout=text_config.get("dropout", 0.1),
             max_sequence_length=text_config.get(
@@ -181,12 +194,12 @@ def convert_backbone_config(transformers_config):
         )
     elif model_type == "t5":
         language_model = BLIP2FlanT5(
-            vocabulary_size=text_config.get("vocab_size", 32128),
-            num_layers=text_config.get("num_layers", 6),
-            num_heads=text_config.get("num_heads", 8),
-            hidden_dim=text_config.get("d_model", 512),
-            intermediate_dim=text_config.get("d_ff", 2048),
-            key_value_dim=text_config.get("d_kv", 64),
+            vocabulary_size=text_config["vocab_size"],
+            num_layers=text_config["num_layers"],
+            num_heads=text_config["num_heads"],
+            hidden_dim=text_config["d_model"],
+            intermediate_dim=text_config["d_ff"],
+            key_value_dim=text_config["d_kv"],
             num_query_tokens=num_query_tokens,
             qformer_hidden_dim=qformer_hidden_dim,
             dropout=text_config.get("dropout_rate", 0.1),
