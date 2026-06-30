@@ -860,6 +860,21 @@ from keras_hub.src.models.text_to_image import TextToImage as TextToImage
 from keras_hub.src.models.text_to_image_preprocessor import (
     TextToImagePreprocessor as TextToImagePreprocessor,
 )
+from keras_hub.src.models.tipsv2.tipsv2_backbone import (
+    TIPSv2Backbone as TIPSv2Backbone,
+)
+from keras_hub.src.models.tipsv2.tipsv2_preprocessor import (
+    TIPSv2Preprocessor as TIPSv2Preprocessor,
+)
+from keras_hub.src.models.tipsv2.tipsv2_text_encoder import (
+    TIPSv2TextEncoder as TIPSv2TextEncoder,
+)
+from keras_hub.src.models.tipsv2.tipsv2_tokenizer import (
+    TIPSv2Tokenizer as TIPSv2Tokenizer,
+)
+from keras_hub.src.models.tipsv2.tipsv2_vision_encoder import (
+    TIPSv2VisionEncoder as TIPSv2VisionEncoder,
+)
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone as VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import (
     VGGImageClassifier as VGGImageClassifier,
