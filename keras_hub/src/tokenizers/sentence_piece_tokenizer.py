@@ -450,11 +450,12 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             )
         return inputs, is_batched
 
-    def _chunk_by_special_tokens(self, seq):
-        try:
-            special_ids = set(self.special_token_ids)
-        except ValueError:
-            special_ids = set()
+    def _chunk_by_special_tokens(self, seq, special_ids=None):
+        if special_ids is None:
+            try:
+                special_ids = set(self.special_token_ids)
+            except ValueError:
+                special_ids = set()
 
         current_chunk = []
         for token_id in seq:
@@ -469,10 +470,15 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             yield False, current_chunk
 
     def _decode_with_special_tokens(self, inputs):
+        try:
+            special_ids = set(self.special_token_ids)
+        except ValueError:
+            special_ids = set()
+
         outputs = []
         for seq in inputs:
             words = []
-            for is_special, chunk in self._chunk_by_special_tokens(seq):
+            for is_special, chunk in self._chunk_by_special_tokens(seq, special_ids):
                 if is_special:
                     words.append(self.id_to_token(chunk[0]))
                 else:
