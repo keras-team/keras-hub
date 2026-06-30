@@ -161,7 +161,8 @@ class SAM3PromptableConceptBackbone(Backbone):
 
         padding_mask = ops.cast(padding_mask_input, dtype="bool")
         box_masks = ops.cast(
-            ops.where(ops.not_equal(box_label_input, -10), 1, 0), dtype="bool"
+            ops.where(ops.not_equal(box_label_input, -10), 1, 0),
+            dtype="int32",
         )
 
         fpn_hidden_states, fpn_position_encodings = self.vision_encoder(
