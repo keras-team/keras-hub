@@ -4,6 +4,12 @@ from keras import ops
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.transformer_decoder import TransformerDecoder
 
+# OPT indexes its learned position embeddings starting at 2: HuggingFace's
+# `OPTLearnedPositionalEmbedding` reserves ids 0 and 1 for the historical
+# padding token, so every absolute position id (and the position-embedding
+# table size) is shifted by this amount.
+OPT_POSITION_OFFSET = 2
+
 
 def opt_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
@@ -54,7 +60,7 @@ class BLIP2OPTEmbeddings(keras.layers.Layer):
             name="token_embedding",
         )
         self.position_embedding = keras.layers.Embedding(
-            input_dim=max_sequence_length + 2,
+            input_dim=max_sequence_length + OPT_POSITION_OFFSET,
             output_dim=hidden_dim,
             embeddings_initializer=opt_kernel_initializer(initializer_range),
             dtype=dtype,
@@ -185,7 +191,7 @@ class BLIP2CustomOPT(keras.Model):
             vocabulary_size=vocabulary_size,
             hidden_dim=hidden_dim,
             max_sequence_length=max_sequence_length,
-            position_offset=num_query_tokens + 2,
+            position_offset=num_query_tokens + OPT_POSITION_OFFSET,
             initializer_range=initializer_range,
             dtype=dtype,
             name="embeddings_layer",
@@ -241,7 +247,12 @@ class BLIP2CustomOPT(keras.Model):
             projected_qf = language_projection(qformer_features_input)
 
             vis_pos_ids = ops.expand_dims(
-                ops.arange(2, 2 + num_query_tokens, dtype="int32"), axis=0
+                ops.arange(
+                    OPT_POSITION_OFFSET,
+                    OPT_POSITION_OFFSET + num_query_tokens,
+                    dtype="int32",
+                ),
+                axis=0,
             )
             x, vis_pos_embeds = embeddings_layer(
                 token_ids_input, visual_position_ids=vis_pos_ids

@@ -21,7 +21,7 @@ class BLIP2FlanT5(keras.Model):
       tokens during inference).
 
     The model returns the decoder hidden states.  The ``lm_head`` is kept
-    as a separate sub-layer so ``BLIP2CausalLM`` can call it externally.
+    as a separate sub-layer so ``BLIP2Seq2SeqLM`` can call it externally.
 
     Args:
         vocabulary_size: int. Token vocabulary size.

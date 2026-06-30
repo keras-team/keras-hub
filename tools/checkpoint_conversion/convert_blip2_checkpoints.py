@@ -271,6 +271,10 @@ def validate_output(keras_lm, hf_model, hf_processor, image):
     ].strip()
 
     keras_lm.compile(sampler="greedy")
+    # HF's `max_new_tokens` counts only newly generated tokens, while KerasHub's
+    # `max_length` caps the total sequence (prompt + generated). The +64 is
+    # generous headroom for the prompt tokens so Keras still emits at least
+    # `max_new_tokens` new tokens, keeping the two outputs comparable.
     if is_encoder_decoder:
         # Seq2Seq: the prompt feeds the encoder and the decoder generates the
         # answer from scratch, so there is no prompt prefix to strip.

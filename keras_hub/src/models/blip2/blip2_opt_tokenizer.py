@@ -63,6 +63,9 @@ class BLIP2OPTTokenizer(BytePairTokenizer):
         **kwargs,
     ):
         self._add_special_token("</s>", "start_token")
+        # BLIP-2 OPT uses a newline as EOS. "\u010a" is the byte-level-BPE
+        # rendering of "\n" (GPT-2/OPT's `bytes_to_unicode` maps byte 0x0A
+        # into the U+0100+ range).
         self._add_special_token("\u010a", "end_token")
         self._add_special_token("<pad>", "pad_token")
         self._add_special_token("<image>", "image_token")

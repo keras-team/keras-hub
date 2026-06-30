@@ -188,20 +188,6 @@ class BLIP2Backbone(Backbone):
         """Hidden dimensionality of the Q-Former (0 in text-only mode)."""
         return self.qformer.hidden_dim if self.qformer is not None else 0
 
-    def enable_lora(self, rank):
-        super().enable_lora(rank)
-        lora_prefixes = set()
-        for v in self.variables:
-            if "lora_kernel" in v.path:
-                prefix = v.path.rsplit("/lora_kernel", 1)[0]
-                lora_prefixes.add(prefix)
-
-        for v in self.variables:
-            if "bias" in v.path and "lora_kernel" not in v.path:
-                prefix = v.path.rsplit("/bias", 1)[0]
-                if prefix in lora_prefixes:
-                    v.trainable = False
-
     def get_config(self):
         config = super().get_config()
         config.update(

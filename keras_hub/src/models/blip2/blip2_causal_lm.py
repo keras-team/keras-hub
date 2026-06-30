@@ -160,8 +160,19 @@ class BLIP2CausalLM(CausalLM):
         if projected_features is not None:
             if uses_learned_positions:
                 token_embeds = lm.embeddings_layer(token_ids)
+                # OPT shifts the query tokens past its base position offset
+                # (`position_offset == num_query_tokens + OPT_POSITION_OFFSET`),
+                # so the visual tokens occupy ids [base, base + num_visual).
+                base_position_offset = (
+                    lm.embeddings_layer.position_offset - num_visual
+                )
                 visual_pos_ids = ops.expand_dims(
-                    ops.arange(2, 2 + num_visual, dtype="int32"), axis=0
+                    ops.arange(
+                        base_position_offset,
+                        base_position_offset + num_visual,
+                        dtype="int32",
+                    ),
+                    axis=0,
                 )
                 visual_pos_embeds = lm.embeddings_layer.position_embedding(
                     visual_pos_ids
@@ -190,8 +201,16 @@ class BLIP2CausalLM(CausalLM):
         else:
             if uses_learned_positions:
                 batch_size = ops.shape(token_ids)[0]
+                # Text tokens start after the visual block, at OPT's base
+                # position offset (`position_offset - num_visual`).
+                base_position_offset = (
+                    lm.embeddings_layer.position_offset - num_visual
+                )
                 position_ids = ops.broadcast_to(
-                    ops.cast(cache_update_index + 2, "int32"), (batch_size, 1)
+                    ops.cast(
+                        cache_update_index + base_position_offset, "int32"
+                    ),
+                    (batch_size, 1),
                 )
                 token_embeds = lm.embeddings_layer(
                     token_ids, position_ids=position_ids
@@ -253,7 +272,6 @@ class BLIP2CausalLM(CausalLM):
         qformer_token_ids = inputs.get("qformer_token_ids")
         qformer_padding_mask = inputs.get("qformer_padding_mask")
         num_visual = self.backbone.num_query_tokens
-        lm = self.backbone.language_model
 
         if images is not None:
             projected_features = self._encode_images(
@@ -262,49 +280,25 @@ class BLIP2CausalLM(CausalLM):
         else:
             projected_features = None
 
-        use_cache = hasattr(lm, "call_with_cache")
-
-        if use_cache:
-            hidden_states, cache = self._build_cache(
-                token_ids, projected_features, padding_mask
-            )
-        else:
-            hidden_states = self.backbone(inputs)
-            cache = None
+        # BLIP2CausalLM only serves OPT and Vicuna, both of which implement
+        # `call_with_cache`, so generation always runs the cached path.
+        hidden_states, cache = self._build_cache(
+            token_ids, projected_features, padding_mask
+        )
 
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
             batch_size = ops.shape(prompt)[0]
-            if use_cache:
-                cache_update_index = index - 1 + num_visual
-                prompt_slice = ops.slice(
-                    prompt, [0, index - 1], [batch_size, 1]
-                )
-                logits, hidden_states, cache = self.call_with_cache(
-                    token_ids=prompt_slice,
-                    cache=cache,
-                    cache_update_index=cache_update_index,
-                    projected_features=None,
-                )
-            else:
-                current_inputs = {
-                    "token_ids": prompt,
-                    "padding_mask": ops.cast(prompt != 0, "int32"),
-                }
-                if images is not None:
-                    current_inputs["images"] = images
-                all_logits = self(current_inputs)
-                logits = ops.slice(
-                    all_logits, [0, index - 1, 0], [batch_size, 1, -1]
-                )
-                all_hidden_states = self.backbone(current_inputs)
-                hidden_states = ops.slice(
-                    all_hidden_states,
-                    [0, num_visual + index - 1, 0],
-                    [batch_size, 1, -1],
-                )
+            cache_update_index = index - 1 + num_visual
+            prompt_slice = ops.slice(prompt, [0, index - 1], [batch_size, 1])
+            logits, hidden_states, cache = self.call_with_cache(
+                token_ids=prompt_slice,
+                cache=cache,
+                cache_update_index=cache_update_index,
+                projected_features=None,
+            )
 
             return (
                 ops.squeeze(logits, axis=1),

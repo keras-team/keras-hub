@@ -95,104 +95,102 @@ def convert_backbone_config(transformers_config):
     them as constructor kwargs.
 
     HuggingFace serializes only non-default values, so on disk the nested
-    ``vision_config`` and ``qformer_config`` are almost empty. Re-instantiating
-    ``Blip2Config`` repopulates every default (``image_size``, ``patch_size``,
-    layer counts, ...), matching what ``hf_model.config`` provided before the
-    conversion was routed through ``from_preset``.
+    ``vision_config``, ``qformer_config`` and ``text_config`` are almost empty.
+    Each field is read straight from the raw config dict with its HuggingFace
+    default as the fallback (``Blip2VisionConfig`` / ``Blip2QFormerConfig`` and
+    the per-variant ``OPTConfig`` / ``T5Config`` / ``LlamaConfig``), so a pruned
+    key resolves to the same value the model was trained with.
     """
     is_instruct = _is_instructblip(transformers_config)
-    if is_instruct:
-        from transformers import InstructBlipConfig
+    vision_config = transformers_config["vision_config"]
+    qformer_config = transformers_config["qformer_config"]
+    text_config = transformers_config["text_config"]
+    num_query_tokens = transformers_config.get("num_query_tokens", 32)
 
-        config = InstructBlipConfig.from_dict(transformers_config)
-    else:
-        from transformers import Blip2Config
-
-        config = Blip2Config.from_dict(transformers_config)
-    vision_config = config.vision_config
-    qformer_config = config.qformer_config
-    text_config = config.text_config
-    num_query_tokens = config.num_query_tokens
-
+    vision_dim = vision_config.get("hidden_size", 1408)
     vision_encoder = BLIP2VisionEncoder(
-        image_size=vision_config.image_size,
-        patch_size=vision_config.patch_size,
-        num_layers=vision_config.num_hidden_layers,
-        num_heads=vision_config.num_attention_heads,
-        hidden_dim=vision_config.hidden_size,
-        intermediate_dim=vision_config.intermediate_size,
+        image_size=vision_config.get("image_size", 224),
+        patch_size=vision_config.get("patch_size", 14),
+        num_layers=vision_config.get("num_hidden_layers", 39),
+        num_heads=vision_config.get("num_attention_heads", 16),
+        hidden_dim=vision_dim,
+        intermediate_dim=vision_config.get("intermediate_size", 6144),
         use_patch_bias=True,
         use_class_token=True,
         use_mha_bias=True,
         use_mlp_bias=True,
         dropout_rate=0.0,
-        layer_norm_epsilon=vision_config.layer_norm_eps,
-        initializer_range=vision_config.initializer_range,
+        layer_norm_epsilon=vision_config.get("layer_norm_eps", 1e-6),
+        initializer_range=vision_config.get("initializer_range", 1e-10),
     )
 
+    qformer_hidden_dim = qformer_config.get("hidden_size", 768)
     qformer = BLIP2QFormer(
         num_query_tokens=num_query_tokens,
-        num_layers=qformer_config.num_hidden_layers,
-        num_heads=qformer_config.num_attention_heads,
-        hidden_dim=qformer_config.hidden_size,
-        intermediate_dim=qformer_config.intermediate_size,
-        vision_dim=vision_config.hidden_size,
-        cross_attention_frequency=qformer_config.cross_attention_frequency,
-        dropout=qformer_config.hidden_dropout_prob,
-        layer_norm_epsilon=qformer_config.layer_norm_eps,
+        num_layers=qformer_config.get("num_hidden_layers", 12),
+        num_heads=qformer_config.get("num_attention_heads", 12),
+        hidden_dim=qformer_hidden_dim,
+        intermediate_dim=qformer_config.get("intermediate_size", 3072),
+        vision_dim=vision_dim,
+        cross_attention_frequency=qformer_config.get(
+            "cross_attention_frequency", 2
+        ),
+        dropout=qformer_config.get("hidden_dropout_prob", 0.1),
+        layer_norm_epsilon=qformer_config.get("layer_norm_eps", 1e-12),
         instruction_aware=is_instruct,
         qformer_vocabulary_size=(
-            qformer_config.vocab_size if is_instruct else None
+            qformer_config.get("vocab_size", 30522) if is_instruct else None
         ),
-        max_position_embeddings=(
-            qformer_config.max_position_embeddings if is_instruct else 512
+        max_position_embeddings=qformer_config.get(
+            "max_position_embeddings", 512
         ),
     )
 
-    model_type = text_config.model_type
+    model_type = text_config["model_type"]
     if model_type == "llama":
+        num_attention_heads = text_config.get("num_attention_heads", 32)
         language_model = BLIP2Vicuna(
-            vocabulary_size=text_config.vocab_size,
-            num_layers=text_config.num_hidden_layers,
-            num_query_heads=text_config.num_attention_heads,
-            hidden_dim=text_config.hidden_size,
-            intermediate_dim=text_config.intermediate_size,
+            vocabulary_size=text_config.get("vocab_size", 32000),
+            num_layers=text_config.get("num_hidden_layers", 32),
+            num_query_heads=num_attention_heads,
+            hidden_dim=text_config.get("hidden_size", 4096),
+            intermediate_dim=text_config.get("intermediate_size", 11008),
             num_query_tokens=num_query_tokens,
-            qformer_hidden_dim=qformer_config.hidden_size,
+            qformer_hidden_dim=qformer_hidden_dim,
             # Vicuna-7B is LLaMA-1; older LlamaConfig revisions omit these and
             # rely on the architecture defaults.
-            rope_max_wavelength=getattr(text_config, "rope_theta", 10000.0),
-            num_key_value_heads=getattr(
-                text_config,
-                "num_key_value_heads",
-                text_config.num_attention_heads,
+            rope_max_wavelength=text_config.get("rope_theta", 10000.0),
+            num_key_value_heads=text_config.get(
+                "num_key_value_heads", num_attention_heads
             ),
-            layer_norm_epsilon=getattr(text_config, "rms_norm_eps", 1e-6),
+            layer_norm_epsilon=text_config.get("rms_norm_eps", 1e-6),
         )
     elif model_type == "opt":
         language_model = BLIP2CustomOPT(
-            vocabulary_size=text_config.vocab_size,
-            num_layers=text_config.num_hidden_layers,
-            num_heads=text_config.num_attention_heads,
-            hidden_dim=text_config.hidden_size,
-            intermediate_dim=text_config.ffn_dim,
+            vocabulary_size=text_config.get("vocab_size", 50272),
+            num_layers=text_config.get("num_hidden_layers", 12),
+            num_heads=text_config.get("num_attention_heads", 12),
+            hidden_dim=text_config.get("hidden_size", 768),
+            intermediate_dim=text_config.get("ffn_dim", 3072),
             num_query_tokens=num_query_tokens,
-            dropout=text_config.dropout,
-            max_sequence_length=text_config.max_position_embeddings,
-            qformer_hidden_dim=qformer_config.hidden_size,
+            dropout=text_config.get("dropout", 0.1),
+            max_sequence_length=text_config.get(
+                "max_position_embeddings", 2048
+            ),
+            qformer_hidden_dim=qformer_hidden_dim,
         )
     elif model_type == "t5":
         language_model = BLIP2FlanT5(
-            vocabulary_size=text_config.vocab_size,
-            num_layers=text_config.num_layers,
-            num_heads=text_config.num_heads,
-            hidden_dim=text_config.d_model,
-            intermediate_dim=text_config.d_ff,
-            key_value_dim=text_config.d_kv,
+            vocabulary_size=text_config.get("vocab_size", 32128),
+            num_layers=text_config.get("num_layers", 6),
+            num_heads=text_config.get("num_heads", 8),
+            hidden_dim=text_config.get("d_model", 512),
+            intermediate_dim=text_config.get("d_ff", 2048),
+            key_value_dim=text_config.get("d_kv", 64),
             num_query_tokens=num_query_tokens,
-            qformer_hidden_dim=qformer_config.hidden_size,
-            dropout=text_config.dropout_rate,
-            layer_norm_epsilon=text_config.layer_norm_epsilon,
+            qformer_hidden_dim=qformer_hidden_dim,
+            dropout=text_config.get("dropout_rate", 0.1),
+            layer_norm_epsilon=text_config.get("layer_norm_epsilon", 1e-6),
         )
     else:
         raise ValueError(
@@ -830,10 +828,8 @@ def load_image_converter_config(preset, transformers_config):
     `BLIP2ImageConverter` bakes in the EVA-CLIP normalization statistics, so
     only the spatial size is read from the checkpoint. The size lives in the
     nested ``vision_config``, which HuggingFace prunes to its defaults on disk,
-    so we repopulate it through ``Blip2Config`` rather than reading raw JSON.
+    so we fall back to the ``Blip2VisionConfig`` default (224) when the key is
+    absent.
     """
-    from transformers import Blip2Config
-
-    config = Blip2Config.from_dict(transformers_config)
-    image_size = config.vision_config.image_size
+    image_size = transformers_config["vision_config"].get("image_size", 224)
     return {"image_size": (image_size, image_size)}
