@@ -82,11 +82,13 @@ class SentencePieceTokenizerTest(TestCase):
         self.assertAllEqual(outputs, ["the quick brown fox.", "the fox."])
 
     def test_detokenize_with_special_tokens(self):
-        # We create a custom test tokenizer to test the special token chunking fix
+        # We create a custom test tokenizer to test the special token chunking 
+        # fix.
         class CustomTokenizer(SentencePieceTokenizer):
             def __init__(self, **kwargs):
                 super().__init__(**kwargs)
-                # "<s>" and "</s>" are in the tokenizer_test_vocab.spm vocabulary
+                # "<s>" and "</s>" are in the tokenizer_test_vocab.spm 
+                # vocabulary.
                 self._add_special_token("<s>", "start_token")
                 self._add_special_token("</s>", "end_token")
 
@@ -96,7 +98,8 @@ class SentencePieceTokenizerTest(TestCase):
         input_data = [[1, 6, 5, 3, 4, 2]]
         
         output = tokenizer.detokenize(input_data)
-        # Verify it doesn't strip spaces between special tokens and normal tokens incorrectly
+        # Verify it doesn't strip spaces between special tokens and normal 
+        # tokens incorrectly.
         self.assertAllEqual(output, ["<s>the quick brown fox.</s>"])
 
     def test_accessors(self):
