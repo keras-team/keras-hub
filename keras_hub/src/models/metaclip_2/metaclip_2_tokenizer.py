@@ -210,6 +210,7 @@ class MetaCLIP2Tokenizer(SentencePieceTokenizer):
                     new_ids.append(1)
                 else:
                     new_ids.append(id)
+            return new_ids
         outputs = []
         for seq in inputs:
             words = []
