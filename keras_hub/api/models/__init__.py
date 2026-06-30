@@ -919,6 +919,12 @@ from keras_hub.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor i
 from keras_hub.src.models.xlm_roberta.xlm_roberta_text_classifier_preprocessor import (
     XLMRobertaTextClassifierPreprocessor as XLMRobertaTextClassifierPreprocessor,
 )
+from keras_hub.src.models.xlm_roberta.xlm_roberta_text_embedder import (
+    XLMRobertaTextEmbedder as XLMRobertaTextEmbedder,
+)
+from keras_hub.src.models.xlm_roberta.xlm_roberta_text_embedder_preprocessor import (
+    XLMRobertaTextEmbedderPreprocessor as XLMRobertaTextEmbedderPreprocessor,
+)
 from keras_hub.src.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer as XLMRobertaTokenizer,
 )
