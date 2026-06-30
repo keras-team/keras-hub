@@ -79,7 +79,7 @@ class XLMRobertaTextEmbedderTest(TestCase):
             cls=XLMRobertaTextEmbedder,
             preset="multilingual_e5_base",
             input_data=self.input_data,
-            expected_output_shape=(2, 1024),
+            expected_output_shape=(2, 768),
         )
 
     @pytest.mark.extra_large

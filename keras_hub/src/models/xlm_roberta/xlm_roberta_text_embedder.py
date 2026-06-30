@@ -133,7 +133,7 @@ class XLMRobertaTextEmbedder(TextEmbedder):
             ops.expand_dims(padding_mask, axis=-1), sequence_output.dtype
         )
         sum_embeddings = ops.sum(sequence_output * mask, axis=1)
-        sum_mask = ops.maximum(ops.sum(mask, axis=1), 1e-9)
+        sum_mask = ops.maximum(ops.sum(mask, axis=1), 1e-5)
         return sum_embeddings / sum_mask
 
     @staticmethod
