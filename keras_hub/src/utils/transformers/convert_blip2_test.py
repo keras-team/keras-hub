@@ -61,4 +61,3 @@ class TestTask(TestCase):
         self.assertIsInstance(model, BLIP2CausalLM)
         model = Backbone.from_preset(preset, load_weights=False)
         self.assertIsInstance(model, BLIP2Backbone)
-
