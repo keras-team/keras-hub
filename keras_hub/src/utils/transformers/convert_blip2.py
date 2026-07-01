@@ -1,16 +1,15 @@
 """Convert BLIP-2 checkpoints from HuggingFace to KerasHub.
 
-BLIP-2 (`Blip2ForConditionalGeneration`) and InstructBLIP bundle several
-sub-networks under a single checkpoint:
+BLIP-2 (`Blip2ForConditionalGeneration`) bundles several sub-networks under a
+single checkpoint:
 
   - ``vision_model.*``        : EVA-CLIP ViT vision encoder.
   - ``qformer.*``             : Querying Transformer (Q-Former), plus the
                                 top-level ``query_tokens`` parameter.
   - ``language_projection.*`` : Q-Former -> language-model projection.
   - ``language_model.*``      : the language model, one of OPT (decoder-only,
-                                ``text_config.model_type == "opt"``), Flan-T5
-                                (encoder-decoder, ``model_type == "t5"``), or
-                                Vicuna/LLaMA (decoder-only, ``"llama"``).
+                                ``text_config.model_type == "opt"``) or Flan-T5
+                                (encoder-decoder, ``model_type == "t5"``).
 
 The vision encoder, Q-Former and projection are shared across variants; only
 the language-model port differs. The weight correspondences here mirror the
@@ -24,7 +23,6 @@ from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
 from keras_hub.src.models.blip2.blip2_custom_opt import BLIP2CustomOPT
 from keras_hub.src.models.blip2.blip2_flan_t5_lm import BLIP2FlanT5
 from keras_hub.src.models.blip2.blip2_qformer import BLIP2QFormer
-from keras_hub.src.models.blip2.blip2_vicuna import BLIP2Vicuna
 from keras_hub.src.models.blip2.blip2_vision_encoder import BLIP2VisionEncoder
 from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
@@ -83,10 +81,6 @@ def _text_model_type(transformers_config):
     return transformers_config["text_config"]["model_type"]
 
 
-def _is_instructblip(transformers_config):
-    return transformers_config.get("model_type") == "instructblip"
-
-
 def convert_backbone_config(transformers_config):
     """Build BLIP-2 sub-module objects from a HuggingFace config.
 
@@ -100,17 +94,15 @@ def convert_backbone_config(transformers_config):
 
     The exception is the nested ``vision_config`` and ``qformer_config``:
     HuggingFace serializes a sub-config as a diff against its defaults, and
-    BLIP-2 / InstructBLIP set no non-default vision or Q-Former fields, so on
+    BLIP-2 sets no non-default vision or Q-Former fields, so on
     disk these objects hold only ``model_type``. Their structural keys are
     never present, so they keep ``.get(key, default)`` with the
     ``Blip2VisionConfig`` / ``Blip2QFormerConfig`` default (recovering them
     via the raw dict is impossible without the rejected ``Blip2Config``
     reconstruction). ``text_config`` is serialized in full, so its structural
     fields are indexed directly; only keys HuggingFace prunes there (OPT
-    ``dropout`` / ``max_position_embeddings``) or that vary by model revision
-    (LLaMA-1 ``rope_theta`` / ``num_key_value_heads``) keep ``.get``.
+    ``dropout`` / ``max_position_embeddings``) keep ``.get``.
     """
-    is_instruct = _is_instructblip(transformers_config)
     vision_config = transformers_config["vision_config"]
     qformer_config = transformers_config["qformer_config"]
     text_config = transformers_config["text_config"]
@@ -148,37 +140,13 @@ def convert_backbone_config(transformers_config):
         ),
         dropout=qformer_config.get("hidden_dropout_prob", 0.1),
         layer_norm_epsilon=qformer_config.get("layer_norm_eps", 1e-12),
-        instruction_aware=is_instruct,
-        qformer_vocabulary_size=(
-            qformer_config.get("vocab_size", 30522) if is_instruct else None
-        ),
-        max_position_embeddings=qformer_config.get(
-            "max_position_embeddings", 512
-        ),
     )
 
     # text_config is serialized in full, so structural fields are indexed
     # directly. `.get` is kept only for keys HuggingFace prunes (OPT dropout /
-    # max_position_embeddings) or that vary by model revision (LLaMA-1 omits
-    # rope_theta / num_key_value_heads and relies on the architecture defaults).
+    # max_position_embeddings).
     model_type = text_config["model_type"]
-    if model_type == "llama":
-        num_attention_heads = text_config["num_attention_heads"]
-        language_model = BLIP2Vicuna(
-            vocabulary_size=text_config["vocab_size"],
-            num_layers=text_config["num_hidden_layers"],
-            num_query_heads=num_attention_heads,
-            hidden_dim=text_config["hidden_size"],
-            intermediate_dim=text_config["intermediate_size"],
-            num_query_tokens=num_query_tokens,
-            qformer_hidden_dim=qformer_hidden_dim,
-            rope_max_wavelength=text_config.get("rope_theta", 10000.0),
-            num_key_value_heads=text_config.get(
-                "num_key_value_heads", num_attention_heads
-            ),
-            layer_norm_epsilon=text_config.get("rms_norm_eps", 1e-6),
-        )
-    elif model_type == "opt":
+    if model_type == "opt":
         language_model = BLIP2CustomOPT(
             vocabulary_size=text_config["vocab_size"],
             num_layers=text_config["num_hidden_layers"],
@@ -207,8 +175,8 @@ def convert_backbone_config(transformers_config):
         )
     else:
         raise ValueError(
-            "KerasHub's BLIP-2 converter supports `opt`, `t5`, and `llama` "
-            "language models; received "
+            "KerasHub's BLIP-2 converter supports `opt` and `t5` language "
+            "models; received "
             f"`text_config.model_type='{model_type}'`."
         )
 
@@ -329,36 +297,18 @@ def _convert_vision_weights(vision_encoder, loader):
 
 
 def _convert_qformer_weights(qformer, loader):
-    instruction_aware = getattr(qformer, "instruction_aware", False)
-    # InstructBLIP nests the embeddings LayerNorm (and adds word / position
-    # embeddings) under `qformer.embeddings`; BLIP-2 keeps a top-level
-    # `qformer.layernorm` over the query tokens only.
-    ln_prefix = "qformer.embeddings." if instruction_aware else "qformer."
-
     loader.port_weight(
         keras_variable=qformer.query_tokens,
         hf_weight_key="query_tokens",
     )
     loader.port_weight(
         keras_variable=qformer.layer_norm.gamma,
-        hf_weight_key=f"{ln_prefix}layernorm.weight",
+        hf_weight_key="qformer.layernorm.weight",
     )
     loader.port_weight(
         keras_variable=qformer.layer_norm.beta,
-        hf_weight_key=f"{ln_prefix}layernorm.bias",
+        hf_weight_key="qformer.layernorm.bias",
     )
-
-    if instruction_aware:
-        loader.port_weight(
-            keras_variable=qformer.text_embeddings.word_embeddings.embeddings,
-            hf_weight_key="qformer.embeddings.word_embeddings.weight",
-        )
-        loader.port_weight(
-            keras_variable=(
-                qformer.text_embeddings.position_embeddings.embeddings
-            ),
-            hf_weight_key="qformer.embeddings.position_embeddings.weight",
-        )
 
     def port_attention(keras_attn, hf_prefix):
         mha = keras_attn.attention
@@ -441,37 +391,6 @@ def _convert_qformer_weights(qformer, loader):
         loader.port_weight(
             keras_variable=layer.output_layer_norm.beta,
             hf_weight_key=f"{prefix}output_query.LayerNorm.bias",
-        )
-
-        if not instruction_aware:
-            continue
-
-        # InstructBLIP's second (instruction-text) feed-forward network.
-        loader.port_weight(
-            keras_variable=layer.text_intermediate_dense.kernel,
-            hf_weight_key=f"{prefix}intermediate.dense.weight",
-            hook_fn=_transpose,
-        )
-        loader.port_weight(
-            keras_variable=layer.text_intermediate_dense.bias,
-            hf_weight_key=f"{prefix}intermediate.dense.bias",
-        )
-        loader.port_weight(
-            keras_variable=layer.text_output_dense.kernel,
-            hf_weight_key=f"{prefix}output.dense.weight",
-            hook_fn=_transpose,
-        )
-        loader.port_weight(
-            keras_variable=layer.text_output_dense.bias,
-            hf_weight_key=f"{prefix}output.dense.bias",
-        )
-        loader.port_weight(
-            keras_variable=layer.text_output_layer_norm.gamma,
-            hf_weight_key=f"{prefix}output.LayerNorm.weight",
-        )
-        loader.port_weight(
-            keras_variable=layer.text_output_layer_norm.beta,
-            hf_weight_key=f"{prefix}output.LayerNorm.bias",
         )
 
 
@@ -668,73 +587,6 @@ def _convert_t5_weights(flan_t5, loader):
     )
 
 
-def _convert_vicuna_weights(vicuna, loader):
-    """Port a Vicuna (LLaMA) language model under the `language_model.` prefix.
-
-    Mirrors `convert_llama3.convert_weights`, but the InstructBLIP checkpoint
-    stores the LLM under `language_model.*` and Vicuna keeps an untied output
-    embedding (`language_model.lm_head.weight`).
-    """
-    llama = vicuna.llama
-
-    def transpose_and_reshape(x, shape):
-        return np.reshape(np.transpose(x), shape)
-
-    loader.port_weight(
-        keras_variable=llama.get_layer("token_embedding").embeddings,
-        hf_weight_key="language_model.model.embed_tokens.weight",
-    )
-    loader.port_weight(
-        keras_variable=llama.get_layer("token_embedding").reverse_embeddings,
-        hf_weight_key="language_model.lm_head.weight",
-        hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
-    )
-
-    for i in range(llama.num_layers):
-        decoder_layer = llama.get_layer(f"transformer_layer_{i}")
-        prefix = f"language_model.model.layers.{i}"
-
-        loader.port_weight(
-            keras_variable=decoder_layer._self_attention_layernorm.scale,
-            hf_weight_key=f"{prefix}.input_layernorm.weight",
-        )
-        loader.port_weight(
-            keras_variable=decoder_layer._feedforward_layernorm.scale,
-            hf_weight_key=f"{prefix}.post_attention_layernorm.weight",
-        )
-
-        attn = decoder_layer._self_attention_layer
-        for proj, dense in (
-            ("q_proj", attn._query_dense),
-            ("k_proj", attn._key_dense),
-            ("v_proj", attn._value_dense),
-            ("o_proj", attn._output_dense),
-        ):
-            loader.port_weight(
-                keras_variable=dense.kernel,
-                hf_weight_key=f"{prefix}.self_attn.{proj}.weight",
-                hook_fn=transpose_and_reshape,
-            )
-
-        for proj, dense in (
-            ("gate_proj", decoder_layer._feedforward_gate_dense),
-            ("up_proj", decoder_layer._feedforward_intermediate_dense),
-            ("down_proj", decoder_layer._feedforward_output_dense),
-        ):
-            loader.port_weight(
-                keras_variable=dense.kernel,
-                hf_weight_key=f"{prefix}.mlp.{proj}.weight",
-                hook_fn=lambda hf_tensor, _: np.transpose(
-                    hf_tensor, axes=(1, 0)
-                ),
-            )
-
-    loader.port_weight(
-        keras_variable=llama.get_layer("sequence_output_layernorm").scale,
-        hf_weight_key="language_model.model.norm.weight",
-    )
-
-
 def convert_weights(backbone, loader, transformers_config):
     _convert_vision_weights(backbone.vision_encoder, loader)
     _convert_qformer_weights(backbone.qformer, loader)
@@ -745,8 +597,6 @@ def convert_weights(backbone, loader, transformers_config):
     model_type = _text_model_type(transformers_config)
     if model_type == "opt":
         _convert_opt_weights(backbone.language_model, loader)
-    elif model_type == "llama":
-        _convert_vicuna_weights(backbone.language_model, loader)
     else:
         _convert_t5_weights(backbone.language_model, loader)
 
@@ -763,17 +613,6 @@ def convert_tokenizer(cls, preset, **kwargs):
     """
     config = load_json(preset, "config.json")
     model_type = config["text_config"]["model_type"]
-
-    if model_type == "llama":
-        from keras_hub.src.models.blip2.blip2_vicuna_tokenizer import (
-            BLIP2VicunaTokenizer,
-        )
-
-        if check_file_exists(preset, "tokenizer.model"):
-            proto = get_file(preset, "tokenizer.model")
-        else:
-            proto = get_file(preset, "spiece.model")
-        return BLIP2VicunaTokenizer(proto=proto, **kwargs)
 
     if model_type == "opt":
         from keras_hub.src.models.blip2.blip2_opt_tokenizer import (
@@ -809,30 +648,6 @@ def convert_tokenizer(cls, preset, **kwargs):
 
 
 # image converter
-
-
-def load_preprocessor_config(preset, transformers_config):
-    """Inject the InstructBLIP Q-Former (BERT WordPiece) tokenizer.
-
-    InstructBLIP ships a second tokenizer for the instruction-aware Q-Former
-    under the ``qformer_tokenizer/`` subdirectory of the HuggingFace checkpoint.
-    It is loaded here and passed to the preprocessor constructor; for BLIP-2
-    (no Q-Former instruction) this returns nothing.
-    """
-    if not _is_instructblip(transformers_config):
-        return None
-
-    from keras_hub.src.models.blip2.blip2_qformer_tokenizer import (
-        BLIP2QFormerTokenizer,
-    )
-
-    vocab_path = get_file(preset, "qformer_tokenizer/vocab.txt")
-    with open(vocab_path, encoding="utf-8") as f:
-        vocabulary = [line.rstrip("\n") for line in f]
-    qformer_tokenizer = BLIP2QFormerTokenizer(
-        vocabulary=vocabulary, lowercase=True
-    )
-    return {"qformer_tokenizer": qformer_tokenizer}
 
 
 def load_image_converter_config(preset, transformers_config):

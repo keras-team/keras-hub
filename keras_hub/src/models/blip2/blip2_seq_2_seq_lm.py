@@ -61,31 +61,18 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
             **kwargs,
         )
 
-    def _qformer_features(
-        self, images, qformer_token_ids=None, qformer_padding_mask=None
-    ):
+    def _qformer_features(self, images):
         """Run the vision encoder + Q-Former to obtain visual query features."""
         if ops.ndim(images) == 3:
             images = ops.expand_dims(images, axis=0)
         vision_features = self.backbone.vision_encoder(images)
-        qformer = self.backbone.qformer
-        if getattr(qformer, "instruction_aware", False):
-            return qformer(
-                {
-                    "vision_features": vision_features,
-                    "qformer_token_ids": qformer_token_ids,
-                    "qformer_padding_mask": qformer_padding_mask,
-                }
-            )
-        return qformer(vision_features)
+        return self.backbone.qformer(vision_features)
 
     def call_encoder(
         self,
         encoder_token_ids,
         encoder_padding_mask,
         images=None,
-        qformer_token_ids=None,
-        qformer_padding_mask=None,
     ):
         """Encode the prompt and (optionally) the image into encoder states.
 
@@ -95,9 +82,7 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
         """
         qformer_features = None
         if images is not None:
-            qformer_features = self._qformer_features(
-                images, qformer_token_ids, qformer_padding_mask
-            )
+            qformer_features = self._qformer_features(images)
         return self.backbone.language_model.call_encoder(
             encoder_token_ids, encoder_padding_mask, qformer_features
         )
@@ -123,9 +108,8 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
         Args:
             inputs: A dictionary with keys `"encoder_token_ids"`,
                 `"encoder_padding_mask"`, `"decoder_token_ids"` and
-                `"decoder_padding_mask"`, plus optional `"images"` (and
-                `"qformer_token_ids"` / `"qformer_padding_mask"` for
-                instruction-aware variants), with batched tensor values.
+                `"decoder_padding_mask"`, plus optional `"images"`, with
+                batched tensor values.
             stop_token_ids: Tuple of id's of end tokens to stop on. If all
                 sequences have produced a new stop token, generation will stop.
         """
@@ -134,8 +118,6 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
         decoder_token_ids = inputs["decoder_token_ids"]
         decoder_padding_mask = inputs["decoder_padding_mask"]
         images = inputs.get("images")
-        qformer_token_ids = inputs.get("qformer_token_ids")
-        qformer_padding_mask = inputs.get("qformer_padding_mask")
         lm_head = self.backbone.language_model.lm_head
 
         # Encode the image + prompt once; reused for every decoding step.
@@ -143,8 +125,6 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
             encoder_token_ids,
             encoder_padding_mask,
             images,
-            qformer_token_ids,
-            qformer_padding_mask,
         )
 
         # Seed the decoder hidden states for the sampler.

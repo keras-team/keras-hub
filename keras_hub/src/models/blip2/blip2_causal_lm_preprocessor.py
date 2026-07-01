@@ -2,7 +2,6 @@ import keras
 import tensorflow as tf
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
 from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
@@ -31,9 +30,8 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
     in a separate process).
 
     Args:
-        tokenizer: A `keras_hub.models.BLIP2OPTTokenizer`,
-            `keras_hub.models.BLIP2FlanT5Tokenizer`, or
-            `keras_hub.models.BLIP2VicunaTokenizer` instance. The actual
+        tokenizer: A `keras_hub.models.BLIP2OPTTokenizer` or
+            `keras_hub.models.BLIP2FlanT5Tokenizer` instance. The actual
             tokenizer is resolved from the preset config when using
             `from_preset()`.
         image_converter: A `keras_hub.models.BLIP2ImageConverter` instance, or
@@ -86,9 +84,7 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
         self,
         tokenizer,
         image_converter=None,
-        qformer_tokenizer=None,
         sequence_length=512,
-        qformer_sequence_length=64,
         add_start_token=True,
         add_end_token=True,
         **kwargs,
@@ -101,44 +97,10 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
             **kwargs,
         )
         self.image_converter = image_converter
-        # The (BERT) Q-Former tokenizer is only present for instruction-aware
-        # InstructBLIP variants; it tokenizes the instruction fed to the
-        # Q-Former, separately from the language-model `tokenizer`.
-        self.qformer_tokenizer = qformer_tokenizer
-        self.qformer_sequence_length = qformer_sequence_length
-        self.instruction_aware = qformer_tokenizer is not None
-        self.qformer_packer = None
         self.text_only_model = self.image_converter is None
-
-    def build(self, input_shape):
-        super().build(input_shape)
-        if self.instruction_aware:
-            self.qformer_packer = StartEndPacker(
-                start_value=self.qformer_tokenizer.cls_token_id,
-                end_value=self.qformer_tokenizer.sep_token_id,
-                pad_value=self.qformer_tokenizer.pad_token_id,
-                sequence_length=self.qformer_sequence_length,
-                return_padding_mask=True,
-            )
 
     def _preprocess_images(self, images):
         return self.image_converter(images)
-
-    def _preprocess_qformer(self, text, sequence_length=None):
-        """Tokenize the instruction for the (instruction-aware) Q-Former."""
-        if not self.built:
-            self.build(None)
-        sequence_length = sequence_length or self.qformer_sequence_length
-        qf_ids, qf_mask = self.qformer_packer(
-            self.qformer_tokenizer(text),
-            sequence_length=sequence_length,
-            add_start_value=True,
-            add_end_value=True,
-        )
-        return {
-            "qformer_token_ids": qf_ids,
-            "qformer_padding_mask": qf_mask,
-        }
 
     def _parse_inputs(self, x):
         if isinstance(x, dict):
@@ -173,8 +135,6 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
         }
         if images is not None:
             x_out["images"] = self._preprocess_images(images)
-        if self.instruction_aware and text is not None:
-            x_out.update(self._preprocess_qformer(text))
 
         return x_out, y_label, sw
 
@@ -207,8 +167,6 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
         }
         if images is not None:
             x_out["images"] = self._preprocess_images(images)
-        if self.instruction_aware and text is not None:
-            x_out.update(self._preprocess_qformer(text))
 
         return x_out
 
@@ -255,12 +213,6 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
                     if self.image_converter is not None
                     else None
                 ),
-                "qformer_tokenizer": (
-                    keras.layers.serialize(self.qformer_tokenizer)
-                    if self.qformer_tokenizer is not None
-                    else None
-                ),
-                "qformer_sequence_length": self.qformer_sequence_length,
             }
         )
         return config
@@ -270,9 +222,5 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
         if config.get("image_converter") is not None:
             config["image_converter"] = keras.layers.deserialize(
                 config["image_converter"]
-            )
-        if config.get("qformer_tokenizer") is not None:
-            config["qformer_tokenizer"] = keras.layers.deserialize(
-                config["qformer_tokenizer"]
             )
         return super().from_config(config)

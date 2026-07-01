@@ -1,6 +1,6 @@
-"""Convert BLIP-2 and InstructBLIP checkpoints to KerasHub format.
+"""Convert BLIP-2 checkpoints to KerasHub format.
 
-Covers the OPT, Flan-T5, and Vicuna (InstructBLIP) language-model variants.
+Covers the OPT and Flan-T5 language-model variants.
 
 Weight mapping lives in ``keras_hub/src/utils/transformers/convert_blip2.py``,
 so this script simply loads the model through ``from_preset("hf://...")``,
@@ -27,8 +27,6 @@ from absl import flags  # noqa: E402
 from PIL import Image  # noqa: E402
 from transformers import Blip2ForConditionalGeneration  # noqa: E402
 from transformers import Blip2Processor  # noqa: E402
-from transformers import InstructBlipForConditionalGeneration  # noqa: E402
-from transformers import InstructBlipProcessor  # noqa: E402
 
 import keras_hub  # noqa: E402
 
@@ -37,7 +35,6 @@ PRESET_MAP = {
     "blip2_opt_6_7b": "Salesforce/blip2-opt-6.7b",
     "blip2_flan_t5_xl": "Salesforce/blip2-flan-t5-xl",
     "blip2_flan_t5_xxl": "Salesforce/blip2-flan-t5-xxl",
-    "instructblip_vicuna_7b": "Salesforce/instructblip-vicuna-7b",
 }
 
 _PROMPT = "Question: what is in the picture? Answer:"
@@ -104,11 +101,8 @@ def validate_output(keras_lm, hf_model, hf_processor, image):
     backbone = keras_lm.backbone
     lm = backbone.language_model
     is_encoder_decoder = hasattr(lm, "encoder_transformer_layers")
-    instruction_aware = getattr(backbone.qformer, "instruction_aware", False)
     if is_encoder_decoder:
         lm_name = "Flan-T5"
-    elif instruction_aware:
-        lm_name = "Vicuna"
     else:
         lm_name = "OPT"
 
@@ -150,18 +144,6 @@ def validate_output(keras_lm, hf_model, hf_processor, image):
     pixel_values = hf_inputs["pixel_values"]
     keras_images = np.transpose(_to_np(pixel_values), (0, 2, 3, 1))
 
-    # InstructBLIP feeds the instruction to the Q-Former through a second
-    # (BERT) tokenization. Reuse HF's `qformer_input_ids` so the per-component
-    # comparison isolates weight-conversion error.
-    qformer_token_ids = qformer_padding_mask = None
-    if instruction_aware:
-        qformer_token_ids = (
-            hf_inputs["qformer_input_ids"].numpy().astype("int32")
-        )
-        qformer_padding_mask = (
-            hf_inputs["qformer_attention_mask"].numpy().astype("int32")
-        )
-
     # Single HF forward pass; intermediate outputs are read off the result.
     with torch.no_grad():
         if is_encoder_decoder:
@@ -186,23 +168,8 @@ def validate_output(keras_lm, hf_model, hf_processor, image):
     )
 
     # Q-Former.
-    if instruction_aware:
-        # Feed this direct sub-model call uniform numpy: `keras_vision` is a
-        # backend tensor while the instruction ids are numpy, and Keras rejects
-        # a dict that mixes tensors and non-tensors in a nested call.
-        keras_qformer = backbone.qformer(
-            {
-                "vision_features": _to_np(keras_vision),
-                "qformer_token_ids": qformer_token_ids,
-                "qformer_padding_mask": qformer_padding_mask,
-            }
-        )
-        # HF returns query + instruction tokens; keep only the query outputs.
-        num_query = backbone.num_query_tokens
-        hf_qformer = hf_out.qformer_outputs.last_hidden_state[:, :num_query, :]
-    else:
-        keras_qformer = backbone.qformer(keras_vision)
-        hf_qformer = hf_out.qformer_outputs.last_hidden_state
+    keras_qformer = backbone.qformer(keras_vision)
+    hf_qformer = hf_out.qformer_outputs.last_hidden_state
     _report_diff(
         "Q-Former query outputs",
         keras_qformer,
@@ -228,9 +195,6 @@ def validate_output(keras_lm, hf_model, hf_processor, image):
             "token_ids": token_ids,
             "padding_mask": padding_mask,
         }
-        if instruction_aware:
-            keras_inputs["qformer_token_ids"] = qformer_token_ids
-            keras_inputs["qformer_padding_mask"] = qformer_padding_mask
         # Backbone returns LM hidden states; the lm head is applied by the
         # CausalLM functional model (which strips the query-token prefix). The
         # text tokens are contiguous at the end of both sequences, so compare
@@ -307,7 +271,6 @@ def main(_):
     hf_model_name = PRESET_MAP[preset]
     os.makedirs(preset, exist_ok=True)
 
-    is_instructblip = preset.startswith("instructblip")
     # The Flan-T5 variant is encoder-decoder and must be packaged as a
     # `BLIP2Seq2SeqLM` task so its `task.json` matches at load time (otherwise
     # the separate `lm_head` task weight is silently skipped on reload).
@@ -319,16 +282,10 @@ def main(_):
     )
 
     print(f"\n-> Loading HF model: {hf_model_name}")
-    if is_instructblip:
-        hf_model = InstructBlipForConditionalGeneration.from_pretrained(
-            hf_model_name, torch_dtype=torch.float32
-        )
-        hf_processor = InstructBlipProcessor.from_pretrained(hf_model_name)
-    else:
-        hf_model = Blip2ForConditionalGeneration.from_pretrained(
-            hf_model_name, torch_dtype=torch.float32
-        )
-        hf_processor = Blip2Processor.from_pretrained(hf_model_name)
+    hf_model = Blip2ForConditionalGeneration.from_pretrained(
+        hf_model_name, torch_dtype=torch.float32
+    )
+    hf_processor = Blip2Processor.from_pretrained(hf_model_name)
     hf_model.eval()
 
     print("\n-> Loading KerasHub model from the HF preset.")

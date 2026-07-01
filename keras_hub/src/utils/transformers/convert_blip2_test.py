@@ -27,17 +27,6 @@ class TestTask(TestCase):
             {"images": image, "encoder_text": "a photo of"}, max_length=15
         )
 
-    @pytest.mark.extra_large
-    def test_convert_instructblip_vicuna_preset(self):
-        # InstructBLIP with a Vicuna (LLaMA) LM -> BLIP2CausalLM.
-        model = BLIP2CausalLM.from_preset(
-            "hf://Salesforce/instructblip-vicuna-7b"
-        )
-        image = np.random.rand(224, 224, 3)
-        model.generate(
-            {"images": image, "text": "describe the image"}, max_length=15
-        )
-
     @pytest.mark.large
     def test_class_detection_opt(self):
         preset = "hf://Salesforce/blip2-opt-2.7b"
@@ -51,13 +40,5 @@ class TestTask(TestCase):
         preset = "hf://Salesforce/blip2-flan-t5-xl"
         model = Seq2SeqLM.from_preset(preset, load_weights=False)
         self.assertIsInstance(model, BLIP2Seq2SeqLM)
-        model = Backbone.from_preset(preset, load_weights=False)
-        self.assertIsInstance(model, BLIP2Backbone)
-
-    @pytest.mark.large
-    def test_class_detection_instructblip_vicuna(self):
-        preset = "hf://Salesforce/instructblip-vicuna-7b"
-        model = CausalLM.from_preset(preset, load_weights=False)
-        self.assertIsInstance(model, BLIP2CausalLM)
         model = Backbone.from_preset(preset, load_weights=False)
         self.assertIsInstance(model, BLIP2Backbone)

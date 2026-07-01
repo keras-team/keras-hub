@@ -1,15 +1,11 @@
 import numpy as np
 import pytest
-from keras import ops
 
 from keras_hub.src.models.blip2.blip2_causal_lm_preprocessor import (
     BLIP2CausalLMPreprocessor,
 )
 from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter
 from keras_hub.src.models.blip2.blip2_opt_tokenizer import BLIP2OPTTokenizer
-from keras_hub.src.models.blip2.blip2_qformer_tokenizer import (
-    BLIP2QFormerTokenizer,
-)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -176,67 +172,3 @@ class BLIP2CausalLMPreprocessorTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
-
-
-class BLIP2InstructionAwarePreprocessorTest(TestCase):
-    def setUp(self):
-        vocab = {
-            "<pad>": 1,
-            "</s>": 2,
-            "<image>": 3,
-            "Ċ": 4,
-            "Ġ": 5,
-            "t": 6,
-            "h": 7,
-            "e": 8,
-            "q": 9,
-            "u": 10,
-            "i": 11,
-            "c": 15,
-            "k": 12,
-            "he": 13,
-            "Ġt": 14,
-        }
-        merges = ["h e", "Ġ t"]
-        self.tokenizer = BLIP2OPTTokenizer(vocabulary=vocab, merges=merges)
-        qformer_vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
-        qformer_vocab += ["the", "quick", "fox"]
-        self.qformer_tokenizer = BLIP2QFormerTokenizer(vocabulary=qformer_vocab)
-        self.image_converter = BLIP2ImageConverter(image_size=(4, 4))
-        self.init_kwargs = {
-            "tokenizer": self.tokenizer,
-            "image_converter": self.image_converter,
-            "qformer_tokenizer": self.qformer_tokenizer,
-            "sequence_length": 10,
-            "qformer_sequence_length": 6,
-        }
-        self.input_data = {
-            "images": np.ones((2, 32, 32, 3), dtype="float32"),
-            "text": ["the quick", "the fox"],
-        }
-
-    def test_emits_qformer_tokens(self):
-        preprocessor = BLIP2CausalLMPreprocessor(**self.init_kwargs)
-        x, _, _ = preprocessor(self.input_data)
-        self.assertIn("qformer_token_ids", x)
-        self.assertIn("qformer_padding_mask", x)
-        self.assertEqual(tuple(x["qformer_token_ids"].shape), (2, 6))
-        self.assertEqual(tuple(x["qformer_padding_mask"].shape), (2, 6))
-        # [CLS] should lead the instruction tokens.
-        cls_id = self.qformer_tokenizer.cls_token_id
-        qformer_token_ids = ops.convert_to_numpy(x["qformer_token_ids"])
-        self.assertEqual(int(qformer_token_ids[0, 0]), cls_id)
-
-    def test_generate_preprocess_emits_qformer_tokens(self):
-        preprocessor = BLIP2CausalLMPreprocessor(**self.init_kwargs)
-        x = preprocessor.generate_preprocess(self.input_data)
-        self.assertIn("qformer_token_ids", x)
-        self.assertEqual(tuple(x["qformer_token_ids"].shape), (2, 6))
-
-    def test_serialization(self):
-        preprocessor = BLIP2CausalLMPreprocessor(**self.init_kwargs)
-        restored = BLIP2CausalLMPreprocessor.from_config(
-            preprocessor.get_config()
-        )
-        self.assertTrue(restored.instruction_aware)
-        self.assertEqual(restored.qformer_sequence_length, 6)

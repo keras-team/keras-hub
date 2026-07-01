@@ -18,8 +18,8 @@ class BLIP2Backbone(Backbone):
       1. A `BLIP2VisionEncoder` (ViT) maps raw images to patch features.
       2. A `BLIP2QFormer` cross-attends learned query tokens against those
          patch features and produces a compact set of visual embeddings.
-      3. A language model (OPT, Flan-T5, or Vicuna) receives the query
-         embeddings prepended to its token sequence and generates text.
+      3. A language model (OPT or Flan-T5) receives the query embeddings
+         prepended to its token sequence and generates text.
 
     When `vision_encoder` is `None` the backbone operates in text-only mode:
     the Q-Former is bypassed and the language model receives only token ids.
@@ -32,8 +32,8 @@ class BLIP2Backbone(Backbone):
             `None` for a text-only backbone.
         qformer: A `keras_hub.models.BLIP2QFormer` instance. Pass `None` when
             `vision_encoder` is `None`.
-        language_model: The language model instance (e.g. `BLIP2CustomOPT`,
-            `BLIP2FlanT5`, or `BLIP2Vicuna`).
+        language_model: The language model instance (e.g. `BLIP2CustomOPT`
+            or `BLIP2FlanT5`).
         dtype: string or `keras.mixed_precision.DTypePolicy`. Dtype used for
             model computations and weights. Defaults to `None` (Keras global
             default).
@@ -77,7 +77,7 @@ class BLIP2Backbone(Backbone):
         # Encoder-decoder language models (Flan-T5) follow the keras-hub
         # seq2seq convention and name their encoder inputs
         # `encoder_token_ids` / `encoder_padding_mask`; decoder-only language
-        # models (OPT, Vicuna) keep the plain `token_ids` / `padding_mask`.
+        # models (OPT) keep the plain `token_ids` / `padding_mask`.
         is_encoder_decoder = hasattr(
             self.language_model, "encoder_transformer_layers"
         )
@@ -118,24 +118,7 @@ class BLIP2Backbone(Backbone):
             inputs["images"] = images_input
 
             patch_features = self.vision_encoder(images_input)
-            if getattr(self.qformer, "instruction_aware", False):
-                qformer_token_ids_input = keras.Input(
-                    shape=(None,), dtype="int32", name="qformer_token_ids"
-                )
-                qformer_padding_mask_input = keras.Input(
-                    shape=(None,), dtype="int32", name="qformer_padding_mask"
-                )
-                inputs["qformer_token_ids"] = qformer_token_ids_input
-                inputs["qformer_padding_mask"] = qformer_padding_mask_input
-                query_embeddings = self.qformer(
-                    {
-                        "vision_features": patch_features,
-                        "qformer_token_ids": qformer_token_ids_input,
-                        "qformer_padding_mask": qformer_padding_mask_input,
-                    }
-                )
-            else:
-                query_embeddings = self.qformer(patch_features)
+            query_embeddings = self.qformer(patch_features)
         else:
             query_embeddings = None
 

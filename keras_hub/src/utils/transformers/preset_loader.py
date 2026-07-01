@@ -49,7 +49,7 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_bart
         elif model_type == "bert":
             self.converter = convert_bert
-        elif model_type in ("blip-2", "instructblip"):
+        elif model_type == "blip-2":
             self.converter = convert_blip2
         elif model_type == "deit":
             self.converter = convert_deit

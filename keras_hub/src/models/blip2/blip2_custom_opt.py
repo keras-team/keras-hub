@@ -296,10 +296,6 @@ class BLIP2CustomOPT(keras.Model):
         self.initializer_range = initializer_range
         self.layer_norm_epsilon = layer_norm_epsilon
 
-        # OPT uses learned absolute position embeddings (added in
-        # `embeddings_layer`); the causal-LM generation glue branches on this.
-        self.uses_learned_positions = True
-
         self.embeddings_layer = embeddings_layer
         self.transformer_layers = transformer_layers
         self.layer_norm = layer_norm

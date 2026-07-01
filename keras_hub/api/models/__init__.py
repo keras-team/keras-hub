@@ -101,18 +101,11 @@ from keras_hub.src.models.blip2.blip2_opt_tokenizer import (
 from keras_hub.src.models.blip2.blip2_qformer import (
     BLIP2QFormer as BLIP2QFormer,
 )
-from keras_hub.src.models.blip2.blip2_qformer_tokenizer import (
-    BLIP2QFormerTokenizer as BLIP2QFormerTokenizer,
-)
 from keras_hub.src.models.blip2.blip2_seq_2_seq_lm import (
     BLIP2Seq2SeqLM as BLIP2Seq2SeqLM,
 )
 from keras_hub.src.models.blip2.blip2_seq_2_seq_lm_preprocessor import (
     BLIP2Seq2SeqLMPreprocessor as BLIP2Seq2SeqLMPreprocessor,
-)
-from keras_hub.src.models.blip2.blip2_vicuna import BLIP2Vicuna as BLIP2Vicuna
-from keras_hub.src.models.blip2.blip2_vicuna_tokenizer import (
-    BLIP2VicunaTokenizer as BLIP2VicunaTokenizer,
 )
 from keras_hub.src.models.blip2.blip2_vision_encoder import (
     BLIP2VisionEncoder as BLIP2VisionEncoder,

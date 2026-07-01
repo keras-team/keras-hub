@@ -40,15 +40,10 @@ class BLIP2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         tokenizer: A `keras_hub.models.BLIP2FlanT5Tokenizer` instance.
         image_converter: A `keras_hub.models.BLIP2ImageConverter` instance, or
             `None`. If `None`, the preprocessor operates in text-only mode.
-        qformer_tokenizer: A `keras_hub.models.BLIP2QFormerTokenizer` instance,
-            or `None`. Only used by instruction-aware (InstructBLIP) variants
-            to tokenize the instruction fed to the Q-Former.
         encoder_sequence_length: int. The length of the packed encoder inputs.
             Defaults to `512`.
         decoder_sequence_length: int. The length of the packed decoder inputs.
             Defaults to `512`.
-        qformer_sequence_length: int. The length of the packed Q-Former
-            instruction inputs. Defaults to `64`.
 
     Examples:
     ```python
@@ -82,10 +77,8 @@ class BLIP2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         self,
         tokenizer,
         image_converter=None,
-        qformer_tokenizer=None,
         encoder_sequence_length=512,
         decoder_sequence_length=512,
-        qformer_sequence_length=64,
         **kwargs,
     ):
         super().__init__(
@@ -95,13 +88,6 @@ class BLIP2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
             **kwargs,
         )
         self.image_converter = image_converter
-        # The (BERT) Q-Former tokenizer is only present for instruction-aware
-        # InstructBLIP variants; it tokenizes the instruction fed to the
-        # Q-Former, separately from the language-model `tokenizer`.
-        self.qformer_tokenizer = qformer_tokenizer
-        self.qformer_sequence_length = qformer_sequence_length
-        self.instruction_aware = qformer_tokenizer is not None
-        self.qformer_packer = None
         self.text_only_model = self.image_converter is None
 
     def build(self, input_shape):
@@ -122,14 +108,6 @@ class BLIP2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
             sequence_length=self.decoder_sequence_length,
             return_padding_mask=True,
         )
-        if self.instruction_aware:
-            self.qformer_packer = StartEndPacker(
-                start_value=self.qformer_tokenizer.cls_token_id,
-                end_value=self.qformer_tokenizer.sep_token_id,
-                pad_value=self.qformer_tokenizer.pad_token_id,
-                sequence_length=self.qformer_sequence_length,
-                return_padding_mask=True,
-            )
         self.built = True
 
     def _parse_inputs(self, x):
@@ -151,19 +129,6 @@ class BLIP2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
 
     def _preprocess_images(self, images):
         return self.image_converter(images)
-
-    def _preprocess_qformer(self, text):
-        """Tokenize the instruction for the (instruction-aware) Q-Former."""
-        qf_ids, qf_mask = self.qformer_packer(
-            self.qformer_tokenizer(text),
-            sequence_length=self.qformer_sequence_length,
-            add_start_value=True,
-            add_end_value=True,
-        )
-        return {
-            "qformer_token_ids": qf_ids,
-            "qformer_padding_mask": qf_mask,
-        }
 
     @preprocessing_function
     def call(
@@ -203,8 +168,6 @@ class BLIP2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         }
         if images is not None:
             x_out["images"] = self._preprocess_images(images)
-        if self.instruction_aware and encoder_text is not None:
-            x_out.update(self._preprocess_qformer(encoder_text))
 
         # Target is the decoder sequence shifted one step to the left.
         y = decoder_token_ids[..., 1:]
@@ -251,8 +214,6 @@ class BLIP2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         }
         if images is not None:
             x_out["images"] = self._preprocess_images(images)
-        if self.instruction_aware and encoder_text is not None:
-            x_out.update(self._preprocess_qformer(encoder_text))
         return x_out
 
     def get_config(self):
@@ -264,12 +225,6 @@ class BLIP2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
                     if self.image_converter is not None
                     else None
                 ),
-                "qformer_tokenizer": (
-                    keras.layers.serialize(self.qformer_tokenizer)
-                    if self.qformer_tokenizer is not None
-                    else None
-                ),
-                "qformer_sequence_length": self.qformer_sequence_length,
             }
         )
         return config
@@ -279,9 +234,5 @@ class BLIP2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         if config.get("image_converter") is not None:
             config["image_converter"] = keras.layers.deserialize(
                 config["image_converter"]
-            )
-        if config.get("qformer_tokenizer") is not None:
-            config["qformer_tokenizer"] = keras.layers.deserialize(
-                config["qformer_tokenizer"]
             )
         return super().from_config(config)

@@ -14,8 +14,8 @@ from keras_hub.src.utils.tensor_utils import any_equal
 class BLIP2CausalLM(CausalLM):
     """An end-to-end multimodal BLIP-2 model for causal language modeling.
 
-    This is the decoder-only BLIP-2 task, used by the OPT and Vicuna language
-    model variants. For the encoder-decoder (Flan-T5) variant, use
+    This is the decoder-only BLIP-2 task, used by the OPT language model
+    variant. For the encoder-decoder (Flan-T5) variant, use
     `keras_hub.models.BLIP2Seq2SeqLM` instead.
 
     A causal language model (LM) predicts the next token based on previous
@@ -56,15 +56,11 @@ class BLIP2CausalLM(CausalLM):
 
         inputs = backbone.input
         hidden_states = backbone(inputs)
-        lm = backbone.language_model
 
         # Drop the visual-prefix positions; only text positions produce logits.
         text_hidden_states = hidden_states[:, backbone.num_query_tokens :, :]
 
-        if hasattr(lm, "lm_head") and lm.lm_head is not None:
-            outputs = lm.lm_head(text_hidden_states)
-        else:
-            outputs = backbone.token_embedding(text_hidden_states, reverse=True)
+        outputs = backbone.token_embedding(text_hidden_states, reverse=True)
 
         super().__init__(
             inputs=inputs,
@@ -120,23 +116,11 @@ class BLIP2CausalLM(CausalLM):
         # Already a list of samples — don't wrap
         return [inputs], False
 
-    def _encode_images(
-        self, images, qformer_token_ids=None, qformer_padding_mask=None
-    ):
+    def _encode_images(self, images):
         if ops.ndim(images) == 3:
             images = ops.expand_dims(images, axis=0)
         vision_features = self.backbone.vision_encoder(images)
-        qformer = self.backbone.qformer
-        if getattr(qformer, "instruction_aware", False):
-            qformer_features = qformer(
-                {
-                    "vision_features": vision_features,
-                    "qformer_token_ids": qformer_token_ids,
-                    "qformer_padding_mask": qformer_padding_mask,
-                }
-            )
-        else:
-            qformer_features = qformer(vision_features)
+        qformer_features = self.backbone.qformer(vision_features)
         return self.backbone.language_model.language_projection(
             qformer_features
         )
@@ -152,36 +136,29 @@ class BLIP2CausalLM(CausalLM):
         """Language-model forward pass with a KV cache."""
         lm = self.backbone.language_model
         num_visual = self.backbone.num_query_tokens
-        # OPT adds learned absolute position embeddings here; LLaMA/Vicuna uses
-        # rotary embeddings applied inside attention (keyed off the cache update
-        # index), so there are no position embeddings to add.
-        uses_learned_positions = getattr(lm, "uses_learned_positions", True)
 
         if projected_features is not None:
-            if uses_learned_positions:
-                token_embeds = lm.embeddings_layer(token_ids)
-                # OPT shifts the query tokens past its base position offset
-                # (`position_offset == num_query_tokens + OPT_POSITION_OFFSET`),
-                # so the visual tokens occupy ids [base, base + num_visual).
-                base_position_offset = (
-                    lm.embeddings_layer.position_offset - num_visual
-                )
-                visual_pos_ids = ops.expand_dims(
-                    ops.arange(
-                        base_position_offset,
-                        base_position_offset + num_visual,
-                        dtype="int32",
-                    ),
-                    axis=0,
-                )
-                visual_pos_embeds = lm.embeddings_layer.position_embedding(
-                    visual_pos_ids
-                )
-                projected_features = projected_features + ops.cast(
-                    visual_pos_embeds, projected_features.dtype
-                )
-            else:
-                token_embeds = lm.token_embedding(token_ids)
+            token_embeds = lm.embeddings_layer(token_ids)
+            # OPT shifts the query tokens past its base position offset
+            # (`position_offset == num_query_tokens + OPT_POSITION_OFFSET`),
+            # so the visual tokens occupy ids [base, base + num_visual).
+            base_position_offset = (
+                lm.embeddings_layer.position_offset - num_visual
+            )
+            visual_pos_ids = ops.expand_dims(
+                ops.arange(
+                    base_position_offset,
+                    base_position_offset + num_visual,
+                    dtype="int32",
+                ),
+                axis=0,
+            )
+            visual_pos_embeds = lm.embeddings_layer.position_embedding(
+                visual_pos_ids
+            )
+            projected_features = projected_features + ops.cast(
+                visual_pos_embeds, projected_features.dtype
+            )
 
             x = ops.concatenate([projected_features, token_embeds], axis=1)
 
@@ -199,24 +176,19 @@ class BLIP2CausalLM(CausalLM):
                 )
 
         else:
-            if uses_learned_positions:
-                batch_size = ops.shape(token_ids)[0]
-                # Text tokens start after the visual block, at OPT's base
-                # position offset (`position_offset - num_visual`).
-                base_position_offset = (
-                    lm.embeddings_layer.position_offset - num_visual
-                )
-                position_ids = ops.broadcast_to(
-                    ops.cast(
-                        cache_update_index + base_position_offset, "int32"
-                    ),
-                    (batch_size, 1),
-                )
-                token_embeds = lm.embeddings_layer(
-                    token_ids, position_ids=position_ids
-                )
-            else:
-                token_embeds = lm.token_embedding(token_ids)
+            batch_size = ops.shape(token_ids)[0]
+            # Text tokens start after the visual block, at OPT's base
+            # position offset (`position_offset - num_visual`).
+            base_position_offset = (
+                lm.embeddings_layer.position_offset - num_visual
+            )
+            position_ids = ops.broadcast_to(
+                ops.cast(cache_update_index + base_position_offset, "int32"),
+                (batch_size, 1),
+            )
+            token_embeds = lm.embeddings_layer(
+                token_ids, position_ids=position_ids
+            )
             x = token_embeds
             full_padding_mask = None
 
@@ -229,10 +201,7 @@ class BLIP2CausalLM(CausalLM):
         else:
             logits_hidden_states = hidden_states
 
-        if hasattr(lm, "lm_head") and lm.lm_head is not None:
-            logits = lm.lm_head(logits_hidden_states)
-        else:
-            logits = lm.token_embedding(logits_hidden_states, reverse=True)
+        logits = lm.token_embedding(logits_hidden_states, reverse=True)
 
         return logits, hidden_states, new_cache
 
@@ -244,7 +213,7 @@ class BLIP2CausalLM(CausalLM):
         text_length = ops.shape(token_ids)[1]
         max_length = text_length + num_visual
 
-        head_dim = getattr(lm, "head_dim", lm.hidden_dim // lm.num_heads)
+        head_dim = lm.hidden_dim // lm.num_heads
         cache_shape = [
             batch_size,
             lm.num_layers,
@@ -269,19 +238,15 @@ class BLIP2CausalLM(CausalLM):
         token_ids = inputs["token_ids"]
         padding_mask = inputs["padding_mask"]
         images = inputs.get("images")
-        qformer_token_ids = inputs.get("qformer_token_ids")
-        qformer_padding_mask = inputs.get("qformer_padding_mask")
         num_visual = self.backbone.num_query_tokens
 
         if images is not None:
-            projected_features = self._encode_images(
-                images, qformer_token_ids, qformer_padding_mask
-            )
+            projected_features = self._encode_images(images)
         else:
             projected_features = None
 
-        # BLIP2CausalLM only serves OPT and Vicuna, both of which implement
-        # `call_with_cache`, so generation always runs the cached path.
+        # BLIP2CausalLM serves OPT, which implements `call_with_cache`, so
+        # generation always runs the cached path.
         hidden_states, cache = self._build_cache(
             token_ids, projected_features, padding_mask
         )
