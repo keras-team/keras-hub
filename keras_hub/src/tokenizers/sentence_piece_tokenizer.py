@@ -450,10 +450,57 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             )
         return inputs, is_batched
 
+    def _chunk_by_special_tokens(self, seq, special_ids=None):
+        if special_ids is None:
+            try:
+                special_ids = set(self.special_token_ids)
+            except ValueError:
+                special_ids = set()
+
+        current_chunk = []
+        for token_id in seq:
+            if token_id in special_ids:
+                if current_chunk:
+                    yield False, current_chunk
+                    current_chunk = []
+                yield True, [token_id]
+            else:
+                current_chunk.append(token_id)
+        if current_chunk:
+            yield False, current_chunk
+
+    def _decode_with_special_tokens(self, inputs):
+        if (
+            not hasattr(self, "_special_token_attrs")
+            or not self._special_token_attrs
+        ):
+            return self._sentence_piece_spm.Decode(inputs)
+
+        try:
+            special_ids = set(self.special_token_ids)
+        except ValueError:
+            special_ids = set()
+
+        if not special_ids:
+            return self._sentence_piece_spm.Decode(inputs)
+
+        outputs = []
+        for seq in inputs:
+            words = []
+            for is_special, chunk in self._chunk_by_special_tokens(
+                seq, special_ids
+            ):
+                if is_special:
+                    words.append(self.id_to_token(chunk[0]))
+                else:
+                    words.append(self._sentence_piece_spm.Decode(chunk))
+            outputs.append("".join(words))
+        return outputs
+
     def _detokenize_spm(self, inputs):
         self._maybe_initialized_spm()
         inputs, batched = self._canonicalize_detokenize_spm_inputs(inputs)
-        outputs = self._sentence_piece_spm.Decode(inputs)
+        outputs = self._decode_with_special_tokens(inputs)
         if not batched:
             outputs = outputs[0]
         return outputs
