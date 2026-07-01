@@ -35,6 +35,12 @@ from transformers import Blip2Processor  # noqa: E402
 # the CPU and leave the GPU to torch/Keras.
 tf.config.set_visible_devices([], "GPU")
 
+# Run GPU matmuls/convs in true float32 (not TF32) so the parity check against
+# the float32 HuggingFace model stays tight (~1e-4). TF32's ~10-bit mantissa
+# would otherwise inflate per-component diffs to ~1e-3 on Ampere+ GPUs.
+torch.backends.cuda.matmul.allow_tf32 = False
+torch.backends.cudnn.allow_tf32 = False
+
 import keras_hub  # noqa: E402
 
 PRESET_MAP = {
