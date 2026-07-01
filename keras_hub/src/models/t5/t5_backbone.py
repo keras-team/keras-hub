@@ -87,7 +87,7 @@ class T5Backbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.tie_embedding_weights = tie_embedding_weights
 
-        # Token embedding layer. Shared by encoder and decoder.
+        # Token embedding layer (shared encoder/decoder)
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
@@ -101,30 +101,30 @@ class T5Backbone(Backbone):
             dropout, dtype=dtype, name="encoder_embedding_dropout"
         )
 
-        self.encoder_transformer_layers = []
-        for i in range(num_layers):
-            self.encoder_transformer_layers.append(
-                T5TransformerLayer(
-                    is_decoder=False,
-                    hidden_dim=hidden_dim,
-                    intermediate_dim=intermediate_dim,
-                    key_value_dim=key_value_dim or hidden_dim // num_heads,
-                    dropout=dropout,
-                    activation=activation,
-                    layer_norm_epsilon=layer_norm_epsilon,
-                    num_heads=num_heads,
-                    use_gated_activation=use_gated_activation,
-                    use_relative_attention_bias=bool(i == 0),
-                    dtype=dtype,
-                    name=f"transformer_encoder_layer_{i}",
-                )
+        self.encoder_transformer_layers = [
+            T5TransformerLayer(
+                is_decoder=False,
+                hidden_dim=hidden_dim,
+                intermediate_dim=intermediate_dim,
+                key_value_dim=key_value_dim or hidden_dim // num_heads,
+                dropout=dropout,
+                activation=activation,
+                layer_norm_epsilon=layer_norm_epsilon,
+                num_heads=num_heads,
+                use_gated_activation=use_gated_activation,
+                use_relative_attention_bias=(i == 0),
+                dtype=dtype,
+                name=f"transformer_encoder_layer_{i}",
             )
+            for i in range(num_layers)
+        ]
 
         self.encoder_layer_norm = T5LayerNorm(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="encoder_output_layer_norm",
         )
+
         self.encoder_dropout = keras.layers.Dropout(
             dropout, dtype=dtype, name="encoder_output_dropout"
         )
@@ -133,38 +133,38 @@ class T5Backbone(Backbone):
             dropout, dtype=dtype, name="decoder_embedding_dropout"
         )
 
-        self.decoder_transformer_layers = []
-        for i in range(num_layers):
-            self.decoder_transformer_layers.append(
-                T5TransformerLayer(
-                    is_decoder=True,
-                    hidden_dim=hidden_dim,
-                    intermediate_dim=intermediate_dim,
-                    key_value_dim=key_value_dim or hidden_dim // num_heads,
-                    dropout=dropout,
-                    activation=activation,
-                    layer_norm_epsilon=layer_norm_epsilon,
-                    num_heads=num_heads,
-                    use_gated_activation=use_gated_activation,
-                    use_relative_attention_bias=bool(i == 0),
-                    dtype=dtype,
-                    name=f"transformer_decoder_layer_{i}",
-                )
+        self.decoder_transformer_layers = [
+            T5TransformerLayer(
+                is_decoder=True,
+                hidden_dim=hidden_dim,
+                intermediate_dim=intermediate_dim,
+                key_value_dim=key_value_dim or hidden_dim // num_heads,
+                dropout=dropout,
+                activation=activation,
+                layer_norm_epsilon=layer_norm_epsilon,
+                num_heads=num_heads,
+                use_gated_activation=use_gated_activation,
+                use_relative_attention_bias=(i == 0),
+                dtype=dtype,
+                name=f"transformer_decoder_layer_{i}",
             )
+            for i in range(num_layers)
+        ]
 
         self.decoder_layer_norm = T5LayerNorm(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="decoder_output_layer_norm",
         )
+
         self.decoder_dropout = keras.layers.Dropout(
             dropout, dtype=dtype, name="decoder_output_dropout"
         )
 
-        # NNX Initialization
         nnx_enabled = keras.config.is_nnx_enabled()
+
+        # === Functional Model ===
         if not nnx_enabled:
-            # === Functional Model ===
             encoder_token_id_input = keras.Input(
                 shape=(None,), dtype="int32", name="encoder_token_ids"
             )
@@ -199,11 +199,10 @@ class T5Backbone(Backbone):
                 dtype=dtype,
                 **kwargs,
             )
+
+        # NNX mode (no tracing)
         else:
             super().__init__(dtype=dtype, **kwargs)
-
-    def call(self, inputs, training=None):
-        return self._forward(inputs, training=training)
 
     # Config
     def get_config(self):
@@ -250,7 +249,8 @@ class T5Backbone(Backbone):
                 x, position_bias = output
 
         encoder_output = self.encoder_dropout(
-            self.encoder_layer_norm(x), training=training
+            self.encoder_layer_norm(x),
+            training=training,
         )
 
         # Decoder
@@ -274,7 +274,8 @@ class T5Backbone(Backbone):
                 x, position_bias = output
 
         decoder_output = self.decoder_dropout(
-            self.decoder_layer_norm(x), training=training
+            self.decoder_layer_norm(x),
+            training=training,
         )
 
         return {
