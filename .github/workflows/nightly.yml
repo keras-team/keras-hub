@@ -16,7 +16,7 @@ jobs:
     needs: [run-test-for-nightly]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -27,7 +27,7 @@ jobs:
           python -m pip install --upgrade pip setuptools
           echo "::set-output name=dir::$(pip cache dir)"
       - name: pip cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ${{ steps.pip-cache.outputs.dir }}
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements-common.txt') }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('pyproject.toml') }}
