@@ -240,4 +240,3 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         if not batched:
             outputs = outputs[0]
         return outputs
-

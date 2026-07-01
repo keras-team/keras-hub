@@ -470,10 +470,16 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             yield False, current_chunk
 
     def _decode_with_special_tokens(self, inputs):
+        if not hasattr(self, "_special_token_attrs") or not self._special_token_attrs:
+            return self._sentence_piece_spm.Decode(inputs)
+
         try:
             special_ids = set(self.special_token_ids)
         except ValueError:
             special_ids = set()
+
+        if not special_ids:
+            return self._sentence_piece_spm.Decode(inputs)
 
         outputs = []
         for seq in inputs:

@@ -81,7 +81,7 @@ class DebertaV3TokenizerTest(TestCase):
 
 class DebertaV3TokenizerTFTest(DebertaV3TokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
-    
+
     def test_detokenize(self):
         tokenizer = DebertaV3Tokenizer(**self.init_kwargs)
         input_data = [
