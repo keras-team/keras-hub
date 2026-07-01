@@ -178,7 +178,7 @@ class T5Backbone(Backbone):
                 shape=(None,), dtype="int32", name="decoder_padding_mask"
             )
 
-            outputs = self._forward(
+            outputs = self.call(
                 {
                     "encoder_token_ids": encoder_token_id_input,
                     "encoder_padding_mask": encoder_padding_mask_input,
@@ -200,9 +200,12 @@ class T5Backbone(Backbone):
                 **kwargs,
             )
 
-        # NNX mode (no tracing)
+        # NNX mode
         else:
             super().__init__(dtype=dtype, **kwargs)
+
+    def call(self, inputs, training=None):
+        return self._forward(inputs, training=training)
 
     # Config
     def get_config(self):
