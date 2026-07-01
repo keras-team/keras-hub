@@ -20,12 +20,20 @@ os.environ["KERAS_BACKEND"] = "torch"
 
 import numpy as np  # noqa: E402
 import requests  # noqa: E402
+import tensorflow as tf  # noqa: E402
 import torch  # noqa: E402
 from absl import app  # noqa: E402
 from absl import flags  # noqa: E402
 from PIL import Image  # noqa: E402
 from transformers import Blip2ForConditionalGeneration  # noqa: E402
 from transformers import Blip2Processor  # noqa: E402
+
+# keras-hub tokenizers run on TensorFlow string ops. Some TF builds ship no CUDA
+# kernels for newer GPUs (e.g. Blackwell / compute capability 12.0) and fail to
+# JIT them from PTX, crashing the OPT BPE tokenizer's `tf.cast`. TF only does
+# tokenizer string ops here (the model runs on the torch backend), so keep TF on
+# the CPU and leave the GPU to torch/Keras.
+tf.config.set_visible_devices([], "GPU")
 
 import keras_hub  # noqa: E402
 
