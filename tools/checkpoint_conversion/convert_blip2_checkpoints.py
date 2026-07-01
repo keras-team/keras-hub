@@ -20,20 +20,12 @@ os.environ["KERAS_BACKEND"] = "torch"
 
 import numpy as np  # noqa: E402
 import requests  # noqa: E402
-import tensorflow as tf  # noqa: E402
 import torch  # noqa: E402
 from absl import app  # noqa: E402
 from absl import flags  # noqa: E402
 from PIL import Image  # noqa: E402
 from transformers import Blip2ForConditionalGeneration  # noqa: E402
 from transformers import Blip2Processor  # noqa: E402
-
-# keras-hub tokenizers run on TensorFlow string ops. Some TF builds ship no CUDA
-# kernels for newer GPUs (e.g. Blackwell / compute capability 12.0) and fail to
-# JIT them from PTX, crashing the OPT BPE tokenizer's `tf.cast`. TF only does
-# tokenizer string ops here (the model runs on the torch backend), so keep TF on
-# the CPU and leave the GPU to torch/Keras.
-tf.config.set_visible_devices([], "GPU")
 
 # Run GPU matmuls/convs in true float32 (not TF32) so the parity check against
 # the float32 HuggingFace model stays tight (~1e-4). TF32's ~10-bit mantissa
@@ -280,6 +272,15 @@ def validate_output(keras_lm, hf_model, hf_processor, image):
 
 
 def main(_):
+    # Import TensorFlow only here, after torch/Keras have claimed CUDA. TF is
+    # pulled in lazily by keras-hub's tokenizers; importing it before torch can
+    # shadow torch's CUDA libraries and segfault. Keep TF on the CPU too: it
+    # only runs tokenizer string ops, and on some GPUs (e.g. Blackwell) its BPE
+    # `tf.cast` has no compatible kernel and crashes if placed on the GPU.
+    import tensorflow as tf
+
+    tf.config.set_visible_devices([], "GPU")
+
     preset = FLAGS.preset
     hf_model_name = PRESET_MAP[preset]
     os.makedirs(preset, exist_ok=True)
