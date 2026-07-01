@@ -1,17 +1,21 @@
 """Convert and validate Harrier text embedding checkpoints.
 
-This script handles HuggingFace checkpoints for Microsoft harrier-oss
-family.  Weight loading goes through 
-``keras_hub.src.utils.transformers.convert_qwen3``
-via the standard KerasHub ``from_preset("hf://...")`` path.
+This script handles HuggingFace checkpoints for the Microsoft harrier-oss
+family. Weight loading uses the standard KerasHub ``from_preset("hf://...")``
+path:
+  - ``harrier_embedding_oss_06b`` loads via ``Qwen3TextEmbedder``
+  - ``harrier_embedding_oss_270m`` loads via ``Gemma3TextEmbedder``
 
-Validation compares a ``Qwen3TextEmbedder`` (last-token pool + L2 norm)
-against the HF AutoModel reference.
+Validation compares the converted embedder against the HF AutoModel reference
+using last-token pool + L2 norm.
 
 Usage::
 
     python -m tools.checkpoint_conversion.convert_harrier_checkpoints \
         --preset harrier_embedding_oss_06b
+
+    python -m tools.checkpoint_conversion.convert_harrier_checkpoints \
+        --preset harrier_embedding_oss_270m
 """
 
 import os
@@ -37,6 +41,7 @@ import keras_hub  # noqa: E402
 
 PRESET_MAP = {
     "harrier_embedding_oss_06b": "microsoft/harrier-oss-v1-0.6b",
+    "harrier_embedding_oss_270m": "microsoft/harrier-oss-v1-270m",
 }
 
 FLAGS = flags.FLAGS
@@ -56,14 +61,26 @@ flags.DEFINE_string(
 # =============================================================================
 
 
-def _hf_embed(texts, hf_tokenizer, hf_model):
+def _hf_embed(texts, hf_tokenizer, hf_model, eos_token=None):
     """Tokenize, run AutoModel, last-token pool, L2 norm.
 
     Processes one sequence at a time to avoid batch-padding effects.
-    Uses ``add_special_tokens=False`` + explicit ``<|im_end|>`` append to
-    produce an identical token sequence to ``Qwen3TextEmbedderPreprocessor``.
+
+    Args:
+        texts: List of input strings.
+        hf_tokenizer: HuggingFace tokenizer.
+        hf_model: HuggingFace AutoModel.
+        eos_token: Optional string token to append after tokenization. When
+            provided, `add_special_tokens=False` is used so the tokenizer
+            does not inject its own special tokens (Qwen3 path — no BOS,
+            manual `<|im_end|>` append). When `None`, the tokenizer's
+            default special-token behaviour is used (Gemma3 path — BOS added
+            automatically by the tokenizer).
+
+    Returns:
+        np.ndarray of shape `(len(texts), hidden_dim)` with L2-normalized
+        embeddings.
     """
-    eos_id = hf_tokenizer.convert_tokens_to_ids("<|im_end|>")
     results = []
     for text in texts:
         enc = hf_tokenizer(
@@ -72,15 +89,22 @@ def _hf_embed(texts, hf_tokenizer, hf_model):
             truncation=True,
             max_length=32767,
             return_tensors="pt",
-            add_special_tokens=False,
+            add_special_tokens=(eos_token is None),
         )
-        eos_col = torch.full((1, 1), eos_id, dtype=torch.long)
-        ones_col = torch.ones((1, 1), dtype=torch.long)
-        input_ids = torch.cat([enc["input_ids"], eos_col], dim=1)
-        attention_mask = torch.cat([enc["attention_mask"], ones_col], dim=1)
+        if eos_token is not None:
+            eos_id = hf_tokenizer.convert_tokens_to_ids(eos_token)
+            eos_col = torch.full((1, 1), eos_id, dtype=torch.long)
+            ones_col = torch.ones((1, 1), dtype=torch.long)
+            enc["input_ids"] = torch.cat([enc["input_ids"], eos_col], dim=1)
+            enc["attention_mask"] = torch.cat(
+                [enc["attention_mask"], ones_col], dim=1
+            )
         with torch.no_grad():
-            out = hf_model(input_ids=input_ids, attention_mask=attention_mask)
-        last = out.last_hidden_state[0, -1, :].float().numpy()
+            out = hf_model(**enc)
+        # Last real token: attention_mask.sum() - 1. Works for both paths
+        # since we process one sequence at a time with no padding.
+        seq_len = int(enc["attention_mask"].sum()) - 1
+        last = out.last_hidden_state[0, seq_len, :].float().numpy()
         norm = np.linalg.norm(last)
         results.append(last / norm)
     return np.stack(results)
@@ -91,8 +115,8 @@ def _hf_embed(texts, hf_tokenizer, hf_model):
 # =============================================================================
 
 
-def validate_output(embedder, hf_model_id):
-    """Validate Qwen3TextEmbedder parity against the HF AutoModel reference.
+def validate_output(embedder, hf_model_id, eos_token=None):
+    """Validate embedder parity against the HF AutoModel reference.
 
     Performs:
     1. Parameter count check.
@@ -102,8 +126,12 @@ def validate_output(embedder, hf_model_id):
     5. Semantic search ranking consistency.
 
     Args:
-        embedder: Converted ``Qwen3TextEmbedder`` instance.
+        embedder: Converted `TextEmbedder` instance (Qwen3 or Gemma3).
         hf_model_id: HuggingFace model ID string.
+        eos_token: Passed through to `_hf_embed`. `None` uses the
+            tokenizer's default special tokens (Gemma3); a token string such
+            as `"<|im_end|>"` disables auto-special-tokens and appends the
+            EOS manually (Qwen3).
 
     Returns:
         bool: True if all checks pass.
@@ -143,11 +171,12 @@ def validate_output(embedder, hf_model_id):
     print(f"Test inputs: {test_texts}")
 
     print("\nComputing HF embeddings (AutoModel, last-token + L2 norm)...")
-    hf_embeddings = _hf_embed(test_texts, hf_tokenizer, hf_model)
+    hf_embeddings = _hf_embed(test_texts, hf_tokenizer, hf_model, eos_token)
     print(f"HF shape: {hf_embeddings.shape}")
     print(f"HF[0][:5]: {hf_embeddings[0][:5]}")
 
-    print("\nComputing KerasHub embeddings (Qwen3TextEmbedder.predict)...")
+    embedder_cls = type(embedder).__name__
+    print(f"\nComputing KerasHub embeddings ({embedder_cls}.predict)...")
     keras_embeddings = np.array(embedder.predict(test_texts))
     print(f"KerasHub shape: {keras_embeddings.shape}")
     print(f"KerasHub[0][:5]: {keras_embeddings[0][:5]}")
@@ -195,8 +224,8 @@ def validate_output(embedder, hf_model_id):
     keras_sims = np.array(embedder.similarity(keras_q, keras_d))
     keras_best = int(np.argmax(keras_sims))
 
-    hf_q = _hf_embed([query], hf_tokenizer, hf_model)
-    hf_d = _hf_embed(documents, hf_tokenizer, hf_model)
+    hf_q = _hf_embed([query], hf_tokenizer, hf_model, eos_token)
+    hf_d = _hf_embed(documents, hf_tokenizer, hf_model, eos_token)
     hf_sims = hf_q @ hf_d.T
     hf_best = int(np.argmax(hf_sims))
 
@@ -252,13 +281,21 @@ def main(_):
     preset = FLAGS.preset
     hf_preset = PRESET_MAP[preset]
 
-    print(f"\nLoading Qwen3TextEmbedder from hf://{hf_preset} ...")
-    embedder = keras_hub.models.Qwen3TextEmbedder.from_preset(
-        f"hf://{hf_preset}"
-    )
+    if preset == "harrier_embedding_oss_06b":
+        print(f"\nLoading Qwen3TextEmbedder from hf://{hf_preset} ...")
+        embedder = keras_hub.models.Qwen3TextEmbedder.from_preset(
+            f"hf://{hf_preset}"
+        )
+        eos_token = "<|im_end|>"
+    else:
+        print(f"\nLoading Gemma3TextEmbedder from hf://{hf_preset} ...")
+        embedder = keras_hub.models.Gemma3TextEmbedder.from_preset(
+            f"hf://{hf_preset}"
+        )
+        eos_token = None
     print("\n-> Embedder loaded")
 
-    passed = validate_output(embedder, hf_preset)
+    passed = validate_output(embedder, hf_preset, eos_token=eos_token)
     if not passed:
         print("\n⚠️  Verification failed. Preset not saved.")
         return

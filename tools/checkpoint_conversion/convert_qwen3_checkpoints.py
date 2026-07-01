@@ -18,6 +18,8 @@ torch.set_default_device(device)
 
 import keras  # noqa: E402
 from keras import ops  # noqa: E402
+
+keras.config.set_dtype_policy("float32")
 from transformers import AutoModelForCausalLM  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
 
@@ -129,8 +131,6 @@ def main(_):
         )
     preset = FLAGS.preset
     hf_preset = PRESET_MAP[preset]
-
-    keras.config.set_dtype_policy("float32")
 
     # === Load the Huggingface model ===
     hf_model = AutoModelForCausalLM.from_pretrained(
