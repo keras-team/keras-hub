@@ -17,7 +17,6 @@ import gc
 import os
 
 os.environ["KERAS_BACKEND"] = "torch"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 import numpy as np  # noqa: E402
 import requests  # noqa: E402
