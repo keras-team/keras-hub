@@ -470,7 +470,10 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             yield False, current_chunk
 
     def _decode_with_special_tokens(self, inputs):
-        if not hasattr(self, "_special_token_attrs") or not self._special_token_attrs:
+        if (
+            not hasattr(self, "_special_token_attrs")
+            or not self._special_token_attrs
+        ):
             return self._sentence_piece_spm.Decode(inputs)
 
         try:
@@ -484,7 +487,9 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         outputs = []
         for seq in inputs:
             words = []
-            for is_special, chunk in self._chunk_by_special_tokens(seq, special_ids):
+            for is_special, chunk in self._chunk_by_special_tokens(
+                seq, special_ids
+            ):
                 if is_special:
                     words.append(self.id_to_token(chunk[0]))
                 else:
