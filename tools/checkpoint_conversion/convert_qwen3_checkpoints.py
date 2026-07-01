@@ -18,12 +18,12 @@ torch.set_default_device(device)
 
 import keras  # noqa: E402
 from keras import ops  # noqa: E402
-
-keras.config.set_dtype_policy("float32")
 from transformers import AutoModelForCausalLM  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
 
 import keras_hub  # noqa: E402
+
+keras.config.set_dtype_policy("float32")
 
 PRESET_MAP = {
     "qwen3_0.6b_en": "Qwen/Qwen3-0.6B",
