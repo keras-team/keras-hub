@@ -331,8 +331,7 @@ class CachedGemma3Attention(keras.layers.Layer):
         query = self._apply_rope(query, cache_update_index)
 
         if cache is not None:
-            key_cache = cache[:, 0, ...]
-            value_cache = cache[:, 1, ...]
+            key_cache, value_cache = cache
             key_update = self.key_dense(x)
 
             if self.use_query_key_norm:
@@ -379,7 +378,7 @@ class CachedGemma3Attention(keras.layers.Layer):
 
             key = ops.slice_update(key_cache, start, key_update)
             value = ops.slice_update(value_cache, start, value_update)
-            cache = ops.stack((key, value), axis=1)
+            cache = (key, value)
         else:
             key = self.key_dense(x)
 
