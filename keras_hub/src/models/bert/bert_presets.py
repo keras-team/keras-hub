@@ -227,4 +227,177 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/sentence-transformers/keras/msmarco_minilm_l12_cos_v5_en/1",
     },
+    # BGE family: BAAI General Embedding models optimized for dense retrieval.
+    "bge_small_en": {
+        "metadata": {
+            "description": (
+                "12-layer BGE small English embedding model (v1). Maps "
+                "sentences to 384-dimensional L2-normalized dense vectors. "
+                "Optimized for dense retrieval and semantic similarity."
+            ),
+            "params": 33360000,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/bge_small_en/1",
+    },
+    "bge_base_en": {
+        "metadata": {
+            "description": (
+                "12-layer BGE base English embedding model (v1). Maps "
+                "sentences to 768-dimensional L2-normalized dense vectors. "
+                "Optimized for dense retrieval and semantic similarity."
+            ),
+            "params": 109482240,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/bge_base_en/1",
+    },
+    "bge_large_en": {
+        "metadata": {
+            "description": (
+                "24-layer BGE large English embedding model (v1). Maps "
+                "sentences to 1024-dimensional L2-normalized dense vectors. "
+                "Highest accuracy in the BGE English v1 family."
+            ),
+            "params": 335141888,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/bge_large_en/1",
+    },
+    "bge_small_en_v1.5": {
+        "metadata": {
+            "description": (
+                "12-layer BGE small English embedding model (v1.5). Maps "
+                "sentences to 384-dimensional L2-normalized dense vectors. "
+                "Optimized for dense retrieval and semantic similarity."
+            ),
+            "params": 33360000,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/bge_small_en_v1.5/1",
+    },
+    "bge_base_en_v1.5": {
+        "metadata": {
+            "description": (
+                "12-layer BGE base English embedding model (v1.5). Maps "
+                "sentences to 768-dimensional L2-normalized dense vectors. "
+                "Optimized for dense retrieval and semantic similarity."
+            ),
+            "params": 109482240,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/bge_base_en_v1.5/1",
+    },
+    "bge_large_en_v1.5": {
+        "metadata": {
+            "description": (
+                "24-layer BGE large English embedding model (v1.5). Maps "
+                "sentences to 1024-dimensional L2-normalized dense vectors. "
+                "Highest accuracy in the BGE English family."
+            ),
+            "params": 335141888,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/bge_large_en_v1.5/1",
+    },
+    "bge_small_zh": {
+        "metadata": {
+            "description": (
+                "12-layer BGE small Chinese embedding model (v1). Maps "
+                "sentences to 384-dimensional L2-normalized dense vectors. "
+                "Optimized for dense retrieval on Chinese text."
+            ),
+            "params": 23953920,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/bge_small_zh/1",
+    },
+    "bge_base_zh": {
+        "metadata": {
+            "description": (
+                "12-layer BGE base Chinese embedding model (v1). Maps "
+                "sentences to 768-dimensional L2-normalized dense vectors. "
+                "Optimized for dense retrieval on Chinese text."
+            ),
+            "params": 102267648,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/bge_base_zh/1",
+    },
+    "bge_large_zh": {
+        "metadata": {
+            "description": (
+                "24-layer BGE large Chinese embedding model (v1). Maps "
+                "sentences to 1024-dimensional L2-normalized dense vectors. "
+                "Highest accuracy in the BGE Chinese v1 family."
+            ),
+            "params": 325522432,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/bge_large_zh/1",
+    },
+    "bge_small_zh_v1.5": {
+        "metadata": {
+            "description": (
+                "12-layer BGE small Chinese embedding model (v1.5). Maps "
+                "sentences to 384-dimensional L2-normalized dense vectors. "
+                "Optimized for dense retrieval on Chinese text."
+            ),
+            "params": 23953920,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/bge_small_zh_v1.5/1",
+    },
+    "bge_base_zh_v1.5": {
+        "metadata": {
+            "description": (
+                "12-layer BGE base Chinese embedding model (v1.5). Maps "
+                "sentences to 768-dimensional L2-normalized dense vectors. "
+                "Optimized for dense retrieval on Chinese text."
+            ),
+            "params": 102267648,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/bge_base_zh_v1.5/1",
+    },
+    "bge_large_zh_v1.5": {
+        "metadata": {
+            "description": (
+                "24-layer BGE large Chinese embedding model (v1.5). Maps "
+                "sentences to 1024-dimensional L2-normalized dense vectors. "
+                "Highest accuracy in the BGE Chinese v1.5 family."
+            ),
+            "params": 325522432,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/bge_large_zh_v1.5/1",
+    },
+    "llm_embedder": {
+        "metadata": {
+            "description": (
+                "BGE-LLM-Embedder: 12-layer embedding model for "
+                "retrieval-augmented language model applications. Maps text to "
+                "768-dimensional dense vectors and supports knowledge, memory, "
+                "demonstration, and tool retrieval tasks."
+            ),
+            "params": 109482240,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/bge/keras/llm_embedder/1",
+    },
+    # "multilingual-e5-*" family: multilingual dense retrieval models.
+    "multilingual_e5_small": {
+        "metadata": {
+            "description": (
+                "12-layer multilingual E5 embedding model with 384-dimensional "
+                "vectors. Fine-tuned for dense retrieval across 100+ languages "
+                "using weakly-supervised contrastive pre-training. "
+                "Prefix inputs with 'query: ' for queries and 'passage: ' "
+                "for documents."
+            ),
+            "params": 117653760,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/multilingual-e5/keras/multilingual_e5_small/1",
+    },
 }
