@@ -101,25 +101,34 @@ class Gemma3TextEmbedder(TextEmbedder):
 
         # === Functional Model ===
         inputs = backbone.input
-        # Gemma3Backbone outputs a raw sequence tensor of shape
-        # (batch, seq_len, hidden_dim), not a dict.
-        sequence_output = backbone(inputs)
+        backbone_output = backbone(inputs)
         padding_mask = inputs["padding_mask"]
 
-        # Apply pooling.
-        if pooling_mode == "last":
-            pooled = self._last_token_pooling(sequence_output, padding_mask)
-        elif pooling_mode == "mean":
-            pooled = self._mean_pooling(sequence_output, padding_mask)
+        if (
+            isinstance(backbone_output, dict)
+            and "pooled_output" in backbone_output
+        ):
+            pooled = backbone_output["pooled_output"]
         else:
-            raise ValueError(
-                f"Invalid pooling_mode: '{pooling_mode}'. "
-                "Expected one of 'last' or 'mean'."
-            )
+            if isinstance(backbone_output, dict):
+                sequence_output = backbone_output["sequence_output"]
+            else:
+                sequence_output = backbone_output
 
-        # Apply L2 normalization.
-        if normalize:
-            pooled = self._l2_normalize(pooled)
+            # Apply pooling.
+            if pooling_mode == "last":
+                pooled = self._last_token_pooling(sequence_output, padding_mask)
+            elif pooling_mode == "mean":
+                pooled = self._mean_pooling(sequence_output, padding_mask)
+            else:
+                raise ValueError(
+                    f"Invalid pooling_mode: '{pooling_mode}'. "
+                    "Expected one of 'last' or 'mean'."
+                )
+
+            # Apply L2 normalization.
+            if normalize:
+                pooled = self._l2_normalize(pooled)
 
         super().__init__(
             inputs=inputs,
@@ -134,15 +143,10 @@ class Gemma3TextEmbedder(TextEmbedder):
     @staticmethod
     def _last_token_pooling(sequence_output, padding_mask):
         """Pool the hidden state of the last non-padding token."""
-        # padding_mask: (batch, seq_len), 1 for real tokens, 0 for padding.
         mask = ops.cast(padding_mask, sequence_output.dtype)
-        # Pad one zero on the right, then slice off position 0 to shift left.
-        # mask_shifted[i] = mask[i+1], with mask_shifted[-1] = 0.
+        # Shift mask left to find the last real token (where mask=1, next=0).
         mask_shifted = ops.pad(mask, [[0, 0], [0, 1]])[:, 1:]
-        # last_token_mask[i] = 1 iff mask[i]=1 and mask[i+1]=0.
         last_token_mask = mask * (1.0 - mask_shifted)
-        # Weighted sum selects the last real token embedding.
-        # Shape: (batch, hidden_dim).
         return ops.sum(
             sequence_output * ops.expand_dims(last_token_mask, axis=-1),
             axis=1,

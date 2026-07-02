@@ -118,9 +118,7 @@ class Qwen3TextEmbedderTest(TestCase):
         sequence_output = ops.convert_to_tensor(
             [[[1.0, 2.0], [3.0, 4.0], [10.0, 20.0]]]
         )
-        # Mask: first 2 tokens real, last is padding — last real token is idx 1.
         mask_partial = np.array([[1, 1, 0]], dtype="int32")
-        # Mask: all 3 tokens real — last real token is idx 2.
         mask_full = np.array([[1, 1, 1]], dtype="int32")
 
         pooled_partial = Qwen3TextEmbedder._last_token_pooling(

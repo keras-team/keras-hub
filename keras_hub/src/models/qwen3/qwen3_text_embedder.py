@@ -134,15 +134,10 @@ class Qwen3TextEmbedder(TextEmbedder):
     @staticmethod
     def _last_token_pooling(sequence_output, padding_mask):
         """Pool the hidden state of the last non-padding token."""
-        # padding_mask: (batch, seq_len), 1 for real tokens, 0 for padding.
         mask = ops.cast(padding_mask, sequence_output.dtype)
-        # Pad one zero on the right, then slice off position 0 to shift left.
-        # mask_shifted[i] = mask[i+1], with mask_shifted[-1] = 0.
+        # Shift mask left to find the last real token (where mask=1, next=0).
         mask_shifted = ops.pad(mask, [[0, 0], [0, 1]])[:, 1:]
-        # last_token_mask[i] = 1 iff mask[i]=1 and mask[i+1]=0.
         last_token_mask = mask * (1.0 - mask_shifted)
-        # Weighted sum selects the last real token embedding.
-        # Shape: (batch, hidden_dim).
         return ops.sum(
             sequence_output * ops.expand_dims(last_token_mask, axis=-1),
             axis=1,
@@ -155,7 +150,7 @@ class Qwen3TextEmbedder(TextEmbedder):
             ops.expand_dims(padding_mask, axis=-1), sequence_output.dtype
         )
         sum_embeddings = ops.sum(sequence_output * mask, axis=1)
-        sum_mask = ops.maximum(ops.sum(mask, axis=1), 1e-5)
+        sum_mask = ops.maximum(ops.sum(mask, axis=1), 1e-9)
         return sum_embeddings / sum_mask
 
     @staticmethod

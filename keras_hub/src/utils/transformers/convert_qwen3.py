@@ -1,9 +1,42 @@
 import numpy as np
 
 from keras_hub.src.models.qwen3.qwen3_backbone import Qwen3Backbone
+from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = Qwen3Backbone
+
+
+def load_task_config(preset, transformers_config):
+    """Detect sentence-transformer pipeline settings.
+
+    Reads two sentence-transformer config files when available:
+
+    - ``modules.json``: determines whether L2 normalization is applied.
+    - ``1_Pooling/config.json``: determines the pooling strategy
+      (mean or last).
+
+    Returns kwargs suitable for ``Qwen3TextEmbedder``.
+    """
+    kwargs = {}
+
+    # Detect normalization from modules.json.
+    if check_file_exists(preset, "modules.json"):
+        modules = load_json(preset, "modules.json")
+        kwargs["normalize"] = any(
+            "Normalize" in m.get("type", "") for m in modules
+        )
+
+    # Detect pooling mode from 1_Pooling/config.json.
+    pooling_config_file = "1_Pooling/config.json"
+    if check_file_exists(preset, pooling_config_file):
+        pooling_config = load_json(preset, pooling_config_file)
+        if pooling_config.get("pooling_mode_mean_tokens", False):
+            kwargs["pooling_mode"] = "mean"
+        else:
+            kwargs["pooling_mode"] = "last"
+
+    return kwargs
 
 
 def convert_backbone_config(transformers_config):

@@ -138,7 +138,7 @@ def validate_output(embedder, hf_model_id, eos_token=None):
     """
     print(f"\nLoading AutoModel + AutoTokenizer: {hf_model_id} (float32)")
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_model_id)
-    hf_model = AutoModel.from_pretrained(hf_model_id, dtype=torch.float32)
+    hf_model = AutoModel.from_pretrained(hf_model_id, torch_dtype=torch.float32)
     hf_model.eval()
 
     print("\n" + "=" * 60)

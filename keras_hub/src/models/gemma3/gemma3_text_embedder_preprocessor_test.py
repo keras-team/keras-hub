@@ -22,6 +22,19 @@ class Gemma3TextEmbedderPreprocessorTest(TestCase):
         }
         self.input_data = ["the quick brown fox"]
 
+    def test_preprocessor_basics(self):
+        self.run_preprocessor_test(
+            cls=Gemma3TextEmbedderPreprocessor,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output={
+                "token_ids": [[1, 9, 14, 10, 12, 2, 0, 0]],
+                "padding_mask": [
+                    [True, True, True, True, True, True, False, False]
+                ],
+            },
+        )
+
     def test_output_keys(self):
         preprocessor = Gemma3TextEmbedderPreprocessor(**self.init_kwargs)
         output = preprocessor(self.input_data)
