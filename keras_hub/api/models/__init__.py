@@ -322,6 +322,12 @@ from keras_hub.src.models.gemma3.gemma3_causal_lm import (
 from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
     Gemma3CausalLMPreprocessor as Gemma3CausalLMPreprocessor,
 )
+from keras_hub.src.models.gemma3.gemma3_text_embedder import (
+    Gemma3TextEmbedder as Gemma3TextEmbedder,
+)
+from keras_hub.src.models.gemma3.gemma3_text_embedder_preprocessor import (
+    Gemma3TextEmbedderPreprocessor as Gemma3TextEmbedderPreprocessor,
+)
 from keras_hub.src.models.gemma3.gemma3_tokenizer import (
     Gemma3Tokenizer as Gemma3Tokenizer,
 )
@@ -608,6 +614,12 @@ from keras_hub.src.models.qwen3.qwen3_causal_lm import (
 )
 from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
     Qwen3CausalLMPreprocessor as Qwen3CausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen3.qwen3_text_embedder import (
+    Qwen3TextEmbedder as Qwen3TextEmbedder,
+)
+from keras_hub.src.models.qwen3.qwen3_text_embedder_preprocessor import (
+    Qwen3TextEmbedderPreprocessor as Qwen3TextEmbedderPreprocessor,
 )
 from keras_hub.src.models.qwen3.qwen3_tokenizer import (
     Qwen3Tokenizer as Qwen3Tokenizer,

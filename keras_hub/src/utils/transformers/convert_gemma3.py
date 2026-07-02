@@ -6,6 +6,7 @@ from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
 from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
     Gemma3VisionEncoder,
 )
+from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import load_json
 
@@ -71,9 +72,12 @@ def convert_backbone_config(transformers_config):
     sliding_window = transformer_config.get("sliding_window", None)
     layer_types = transformer_config.get("layer_types", [])
 
-    use_sliding_window_attention = sliding_window not in (None, 0) or any(
-        lt == "sliding_attention" for lt in layer_types
-    )
+    if layer_types:
+        use_sliding_window_attention = any(
+            lt == "sliding_attention" for lt in layer_types
+        )
+    else:
+        use_sliding_window_attention = sliding_window not in (None, 0)
 
     # Determine query_head_dim_normalize
     # If query_pre_attn_scalar equals head_dim, then normalize by head_dim
@@ -454,18 +458,107 @@ def _resolve_prefix(loader, candidates):
     return candidates[0]
 
 
+def _build_sentencepiece_proto(tokenizer_config):
+    """Build a serialized SentencePiece proto from a tokenizer.json config.
+
+    Used when `tokenizer.model` is absent from the HF repo (e.g.
+    harrier-oss-v1-270m only ships `tokenizer.json`). Reconstructs a BPE
+    SentencePiece model that is byte-for-byte compatible with the
+    Gemma-family tokenizer.
+    """
+    import re
+
+    from sentencepiece import sentencepiece_model_pb2 as sp_pb2
+
+    vocab = dict(tokenizer_config["model"]["vocab"])
+    merges = list(tokenizer_config["model"]["merges"])
+
+    # Normalize merge format: [["a","b"], ...] → ["a b", ...].
+    if merges and isinstance(merges[0], list) and len(merges[0]) == 2:
+        merges = [" ".join(m) for m in merges]
+
+    # Include added / special tokens.
+    added_token_strings = set()
+    for token_info in tokenizer_config.get("added_tokens", []):
+        content = token_info["content"]
+        vocab[content] = token_info["id"]
+        added_token_strings.add(content)
+
+    # Map each merge result → rank for piece scores.
+    merge_result_rank = {}
+    for rank, rule in enumerate(merges):
+        parts = rule.split(" ", 1)
+        if len(parts) == 2:
+            merge_result_rank[parts[0] + parts[1]] = rank
+
+    model_proto = sp_pb2.ModelProto()
+
+    ts = model_proto.trainer_spec
+    ts.model_type = sp_pb2.TrainerSpec.BPE
+    ts.vocab_size = len(vocab)
+    ts.byte_fallback = True
+
+    ns = model_proto.normalizer_spec
+    ns.name = "identity"
+    ns.add_dummy_prefix = False
+    ns.escape_whitespaces = True
+    ns.remove_extra_whitespaces = False
+
+    dns = model_proto.denormalizer_spec
+    dns.add_dummy_prefix = False
+    dns.escape_whitespaces = True
+    dns.remove_extra_whitespaces = False
+
+    _byte_re = re.compile(r"^<0x[0-9A-Fa-f]{2}>$")
+    base_score = -float(len(merges) + 1)
+
+    for token_str, _token_id in sorted(vocab.items(), key=lambda kv: kv[1]):
+        piece = model_proto.pieces.add()
+        piece.piece = token_str
+        if token_str == "<unk>":
+            piece.type = sp_pb2.ModelProto.SentencePiece.UNKNOWN
+            piece.score = 0.0
+        elif _byte_re.match(token_str):
+            piece.type = sp_pb2.ModelProto.SentencePiece.BYTE
+            piece.score = 0.0
+        elif token_str in added_token_strings:
+            piece.type = sp_pb2.ModelProto.SentencePiece.USER_DEFINED
+            piece.score = 0.0
+        elif token_str in merge_result_rank:
+            piece.type = sp_pb2.ModelProto.SentencePiece.NORMAL
+            piece.score = -float(merge_result_rank[token_str])
+        else:
+            piece.type = sp_pb2.ModelProto.SentencePiece.NORMAL
+            piece.score = base_score
+
+    return model_proto.SerializeToString()
+
+
 def convert_tokenizer(cls, preset, **kwargs):
-    proto = get_file(preset, "tokenizer.model")
-    sp = SentencePieceProcessor()
-    if isinstance(proto, bytes):
-        sp.LoadFromSerializedProto(proto)
-    else:
-        sp.load(proto)
+    if check_file_exists(preset, "tokenizer.model"):
+        proto = get_file(preset, "tokenizer.model")
+        sp = SentencePieceProcessor()
+        if isinstance(proto, bytes):
+            sp.LoadFromSerializedProto(proto)
+        else:
+            sp.load(proto)
+        has_vision_tokens = (
+            sp.PieceToId("<start_of_image>") != sp.unk_id()
+            and sp.PieceToId("<img>") != sp.unk_id()
+            and sp.PieceToId("<end_of_image>") != sp.unk_id()
+        )
+        return cls(proto, has_vision_tokens=has_vision_tokens, **kwargs)
 
+    # tokenizer.model not present – build proto from tokenizer.json.
+    tokenizer_config = load_json(preset, "tokenizer.json")
+    proto = _build_sentencepiece_proto(tokenizer_config)
+    vocab = tokenizer_config.get("model", {}).get("vocab", {})
+    added_contents = {
+        t["content"] for t in tokenizer_config.get("added_tokens", [])
+    }
     has_vision_tokens = (
-        sp.PieceToId("<start_of_image>") != sp.unk_id()
-        and sp.PieceToId("<img>") != sp.unk_id()
-        and sp.PieceToId("<end_of_image>") != sp.unk_id()
+        ("<start_of_image>" in vocab or "<start_of_image>" in added_contents)
+        and ("<img>" in vocab or "<img>" in added_contents)
+        and ("<end_of_image>" in vocab or "<end_of_image>" in added_contents)
     )
-
     return cls(proto, has_vision_tokens=has_vision_tokens, **kwargs)

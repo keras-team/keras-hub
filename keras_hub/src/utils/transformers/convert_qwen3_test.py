@@ -8,6 +8,16 @@ from keras_hub.src.utils.transformers import convert_qwen3
 
 class TestQwen3Converter(TestCase):
     @pytest.mark.extra_large
+    def test_backbone_from_hf_preset(self):
+        model = Qwen3Backbone.from_preset(
+            "hf://microsoft/harrier-oss-v1-0.6b",
+            load_weights=False,
+        )
+        # harrier: hidden_dim=1024, num_layers=28
+        self.assertEqual(model.hidden_dim, 1024)
+        self.assertEqual(model.num_layers, 28)
+
+    @pytest.mark.extra_large
     def test_convert_tiny_preset(self):
         model = Qwen3Backbone.from_preset(
             "hf://yujiepan/qwen3-tiny-random",

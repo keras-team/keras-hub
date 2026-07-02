@@ -303,4 +303,18 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/embeddinggemma/keras/embedding_gemma3_300m/2",
     },
+    # Microsoft harrier model presets
+    "harrier_embedding_oss_270m": {
+        "metadata": {
+            "description": (
+                "Microsoft harrier-oss-v1 270M multilingual text embedding "
+                "model based on the Gemma3-270M architecture, fine-tuned for "
+                "dense retrieval and semantic similarity across 94+ languages. "
+                "Achieves 66.5 on Multilingual MTEB v2."
+            ),
+            "params": 268098176,
+            "path": "gemma3",
+        },
+        "kaggle_handle": "kaggle://keras/gemma3/keras/harrier_embedding_oss_270m/1",
+    },
 }
