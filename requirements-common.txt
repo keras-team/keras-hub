@@ -3,6 +3,7 @@ dm-tree
 regex
 rich
 kagglehub!=1.0.1
+kagglesdk==0.1.30
 tokenizers
 sentencepiece
 # Tooling deps.

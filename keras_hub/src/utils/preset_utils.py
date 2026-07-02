@@ -18,8 +18,16 @@ from keras_hub.src.utils.tensor_utils import get_tensor_size_in_bits
 try:
     import kagglehub
     from kagglehub.exceptions import KaggleApiHTTPError
-except ImportError:
-    kagglehub = None
+except ImportError as e:
+    if getattr(e, "name", None) == "kagglehub":
+        kagglehub = None
+    else:
+        raise ImportError(
+            f"The `kagglehub` package is installed but failed to import "
+            f"due to a dependency error: {e}. This is likely caused by "
+            f"an incompatible version of `kagglesdk`. Please try: "
+            f"`pip install --upgrade kagglehub kagglesdk`."
+        ) from e
 
 try:
     import huggingface_hub
