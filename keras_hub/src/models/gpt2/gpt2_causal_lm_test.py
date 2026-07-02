@@ -245,6 +245,21 @@ class GPT2CausalLMTest(TestCase):
 
         self.assertIsNone(causal_lm.get_quantization_layer_structure("int8"))
 
+    def test_generate_max_length_with_no_preprocessor(self):
+        causal_lm = GPT2CausalLM(**self.init_kwargs)
+        prompt = " airplane at airport"
+
+        # Pre-tokenize inputs before detaching preprocessing.
+        inputs = causal_lm.preprocessor.generate_preprocess([prompt])
+        causal_lm.preprocessor = None
+        output = causal_lm.generate(
+            inputs,
+            max_length=8,
+            stop_token_ids=None,
+        )
+
+        self.assertIsNotNone(output)
+
 
 @pytest.mark.skipif(keras.src.backend.backend() != "jax", reason="JAX only")
 @pytest.mark.multi_device
