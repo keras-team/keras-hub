@@ -694,9 +694,10 @@ class Qwen3_5Spec(Qwen3FamilySpec):
             "structure (`call_with_cache` expects a `(kv_cache, conv_cache, "
             "recurrent_cache)` tuple, since linear-attention layers need a "
             "convolutional/recurrent state that a stacked KV tensor cannot "
-            "represent) that the adapter does not yet support: it always "
-            "stacks per-layer KV tensors into a single `cache` tensor and "
-            "passes that alone. Support for hybrid cache structures is not "
+            "represent), but the LiteRT-LM adapter only supports "
+            '`cache_structure="single_stacked"` (a single stacked '
+            "`[batch, num_layers, 2, cache_length, num_kv_heads, head_dim]` "
+            "KV-cache tensor). Support for hybrid cache structures is not "
             "yet implemented."
         )
 
