@@ -1,6 +1,7 @@
 """Export KerasHub CausalLM models to LiteRT-LM `.litertlm` bundles."""
 
 import contextlib
+import dataclasses
 import importlib.util
 import inspect
 import os
@@ -300,39 +301,55 @@ def _validate_export_args(
     return prefill_seq_lens
 
 
-def _build_prefill_inputs(
-    prefill_seq_lens,
-    num_layers,
-    cache_length,
-    num_kv_heads,
-    head_dim,
-    dtype,
-    cache_layout,
-    has_vision,
-    has_audio,
-    vision_cfg,
-    audio_cfg,
-    separate_vision_encoder,
-    is_gemma4_vision,
-    vision_output_dim,
-):
+@dataclasses.dataclass(frozen=True)
+class ExportPlan:
+    """Immutable bundle of per-export-run settings for a single export call.
+
+    ``export_to_litertlm`` computes all of these values once, early in the
+    pipeline (resolving the model-family spec, cache config, and
+    vision/audio config), then passes a single ``ExportPlan`` to the later
+    pipeline phases (building sample inputs, tracing/converting, assembling
+    the bundle) instead of a long, order-sensitive positional-argument list.
+    """
+
+    spec: object
+    num_layers: int
+    cache_length: int
+    num_kv_heads: int
+    head_dim: int
+    cache_layout: str
+    prefill_seq_lens: list
+    dtype: object
+    has_vision: bool
+    has_audio: bool
+    vision_cfg: dict | None
+    audio_cfg: dict | None
+    is_gemma4_vision: bool
+    vision_output_dim: int | None
+    max_images: int | None
+    tokens_per_image: int | None
+    separate_vision_encoder: bool
+
+
+def _build_prefill_inputs(plan):
     """Build a ``{seq_len: sample_inputs}`` map for every prefill bucket."""
     prefill_inputs_map = {}
-    for seq_len in prefill_seq_lens:
+    for seq_len in plan.prefill_seq_lens:
         base = _build_sample_inputs(
             batch_size=1,
             seq_len=seq_len,
-            num_layers=num_layers,
-            cache_length=cache_length,
-            num_kv_heads=num_kv_heads,
-            head_dim=head_dim,
-            dtype=dtype,
-            cache_layout=cache_layout,
+            num_layers=plan.num_layers,
+            cache_length=plan.cache_length,
+            num_kv_heads=plan.num_kv_heads,
+            head_dim=plan.head_dim,
+            dtype=plan.dtype,
+            cache_layout=plan.cache_layout,
         )
-        if has_vision:
+        if plan.has_vision:
+            vision_cfg = plan.vision_cfg
             max_images = vision_cfg["max_images_per_prompt"]
             num_vision_tokens = vision_cfg["num_vision_tokens"]
-            if separate_vision_encoder:
+            if plan.separate_vision_encoder:
                 tokens_per_image = (
                     num_vision_tokens // max_images if max_images else 1
                 )
@@ -342,9 +359,9 @@ def _build_prefill_inputs(
                             (
                                 1 * max_images,
                                 tokens_per_image,
-                                vision_output_dim,
+                                plan.vision_output_dim,
                             ),
-                            dtype=dtype,
+                            dtype=plan.dtype,
                             device="cpu",
                         ),
                         "vision_indices": torch.zeros(
@@ -355,7 +372,7 @@ def _build_prefill_inputs(
                         ),
                     }
                 )
-            elif is_gemma4_vision:
+            elif plan.is_gemma4_vision:
                 base.update(
                     _build_gemma4_vision_sample_inputs(
                         batch_size=1,
@@ -364,7 +381,7 @@ def _build_prefill_inputs(
                         image_size=vision_cfg["image_size"],
                         num_vision_tokens=num_vision_tokens,
                         seq_len=seq_len,
-                        dtype=dtype,
+                        dtype=plan.dtype,
                     )
                 )
             else:
@@ -375,10 +392,11 @@ def _build_prefill_inputs(
                         image_size=vision_cfg["image_size"],
                         num_vision_tokens=num_vision_tokens,
                         seq_len=seq_len,
-                        dtype=dtype,
+                        dtype=plan.dtype,
                     )
                 )
-        if has_audio:
+        if plan.has_audio:
+            audio_cfg = plan.audio_cfg
             base.update(
                 _build_audio_sample_inputs(
                     batch_size=1,
@@ -389,7 +407,7 @@ def _build_prefill_inputs(
                     audio_input_feat_size=audio_cfg.get(
                         "audio_input_feat_size", 128
                     ),
-                    dtype=dtype,
+                    dtype=plan.dtype,
                 )
             )
         prefill_inputs_map[seq_len] = base
@@ -495,16 +513,8 @@ def _trace_and_convert(
     decode_adapter,
     prefill_inputs_map,
     decode_inputs,
-    prefill_seq_lens,
+    plan,
     quant_config,
-    separate_vision_encoder,
-    has_vision,
-    is_gemma4_vision,
-    vision_cfg,
-    vision_output_dim,
-    max_images,
-    tokens_per_image,
-    dtype,
     **kwargs,
 ):
     """Trace prefill/decode (and optional vision) signatures and convert."""
@@ -521,22 +531,23 @@ def _trace_and_convert(
         vision_adapter_edge = None
 
         # Optionally export the vision encoder and adapter as separate models.
-        if separate_vision_encoder and has_vision:
+        if plan.separate_vision_encoder and plan.has_vision:
+            vision_cfg = plan.vision_cfg
             patch_size = vision_cfg.get("patch_size", 16)
             vision_encoder_inputs = _build_vision_encoder_sample_inputs(
                 batch_size=1,
-                max_images=max_images,
+                max_images=plan.max_images,
                 image_size=vision_cfg["image_size"],
                 patch_size=patch_size,
-                dtype=dtype,
-                is_gemma4_vision=is_gemma4_vision,
+                dtype=plan.dtype,
+                is_gemma4_vision=plan.is_gemma4_vision,
             )
             vision_adapter_inputs = _build_vision_adapter_sample_inputs(
                 batch_size=1,
-                max_images=max_images,
-                tokens_per_image=tokens_per_image,
-                vision_output_dim=vision_output_dim,
-                dtype=dtype,
+                max_images=plan.max_images,
+                tokens_per_image=plan.tokens_per_image,
+                vision_output_dim=plan.vision_output_dim,
+                dtype=plan.dtype,
             )
             vision_encoder_adapter = KerasHubVisionEncoderAdapter(model).eval()
             vision_adapter = KerasHubVisionAdapter().eval()
@@ -556,10 +567,10 @@ def _trace_and_convert(
 
         # Chain one signature per prefill bucket plus the decode signature.
         signatures = []
-        for seq_len in prefill_seq_lens:
+        for seq_len in plan.prefill_seq_lens:
             sig_name = (
                 "prefill"
-                if len(prefill_seq_lens) == 1
+                if len(plan.prefill_seq_lens) == 1
                 else f"prefill_{seq_len}"
             )
             signatures.append(
@@ -578,21 +589,16 @@ def _trace_and_convert(
 def _assemble_bundle(
     path,
     temp_dir,
-    spec,
     tokenizer,
     backend_constraint,
     edge_model,
-    separate_vision_encoder,
-    has_vision,
     vision_encoder_edge,
     vision_adapter_edge,
-    cache_length,
-    vision_cfg,
-    audio_cfg,
+    plan,
     hf_tokenizer_path,
 ):
     """Write TFLite files, bundle the tokenizer, and assemble ``.litertlm``."""
-    if separate_vision_encoder and has_vision:
+    if plan.separate_vision_encoder and plan.has_vision:
         prefill_tflite_path = os.path.join(temp_dir, "prefill_decode.tflite")
         edge_model.export(prefill_tflite_path)
         vision_encoder_tflite_path = os.path.join(
@@ -621,12 +627,12 @@ def _assemble_bundle(
 
     meta_path = os.path.join(temp_dir, "llm_metadata.pb")
     _build_llm_metadata(
-        spec,
+        plan.spec,
         tokenizer,
-        cache_length,
+        plan.cache_length,
         meta_path,
-        vision_cfg=vision_cfg,
-        audio_cfg=audio_cfg,
+        vision_cfg=plan.vision_cfg,
+        audio_cfg=plan.audio_cfg,
     )
 
     litert_lm_builder = _import_litert_lm_builder()
@@ -643,7 +649,7 @@ def _assemble_bundle(
         litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
         backend_constraint=backend_constraint,
     )
-    if separate_vision_encoder and has_vision:
+    if plan.separate_vision_encoder and plan.has_vision:
         builder.add_tflite_model(
             vision_encoder_tflite_path,
             litert_lm_builder.TfLiteModelType.VISION_ENCODER,
@@ -888,40 +894,53 @@ def export_to_litertlm(
         tokens_per_image = num_vision_tokens // max_images if max_images else 1
 
     dtype = _torch_dtype_from_model(model)
+
+    # Phases 1-2 (above) resolve the model-family spec and compute every
+    # per-export-run setting. Bundle them into a single immutable plan so the
+    # remaining phases (building sample inputs, tracing/converting, and
+    # assembling the bundle) take one object instead of a long,
+    # order-sensitive positional-argument list.
+    plan = ExportPlan(
+        spec=spec,
+        num_layers=num_layers,
+        cache_length=cache_length,
+        num_kv_heads=num_kv_heads,
+        head_dim=head_dim,
+        cache_layout=cache_layout,
+        prefill_seq_lens=prefill_seq_lens,
+        dtype=dtype,
+        has_vision=has_vision,
+        has_audio=has_audio,
+        vision_cfg=vision_cfg,
+        audio_cfg=audio_cfg,
+        is_gemma4_vision=is_gemma4_vision,
+        vision_output_dim=vision_output_dim,
+        max_images=max_images,
+        tokens_per_image=tokens_per_image,
+        separate_vision_encoder=separate_vision_encoder,
+    )
+
     with _cpu_default_device_scope():
-        prefill_inputs_map = _build_prefill_inputs(
-            prefill_seq_lens=prefill_seq_lens,
-            num_layers=num_layers,
-            cache_length=cache_length,
-            num_kv_heads=num_kv_heads,
-            head_dim=head_dim,
-            dtype=dtype,
-            cache_layout=cache_layout,
-            has_vision=has_vision,
-            has_audio=has_audio,
-            vision_cfg=vision_cfg,
-            audio_cfg=audio_cfg,
-            separate_vision_encoder=separate_vision_encoder,
-            is_gemma4_vision=is_gemma4_vision,
-            vision_output_dim=vision_output_dim,
-        )
+        prefill_inputs_map = _build_prefill_inputs(plan)
 
         decode_inputs = _build_sample_inputs(
             batch_size=1,
             seq_len=1,
-            num_layers=num_layers,
-            cache_length=cache_length,
-            num_kv_heads=num_kv_heads,
-            head_dim=head_dim,
-            dtype=dtype,
-            cache_layout=cache_layout,
+            num_layers=plan.num_layers,
+            cache_length=plan.cache_length,
+            num_kv_heads=plan.num_kv_heads,
+            head_dim=plan.head_dim,
+            dtype=plan.dtype,
+            cache_layout=plan.cache_layout,
         )
 
         adapter = KerasHubLiteRTAdapter(
             model,
-            num_layers,
-            cache_length,
-            separate_vision_encoder=(separate_vision_encoder and has_vision),
+            plan.num_layers,
+            plan.cache_length,
+            separate_vision_encoder=(
+                plan.separate_vision_encoder and plan.has_vision
+            ),
             export_spec=spec,
         )
         adapter.eval()
@@ -941,16 +960,8 @@ def export_to_litertlm(
                     decode_adapter,
                     prefill_inputs_map,
                     decode_inputs,
-                    prefill_seq_lens,
+                    plan,
                     quant_config,
-                    separate_vision_encoder,
-                    has_vision,
-                    is_gemma4_vision,
-                    vision_cfg,
-                    vision_output_dim,
-                    max_images,
-                    tokens_per_image,
-                    dtype,
                     **kwargs,
                 )
             )
@@ -959,17 +970,12 @@ def export_to_litertlm(
         _assemble_bundle(
             path,
             temp_dir,
-            spec,
             tokenizer,
             backend_constraint,
             edge_model,
-            separate_vision_encoder,
-            has_vision,
             vision_encoder_edge,
             vision_adapter_edge,
-            cache_length,
-            vision_cfg,
-            audio_cfg,
+            plan,
             hf_tokenizer_path,
         )
 
