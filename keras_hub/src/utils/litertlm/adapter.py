@@ -37,16 +37,6 @@ def _get_vision_encoder(backbone):
     )
 
 
-def _is_gemma4_vision_encoder(vision_encoder):
-    """Return ``True`` if *vision_encoder* uses Gemma4 patch inputs."""
-    return (
-        hasattr(vision_encoder, "inputs")
-        and len(vision_encoder.inputs) == 2
-        and {inp.name for inp in vision_encoder.inputs}
-        == {"pixel_values", "pixel_position_ids"}
-    )
-
-
 def _encoder_expects_single_image(vision_encoder):
     """Return ``True`` if the vision encoder takes one image at a time.
 
@@ -133,21 +123,21 @@ class KerasHubLiteRTAdapter(nn.Module):
         keras_model,
         num_layers,
         cache_length,
+        export_spec,
         separate_vision_encoder=False,
-        cache_layout="standard",
     ):
         super().__init__()
         self.keras_model = keras_model
         self.num_layers = num_layers
         self.cache_length = cache_length
         self.separate_vision_encoder = separate_vision_encoder
-        self.cache_layout = cache_layout
+        self.export_spec = export_spec
+        self.cache_layout = export_spec.cache_layout
 
         vision_encoder = _get_vision_encoder(keras_model.backbone)
         self.has_vision = vision_encoder is not None
         self.is_gemma4_vision = (
-            vision_encoder is not None
-            and _is_gemma4_vision_encoder(vision_encoder)
+            vision_encoder is not None and export_spec.is_gemma4_vision
         )
         # When exporting a separate vision encoder, keep the vision tower out of
         # the PREFILL_DECODE graph so its weights are not duplicated in the main
@@ -263,25 +253,13 @@ class KerasHubLiteRTAdapter(nn.Module):
             return None, images
 
         if self.separate_vision_encoder:
-            img_embeddings = mm_embedding
-            # Gemma4 interleaves image embeddings with shape
-            # (batch, num_images, tokens_per_image, hidden_dim).
-            # The separate vision encoder/adapter produces a flat
-            # (batch*num_images, ...) tensor, so reshape it back before
-            # passing to the language model.
-            if img_embeddings is not None and self.is_gemma4_vision:
-                max_images = getattr(
-                    self.keras_model.preprocessor,
-                    "max_images_per_prompt",
-                    1,
-                )
-                batch_size = tokens.shape[0]
-                img_embeddings = img_embeddings.reshape(
-                    batch_size,
-                    max_images,
-                    img_embeddings.shape[1],
-                    img_embeddings.shape[2],
-                )
+            # Only Gemma4 needs a reshape here (see
+            # ``Gemma4Spec.reshape_separate_vision_embeddings``); every other
+            # family returns ``mm_embedding`` unchanged.
+            reshape_fn = self.export_spec.reshape_separate_vision_embeddings
+            img_embeddings = reshape_fn(
+                mm_embedding, tokens, self.keras_model.preprocessor
+            )
             return img_embeddings, None
 
         if self.is_gemma4_vision:
@@ -340,17 +318,14 @@ class KerasHubLiteRTAdapter(nn.Module):
         self, tokens, cache, cache_update_index, call_kwargs, return_logits
     ):
         """Run ``keras_model.call_with_cache`` and return updated KV caches."""
-        if self.cache_layout == "gemma3n":
-            # Gemma3n's attention mask computation requires the padding mask
-            # to span the full cache length, otherwise a seq_len shorter than
-            # cache_length causes a broadcasting error between the causal and
-            # padding masks. During export we always pass full-length valid
-            # tokens, so a ones mask of cache length is correct.
-            call_kwargs["padding_mask"] = torch.ones(
-                (tokens.shape[0], self.cache_length),
-                dtype=torch.bool,
-                device=tokens.device,
+        # Only Gemma3n forces an override here (a full-length padding mask;
+        # see ``Gemma3nSpec.get_forced_call_with_cache_kwargs``); every other
+        # family is a no-op.
+        call_kwargs.update(
+            self.export_spec.get_forced_call_with_cache_kwargs(
+                tokens, self.cache_length
             )
+        )
         logits, _, updated_cache = self.keras_model.call_with_cache(
             tokens,
             cache,

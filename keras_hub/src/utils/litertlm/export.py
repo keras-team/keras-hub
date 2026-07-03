@@ -21,17 +21,8 @@ from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
 from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
     materialize_hf_tokenizer_json,
 )
+from keras_hub.src.utils.litertlm.model_specs import resolve_export_spec
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
-
-# Special token strings used when populating vision/audio metadata. Keeping
-# them as named constants makes it easy to audit which tokens each model
-# family expects and avoids scattering literals through the metadata helpers.
-_GEMMA3_START_OF_IMAGE_TOKEN = "<start_of_image>"
-_GEMMA3_END_OF_IMAGE_TOKEN = "<end_of_image>"
-_GEMMA4_START_OF_IMAGE_TOKEN = "<|image>"
-_GEMMA4_END_OF_IMAGE_TOKEN = "<image|>"
-_AUDIO_START_TOKEN = "<|audio>"
-_AUDIO_END_TOKEN = "<audio|>"
 
 # Quantization recipes and attributes are long, stable reference material.
 # Keeping them at module level keeps the ``export_to_litertlm`` docstring
@@ -91,67 +82,6 @@ quant_config = full_weight_only_recipe(
 # availability without importing it at module level, because importing
 # ``litert_torch`` has the side effect of enabling ``jax_enable_x64``.
 _LITERT_TORCH_AVAILABLE = importlib.util.find_spec("litert_torch") is not None
-
-# (module_path, class_name, model_type). Imported lazily inside
-# ``_detect_llm_model_type`` to avoid heavy top-level dependencies.
-_MODEL_TYPE_MAPPING = (
-    (
-        "keras_hub.src.models.gemma4.gemma4_causal_lm",
-        "Gemma4CausalLM",
-        "gemma4",
-    ),
-    (
-        "keras_hub.src.models.gemma3n.gemma3n_causal_lm",
-        "Gemma3nCausalLM",
-        "gemma3n",
-    ),
-    (
-        "keras_hub.src.models.gemma3.gemma3_causal_lm",
-        "Gemma3CausalLM",
-        "gemma3",
-    ),
-    (
-        "keras_hub.src.models.gemma.gemma_causal_lm",
-        "GemmaCausalLM",
-        "generic_model",
-    ),
-    (
-        "keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm",
-        "Qwen3MoeCausalLM",
-        "qwen3",
-    ),
-    (
-        "keras_hub.src.models.qwen3.qwen3_causal_lm",
-        "Qwen3CausalLM",
-        "qwen3",
-    ),
-    # NOTE: LlmModelType does not have a dedicated "qwen3_5" field. Qwen3.5 is
-    # architecturally a Qwen3 variant (hybrid attention decoder in the same
-    # family), so it maps to the "qwen3" oneof, matching Qwen3MoeCausalLM
-    # above.
-    (
-        "keras_hub.src.models.qwen3_5.qwen3_5_causal_lm",
-        "Qwen3_5CausalLM",
-        "qwen3",
-    ),
-    (
-        "keras_hub.src.models.qwen_moe.qwen_moe_causal_lm",
-        "QwenMoeCausalLM",
-        "qwen2p5",
-    ),
-    (
-        "keras_hub.src.models.qwen.qwen_causal_lm",
-        "QwenCausalLM",
-        "qwen2p5",
-    ),
-    # NOTE: LlmModelType does not have a dedicated "llama" field; map
-    # Llama checkpoints to generic_model so the protobuf oneof stays valid.
-    (
-        "keras_hub.src.models.llama.llama_causal_lm",
-        "LlamaCausalLM",
-        "generic_model",
-    ),
-)
 
 
 @contextlib.contextmanager
@@ -232,17 +162,6 @@ class _DecodeAdapter(_AdapterBase):
 
     def forward(self, *args, **kwargs):
         return self.base.forward_decode(*args, **kwargs)
-
-
-def _first_attr(obj, *names, default=None):
-    """Return the first non-``None`` attribute from *obj*, or *default*."""
-    if obj is None:
-        return default
-    for name in names:
-        value = getattr(obj, name, None)
-        if value is not None:
-            return value
-    return default
 
 
 def _validate_quant_config(quant_config):
@@ -355,7 +274,7 @@ def _validate_export_args(
 
     # Normalise prefill_seq_len to a sorted list. Cache-length checks are left
     # to the orchestrator because ``cache_length`` is not known until after
-    # ``_get_cache_config`` runs.
+    # ``spec.get_cache_config`` runs.
     if prefill_seq_len is None:
         prefill_seq_lens = None
     elif isinstance(prefill_seq_len, int):
@@ -659,7 +578,7 @@ def _trace_and_convert(
 def _assemble_bundle(
     path,
     temp_dir,
-    model,
+    spec,
     tokenizer,
     backend_constraint,
     edge_model,
@@ -702,7 +621,7 @@ def _assemble_bundle(
 
     meta_path = os.path.join(temp_dir, "llm_metadata.pb")
     _build_llm_metadata(
-        model,
+        spec,
         tokenizer,
         cache_length,
         meta_path,
@@ -875,14 +794,30 @@ def export_to_litertlm(
     from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
     from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
     from keras_hub.src.utils.litertlm.adapter import _get_vision_encoder
-    from keras_hub.src.utils.litertlm.adapter import _is_gemma4_vision_encoder
 
-    cache_cfg = _get_cache_config(model, cache_length=cache_length)
+    # Resolve the model-family export spec once and thread it through the
+    # rest of the pipeline (and into the adapter), instead of re-deriving
+    # family checks at each site.
+    spec = resolve_export_spec(model)
+
+    cache_cfg = spec.get_cache_config(model, cache_length=cache_length)
     num_layers = cache_cfg["num_layers"]
     cache_length = cache_cfg["cache_length"]
     num_kv_heads = cache_cfg["num_kv_heads"]
     head_dim = cache_cfg["head_dim"]
     cache_layout = cache_cfg["cache_layout"]
+    if cache_cfg["used_preprocessor_fallback"]:
+        warnings.warn(
+            "`cache_length` was not specified and "
+            f"`{type(model.backbone).__name__}` does not define "
+            "`max_sequence_length`. Falling back to "
+            f"`preprocessor.sequence_length` ({cache_length}) as the "
+            "KV-cache length. This is a tokenization default, not "
+            "necessarily the model's true maximum context length. Pass "
+            "`cache_length` explicitly to `export_to_litertlm` / "
+            '`model.export(..., format="litertlm")` to set it directly.',
+            stacklevel=2,
+        )
 
     # Prefill seq_len values must be validated against the real cache length.
     if prefill_seq_lens is None:
@@ -895,8 +830,8 @@ def export_to_litertlm(
             )
 
     # Detect multimodal capabilities.
-    vision_cfg = _get_vision_config(model)
-    audio_cfg = _get_audio_config(model)
+    vision_cfg = spec.get_vision_config(model)
+    audio_cfg = spec.get_audio_config(model)
     has_vision = vision_cfg is not None
     has_audio = audio_cfg is not None
 
@@ -904,12 +839,8 @@ def export_to_litertlm(
     vision_output_dim = None
     if has_vision:
         vision_encoder = _get_vision_encoder(model.backbone)
-        is_gemma4_vision = _is_gemma4_vision_encoder(vision_encoder)
-        vision_output_dim = getattr(vision_encoder, "output_dim", None)
-        if vision_output_dim is None:
-            # PaliGemma's ViT uses ``num_classes`` as the projected vision
-            # dimension instead of ``output_dim``.
-            vision_output_dim = getattr(vision_encoder, "num_classes", None)
+        is_gemma4_vision = spec.is_gemma4_vision
+        vision_output_dim = spec.get_vision_output_dim(vision_encoder)
         if separate_vision_encoder and vision_output_dim is None:
             raise ValueError(
                 "LiteRT-LM separate vision encoder export requires "
@@ -991,7 +922,7 @@ def export_to_litertlm(
             num_layers,
             cache_length,
             separate_vision_encoder=(separate_vision_encoder and has_vision),
-            cache_layout=cache_layout,
+            export_spec=spec,
         )
         adapter.eval()
 
@@ -1028,7 +959,7 @@ def export_to_litertlm(
         _assemble_bundle(
             path,
             temp_dir,
-            model,
+            spec,
             tokenizer,
             backend_constraint,
             edge_model,
@@ -1043,216 +974,6 @@ def export_to_litertlm(
         )
 
     return path
-
-
-def _get_cache_config(model, cache_length=None):
-    """Extract KV-cache dimensions and layout from the model.
-
-    Args:
-        model: The KerasHub ``CausalLM`` being exported.
-        cache_length: Optional explicit cache length. When ``None``, the
-            cache length is inferred from `backbone.max_sequence_length` if
-            the backbone defines it, else from
-            `preprocessor.sequence_length` -- emitting a ``UserWarning`` in
-            the latter case, since the preprocessor's sequence length is a
-            tokenization default and not necessarily the model's true
-            maximum context length.
-    """
-    backbone = model.backbone
-    num_layers = _first_attr(backbone, "num_layers", "num_hidden_layers")
-    if num_layers is None:
-        raise ValueError(
-            "Could not determine number of layers from model backbone. "
-            "Expected `backbone.num_layers` or `backbone.num_hidden_layers`."
-        )
-
-    if cache_length is None:
-        cache_length = _first_attr(backbone, "max_sequence_length")
-        if cache_length is None:
-            preprocessor = getattr(model, "preprocessor", None)
-            cache_length = _first_attr(preprocessor, "sequence_length")
-            if cache_length is not None:
-                warnings.warn(
-                    "`cache_length` was not specified and "
-                    f"`{type(backbone).__name__}` does not define "
-                    "`max_sequence_length`. Falling back to "
-                    f"`preprocessor.sequence_length` ({cache_length}) as "
-                    "the KV-cache length. This is a tokenization default, "
-                    "not necessarily the model's true maximum context "
-                    "length. Pass `cache_length` explicitly to "
-                    "`export_to_litertlm` / `model.export(..., "
-                    'format="litertlm")` to set it directly.',
-                    stacklevel=3,
-                )
-    if cache_length is None:
-        raise ValueError(
-            "Could not determine cache length from model backbone or "
-            "preprocessor. Please specify `cache_length` or "
-            "`prefill_seq_len`, or ensure the model has "
-            "`max_sequence_length`."
-        )
-
-    num_kv_heads = _first_attr(
-        backbone,
-        "num_key_value_heads",
-        "num_query_heads",
-        "num_heads",
-        "num_attention_heads",
-    )
-    if num_kv_heads is None:
-        raise ValueError(
-            "Could not determine the number of key/value heads from model "
-            "backbone. Expected one of `backbone.num_key_value_heads`, "
-            "`backbone.num_query_heads`, `backbone.num_heads`, or "
-            "`backbone.num_attention_heads`."
-        )
-
-    head_dim = _first_attr(backbone, "head_dim")
-    if head_dim is None:
-        hidden_dim = _first_attr(backbone, "hidden_dim")
-        num_qh = _first_attr(
-            backbone,
-            "num_query_heads",
-            "num_heads",
-            "num_attention_heads",
-        )
-        if hidden_dim is not None and num_qh is not None and num_qh > 0:
-            head_dim = hidden_dim // num_qh
-
-    if head_dim is None:
-        raise ValueError(
-            "Could not determine attention head dimension from model "
-            "attributes. Expected `backbone.head_dim` or both "
-            "`backbone.hidden_dim` and `backbone.num_query_heads`."
-        )
-
-    # Gemma3n uses a [B, L, 2, H, T, D] cache layout, whereas most other
-    # KerasHub models use [B, L, 2, T, H, D].  We detect this from the
-    # backbone class name so the adapter can build sample inputs with the
-    # correct per-layer cache shape.
-    cache_layout = "standard"
-    if type(backbone).__name__.startswith("Gemma3n"):
-        cache_layout = "gemma3n"
-
-    return {
-        "num_layers": num_layers,
-        "cache_length": cache_length,
-        "num_kv_heads": num_kv_heads,
-        "head_dim": head_dim,
-        "cache_layout": cache_layout,
-    }
-
-
-def _get_vision_config(model):
-    """Return vision metadata if *model* has a vision encoder, else ``None``."""
-    backbone = getattr(model, "backbone", None)
-    if backbone is None:
-        return None
-    vision_encoder = getattr(backbone, "vision_encoder", None) or getattr(
-        backbone, "vit_encoder", None
-    )
-    if vision_encoder is None:
-        return None
-    preprocessor = getattr(model, "preprocessor", None)
-    max_images = getattr(preprocessor, "max_images_per_prompt", 1)
-
-    image_size = getattr(backbone, "image_size", None)
-    if image_size is None:
-        # Gemma3n does not set backbone.image_size; read from the preprocessor
-        # image converter first, then fall back to the encoder config.
-        image_converter = getattr(preprocessor, "image_converter", None)
-        if image_converter is not None:
-            image_size = getattr(image_converter, "image_size", None)
-        if image_size is None:
-            vision_encoder_config = getattr(
-                backbone, "vision_encoder_config", {}
-            )
-            image_shape = vision_encoder_config.get("image_shape")
-            if image_shape is not None:
-                image_size = image_shape[0]
-    if image_size is None:
-        raise ValueError(
-            "Could not determine vision image size. Searched "
-            "`backbone.image_size`, `preprocessor.image_converter.image_size`, "
-            "and `backbone.vision_encoder_config.image_shape[0]`."
-        )
-    # Image converters may report a (height, width) tuple; downstream code
-    # currently assumes a square image, so use the height as the size.
-    if isinstance(image_size, (list, tuple)):
-        image_size = image_size[0]
-
-    num_vision_tokens_per_image = getattr(
-        backbone, "num_vision_tokens_per_image", None
-    )
-    if num_vision_tokens_per_image is None:
-        # PaliGemma exposes the per-image token count via
-        # ``image_sequence_length`` rather than ``num_vision_tokens_per_image``.
-        num_vision_tokens_per_image = getattr(
-            backbone, "image_sequence_length", None
-        )
-    if num_vision_tokens_per_image is None and preprocessor is not None:
-        # Gemma3/Gemma3n expose the per-image token count on the preprocessor.
-        num_vision_tokens_per_image = getattr(
-            preprocessor, "num_vision_tokens_per_image", None
-        )
-    if num_vision_tokens_per_image is None:
-        raise ValueError(
-            "Could not determine `num_vision_tokens_per_image`. Searched "
-            "`backbone.num_vision_tokens_per_image`, "
-            "`backbone.image_sequence_length`, and "
-            "`preprocessor.num_vision_tokens_per_image`."
-        )
-    num_vision_tokens = num_vision_tokens_per_image * max_images
-    patch_size = getattr(vision_encoder, "patch_size", None)
-    pool_size = getattr(vision_encoder, "pool_size", None)
-    return {
-        "max_images_per_prompt": max_images,
-        "image_size": image_size,
-        "num_vision_tokens": num_vision_tokens,
-        "num_vision_tokens_per_image": num_vision_tokens_per_image,
-        "patch_size": patch_size,
-        "pool_size": pool_size,
-    }
-
-
-def _get_audio_config(model):
-    """Return audio metadata if *model* has an audio encoder, else ``None``."""
-    backbone = getattr(model, "backbone", None)
-    if backbone is None:
-        return None
-    audio_encoder = getattr(backbone, "audio_encoder", None)
-    if audio_encoder is None:
-        return None
-    preprocessor = getattr(model, "preprocessor", None)
-    max_clips = getattr(preprocessor, "max_audio_clips_per_prompt", None)
-    if max_clips is None:
-        # Gemma3n names this attribute ``max_audios_per_prompt``.
-        max_clips = getattr(preprocessor, "max_audios_per_prompt", 1)
-    num_frames = getattr(preprocessor, "max_audio_frames", 100)
-    num_audio_tokens_per_clip = getattr(
-        backbone, "num_audio_tokens_per_clip", None
-    )
-    if num_audio_tokens_per_clip is None and preprocessor is not None:
-        # Gemma3n names this attribute ``num_audio_tokens_per_audio``.
-        num_audio_tokens_per_clip = getattr(
-            preprocessor, "num_audio_tokens_per_audio", 0
-        )
-    num_audio_tokens = num_audio_tokens_per_clip * max_clips
-    audio_input_feat_size = getattr(preprocessor, "audio_input_feat_size", None)
-    if audio_input_feat_size is None and preprocessor is not None:
-        audio_converter = getattr(preprocessor, "audio_converter", None)
-        if audio_converter is not None:
-            audio_input_feat_size = getattr(
-                audio_converter, "feature_size", 128
-            )
-    if audio_input_feat_size is None:
-        audio_input_feat_size = 128
-    return {
-        "max_clips_per_prompt": max_clips,
-        "num_frames": num_frames,
-        "num_audio_tokens": num_audio_tokens,
-        "audio_input_feat_size": audio_input_feat_size,
-    }
 
 
 def _build_sample_inputs(
@@ -1457,40 +1178,8 @@ def _materialize_sentencepiece_tokenizer(tokenizer, temp_dir):
     return tokenizer_path
 
 
-def _populate_vision_metadata(meta, model_type, vision_cfg, tokenizer):
-    """Populate vision-related fields in the LlmMetadata protobuf."""
-    image_size = vision_cfg["image_size"]
-    patch_size = vision_cfg.get("patch_size")
-    pool_size = vision_cfg.get("pool_size")
-
-    if model_type in ("gemma3", "gemma3n"):
-        subtype = getattr(meta.llm_model_type, model_type)
-        subtype.start_of_image_token.token_str = _GEMMA3_START_OF_IMAGE_TOKEN
-        subtype.end_of_image_token.token_str = _GEMMA3_END_OF_IMAGE_TOKEN
-        subtype.image_tensor_height = image_size
-        subtype.image_tensor_width = image_size
-    elif model_type == "gemma4":
-        subtype = meta.llm_model_type.gemma4
-        subtype.start_of_image_token.token_str = _GEMMA4_START_OF_IMAGE_TOKEN
-        subtype.end_of_image_token.token_str = _GEMMA4_END_OF_IMAGE_TOKEN
-        if patch_size is not None:
-            subtype.patch_width = patch_size
-            subtype.patch_height = patch_size
-            subtype.max_num_patches = (image_size // patch_size) ** 2
-        if pool_size is not None:
-            subtype.pooling_kernel_size = pool_size
-
-
-def _populate_audio_metadata(meta, model_type, audio_cfg, tokenizer):
-    """Populate audio-related fields in the LlmMetadata protobuf."""
-    if model_type in ("gemma3n", "gemma4"):
-        subtype = getattr(meta.llm_model_type, model_type)
-        subtype.start_of_audio_token.token_str = _AUDIO_START_TOKEN
-        subtype.end_of_audio_token.token_str = _AUDIO_END_TOKEN
-
-
 def _build_llm_metadata(
-    model, tokenizer, max_num_tokens, path, vision_cfg=None, audio_cfg=None
+    spec, tokenizer, max_num_tokens, path, vision_cfg=None, audio_cfg=None
 ):
     """Serialize an ``LlmMetadata`` protobuf to *path*."""
     # The protobuf lives under an internal-looking subpackage of
@@ -1532,38 +1221,18 @@ def _build_llm_metadata(
 
     meta.max_num_tokens = int(max_num_tokens)
 
-    model_type = _detect_llm_model_type(model)
-    getattr(meta.llm_model_type, model_type).SetInParent()
+    getattr(meta.llm_model_type, spec.model_type).SetInParent()
 
     # Populate vision fields for supported model types.
     if vision_cfg is not None:
-        _populate_vision_metadata(meta, model_type, vision_cfg, tokenizer)
+        spec.populate_vision_metadata(meta, vision_cfg)
 
     # Populate audio fields for supported model types.
     if audio_cfg is not None:
-        _populate_audio_metadata(meta, model_type, audio_cfg, tokenizer)
+        spec.populate_audio_metadata(meta, audio_cfg)
 
     with open(path, "wb") as f:
         f.write(meta.SerializeToString())
-
-
-def _detect_llm_model_type(model):
-    """Return the LiteRT-LM LlmModelType name for *model*.
-
-    Uses ``isinstance`` checks against the module-level
-    ``_MODEL_TYPE_MAPPING`` to avoid mis-identifying user-defined
-    subclasses. Unrecognized models map to ``"generic_model"``.
-    """
-    for module_path, class_name, model_type in _MODEL_TYPE_MAPPING:
-        try:
-            module = __import__(module_path, fromlist=[class_name])
-            cls = getattr(module, class_name)
-            if isinstance(model, cls):
-                return model_type
-        except ImportError:
-            pass
-
-    return "generic_model"
 
 
 def _torch_dtype_from_model(model):

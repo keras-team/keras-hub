@@ -139,10 +139,12 @@ class Qwen3_5CausalLMTest(TestCase):
         if keras.config.backend() != "torch":
             self.skipTest("LiteRT-LM export requires the PyTorch backend.")
 
-        from keras_hub.src.utils.litertlm.export import _detect_llm_model_type
+        from keras_hub.src.utils.litertlm.model_specs import (
+            resolve_export_spec,
+        )
 
         causal_lm = Qwen3_5CausalLM(**self.init_kwargs)
-        self.assertEqual(_detect_llm_model_type(causal_lm), "qwen3")
+        self.assertEqual(resolve_export_spec(causal_lm).model_type, "qwen3")
 
     @pytest.mark.xfail(
         strict=True,
