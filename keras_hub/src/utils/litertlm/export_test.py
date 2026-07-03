@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 import unittest
+import unittest.mock
 
 import keras
 import numpy as np
@@ -299,6 +300,55 @@ class TestLiteRTLmExport(TestCase):
                     backend_constraint=backend,
                 )
                 self.assertTrue(os.path.exists(path))
+
+    def test_export_lowercases_backend_constraint(self):
+        """Verify a mixed-case backend_constraint reaches the builder call
+        already lowercased.
+
+        `_validate_export_args` lowercases `backend_constraint` to validate
+        it, but must also return the normalized value so
+        `export_to_litertlm` threads *that* value through to
+        `_assemble_bundle` / `builder.add_tflite_model`, rather than the
+        original (possibly mixed-case) argument. `litert_lm_builder` itself
+        happens to lowercase `backend_constraint` again before persisting it
+        as metadata, so a real end-to-end bundle read would pass even with
+        the bug (the original argument would still show up lowercased in
+        the file); this spies on the actual call to
+        `LitertLmFileBuilder.add_tflite_model` to check what our own code
+        passes, independent of that downstream normalization.
+        """
+        import litert_lm_builder
+
+        path = os.path.join(
+            self.get_temp_dir(), "test_backend_case.litertlm"
+        )
+        original_add_tflite_model = (
+            litert_lm_builder.LitertLmFileBuilder.add_tflite_model
+        )
+        captured_backend_constraints = []
+
+        def _spy_add_tflite_model(self, *args, **kwargs):
+            captured_backend_constraints.append(
+                kwargs.get("backend_constraint")
+            )
+            return original_add_tflite_model(self, *args, **kwargs)
+
+        with unittest.mock.patch.object(
+            litert_lm_builder.LitertLmFileBuilder,
+            "add_tflite_model",
+            _spy_add_tflite_model,
+        ):
+            self.model.export(
+                path,
+                format="litertlm",
+                prefill_seq_len=8,
+                backend_constraint="GPU",
+            )
+
+        self.assertTrue(os.path.exists(path))
+        self.assertTrue(captured_backend_constraints)
+        for value in captured_backend_constraints:
+            self.assertEqual(value, "gpu")
 
     def test_export_invalid_backend_constraint(self):
         """Verify invalid backend_constraint raises ValueError."""

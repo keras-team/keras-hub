@@ -195,6 +195,29 @@ class TraceableOpsParityTest(TestCase):
         patched = traceable_ops._patched_take(x, indices, axis=None)
         self.assertAllClose(_to_np(original), _to_np(patched))
 
+    def test_take_no_axis_negative_index_matches_flattened_semantics(self):
+        """Regression test: ``axis=None`` + negative indices on a
+        multi-dim input must wrap against the *flattened* length, not the
+        first (unflattened) dimension's size.
+
+        Note this deliberately does **not** compare against
+        ``keras.src.backend.torch.numpy.take`` (the pattern every other
+        ``test_take_*`` case in this file uses): that upstream Keras
+        function has the exact same bug (it computes
+        ``x_dim = x.shape[0]`` before flattening for ``axis=None`), so it
+        is not a valid reference here. Ground truth is real numpy's
+        ``np.take(..., axis=None)``, which flattens first -- e.g. for a
+        ``3x4`` input (12 elements), index ``-1`` must resolve to the last
+        flattened element (value ``11``), not wrap as if against a
+        first-dimension size of 3 (which would incorrectly give ``2``).
+        """
+        x = torch.arange(12, dtype=torch.float32).reshape(3, 4)
+        indices = torch.tensor([-1, -2])
+
+        expected = np.take(_to_np(x), _to_np(indices), axis=None)
+        patched = traceable_ops._patched_take(x, indices, axis=None)
+        self.assertAllClose(expected, _to_np(patched))
+
     # ------------------------------------------------------------------
     # scatter_update
     # ------------------------------------------------------------------

@@ -191,10 +191,15 @@ def _validate_export_args(
 ):
     """Fail fast on invalid export arguments.
 
-    Returns the normalized list of prefill sequence lengths. Importing
-    ``litert_torch`` is deferred to the orchestrator so that the JAX
-    ``jax_enable_x64`` side effect can be kept under one preserve/restore
-    context that covers both import and tracing.
+    Returns a ``(prefill_seq_lens, backend_constraint)`` tuple: the
+    normalized list of prefill sequence lengths, and the normalized
+    (lowercased) ``backend_constraint`` string (or ``None``). Callers must
+    use the returned ``backend_constraint`` -- not the original argument --
+    so the lowercased value actually reaches ``_assemble_bundle`` /
+    ``builder.add_tflite_model``. Importing ``litert_torch`` is deferred to
+    the orchestrator so that the JAX ``jax_enable_x64`` side effect can be
+    kept under one preserve/restore context that covers both import and
+    tracing.
     """
     if not path.endswith(".litertlm"):
         raise ValueError(
@@ -298,7 +303,7 @@ def _validate_export_args(
                     f"Received: {seq_len!r}"
                 )
 
-    return prefill_seq_lens
+    return prefill_seq_lens, backend_constraint
 
 
 @dataclasses.dataclass(frozen=True)
@@ -793,7 +798,12 @@ def export_to_litertlm(
     """
     path = os.fspath(path)
     tokenizer = _get_tokenizer(model)
-    prefill_seq_lens = _validate_export_args(
+    # `_validate_export_args` returns the normalized (lowercased)
+    # `backend_constraint` alongside `prefill_seq_lens`; rebind the local
+    # here so the normalized value -- not the original, possibly
+    # mixed-case, argument -- is what flows into `_assemble_bundle` /
+    # `builder.add_tflite_model` below.
+    prefill_seq_lens, backend_constraint = _validate_export_args(
         model,
         path,
         tokenizer,

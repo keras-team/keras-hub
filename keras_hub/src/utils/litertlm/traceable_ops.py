@@ -333,20 +333,36 @@ def _patched_take(x, indices, axis=None):
     ``torch.nn.functional.embedding``. ``litert_torch``'s TFLite embedding
     lowering expects int32 indices consistent with the traced function
     signature, so we keep indices in int32 for the embedding-lookup case.
+
+    ``axis=None`` means "take from the flattened input" (matching
+    ``numpy``/``jax`` semantics), so the input must be flattened *before*
+    negative indices are wrapped -- wrapping against
+    ``x.shape[0]`` (the first, unflattened dimension) is only correct when
+    ``x`` is already 1-D. Flattening first and then computing ``x_dim`` as
+    the flattened length keeps this correct for multi-dimensional ``x``
+    (e.g. ``take(x_3x4, -1, axis=None)`` must resolve to the last of the 12
+    flattened elements, not wrap against the first dimension's size of 3).
     """
     x = torch_core.convert_to_tensor(x)
     indices = torch_core.convert_to_tensor(indices, dtype=torch.int32)
-    x_dim = x.shape[axis] if axis is not None else x.shape[0]
+    if axis is None:
+        x = torch.reshape(x, (-1,))
+        axis = 0
+    x_dim = x.shape[axis]
     indices = torch.where(
         indices < 0,
         indices + x_dim,
         indices,
     )
     if x.ndim == 2 and axis == 0:
+        # ``F.embedding`` documents a float ``weight`` (embedding table), but
+        # empirically it also accepts int32/int64/bool ``x`` and returns a
+        # plain gather with no dtype-related crash, both eagerly and under
+        # ``torch.export`` (verified 2026-07-03 against this repo's PyTorch
+        # version -- see keras-hub PR #2705 review). No dtype guard is
+        # needed here; this comment documents that the case was checked
+        # rather than assumed.
         return torch.nn.functional.embedding(indices, x)
-    if axis is None:
-        x = torch.reshape(x, (-1,))
-        axis = 0
     axis = torch_backend_numpy.canonicalize_axis(axis, x.ndim)
     shape = x.shape[:axis] + indices.shape + x.shape[axis + 1 :]
     indices = indices.ravel()
