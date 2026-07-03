@@ -124,6 +124,15 @@ _MODEL_TYPE_MAPPING = (
         "Qwen3CausalLM",
         "qwen3",
     ),
+    # NOTE: LlmModelType does not have a dedicated "qwen3_5" field. Qwen3.5 is
+    # architecturally a Qwen3 variant (hybrid attention decoder in the same
+    # family), so it maps to the "qwen3" oneof, matching Qwen3MoeCausalLM
+    # above.
+    (
+        "keras_hub.src.models.qwen3_5.qwen3_5_causal_lm",
+        "Qwen3_5CausalLM",
+        "qwen3",
+    ),
     (
         "keras_hub.src.models.qwen_moe.qwen_moe_causal_lm",
         "QwenMoeCausalLM",

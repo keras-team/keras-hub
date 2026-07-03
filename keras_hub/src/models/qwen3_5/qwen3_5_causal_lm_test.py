@@ -127,8 +127,39 @@ class Qwen3_5CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    def test_litertlm_model_type_detection(self):
+        """Verify Qwen3.5 is tagged as the "qwen3" LlmModelType.
+
+        This checks the model-type mapping directly (independent of the full
+        export pipeline below, which currently fails for an unrelated
+        reason) so the mapping fix has real, always-on regression coverage.
+        """
+        import keras
+
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        from keras_hub.src.utils.litertlm.export import _detect_llm_model_type
+
+        causal_lm = Qwen3_5CausalLM(**self.init_kwargs)
+        self.assertEqual(_detect_llm_model_type(causal_lm), "qwen3")
+
     @pytest.mark.xfail(
-        strict=False, reason="Non-tokenizer LiteRT-LM runtime gap"
+        strict=True,
+        reason=(
+            "Qwen3.5's hybrid full_attention/linear_attention layers use a "
+            "dual cache structure (Qwen3_5CausalLM.call_with_cache indexes "
+            "`cache[1]` for the linear-attention conv state) that the "
+            "LiteRT-LM adapter does not yet support: the adapter always "
+            "stacks per-layer KV tensors into a single "
+            "`[batch, num_layers, 2, cache_length, num_kv_heads, head_dim]` "
+            "tensor and passes it as `cache`, so indexing it as a two-item "
+            "sequence raises `IndexError: index 1 is out of bounds for "
+            "dimension 0 with size 1`. This is independent of tokenizer "
+            "support and of the model-type mapping (see "
+            "test_litertlm_model_type_detection above). Remove this xfail "
+            "once the adapter supports hybrid attention+conv cache layouts."
+        ),
     )
     def test_litertlm_export(self):
         self.run_litertlm_export_test(
