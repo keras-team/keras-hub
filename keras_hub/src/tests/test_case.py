@@ -1208,7 +1208,18 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             # as authoritative over the prompt length, so this isn't a new
             # family-specific heuristic, just reusing that existing signal.
             prompt_len = numeric_input.shape[-1]
-            target_cache_length = prompt_len + _LITERTLM_DECODE_CACHE_HEADROOM
+            # A caller-supplied `prefill_seq_len` is a lower bound on the
+            # cache length regardless of the prompt length -- otherwise the
+            # headroom bump below could compute a `cache_length` smaller
+            # than an already-requested `prefill_seq_len` and trip
+            # `export_to_litertlm`'s own "prefill_seq_len cannot exceed
+            # cache_length" validation.
+            min_required_len = max(
+                prompt_len, export_kwargs.get("prefill_seq_len", 0)
+            )
+            target_cache_length = (
+                min_required_len + _LITERTLM_DECODE_CACHE_HEADROOM
+            )
             max_supported = getattr(model.backbone, "max_sequence_length", None)
             if max_supported is not None:
                 target_cache_length = min(target_cache_length, max_supported)
