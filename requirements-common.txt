@@ -21,4 +21,3 @@ safetensors
 pillow
 openvino
 transformers
-mistral-common
