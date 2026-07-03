@@ -3,7 +3,6 @@ import numpy as np
 from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
 from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
-from keras_hub.src.utils.preset_utils import load_json
 from keras_hub.src.utils.transformers.convert_tekken import (
     convert_tekken_tokenizer,
 )
@@ -127,15 +126,14 @@ def convert_tokenizer(cls, preset, **kwargs):
     # Newer Mistral checkpoints (e.g. Magistral) ship a Tekken (byte-level BPE)
     # `tekken.json` instead of a SentencePiece `tokenizer.model`.
     if check_file_exists(preset, "tekken.json"):
-        tekken_config = load_json(preset, "tekken.json")
-        vocabulary_size = load_json(preset, "config.json")["vocab_size"]
-        vocabulary, merges, _ = convert_tekken_tokenizer(
-            tekken_config, vocabulary_size
+        tekken_path = get_file(preset, "tekken.json")
+        vocabulary, merges, _, split_pattern = convert_tekken_tokenizer(
+            tekken_path
         )
         return cls(
             vocabulary=vocabulary,
             merges=merges,
-            split_pattern=tekken_config["config"]["pattern"],
+            split_pattern=split_pattern,
             **kwargs,
         )
     return cls(get_file(preset, "tokenizer.model"), **kwargs)

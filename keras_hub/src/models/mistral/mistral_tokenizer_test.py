@@ -1,5 +1,7 @@
 import base64
+import json
 import os
+import tempfile
 
 import pytest
 
@@ -29,6 +31,7 @@ class MistralTokenizerTest(TestCase):
         )
 
     def test_tekken_tokenizer_basics(self):
+        pytest.importorskip("mistral_common")
         # Magistral-style Tekken (byte-level BPE) vocabulary.
         vocab = [
             {
@@ -59,7 +62,10 @@ class MistralTokenizerTest(TestCase):
                     r"[\p{Ll}\p{Lm}\p{Lo}\p{M}]+|\p{N}| ?[^\s\p{L}\p{N}]+"
                     r"[\r\n/]*|\s*[\r\n]+|\s+(?!\S)|\s+"
                 ),
+                "num_vocab_tokens": 261,
+                "default_vocab_size": 266,
                 "default_num_special_tokens": 5,
+                "version": "v7",
             },
             "vocab": vocab,
             "special_tokens": [
@@ -70,13 +76,19 @@ class MistralTokenizerTest(TestCase):
                 {"rank": 4, "token_str": "[INST]", "is_control": True},
             ],
         }
-        vocabulary, merges, _ = convert_tekken_tokenizer(tekken_config, 266)
+        with tempfile.TemporaryDirectory() as dir_path:
+            path = os.path.join(dir_path, "tekken.json")
+            with open(path, "w") as f:
+                json.dump(tekken_config, f)
+            vocabulary, merges, _, split_pattern = convert_tekken_tokenizer(
+                path
+            )
         self.run_preprocessing_layer_test(
             cls=MistralTokenizer,
             init_kwargs={
                 "vocabulary": vocabulary,
                 "merges": merges,
-                "split_pattern": tekken_config["config"]["pattern"],
+                "split_pattern": split_pattern,
             },
             input_data=["the tin", "in the"],
         )

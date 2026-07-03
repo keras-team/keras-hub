@@ -3,12 +3,14 @@
 Newer Mistral checkpoints (e.g. Magistral) ship a `tekken.json` file instead
 of a SentencePiece `tokenizer.model`. Tekken is a tiktoken-style byte-level
 BPE tokenizer: the vocabulary is a rank-ordered list of raw byte sequences and
-there are no explicit merge rules. This module reconstructs the merge rules
-from the ranks and re-encodes the vocabulary using the GPT-2 byte-to-unicode
-mapping so the tokenizer can be represented as a `BytePairTokenizer`.
-"""
+there are no explicit merge rules.
 
-import base64
+The file is parsed with Mistral's own `mistral_common` library (the same
+backend Hugging Face delegates to for Tekken), and the resulting byte
+vocabulary is turned into `BytePairTokenizer` arguments: merge rules are
+reconstructed from the ranks and every token is re-encoded with the GPT-2
+byte-to-unicode mapping so it can be stored as a string.
+"""
 
 
 def bytes_to_unicode():
@@ -85,35 +87,35 @@ def _recover_merges(mergeable_ranks):
     return merges
 
 
-def convert_tekken_tokenizer(tekken_config, vocabulary_size):
-    """Convert a parsed `tekken.json` into `BytePairTokenizer` arguments.
+def convert_tekken_tokenizer(path):
+    """Convert a `tekken.json` file into `BytePairTokenizer` arguments.
 
     Args:
-        tekken_config: dict. The parsed contents of a `tekken.json` file.
-        vocabulary_size: int. The model's vocabulary size (from the HF
-            `config.json`). Tekken files list more tokens than the model
-            actually uses, so we keep only the first
-            `vocabulary_size - num_special_tokens` regular tokens.
+        path: str. Path to a `tekken.json` file.
 
     Returns:
-        A tuple `(vocabulary, merges, special_tokens)` where `vocabulary` maps
-        GPT-2-unicode encoded token strings to integer ids, `merges` is a list
-        of `"a b"` merge rules, and `special_tokens` is the ordered list of
-        control token strings.
+        A tuple `(vocabulary, merges, special_tokens, split_pattern)` where
+        `vocabulary` maps GPT-2-unicode encoded token strings to integer ids,
+        `merges` is a list of `"a b"` merge rules, `special_tokens` is the
+        ordered list of control token strings, and `split_pattern` is the
+        pre-tokenization regex.
     """
-    config = tekken_config["config"]
-    num_special_tokens = config["default_num_special_tokens"]
-    num_regular_tokens = vocabulary_size - num_special_tokens
+    try:
+        from mistral_common.tokens.tokenizers.tekken import Tekkenizer
+    except ImportError:
+        raise ImportError(
+            "Converting a Tekken (`tekken.json`) tokenizer requires the "
+            "`mistral_common` package. Please install it with "
+            "`pip install mistral-common`."
+        )
 
-    # Map each used regular token's rank to its raw bytes.
-    rank_to_bytes = {}
-    for entry in tekken_config["vocab"][:num_regular_tokens]:
-        rank_to_bytes[entry["rank"]] = base64.b64decode(entry["token_bytes"])
-    mergeable_ranks = {
-        token_bytes: rank for rank, token_bytes in rank_to_bytes.items()
-    }
-
-    merges = _recover_merges(mergeable_ranks)
+    tokenizer = Tekkenizer.from_file(path)
+    # `Tekkenizer` wraps a `tiktoken.Encoding`, which exposes both the byte
+    # vocabulary (as rank -> bytes) and the pre-tokenization pattern.
+    encoding = tokenizer._model
+    mergeable_ranks = encoding._mergeable_ranks
+    num_special_tokens = tokenizer.num_special_tokens
+    split_pattern = encoding._pat_str
 
     byte_encoder = bytes_to_unicode()
 
@@ -123,20 +125,19 @@ def convert_tekken_tokenizer(tekken_config, vocabulary_size):
     # Regular token ids are offset by the reserved special-token block, so the
     # id of a token with rank `r` is `r + num_special_tokens`.
     vocabulary = {
-        encode(rank_to_bytes[rank]): rank + num_special_tokens
-        for rank in rank_to_bytes
+        encode(token_bytes): rank + num_special_tokens
+        for token_bytes, rank in mergeable_ranks.items()
     }
-    merges = [f"{encode(a)} {encode(b)}" for a, b in merges]
+    merges = [
+        f"{encode(a)} {encode(b)}" for a, b in _recover_merges(mergeable_ranks)
+    ]
 
-    # Special tokens occupy the reserved block of ids `[0, num_special_tokens)`
-    # and their id is simply their rank.
-    sorted_special = sorted(
-        tekken_config["special_tokens"], key=lambda e: e["rank"]
-    )
+    # Special tokens occupy the reserved block of ids
+    # `[0, num_special_tokens)`; their id is simply their rank.
     special_tokens = []
-    for entry in sorted_special:
-        token_str = entry["token_str"]
-        vocabulary[token_str] = entry["rank"]
+    for rank in range(num_special_tokens):
+        token_str = tokenizer.id_to_piece(rank)
+        vocabulary[token_str] = rank
         special_tokens.append(token_str)
 
-    return vocabulary, merges, special_tokens
+    return vocabulary, merges, special_tokens, split_pattern
