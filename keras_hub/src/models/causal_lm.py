@@ -480,7 +480,18 @@ class CausalLM(Task):
                   models (e.g. Gemma3), ``prefill_seq_len`` must match the
                   preprocessor's ``sequence_length``; bucketing is not
                   supported for multimodal models due to attention mask
-                  shape constraints.
+                  shape constraints. Defaults to ``cache_length``.
+                - ``cache_length``: Optional ``int``. The KV-cache length
+                  (the model's maximum context window) to export with. If
+                  not given, this is inferred from
+                  ``backbone.max_sequence_length`` when the backbone defines
+                  it; most backbones (e.g. Gemma, Llama, Mistral, Qwen) do
+                  not, in which case it falls back to
+                  ``preprocessor.sequence_length`` and a ``UserWarning`` is
+                  raised, since that value is a tokenization default and not
+                  necessarily the model's true maximum context length. Pass
+                  this explicitly to get a cache length independent of the
+                  preprocessor.
                 - ``quant_config``: Optional
                   ``litert_torch.quantize.quant_config.QuantConfig`` for
                   in-conversion quantization. Supported recipes are
@@ -518,6 +529,7 @@ class CausalLM(Task):
                 filepath,
                 backend_constraint=kwargs.pop("backend_constraint", None),
                 prefill_seq_len=kwargs.pop("prefill_seq_len", None),
+                cache_length=kwargs.pop("cache_length", None),
                 quant_config=kwargs.pop("quant_config", None),
                 separate_vision_encoder=kwargs.pop(
                     "separate_vision_encoder", False

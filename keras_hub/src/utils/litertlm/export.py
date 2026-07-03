@@ -784,6 +784,7 @@ def export_to_litertlm(
     path,
     backend_constraint=None,
     prefill_seq_len=None,
+    cache_length=None,
     quant_config=None,
     separate_vision_encoder=False,
     hf_tokenizer_path=None,
@@ -831,9 +832,19 @@ def export_to_litertlm(
         backend_constraint: Optional LiteRT-LM backend constraint, such as
             ``"cpu"`` or ``"gpu"``. Defaults to ``None``.
         prefill_seq_len: int or list[int]. Sequence length(s) used when
-            tracing the prefill signature(s). Defaults to the model's
-            maximum sequence length. Each value must not exceed
-            ``cache_length``.
+            tracing the prefill signature(s). Each value must not exceed
+            ``cache_length``. Defaults to ``cache_length`` itself.
+        cache_length: Optional int. The KV-cache length (the model's maximum
+            context window) to trace the export with. If ``None``, this is
+            inferred from ``backbone.max_sequence_length`` when the backbone
+            defines it; most backbones (e.g. Gemma, Llama, Mistral, Qwen) do
+            not, in which case the exporter falls back to
+            ``preprocessor.sequence_length`` and emits a ``UserWarning``,
+            since that value is a tokenization default chosen for training or
+            preprocessing and is not necessarily the model's true maximum
+            context length. Pass this explicitly to avoid the warning and to
+            get a cache length independent of the preprocessor. Defaults to
+            ``None``.
         quant_config: Optional
             ``litert_torch.quantize.quant_config.QuantConfig`` for
             in-conversion quantization. Defaults to ``None`` (no
@@ -884,7 +895,7 @@ def export_to_litertlm(
     from keras_hub.src.utils.litertlm.adapter import _get_vision_encoder
     from keras_hub.src.utils.litertlm.adapter import _is_gemma4_vision_encoder
 
-    cache_cfg = _get_cache_config(model)
+    cache_cfg = _get_cache_config(model, cache_length=cache_length)
     num_layers = cache_cfg["num_layers"]
     cache_length = cache_cfg["cache_length"]
     num_kv_heads = cache_cfg["num_kv_heads"]
@@ -1052,8 +1063,19 @@ def export_to_litertlm(
     return path
 
 
-def _get_cache_config(model):
-    """Extract KV-cache dimensions and layout from the model."""
+def _get_cache_config(model, cache_length=None):
+    """Extract KV-cache dimensions and layout from the model.
+
+    Args:
+        model: The KerasHub ``CausalLM`` being exported.
+        cache_length: Optional explicit cache length. When ``None``, the
+            cache length is inferred from `backbone.max_sequence_length` if
+            the backbone defines it, else from
+            `preprocessor.sequence_length` -- emitting a ``UserWarning`` in
+            the latter case, since the preprocessor's sequence length is a
+            tokenization default and not necessarily the model's true
+            maximum context length.
+    """
     backbone = model.backbone
     num_layers = _first_attr(backbone, "num_layers", "num_hidden_layers")
     if num_layers is None:
@@ -1062,15 +1084,30 @@ def _get_cache_config(model):
             "Expected `backbone.num_layers` or `backbone.num_hidden_layers`."
         )
 
-    cache_length = _first_attr(backbone, "max_sequence_length")
     if cache_length is None:
-        preprocessor = getattr(model, "preprocessor", None)
-        cache_length = _first_attr(preprocessor, "sequence_length")
+        cache_length = _first_attr(backbone, "max_sequence_length")
+        if cache_length is None:
+            preprocessor = getattr(model, "preprocessor", None)
+            cache_length = _first_attr(preprocessor, "sequence_length")
+            if cache_length is not None:
+                warnings.warn(
+                    "`cache_length` was not specified and "
+                    f"`{type(backbone).__name__}` does not define "
+                    "`max_sequence_length`. Falling back to "
+                    f"`preprocessor.sequence_length` ({cache_length}) as "
+                    "the KV-cache length. This is a tokenization default, "
+                    "not necessarily the model's true maximum context "
+                    "length. Pass `cache_length` explicitly to "
+                    "`export_to_litertlm` / `model.export(..., "
+                    'format="litertlm")` to set it directly.',
+                    stacklevel=3,
+                )
     if cache_length is None:
         raise ValueError(
             "Could not determine cache length from model backbone or "
-            "preprocessor. Please specify `prefill_seq_len` or ensure the "
-            "model has `max_sequence_length`."
+            "preprocessor. Please specify `cache_length` or "
+            "`prefill_seq_len`, or ensure the model has "
+            "`max_sequence_length`."
         )
 
     num_kv_heads = _first_attr(
