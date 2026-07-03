@@ -595,27 +595,9 @@ def _trace_and_convert(
     from keras_hub.src.utils.litertlm.adapter import (
         KerasHubVisionEncoderAdapter,
     )
-    from keras_hub.src.utils.litertlm.adapter import _traceable_arange_scope
-    from keras_hub.src.utils.litertlm.adapter import (
-        _traceable_dot_product_attention_scope,
-    )
-    from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
-    from keras_hub.src.utils.litertlm.adapter import _traceable_repeat_scope
-    from keras_hub.src.utils.litertlm.adapter import (
-        _traceable_scatter_update_scope,
-    )
-    from keras_hub.src.utils.litertlm.adapter import _traceable_slice_scope
-    from keras_hub.src.utils.litertlm.adapter import _traceable_take_scope
+    from keras_hub.src.utils.litertlm.traceable_ops import traceable_ops_scope
 
-    with (
-        _traceable_slice_scope(),
-        _traceable_dot_product_attention_scope(),
-        _traceable_one_hot_scope(),
-        _traceable_repeat_scope(),
-        _traceable_arange_scope(),
-        _traceable_take_scope(),
-        _traceable_scatter_update_scope(),
-    ):
+    with traceable_ops_scope():
         vision_encoder_edge = None
         vision_adapter_edge = None
 

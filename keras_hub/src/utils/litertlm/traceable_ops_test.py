@@ -1,15 +1,15 @@
-"""Parity tests for the litertlm "traceable op" patches in ``adapter.py``.
+"""Parity tests for the litertlm "traceable op" patches in ``traceable_ops.py``.
 
-``adapter.py`` temporarily replaces a handful of Keras torch-backend ops
-(``one_hot``, ``repeat``, ``slice``, ``take``, ``scatter_update``,
+``traceable_ops.py`` temporarily replaces a handful of Keras torch-backend
+ops (``one_hot``, ``repeat``, ``slice``, ``take``, ``scatter_update``,
 ``dot_product_attention``, ``arange``) with reimplementations that are
-friendlier to ``torch.export`` tracing (see each function's docstring in
-``adapter.py`` for the specific tracing issue it works around). These tests
-do not exercise ``torch.export`` at all -- they call the patched functions
-directly, on ordinary eager tensors, and check that they compute the exact
-same values as the original (unpatched) Keras implementation on
-representative shapes/dtypes/axes so a future change to one of these patches
-cannot silently change numerics without a failing test.
+friendlier to ``torch.export`` tracing (see each function's docstring for
+the specific tracing issue it works around). These tests do not exercise
+``torch.export`` at all -- they call the patched functions directly, on
+ordinary eager tensors, and check that they compute the exact same values
+as the original (unpatched) Keras implementation on representative
+shapes/dtypes/axes so a future change to one of these patches cannot
+silently change numerics without a failing test.
 """
 
 import unittest
@@ -19,7 +19,7 @@ import numpy as np
 import torch
 
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.litertlm import adapter
+from keras_hub.src.utils.litertlm import traceable_ops
 
 
 def _to_np(x):
@@ -53,7 +53,7 @@ class TraceableOpsParityTest(TestCase):
                 original = torch_backend_nn.one_hot(
                     x_t, num_classes, axis=axis, dtype=dtype
                 )
-                patched = adapter._patched_one_hot(
+                patched = traceable_ops._patched_one_hot(
                     x_t, num_classes, axis=axis, dtype=dtype
                 )
                 self.assertEqual(tuple(original.shape), tuple(patched.shape))
@@ -65,7 +65,7 @@ class TraceableOpsParityTest(TestCase):
         with self.assertRaises(ValueError):
             torch_backend_nn.one_hot(torch.tensor([0]), 4, sparse=True)
         with self.assertRaises(ValueError):
-            adapter._patched_one_hot(torch.tensor([0]), 4, sparse=True)
+            traceable_ops._patched_one_hot(torch.tensor([0]), 4, sparse=True)
 
     # ------------------------------------------------------------------
     # repeat
@@ -80,7 +80,7 @@ class TraceableOpsParityTest(TestCase):
                     original = torch_backend_numpy.repeat(
                         x, repeats, axis=axis
                     )
-                    patched = adapter._traceable_repeat(
+                    patched = traceable_ops._traceable_repeat(
                         x, repeats, axis=axis
                     )
                     self.assertAllClose(_to_np(original), _to_np(patched))
@@ -95,24 +95,24 @@ class TraceableOpsParityTest(TestCase):
         x = torch.arange(12, dtype=torch.float32).reshape(3, 4)
         repeats = torch.tensor(2)
         original = torch_backend_numpy.repeat(x, repeats, axis=1)
-        patched = adapter._traceable_repeat(x, repeats, axis=1)
+        patched = traceable_ops._traceable_repeat(x, repeats, axis=1)
         self.assertAllClose(_to_np(original), _to_np(patched))
 
     def test_repeat_identity_when_repeats_is_one(self):
         x = torch.arange(6, dtype=torch.float32).reshape(2, 3)
-        patched = adapter._traceable_repeat(x, 1, axis=0)
+        patched = traceable_ops._traceable_repeat(x, 1, axis=0)
         self.assertAllClose(_to_np(x), _to_np(patched))
 
     def test_repeat_rejects_negative(self):
         with self.assertRaises(ValueError):
-            adapter._traceable_repeat(torch.zeros(2, 2), -1, axis=0)
+            traceable_ops._traceable_repeat(torch.zeros(2, 2), -1, axis=0)
 
     def test_repeat_no_axis_falls_back_to_original(self):
         from keras.src.backend.torch import numpy as torch_backend_numpy
 
         x = torch.arange(6, dtype=torch.float32)
         original = torch_backend_numpy.repeat(x, 3, axis=None)
-        patched = adapter._traceable_repeat(x, 3, axis=None)
+        patched = traceable_ops._traceable_repeat(x, 3, axis=None)
         self.assertAllClose(_to_np(original), _to_np(patched))
 
     # ------------------------------------------------------------------
@@ -122,7 +122,7 @@ class TraceableOpsParityTest(TestCase):
         from keras.src.backend.torch import core as torch_core
 
         x = torch.arange(60, dtype=torch.float32).reshape(3, 4, 5)
-        patched_slice = adapter._make_patched_slice(torch_core.slice)
+        patched_slice = traceable_ops._make_patched_slice()
         original = torch_core.slice(x, [1, 1, 0], [2, 2, 5])
         patched = patched_slice(x, [1, 1, 0], [2, 2, 5])
         self.assertAllClose(_to_np(original), _to_np(patched))
@@ -131,7 +131,7 @@ class TraceableOpsParityTest(TestCase):
         from keras.src.backend.torch import core as torch_core
 
         x = torch.arange(60, dtype=torch.float32).reshape(3, 4, 5)
-        patched_slice = adapter._make_patched_slice(torch_core.slice)
+        patched_slice = traceable_ops._make_patched_slice()
         for start in range(0, 3):
             with self.subTest(start=start):
                 start_t = torch.tensor(start)
@@ -146,7 +146,7 @@ class TraceableOpsParityTest(TestCase):
         from keras.src.backend.torch import core as torch_core
 
         x = torch.arange(2 * 4 * 5, dtype=torch.float32).reshape(2, 4, 5)
-        patched_slice = adapter._make_patched_slice(torch_core.slice)
+        patched_slice = traceable_ops._make_patched_slice()
         for start in range(0, 3):
             with self.subTest(start=start):
                 start_t = torch.tensor(start)
@@ -158,7 +158,7 @@ class TraceableOpsParityTest(TestCase):
         from keras.src.backend.torch import core as torch_core
 
         x = torch.arange(60, dtype=torch.float32).reshape(3, 4, 5)
-        patched_slice = adapter._make_patched_slice(torch_core.slice)
+        patched_slice = traceable_ops._make_patched_slice()
         with self.assertRaises(NotImplementedError):
             patched_slice(
                 x, [torch.tensor(0), torch.tensor(1), 0], [1, 1, 5]
@@ -173,7 +173,7 @@ class TraceableOpsParityTest(TestCase):
         table = torch.arange(20, dtype=torch.float32).reshape(5, 4)
         indices = torch.tensor([0, 2, 4, 1])
         original = torch_backend_numpy.take(table, indices, axis=0)
-        patched = adapter._patched_take(table, indices, axis=0)
+        patched = traceable_ops._patched_take(table, indices, axis=0)
         self.assertAllClose(_to_np(original), _to_np(patched))
 
     def test_take_matches_original_various_axes(self):
@@ -189,7 +189,7 @@ class TraceableOpsParityTest(TestCase):
         for indices, axis in cases:
             with self.subTest(axis=axis, indices=indices.tolist()):
                 original = torch_backend_numpy.take(x, indices, axis=axis)
-                patched = adapter._patched_take(x, indices, axis=axis)
+                patched = traceable_ops._patched_take(x, indices, axis=axis)
                 self.assertAllClose(_to_np(original), _to_np(patched))
 
     def test_take_no_axis_matches_original(self):
@@ -198,7 +198,7 @@ class TraceableOpsParityTest(TestCase):
         x = torch.arange(12, dtype=torch.float32).reshape(3, 4)
         indices = torch.tensor([0, 5, 11])
         original = torch_backend_numpy.take(x, indices, axis=None)
-        patched = adapter._patched_take(x, indices, axis=None)
+        patched = traceable_ops._patched_take(x, indices, axis=None)
         self.assertAllClose(_to_np(original), _to_np(patched))
 
     # ------------------------------------------------------------------
@@ -215,7 +215,7 @@ class TraceableOpsParityTest(TestCase):
                 original = torch_core.scatter_update(
                     inputs, indices, updates, reduction=reduction
                 )
-                patched = adapter._patched_scatter_update(
+                patched = traceable_ops._patched_scatter_update(
                     inputs, indices, updates, reduction=reduction
                 )
                 self.assertAllClose(_to_np(original), _to_np(patched))
@@ -233,7 +233,7 @@ class TraceableOpsParityTest(TestCase):
                 original = torch_core.scatter_update(
                     inputs, indices, updates, reduction=reduction
                 )
-                patched = adapter._patched_scatter_update(
+                patched = traceable_ops._patched_scatter_update(
                     inputs, indices, updates, reduction=reduction
                 )
                 self.assertAllClose(_to_np(original), _to_np(patched))
@@ -243,7 +243,7 @@ class TraceableOpsParityTest(TestCase):
         indices = torch.tensor([[0, 0]])
         updates = torch.tensor([1.0])
         with self.assertRaises(ValueError):
-            adapter._patched_scatter_update(
+            traceable_ops._patched_scatter_update(
                 inputs, indices, updates, reduction="bogus"
             )
 
@@ -264,14 +264,14 @@ class TraceableOpsParityTest(TestCase):
                 original = torch_backend_numpy.arange(
                     start, stop=stop, step=step
                 )
-                patched = adapter._patched_arange(
+                patched = traceable_ops._patched_arange(
                     start, stop=stop, step=step
                 )
                 self.assertAllClose(_to_np(original), _to_np(patched))
 
     def test_arange_forces_int32_for_integer_ranges(self):
-        original = adapter._ORIGINAL_ARANGE(0, stop=10, step=1)
-        patched = adapter._patched_arange(0, stop=10, step=1)
+        original = traceable_ops._ORIGINAL_ARANGE(0, stop=10, step=1)
+        patched = traceable_ops._patched_arange(0, stop=10, step=1)
         self.assertAllClose(_to_np(original), _to_np(patched))
         self.assertEqual(patched.dtype, torch.int32)
 
@@ -281,7 +281,7 @@ class TraceableOpsParityTest(TestCase):
         original = torch_backend_numpy.arange(
             0, stop=10, step=1, dtype=torch.int64
         )
-        patched = adapter._patched_arange(0, stop=10, step=1, dtype=torch.int64)
+        patched = traceable_ops._patched_arange(0, stop=10, step=1, dtype=torch.int64)
         self.assertAllClose(_to_np(original), _to_np(patched))
         self.assertEqual(patched.dtype, torch.int64)
 
@@ -313,7 +313,7 @@ class TraceableOpsParityTest(TestCase):
         original = torch_backend_nn.dot_product_attention(
             query, key, value, is_causal=True
         )
-        patched = adapter._traceable_dot_product_attention(
+        patched = traceable_ops._traceable_dot_product_attention(
             query, key, value, is_causal=True
         )
         self.assertAllClose(
@@ -346,7 +346,7 @@ class TraceableOpsParityTest(TestCase):
         groups = query.shape[2] // key.shape[2]
         key_r = key.repeat_interleave(groups, dim=2)
         value_r = value.repeat_interleave(groups, dim=2)
-        patched = adapter._traceable_dot_product_attention(
+        patched = traceable_ops._traceable_dot_product_attention(
             query, key_r, value_r, is_causal=True
         )
         self.assertAllClose(
@@ -365,7 +365,7 @@ class TraceableOpsParityTest(TestCase):
         original = torch_backend_nn.dot_product_attention(
             query, key, value, mask=mask
         )
-        patched = adapter._traceable_dot_product_attention(
+        patched = traceable_ops._traceable_dot_product_attention(
             query, key, value, mask=mask
         )
         self.assertAllClose(
@@ -396,7 +396,7 @@ class TraceableOpsParityTest(TestCase):
         attn = torch.softmax(scores, dim=-1)
         expected = torch.matmul(attn, v).transpose(1, 2)
 
-        patched = adapter._traceable_dot_product_attention(
+        patched = traceable_ops._traceable_dot_product_attention(
             query, key, value, attn_logits_soft_cap=cap
         )
         self.assertAllClose(
