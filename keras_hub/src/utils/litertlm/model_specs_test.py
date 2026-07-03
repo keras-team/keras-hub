@@ -267,3 +267,25 @@ class ExportSpecRegistryIntegrityTest(TestCase):
         self.assertEqual(
             Qwen2p5FamilySpec().get_chat_stop_token_ids(tokenizer), []
         )
+
+    # -- Unsupported cache-structure messaging ------------------------------
+
+    def test_base_spec_describes_unsupported_cache_structure_generically(self):
+        """The default `describe_unsupported_cache_structure` must name the
+        actual mismatched `cache_structure` value generically, without any
+        family-specific (e.g. Qwen3.5) text -- that lives on the family's
+        own spec (see `Qwen3_5Spec`'s override) instead of leaking into the
+        shared/generic path."""
+
+        class _CustomHybridSpec(LiteRTLMExportSpec):
+            cache_structure = "custom_hybrid"
+
+        message = _CustomHybridSpec().describe_unsupported_cache_structure()
+        self.assertIn("custom_hybrid", message)
+        self.assertIn("single_stacked", message)
+        self.assertNotIn("Qwen3.5", message)
+        self.assertNotIn("Qwen", message)
+
+    def test_qwen3_5_spec_describes_hybrid_cache_specifically(self):
+        message = Qwen3_5Spec().describe_unsupported_cache_structure()
+        self.assertIn("hybrid full_attention/linear_attention", message)

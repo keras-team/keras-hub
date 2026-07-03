@@ -113,9 +113,14 @@ class KerasHubLiteRTAdapter(nn.Module):
         logits:       float [batch, seq_len, vocab_size]
         kv_cache_k_0, kv_cache_v_0, ...: updated per-layer KV caches
 
-    The adapter stacks per-layer k/v tensors into the Keras cache format
-    (``[batch, num_layers, 2, cache_length, num_kv_heads, head_dim]``),
-    calls ``model.call_with_cache()``, and unstacks the result.
+    The adapter delegates to ``export_spec.stack_kv_cache``/
+    ``unstack_kv_cache`` (see ``LiteRTLMExportSpec`` in ``model_specs.py``)
+    to convert between the flat per-layer k/v tensors and whatever cache
+    shape ``model.call_with_cache()`` expects for this family -- by default
+    a single stacked ``[batch, num_layers, 2, cache_length, num_kv_heads,
+    head_dim]`` tensor -- rather than hardcoding that shape here, so a
+    future hybrid-cache family can override cache handling on its own spec
+    instead of this adapter growing per-family branches.
     """
 
     def __init__(
@@ -136,12 +141,17 @@ class KerasHubLiteRTAdapter(nn.Module):
 
         vision_encoder = _get_vision_encoder(keras_model.backbone)
         self.has_vision = vision_encoder is not None
-        self.is_gemma4_vision = (
-            vision_encoder is not None and export_spec.is_gemma4_vision
+        # How this family's vision encoder consumes its input -- see
+        # `LiteRTLMExportSpec.vision_input_style` in model_specs.py for the
+        # three possible values ("raw_images" / "patch_values" /
+        # "embedded_pixel_values"). `None` when the model has no vision
+        # encoder at all.
+        self.vision_input_style = (
+            export_spec.vision_input_style if self.has_vision else None
         )
         # When exporting a separate vision encoder, keep the vision tower out of
         # the PREFILL_DECODE graph so its weights are not duplicated in the main
-        # model. The cached `is_gemma4_vision` flag still guides reshape logic.
+        # model. The cached `vision_input_style` still guides reshape logic.
         self.vision_encoder = (
             None if separate_vision_encoder else vision_encoder
         )
@@ -157,7 +167,6 @@ class KerasHubLiteRTAdapter(nn.Module):
             inspect.signature(keras_model.call_with_cache).parameters.keys()
         )
         self._call_with_cache_params = call_params
-        self._expects_pixel_values = "pixel_values" in call_params
         self._expects_input_features = "input_features" in call_params
 
     def forward_prefill(
@@ -187,7 +196,7 @@ class KerasHubLiteRTAdapter(nn.Module):
         element is used as the cache-update index so that prefill appends to
         the existing cache instead of overwriting from position 0.
         """
-        cache = self._stack_kv_cache(kv_cache)
+        cache = self.export_spec.stack_kv_cache(kv_cache, self.num_layers)
         # The first element of input_pos is the start position.
         cache_update_index = input_pos[0]
 
@@ -237,17 +246,19 @@ class KerasHubLiteRTAdapter(nn.Module):
         Only one of the two return values is non-``None`` for a given model
         signature:
 
-        - Gemma3n expects raw ``pixel_values`` (returned as the second tuple
-          item).
+        - Gemma3n (``vision_input_style="embedded_pixel_values"``) expects
+          raw ``pixel_values`` (returned as the second tuple item).
         - Separate-vision-encoder exports consume pre-computed
           ``mm_embedding``.
-        - Gemma4 accepts preprocessed patch tensors.
-        - Other vision encoders (Gemma3, PaliGemma) accept raw ``images``.
+        - Gemma4 (``vision_input_style="patch_values"``) accepts
+          preprocessed patch tensors.
+        - Other vision encoders (``vision_input_style="raw_images"``, e.g.
+          Gemma3, PaliGemma) accept raw ``images``.
         """
         if not self.has_vision:
             return None, None
 
-        if self._expects_pixel_values:
+        if self.vision_input_style == "embedded_pixel_values":
             # Gemma3n runs the vision encoder inside the backbone; pass the
             # raw preprocessed images through.
             return None, images
@@ -262,7 +273,7 @@ class KerasHubLiteRTAdapter(nn.Module):
             )
             return img_embeddings, None
 
-        if self.is_gemma4_vision:
+        if self.vision_input_style == "patch_values":
             if pixel_values is not None and pixel_position_ids is not None:
                 img_embeddings = self.vision_encoder(
                     {
@@ -299,7 +310,7 @@ class KerasHubLiteRTAdapter(nn.Module):
         directly as the cache-update index so that the value remains a tensor
         inside the exported graph and is not baked in as a Python constant.
         """
-        cache = self._stack_kv_cache(kv_cache)
+        cache = self.export_spec.stack_kv_cache(kv_cache, self.num_layers)
         # Squeeze to a 0-D tensor so Keras cache operations receive a scalar.
         cache_update_index = input_pos.reshape(())
         call_kwargs = self._build_call_with_cache_kwargs(
@@ -340,25 +351,12 @@ class KerasHubLiteRTAdapter(nn.Module):
         # `.clone()` (verified empirically: `updated_cache.data_ptr() !=
         # cache.data_ptr()`, and mutating `updated_cache` in place does not
         # affect `cache`).
-        outputs = self._unstack_kv_cache(updated_cache)
+        outputs = self.export_spec.unstack_kv_cache(
+            updated_cache, self.num_layers
+        )
         if return_logits:
             outputs["logits"] = logits
         return outputs
-
-    def _stack_kv_cache(self, kv_cache):
-        """Stack flat ``kv_cache_k_N`` / ``kv_cache_v_N`` into Keras format.
-
-        ``torch.stack`` always allocates a new, contiguous tensor -- it never
-        returns a view aliasing its inputs -- so the doubly-nested stack
-        below is already guaranteed to be a fresh allocation independent of
-        the per-layer ``kv_cache_k_N`` / ``kv_cache_v_N`` input buffers,
-        without an extra ``.clone()``.
-        """
-        k_list = [kv_cache[f"kv_cache_k_{i}"] for i in range(self.num_layers)]
-        v_list = [kv_cache[f"kv_cache_v_{i}"] for i in range(self.num_layers)]
-        k_stack = torch.stack(k_list, dim=1)
-        v_stack = torch.stack(v_list, dim=1)
-        return torch.stack([k_stack, v_stack], dim=2)
 
     def _build_call_with_cache_kwargs(
         self,
@@ -388,25 +386,6 @@ class KerasHubLiteRTAdapter(nn.Module):
             "audio_indices": audio_indices,
         }
         return {k: v for k, v in values.items() if k in params}
-
-    def _unstack_kv_cache(self, cache):
-        """Split Keras cache back into per-layer output tensors.
-
-        Each per-layer tensor is a view into ``cache``, which is itself
-        already a fresh, non-aliased tensor produced by
-        ``keras_model.call_with_cache`` (see the comment in
-        ``_call_with_cache``). No additional ``.clone()`` is needed here:
-        ``torch.export``'s functionalization pass materializes graph-output
-        views into independent buffers automatically, and this is exercised
-        by the full litert_lm-runtime generation tests (multi-step decode,
-        which is exactly the scenario where aliased output buffers would
-        surface as corrupted generation).
-        """
-        outputs = {}
-        for i in range(self.num_layers):
-            outputs[f"kv_cache_k_{i}"] = cache[:, i, 0, ...]
-            outputs[f"kv_cache_v_{i}"] = cache[:, i, 1, ...]
-        return outputs
 
 
 class KerasHubVisionEncoderAdapter(nn.Module):

@@ -61,20 +61,32 @@ class LiteRTLMExportSpec:
     #: Shape of the ``cache`` argument ``call_with_cache`` expects.
     #: ``"single_stacked"`` (every currently-supported family) is a single
     #: stacked ``[batch, num_layers, 2, cache_length, num_kv_heads,
-    #: head_dim]`` KV-cache tensor -- exactly what
-    #: ``KerasHubLiteRTAdapter._stack_kv_cache`` builds. ``"hybrid"``
-    #: (Qwen3.5) means ``call_with_cache`` instead expects a
-    #: ``(kv_cache, conv_cache, recurrent_cache)`` tuple, because hybrid
-    #: full-attention/linear-attention architectures need two structurally
-    #: different per-layer caches. The adapter does not build that shape,
-    #: so ``export_to_litertlm`` fails fast on any spec with
+    #: head_dim]`` KV-cache tensor -- exactly what the default
+    #: ``stack_kv_cache`` below builds. ``"hybrid"`` (Qwen3.5) means
+    #: ``call_with_cache`` instead expects a ``(kv_cache, conv_cache,
+    #: recurrent_cache)`` tuple, because hybrid full-attention/
+    #: linear-attention architectures need two structurally different
+    #: per-layer caches. The default ``stack_kv_cache``/``unstack_kv_cache``
+    #: do not build/parse that shape (no current spec overrides them to), so
+    #: ``export_to_litertlm`` fails fast on any spec with
     #: ``cache_structure != "single_stacked"`` (see the early validation in
     #: ``export.py``) instead of letting a mismatched cache reach
     #: ``call_with_cache`` and fail with a cryptic ``IndexError``.
     cache_structure = "single_stacked"
-    #: Whether the vision encoder expects preprocessed patch tensors
-    #: (``pixel_values`` + ``pixel_position_ids``) rather than raw images.
-    is_gemma4_vision = False
+    #: How this family's vision encoder consumes its input (only meaningful
+    #: when `get_vision_config` returns non-``None``). One of:
+    #: - ``"raw_images"`` (default): the vision encoder -- or
+    #:   ``KerasHubVisionEncoderAdapter`` on the separate-vision-encoder
+    #:   export path -- is called with a raw ``[B, N, H, W, 3]`` images
+    #:   tensor (Gemma3, PaliGemma).
+    #: - ``"patch_values"``: the vision encoder is called with preprocessed
+    #:   ``pixel_values`` + ``pixel_position_ids`` patch tensors (Gemma4).
+    #: - ``"embedded_pixel_values"``: the vision encoder runs *inside* the
+    #:   backbone, so `call_with_cache` itself consumes raw ``pixel_values``
+    #:   directly and the adapter never calls a separate vision encoder at
+    #:   all (Gemma3n). `separate_vision_encoder=True` is meaningless for
+    #:   this style and is rejected in `export_to_litertlm`.
+    vision_input_style = "raw_images"
 
     # -- Cache / vision / audio config -----------------------------------
 
@@ -157,6 +169,29 @@ class LiteRTLMExportSpec:
             "cache_layout": self.cache_layout,
             "used_preprocessor_fallback": used_preprocessor_fallback,
         }
+
+    def describe_unsupported_cache_structure(self):
+        """Explain why ``cache_structure`` isn't ``"single_stacked"``.
+
+        Used by ``export_to_litertlm``'s fail-fast check (raised right
+        after the spec is resolved, before any cache-config derivation or
+        tracing) when ``self.cache_structure != "single_stacked"``. Default:
+        a generic description naming the actual ``cache_structure`` value
+        and the shape the adapter does support. Families with a more
+        specific/helpful explanation of *why* their cache doesn't fit (e.g.
+        ``Qwen3_5Spec``, whose hybrid attention/linear-attention layers need
+        a genuinely different, non-KV-only cache) should override this
+        instead of the generic validation in ``export.py`` growing another
+        family-specific branch.
+        """
+        return (
+            f"requires a {self.cache_structure!r} cache structure, but the "
+            "LiteRT-LM adapter only supports "
+            '`cache_structure="single_stacked"` (a single stacked '
+            "`[batch, num_layers, 2, cache_length, num_kv_heads, head_dim]` "
+            "KV-cache tensor). Support for this cache structure is not yet "
+            "implemented."
+        )
 
     def get_vision_config(self, model):
         """Return vision metadata if *model* has a vision encoder, else
@@ -330,6 +365,68 @@ class LiteRTLMExportSpec:
         del tokens, cache_length
         return {}
 
+    # -- KV-cache stack/unstack ---------------------------------------------
+    #
+    # Cache *layout* (the per-layer tensor shape, see ``cache_layout``) and
+    # cache *structure* (what ``call_with_cache`` expects as its ``cache``
+    # argument overall, see ``cache_structure``) are already per-family spec
+    # facts. Stacking/unstacking between the flat ``kv_cache_k_N``/
+    # ``kv_cache_v_N`` tensors LiteRT-LM's signature contract uses and
+    # whatever shape ``call_with_cache`` actually expects is therefore also
+    # family-specific behavior, not a fixed adapter mechanism -- these two
+    # methods are what a future ``cache_structure="hybrid"`` family (this is
+    # exactly the seam Qwen3.5's hybrid ``(kv_cache, conv_cache,
+    # recurrent_cache)`` cache needs -- see ``Qwen3_5Spec``) would override,
+    # instead of ``KerasHubLiteRTAdapter`` growing per-family branches.
+
+    def stack_kv_cache(self, kv_cache, num_layers):
+        """Stack flat ``kv_cache_k_N``/``kv_cache_v_N`` tensors into the
+        cache format ``call_with_cache`` expects for this family.
+
+        Default (every family with ``cache_structure="single_stacked"``):
+        stack into a single ``[batch, num_layers, 2, cache_length,
+        num_kv_heads, head_dim]`` tensor -- exactly what
+        ``KerasHubLiteRTAdapter`` used to build inline before this moved
+        onto the spec. ``torch.stack`` always allocates a new, contiguous
+        tensor -- it never returns a view aliasing its inputs -- so the
+        doubly-nested stack below is already guaranteed to be a fresh
+        allocation independent of the per-layer ``kv_cache_k_N``/
+        ``kv_cache_v_N`` input buffers, without an extra ``.clone()``.
+
+        Torch is imported locally (this method is only ever called from the
+        adapter, after the torch backend has already been verified), the
+        same pattern ``Gemma3nSpec.get_forced_call_with_cache_kwargs`` uses.
+        """
+        import torch
+
+        k_list = [kv_cache[f"kv_cache_k_{i}"] for i in range(num_layers)]
+        v_list = [kv_cache[f"kv_cache_v_{i}"] for i in range(num_layers)]
+        k_stack = torch.stack(k_list, dim=1)
+        v_stack = torch.stack(v_list, dim=1)
+        return torch.stack([k_stack, v_stack], dim=2)
+
+    def unstack_kv_cache(self, cache, num_layers):
+        """Split the cache ``call_with_cache`` returned back into per-layer
+        ``kv_cache_k_N``/``kv_cache_v_N`` output tensors, inverting
+        ``stack_kv_cache``.
+
+        Default: inverse of the single-stacked layout built above. Each
+        per-layer tensor is a view into ``cache``, which is itself already
+        a fresh, non-aliased tensor produced by ``call_with_cache`` (Keras's
+        ``slice_update``/``scatter_update`` cache-update ops are purely
+        functional and never mutate their input in place). No additional
+        ``.clone()`` is needed here: ``torch.export``'s functionalization
+        pass materializes graph-output views into independent buffers
+        automatically, exercised by the full litert_lm-runtime generation
+        tests (multi-step decode, exactly the scenario where aliased output
+        buffers would surface as corrupted generation).
+        """
+        outputs = {}
+        for i in range(num_layers):
+            outputs[f"kv_cache_k_{i}"] = cache[:, i, 0, ...]
+            outputs[f"kv_cache_v_{i}"] = cache[:, i, 1, ...]
+        return outputs
+
     # -- Metadata: chat-turn stop tokens -----------------------------------
 
     def get_chat_stop_token_ids(self, tokenizer):
@@ -424,6 +521,7 @@ class Gemma3Spec(GemmaSpec):
 class Gemma3nSpec(GemmaSpec):
     model_type = "gemma3n"
     cache_layout = "gemma3n"
+    vision_input_style = "embedded_pixel_values"
 
     def populate_vision_metadata(self, meta, vision_cfg):
         _populate_gemma3_family_vision_metadata(
@@ -455,7 +553,7 @@ class Gemma3nSpec(GemmaSpec):
 
 class Gemma4Spec(GemmaSpec):
     model_type = "gemma4"
-    is_gemma4_vision = True
+    vision_input_style = "patch_values"
 
     def populate_vision_metadata(self, meta, vision_cfg):
         image_size = vision_cfg["image_size"]
@@ -551,6 +649,19 @@ class Qwen3_5Spec(Qwen3FamilySpec):
     """
 
     cache_structure = "hybrid"
+
+    def describe_unsupported_cache_structure(self):
+        return (
+            "requires a 'hybrid' cache structure: Qwen3.5's hybrid "
+            "full_attention/linear_attention layers use a dual cache "
+            "structure (`call_with_cache` expects a `(kv_cache, conv_cache, "
+            "recurrent_cache)` tuple, since linear-attention layers need a "
+            "convolutional/recurrent state that a stacked KV tensor cannot "
+            "represent) that the adapter does not yet support: it always "
+            "stacks per-layer KV tensors into a single `cache` tensor and "
+            "passes that alone. Support for hybrid cache structures is not "
+            "yet implemented."
+        )
 
 
 class Qwen2p5FamilySpec(LiteRTLMExportSpec):

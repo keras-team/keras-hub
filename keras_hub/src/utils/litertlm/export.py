@@ -3,7 +3,6 @@
 import contextlib
 import dataclasses
 import importlib.util
-import inspect
 import json
 import os
 import tempfile
@@ -432,7 +431,7 @@ class ExportPlan:
     has_audio: bool
     vision_cfg: dict | None
     audio_cfg: dict | None
-    is_gemma4_vision: bool
+    vision_input_style: str | None
     vision_output_dim: int | None
     max_images: int | None
     tokens_per_image: int | None
@@ -480,7 +479,7 @@ def _build_prefill_inputs(plan):
                         ),
                     }
                 )
-            elif plan.is_gemma4_vision:
+            elif plan.vision_input_style == "patch_values":
                 base.update(
                     _build_gemma4_vision_sample_inputs(
                         batch_size=1,
@@ -493,6 +492,12 @@ def _build_prefill_inputs(plan):
                     )
                 )
             else:
+                # "raw_images" (Gemma3/PaliGemma) and "embedded_pixel_values"
+                # (Gemma3n) both need the same raw `[B, N, H, W, 3]` images
+                # sample tensor here -- they only diverge in how the adapter
+                # *runs* the vision encoder at trace time (see
+                # `KerasHubLiteRTAdapter._prepare_image_embeddings`), not in
+                # what shape the prefill signature needs.
                 base.update(
                     _build_vision_sample_inputs(
                         batch_size=1,
@@ -528,11 +533,11 @@ def _build_vision_encoder_sample_inputs(
     image_size,
     patch_size,
     dtype,
-    is_gemma4_vision=False,
+    vision_input_style="raw_images",
 ):
     """Create concrete sample inputs for a separate vision-encoder signature."""
     device = "cpu"
-    if is_gemma4_vision:
+    if vision_input_style == "patch_values":
         num_patches = (image_size // patch_size) ** 2
         patch_dim = patch_size**2 * 3
         return {
@@ -648,7 +653,7 @@ def _trace_and_convert(
                 image_size=vision_cfg["image_size"],
                 patch_size=patch_size,
                 dtype=plan.dtype,
-                is_gemma4_vision=plan.is_gemma4_vision,
+                vision_input_style=plan.vision_input_style,
             )
             vision_adapter_inputs = _build_vision_adapter_sample_inputs(
                 batch_size=1,
@@ -928,29 +933,21 @@ def export_to_litertlm(
 
     # Fail fast on model families whose cache structure the adapter cannot
     # build. Every currently-supported family uses a single stacked KV-cache
-    # tensor ("single_stacked"); Qwen3.5's hybrid full-attention/
-    # linear-attention layers need a `(kv_cache, conv_cache, recurrent_cache)`
-    # tuple instead (see `LiteRTLMExportSpec.cache_structure`). Checking this
-    # here, right after the spec is resolved and before any cache-config
+    # tensor ("single_stacked"); see `LiteRTLMExportSpec.cache_structure` and
+    # `describe_unsupported_cache_structure` for what a family-specific
+    # mismatch (e.g. Qwen3.5's hybrid cache) looks like and how to explain
+    # it -- this generic check/message applies to any such family, not just
+    # Qwen3.5, so a family-specific explanation belongs on that family's own
+    # spec class, not as a growing set of branches here. Checking this here,
+    # right after the spec is resolved and before any cache-config
     # derivation or tracing, turns what used to be a cryptic `IndexError`
-    # deep inside `KerasHubLiteRTAdapter._stack_kv_cache` into a clear,
+    # deep inside `LiteRTLMExportSpec.stack_kv_cache` into a clear,
     # documented error raised before any expensive work happens.
     if spec.cache_structure != "single_stacked":
         raise ValueError(
             f"LiteRT-LM export does not support `{type(model).__name__}`: "
-            f"`{type(model.backbone).__name__}` requires a "
-            f"{spec.cache_structure!r} cache structure, but the LiteRT-LM "
-            'adapter only supports `cache_structure="single_stacked"` (a '
-            "single stacked `[batch, num_layers, 2, cache_length, "
-            "num_kv_heads, head_dim]` KV-cache tensor). Qwen3.5's hybrid "
-            "full_attention/linear_attention layers use a dual cache "
-            "structure (`call_with_cache` expects a `(kv_cache, conv_cache, "
-            "recurrent_cache)` tuple, since linear-attention layers need a "
-            "convolutional/recurrent state that a stacked KV tensor cannot "
-            "represent) that the adapter does not yet support: it always "
-            "stacks per-layer KV tensors into a single `cache` tensor and "
-            "passes that alone. Support for hybrid cache structures is not "
-            "yet implemented."
+            f"`{type(model.backbone).__name__}` "
+            f"{spec.describe_unsupported_cache_structure()}"
         )
 
     cache_cfg = spec.get_cache_config(model, cache_length=cache_length)
@@ -988,11 +985,11 @@ def export_to_litertlm(
     has_vision = vision_cfg is not None
     has_audio = audio_cfg is not None
 
-    is_gemma4_vision = False
+    vision_input_style = None
     vision_output_dim = None
     if has_vision:
         vision_encoder = _get_vision_encoder(model.backbone)
-        is_gemma4_vision = spec.is_gemma4_vision
+        vision_input_style = spec.vision_input_style
         vision_output_dim = spec.get_vision_output_dim(vision_encoder)
         if separate_vision_encoder and vision_output_dim is None:
             raise ValueError(
@@ -1006,15 +1003,22 @@ def export_to_litertlm(
         )
 
     # Gemma3n runs vision/audio encoders inside the backbone and expects raw
-    # pixel_values / input_features, so a separate vision encoder is not
-    # meaningful for that architecture.
-    if separate_vision_encoder and has_vision:
-        call_params = set(inspect.signature(model.call_with_cache).parameters)
-        if "pixel_values" in call_params:
-            raise ValueError(
-                "`separate_vision_encoder=True` is not supported for models "
-                "that expect raw `pixel_values` (e.g. Gemma3n)."
-            )
+    # pixel_values / input_features (`vision_input_style ==
+    # "embedded_pixel_values"`), so a separate vision encoder is not
+    # meaningful for that architecture. This used to be detected by
+    # inspecting whether `call_with_cache`'s signature has a `pixel_values`
+    # parameter; the spec already knows this about its own family (via the
+    # registry that resolved it), so ask it directly instead of re-deriving
+    # the same fact from signature introspection.
+    if (
+        separate_vision_encoder
+        and has_vision
+        and vision_input_style == "embedded_pixel_values"
+    ):
+        raise ValueError(
+            "`separate_vision_encoder=True` is not supported for models "
+            "that expect raw `pixel_values` (e.g. Gemma3n)."
+        )
 
     # Multimodal models require cache_length == token_length due to how
     # Gemma3 computes bidirectional image attention masks. Enforce this.
@@ -1060,7 +1064,7 @@ def export_to_litertlm(
         has_audio=has_audio,
         vision_cfg=vision_cfg,
         audio_cfg=audio_cfg,
-        is_gemma4_vision=is_gemma4_vision,
+        vision_input_style=vision_input_style,
         vision_output_dim=vision_output_dim,
         max_images=max_images,
         tokens_per_image=tokens_per_image,
