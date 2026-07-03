@@ -332,9 +332,15 @@ class KerasHubLiteRTAdapter(nn.Module):
             cache_update_index,
             **call_kwargs,
         )
-        # Clone the updated cache before unstacking so that TFLite does not
-        # alias the returned KV-cache outputs with activation buffers.
-        outputs = self._unstack_kv_cache(updated_cache.clone())
+        # Keras ops (``slice_update``/``scatter_update``, used internally by
+        # every model's cache-update mechanism) are purely functional: they
+        # never mutate their input in place, always returning a freshly
+        # allocated tensor. `updated_cache` is therefore already guaranteed
+        # to be independent of the `cache` argument above, without an extra
+        # `.clone()` (verified empirically: `updated_cache.data_ptr() !=
+        # cache.data_ptr()`, and mutating `updated_cache` in place does not
+        # affect `cache`).
+        outputs = self._unstack_kv_cache(updated_cache)
         if return_logits:
             outputs["logits"] = logits
         return outputs
@@ -342,15 +348,17 @@ class KerasHubLiteRTAdapter(nn.Module):
     def _stack_kv_cache(self, kv_cache):
         """Stack flat ``kv_cache_k_N`` / ``kv_cache_v_N`` into Keras format.
 
-        The returned tensor is cloned so that downstream in-place cache
-        updates do not corrupt the input/output buffers that TFLite may
-        alias.
+        ``torch.stack`` always allocates a new, contiguous tensor -- it never
+        returns a view aliasing its inputs -- so the doubly-nested stack
+        below is already guaranteed to be a fresh allocation independent of
+        the per-layer ``kv_cache_k_N`` / ``kv_cache_v_N`` input buffers,
+        without an extra ``.clone()``.
         """
         k_list = [kv_cache[f"kv_cache_k_{i}"] for i in range(self.num_layers)]
         v_list = [kv_cache[f"kv_cache_v_{i}"] for i in range(self.num_layers)]
         k_stack = torch.stack(k_list, dim=1)
         v_stack = torch.stack(v_list, dim=1)
-        return torch.stack([k_stack, v_stack], dim=2).clone()
+        return torch.stack([k_stack, v_stack], dim=2)
 
     def _build_call_with_cache_kwargs(
         self,
@@ -384,15 +392,20 @@ class KerasHubLiteRTAdapter(nn.Module):
     def _unstack_kv_cache(self, cache):
         """Split Keras cache back into per-layer output tensors.
 
-        Each slice is cloned so that TFLite cannot alias the returned KV
-        cache tensors with intermediate activation buffers. LiteRT-LM
-        allocates dedicated output buffers for these tensors, so the clone
-        is only a trace-time guard against aliasing in the exported graph.
+        Each per-layer tensor is a view into ``cache``, which is itself
+        already a fresh, non-aliased tensor produced by
+        ``keras_model.call_with_cache`` (see the comment in
+        ``_call_with_cache``). No additional ``.clone()`` is needed here:
+        ``torch.export``'s functionalization pass materializes graph-output
+        views into independent buffers automatically, and this is exercised
+        by the full litert_lm-runtime generation tests (multi-step decode,
+        which is exactly the scenario where aliased output buffers would
+        surface as corrupted generation).
         """
         outputs = {}
         for i in range(self.num_layers):
-            outputs[f"kv_cache_k_{i}"] = cache[:, i, 0, ...].clone()
-            outputs[f"kv_cache_v_{i}"] = cache[:, i, 1, ...].clone()
+            outputs[f"kv_cache_k_{i}"] = cache[:, i, 0, ...]
+            outputs[f"kv_cache_v_{i}"] = cache[:, i, 1, ...]
         return outputs
 
 
