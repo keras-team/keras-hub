@@ -378,6 +378,43 @@ class LiteRTLMExportSpec:
     # exactly the seam Qwen3.5's hybrid ``(kv_cache, conv_cache,
     # recurrent_cache)`` cache needs -- see ``Qwen3_5Spec``) would override,
     # instead of ``KerasHubLiteRTAdapter`` growing per-family branches.
+    #
+    # INVESTIGATION (2026-07-03, keras-hub PR #2705 review, item 7 --
+    # decode-path KV-cache copy cost): traced a tiny Gemma decode step
+    # (num_layers=4, cache_length=16, num_kv_heads=1, head_dim=8; per-layer
+    # per-k/v-tensor size P = cache_length * num_kv_heads * head_dim = 128
+    # elements) with ``torch.export`` and inspected the graph for
+    # ``stack``/``cat`` nodes on cache-sized tensors:
+    #
+    # - ``stack_kv_cache`` itself produces exactly 3 ``torch.stack`` nodes
+    #   per decode step: ``k_stack``/``v_stack`` (``num_layers * P`` = 512
+    #   elements each) plus the final ``stack([k_stack, v_stack])`` combine
+    #   (``2 * num_layers * P`` = 1024 elements). Total elements written:
+    #   ``4 * num_layers * P`` = 2048 -- i.e. **2x** the logical KV-cache
+    #   size (``2 * num_layers * P`` = 1024) is copied here per decode
+    #   step, purely to convert the flat per-layer ``kv_cache_k_N``/
+    #   ``kv_cache_v_N`` signature contract into the single stacked tensor
+    #   ``call_with_cache`` expects.
+    # - ``unstack_kv_cache`` produced **zero** ``stack``/``cat`` nodes in
+    #   the traced graph (only ``select``/``getitem``), confirming it is
+    #   genuinely view-based with no extra copy, as its docstring claims.
+    # - A further ~2x cache size is copied *inside* ``call_with_cache``
+    #   itself (one ``stack([k, v])`` rebuild per layer after that layer's
+    #   cache update, plus one final stack across all ``num_layers``
+    #   layers' results) -- this is a property of the underlying Keras
+    #   model's own per-layer cache-update mechanism, not something these
+    #   two methods control, so it is out of scope here.
+    #
+    # Net: ~4x the logical KV-cache size is copied via ``stack`` somewhere
+    # in the traced decode graph per generated token -- 2x attributable to
+    # this method, 2x to the underlying model's cache update. For a
+    # production-sized cache (many layers x long cache_length x realistic
+    # head_dim) this is a genuine, per-token-recurring data-movement cost,
+    # not just per-tensor binding overhead. Restructuring it would mean
+    # either changing the LiteRT-LM signature contract (the flat
+    # ``kv_cache_k_N``/``kv_cache_v_N`` naming convention) or Keras cache
+    # internals -- both larger changes than this fix batch's scope, so this
+    # is flagged as a follow-up rather than attempted here.
 
     def stack_kv_cache(self, kv_cache, num_layers):
         """Stack flat ``kv_cache_k_N``/``kv_cache_v_N`` tensors into the
