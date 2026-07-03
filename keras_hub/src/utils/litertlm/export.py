@@ -166,6 +166,33 @@ def _preserve_jax_x64_state():
             jax.config.update("jax_enable_x64", original_x64)
 
 
+@contextlib.contextmanager
+def _preserve_jax_platforms_state():
+    """Preserve the JAX ``jax_platforms`` flag around ``litert_torch`` usage.
+
+    LiteRT-LM's JAX bridge (used internally by ``litert_torch`` during MLIR
+    lowering) defaults to the TPU platform if one is visible, but export must
+    run on CPU so it does not contend with other processes using the TPU. We
+    force ``jax_platforms=cpu`` for the duration of tracing/conversion and
+    restore the caller's original setting afterward, mirroring
+    ``_preserve_jax_x64_state``.
+    """
+    try:
+        import jax
+    except ImportError:
+        jax = None
+        original_platforms = None
+    else:
+        original_platforms = jax.config.jax_platforms
+    if jax is not None:
+        jax.config.update("jax_platforms", "cpu")
+    try:
+        yield
+    finally:
+        if jax is not None:
+            jax.config.update("jax_platforms", original_platforms)
+
+
 # ``torch`` is optional. Defining the adapter bases conditionally lets the
 # module import cleanly in non-PyTorch environments while still giving
 # ``torch.nn.Module`` semantics when PyTorch is present.
@@ -826,18 +853,6 @@ def export_to_litertlm(
         prefill_seq_len,
     )
 
-    # LiteRT-LM's JAX bridge defaults to the TPU platform if one is visible,
-    # but export must run on CPU so it does not contend with other processes
-    # using the TPU. We update the JAX config before any backend access; the
-    # environment variable alone is not enough if JAX was imported before
-    # ``keras_hub.src`` set it.
-    try:
-        import jax
-    except ImportError:
-        jax = None
-    if jax is not None:
-        jax.config.update("jax_platforms", "cpu")
-
     # Defer torch-specific adapter imports until after the backend check so
     # that a JAX/TF caller without torch gets the friendly backend error.
     from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
@@ -966,7 +981,7 @@ def export_to_litertlm(
         prefill_adapter = _PrefillAdapter(adapter).eval()
         decode_adapter = _DecodeAdapter(adapter).eval()
 
-        with _preserve_jax_x64_state():
+        with _preserve_jax_x64_state(), _preserve_jax_platforms_state():
             import litert_torch
 
             _validate_quant_config(quant_config)
