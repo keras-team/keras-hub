@@ -52,6 +52,10 @@ jobs:
       run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
+    - name: Install LiteRT-LM export dependencies
+      if: ${{ matrix.backend == 'torch' }}
+      run: |
+          pip install -e ".[litertlm]" --progress-bar off
     - name: Pin Keras 3.14
       if: ${{ matrix.version == 'keras-3.14'}}
       run: |
