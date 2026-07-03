@@ -23,6 +23,7 @@ PRESET_MAP = {
     "mistral_0.2_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.2",
     "mistral_0.3_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.3",
     "magistral_small_2506_en": "mistralai/Magistral-Small-2506",
+    "magistral_small_2507_en": "mistralai/Magistral-Small-2507",
 }
 
 FLAGS = flags.FLAGS
