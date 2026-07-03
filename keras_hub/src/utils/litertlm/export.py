@@ -813,6 +813,33 @@ def export_to_litertlm(
     # family checks at each site.
     spec = resolve_export_spec(model)
 
+    # Fail fast on model families whose cache structure the adapter cannot
+    # build. Every currently-supported family uses a single stacked KV-cache
+    # tensor ("single_stacked"); Qwen3.5's hybrid full-attention/
+    # linear-attention layers need a `(kv_cache, conv_cache, recurrent_cache)`
+    # tuple instead (see `LiteRTLMExportSpec.cache_structure`). Checking this
+    # here, right after the spec is resolved and before any cache-config
+    # derivation or tracing, turns what used to be a cryptic `IndexError`
+    # deep inside `KerasHubLiteRTAdapter._stack_kv_cache` into a clear,
+    # documented error raised before any expensive work happens.
+    if spec.cache_structure != "single_stacked":
+        raise ValueError(
+            f"LiteRT-LM export does not support `{type(model).__name__}`: "
+            f"`{type(model.backbone).__name__}` requires a "
+            f"{spec.cache_structure!r} cache structure, but the LiteRT-LM "
+            'adapter only supports `cache_structure="single_stacked"` (a '
+            "single stacked `[batch, num_layers, 2, cache_length, "
+            "num_kv_heads, head_dim]` KV-cache tensor). Qwen3.5's hybrid "
+            "full_attention/linear_attention layers use a dual cache "
+            "structure (`call_with_cache` expects a `(kv_cache, conv_cache, "
+            "recurrent_cache)` tuple, since linear-attention layers need a "
+            "convolutional/recurrent state that a stacked KV tensor cannot "
+            "represent) that the adapter does not yet support: it always "
+            "stacks per-layer KV tensors into a single `cache` tensor and "
+            "passes that alone. Support for hybrid cache structures is not "
+            "yet implemented."
+        )
+
     cache_cfg = spec.get_cache_config(model, cache_length=cache_length)
     num_layers = cache_cfg["num_layers"]
     cache_length = cache_cfg["cache_length"]

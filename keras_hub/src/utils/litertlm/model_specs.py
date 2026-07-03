@@ -23,6 +23,7 @@ generic_model" behavior). This is a pure refactor of detection/config
 lookup -- it does not change behavior for any currently-supported model.
 """
 
+
 def _first_attr(obj, *names, default=None):
     """Return the first non-``None`` attribute from *obj*, or *default*."""
     if obj is None:
@@ -57,6 +58,20 @@ class LiteRTLMExportSpec:
     #: ``[batch, cache_length, num_kv_heads, head_dim]``; ``"gemma3n"`` is
     #: ``[batch, num_kv_heads, cache_length, head_dim]``.
     cache_layout = "standard"
+    #: Shape of the ``cache`` argument ``call_with_cache`` expects.
+    #: ``"single_stacked"`` (every currently-supported family) is a single
+    #: stacked ``[batch, num_layers, 2, cache_length, num_kv_heads,
+    #: head_dim]`` KV-cache tensor -- exactly what
+    #: ``KerasHubLiteRTAdapter._stack_kv_cache`` builds. ``"hybrid"``
+    #: (Qwen3.5) means ``call_with_cache`` instead expects a
+    #: ``(kv_cache, conv_cache, recurrent_cache)`` tuple, because hybrid
+    #: full-attention/linear-attention architectures need two structurally
+    #: different per-layer caches. The adapter does not build that shape,
+    #: so ``export_to_litertlm`` fails fast on any spec with
+    #: ``cache_structure != "single_stacked"`` (see the early validation in
+    #: ``export.py``) instead of letting a mismatched cache reach
+    #: ``call_with_cache`` and fail with a cryptic ``IndexError``.
+    cache_structure = "single_stacked"
     #: Whether the vision encoder expects preprocessed patch tensors
     #: (``pixel_values`` + ``pixel_position_ids``) rather than raw images.
     is_gemma4_vision = False
@@ -415,6 +430,17 @@ class Qwen3FamilySpec(LiteRTLMExportSpec):
     model_type = "qwen3"
 
 
+class Qwen3_5Spec(Qwen3FamilySpec):
+    """Qwen3.5 maps to the "qwen3" oneof like the rest of the family, but its
+    hybrid full-attention/linear-attention decoder layers need a dual cache
+    (`Qwen3_5CausalLM.call_with_cache` expects a `(kv_cache, conv_cache,
+    recurrent_cache)` tuple) that the LiteRT-LM adapter's single
+    stacked-KV-tensor cache format cannot represent yet.
+    """
+
+    cache_structure = "hybrid"
+
+
 class Qwen2p5FamilySpec(LiteRTLMExportSpec):
     """Qwen and Qwen-MoE (pre-Qwen3 architecture) map to "qwen2p5"."""
 
@@ -479,11 +505,13 @@ _EXPORT_SPEC_REGISTRY = (
     # NOTE: LlmModelType does not have a dedicated "qwen3_5" field. Qwen3.5
     # is architecturally a Qwen3 variant (hybrid attention decoder in the
     # same family), so it maps to the "qwen3" oneof, matching
-    # Qwen3MoeCausalLM above.
+    # Qwen3MoeCausalLM above. It gets its own spec class (rather than
+    # reusing Qwen3FamilySpec directly) because its hybrid cache structure
+    # is not yet supported by the adapter -- see `Qwen3_5Spec`.
     (
         "keras_hub.src.models.qwen3_5.qwen3_5_causal_lm",
         "Qwen3_5CausalLM",
-        Qwen3FamilySpec,
+        Qwen3_5Spec,
     ),
     (
         "keras_hub.src.models.qwen_moe.qwen_moe_causal_lm",
