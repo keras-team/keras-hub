@@ -223,6 +223,15 @@ class MistralTokenizer(SentencePieceTokenizer):
             )
             return
 
+        # Bypass the SentencePiece `__init__`, which requires a proto. The
+        # base layer must be initialized before assigning the internal
+        # tokenizer, since on the torch backend a `keras.Layer` is also a
+        # `torch.nn.Module` and rejects submodule assignment before its own
+        # `__init__` has run.
+        from keras_hub.src.tokenizers.tokenizer import Tokenizer
+
+        Tokenizer.__init__(self, dtype=dtype, **kwargs)
+
         # Delegate tokenization to an internal `BytePairTokenizer` while
         # remaining a `MistralTokenizer` instance so the preset/preprocessor
         # machinery keeps working.
@@ -235,10 +244,6 @@ class MistralTokenizer(SentencePieceTokenizer):
             dtype=dtype,
             sequence_length=sequence_length,
         )
-        # Bypass the SentencePiece `__init__`, which requires a proto.
-        from keras_hub.src.tokenizers.tokenizer import Tokenizer
-
-        Tokenizer.__init__(self, dtype=dtype, **kwargs)
         self.file_assets = self._bpe.file_assets
         # The vocabulary may not be available yet (it arrives via `load_assets`
         # during deserialization); only resolve special-token ids once it is.
