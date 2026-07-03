@@ -14,9 +14,14 @@ tests catch exactly that.
 """
 
 import importlib
+import types
 
+from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
+from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
 from keras_hub.src.models.llama.llama_backbone import LlamaBackbone
 from keras_hub.src.models.llama.llama_causal_lm import LlamaCausalLM
+from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
+from keras_hub.src.models.llama3.llama3_causal_lm import Llama3CausalLM
 from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
 from keras_hub.src.models.qwen.qwen_causal_lm import QwenCausalLM
 from keras_hub.src.models.qwen3.qwen3_backbone import Qwen3Backbone
@@ -25,7 +30,9 @@ from keras_hub.src.models.qwen3_5.qwen3_5_backbone import Qwen3_5Backbone
 from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm import Qwen3_5CausalLM
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.litertlm.model_specs import _EXPORT_SPEC_REGISTRY
+from keras_hub.src.utils.litertlm.model_specs import GemmaSpec
 from keras_hub.src.utils.litertlm.model_specs import LiteRTLMExportSpec
+from keras_hub.src.utils.litertlm.model_specs import Llama3Spec
 from keras_hub.src.utils.litertlm.model_specs import Qwen2p5FamilySpec
 from keras_hub.src.utils.litertlm.model_specs import Qwen3_5Spec
 from keras_hub.src.utils.litertlm.model_specs import Qwen3FamilySpec
@@ -85,6 +92,29 @@ class ExportSpecRegistryIntegrityTest(TestCase):
             intermediate_dim=16,
         )
         return LlamaCausalLM(backbone=backbone)
+
+    def _tiny_llama3(self):
+        backbone = Llama3Backbone(
+            vocabulary_size=10,
+            num_layers=1,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+        )
+        return Llama3CausalLM(backbone=backbone)
+
+    def _tiny_gemma(self):
+        backbone = GemmaBackbone(
+            vocabulary_size=10,
+            num_layers=1,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            head_dim=4,
+            intermediate_dim=16,
+        )
+        return GemmaCausalLM(backbone=backbone)
 
     def _tiny_qwen(self):
         backbone = QwenBackbone(
@@ -164,3 +194,76 @@ class ExportSpecRegistryIntegrityTest(TestCase):
         self.assertIsInstance(spec, Qwen3_5Spec)
         self.assertEqual(spec.model_type, "qwen3")
         self.assertEqual(spec.cache_structure, "hybrid")
+
+    def test_gemma_resolves_to_gemma_spec(self):
+        """Base Gemma has no dedicated `LlmModelType` subtype, but must still
+        resolve to `GemmaSpec` (not the plain `LiteRTLMExportSpec` fallback)
+        to get the shared Gemma-family `<end_of_turn>` chat-stop-token
+        behavior."""
+        spec = resolve_export_spec(self._tiny_gemma())
+        self.assertIsInstance(spec, GemmaSpec)
+        self.assertEqual(spec.model_type, "generic_model")
+
+    def test_llama3_resolves_to_llama3_spec(self):
+        """`Llama3CausalLM` is a subclass of `LlamaCausalLM`; it must resolve
+        to `Llama3Spec` (registered earlier in `_EXPORT_SPEC_REGISTRY`), not
+        fall through to the plain `LlamaCausalLM` entry."""
+        spec = resolve_export_spec(self._tiny_llama3())
+        self.assertIsInstance(spec, Llama3Spec)
+        self.assertEqual(spec.model_type, "generic_model")
+
+    # -- Chat-turn stop-token overrides -------------------------------------
+    #
+    # Dependency-free checks of `get_chat_stop_token_ids` against small fake
+    # tokenizer objects -- no real KerasHub tokenizer or torch/litert
+    # dependency needed, since the method only calls `token_to_id`/reads
+    # plain attributes.
+
+    def test_gemma_spec_chat_stop_token_ids_looks_up_end_of_turn(self):
+        vocab = {"<end_of_turn>": 7}
+        tokenizer = types.SimpleNamespace(
+            token_to_id=vocab.__getitem__, _unk_token_id=0
+        )
+        self.assertEqual(GemmaSpec().get_chat_stop_token_ids(tokenizer), [7])
+
+    def test_gemma_spec_chat_stop_token_ids_absent_returns_empty(self):
+        tokenizer = types.SimpleNamespace(
+            token_to_id=lambda token: (_ for _ in ()).throw(KeyError(token))
+        )
+        self.assertEqual(GemmaSpec().get_chat_stop_token_ids(tokenizer), [])
+
+    def test_llama3_spec_chat_stop_token_ids_uses_end_token2_id(self):
+        """`Llama3Tokenizer` stores `<|eot_id|>` as `end_token2_id` (see the
+        "Hack" comment in `llama3_tokenizer.py`), not via `token_to_id`
+        lookup -- `Llama3Spec` must read that attribute directly."""
+        tokenizer = types.SimpleNamespace(end_token2_id=5)
+        self.assertEqual(Llama3Spec().get_chat_stop_token_ids(tokenizer), [5])
+
+    def test_llama3_spec_chat_stop_token_ids_absent_returns_empty(self):
+        """Base Llama (no `end_token2` hack) has no `end_token2_id`
+        attribute at all."""
+        tokenizer = types.SimpleNamespace()
+        self.assertEqual(Llama3Spec().get_chat_stop_token_ids(tokenizer), [])
+
+    def test_qwen3_family_spec_chat_stop_token_ids_looks_up_im_end(self):
+        """Qwen3's `<|im_end|>` is already `tokenizer.end_token_id`; this
+        override documents that intentionally rather than leaving it as an
+        accident of `end_token_id`'s value (`_build_llm_metadata`
+        deduplicates the two)."""
+        vocab = {"<|im_end|>": 3}
+        tokenizer = types.SimpleNamespace(
+            token_to_id=vocab.__getitem__, _unk_token_id=0
+        )
+        self.assertEqual(
+            Qwen3FamilySpec().get_chat_stop_token_ids(tokenizer), [3]
+        )
+
+    def test_qwen2p5_family_spec_chat_stop_token_ids_absent_by_default(self):
+        """Base Qwen (2.5) tokenizers use `<|endoftext|>`, not `<|im_end|>`;
+        the override must not invent a token that isn't in vocab."""
+        tokenizer = types.SimpleNamespace(
+            token_to_id=lambda token: (_ for _ in ()).throw(KeyError(token))
+        )
+        self.assertEqual(
+            Qwen2p5FamilySpec().get_chat_stop_token_ids(tokenizer), []
+        )

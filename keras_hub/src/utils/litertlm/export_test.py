@@ -356,9 +356,7 @@ class TestLiteRTLmExport(TestCase):
         """
         import litert_lm_builder
 
-        path = os.path.join(
-            self.get_temp_dir(), "test_backend_case.litertlm"
-        )
+        path = os.path.join(self.get_temp_dir(), "test_backend_case.litertlm")
         original_add_tflite_model = (
             litert_lm_builder.LitertLmFileBuilder.add_tflite_model
         )
@@ -1059,6 +1057,21 @@ class TestLiteRTLmExport(TestCase):
         self.assertTrue(os.path.exists(path))
 
         self._verify_litertlm_generation(path, prompt="hi", max_num_tokens=4)
+
+        # Regression coverage for the stop-token fix (see `Llama3Spec` in
+        # model_specs.py): Llama3's chat-turn-stop token `<|eot_id|>` (id 5
+        # in the vocab above) must reach the exported metadata alongside the
+        # primary EOS `<|end_of_text|>` (id 2) -- previously only the
+        # Gemma-specific `<end_of_turn>` literal was checked, so Llama3
+        # never got a chat-stop token beyond its primary (non-chat) EOS.
+        llm_metadata = self._parse_litertlm_llm_metadata(path)
+        self.assertIsNotNone(llm_metadata)
+        stop_token_ids = {
+            stop_token.token_ids.ids[0]
+            for stop_token in llm_metadata.stop_tokens
+        }
+        self.assertIn(2, stop_token_ids)  # <|end_of_text|>
+        self.assertIn(5, stop_token_ids)  # <|eot_id|>
 
     def test_export_qwen3_with_auto_hf_tokenizer(self):
         """Export a tiny Qwen3 model with auto-converted HF tokenizer."""

@@ -1354,23 +1354,30 @@ def _build_llm_metadata(
     if start_id is not None:
         meta.start_token.token_ids.ids.append(int(start_id))
 
+    # The primary EOS (used for packing/training) is always a stop token.
+    stop_token_ids = []
     end_id = getattr(tokenizer, "end_token_id", None)
     if end_id is not None:
-        meta.stop_tokens.add().token_ids.ids.append(int(end_id))
+        stop_token_ids.append(int(end_id))
 
-    # ``<end_of_turn>`` is an optional stop token for some Gemma/SentencePiece
-    # tokenizers. Only look it up when the tokenizer exposes ``token_to_id``,
-    # and swallow the specific lookup-failure exceptions so a missing special
-    # token does not abort export.
-    if hasattr(tokenizer, "token_to_id"):
-        try:
-            eot_id = tokenizer.token_to_id("<end_of_turn>")
-        except (KeyError, ValueError):
-            eot_id = None
-        if eot_id is not None:
-            unk_id = getattr(tokenizer, "_unk_token_id", None)
-            if eot_id != unk_id:
-                meta.stop_tokens.add().token_ids.ids.append(int(eot_id))
+    # Some families additionally mark the end of a *chat turn* with a
+    # second, distinct token (e.g. Gemma's ``<end_of_turn>``, Llama3's
+    # ``<|eot_id|>``) -- see ``LiteRTLMExportSpec.get_chat_stop_token_ids``.
+    # This used to be a single hardcoded ``<end_of_turn>`` lookup here,
+    # unconditionally applied to every tokenizer regardless of family (it
+    # simply no-opped for non-Gemma tokenizers that don't have the token in
+    # vocab) -- silently giving no chat-stop-token to e.g. Llama3 or Qwen
+    # families that need a *different* second token. Deduplicate against
+    # ``end_token_id`` since some families' override intentionally returns
+    # the same id (e.g. Qwen3's ``<|im_end|>``, documenting that it is
+    # already the primary EOS rather than a coincidence).
+    for extra_id in spec.get_chat_stop_token_ids(tokenizer):
+        extra_id = int(extra_id)
+        if extra_id not in stop_token_ids:
+            stop_token_ids.append(extra_id)
+
+    for stop_id in stop_token_ids:
+        meta.stop_tokens.add().token_ids.ids.append(stop_id)
 
     meta.max_num_tokens = int(max_num_tokens)
 

@@ -330,8 +330,89 @@ class LiteRTLMExportSpec:
         del tokens, cache_length
         return {}
 
+    # -- Metadata: chat-turn stop tokens -----------------------------------
 
-class Gemma3Spec(LiteRTLMExportSpec):
+    def get_chat_stop_token_ids(self, tokenizer):
+        """Return extra chat-turn-boundary stop token ids for this family.
+
+        ``_build_llm_metadata`` always adds ``tokenizer.end_token_id`` (the
+        primary EOS used for packing/training) as a stop token. Some
+        families additionally mark the end of a *chat turn* with a second,
+        distinct token that is not ``end_token_id`` -- e.g. Gemma's
+        ``<end_of_turn>`` (see ``GemmaSpec``) or Llama3's ``<|eot_id|>``
+        (see ``Llama3Spec``). Without surfacing that second token, on-device
+        chat generation for those families has no way to know when to stop
+        at a turn boundary (risk of runaway generation).
+
+        Default: none. This covers every family whose primary EOS *is*
+        already the chat-turn-stop token -- e.g. Qwen3's ``<|im_end|>`` is
+        already ``tokenizer.end_token_id`` (see ``Qwen3Tokenizer``), so no
+        override is needed there for that reason (``Qwen3FamilySpec`` still
+        overrides this to make that fact explicit rather than incidental --
+        see below).
+
+        Callers must not assume the returned ids are disjoint from
+        ``end_token_id``; ``_build_llm_metadata`` de-duplicates before
+        writing ``meta.stop_tokens``.
+        """
+        del tokenizer
+        return []
+
+
+def _lookup_token_id(tokenizer, token_str):
+    """Return the id for *token_str* in *tokenizer*'s vocab, or ``None``.
+
+    Only looks up when the tokenizer exposes ``token_to_id``, and swallows
+    the specific lookup-failure exceptions so a missing special token does
+    not abort export. Also treats a lookup that resolves to the tokenizer's
+    unk id as "not present", since some tokenizers map unknown lookups to
+    the unk id instead of raising.
+    """
+    if not hasattr(tokenizer, "token_to_id"):
+        return None
+    try:
+        token_id = tokenizer.token_to_id(token_str)
+    except (KeyError, ValueError):
+        return None
+    if token_id is None:
+        return None
+    unk_id = getattr(tokenizer, "_unk_token_id", None)
+    if token_id == unk_id:
+        return None
+    return token_id
+
+
+def _gemma_family_chat_stop_token_ids(tokenizer):
+    """Return ``[<end_of_turn> id]`` if present in *tokenizer*'s vocab.
+
+    ``<end_of_turn>`` is an optional chat-turn-stop token shared by the
+    Gemma family of SentencePiece tokenizers (Gemma, Gemma3, Gemma3n,
+    Gemma4, PaliGemma), distinct from ``tokenizer.end_token_id``.
+    """
+    token_id = _lookup_token_id(tokenizer, "<end_of_turn>")
+    return [token_id] if token_id is not None else []
+
+
+class GemmaSpec(LiteRTLMExportSpec):
+    """Base Gemma (Gemma/Gemma2) family.
+
+    Not registered with its own dedicated ``LlmModelType`` subtype (there is
+    no "gemma" oneof field distinct from "gemma3"/"gemma3n"/"gemma4"), so
+    ``model_type`` stays the ``LiteRTLMExportSpec`` default of
+    ``"generic_model"``, matching today's behavior. Registered explicitly so
+    the Gemma-family ``<end_of_turn>`` chat-stop-token convention (shared
+    with ``Gemma3Spec``/``Gemma3nSpec``/``Gemma4Spec``/``PaliGemmaSpec``
+    below, all of which subclass this instead of ``LiteRTLMExportSpec``
+    directly) lives on the registry instead of as an unconditional check in
+    ``_build_llm_metadata`` that happened to no-op for non-Gemma tokenizers
+    only because they don't have ``<end_of_turn>`` in vocab.
+    """
+
+    def get_chat_stop_token_ids(self, tokenizer):
+        return _gemma_family_chat_stop_token_ids(tokenizer)
+
+
+class Gemma3Spec(GemmaSpec):
     model_type = "gemma3"
 
     def populate_vision_metadata(self, meta, vision_cfg):
@@ -340,7 +421,7 @@ class Gemma3Spec(LiteRTLMExportSpec):
         )
 
 
-class Gemma3nSpec(LiteRTLMExportSpec):
+class Gemma3nSpec(GemmaSpec):
     model_type = "gemma3n"
     cache_layout = "gemma3n"
 
@@ -372,7 +453,7 @@ class Gemma3nSpec(LiteRTLMExportSpec):
         }
 
 
-class Gemma4Spec(LiteRTLMExportSpec):
+class Gemma4Spec(GemmaSpec):
     model_type = "gemma4"
     is_gemma4_vision = True
 
@@ -415,19 +496,50 @@ class Gemma4Spec(LiteRTLMExportSpec):
         )
 
 
-class PaliGemmaSpec(LiteRTLMExportSpec):
+class PaliGemmaSpec(GemmaSpec):
     """PaliGemma has no dedicated ``LlmModelType`` vision subtype today.
 
     Registered explicitly (rather than relying on the ``LiteRTLMExportSpec``
     fallback) purely for discoverability, so its lack of special-cased
-    behavior is a documented decision rather than an omission.
+    behavior is a documented decision rather than an omission. Subclasses
+    ``GemmaSpec`` (not ``LiteRTLMExportSpec`` directly) since PaliGemma uses
+    a Gemma tokenizer and shares the same ``<end_of_turn>`` convention.
     """
+
+
+class Llama3Spec(LiteRTLMExportSpec):
+    """Llama3's chat template ends a turn with ``<|eot_id|>``.
+
+    ``Llama3Tokenizer`` stores this as the secondary special token
+    ``end_token2`` (see the "Hack" comment in ``llama3_tokenizer.py``):
+    Llama3 checkpoints have no config indicating whether the true stop
+    token is ``<|end_of_text|>`` or ``<|eot_id|>``, so the tokenizer
+    registers both, but the packer always uses ``<|end_of_text|>``
+    (``tokenizer.end_token_id``) as the primary EOS. Without this override,
+    ``<|eot_id|>`` never reaches the exported metadata, so on-device chat
+    generation has no way to know when to stop at a turn boundary.
+    """
+
+    def get_chat_stop_token_ids(self, tokenizer):
+        eot_id = getattr(tokenizer, "end_token2_id", None)
+        return [eot_id] if eot_id is not None else []
 
 
 class Qwen3FamilySpec(LiteRTLMExportSpec):
     """Qwen3, Qwen3-MoE, and Qwen3.5 all map to the "qwen3" oneof."""
 
     model_type = "qwen3"
+
+    def get_chat_stop_token_ids(self, tokenizer):
+        # Qwen3's chat template ends a turn with `<|im_end|>`, which is
+        # already the tokenizer's primary EOS (`tokenizer.end_token_id` --
+        # see `Qwen3Tokenizer.__init__`). This override makes that
+        # intentional rather than an accident of `end_token_id` happening
+        # to already be the right token; `_build_llm_metadata`
+        # de-duplicates against `end_token_id` so this does not add a
+        # redundant entry to the exported metadata.
+        token_id = _lookup_token_id(tokenizer, "<|im_end|>")
+        return [token_id] if token_id is not None else []
 
 
 class Qwen3_5Spec(Qwen3FamilySpec):
@@ -445,6 +557,16 @@ class Qwen2p5FamilySpec(LiteRTLMExportSpec):
     """Qwen and Qwen-MoE (pre-Qwen3 architecture) map to "qwen2p5"."""
 
     model_type = "qwen2p5"
+
+    def get_chat_stop_token_ids(self, tokenizer):
+        # Unlike Qwen3, `<|im_end|>` is not Qwen (2.5)'s registered
+        # `end_token` (see `QwenTokenizer`/`QwenMoeTokenizer`, which use
+        # `<|endoftext|>`), but ChatML-format instruct checkpoints may still
+        # include `<|im_end|>` in their vocabulary as an ordinary token. Add
+        # it as a chat-stop token when present; do nothing when it is not
+        # (base/non-chat Qwen 2.5 vocabularies).
+        token_id = _lookup_token_id(tokenizer, "<|im_end|>")
+        return [token_id] if token_id is not None else []
 
 
 # Special token strings used when populating vision/audio metadata. Keeping
@@ -492,6 +614,16 @@ _EXPORT_SPEC_REGISTRY = (
         "PaliGemmaCausalLM",
         PaliGemmaSpec,
     ),
+    # Base Gemma (Gemma/Gemma2) has no dedicated ``LlmModelType`` subtype
+    # (see ``GemmaSpec``), so this entry only exists to give it the shared
+    # Gemma-family ``<end_of_turn>`` chat-stop-token behavior instead of
+    # silently falling through to the plain ``LiteRTLMExportSpec`` default
+    # (which has no chat-stop-token override).
+    (
+        "keras_hub.src.models.gemma.gemma_causal_lm",
+        "GemmaCausalLM",
+        GemmaSpec,
+    ),
     (
         "keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm",
         "Qwen3MoeCausalLM",
@@ -523,10 +655,21 @@ _EXPORT_SPEC_REGISTRY = (
         "QwenCausalLM",
         Qwen2p5FamilySpec,
     ),
+    # Llama3CausalLM is a subclass of LlamaCausalLM, so its entry must come
+    # first (registry order + isinstance first-match-wins) to get
+    # ``Llama3Spec``'s ``<|eot_id|>`` chat-stop-token override instead of
+    # falling through to the plain ``LlamaCausalLM`` entry below.
+    (
+        "keras_hub.src.models.llama3.llama3_causal_lm",
+        "Llama3CausalLM",
+        Llama3Spec,
+    ),
     # NOTE: LlmModelType does not have a dedicated "llama" field; map Llama
     # checkpoints to generic_model so the protobuf oneof stays valid. (This
     # is also the ``LiteRTLMExportSpec`` default, so this entry only exists
-    # to make the mapping explicit/greppable.)
+    # to make the mapping explicit/greppable.) Base Llama (v1/v2) uses a
+    # plain SentencePiece EOS with no secondary chat-stop token, so it does
+    # not need its own spec class the way ``Llama3Spec`` does.
     (
         "keras_hub.src.models.llama.llama_causal_lm",
         "LlamaCausalLM",
