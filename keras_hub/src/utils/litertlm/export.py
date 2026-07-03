@@ -4,6 +4,7 @@ import contextlib
 import dataclasses
 import importlib.util
 import inspect
+import json
 import os
 import tempfile
 import warnings
@@ -181,6 +182,107 @@ def _validate_quant_config(quant_config):
         )
 
 
+# A cheap sanity check on `hf_tokenizer_path` compatibility, not exact
+# validation: small differences (e.g. a handful of reserved/special tokens)
+# are expected and not flagged. Only a difference of more than a few hundred
+# tokens *and* a meaningfully different order of magnitude (a >=5x ratio)
+# together indicate the bundled tokenizer almost certainly does not match
+# the model's embedding table -- e.g. bundling a ~32k-vocab Llama tokenizer
+# with a model whose embedding table was sized for a ~256k-vocab Gemma
+# tokenizer.
+_HF_TOKENIZER_VOCAB_MISMATCH_ABS_THRESHOLD = 300
+_HF_TOKENIZER_VOCAB_MISMATCH_RATIO_THRESHOLD = 5.0
+
+
+def _model_embedding_vocab_size(model):
+    """Return the model's embedding vocabulary size, or ``None`` if unknown.
+
+    Prefers ``backbone.vocabulary_size`` (the constructor argument most
+    backbones store directly, e.g. ``GemmaBackbone``/``LlamaBackbone``/
+    ``GPT2Backbone``); falls back to ``backbone.token_embedding.input_dim``
+    (the actual embedding table size) for backbones that do not expose
+    ``vocabulary_size`` directly.
+    """
+    backbone = getattr(model, "backbone", None)
+    vocab_size = getattr(backbone, "vocabulary_size", None)
+    if vocab_size is not None:
+        return int(vocab_size)
+    token_embedding = getattr(backbone, "token_embedding", None)
+    input_dim = getattr(token_embedding, "input_dim", None)
+    if input_dim is not None:
+        return int(input_dim)
+    return None
+
+
+def _hf_tokenizer_vocab_size(hf_tokenizer_path):
+    """Return the vocab size implied by a HuggingFace ``tokenizer.json``.
+
+    Reads the file directly as JSON (``tokenizer.json`` is plain JSON; this
+    avoids a hard dependency on the ``tokenizers`` library just to sanity
+    check a vocab size) and returns ``max_token_id + 1`` across both the
+    base ``model.vocab`` mapping and any ``added_tokens`` entries (special
+    tokens are often listed separately from the base vocab) -- matching how
+    large the embedding table must be to cover every id the tokenizer can
+    produce. Returns ``None`` if the file cannot be parsed as the expected
+    ``tokenizer.json`` structure.
+    """
+    try:
+        with open(hf_tokenizer_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    model_vocab = (data.get("model") or {}).get("vocab") or {}
+    try:
+        max_id = max(model_vocab.values(), default=-1)
+    except (TypeError, ValueError):
+        return None
+    for token in data.get("added_tokens") or []:
+        token_id = token.get("id")
+        if isinstance(token_id, int):
+            max_id = max(max_id, token_id)
+    if max_id < 0:
+        return None
+    return max_id + 1
+
+
+def _check_hf_tokenizer_vocab_compatible(hf_tokenizer_path, model):
+    """Raise ``ValueError`` if the HF tokenizer's vocab looks incompatible.
+
+    This is a cheap sanity check (see the module-level threshold constants
+    above), not exact validation -- it exists to catch the case of bundling
+    a tokenizer from an entirely different model/family, not to enforce
+    that the tokenizer and model agree token-for-token.
+    """
+    hf_vocab_size = _hf_tokenizer_vocab_size(hf_tokenizer_path)
+    model_vocab_size = _model_embedding_vocab_size(model)
+    if hf_vocab_size is None or not model_vocab_size:
+        # Could not determine one of the two sizes; skip rather than risk a
+        # false positive from an unusual tokenizer.json structure or backbone.
+        return
+    diff = abs(hf_vocab_size - model_vocab_size)
+    ratio = hf_vocab_size / model_vocab_size
+    is_grossly_mismatched = (
+        diff > _HF_TOKENIZER_VOCAB_MISMATCH_ABS_THRESHOLD
+        and (
+            ratio >= _HF_TOKENIZER_VOCAB_MISMATCH_RATIO_THRESHOLD
+            or ratio <= 1 / _HF_TOKENIZER_VOCAB_MISMATCH_RATIO_THRESHOLD
+        )
+    )
+    if is_grossly_mismatched:
+        raise ValueError(
+            "`hf_tokenizer_path` appears incompatible with the model: the "
+            f"tokenizer implies a vocabulary of {hf_vocab_size} tokens "
+            f"(highest token id + 1 across `model.vocab` and "
+            f"`added_tokens` in {hf_tokenizer_path!r}), but the model's "
+            f"embedding table is sized for {model_vocab_size} tokens "
+            f"(`{type(model.backbone).__name__}`). This looks like a "
+            "tokenizer from a different model/family rather than a small "
+            "reserved-token discrepancy -- pass the tokenizer that matches "
+            "this model, or omit `hf_tokenizer_path` to use the model's own "
+            "tokenizer."
+        )
+
+
 def _validate_export_args(
     model,
     path,
@@ -239,6 +341,7 @@ def _validate_export_args(
                 "`hf_tokenizer_path` must point to a `tokenizer.json` file. "
                 f"Received: {hf_tokenizer_path!r}"
             )
+        _check_hf_tokenizer_vocab_compatible(hf_tokenizer_path, model)
     elif _is_sentencepiece_tokenizer(tokenizer):
         _validate_sentencepiece_tokenizer(tokenizer)
     elif isinstance(tokenizer, BytePairTokenizer):

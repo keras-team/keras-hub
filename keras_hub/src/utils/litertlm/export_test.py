@@ -2,6 +2,7 @@ import importlib.util
 import json
 import os
 import tempfile
+import types
 import unittest
 import unittest.mock
 
@@ -34,6 +35,7 @@ from keras_hub.src.models.qwen3.qwen3_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.qwen3.qwen3_tokenizer import Qwen3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.litertlm import export
 from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
 from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
     convert_byte_pair_to_hf,
@@ -176,6 +178,41 @@ class TestLiteRTLmExport(TestCase):
             max_num_tokens=4,
         )
         self.assertIsNotNone(engine)
+
+    def test_export_with_hf_tokenizer_path_mismatched_vocab_raises(self):
+        """`hf_tokenizer_path` pointing at a wildly different vocab size
+        must be rejected before any tracing/bundling work happens.
+
+        Uses a bare-bones hand-written ``tokenizer.json`` (rather than a
+        real ``tokenizers.Tokenizer``, as ``test_export_with_hf_tokenizer_path``
+        above does) because the vocab-size sanity check runs during
+        argument validation, before the file would ever be loaded by the
+        `tokenizers` library or `litert_lm_builder`.
+        """
+        model_vocab_size = self.tokenizer.vocabulary_size()
+        # Comfortably past both the absolute-diff and ratio thresholds in
+        # `_check_hf_tokenizer_vocab_compatible`.
+        mismatched_vocab_size = model_vocab_size * 100 + 1000
+        vocab = {f"tok{i}": i for i in range(mismatched_vocab_size)}
+        hf_tokenizer_path = os.path.join(
+            self.get_temp_dir(), "mismatched_tokenizer.json"
+        )
+        with open(hf_tokenizer_path, "w", encoding="utf-8") as f:
+            json.dump({"model": {"vocab": vocab}}, f)
+
+        path = os.path.join(
+            self.get_temp_dir(), "test_mismatched_hf_tokenizer.litertlm"
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "appears incompatible with the model",
+        ):
+            self.model.export(
+                path,
+                format="litertlm",
+                prefill_seq_len=8,
+                hf_tokenizer_path=hf_tokenizer_path,
+            )
 
     def test_export_outputs_match_keras(self):
         """Verify that exported TFLite outputs match Keras eager outputs."""
@@ -1084,6 +1121,53 @@ class TestLiteRTLmAdapterHelpers(TestCase):
         with _cpu_default_device_scope():
             self.assertEqual(torch.get_default_device(), torch.device("cpu"))
         self.assertEqual(torch.get_default_device(), original)
+
+
+class TestHfTokenizerVocabCompatibility(TestCase):
+    """Unit tests for the `hf_tokenizer_path` vocab-size sanity check.
+
+    These exercise `_hf_tokenizer_vocab_size` and
+    `_check_hf_tokenizer_vocab_compatible` directly against hand-written
+    `tokenizer.json` fixtures and a minimal fake model, independent of any
+    Keras backend or real KerasHub model -- both helpers are plain
+    JSON/attribute-lookup logic with no tensor operations.
+    """
+
+    def _write_tokenizer_json(self, vocab_size, extra_added_tokens=0):
+        path = os.path.join(self.get_temp_dir(), "tokenizer.json")
+        vocab = {f"tok{i}": i for i in range(vocab_size)}
+        added_tokens = [
+            {"id": vocab_size + i, "content": f"<extra{i}>"}
+            for i in range(extra_added_tokens)
+        ]
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(
+                {"model": {"vocab": vocab}, "added_tokens": added_tokens}, f
+            )
+        return path
+
+    def _fake_model(self, vocabulary_size):
+        backbone = types.SimpleNamespace(vocabulary_size=vocabulary_size)
+        return types.SimpleNamespace(backbone=backbone)
+
+    def test_hf_tokenizer_vocab_size_counts_vocab_and_added_tokens(self):
+        path = self._write_tokenizer_json(vocab_size=20, extra_added_tokens=3)
+        self.assertEqual(export._hf_tokenizer_vocab_size(path), 23)
+
+    def test_check_hf_tokenizer_vocab_compatible_matching_does_not_raise(self):
+        # A handful of reserved/special tokens (well within the "few
+        # hundred" absolute threshold) must not raise.
+        path = self._write_tokenizer_json(vocab_size=1000)
+        model = self._fake_model(vocabulary_size=1000)
+        export._check_hf_tokenizer_vocab_compatible(path, model)
+
+    def test_check_hf_tokenizer_vocab_compatible_mismatch_raises(self):
+        path = self._write_tokenizer_json(vocab_size=50000)
+        model = self._fake_model(vocabulary_size=32)
+        with self.assertRaisesRegex(
+            ValueError, "appears incompatible with the model"
+        ):
+            export._check_hf_tokenizer_vocab_compatible(path, model)
 
 
 @unittest.skipIf(
