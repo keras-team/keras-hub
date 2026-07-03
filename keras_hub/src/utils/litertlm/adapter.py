@@ -617,6 +617,15 @@ def _traceable_dot_product_attention(
     The function mirrors Keras's ``dot_product_attention`` signature and shape
     convention: inputs are ``[batch, seq_len, num_heads, head_dim]`` and the
     output is returned in the same layout.
+
+    Unlike the original Keras torch-backend op, this implementation does
+    **not** internally broadcast mismatched query/key-value head counts for
+    grouped-query attention. Every current KerasHub attention layer that
+    calls ``dot_product_attention`` (e.g. ``LlamaAttention``,
+    ``GemmaAttention``) already repeats the key/value heads up to the query
+    head count before calling it, so this is not a behavior change in
+    practice -- but a caller relying on the original op's implicit GQA
+    broadcast would get silently wrong (shape-broadcast) results here.
     """
     del flash_attention  # Fused flash attention is not exportable.
 
