@@ -39,6 +39,15 @@ def convert_to_comparible_type(x):
     return x
 
 
+# Extra KV-cache slots (beyond the prompt length) to trace a LiteRT-LM bundle
+# with, when `run_litertlm_export_test` auto-derives `cache_length` for
+# text-only numeric-parity verification. This gives `_verify_litertlm_numerics`
+# room to decode one step past the prefilled prompt, so the decode step
+# genuinely attends across a populated cache instead of writing into the same
+# lone slot it just read from.
+_LITERTLM_DECODE_CACHE_HEADROOM = 4
+
+
 class TestCase(tf.test.TestCase, parameterized.TestCase):
     """Base test case class for KerasHub."""
 
@@ -874,9 +883,26 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         input_data,
         atol,
         rtol,
+        cache_length=None,
     ):
-        """Compare Keras eager and TFLite prefill/decode outputs."""
+        """Compare Keras eager and TFLite prefill/decode outputs.
+
+        Args:
+            cache_length: The exact cache length the bundle under test was
+                traced with (see `run_litertlm_export_test`). Threading it
+                through explicitly, rather than re-deriving it independently,
+                keeps this helper from silently drifting out of sync with
+                the cache length `export_to_litertlm` actually used. When
+                omitted, it is derived the same way `export_to_litertlm`
+                derives it by default.
+        """
         import torch
+
+        # Local import to avoid a module-level dependency from this
+        # low-level, widely-imported test helper module onto the litertlm
+        # package -- matches the lazy-import convention `export.py` and
+        # `model_specs.py` already use for optional/heavy dependencies.
+        from keras_hub.src.utils.litertlm.model_specs import resolve_export_spec
 
         tokens_np = ops.convert_to_numpy(input_data)
         if tokens_np.ndim != 2:
@@ -886,52 +912,17 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             )
 
         B, T = tokens_np.shape
-        backbone = model.backbone
-        L = getattr(backbone, "num_layers", None)
-        if L is None:
-            L = getattr(backbone, "num_hidden_layers", None)
-        if L is None:
-            raise ValueError(
-                "Model backbone must expose `num_layers` or "
-                "`num_hidden_layers`."
-            )
-        H = getattr(
-            backbone,
-            "num_key_value_heads",
-            getattr(backbone, "num_heads", None),
-        )
-        if H is None:
-            raise ValueError(
-                "Model backbone must expose `num_key_value_heads` or "
-                "`num_heads`."
-            )
-        D = getattr(backbone, "head_dim", None)
-        if D is None:
-            hidden_dim = getattr(backbone, "hidden_dim", None)
-            num_qh = getattr(
-                backbone,
-                "num_query_heads",
-                getattr(backbone, "num_heads", None),
-            )
-            if hidden_dim is None or num_qh is None or num_qh <= 0:
-                raise ValueError(
-                    "Could not determine attention head dimension."
-                )
-            D = hidden_dim // num_qh
 
-        cache_length = getattr(backbone, "max_sequence_length", None)
-        if cache_length is None:
-            preprocessor = getattr(model, "preprocessor", None)
-            cache_length = getattr(preprocessor, "sequence_length", T)
-        if cache_length is None:
-            cache_length = T
+        # Derive cache dimensions/layout the same way the real export
+        # pipeline does, instead of a separate, drift-prone getattr chain.
+        spec = resolve_export_spec(model)
+        cache_cfg = spec.get_cache_config(model, cache_length=cache_length)
+        L = cache_cfg["num_layers"]
+        H = cache_cfg["num_kv_heads"]
+        D = cache_cfg["head_dim"]
+        cache_length = cache_cfg["cache_length"]
+        cache_layout = cache_cfg["cache_layout"]
 
-        # Gemma3n uses a different KV-cache axis order than standard models.
-        cache_layout = (
-            "gemma3n"
-            if type(backbone).__name__.startswith("Gemma3n")
-            else "standard"
-        )
         if cache_layout == "gemma3n":
             keras_cache_shape = (B, L, 2, H, cache_length, D)
             per_layer_shape = (B, H, cache_length, D)
@@ -997,9 +988,18 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 rtol=rtol,
             )
 
-        # Single decode step at position 0.
-        decode_pos = 0
-        decode_token = tokens_np[:, decode_pos : decode_pos + 1].copy()
+        # Single decode step one position past the prefilled prompt, so
+        # decode genuinely attends across a populated cache instead of
+        # writing into the same lone slot it just read from (with causal
+        # masking, decoding at position 0 can only attend to itself). Falls
+        # back to the last valid cache slot if the caller didn't leave any
+        # headroom beyond the prompt (`cache_length == T`).
+        decode_pos = min(T, cache_length - 1)
+        # The decode token's identity does not matter for numeric parity
+        # (both backends run the identical op on it); reuse the prompt's
+        # last token rather than indexing at `decode_pos`, which may be past
+        # the end of the actual prompt tokens.
+        decode_token = tokens_np[:, -1:].copy()
         with torch.no_grad():
             keras_logits_dec, _, keras_cache_dec = model.call_with_cache(
                 torch.from_numpy(decode_token),
@@ -1165,9 +1165,57 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 ops.cast(input_data["padding_mask"], "int32")
             )
 
+        # Determine up front whether this call will exercise text-only
+        # numeric parity, so the cache-length bump below can be applied
+        # before tracing -- the bundle's cache length is fixed at trace
+        # time, so any adjustment must happen before `model.export`.
+        numeric_input = None
+        if verify_numerics and input_data is not None:
+            candidate_input = input_data
+            if isinstance(input_data, dict):
+                candidate_input = input_data.get("token_ids")
+            if candidate_input is not None:
+                # Skip numeric parity for multimodal inputs; the helper only
+                # validates text token prefill/decode KV-cache parity.
+                text_only_keys = {"token_ids", "padding_mask"}
+                is_text_only = not isinstance(
+                    input_data, dict
+                ) or text_only_keys.issuperset(input_data.keys())
+                if is_text_only:
+                    # The exported TFLite prefill signature is traced with
+                    # batch_size=1, so numeric parity must use a single
+                    # sample.
+                    numeric_input = ops.convert_to_numpy(candidate_input)
+                    if numeric_input.ndim >= 2 and numeric_input.shape[0] > 1:
+                        numeric_input = numeric_input[:1]
+
         path = os.path.join(self.get_temp_dir(), "model.litertlm")
         if prefill_seq_len is not None:
             export_kwargs.setdefault("prefill_seq_len", prefill_seq_len)
+
+        if numeric_input is not None and "cache_length" not in export_kwargs:
+            # Trace with a few unused cache slots beyond the prompt so
+            # `_verify_litertlm_numerics` can decode one step past the
+            # prefilled prompt, genuinely exercising attention over a
+            # populated cache instead of decoding into the same lone slot
+            # the prompt just filled. Absolute (non-RoPE) position-embedding
+            # families (e.g. GPT2, OPT) size a fixed position-embedding
+            # table to `backbone.max_sequence_length`; requesting a cache
+            # beyond it produces invalid position ids during tracing. When
+            # the backbone defines that attribute, treat it as a hard cap on
+            # how much headroom can safely be added -- this is the same
+            # attribute `LiteRTLMExportSpec.get_cache_config` already treats
+            # as authoritative over the prompt length, so this isn't a new
+            # family-specific heuristic, just reusing that existing signal.
+            prompt_len = numeric_input.shape[-1]
+            target_cache_length = prompt_len + _LITERTLM_DECODE_CACHE_HEADROOM
+            max_supported = getattr(model.backbone, "max_sequence_length", None)
+            if max_supported is not None:
+                target_cache_length = min(target_cache_length, max_supported)
+            if target_cache_length > prompt_len:
+                export_kwargs["cache_length"] = target_cache_length
+                export_kwargs.setdefault("prefill_seq_len", prompt_len)
+        verify_cache_length = export_kwargs.get("cache_length")
 
         model.export(path, format="litertlm", **export_kwargs)
 
@@ -1220,30 +1268,15 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 f"got '{actual_type}'.",
             )
 
-        if verify_numerics and input_data is not None:
-            numeric_input = input_data
-            if isinstance(input_data, dict):
-                numeric_input = input_data.get("token_ids")
-            if numeric_input is not None:
-                # Skip numeric parity for multimodal inputs; the helper only
-                # validates text token prefill/decode KV-cache parity.
-                text_only_keys = {"token_ids", "padding_mask"}
-                is_text_only = not isinstance(
-                    input_data, dict
-                ) or text_only_keys.issuperset(input_data.keys())
-                if is_text_only:
-                    # The exported TFLite prefill signature is traced with
-                    # batch_size=1, so numeric parity must use a single sample.
-                    numeric_input = ops.convert_to_numpy(numeric_input)
-                    if numeric_input.ndim >= 2 and numeric_input.shape[0] > 1:
-                        numeric_input = numeric_input[:1]
-                    self._verify_litertlm_numerics(
-                        model,
-                        main_interpreter,
-                        numeric_input,
-                        atol=atol,
-                        rtol=rtol,
-                    )
+        if numeric_input is not None:
+            self._verify_litertlm_numerics(
+                model,
+                main_interpreter,
+                numeric_input,
+                atol=atol,
+                rtol=rtol,
+                cache_length=verify_cache_length,
+            )
 
         if verify_generation:
             self._verify_litertlm_generation(
