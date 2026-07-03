@@ -1,6 +1,5 @@
 from unittest.mock import patch
 
-import pytest
 from keras import ops
 
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone

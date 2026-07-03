@@ -450,5 +450,3 @@ class KerasHubVisionAdapter(nn.Module):
 
     def forward(self, features):
         return {"mm_embedding": features}
-
-

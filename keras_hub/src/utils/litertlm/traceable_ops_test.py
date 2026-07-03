@@ -77,9 +77,7 @@ class TraceableOpsParityTest(TestCase):
         for axis in (0, 1, 2, -1):
             for repeats in (1, 2, 3):
                 with self.subTest(axis=axis, repeats=repeats):
-                    original = torch_backend_numpy.repeat(
-                        x, repeats, axis=axis
-                    )
+                    original = torch_backend_numpy.repeat(x, repeats, axis=axis)
                     patched = traceable_ops._traceable_repeat(
                         x, repeats, axis=axis
                     )
@@ -155,14 +153,10 @@ class TraceableOpsParityTest(TestCase):
                 self.assertAllClose(_to_np(original), _to_np(patched))
 
     def test_slice_multiple_dynamic_dims_raises(self):
-        from keras.src.backend.torch import core as torch_core
-
         x = torch.arange(60, dtype=torch.float32).reshape(3, 4, 5)
         patched_slice = traceable_ops._make_patched_slice()
         with self.assertRaises(NotImplementedError):
-            patched_slice(
-                x, [torch.tensor(0), torch.tensor(1), 0], [1, 1, 5]
-            )
+            patched_slice(x, [torch.tensor(0), torch.tensor(1), 0], [1, 1, 5])
 
     # ------------------------------------------------------------------
     # take
@@ -281,7 +275,9 @@ class TraceableOpsParityTest(TestCase):
         original = torch_backend_numpy.arange(
             0, stop=10, step=1, dtype=torch.int64
         )
-        patched = traceable_ops._patched_arange(0, stop=10, step=1, dtype=torch.int64)
+        patched = traceable_ops._patched_arange(
+            0, stop=10, step=1, dtype=torch.int64
+        )
         self.assertAllClose(_to_np(original), _to_np(patched))
         self.assertEqual(patched.dtype, torch.int64)
 
