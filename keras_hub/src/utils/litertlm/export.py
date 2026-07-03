@@ -5,6 +5,7 @@ import importlib.util
 import inspect
 import os
 import tempfile
+import warnings
 
 import keras
 
@@ -1078,8 +1079,14 @@ def _get_cache_config(model):
         "num_query_heads",
         "num_heads",
         "num_attention_heads",
-        default=1,
     )
+    if num_kv_heads is None:
+        raise ValueError(
+            "Could not determine the number of key/value heads from model "
+            "backbone. Expected one of `backbone.num_key_value_heads`, "
+            "`backbone.num_query_heads`, `backbone.num_heads`, or "
+            "`backbone.num_attention_heads`."
+        )
 
     head_dim = _first_attr(backbone, "head_dim")
     if head_dim is None:
@@ -1557,6 +1564,16 @@ def _torch_dtype_from_model(model):
         raise ValueError(
             f"Unsupported compute_dtype for LiteRT-LM export: "
             f"{compute_dtype!r}. Expected a PyTorch dtype string."
+        )
+    if torch_dtype is torch.bfloat16:
+        warnings.warn(
+            "Exporting with `compute_dtype=bfloat16`. BF16 LiteRT-LM export "
+            "is untested; numeric parity with the Keras model and runtime "
+            "support are not guaranteed. Consider using float32 (optionally "
+            "combined with `quant_config` for post-training quantization) "
+            "unless you have independently verified BF16 export for this "
+            "model.",
+            stacklevel=2,
         )
     return torch_dtype
 
