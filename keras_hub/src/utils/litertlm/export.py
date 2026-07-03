@@ -676,6 +676,13 @@ def _assemble_bundle(
         suffix=".tmp",
     )
     try:
+        # `mkstemp` always creates the file 0600. Match the permissions a
+        # plain `open(path, "wb")` would have produced (0666 minus umask) so
+        # switching to an atomic write doesn't silently make bundles
+        # unreadable by other users/services that consumed them before.
+        umask = os.umask(0)
+        os.umask(umask)
+        os.fchmod(tmp_fd, 0o666 & ~umask)
         with os.fdopen(tmp_fd, "wb") as output_file:
             builder.build(output_file)
     except BaseException:
