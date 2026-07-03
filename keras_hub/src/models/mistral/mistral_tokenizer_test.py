@@ -1,9 +1,13 @@
+import base64
 import os
 
 import pytest
 
 from keras_hub.src.models.mistral.mistral_tokenizer import MistralTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.transformers.convert_tekken import (
+    convert_tekken_tokenizer,
+)
 
 
 class MistralTokenizerTest(TestCase):
@@ -22,6 +26,59 @@ class MistralTokenizerTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output=[[3, 8, 4, 6], [3, 5, 7, 9]],
+        )
+
+    def test_tekken_tokenizer_basics(self):
+        # Magistral-style Tekken (byte-level BPE) vocabulary.
+        vocab = [
+            {
+                "rank": i,
+                "token_bytes": base64.b64encode(bytes([i])).decode(),
+                "token_str": None,
+            }
+            for i in range(256)
+        ]
+        for rank, piece in [
+            (256, b"th"),
+            (257, b"the"),
+            (258, b"in"),
+            (259, b" t"),
+            (260, b" th"),
+        ]:
+            vocab.append(
+                {
+                    "rank": rank,
+                    "token_bytes": base64.b64encode(piece).decode(),
+                    "token_str": piece.decode("latin-1"),
+                }
+            )
+        tekken_config = {
+            "config": {
+                "pattern": (
+                    r"[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*"
+                    r"[\p{Ll}\p{Lm}\p{Lo}\p{M}]+|\p{N}| ?[^\s\p{L}\p{N}]+"
+                    r"[\r\n/]*|\s*[\r\n]+|\s+(?!\S)|\s+"
+                ),
+                "default_num_special_tokens": 5,
+            },
+            "vocab": vocab,
+            "special_tokens": [
+                {"rank": 0, "token_str": "<unk>", "is_control": True},
+                {"rank": 1, "token_str": "<s>", "is_control": True},
+                {"rank": 2, "token_str": "</s>", "is_control": True},
+                {"rank": 3, "token_str": "<pad>", "is_control": True},
+                {"rank": 4, "token_str": "[INST]", "is_control": True},
+            ],
+        }
+        vocabulary, merges, _ = convert_tekken_tokenizer(tekken_config, 266)
+        self.run_preprocessing_layer_test(
+            cls=MistralTokenizer,
+            init_kwargs={
+                "vocabulary": vocabulary,
+                "merges": merges,
+                "split_pattern": tekken_config["config"]["pattern"],
+            },
+            input_data=["the tin", "in the"],
         )
 
     def test_errors_missing_special_tokens(self):
