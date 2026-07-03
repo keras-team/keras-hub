@@ -749,8 +749,22 @@ def _assemble_bundle(
         builder.add_sentencepiece_tokenizer(tokenizer_path)
     builder.add_llm_metadata(meta_path)
 
-    with open(path, "wb") as output_file:
-        builder.build(output_file)
+    # Write to a temp file in the same directory as `path` and atomically
+    # rename it into place on success, so a crash mid-build (the bundle can be
+    # large) never leaves a truncated `.litertlm` file at the destination.
+    output_dir = os.path.dirname(os.path.abspath(path)) or "."
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        dir=output_dir,
+        prefix=f".{os.path.basename(path)}.",
+        suffix=".tmp",
+    )
+    try:
+        with os.fdopen(tmp_fd, "wb") as output_file:
+            builder.build(output_file)
+    except BaseException:
+        os.remove(tmp_path)
+        raise
+    os.replace(tmp_path, path)
 
     return path
 
