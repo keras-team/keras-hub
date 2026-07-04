@@ -676,9 +676,17 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # Extract comparison_mode from export_kwargs if provided
         comparison_mode = export_kwargs.pop("comparison_mode", "strict")
         backend = keras.backend.backend()
-        if backend not in ("tensorflow", "torch"):
+        # LiteRT export currently runs on the torch backend only. The
+        # TensorFlow-backend path (ExportArchive -> SavedModel ->
+        # tf.lite.TFLiteConverter) is temporarily disabled: TFLiteConverter
+        # .convert() leaks memory and OOM-kills CI when many models are
+        # converted in one process (tensorflow/tensorflow#122598). Re-enable
+        # the TensorFlow backend here once that leak is fixed upstream.
+        if backend != "torch":
             self.skipTest(
-                "LiteRT export only supports the TensorFlow and torch backends"
+                "LiteRT export tests currently run on the torch backend only "
+                "(TensorFlow backend temporarily disabled pending "
+                "tensorflow/tensorflow#122598)."
             )
 
         # The torch export path is provided by the optional litert-torch
