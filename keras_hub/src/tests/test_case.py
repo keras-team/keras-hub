@@ -584,22 +584,16 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         The torch export path does not support dynamic shapes, so it needs a
         fully specified `keras.InputSpec` tree derived from the sample data.
         """
-
-        def _to_numpy(x):
-            if hasattr(x, "detach"):
-                return x.detach().cpu().numpy()
-            if hasattr(x, "numpy") and not isinstance(x, np.ndarray):
-                return x.numpy()
-            return x
+        dtype_map = {
+            "float64": "float32",
+            "int64": "int32",
+        }
 
         def _to_spec(x):
-            x = _to_numpy(x)
-            dtype = np.dtype(x.dtype)
-            if dtype == np.dtype("float64"):
-                dtype = np.dtype("float32")
-            elif dtype == np.dtype("int64"):
-                dtype = np.dtype("int32")
-            return keras.InputSpec(shape=x.shape, dtype=dtype.name)
+            x = ops.convert_to_numpy(x)
+            dtype = keras.backend.standardize_dtype(x.dtype)
+            dtype = dtype_map.get(dtype, dtype)
+            return keras.InputSpec(shape=x.shape, dtype=dtype)
 
         return [tree.map_structure(_to_spec, input_data)]
 
@@ -840,29 +834,19 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 runner = interpreter.get_signature_runner("serving_default")
 
                 # Convert input data dtypes to match TFLite expectations
+                dtype_map = {
+                    "bool": "int32",
+                    "float64": "float32",
+                    "int64": "int32",
+                }
+
                 def convert_for_tflite(x):
                     """Convert tensor/array to TFLite-compatible dtypes."""
-                    if hasattr(x, "detach"):
-                        x = x.detach().cpu().numpy()
-                    if hasattr(x, "dtype"):
-                        if isinstance(x, np.ndarray):
-                            if x.dtype == bool:
-                                return x.astype(np.int32)
-                            elif x.dtype == np.float64:
-                                return x.astype(np.float32)
-                            elif x.dtype == np.int64:
-                                return x.astype(np.int32)
-                        else:  # TensorFlow tensor
-                            if x.dtype == tf.bool:
-                                return ops.cast(x, "int32").numpy()
-                            elif x.dtype == tf.float64:
-                                return ops.cast(x, "float32").numpy()
-                            elif x.dtype == tf.int64:
-                                return ops.cast(x, "int32").numpy()
-                            else:
-                                return x.numpy() if hasattr(x, "numpy") else x
-                    elif hasattr(x, "numpy"):
-                        return x.numpy()
+                    x = ops.convert_to_numpy(x)
+                    dtype = keras.backend.standardize_dtype(x.dtype)
+                    target = dtype_map.get(dtype)
+                    if target is not None:
+                        x = x.astype(target)
                     return x
 
                 if isinstance(input_data, dict):
