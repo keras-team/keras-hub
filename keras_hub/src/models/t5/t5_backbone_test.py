@@ -32,6 +32,30 @@ class T5BackboneTest(TestCase):
             },
         )
 
+    def test_nnx_mode_instantiation(self):
+        """Verify initialization passes cleanly when NNX mode is active."""
+        from unittest import mock
+
+        with mock.patch("keras.config.is_nnx_enabled", return_value=True):
+            backbone = T5Backbone(**self.init_kwargs)
+
+            self.assertFalse(backbone._is_graph_network)
+            self.assertEqual(backbone.vocabulary_size, 10)
+            self.assertEqual(backbone.num_layers, 2)
+
+            config = backbone.get_config()
+            self.assertEqual(config["vocabulary_size"], 10)
+            outputs = backbone(self.input_data)
+            self.assertIn("encoder_sequence_output", outputs)
+            self.assertIn("decoder_sequence_output", outputs)
+
+            self.assertEqual(
+                tuple(outputs["encoder_sequence_output"].shape), (2, 3, 2)
+            )
+            self.assertEqual(
+                tuple(outputs["decoder_sequence_output"].shape), (2, 3, 2)
+            )
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
