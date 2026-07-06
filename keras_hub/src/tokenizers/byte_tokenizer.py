@@ -179,11 +179,21 @@ class ByteTokenizer(tokenizer.Tokenizer):
                     "`sequence_length` must be an int, got bool: "
                     f"{sequence_length}"
                 )
-            if not isinstance(sequence_length, numbers.Integral):
+
+            if isinstance(sequence_length, float):
+                if not sequence_length.is_integer():
+                    raise ValueError(
+                        "`sequence_length` must be a whole number. "
+                        f"Received: {sequence_length}"
+                    )
+                sequence_length = int(sequence_length)
+
+            elif not isinstance(sequence_length, numbers.Integral):
                 raise ValueError(
                     "`sequence_length` must be an int or None. "
-                    f"{sequence_length}"
+                    f"Received: {sequence_length}"
                 )
+
             if sequence_length <= 0:
                 raise ValueError(
                     "`sequence_length` must be > 0. "

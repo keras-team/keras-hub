@@ -222,8 +222,8 @@ class ByteTokenizerTest(TestCase):
         self.assertEqual(tokenizer.sequence_length, 5)
 
     def test_sequence_length_valid_float(self):
-        with self.assertRaises(ValueError):
-            ByteTokenizer(sequence_length=5.0)
+        tokenizer = ByteTokenizer(sequence_length=5.0)
+        self.assertEqual(tokenizer.sequence_length, 5)
 
     def test_sequence_length_invalid_float(self):
         with self.assertRaises(ValueError):
