@@ -247,10 +247,10 @@ class RetinaNetObjectDetector(ObjectDetector):
         positive_mask = ops.cast(ops.greater(labels, -1.0), dtype="float32")
         normalizer = ops.sum(positive_mask)
         # avoid dividing by zero below, normalizer is integer value here
-        normalizer = ops.maximum(normalizer, ops.ones_like(normalizer)) 
+        safe_normalizer = ops.maximum(normalizer, ops.ones_like(normalizer)) 
         cls_weights = ops.cast(ops.not_equal(labels, -2.0), dtype="float32")
-        cls_weights /= normalizer
-        box_weights = positive_mask / normalizer
+        cls_weights /= safe_normalizer 
+        box_weights = positive_mask / safe_normalizer
 
         y_true = {
             "bbox_regression": boxes,
