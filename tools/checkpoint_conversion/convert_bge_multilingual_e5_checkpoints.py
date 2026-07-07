@@ -29,27 +29,8 @@ pip install keras-hub keras transformers safetensors huggingface_hub \
 Usage:
 ```shell
 cd tools/checkpoint_conversion
-# BGE (BERT-based)
-python convert_multilingual_e5_checkpoints.py --preset bge_small_en_v1.5
-python convert_multilingual_e5_checkpoints.py \\
-    --preset bge_small_en_v1.5 \\
-    --upload_uri kaggle://keras/bge/keras/bge_small_en_v1.5
 
-# BGE-M3 (XLM-RoBERTa-based)
-python convert_multilingual_e5_checkpoints.py --preset bge_m3
-python convert_multilingual_e5_checkpoints.py \\
-    --preset bge_m3 \\
-    --upload_uri kaggle://keras/bge/keras/bge_m3
-
-# Multilingual-E5 small (BERT-based)
-python convert_multilingual_e5_checkpoints.py --preset multilingual_e5_small
-python convert_multilingual_e5_checkpoints.py \\
-    --preset multilingual_e5_small \\
-    --upload_uri kaggle://keras/multilingual-e5/keras/multilingual_e5_small
-
-# Multilingual-E5 base/large (XLM-RoBERTa-based)
-python convert_multilingual_e5_checkpoints.py --preset multilingual_e5_base
-python convert_multilingual_e5_checkpoints.py \\
+python convert_bge_multilingual_e5_checkpoints.py \\
     --preset multilingual_e5_large \\
     --upload_uri kaggle://keras/multilingual-e5/keras/multilingual_e5_large
 ```
