@@ -1,7 +1,7 @@
 import os
 
-import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.xlm_roberta.xlm_roberta_text_embedder_preprocessor import (  # noqa: E501
     XLMRobertaTextEmbedderPreprocessor,
@@ -58,7 +58,10 @@ class XLMRobertaTextEmbedderPreprocessorTest(TestCase):
         token_ids = output["token_ids"]
         padding_mask = output["padding_mask"]
         # Where token_id is 1 (<pad>), mask should be 0.
-        for t, m in zip(np.array(token_ids[0]), np.array(padding_mask[0])):
+        for t, m in zip(
+            ops.convert_to_numpy(token_ids[0]),
+            ops.convert_to_numpy(padding_mask[0]),
+        ):
             if t == 1:
                 self.assertEqual(m, 0)
             else:

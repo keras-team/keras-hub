@@ -11,9 +11,7 @@ backbone_cls = XLMRobertaBackbone
 
 
 def convert_backbone_config(transformers_config):
-    # HuggingFace XLM-RoBERTa position embeddings have two reserved
-    # placeholder rows (indices 0 and 1), so effective sequence length
-    # is max_position_embeddings - 2.
+    # HF reserves 2 placeholder rows; length = max_position_embeddings - 2.
     max_seq_len = transformers_config["max_position_embeddings"] - 2
     return {
         "vocabulary_size": transformers_config["vocab_size"],
@@ -26,9 +24,7 @@ def convert_backbone_config(transformers_config):
 
 
 def convert_weights(backbone, loader, transformers_config):
-    # XLM-RoBERTa sentence-transformer checkpoints always use "weight"/"bias"
-    # naming for layer norms (not "gamma"/"beta"). Detect dynamically to
-    # support standard XLM-RoBERTa checkpoints as well.
+    # Detect layer norm key style ("gamma"/"beta" vs "weight"/"bias").
     try:
         loader.get_tensor("embeddings.LayerNorm.gamma")
         ln_gamma, ln_beta = "gamma", "beta"
@@ -41,20 +37,14 @@ def convert_weights(backbone, loader, transformers_config):
         hf_weight_key="embeddings.word_embeddings.weight",
     )
 
-    # Position embeddings: HuggingFace stores
-    # (max_position_embeddings, hidden_dim) where indices 0–1 are reserved
-    # padding placeholders. KerasHub uses (max_sequence_length, hidden_dim)
-    # starting from actual position 2.
+    # Position embeddings: skip HF's 2 reserved padding rows (indices 0–1).
     loader.port_weight(
         keras_variable=backbone.embeddings.position_embedding.position_embeddings,
         hf_weight_key="embeddings.position_embeddings.weight",
         hook_fn=lambda hf_tensor, shape: hf_tensor[2 : 2 + shape[0]],
     )
 
-    # XLM-RoBERTa always uses token_type_id=0, so token_type_embedding[0] is
-    # a constant offset added to every token. KerasHub's RobertaBackbone has
-    # no token_type_embedding layer, so we fold it directly into the already-
-    # assigned position embeddings.
+    # Fold token_type_embedding[0] into position embeddings (type_id=0).
     type_emb_0 = loader.get_tensor("embeddings.token_type_embeddings.weight")[0]
     pos_emb_var = backbone.embeddings.position_embedding.position_embeddings
     pos_emb_var.assign(pos_emb_var + type_emb_0)

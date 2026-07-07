@@ -53,11 +53,11 @@ backbone_presets = {
     "multilingual_e5_large": {
         "metadata": {
             "description": (
-                "24-layer multilingual E5 embedding model with 1024-dimensional"
-                "vectors. Fine-tuned for dense retrieval across 100+ languages "
-                "using weakly-supervised contrastive pre-training. "
-                "Prefix inputs with 'query: ' for queries and 'passage: ' "
-                "for documents."
+                "24-layer multilingual E5 embedding model with "
+                "1024-dimensional vectors. Fine-tuned for dense retrieval "
+                "across 100+ languages using weakly-supervised contrastive "
+                "pre-training. Prefix inputs with 'query: ' for queries "
+                "and 'passage: ' for documents."
             ),
             "params": 558837760,
             "path": "xlm_roberta",

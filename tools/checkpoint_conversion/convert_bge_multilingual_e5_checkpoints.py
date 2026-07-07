@@ -84,15 +84,17 @@ PRESET_MAP = {
     "bge_small_en": "BAAI/bge-small-en",
     "bge_base_en": "BAAI/bge-base-en",
     "bge_large_en": "BAAI/bge-large-en",
-    "bge_small_en_v1.5": "BAAI/bge-small-en-v1.5",
-    "bge_base_en_v1.5": "BAAI/bge-base-en-v1.5",
-    "bge_large_en_v1.5": "BAAI/bge-large-en-v1.5",
-    "bge_small_zh": "BAAI/bge-small-zh",
+    "bge_small_v1.5_en": "BAAI/bge-small-en-v1.5",
+    "bge_base_v1.5_en": "BAAI/bge-base-en-v1.5",
+    "bge_large_v1.5_en": "BAAI/bge-large-en-v1.5",
     "bge_base_zh": "BAAI/bge-base-zh",
     "bge_large_zh": "BAAI/bge-large-zh",
-    "bge_small_zh_v1.5": "BAAI/bge-small-zh-v1.5",
-    "bge_base_zh_v1.5": "BAAI/bge-base-zh-v1.5",
-    "bge_large_zh_v1.5": "BAAI/bge-large-zh-v1.5",
+    "bge_small_v1.5_zh": "BAAI/bge-small-zh-v1.5",
+    # bge_base_zh_v1.5, bge_large_zh_v1.5, and bge_m3 have no safetensors
+    # on HF and do not support on-the-fly conversion; use the pre-converted
+    # Kaggle presets instead.
+    "bge_base_v1.5_zh": "BAAI/bge-base-zh-v1.5",
+    "bge_large_v1.5_zh": "BAAI/bge-large-zh-v1.5",
     "llm_embedder": "BAAI/llm-embedder",
     # BGE-M3 (pure XLM-RoBERTa, multilingual).
     "bge_m3": "BAAI/bge-m3",
