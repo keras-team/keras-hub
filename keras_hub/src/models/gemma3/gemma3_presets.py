@@ -315,6 +315,6 @@ backbone_presets = {
             "params": 268098176,
             "path": "gemma3",
         },
-        "kaggle_handle": "kaggle://keras/gemma3/keras/harrier_embedding_oss_270m/1",
+        "kaggle_handle": "kaggle://keras/harrier/keras/harrier_embedding_oss_270m/1",
     },
 }

@@ -118,6 +118,6 @@ backbone_presets = {
             "params": 596049920,
             "path": "qwen3",
         },
-        "kaggle_handle": "kaggle://keras/qwen-3-embedding/keras/harrier_oss_v1_0.6b_en/1",
+        "kaggle_handle": "kaggle://keras/harrier/keras/harrier_embedding_oss_0.6b/1",
     },
 }
