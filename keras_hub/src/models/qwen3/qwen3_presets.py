@@ -107,7 +107,7 @@ backbone_presets = {
         "kaggle_handle": "kaggle://keras/qwen-3-embedding/keras/qwen3_embedding_8b_en/1",
     },
     # Microsoft harrier model presets.
-    "harrier_embedding_oss_06b": {
+    "harrier_embedding_oss_0.6b": {
         "metadata": {
             "description": (
                 "Microsoft harrier-oss-v1 0.6B multilingual text embedding "
