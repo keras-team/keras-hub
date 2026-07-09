@@ -74,8 +74,14 @@ class LlamaTest(TestCase):
         devices = keras.distribution.list_devices("CPU")
         if len(devices) == 1:
             self.skipTest("`ModelParallel` testing requires multiple devices.")
+        # Pinned to exactly 2 devices (not len(devices)): the default test
+        # config's num_key_value_heads=2 is intentionally left as-is (not
+        # divisible by every host's device count) to regression-test that
+        # key/value kernels are left replicated rather than sharded on the
+        # data-parallel axis -- see get_layout_map's comment.
+        devices = devices[:2]
         device_mesh = keras.distribution.DeviceMesh(
-            shape=(1, len(devices)),
+            shape=(1, 2),
             axis_names=("batch", "model"),
             devices=devices,
         )
@@ -90,17 +96,21 @@ class LlamaTest(TestCase):
                 self.assertEqual(
                     tuple(w.value.sharding.spec), ("model", "batch")
                 )
+            if "token_embedding/reverse_embeddings" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
             if "self_attention/query/kernel" in w.path:
                 self.assertEqual(
                     tuple(w.value.sharding.spec), ("model", "batch", None)
                 )
             if "self_attention/key/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                    tuple(w.value.sharding.spec), ("model", None, None)
                 )
             if "self_attention/value/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                    tuple(w.value.sharding.spec), ("model", None, None)
                 )
             if "self_attention/attention_output/kernel" in w.path:
                 self.assertEqual(
@@ -126,8 +136,10 @@ class LlamaTest(TestCase):
         if len(devices) == 1:
             # Need more than 1 device for distribution testing.
             self.skipTest("`ModelParallel` testing requires multiple devices.")
+        # Pinned to exactly 2 devices -- see test_distribution's comment.
+        devices = devices[:2]
         device_mesh = keras.distribution.DeviceMesh(
-            shape=(1, len(devices)),
+            shape=(1, 2),
             axis_names=("batch", "model"),
             devices=devices,
         )

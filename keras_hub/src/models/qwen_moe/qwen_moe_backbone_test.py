@@ -126,11 +126,11 @@ class QwenMoeBackboneTest(TestCase):
                 )
             if "self_attention/key/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                    tuple(w.value.sharding.spec), ("model", None, None)
                 )
             if "self_attention/value/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                    tuple(w.value.sharding.spec), ("model", None, None)
                 )
             if "self_attention/attention_output/kernel" in w.path:
                 self.assertEqual(

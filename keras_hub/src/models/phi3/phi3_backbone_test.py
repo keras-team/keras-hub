@@ -83,11 +83,11 @@ class Phi3Test(TestCase):
                 )
             if "attention/key/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                    tuple(w.value.sharding.spec), ("model", None, None)
                 )
             if "attention/value/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                    tuple(w.value.sharding.spec), ("model", None, None)
                 )
             if "attention/attention_output/kernel" in w.path:
                 self.assertEqual(

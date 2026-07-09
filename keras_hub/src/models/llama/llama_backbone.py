@@ -305,11 +305,26 @@ class LlamaBackbone(Backbone):
         # See https://arxiv.org/abs/2403.08295
         layout_map = keras.distribution.LayoutMap(device_mesh)
         layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
-        layout_map[
-            "transformer_layer.*self_attention.*(query|key|value).kernel"
-        ] = (
+        # tie_word_embeddings defaults to False, so a separate
+        # token_embedding/reverse_embeddings output-projection tensor exists
+        # for essentially every real Llama model.
+        layout_map["token_embedding/reverse_embeddings"] = (
             model_dim,
             data_dim,
+        )
+        # Key/value kernels are sized by num_key_value_heads (GQA), which is
+        # independent of and typically much smaller than num_query_heads --
+        # sharding that small axis on the data-parallel dim would raise an
+        # IndivisibleError whenever the batch mesh dimension doesn't divide
+        # it, so key/value are left fully replicated on that axis.
+        layout_map["transformer_layer.*self_attention.*query.kernel"] = (
+            model_dim,
+            data_dim,
+            None,
+        )
+        layout_map["transformer_layer.*self_attention.*(key|value).kernel"] = (
+            model_dim,
+            None,
             None,
         )
         layout_map["transformer_layer.*attention_output.kernel"] = (

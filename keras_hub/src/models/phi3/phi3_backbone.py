@@ -255,9 +255,19 @@ class Phi3Backbone(Backbone):
             model_dim,
             data_dim,
         )
-        layout_map["transformer_layer.*attention.*(query|key|value).kernel"] = (
+        # Key/value kernels are sized by num_key_value_heads (GQA), which is
+        # independent of and typically much smaller than num_query_heads --
+        # sharding that small axis on the data-parallel dim would raise an
+        # IndivisibleError whenever the batch mesh dimension doesn't divide
+        # it, so key/value are left fully replicated on that axis.
+        layout_map["transformer_layer.*attention.*query.kernel"] = (
             model_dim,
             data_dim,
+            None,
+        )
+        layout_map["transformer_layer.*attention.*(key|value).kernel"] = (
+            model_dim,
+            None,
             None,
         )
         layout_map["transformer_layer.*attention_output.kernel"] = (
