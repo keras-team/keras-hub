@@ -230,14 +230,14 @@ class GptOssBackbone(Backbone):
         backbone weights, including the MoE expert-bank and router weights.
 
         Args:
-            device_mesh: The `keras.distribution.DeviceMesh` instance for
-                distribution.
-            model_parallel_dim_name: The axis name of the device mesh, where
-                the weights should be partition on.
-            data_parallel_dim_name: The axis name of the device mesh, where
-                the data should be partition on.
+            device_mesh: keras.distribution.DeviceMesh. The device mesh
+                instance for distribution.
+            model_parallel_dim_name: str. The axis name of the device mesh,
+                where the weights should be partitioned on.
+            data_parallel_dim_name: str. The axis name of the device mesh,
+                where the data should be partitioned on.
 
-        Return:
+        Returns:
             `keras.distribution.LayoutMap` that contains the sharding spec
             for all the model weights.
         """
