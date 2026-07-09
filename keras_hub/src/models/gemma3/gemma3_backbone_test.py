@@ -235,11 +235,14 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
         layout_map = Gemma3Backbone.get_layout_map(device_mesh)
         distribution = keras.distribution.ModelParallel(layout_map=layout_map)
 
-        # The default test config uses num_key_value_heads=1, which is not
-        # divisible by the 2-device model-parallel mesh. Bump it to 2 so the
-        # key/value attention kernels can be sharded along the model axis.
+        # The default test config's num_key_value_heads=1 is intentionally
+        # left as-is (not divisible by the 2-device model-parallel mesh) to
+        # regression-test that key/value kernels are left replicated rather
+        # than sharded -- num_key_value_heads is independent of and typically
+        # smaller than num_query_heads (GQA/MQA), so sharding it on the model
+        # axis raises an IndivisibleError whenever the device count doesn't
+        # divide that head count.
         init_kwargs = self.text_init_kwargs.copy()
-        init_kwargs["num_key_value_heads"] = 2
         with distribution.scope():
             model = Gemma3Backbone(**init_kwargs)
 
@@ -254,11 +257,11 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
                 )
             if "attention/key/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                    tuple(w.value.sharding.spec), (None, "batch", None)
                 )
             if "attention/value/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                    tuple(w.value.sharding.spec), (None, "batch", None)
                 )
             if "attention/attention_output/kernel" in w.path:
                 self.assertEqual(

@@ -353,13 +353,16 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
         layout_map = Gemma4Backbone.get_layout_map(device_mesh)
         distribution = keras.distribution.ModelParallel(layout_map=layout_map)
 
-        # The default test config uses num_key_value_heads=1, which is not
-        # divisible by the 2-device model-parallel mesh. Bump it to 2 so the
-        # key/value attention kernels can be sharded along the model axis.
-        # Also enable the MoE block so the expert-bank/router layout rules
-        # are exercised.
+        # The default test config's num_key_value_heads=1 is intentionally
+        # left as-is (not divisible by the 2-device model-parallel mesh) to
+        # regression-test that key/value kernels are left replicated rather
+        # than sharded -- see get_layout_map's comment: `effective_num_kv_heads`
+        # can be small and independent of num_query_heads (e.g. global-
+        # attention layers via num_global_key_value_heads), so sharding it on
+        # the model axis raises an IndivisibleError whenever the device count
+        # doesn't divide that head count. Also enable the MoE block so the
+        # expert-bank/router layout rules are exercised.
         init_kwargs = self.text_init_kwargs.copy()
-        init_kwargs["num_key_value_heads"] = 2
         init_kwargs["enable_moe_block"] = True
         init_kwargs["num_experts"] = 4
         init_kwargs["expert_intermediate_dim"] = 8
@@ -378,11 +381,11 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
                 )
             if "attention/key/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                    tuple(w.value.sharding.spec), (None, "batch", None)
                 )
             if "attention/value/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                    tuple(w.value.sharding.spec), (None, "batch", None)
                 )
             if "attention/attention_output/kernel" in w.path:
                 self.assertEqual(

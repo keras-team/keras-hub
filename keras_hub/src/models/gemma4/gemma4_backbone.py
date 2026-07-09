@@ -819,8 +819,19 @@ class Gemma4Backbone(Backbone):
         model_dim = model_parallel_dim_name
         layout_map = keras.distribution.LayoutMap(device_mesh)
         layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
-        layout_map["decoder_block.*attention.*(query|key|value).kernel"] = (
+        # Key/value kernels are sized by `effective_num_kv_heads`, which can
+        # be as few as 1-2 (e.g. global-attention layers via
+        # `num_global_key_value_heads`) and independent of `num_query_heads`
+        # -- sharding them on the model axis would raise an IndivisibleError
+        # whenever the device count doesn't divide that small head count, so
+        # they are left replicated while query stays sharded.
+        layout_map["decoder_block.*attention.*query.kernel"] = (
             model_dim,
+            data_dim,
+            None,
+        )
+        layout_map["decoder_block.*attention.*(key|value).kernel"] = (
+            None,
             data_dim,
             None,
         )
