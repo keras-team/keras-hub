@@ -360,6 +360,94 @@ class Qwen3_5Backbone(Backbone):
         )
         return config
 
+    @staticmethod
+    def get_layout_map(
+        device_mesh,
+        model_parallel_dim_name="model",
+        data_parallel_dim_name="batch",
+    ):
+        """Get a `keras.distribution.LayoutMap` for model parallel distribution.
+
+        The returned `LayoutMap` contains the sharding spec for the
+        Qwen3_5 backbone's text-decoder full-attention layers, feedforward
+        layers, and embeddings. Linear-attention (GatedDeltaNet) layers and
+        the vision encoder/interleave weights are left replicated for now --
+        see Limitations in the PR description.
+
+        Args:
+            device_mesh: The `keras.distribution.DeviceMesh` instance for
+                distribution.
+            model_parallel_dim_name: The axis name of the device mesh, where
+                the weights should be partition on.
+            data_parallel_dim_name: The axis name of the device mesh, where
+                the data should be partition on.
+
+        Return:
+            `keras.distribution.LayoutMap` that contains the sharding spec
+            for all the model weights.
+        """
+        if not isinstance(device_mesh, keras.distribution.DeviceMesh):
+            raise ValueError(
+                "Invalid device_mesh type. Expected "
+                f"`keras.distribution.DeviceMesh`, got {type(device_mesh)}"
+            )
+        if model_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{model_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+        if data_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{data_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+
+        data_dim = data_parallel_dim_name
+        model_dim = model_parallel_dim_name
+        layout_map = keras.distribution.LayoutMap(device_mesh)
+        layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
+        layout_map["token_embedding/reverse_embeddings"] = (
+            model_dim,
+            data_dim,
+        )
+        # Key/value kernels are sized by num_key_value_heads (GQA), which is
+        # independent of and typically much smaller than num_query_heads --
+        # sharding that small axis on either mesh dim would raise an
+        # IndivisibleError whenever the mesh dimension doesn't evenly divide
+        # it, so key/value are left fully replicated on both axes. Only
+        # matches full_attention layers -- the linear_attn (GatedDeltaNet)
+        # sublayer on other layers uses different weight names and is left
+        # replicated.
+        layout_map["transformer_layer.*self_attention.*query.kernel"] = (
+            model_dim,
+            data_dim,
+            None,
+        )
+        layout_map["transformer_layer.*self_attention.*(key|value).kernel"] = (
+            model_dim,
+            None,
+            None,
+        )
+        layout_map[
+            "transformer_layer.*self_attention.*attention_output.kernel"
+        ] = (
+            model_dim,
+            None,
+            data_dim,
+        )
+        layout_map[
+            "transformer_layer.*feedforward_intermediate_dense.kernel"
+        ] = (data_dim, model_dim)
+        layout_map["transformer_layer.*feedforward_gate_dense.kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["transformer_layer.*feedforward_output_dense.kernel"] = (
+            model_dim,
+            data_dim,
+        )
+        return layout_map
+
     @classmethod
     def from_config(cls, config):
         config.update(

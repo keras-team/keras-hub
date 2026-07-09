@@ -362,3 +362,104 @@ class T5GemmaBackbone(Backbone):
             }
         )
         return config
+
+    @staticmethod
+    def get_layout_map(
+        device_mesh,
+        model_parallel_dim_name="model",
+        data_parallel_dim_name="batch",
+    ):
+        """Get a `keras.distribution.LayoutMap` for model parallel distribution.
+
+        The returned `LayoutMap` contains the sharding spec for the T5Gemma
+        encoder and decoder weights, including the decoder's cross-attention
+        layers.
+
+        Args:
+            device_mesh: The `keras.distribution.DeviceMesh` instance for
+                distribution.
+            model_parallel_dim_name: The axis name of the device mesh, where
+                the weights should be partition on.
+            data_parallel_dim_name: The axis name of the device mesh, where
+                the data should be partition on.
+
+        Return:
+            `keras.distribution.LayoutMap` that contains the sharding spec
+            for all the model weights.
+        """
+        if not isinstance(device_mesh, keras.distribution.DeviceMesh):
+            raise ValueError(
+                "Invalid device_mesh type. Expected "
+                f"`keras.distribution.DeviceMesh`, got {type(device_mesh)}"
+            )
+        if model_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{model_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+        if data_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{data_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+
+        data_dim = data_parallel_dim_name
+        model_dim = model_parallel_dim_name
+        layout_map = keras.distribution.LayoutMap(device_mesh)
+        layout_map["encoder_token_embedding/embeddings"] = (
+            model_dim,
+            data_dim,
+        )
+        layout_map["decoder_token_embedding/embeddings"] = (
+            model_dim,
+            data_dim,
+        )
+        layout_map["decoder_token_embedding/reverse_embeddings"] = (
+            model_dim,
+            data_dim,
+        )
+        # Key/value kernels are sized by num_key_value_heads (GQA), which is
+        # independent of and typically much smaller than num_query_heads --
+        # sharding that small axis on either mesh dim would raise an
+        # IndivisibleError whenever the mesh dimension doesn't evenly divide
+        # it, so key/value are left fully replicated on both axes. The
+        # broad "attention" wildcard covers both the encoder/decoder
+        # self-attention and the decoder's cross-attention layers, which
+        # share the same query/key/value/attention_output naming.
+        layout_map["encoder_layer.*attention.*query.kernel"] = (
+            model_dim,
+            data_dim,
+            None,
+        )
+        layout_map["encoder_layer.*attention.*(key|value).kernel"] = (
+            model_dim,
+            None,
+            None,
+        )
+        layout_map["encoder_layer.*attention.*attention_output.kernel"] = (
+            model_dim,
+            None,
+            data_dim,
+        )
+        layout_map["decoder_layer.*attention.*query.kernel"] = (
+            model_dim,
+            data_dim,
+            None,
+        )
+        layout_map["decoder_layer.*attention.*(key|value).kernel"] = (
+            model_dim,
+            None,
+            None,
+        )
+        layout_map["decoder_layer.*attention.*attention_output.kernel"] = (
+            model_dim,
+            None,
+            data_dim,
+        )
+        layout_map["encoder_layer.*gate_proj.kernel"] = (data_dim, model_dim)
+        layout_map["encoder_layer.*up_proj.kernel"] = (data_dim, model_dim)
+        layout_map["encoder_layer.*down_proj.kernel"] = (model_dim, data_dim)
+        layout_map["decoder_layer.*gate_proj.kernel"] = (data_dim, model_dim)
+        layout_map["decoder_layer.*up_proj.kernel"] = (data_dim, model_dim)
+        layout_map["decoder_layer.*down_proj.kernel"] = (model_dim, data_dim)
+        return layout_map

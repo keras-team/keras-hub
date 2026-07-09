@@ -103,3 +103,76 @@ class T5GemmaBackboneTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+    def test_distribution(self):
+        if keras.backend.backend() != "jax":
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
+        devices = keras.distribution.list_devices("CPU")
+        if len(devices) == 1:
+            self.skipTest("`ModelParallel` testing requires multiple devices.")
+        # Pinned to exactly 2 devices (not len(devices)): the default test
+        # config's *_num_key_value_heads=2 is intentionally left as-is (not
+        # divisible by every host's device count) to regression-test that
+        # key/value kernels are left replicated rather than sharded -- see
+        # get_layout_map's comment.
+        devices = devices[:2]
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(1, 2),
+            axis_names=("batch", "model"),
+            devices=devices,
+        )
+
+        layout_map = T5GemmaBackbone.get_layout_map(device_mesh)
+        distribution = keras.distribution.ModelParallel(layout_map=layout_map)
+        with distribution.scope():
+            model = T5GemmaBackbone(**self.init_kwargs)
+
+        for w in model.weights:
+            if "encoder_token_embedding/embeddings" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
+            if "decoder_token_embedding/embeddings" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
+            if "self_attention/query/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "self_attention/key/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", None, None)
+                )
+            if "self_attention/value/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", None, None)
+                )
+            if "cross_attention/query/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "cross_attention/key/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", None, None)
+                )
+            if "cross_attention/value/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", None, None)
+                )
+            if "attention/attention_output/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", None, "batch")
+                )
+            if "gate_proj/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
+            if "up_proj/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
+            if "down_proj/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
