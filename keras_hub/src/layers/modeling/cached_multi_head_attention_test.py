@@ -75,6 +75,58 @@ class CachedMultiHeadAttentionTest(TestCase):
         self.assertAllClose(output, no_loop_outputs)
         self.assertAllClose(output_cache, no_loop_cache)
 
+    def test_return_attention_scores(self):
+        batch_size = 2
+        seq_len = 5
+        num_heads = 2
+        key_dim = 4
+        hidden_dim = num_heads * key_dim
+
+        x = random.uniform(shape=(batch_size, seq_len, hidden_dim))
+
+        layer = CachedMultiHeadAttention(num_heads=num_heads, key_dim=key_dim)
+        output, attention_scores = layer(
+            x,
+            x,
+            return_attention_scores=True,
+        )
+
+        self.assertIsNotNone(attention_scores)
+        self.assertAllEqual(output.shape, [batch_size, seq_len, hidden_dim])
+        self.assertAllEqual(
+            attention_scores.shape,
+            [batch_size, num_heads, seq_len, seq_len],
+        )
+
+    def test_return_attention_scores_with_cache(self):
+        batch_size = 2
+        seq_len = 5
+        num_heads = 2
+        key_dim = 4
+        hidden_dim = num_heads * key_dim
+
+        x = random.uniform(shape=(batch_size, seq_len, hidden_dim))
+        input_cache = ops.zeros((batch_size, 2, seq_len, num_heads, key_dim))
+        mask = ops.tril(ops.ones((seq_len, seq_len)))
+
+        layer = CachedMultiHeadAttention(num_heads=num_heads, key_dim=key_dim)
+        output, attention_scores, output_cache = layer(
+            x,
+            x,
+            cache=input_cache,
+            cache_update_index=0,
+            attention_mask=mask,
+            return_attention_scores=True,
+        )
+
+        self.assertIsNotNone(attention_scores)
+        self.assertAllEqual(output.shape, [batch_size, seq_len, hidden_dim])
+        self.assertAllEqual(
+            attention_scores.shape,
+            [batch_size, num_heads, seq_len, seq_len],
+        )
+        self.assertAllEqual(output_cache.shape, input_cache.shape)
+
     def test_training_propagation(self):
         batch_size = 2
         seq_len = 5
