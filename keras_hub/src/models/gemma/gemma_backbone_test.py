@@ -78,6 +78,11 @@ class GemmaBackboneTest(TestCase):
         devices = keras.distribution.list_devices("CPU")
         if len(devices) == 1:
             self.skipTest("`ModelParallel` testing requires multiple devices.")
+        # Pinned to exactly 2 devices (not len(devices)): the default test
+        # config's num_key_value_heads=1 is intentionally left as-is (not
+        # divisible by every host's device count) to regression-test that
+        # key/value kernels are left replicated rather than sharded -- see
+        # get_layout_map's comment.
         devices = devices[:2]
         device_mesh = keras.distribution.DeviceMesh(
             shape=(1, 2),
@@ -88,9 +93,7 @@ class GemmaBackboneTest(TestCase):
         layout_map = GemmaBackbone.get_layout_map(device_mesh)
         distribution = keras.distribution.ModelParallel(layout_map=layout_map)
         with distribution.scope():
-            model = GemmaBackbone(
-                **dict(self.init_kwargs, num_key_value_heads=2)
-            )
+            model = GemmaBackbone(**self.init_kwargs)
 
         for w in model.weights:
             if "token_embedding/embeddings" in w.path:
@@ -103,11 +106,11 @@ class GemmaBackboneTest(TestCase):
                 )
             if "attention/key/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                    tuple(w.value.sharding.spec), (None, "batch", None)
                 )
             if "attention/value/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                    tuple(w.value.sharding.spec), (None, "batch", None)
                 )
             if "attention/attention_output/kernel" in w.path:
                 self.assertEqual(
@@ -132,6 +135,7 @@ class GemmaBackboneTest(TestCase):
         devices = keras.distribution.list_devices("CPU")
         if len(devices) == 1:
             self.skipTest("`ModelParallel` testing requires multiple devices.")
+        # Pinned to exactly 2 devices -- see test_distribution's comment.
         devices = devices[:2]
         device_mesh = keras.distribution.DeviceMesh(
             shape=(1, 2),
@@ -142,9 +146,7 @@ class GemmaBackboneTest(TestCase):
         layout_map = GemmaBackbone.get_layout_map(device_mesh)
         distribution = keras.distribution.ModelParallel(layout_map=layout_map)
         with distribution.scope():
-            model = GemmaBackbone(
-                **dict(self.init_kwargs, num_key_value_heads=2)
-            )
+            model = GemmaBackbone(**self.init_kwargs)
             model.enable_lora(rank=4)
 
         for w in model.weights:

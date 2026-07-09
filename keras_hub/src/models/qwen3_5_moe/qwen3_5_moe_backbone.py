@@ -407,12 +407,12 @@ class Qwen3_5MoeBackbone(Backbone):
         )
         # Key/value kernels are sized by num_key_value_heads (GQA), which is
         # independent of and typically much smaller than num_query_heads --
-        # sharding that small axis on either mesh dim would raise an
-        # IndivisibleError whenever the mesh dimension doesn't evenly divide
-        # it, so key/value are left fully replicated on both axes. Only
-        # matches full_attention layers -- the linear_attn (GatedDeltaNet)
-        # sublayer on other layers uses different weight names and is left
-        # replicated.
+        # sharding that small axis would raise an IndivisibleError whenever
+        # the mesh dimension doesn't evenly divide it, so that axis is left
+        # replicated; the large hidden_dim axis is still sharded via
+        # model_dim. Only matches full_attention layers -- the linear_attn
+        # (GatedDeltaNet) sublayer on other layers uses different weight
+        # names and is left replicated.
         layout_map["transformer_layer.*self_attention.*query.kernel"] = (
             model_dim,
             data_dim,

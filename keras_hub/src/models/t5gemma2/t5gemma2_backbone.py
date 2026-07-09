@@ -593,12 +593,13 @@ class T5Gemma2Backbone(Backbone):
         )
         # Key/value kernels are sized by num_key_value_heads (GQA), which is
         # independent of and typically much smaller than num_query_heads --
-        # sharding that small axis on either mesh dim would raise an
-        # IndivisibleError whenever the mesh dimension doesn't evenly divide
-        # it, so key/value are left fully replicated on both axes. The
-        # broad "attention" wildcard covers both the encoder's self_attention
-        # and the decoder's merged (self+cross) attention, which share the
-        # same query/key/value/attention_output naming.
+        # sharding that small axis would raise an IndivisibleError whenever
+        # the mesh dimension doesn't evenly divide it, so that axis is left
+        # replicated; the large hidden_dim axis is still sharded via
+        # model_dim. The broad "attention" wildcard covers both the
+        # encoder's self_attention and the decoder's merged (self+cross)
+        # attention, which share the same
+        # query/key/value/attention_output naming.
         layout_map["encoder_layer.*attention.*query.kernel"] = (
             model_dim,
             data_dim,

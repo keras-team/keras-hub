@@ -104,9 +104,17 @@ class QwenMoeBackboneTest(TestCase):
 
         layout_map = QwenMoeBackbone.get_layout_map(device_mesh)
         distribution = keras.distribution.ModelParallel(layout_map=layout_map)
-        # `mlp_only_layers=[1]` makes layer 1 use the dense FFN fallback
-        # (`qwen_moe_mlp`) while layer 0 stays sparse, so both the dense
-        # fallback and the routed-expert layout rules are exercised here.
+        # NOTE: `mlp_only_layers=[1]` is intended to make layer 1 use the
+        # dense FFN fallback (`qwen_moe_mlp`) while layer 0 stays sparse, so
+        # both the dense-fallback and routed-expert layout rules would be
+        # exercised here. It currently does NOT, because
+        # `QwenMoeTransformerDecoder.layer_index` defaults to 0 and is never
+        # passed `i` from this backbone's layer-construction loop -- every
+        # layer's `layer_index` is 0 regardless of position, so
+        # `mlp_only_layers` never actually selects a layer. This is a
+        # pre-existing bug unrelated to sharding/layout maps (out of scope
+        # for this PR); the `qwen_moe_mlp.*` assertions below are correct
+        # but currently vacuous (never match a weight) until that's fixed.
         init_kwargs = dict(self.init_kwargs, mlp_only_layers=[1])
         with distribution.scope():
             model = QwenMoeBackbone(**init_kwargs)
