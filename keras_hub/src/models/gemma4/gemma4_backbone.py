@@ -773,6 +773,89 @@ class Gemma4Backbone(Backbone):
         )
         return config
 
+    @staticmethod
+    def get_layout_map(
+        device_mesh,
+        model_parallel_dim_name="model",
+        data_parallel_dim_name="batch",
+    ):
+        """Get a `keras.distribution.LayoutMap` for model parallel distribution.
+
+        The returned `LayoutMap` contains the sharding spec for the Gemma4
+        backbone text-decoder weights, including the MoE expert-bank and
+        router weights used by the 26b-a4b architecture.
+        Vision/audio/embedding-model-head and per-layer-input weights are
+        left replicated for this first PR.
+
+        Args:
+            device_mesh: The `keras.distribution.DeviceMesh` instance for
+                distribution.
+            model_parallel_dim_name: The axis name of the device mesh, where
+                the weights should be partition on.
+            data_parallel_dim_name: The axis name of the device mesh, where
+                the data should be partition on.
+
+        Return:
+            `keras.distribution.LayoutMap` that contains the sharding spec
+            for all the model weights.
+        """
+        if not isinstance(device_mesh, keras.distribution.DeviceMesh):
+            raise ValueError(
+                "Invalid device_mesh type. Expected "
+                f"`keras.distribution.DeviceMesh`, got {type(device_mesh)}"
+            )
+        if model_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{model_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+        if data_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{data_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+
+        data_dim = data_parallel_dim_name
+        model_dim = model_parallel_dim_name
+        layout_map = keras.distribution.LayoutMap(device_mesh)
+        layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
+        layout_map["decoder_block.*attention.*(query|key|value).kernel"] = (
+            model_dim,
+            data_dim,
+            None,
+        )
+        layout_map["decoder_block.*attention_output.kernel"] = (
+            model_dim,
+            None,
+            data_dim,
+        )
+        layout_map["decoder_block.*ffw_gating.kernel"] = (data_dim, model_dim)
+        layout_map["decoder_block.*ffw_gating_2.kernel"] = (data_dim, model_dim)
+        layout_map["decoder_block.*ffw_linear.kernel"] = (model_dim, data_dim)
+        # MoE experts (26b-a4b). The leading dimension is the expert count
+        # and is left replicated so the map works for small test configs.
+        layout_map["decoder_block.*moe_expert_bank/gate_proj"] = (
+            None,
+            data_dim,
+            model_dim,
+        )
+        layout_map["decoder_block.*moe_expert_bank/up_proj"] = (
+            None,
+            data_dim,
+            model_dim,
+        )
+        layout_map["decoder_block.*moe_expert_bank/down_proj"] = (
+            None,
+            model_dim,
+            data_dim,
+        )
+        # Router.
+        layout_map["decoder_block.*moe_router/proj/kernel"] = (
+            data_dim,
+            None,
+        )
+        return layout_map
+
     def default_lora_layer_names(self):
         target_names = super().default_lora_layer_names()
         if not self.text_only_model:

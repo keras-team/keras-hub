@@ -78,8 +78,9 @@ class GemmaBackboneTest(TestCase):
         devices = keras.distribution.list_devices("CPU")
         if len(devices) == 1:
             self.skipTest("`ModelParallel` testing requires multiple devices.")
+        devices = devices[:2]
         device_mesh = keras.distribution.DeviceMesh(
-            shape=(1, len(devices)),
+            shape=(1, 2),
             axis_names=("batch", "model"),
             devices=devices,
         )
@@ -87,7 +88,9 @@ class GemmaBackboneTest(TestCase):
         layout_map = GemmaBackbone.get_layout_map(device_mesh)
         distribution = keras.distribution.ModelParallel(layout_map=layout_map)
         with distribution.scope():
-            model = GemmaBackbone(**self.init_kwargs)
+            model = GemmaBackbone(
+                **dict(self.init_kwargs, num_key_value_heads=2)
+            )
 
         for w in model.weights:
             if "token_embedding/embeddings" in w.path:
@@ -129,16 +132,19 @@ class GemmaBackboneTest(TestCase):
         devices = keras.distribution.list_devices("CPU")
         if len(devices) == 1:
             self.skipTest("`ModelParallel` testing requires multiple devices.")
+        devices = devices[:2]
         device_mesh = keras.distribution.DeviceMesh(
-            shape=(1, len(devices)),
+            shape=(1, 2),
             axis_names=("batch", "model"),
             devices=devices,
         )
 
         layout_map = GemmaBackbone.get_layout_map(device_mesh)
-        distribution = keras.distribution.ModelParallel(device_mesh, layout_map)
+        distribution = keras.distribution.ModelParallel(layout_map=layout_map)
         with distribution.scope():
-            model = GemmaBackbone(**self.init_kwargs)
+            model = GemmaBackbone(
+                **dict(self.init_kwargs, num_key_value_heads=2)
+            )
             model.enable_lora(rank=4)
 
         for w in model.weights:

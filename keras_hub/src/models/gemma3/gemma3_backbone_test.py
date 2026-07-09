@@ -1,5 +1,6 @@
 import copy
 
+import keras
 import numpy as np
 import pytest
 from absl.testing import parameterized
@@ -217,3 +218,61 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
                 if "_text" in preset or "1b" in preset
                 else self.input_data,
             )
+
+    def test_distribution(self):
+        if keras.backend.backend() != "jax":
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
+        devices = keras.distribution.list_devices("CPU")
+        if len(devices) == 1:
+            self.skipTest("`ModelParallel` testing requires multiple devices.")
+        devices = devices[:2]
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(1, 2),
+            axis_names=("batch", "model"),
+            devices=devices,
+        )
+
+        layout_map = Gemma3Backbone.get_layout_map(device_mesh)
+        distribution = keras.distribution.ModelParallel(layout_map=layout_map)
+
+        # The default test config uses num_key_value_heads=1, which is not
+        # divisible by the 2-device model-parallel mesh. Bump it to 2 so the
+        # key/value attention kernels can be sharded along the model axis.
+        init_kwargs = self.text_init_kwargs.copy()
+        init_kwargs["num_key_value_heads"] = 2
+        with distribution.scope():
+            model = Gemma3Backbone(**init_kwargs)
+
+        for w in model.weights:
+            if "token_embedding/embeddings" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
+            if "attention/query/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "attention/key/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "attention/value/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "attention/attention_output/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", None, "batch")
+                )
+            if "ffw_gating/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
+            if "ffw_gating_2/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
+            if "ffw_linear" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )

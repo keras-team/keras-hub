@@ -1,5 +1,6 @@
 import copy
 
+import keras
 import numpy as np
 import pytest
 from absl.testing import parameterized
@@ -335,6 +336,87 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
             init_kwargs=init_kwargs,
             input_data=input_data,
         )
+
+    def test_distribution(self):
+        if keras.backend.backend() != "jax":
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
+        devices = keras.distribution.list_devices("CPU")
+        if len(devices) == 1:
+            self.skipTest("`ModelParallel` testing requires multiple devices.")
+        devices = devices[:2]
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(1, 2),
+            axis_names=("batch", "model"),
+            devices=devices,
+        )
+
+        layout_map = Gemma4Backbone.get_layout_map(device_mesh)
+        distribution = keras.distribution.ModelParallel(layout_map=layout_map)
+
+        # The default test config uses num_key_value_heads=1, which is not
+        # divisible by the 2-device model-parallel mesh. Bump it to 2 so the
+        # key/value attention kernels can be sharded along the model axis.
+        # Also enable the MoE block so the expert-bank/router layout rules
+        # are exercised.
+        init_kwargs = self.text_init_kwargs.copy()
+        init_kwargs["num_key_value_heads"] = 2
+        init_kwargs["enable_moe_block"] = True
+        init_kwargs["num_experts"] = 4
+        init_kwargs["expert_intermediate_dim"] = 8
+        init_kwargs["num_experts_per_token"] = 2
+        with distribution.scope():
+            model = Gemma4Backbone(**init_kwargs)
+
+        for w in model.weights:
+            if "token_embedding/embeddings" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
+            if "attention/query/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "attention/key/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "attention/value/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "attention/attention_output/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", None, "batch")
+                )
+            if "ffw_gating/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
+            if "ffw_gating_2/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
+            if "ffw_linear" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
+            if "moe_expert_bank/gate_proj" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec),
+                    (None, "batch", "model"),
+                )
+            if "moe_expert_bank/up_proj" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec),
+                    (None, "batch", "model"),
+                )
+            if "moe_expert_bank/down_proj" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec),
+                    (None, "model", "batch"),
+                )
+            if "moe_router/proj/kernel" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), ("batch", None))
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large

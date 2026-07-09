@@ -1,3 +1,4 @@
+import keras
 import pytest
 from keras import ops
 
@@ -87,6 +88,95 @@ class QwenMoeBackboneTest(TestCase):
         # token_embedding + 2 transformer layers + final norm + 2 inputs
         expected_layers = 6
         self.assertEqual(len(model.layers), expected_layers)
+
+    def test_distribution(self):
+        if keras.backend.backend() != "jax":
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
+        devices = keras.distribution.list_devices("CPU")
+        if len(devices) == 1:
+            self.skipTest("`ModelParallel` testing requires multiple devices.")
+        devices = devices[:2]
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(1, 2),
+            axis_names=("batch", "model"),
+            devices=devices,
+        )
+
+        layout_map = QwenMoeBackbone.get_layout_map(device_mesh)
+        distribution = keras.distribution.ModelParallel(layout_map=layout_map)
+        # `mlp_only_layers=[1]` makes layer 1 use the dense FFN fallback
+        # (`qwen_moe_mlp`) while layer 0 stays sparse, so both the dense
+        # fallback and the routed-expert layout rules are exercised here.
+        init_kwargs = dict(self.init_kwargs, mlp_only_layers=[1])
+        with distribution.scope():
+            model = QwenMoeBackbone(**init_kwargs)
+
+        for w in model.weights:
+            if "token_embedding/embeddings" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
+            if "token_embedding/reverse_embeddings" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
+            if "self_attention/query/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "self_attention/key/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "self_attention/value/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "self_attention/attention_output/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", None, "batch")
+                )
+            if "qwen_moe_mlp/feedforward_intermediate_dense/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
+            if "qwen_moe_mlp/feedforward_gate_dense/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
+            if "qwen_moe_mlp/feedforward_output_dense/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
+            if "experts/expert_feedforward_gate_dense" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec),
+                    (None, "batch", "model"),
+                )
+            if "experts/expert_feedforward_output_dense" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec),
+                    (None, "model", "batch"),
+                )
+            if "sparse_feedforward_gate_dense/kernel" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), ("batch", None))
+            if "shared_expert_gate_dense/kernel" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), ("batch", None))
+            if (
+                "shared_expert_dense/feedforward_intermediate_dense/kernel"
+                in w.path
+            ):
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
+            if "shared_expert_dense/feedforward_gate_dense/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
+            if "shared_expert_dense/feedforward_output_dense/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
 
     def test_auxiliary_loss(self):
         model = QwenMoeBackbone(**self.init_kwargs)

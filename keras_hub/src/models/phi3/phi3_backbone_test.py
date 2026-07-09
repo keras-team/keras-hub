@@ -1,3 +1,4 @@
+import keras
 import pytest
 from keras import ops
 
@@ -48,6 +49,62 @@ class Phi3Test(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    def test_distribution(self):
+        if keras.backend.backend() != "jax":
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
+        devices = keras.distribution.list_devices("CPU")
+        if len(devices) == 1:
+            self.skipTest("`ModelParallel` testing requires multiple devices.")
+        devices = devices[:2]
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(1, 2),
+            axis_names=("batch", "model"),
+            devices=devices,
+        )
+
+        layout_map = Phi3Backbone.get_layout_map(device_mesh)
+        distribution = keras.distribution.ModelParallel(layout_map=layout_map)
+        with distribution.scope():
+            model = Phi3Backbone(**self.init_kwargs)
+
+        for w in model.weights:
+            if "token_embedding/embeddings" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
+            if "token_embedding/reverse_embeddings" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
+            if "attention/query/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "attention/key/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "attention/value/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
+                )
+            if "attention/attention_output/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", None, "batch")
+                )
+            if "feedforward_intermediate_dense/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
+            if "feedforward_gate_dense/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
+            if "feedforward_output_dense" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
 
     def test_backbone_basics_with_su_rotary(self):
         self.run_backbone_test(
