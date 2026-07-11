@@ -8,6 +8,7 @@ from keras_hub.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
 from keras_hub.src.models.preprocessor import Preprocessor
+from keras_hub.src.utils.tensor_utils import compute_padding_mask
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -122,23 +123,12 @@ class MaskedLMPreprocessor(Preprocessor):
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def _call_python(self, x, y=None, sample_weight=None):
-        def _compute_padding_mask(token_ids):
-            pad_token_id = self.tokenizer.pad_token_id
-            if isinstance(token_ids, (list, tuple)):
-                if token_ids and isinstance(token_ids[0], (list, tuple)):
-                    return [
-                        [token != pad_token_id for token in seq]
-                        for seq in token_ids
-                    ]
-                else:
-                    return [token != pad_token_id for token in token_ids]
-            else:
-                return token_ids != pad_token_id
-
         x = x if isinstance(x, tuple) else (x,)
         x = tuple(self.tokenizer(segment) for segment in x)
         token_ids, segment_ids = self.packer(x)
-        padding_mask = _compute_padding_mask(token_ids)
+        padding_mask = compute_padding_mask(
+            token_ids, self.tokenizer.pad_token_id
+        )
         masker_outputs = self.masker(token_ids)
         x = {
             "token_ids": masker_outputs["token_ids"],

@@ -111,18 +111,7 @@ class RoformerV2MaskedLMPreprocessor(MaskedLMPreprocessor):
 
     @preprocessing_function
     def _call_tf(self, x, y=None, sample_weight=None):
-        x = x if isinstance(x, tuple) else (x,)
-        x = tuple(self.tokenizer(segment) for segment in x)
-        token_ids, segment_ids = self.packer(x)
-        masker_outputs = self.masker(token_ids)
-        x = {
-            "token_ids": masker_outputs["token_ids"],
-            "segment_ids": segment_ids,
-            "mask_positions": masker_outputs["mask_positions"],
-        }
-        y = masker_outputs["mask_ids"]
-        sample_weight = masker_outputs["mask_weights"]
-        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+        return self._call_python(x, y=y, sample_weight=sample_weight)
 
     def _call_python(self, x, y=None, sample_weight=None):
         x = x if isinstance(x, tuple) else (x,)

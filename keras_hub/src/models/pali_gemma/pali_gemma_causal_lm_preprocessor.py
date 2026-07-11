@@ -163,7 +163,6 @@ class PaliGemmaCausalLMPreprocessor(CausalLMPreprocessor):
             sequence_length=sequence_length,
         )
 
-    @preprocessing_function
     def generate_preprocess(
         self,
         x,

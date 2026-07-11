@@ -7,7 +7,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
-from keras_hub.src.utils.tensor_utils import convert_to_list
+from keras_hub.src.utils.tensor_utils import canonicalize_python_inputs
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -215,61 +215,9 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
                 f"Received: `inputs={inputs}`"
             )
 
-        # TODO(hongyuc): Improve the performance of `_call_python`. It becomes
-        # slower when encountering large inputs compared to `_call_tf`.
-        def _canonicalize_single_input(inputs):
-            if isinstance(inputs, (tuple, list)):
-                # Fast path for common cases:
-                # If the inputs are just normal python types (or lists of
-                # python types), it immediately returns.
-                if not inputs:
-                    return [list(inputs)], False
-                first = inputs[0]
-                if isinstance(
-                    first, (int, str, float, bool, np.integer, np.floating)
-                ):
-                    return [list(inputs)], False
-                if isinstance(first, (tuple, list)) and (
-                    not first
-                    or isinstance(
-                        first[0],
-                        (int, str, float, bool, np.integer, np.floating),
-                    )
-                ):
-                    return [list(x) for x in inputs], True
-
-                # `keras.tree.map_structure` is expensive.
-                inputs = keras.tree.map_structure(convert_to_list, inputs)
-                if inputs and isinstance(inputs[0], (tuple, list)):
-                    return inputs, True
-                else:
-                    return [inputs], False
-            elif tf is not None and isinstance(
-                inputs, (tf.Tensor, tf.RaggedTensor)
-            ):
-                unbatched = inputs.shape.rank == 1
-                if unbatched:
-                    inputs = tf.expand_dims(inputs, 0)
-                if isinstance(inputs, tf.Tensor):
-                    inputs = inputs.numpy().tolist()
-                else:
-                    inputs = inputs.to_list()
-                return inputs, not unbatched
-            elif keras.ops.is_tensor(inputs):
-                inputs = convert_to_list(inputs)
-                if inputs and isinstance(inputs[0], (tuple, list)):
-                    return inputs, True
-                else:
-                    return [inputs], False
-            else:
-                raise ValueError(
-                    "Input should be a list or a list of lists. "
-                    f"Received: {inputs}"
-                )
-
-        # convert_to_ragged_batch returns (x, batched) triplets.
-        triplets = [_canonicalize_single_input(x) for x in inputs]
-        x, batched = list(zip(*triplets))
+        # canonicalize_python_inputs returns (x, batched) pairs.
+        pairs = [canonicalize_python_inputs(x) for x in inputs]
+        x, batched = list(zip(*pairs))
         if len(set(batched)) != 1:
             raise ValueError(
                 "All inputs for packing must have the same rank. "
