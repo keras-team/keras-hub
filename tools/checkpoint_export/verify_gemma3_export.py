@@ -52,10 +52,10 @@ import keras  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 from transformers import AutoConfig  # noqa: E402
-from transformers import AutoTokenizer  # noqa: E402
-from transformers import AutoProcessor  # noqa: E402
 from transformers import AutoModelForCausalLM  # noqa: E402
 from transformers import AutoModelForImageTextToText  # noqa: E402
+from transformers import AutoProcessor  # noqa: E402
+from transformers import AutoTokenizer  # noqa: E402
 
 from keras_hub.src.models.gemma3.gemma3_causal_lm import (  # noqa: E402
     Gemma3CausalLM,
@@ -112,25 +112,29 @@ device = torch.device("cpu")
 
 def configs_equal(val1, val2, tolerance=1e-6):
     """Compare two config values with tolerance for floats."""
-    if type(val1) != type(val2):
+    if not isinstance(val1, type(val2)):
         return False
-    
+
     if isinstance(val1, (int, str, bool, type(None))):
         return val1 == val2
-    
+
     if isinstance(val1, float):
         return abs(val1 - val2) < tolerance
-    
+
     if isinstance(val1, (list, tuple)):
         if len(val1) != len(val2):
             return False
-        return all(configs_equal(v1, v2, tolerance) for v1, v2 in zip(val1, val2))
-    
+        return all(
+            configs_equal(v1, v2, tolerance) for v1, v2 in zip(val1, val2)
+        )
+
     if isinstance(val1, dict):
         if set(val1.keys()) != set(val2.keys()):
             return False
-        return all(configs_equal(val1[k], val2.get(k), tolerance) for k in val1.keys())
-    
+        return all(
+            configs_equal(val1[k], val2.get(k), tolerance) for k in val1.keys()
+        )
+
     # Fallback to direct comparison
     return val1 == val2
 
@@ -143,13 +147,13 @@ def configs_equal(val1, val2, tolerance=1e-6):
 def export_keras_model(preset, export_path):
     """Load KerasHub preset and export to HF format."""
     print("\n[1/6] Loading KerasHub model from preset...")
-    
+
     try:
         keras_model = Gemma3CausalLM.from_preset(preset)
     except Exception as e:
         print(f"  ✗ Failed to load KerasHub model: {e}")
         raise
-    
+
     backbone = keras_model.backbone
 
     has_vision = backbone.vision_encoder is not None
@@ -163,7 +167,7 @@ def export_keras_model(preset, export_path):
     print(f"  ✓ Parameters: {keras_model.count_params():,}")
 
     print(f"\n[2/6] Exporting to HF format → {export_path}...")
-    
+
     try:
         keras_model.export_to_transformers(export_path)
     except Exception as e:
@@ -188,7 +192,7 @@ def export_keras_model(preset, export_path):
         print(f"  {'✓' if exists else '✗'} {fname} ({size:,} bytes)")
         if not exists:
             all_exist = False
-    
+
     if not all_exist:
         raise FileNotFoundError("Some expected export files are missing")
 
@@ -355,9 +359,7 @@ def validate_configs(exp_cfg, orig_cfg, has_vision):
                 config_pass = False
 
         if mismatches:
-            print(
-                f"\n    ⚠ {len(mismatches)} field(s) differ: {mismatches}"
-            )
+            print(f"\n    ⚠ {len(mismatches)} field(s) differ: {mismatches}")
         else:
             print(
                 f"\n    ✓ All {len(all_keys) - len(skip_keys)} "
@@ -391,10 +393,7 @@ def validate_token_ids(exp_cfg, orig_cfg, has_vision):
         o = getattr(orig_cfg, name, None)
         e = getattr(exp_cfg, name, None)
         match = o == e
-        print(
-            f"    {'✓' if match else '✗'} {name}: "
-            f"original={o}, exported={e}"
-        )
+        print(f"    {'✓' if match else '✗'} {name}: original={o}, exported={e}")
         if not match:
             token_pass = False
 
@@ -548,8 +547,7 @@ def print_summary(results):
     print(f"     - Config fields match {'✓' if config_pass else '✗'}")
     print(f"     - Token IDs match     {'✓' if token_pass else '✗'}")
     print(
-        f"     - Parameter count:    "
-        f"{'match ✓' if param_match else 'differ ✗'}"
+        f"     - Parameter count:    {'match ✓' if param_match else 'differ ✗'}"
     )
     print(
         f"     - Text logit parity   "
@@ -606,10 +604,9 @@ def main():
         exit(1)
 
     # Set up export directory
-    using_temp_dir = args.export_dir is None
     export_dir = args.export_dir or tempfile.mkdtemp()
     export_path = os.path.join(export_dir, "gemma3_exported")
-    
+
     # Create export directory if it doesn't exist
     os.makedirs(export_path, exist_ok=True)
 
@@ -641,14 +638,15 @@ def main():
         # Summary.
         success = print_summary(validation_results)
         exit(0 if success else 1)
-        
+
     except KeyboardInterrupt:
         print("\n\n⚠ Verification interrupted by user")
         exit(130)
     except Exception as e:
-        print(f"\n\n❌ Verification failed with error:")
+        print("\n\n❌ Verification failed with error:")
         print(f"   {type(e).__name__}: {e}")
         import traceback
+
         traceback.print_exc()
         exit(1)
 
