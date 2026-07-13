@@ -210,16 +210,8 @@ class StableDiffusion3TextToImageTest(TestCase):
         ),
     )
     def test_litert_export(self):
-        # allow_custom_ops is a TensorFlow-converter option; the torch export
-        # path rejects unknown kwargs, so only pass it on the TF backend.
-        tf_only_kwargs = (
-            {"allow_custom_ops": True}
-            if keras.backend.backend() == "tensorflow"
-            else {}
-        )
         self.run_litert_export_test(
             cls=StableDiffusion3TextToImage,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            **tf_only_kwargs,
         )

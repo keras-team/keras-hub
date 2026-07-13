@@ -553,30 +553,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 f"{keras_type}, LiteRT returns {litert_type}"
             )
 
-    def _litert_flex_ops(self, model_bytes):
-        """Return the set of FLEX (SelectTf) op codes in a `.tflite` model.
-
-        The Keras TF LiteRT export path enables `SELECT_TF_OPS`, which emits
-        FLEX ops as TFLite `CUSTOM` operators whose custom code starts with
-        `"Flex"` (e.g. `FlexRoll`). The ai-edge-litert interpreter cannot run
-        these, so callers skip numeric verification when any are present.
-        """
-        from ai_edge_litert import schema_py_generated as schema
-
-        model = schema.Model.GetRootAsModel(model_bytes, 0)
-        flex_ops = set()
-        for i in range(model.OperatorCodesLength()):
-            custom_code = model.OperatorCodes(i).CustomCode()
-            if custom_code is None:
-                continue
-            if isinstance(custom_code, (bytes, bytearray, memoryview)):
-                custom_code = bytes(custom_code).decode(
-                    "utf-8", errors="replace"
-                )
-            if isinstance(custom_code, str) and custom_code.startswith("Flex"):
-                flex_ops.add(custom_code)
-        return flex_ops
-
     @staticmethod
     def _build_litert_torch_input_signature(input_data):
         """Build a concrete input signature for torch-backend LiteRT export.
@@ -656,8 +632,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 Example: {"output1": {"max": 1e-4, "mean": 1e-5},
                          "*": {"max": 1e-3, "mean": 1e-4}}
             **export_kwargs: Additional keyword arguments to pass to
-                model.export(), such as allow_custom_ops=True or
-                enable_select_tf_ops=True.
+                model.export().
         """
         # Extract comparison_mode from export_kwargs if provided
         comparison_mode = export_kwargs.pop("comparison_mode", "strict")
@@ -713,10 +688,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
                 # The torch export path needs a concrete input signature, since
                 # it does not support dynamic shapes.
-                if (
-                    backend == "torch"
-                    and "input_signature" not in export_kwargs
-                ):
+                if "input_signature" not in export_kwargs:
                     export_kwargs["input_signature"] = (
                         self._build_litert_torch_input_signature(input_data)
                     )
@@ -725,22 +697,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 model.export(export_path, format="litert", **export_kwargs)
                 self.assertTrue(os.path.exists(export_path))
                 self.assertGreater(os.path.getsize(export_path), 0)
-
-                # The Keras TF exporter enables SELECT_TF_OPS, so the converted
-                # model may contain FLEX ops that the ai-edge-litert interpreter
-                # cannot execute. Verify numerics only when the model is free of
-                # FLEX ops; export and signature structure are checked either
-                # way.
-                with open(export_path, "rb") as f:
-                    flex_ops = self._litert_flex_ops(f.read())
-                run_inference = not flex_ops
-                if flex_ops:
-                    print(
-                        f"[litert] {type(model).__name__}: skipping numeric "
-                        f"verification; converted model uses FLEX ops "
-                        f"{sorted(flex_ops)} not runnable by ai-edge-litert."
-                    )
-                verify_numerics = verify_numerics and run_inference
 
                 keras_output = model(input_data) if verify_numerics else None
 
@@ -770,29 +726,15 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
                 # Verify input signature
                 if isinstance(input_data, dict):
-                    if backend == "torch":
-                        # torch export renames inputs to `args_0_<key>`, so we
-                        # only check the input count here.
-                        self.assertEqual(
-                            len(input_data),
-                            len(sig_inputs),
-                            f"Input count mismatch: model has "
-                            f"{len(input_data)} inputs but SignatureDef has "
-                            f"{len(sig_inputs)}: {sig_inputs}",
-                        )
-                    else:
-                        expected_inputs = set(input_data.keys())
-                        actual_inputs = set(sig_inputs)
-                        # Check that all expected inputs are in the signature
-                        # (allow signature to have additional optional inputs)
-                        missing_inputs = expected_inputs - actual_inputs
-                        if missing_inputs:
-                            self.fail(
-                                f"Missing inputs in SignatureDef: "
-                                f"{sorted(missing_inputs)}. "
-                                f"Expected: {sorted(expected_inputs)}, "
-                                f"SignatureDef has: {sorted(actual_inputs)}"
-                            )
+                    # torch export renames inputs to `args_0_<key>`, so we
+                    # only check the input count here.
+                    self.assertEqual(
+                        len(input_data),
+                        len(sig_inputs),
+                        f"Input count mismatch: model has "
+                        f"{len(input_data)} inputs but SignatureDef has "
+                        f"{len(sig_inputs)}: {sig_inputs}",
+                    )
                 else:
                     # For numpy arrays, just verify we have exactly one input
                     # (since we're passing a single tensor)
@@ -813,11 +755,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                             f"{sorted(expected_outputs)}, "
                             f"but SignatureDef has {sorted(actual_outputs)}"
                         )
-
-                # When the model contains FLEX ops, ai-edge-litert cannot run
-                # inference, so stop after validating export + signature.
-                if not run_inference:
-                    return
 
                 # Step 3: Run LiteRT inference
                 os.remove(export_path)
@@ -844,27 +781,22 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     converted_input_data = tree.map_structure(
                         convert_for_tflite, input_data
                     )
-                    if backend == "torch":
-                        # litert-torch renames dict inputs (positionally as
-                        # `args_<n>` or as `args_<n>_<key>`); map them back and
-                        # cast to the interpreter's expected dtype.
-                        runner_kwargs = self._map_litert_torch_inputs(
-                            converted_input_data, sig_inputs
-                        )
-                        expected_dtypes = {
-                            d["name"]: d["dtype"]
-                            for d in interpreter.get_input_details()
-                        }
-                        for sig_name, value in list(runner_kwargs.items()):
-                            for dname, dtype in expected_dtypes.items():
-                                if sig_name in dname and value.dtype != dtype:
-                                    runner_kwargs[sig_name] = value.astype(
-                                        dtype
-                                    )
-                                    break
-                        litert_output = runner(**runner_kwargs)
-                    else:
-                        litert_output = runner(**converted_input_data)
+                    # litert-torch renames dict inputs (positionally as
+                    # `args_<n>` or as `args_<n>_<key>`); map them back and
+                    # cast to the interpreter's expected dtype.
+                    runner_kwargs = self._map_litert_torch_inputs(
+                        converted_input_data, sig_inputs
+                    )
+                    expected_dtypes = {
+                        d["name"]: d["dtype"]
+                        for d in interpreter.get_input_details()
+                    }
+                    for sig_name, value in list(runner_kwargs.items()):
+                        for dname, dtype in expected_dtypes.items():
+                            if sig_name in dname and value.dtype != dtype:
+                                runner_kwargs[sig_name] = value.astype(dtype)
+                                break
+                    litert_output = runner(**runner_kwargs)
                 else:
                     # For single tensor inputs, get the input name
                     sig_inputs = serving_sig.get("inputs", [])

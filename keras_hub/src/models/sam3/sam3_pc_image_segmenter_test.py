@@ -176,11 +176,6 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
         ),
     )
     def test_litert_export(self):
-        if keras.backend.backend() == "tensorflow":
-            self.skipTest(
-                "SAM3 LiteRT export fails during TFLite conversion: "
-                "'tfl.zeros_like' does not support bool (i1) operands."
-            )
         self.run_litert_export_test(
             cls=SAM3PromptableConceptImageSegmenter,
             init_kwargs=self.init_kwargs,
