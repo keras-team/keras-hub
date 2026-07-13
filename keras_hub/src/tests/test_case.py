@@ -659,40 +659,43 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 model.export(), such as allow_custom_ops=True or
                 enable_select_tf_ops=True.
         """
-        # The rewritten LiteRT export path requires Keras >= 3.15 on both the
-        # TensorFlow (ExportArchive -> SavedModel) and torch (litert-torch)
-        # backends.
+        # Extract comparison_mode from export_kwargs if provided
+        comparison_mode = export_kwargs.pop("comparison_mode", "strict")
+        backend = keras.backend.backend()
+
+        if backend == "tensorflow":
+            # Skip test if Keras version is less than 3.13
+            if packaging.version.Version(
+                keras.__version__
+            ) < packaging.version.Version("3.13.0"):
+                self.skipTest("LiteRT export requires Keras >= 3.13")
+
+            self.skipTest(
+                "#TODO: [#2572] Re-enable LiteRT tests after a new tf release. "
+                "Can't test with tf 2.20 due to tf.lite module deprecation."
+            )
+        elif backend == "jax":
+            self.skipTest("LiteRT export is not supported on the JAX backend.")
+        elif backend != "torch":
+            self.skipTest(
+                f"LiteRT export is not supported on the {backend} backend."
+            )
+
+        # LiteRT export on PyTorch backend requires Keras >= 3.15.0
         if packaging.version.Version(
             keras.__version__
         ) < packaging.version.Version("3.15.0"):
             self.skipTest("LiteRT export requires Keras >= 3.15")
 
-        # Extract comparison_mode from export_kwargs if provided
-        comparison_mode = export_kwargs.pop("comparison_mode", "strict")
-        backend = keras.backend.backend()
-        # LiteRT export currently runs on the torch backend only. The
-        # TensorFlow-backend path (ExportArchive -> SavedModel ->
-        # tf.lite.TFLiteConverter) is temporarily disabled: TFLiteConverter
-        # .convert() leaks memory and OOM-kills CI when many models are
-        # converted in one process (tensorflow/tensorflow#122598). Re-enable
-        # the TensorFlow backend here once that leak is fixed upstream.
-        if backend != "torch":
-            self.skipTest(
-                "LiteRT export tests currently run on the torch backend only "
-                "(TensorFlow backend temporarily disabled pending "
-                "tensorflow/tensorflow#122598)."
-            )
-
         # The torch export path is provided by the optional litert-torch
         # package.
-        if backend == "torch":
-            try:
-                import litert_torch  # noqa: F401
-            except (ImportError, ModuleNotFoundError):
-                self.skipTest(
-                    "litert-torch is required for LiteRT export with the "
-                    "torch backend"
-                )
+        try:
+            import litert_torch  # noqa: F401
+        except (ImportError, ModuleNotFoundError):
+            self.skipTest(
+                "litert-torch is required for LiteRT export with the "
+                "torch backend"
+            )
 
         # Use the ai-edge-litert interpreter exclusively. The legacy
         # tf.lite.Interpreter is deprecated and removed in recent TensorFlow
