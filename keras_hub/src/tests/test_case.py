@@ -663,29 +663,17 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         comparison_mode = export_kwargs.pop("comparison_mode", "strict")
         backend = keras.backend.backend()
 
-        if backend == "tensorflow":
-            # Skip test if Keras version is less than 3.13
-            if packaging.version.Version(
-                keras.__version__
-            ) < packaging.version.Version("3.13.0"):
-                self.skipTest("LiteRT export requires Keras >= 3.13")
-
+        # The rewritten LiteRT export path requires Keras >= 3.15 and currently
+        # runs on the PyTorch backend only.
+        if not (
+            backend == "torch"
+            and packaging.version.Version(keras.__version__)
+            >= packaging.version.Version("3.15.0")
+        ):
             self.skipTest(
-                "#TODO: [#2572] Re-enable LiteRT tests after a new tf release. "
-                "Can't test with tf 2.20 due to tf.lite module deprecation."
+                "LiteRT export requires Keras >= 3.15 and is supported on "
+                "the PyTorch backend only."
             )
-        elif backend == "jax":
-            self.skipTest("LiteRT export is not supported on the JAX backend.")
-        elif backend != "torch":
-            self.skipTest(
-                f"LiteRT export is not supported on the {backend} backend."
-            )
-
-        # LiteRT export on PyTorch backend requires Keras >= 3.15.0
-        if packaging.version.Version(
-            keras.__version__
-        ) < packaging.version.Version("3.15.0"):
-            self.skipTest("LiteRT export requires Keras >= 3.15")
 
         # The torch export path is provided by the optional litert-torch
         # package.
