@@ -28,6 +28,7 @@ from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
 from keras_hub.src.utils.transformers import convert_qwen3_5
+from keras_hub.src.utils.transformers import convert_qwen3_5_moe
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_sam3
@@ -35,6 +36,7 @@ from keras_hub.src.utils.transformers import convert_smollm3
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_t5gemma2
 from keras_hub.src.utils.transformers import convert_vit
+from keras_hub.src.utils.transformers import convert_xlm_roberta
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
 
@@ -93,10 +95,14 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen3_moe
         elif model_type == "qwen3":
             self.converter = convert_qwen3
+        elif model_type == "qwen3_5_moe":
+            self.converter = convert_qwen3_5_moe
         elif model_type == "qwen3_5":
             self.converter = convert_qwen3_5
         elif model_type == "sam3_video":
             self.converter = convert_sam3
+        elif model_type == "xlm-roberta":
+            self.converter = convert_xlm_roberta
         elif model_type == "smollm3":
             self.converter = convert_smollm3
         elif model_type == "t5gemma":

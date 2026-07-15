@@ -90,7 +90,10 @@ def convert_model(hf_model, device, dtype):
     kwargs["original_max_sequence_length"] = hf_config[
         "original_max_position_embeddings"
     ]
-    kwargs["rope_max_wavelength"] = hf_config["rope_theta"]
+    rope_theta = hf_config.get("rope_parameters", {}).get("rope_theta")
+    if rope_theta is None:
+        rope_theta = hf_config["rope_theta"]
+    kwargs["rope_max_wavelength"] = rope_theta
     if hf_config["rope_scaling"] is not None:
         kwargs["rope_scaling_type"] = hf_config["rope_scaling"]["type"]
         kwargs["rope_scaling_short_factor"] = hf_config["rope_scaling"][
