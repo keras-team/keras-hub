@@ -312,9 +312,9 @@ class CausalLM(Task):
                 structure expected the `backbone` model.
             max_length: Optional. int. The max length of the generated sequence.
                 Will default to the max configured `sequence_length` of the
-                `preprocessor`. When `preprocessor` is None, this value still
-                controls the generation length and is applied directly during
-                decoding.
+                `preprocessor`. When `preprocessor` is None, inputs should
+                already be tokenized and padded to the desired maximum length.
+                Passing `max_length` in this case raises a `ValueError`.
             stop_token_ids: Optional. `None`, "auto", or tuple of token ids.
                 Defaults to "auto" which uses the
                 `preprocessor.tokenizer.end_token_id`. Not specifying a
@@ -330,6 +330,14 @@ class CausalLM(Task):
         """
         if max_length is None and self.preprocessor is not None:
             max_length = getattr(self.preprocessor, "sequence_length", None)
+
+        if self.preprocessor is None and max_length is not None:
+            raise ValueError(
+                "`max_length` has no effect when `preprocessor=None`. "
+                "Inputs should already be tokenized and padded to the "
+                "desired maximum length. Either attach a preprocessor "
+                "or remove the `max_length` argument."
+            )
 
         # Setup our three main passes.
         # 1. Optionally preprocessing strings to dense integer tensors.
@@ -397,7 +405,8 @@ class CausalLM(Task):
             # the sequence and the generated text is at the beginning. We mask
             # it to retain the generated text only.
             y["padding_mask"] = ops.logical_xor(
-                roll_sequence(prompt_mask), roll_sequence(x["padding_mask"]),
+                roll_sequence(prompt_mask),
+                roll_sequence(x["padding_mask"]),
             )
             # we assume the mask is enough and there is no need to zero-out the
             # values
@@ -417,7 +426,9 @@ class CausalLM(Task):
         inputs = [distribute(x) for x in inputs]
 
         if strip_prompt:
-            outputs = [strip_prompt_function(run_generate(x), x) for x in inputs]
+            outputs = [
+                strip_prompt_function(run_generate(x), x) for x in inputs
+            ]
         else:
             outputs = [run_generate(x) for x in inputs]
 
