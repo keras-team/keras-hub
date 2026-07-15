@@ -157,6 +157,9 @@ class EdRecSeq2SeqLM(Seq2SeqLM):
 
         return self_attention_cache, cross_attention_cache
 
+    def _should_raise_for_max_length_without_preprocessor(self):
+        return False
+
     def generate_step(self, inputs, stop_token_ids=None):
         encoder_token_ids = inputs["encoder_token_ids"]
         encoder_padding_mask = inputs["encoder_padding_mask"]

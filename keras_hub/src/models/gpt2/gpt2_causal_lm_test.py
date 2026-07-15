@@ -261,6 +261,26 @@ class GPT2CausalLMTest(TestCase):
                 stop_token_ids=None,
             )
 
+    def test_generate_max_length_with_no_preprocessor_raises_error(self):
+        causal_lm = GPT2CausalLM(**self.init_kwargs)
+        prompt = " airplane at airport"
+
+        # Pre-tokenize inputs before removing preprocessing.
+        inputs = causal_lm.preprocessor.generate_preprocess([prompt])
+        causal_lm.preprocessor = None
+
+        # Previously, max_length was silently ignored in this case.
+        # Now, fail fast with a clear error.
+        with self.assertRaisesRegex(
+            ValueError,
+            "`max_length` has no effect when `preprocessor=None`",
+        ):
+            causal_lm.generate(
+                inputs,
+                max_length=8,
+                stop_token_ids=None,
+            )
+
 
 @pytest.mark.skipif(keras.src.backend.backend() != "jax", reason="JAX only")
 @pytest.mark.multi_device

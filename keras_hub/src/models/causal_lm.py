@@ -250,6 +250,10 @@ class CausalLM(Task):
 
         return [inputs], input_is_scalar
 
+    def _should_raise_for_max_length_without_preprocessor(self):
+        """Whether to error when max_length is set without a preprocessor."""
+        return True
+
     def _normalize_generate_outputs(
         self,
         outputs,
@@ -331,7 +335,11 @@ class CausalLM(Task):
         if max_length is None and self.preprocessor is not None:
             max_length = getattr(self.preprocessor, "sequence_length", None)
 
-        if self.preprocessor is None and max_length is not None:
+        if (
+            self.preprocessor is None
+            and max_length is not None
+            and self._should_raise_for_max_length_without_preprocessor()
+        ):
             raise ValueError(
                 "`max_length` has no effect when `preprocessor=None`. "
                 "Inputs should already be tokenized and padded to the "
