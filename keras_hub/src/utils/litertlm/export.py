@@ -880,7 +880,11 @@ def export_to_litertlm(
             encoder, export the vision encoder and a no-op vision adapter as
             separate ``VISION_ENCODER`` and ``VISION_ADAPTER`` TFLite models,
             and have ``PREFILL_DECODE`` consume pre-computed ``mm_embedding``
-            tensors instead of raw images. Defaults to ``False``.
+            tensors instead of raw images. Defaults to ``False``. Either way
+            the exported bundle is a complete multimodal model —
+            ``PREFILL_DECODE`` always consumes text tokens; this flag only
+            controls whether vision is baked into that trace or factored
+            into reusable models, never producing a vision-only export.
         hf_tokenizer_path: Optional str. Path to a HuggingFace
             ``tokenizer.json`` file to bundle instead of the model's native
             tokenizer. Use this for BytePair / HuggingFace tokenizers that

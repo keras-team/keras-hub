@@ -290,7 +290,19 @@ class KerasHubLiteRTAdapter(nn.Module):
         return None, None
 
     def _prepare_audio_embeddings(self, audio_mel, audio_mel_mask):
-        """Return audio embeddings and optional input feature tensors."""
+        """Return audio embeddings and optional input feature tensors.
+
+        Audio is always baked into the PREFILL_DECODE trace; there is no
+        separate-audio-encoder export path (no audio analogue of
+        ``separate_vision_encoder``). The bundle format's ``AUDIO_*`` slots
+        exist, and ``self.keras_model.backbone.audio_encoder`` is already
+        called standalone below, so tracing it is not the blocker. What's
+        missing is a published upstream reference pipeline/contract:
+        ``litert_torch``'s reference exporter defines exactly what
+        ``VISION_ENCODER``/``VISION_ADAPTER`` must produce for the LiteRT-LM
+        runtime to consume correctly; there is no audio equivalent to
+        conform to (only a one-off, model-specific Moonshine ASR example).
+        """
         if not self.has_audio or audio_mel is None:
             return None, None, None
 
@@ -424,7 +436,12 @@ class KerasHubVisionAdapter(nn.Module):
     """No-op vision adapter exported as a separate LiteRT-LM model.
 
     KerasHub already projects vision features inside the vision encoder, so
-    this adapter simply renames ``features`` to ``mm_embedding``.
+    this adapter simply renames ``features`` to ``mm_embedding``. It is
+    exported as a separate model — rather than folding the rename into the
+    encoder — because the LiteRT-LM bundle format defines ``VISION_ENCODER``
+    and ``VISION_ADAPTER`` as two distinct slots (``TfLiteModelType`` in
+    ``litert_lm_builder``); this conforms to that two-slot contract, it does
+    not introduce the split.
     """
 
     def forward(self, features):

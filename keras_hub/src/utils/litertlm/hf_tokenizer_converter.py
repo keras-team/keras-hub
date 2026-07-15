@@ -1,9 +1,18 @@
-"""Convert KerasHub BytePair tokenizers to HuggingFace tokenizer.json format.
+"""Serialize a KerasHub BytePairTokenizer to a HuggingFace tokenizer.json.
 
-The converter is intentionally dependency-free at runtime: it builds the JSON
-structure that ``tokenizers.Tokenizer.from_file()`` expects without importing
-the ``tokenizers`` library.  The ``tokenizers`` library is only used in tests
-to validate the output.
+Every ``BytePairTokenizer`` already wraps a live ``tokenizers.Tokenizer``
+object (``self._tokenizer``, built in ``_set_vocabulary_and_merges_tokenizers``
+from KerasHub's own vocab/merges and used for every ``encode_batch``/
+``decode_batch``). This module calls ``.to_str()`` on that same object — it
+is *not* a format conversion and re-derives no token ids, so token identity
+is byte-exact by construction. HF ``tokenizer.json`` is the target because
+the LiteRT-LM runtime accepts only two on-device tokenizer formats
+(SentencePiece and ``HF_Tokenizer_Zlib``); there is no KerasHub-native
+on-device format to emit instead.
+
+This module does not itself import ``tokenizers`` (it only serializes an
+object built elsewhere); the library is used directly only in tests, to
+validate the output.
 """
 
 import json

@@ -477,10 +477,10 @@ class CausalLM(Task):
                 - ``prefill_seq_len``: ``int`` or ``list[int]``. Sequence
                   length(s) for prefill signature tracing. A list enables
                   bucketing (e.g. ``[32, 64, 128, 256]``). For multimodal
-                  models (e.g. Gemma3), ``prefill_seq_len`` must match the
-                  preprocessor's ``sequence_length``; bucketing is not
-                  supported for multimodal models due to attention mask
-                  shape constraints. Defaults to ``cache_length``.
+                  models (e.g. Gemma3), ``prefill_seq_len`` must equal
+                  ``cache_length``; bucketing is not supported for
+                  multimodal models due to attention mask shape constraints.
+                  Defaults to ``cache_length``.
                 - ``cache_length``: Optional ``int``. The KV-cache length
                   (the model's maximum context window) to export with. If
                   not given, this is inferred from
