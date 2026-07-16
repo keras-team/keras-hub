@@ -5,6 +5,9 @@ from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.gemma4.gemma4_block_diffusion_lm_layers import (
+    Gemma4BlockDiffusionSelfConditioning,
+)
 from keras_hub.src.models.gemma4.gemma4_decoder_block import (
     Gemma4TextDecoderBlock,
 )
@@ -146,6 +149,16 @@ class Gemma4Backbone(Backbone):
             Defaults to `None`.
         num_experts_per_token: int. Top-k experts selected per token by the
             MoE router. Defaults to `8`.
+        has_encoder_layer_scalar: bool. When `True`, each text decoder block
+            receives a second non-trainable `encoder_layer_scalar` weight
+            alongside the standard `layer_scalar`. Used by DiffusionGemma
+            models where encoder and decoder passes apply different per-layer
+            scalars. Defaults to `False`.
+        has_diffusion_self_conditioning: bool. When `True`, a
+            `Gemma4BlockDiffusionSelfConditioning` sub-layer is created as
+            `backbone.diffusion_self_conditioning`. Used by DiffusionGemma
+            models; mirrors HF where the self-conditioning module lives inside
+            the decoder. Defaults to `False`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. Compute dtype.
             Defaults to `None`.
 
@@ -225,6 +238,8 @@ class Gemma4Backbone(Backbone):
         num_experts=None,
         expert_intermediate_dim=None,
         num_experts_per_token=8,
+        has_encoder_layer_scalar=False,
+        has_diffusion_self_conditioning=False,
         dtype=None,
         **kwargs,
     ):
@@ -409,6 +424,7 @@ class Gemma4Backbone(Backbone):
                 num_experts=num_experts,
                 expert_intermediate_dim=expert_intermediate_dim,
                 num_experts_per_token=num_experts_per_token,
+                has_encoder_layer_scalar=has_encoder_layer_scalar,
                 dtype=dtype,
                 name=f"decoder_block_{i}",
             )
@@ -707,6 +723,20 @@ class Gemma4Backbone(Backbone):
         self.num_experts = num_experts
         self.expert_intermediate_dim = expert_intermediate_dim
         self.num_experts_per_token = num_experts_per_token
+        self.has_encoder_layer_scalar = has_encoder_layer_scalar
+        self.has_diffusion_self_conditioning = has_diffusion_self_conditioning
+
+        if has_diffusion_self_conditioning:
+            self.diffusion_self_conditioning = (
+                Gemma4BlockDiffusionSelfConditioning(
+                    hidden_dim=hidden_dim,
+                    intermediate_dim=intermediate_dim,
+                    epsilon=layer_norm_epsilon,
+                    dtype=dtype,
+                    name="diffusion_self_conditioning",
+                )
+            )
+            self.diffusion_self_conditioning.build((None, None, hidden_dim))
 
         # Keep `num_vision_tokens_per_image` and `text_only_model` accessible.
         if vision_encoder is not None:
@@ -769,6 +799,10 @@ class Gemma4Backbone(Backbone):
                 "num_experts": self.num_experts,
                 "expert_intermediate_dim": self.expert_intermediate_dim,
                 "num_experts_per_token": self.num_experts_per_token,
+                "has_encoder_layer_scalar": self.has_encoder_layer_scalar,
+                "has_diffusion_self_conditioning": (
+                    self.has_diffusion_self_conditioning
+                ),
             }
         )
         return config

@@ -86,6 +86,13 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         is_text_layer: bool. Whether this block is a text (as opposed to
             vision) decoder layer; controls whether a non-trainable
             `layer_scalar` is applied to the output. Defaults to `True`.
+        has_encoder_layer_scalar: bool. When `True`, registers a second
+            non-trainable weight `encoder_layer_scalar` (init 1.0) alongside
+            the standard `layer_scalar`. Used by DiffusionGemma models where
+            the encoder and decoder passes use different per-layer scalars.
+            The caller selects which scalar to use via `use_encoder_scalar` in
+            `call()`. Has no effect when `is_text_layer=False`. Defaults to
+            `False`.
     """
 
     def __init__(
@@ -118,6 +125,7 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         expert_intermediate_dim=None,
         num_experts_per_token=8,
         is_text_layer=True,
+        has_encoder_layer_scalar=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -153,6 +161,7 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         self.expert_intermediate_dim = expert_intermediate_dim
         self.num_experts_per_token = num_experts_per_token
         self.is_text_layer = is_text_layer
+        self.has_encoder_layer_scalar = has_encoder_layer_scalar
         # KV-shared layers optionally use a wider MLP (double intermediate).
         self.actual_intermediate_dim = (
             intermediate_dim * 2
@@ -359,6 +368,15 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
                 initializer="ones",
                 trainable=False,
             )
+            # DiffusionGemma encoder pass uses a separate scalar that differs
+            # from the decoder's layer_scalar.
+            if self.has_encoder_layer_scalar:
+                self.encoder_layer_scalar = self.add_weight(
+                    name="encoder_layer_scalar",
+                    shape=(),
+                    initializer="ones",
+                    trainable=False,
+                )
 
         self.built = True
 
@@ -388,6 +406,30 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         )
         return mask
 
+    def _compute_canvas_bidirectional_attention_mask(
+        self, canvas_mask, batch_size, input_length, output_length
+    ):
+        """Allow canvas tokens to attend fully to all positions (no causal).
+
+        Unlike the vision bidirectional mask, the canvas mask applies on ALL
+        layer types (both sliding-window and global), because the diffusion
+        decoder requires each canvas position to see the full encoder context
+        and all other canvas positions simultaneously.
+        """
+        # canvas_mask shape: (B, output_length), True at canvas positions.
+        # We build a (B, output_length, input_length) mask where each canvas
+        # query position attends to every key position.
+        canvas_mask_cast = ops.cast(canvas_mask, dtype="bool")
+        # query_is_canvas: (B, output_length, 1)
+        query_is_canvas = ops.expand_dims(canvas_mask_cast, axis=2)
+        # full_row: (B, output_length, input_length) — all True
+        full_row = ops.ones(
+            (batch_size, output_length, input_length), dtype="bool"
+        )
+        # Where a query is a canvas token, allow attending to every key.
+        bidirectional_canvas = ops.logical_and(query_is_canvas, full_row)
+        return bidirectional_canvas
+
     def _compute_attention_mask(
         self,
         x,
@@ -395,6 +437,7 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         vision_mask,
         cache,
         cache_update_index,
+        canvas_mask=None,
     ):
         decoder_mask = merge_padding_and_attention_mask(
             inputs=x, padding_mask=padding_mask, attention_mask=None
@@ -448,6 +491,21 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             )
             causal_mask = ops.logical_or(causal_mask, bidirectional_image_mask)
 
+        # Canvas tokens attend fully bidirectionally on ALL layer types (both
+        # sliding-window and global).  This differs from vision_mask which is
+        # only applied on non-global layers.  The canvas bidirectional mask
+        # overrides the causal / sliding-window constraint for canvas queries.
+        if canvas_mask is not None:
+            bidirectional_canvas_mask = (
+                self._compute_canvas_bidirectional_attention_mask(
+                    canvas_mask,
+                    batch_size=batch_size,
+                    input_length=input_length,
+                    output_length=output_length,
+                )
+            )
+            causal_mask = ops.logical_or(causal_mask, bidirectional_canvas_mask)
+
         # Respect the padding mask.
         if decoder_mask is not None:
             causal_mask = ops.minimum(decoder_mask, causal_mask)
@@ -465,6 +523,8 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         per_layer_input=None,
         shared_kv=None,
         positions=None,
+        canvas_mask=None,
+        use_encoder_scalar=False,
     ):
         # Clamp float16 to avoid overflow.
         is_float16 = keras.backend.standardize_dtype(x.dtype) == "float16"
@@ -475,7 +535,12 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         residual = x
         normalized_x = self.pre_attention_norm(x)
         attention_mask = self._compute_attention_mask(
-            normalized_x, padding_mask, vision_mask, cache, cache_update_index
+            normalized_x,
+            padding_mask,
+            vision_mask,
+            cache,
+            cache_update_index,
+            canvas_mask=canvas_mask,
         )
         if cache is not None:
             attention, new_cache = self.attention(
@@ -592,8 +657,14 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
 
         # Text decoder layers scale the output by their layer_scalar.
         # Applied AFTER the per-layer input gate (matching HF order).
+        # DiffusionGemma encoder pass uses encoder_layer_scalar instead.
         if self.is_text_layer:
-            x = x * ops.cast(self.layer_scalar, x.dtype)
+            scalar = (
+                self.encoder_layer_scalar
+                if (use_encoder_scalar and self.has_encoder_layer_scalar)
+                else self.layer_scalar
+            )
+            x = x * ops.cast(scalar, x.dtype)
 
         return x, new_cache
 
@@ -639,6 +710,7 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
                 "expert_intermediate_dim": self.expert_intermediate_dim,
                 "num_experts_per_token": self.num_experts_per_token,
                 "is_text_layer": self.is_text_layer,
+                "has_encoder_layer_scalar": self.has_encoder_layer_scalar,
             }
         )
         return config
