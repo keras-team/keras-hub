@@ -267,6 +267,7 @@ class GemmaBackboneTest(TestCase):
         for dims in (GEMMA_2B_DIMS, GEMMA_7B_DIMS, GEMMA2_9B_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
