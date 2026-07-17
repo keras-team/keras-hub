@@ -1,5 +1,6 @@
 import gc
 import json
+import os
 import re
 
 import keras
@@ -16,15 +17,15 @@ from keras_hub.src.utils.preset_utils import get_file
 # `get_file` call to the Tier-2 test body itself (that's what Tier 3,
 # `test_layout_map_live_presets` below, is for).
 #
-# MEMORY NOTE: this local dev machine cannot load full-scale model dims (see
-# gemma_backbone_test.py's identical note for the OOM history that motivated
-# this pattern). What actually matters for the divisibility/sharding
-# properties this tier tests is the RATIO of query heads to kv heads and
-# whether hidden/intermediate/vocab divide the mesh's model-axis sizes -- not
-# the absolute parameter count. So these dims are scaled down by roughly
-# 20-30x from the real presets while preserving each preset's real
-# query:kv head ratio and keeping hidden/intermediate/vocab as clean powers
-# of 2 divisible by every mesh shape in CAPPED_MESH_SHAPES.
+# MEMORY NOTE: memory-constrained local environments cannot load full-scale
+# model dims (see gemma_backbone_test.py's identical note for the OOM
+# history that motivated this pattern). What actually matters for the
+# divisibility/sharding properties this tier tests is the RATIO of query
+# heads to kv heads and whether hidden/intermediate/vocab divide the mesh's
+# model-axis sizes -- not the absolute parameter count. So these dims are
+# scaled down by roughly 20-30x from the real presets while preserving each
+# preset's real query:kv head ratio and keeping hidden/intermediate/vocab
+# as clean powers of 2 divisible by every mesh shape in CAPPED_MESH_SHAPES.
 #
 # T5Gemma's real encoder/decoder configs are symmetric per preset (encoder
 # and decoder share hidden/intermediate/head-count) and use plain
@@ -84,14 +85,15 @@ T5GEMMA_L_L_DIMS = {
     "tie_word_embeddings": False,
 }
 
-# Hard-capped mesh-shape list for this shared 37GB dev machine. The full
-# 10-shape matrix from the testing-strategy doc is
+# Hard-capped mesh-shape list for memory-constrained local environments.
+# The full 10-shape matrix from the testing-strategy doc is
 # 2x4, 1x8, 4x4, 8x8, 16x16, 2x2x2, 1x1x8, 2x2x4, 4x4x4, 4x4x8 -- shapes
 # 8x8, 16x16, 4x4x4, 4x4x8 (64-256 virtual devices) are DELIBERATELY
-# DROPPED here due to a demonstrated systemd-oomd OOM kill of the entire
-# desktop app on this shared machine during an earlier attempt at this same
-# pipeline. Do not attempt the dropped shapes even experimentally on this
-# box -- revisiting them requires a dedicated or CI machine, not this one.
+# DROPPED here due to a demonstrated OOM kill of the entire desktop
+# environment during an earlier attempt at this same pipeline on a
+# memory-constrained machine. Do not attempt the dropped shapes even
+# experimentally in such environments -- revisiting them requires a
+# dedicated or CI machine with more memory.
 CAPPED_MESH_SHAPES = [
     (2, 4),
     (1, 8),
@@ -120,6 +122,7 @@ _EXPECTED_SHARDINGS = {
     "decoder_layer.*cross_attention.*query.kernel": ("batch", "model", None),
     "decoder_layer.*cross_attention.*key.kernel": ("batch", None, None),
     "decoder_layer.*cross_attention.*value.kernel": ("batch", None, None),
+    "decoder_layer.*attention_output.kernel": ("model", None, "batch"),
     "encoder_layer.*gate_proj.kernel": ("batch", "model"),
     "encoder_layer.*up_proj.kernel": ("batch", "model"),
     "encoder_layer.*down_proj.kernel": ("model", "batch"),
@@ -327,6 +330,11 @@ class T5GemmaBackboneTest(TestCase):
                     None,
                     None,
                 ),
+                "decoder_layer.*attention_output.kernel": (
+                    "model",
+                    None,
+                    "batch",
+                ),
                 "encoder_layer.*gate_proj.kernel": ("batch", "model"),
                 "encoder_layer.*up_proj.kernel": ("batch", "model"),
                 "encoder_layer.*down_proj.kernel": ("model", "batch"),
@@ -412,8 +420,8 @@ class T5GemmaBackboneTest(TestCase):
             "decoder_num_layers"
         ]
         with distribution.scope():
-            # bfloat16: a memory mitigation for this shared dev machine --
-            # spec assertions are dtype-independent.
+            # bfloat16: a memory mitigation for memory-constrained local
+            # environments -- spec assertions are dtype-independent.
             model = T5GemmaBackbone(dtype="bfloat16", **init_kwargs)
             _assert_t5gemma_shardings_and_coverage(self, model, layout_map)
         del model
@@ -430,8 +438,9 @@ class T5GemmaBackboneTest(TestCase):
         # divisibility-relevant dims so width-classes that share a config
         # (e.g. the ul2/prefixlm/ul2_it/prefixlm_it variants of the same
         # size) are only built once per mesh shape -- a memory/time
-        # necessity on this machine, while every preset in the registry is
-        # still fetched and evaluated, preserving full registry coverage.
+        # necessity in memory-constrained local environments, while every
+        # preset in the registry is still fetched and evaluated, preserving
+        # full registry coverage.
         # `get_file(preset, CONFIG_FILE)` fetches this repo's own
         # `config.json` (a serialized `T5GemmaBackbone.get_config()`, i.e.
         # already in the flat encoder_*/decoder_* backbone-kwarg shape used
@@ -470,7 +479,8 @@ class T5GemmaBackboneTest(TestCase):
             # num_layers is forced to 1 below regardless of the real
             # value -- layout rules are per-encoder/decoder-block regexes,
             # so depth is irrelevant to spec matching/divisibility, and 1
-            # layer keeps build memory bounded on this shared machine.
+            # layer keeps build memory bounded in memory-constrained local
+            # environments.
             cfg = dict(cfg)
             cfg["encoder_num_layers"] = 1
             cfg["decoder_num_layers"] = 1
@@ -536,10 +546,10 @@ class T5GemmaBackboneTest(TestCase):
                         skip_reasons.append(reason)
                         continue
 
-                    # Memory-budget guard: this shared dev machine cannot
-                    # locally build full-scale presets (see
-                    # CAPPED_MESH_SHAPES' comment for the OOM history that
-                    # motivated this). Estimate this width-class's
+                    # Memory-budget guard: memory-constrained local
+                    # environments cannot locally build full-scale presets
+                    # (see CAPPED_MESH_SHAPES' comment for the OOM history
+                    # that motivated this). Estimate this width-class's
                     # single-encoder-block + single-decoder-block bf16
                     # footprint (embedding table + each side's one FFN
                     # block's 3 matrices, times a 3x safety margin for
@@ -560,15 +570,21 @@ class T5GemmaBackboneTest(TestCase):
                         * cfg["decoder_intermediate_dim"]
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
-                    max_local_bytes = 300 * 1024 * 1024  # 300MB
+                    max_local_bytes = int(
+                        os.environ.get(
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET",
+                            300 * 1024 * 1024,
+                        )
+                    )
                     if est_bytes > max_local_bytes:
                         reason = (
                             f"{combo_label}: estimated build memory "
                             f"~{est_bytes / 1e9:.2f}GB exceeds the "
                             f"{max_local_bytes / 1e6:.0f}MB local safety "
-                            "threshold on this shared, RAM-constrained "
-                            "dev machine -- verify this width-class on a "
-                            "machine with more RAM or in CI"
+                            "threshold for memory-constrained local "
+                            "environments -- verify this width-class on a "
+                            "machine with more memory or in CI (see "
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET)"
                         )
                         skip_reasons.append(reason)
                         continue
