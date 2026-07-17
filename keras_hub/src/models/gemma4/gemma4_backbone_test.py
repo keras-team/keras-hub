@@ -1,6 +1,7 @@
 import copy
 import gc
 import json
+import os
 import re
 
 import keras
@@ -74,6 +75,7 @@ _AUDIO_EXPECTED_SHARDINGS = {
     "conformer.*attention_out_proj.*dense/kernel": ("model", "batch"),
     "conformer.*lconv_linear_start.*dense/kernel": ("batch", "model"),
     "conformer.*lconv_linear_end.*dense/kernel": ("model", "batch"),
+    "output_proj/kernel": ("model", "batch"),
     "audio_output_projection/kernel": ("batch", "model"),
 }
 
@@ -95,10 +97,11 @@ _AUDIO_ALLOW_REPLICATED = (
 # `get_file` call to the Tier-2 test body itself (that is what Tier 3,
 # `test_layout_map_live_presets` below, is for).
 #
-# MEMORY NOTE: this local dev machine cannot load full-scale model dims. What
-# actually matters for the divisibility/sharding properties this tier tests is
-# the RATIO of query heads to kv heads and whether hidden/intermediate/vocab
-# divide the mesh's model-axis sizes -- not the absolute parameter count. So
+# MEMORY NOTE: memory-constrained local environments cannot load full-scale
+# model dims. What actually matters for the divisibility/sharding properties
+# this tier tests is the RATIO of query heads to kv heads and whether
+# hidden/intermediate/vocab divide the mesh's model-axis sizes -- not the
+# absolute parameter count. So
 # these dims are scaled down by roughly 20-30x from the real gemma4 presets
 # while preserving each preset's real query:kv head ratio (gemma4 E2B/E4B GQA
 # and the 26b-a4b MoE) and keeping hidden/intermediate/vocab as clean multiples
@@ -148,14 +151,14 @@ GEMMA4_26B_A4B_DIMS = {
     "num_experts_per_token": 2,
 }
 
-# Hard-capped mesh-shape list for this shared 37GB dev machine. The full
-# 10-shape matrix from the testing-strategy doc is
+# Hard-capped mesh-shape list for memory-constrained local environments. The
+# full 10-shape matrix from the testing-strategy doc is
 # 2x4, 1x8, 4x4, 8x8, 16x16, 2x2x2, 1x1x8, 2x2x4, 4x4x4, 4x4x8 -- shapes
 # 8x8, 16x16, 4x4x4, 4x4x8 (64-256 virtual devices) are DELIBERATELY DROPPED
-# here: they exceed this shared machine's memory budget (a prior attempt at
-# this pipeline was OOM-killed). Do not attempt the dropped shapes even
-# experimentally on this box -- revisiting them requires a dedicated or CI
-# machine, not this one.
+# here: they exceed a memory-constrained local environment's memory budget (a
+# prior attempt at this pipeline was OOM-killed). These shapes require a
+# dedicated or CI machine with more memory -- do not attempt them
+# experimentally in a memory-constrained local environment.
 CAPPED_MESH_SHAPES = [
     (2, 4),
     (1, 8),
@@ -309,7 +312,8 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
         self.moe_init_kwargs["expert_intermediate_dim"] = 8
         self.moe_init_kwargs["num_experts_per_token"] = 2
 
-        # === Audio encoder config (tiny, matches test_audio_backbone_basics) ==
+        # === Audio encoder config (tiny, matches test_audio_backbone_basics,
+        # except `output_proj_dims` -- see below) ==
         self.audio_input_feat_size = 8
         self.audio_num_tokens_per_clip = 4
         self.audio_encoder_kwargs = {
@@ -323,7 +327,13 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
             "sscp_conv_channels": (4, 2),
             "sscp_kernel_sizes": ((3, 3), (3, 3)),
             "sscp_stride_sizes": ((2, 2), (2, 2)),
-            "output_proj_dims": None,
+            # Non-`None` (unlike test_audio_backbone_basics' config): the
+            # class default is `1536`, so real presets build the
+            # `output_proj` weight. Set here (not `None`) so
+            # test_distribution_audio actually builds and exercises the
+            # `output_proj/kernel` layout-map rule / coverage assertion
+            # instead of silently avoiding it.
+            "output_proj_dims": 6,
             "output_dim": 8,
         }
         num_clips = 1
@@ -647,8 +657,8 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
             # Vision-tower parity adds a second, larger model per mesh shape;
             # the forward/train regression on the (1, 2) mesh above already
             # exercises the numerically-sensitive vision path, so skip the
-            # extra parity twins here to keep this shared dev box within its
-            # memory budget.
+            # extra parity twins here to keep memory-constrained local
+            # environments within budget.
             assert_parity_vs_undistributed=False,
         )
 
@@ -656,9 +666,10 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
         # Text + audio config -- validates the audio-conformer sharding entries
         # added in this PR (plan Part B.4). Forward-only (no fit, no parity
         # twins): the conformer is heavily convolutional / non-standard
-        # attention and this box is RAM-constrained, so this test just asserts
-        # the spec + coverage nets and a finite forward pass. The audio encoder
-        # is float32-only, so build it inside the scope via a callable.
+        # attention and memory-constrained local environments are RAM-limited,
+        # so this test just asserts the spec + coverage nets and a finite
+        # forward pass. The audio encoder is float32-only, so build it inside
+        # the scope via a callable.
         def audio_init_kwargs():
             kwargs = copy.deepcopy(self.text_init_kwargs)
             kwargs["audio_encoder"] = Gemma4AudioEncoder(
@@ -751,8 +762,8 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
             if k not in ("source_preset", "image_size")
         }
         with distribution.scope():
-            # bfloat16: a memory mitigation for this shared dev machine --
-            # spec assertions are dtype-independent.
+            # bfloat16: a memory mitigation for memory-constrained local
+            # environments -- spec assertions are dtype-independent.
             model = Gemma4Backbone(
                 dtype="bfloat16", image_size=16, **init_kwargs
             )
@@ -770,9 +781,10 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
         # Fetch every preset's config only (no weights), then dedupe by the
         # divisibility-relevant dims so width-classes that share a config
         # (e.g. base vs instruction-tuned variants of the same size) are only
-        # built once per mesh shape -- a memory/time necessity on this machine
-        # -- while every preset in the registry is still fetched and evaluated,
-        # preserving full registry coverage.
+        # built once per mesh shape -- a memory/time necessity in
+        # memory-constrained local environments -- while every preset in the
+        # registry is still fetched and evaluated, preserving full registry
+        # coverage.
         dim_keys = (
             "vocabulary_size",
             "num_query_heads",
@@ -797,7 +809,7 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
             # num_layers is forced to 1 below regardless of the real value --
             # layout rules are per-decoder-block regexes, so depth is
             # irrelevant to spec matching/divisibility, and 1 layer keeps
-            # build memory bounded on this shared machine.
+            # build memory bounded in memory-constrained local environments.
             cfg = dict(cfg)
             cfg["num_layers"] = 1
             key = tuple(cfg.get(k) for k in dim_keys)
@@ -815,8 +827,9 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
             self.skipTest(
                 "No preset configs were reachable "
                 f"({len(fetch_failures)} fetch failures) -- likely a Kaggle "
-                "license-consent gate on this account for the gemma4 family. "
-                "See the module comment above CAPPED_MESH_SHAPES."
+                "license-consent gate on this account for the gemma4 family, "
+                "or missing Kaggle credentials. See the module comment above "
+                "CAPPED_MESH_SHAPES."
             )
         print(
             f"test_layout_map_live_presets: {len(width_classes)} unique "
@@ -855,30 +868,57 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
                         skip_reasons.append(reason)
                         continue
 
-                    # Memory-budget guard: this shared dev machine cannot
-                    # locally build full-scale presets. Estimate this
-                    # width-class's single-decoder-block bf16 footprint
-                    # (embedding table + one FFN block's 3 matrices, times a
-                    # 3x safety margin for JAX/XLA transient copies during
-                    # construction/resharding) and skip the actual build if it
-                    # exceeds a conservative local threshold. The config-fetch,
-                    # dedup, and divisibility-skip logic above still exercises
-                    # every registry preset either way; only the expensive
+                    # Memory-budget guard: memory-constrained local
+                    # environments cannot locally build full-scale presets.
+                    # Estimate this width-class's single-decoder-block bf16
+                    # footprint (embedding table + one FFN block's 3
+                    # matrices, times a 3x safety margin for JAX/XLA
+                    # transient copies during construction/resharding) and
+                    # skip the actual build if it exceeds a conservative
+                    # local threshold. The config-fetch, dedup, and
+                    # divisibility-skip logic above still exercises every
+                    # registry preset either way; only the expensive
                     # build+assert step is capped.
+                    #
+                    # MoE presets (26b-a4b) additionally include an
+                    # expert-bank term: gate_proj + up_proj (hidden ->
+                    # expert_intermediate_dim each) + down_proj
+                    # (expert_intermediate_dim -> hidden), replicated across
+                    # num_experts. Omitting this term would dangerously
+                    # undercount a MoE width-class's real footprint, the
+                    # same way it would for gpt_oss's expert banks (see
+                    # gpt_oss_backbone_test.py's identical guard).
                     est_params = (
                         cfg["vocabulary_size"] * cfg["hidden_dim"]
                         + 3 * cfg["hidden_dim"] * cfg["intermediate_dim"]
                     )
+                    if cfg.get("enable_moe_block"):
+                        est_params += cfg["num_experts"] * (
+                            2
+                            * cfg["hidden_dim"]
+                            * cfg["expert_intermediate_dim"]
+                            + cfg["expert_intermediate_dim"] * cfg["hidden_dim"]
+                        )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
-                    max_local_bytes = 300 * 1024 * 1024  # 300MB
+                    # Tunable via env var so CI or a bigger machine can opt
+                    # into real full-scale verification; defaults to 300MB
+                    # to preserve today's behavior in memory-constrained
+                    # local environments.
+                    max_local_bytes = int(
+                        os.environ.get(
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET",
+                            300 * 1024 * 1024,
+                        )
+                    )
                     if est_bytes > max_local_bytes:
                         reason = (
                             f"{combo_label}: estimated build memory "
                             f"~{est_bytes / 1e9:.2f}GB exceeds the "
                             f"{max_local_bytes / 1e6:.0f}MB local safety "
-                            "threshold on this shared, RAM-constrained dev "
-                            "machine -- verify this width-class on a machine "
-                            "with more RAM or in CI"
+                            "threshold for memory-constrained local "
+                            "environments -- verify this width-class on a "
+                            "machine with more RAM or in CI (override with "
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET)"
                         )
                         skip_reasons.append(reason)
                         continue
@@ -897,11 +937,53 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
                     distribution = keras.distribution.ModelParallel(
                         layout_map=layout_map, batch_dim_name="batch"
                     )
-                    init_kwargs = {
-                        k: v for k, v in cfg.items() if k in dim_keys
-                    }
+                    # Use the full preset config (minus `dtype`, which may be
+                    # a serialized dtype-policy dict for quantized presets
+                    # and would collide with the explicit `dtype="bfloat16"`
+                    # override below) rather than a dims-only allowlist --
+                    # the allowlist silently dropped real architecture flags
+                    # (`enable_moe_block`/`num_experts`/
+                    # `expert_intermediate_dim`, `layer_types`,
+                    # `global_head_dim`/`num_global_key_value_heads`, and the
+                    # entire vision/audio sub-configs), so this width-class's
+                    # real preset architecture was never actually validated
+                    # against `get_layout_map`'s rules.
+                    init_kwargs = {k: v for k, v in cfg.items() if k != "dtype"}
                     init_kwargs["num_layers"] = 1
                     init_kwargs["image_size"] = 16
+                    # Keep `layer_types`/`num_kv_shared_layers` consistent
+                    # with the forced single layer above: a real preset's
+                    # `layer_types` list (length == its real num_layers) or
+                    # a nonzero `num_kv_shared_layers` would otherwise be
+                    # combined with `num_layers=1`, which can drive
+                    # `_first_kv_shared` negative inside `__init__` and
+                    # silently build an inconsistent KV-sharing map rather
+                    # than raising -- mirrors t5gemma_backbone_test.py's
+                    # identical `encoder_layer_types`/`decoder_layer_types`
+                    # override in this same test.
+                    init_kwargs["layer_types"] = ["full_attention"]
+                    init_kwargs["num_kv_shared_layers"] = 0
+                    # `vision_encoder`/`audio_encoder` are serialized as
+                    # nested Keras-layer config dicts in the raw preset
+                    # config (see `Gemma4Backbone.get_config`); `__init__`
+                    # requires live layer instances (it calls e.g.
+                    # `vision_encoder.num_vision_tokens_per_image`), so
+                    # deserialize them the same way
+                    # `Gemma4Backbone.from_config` does before constructing
+                    # directly. Nearly every real gemma4 preset is
+                    # audio+vision+text or vision+text (see
+                    # gemma4_presets.py), so this path is exercised by most
+                    # width-classes, not a rare edge case.
+                    if init_kwargs.get("vision_encoder") is not None:
+                        init_kwargs["vision_encoder"] = (
+                            keras.layers.deserialize(
+                                init_kwargs["vision_encoder"]
+                            )
+                        )
+                    if init_kwargs.get("audio_encoder") is not None:
+                        init_kwargs["audio_encoder"] = keras.layers.deserialize(
+                            init_kwargs["audio_encoder"]
+                        )
                     with distribution.scope():
                         model = Gemma4Backbone(dtype="bfloat16", **init_kwargs)
                         _assert_text_shardings_and_coverage(
