@@ -193,6 +193,7 @@ class Qwen3Backbone(Backbone):
         device_mesh,
         model_parallel_dim_name="model",
         data_parallel_dim_name="batch",
+        num_query_heads=None,
     ):
         """Get a `keras.distribution.LayoutMap` for model parallel distribution.
 
@@ -206,6 +207,13 @@ class Qwen3Backbone(Backbone):
                 where the weights should be partitioned on.
             data_parallel_dim_name: str. The axis name of the device mesh,
                 where the data should be partitioned on.
+            num_query_heads: int, optional. The model's `num_query_heads`.
+                When given and the model-parallel axis size does not evenly
+                divide it, the query/attention_output kernels' head axis
+                falls back to fully replicated instead of sharded, avoiding
+                an `IndivisibleError` -- mirroring the key/value fallback
+                below. When `None` (default), the head axis is always
+                sharded on the model-parallel dim, matching prior behavior.
 
         Returns:
             `keras.distribution.LayoutMap` that contains the sharding spec
@@ -252,20 +260,49 @@ class Qwen3Backbone(Backbone):
         # dimension doesn't divide it, so key/value heads are left fully
         # replicated on that axis while hidden still shards on data for
         # memory savings.
-        layout_map["transformer_layer.*self_attention.*query.kernel"] = (
-            data_dim,
-            model_dim,
-            None,
+        #
+        # num_query_heads itself is not immune to the same problem: real
+        # presets range as low as 8 query heads (see e.g. qwen3_0.6b_en),
+        # and large model-parallel mesh axes (32-way, 64-way, ...) do not
+        # evenly divide every preset's head count either. When the caller
+        # tells us `num_query_heads` and it doesn't divide the model-axis
+        # mesh size, fall back to fully replicating the query/
+        # attention_output head axis instead of sharding it -- the same
+        # fallback already applied to key/value above. When
+        # `num_query_heads` isn't provided, we can't evaluate the
+        # divisibility condition, so the axis is sharded as before.
+        model_axis_size = device_mesh.shape[
+            device_mesh.axis_names.index(model_dim)
+        ]
+        query_heads_divisible = (
+            num_query_heads is None or num_query_heads % model_axis_size == 0
         )
+        if query_heads_divisible:
+            layout_map["transformer_layer.*self_attention.*query.kernel"] = (
+                data_dim,
+                model_dim,
+                None,
+            )
+            layout_map["transformer_layer.*attention_output.kernel"] = (
+                model_dim,
+                None,
+                data_dim,
+            )
+        else:
+            layout_map["transformer_layer.*self_attention.*query.kernel"] = (
+                data_dim,
+                None,
+                None,
+            )
+            layout_map["transformer_layer.*attention_output.kernel"] = (
+                None,
+                None,
+                data_dim,
+            )
         layout_map["transformer_layer.*self_attention.*(key|value).kernel"] = (
             data_dim,
             None,
             None,
-        )
-        layout_map["transformer_layer.*attention_output.kernel"] = (
-            model_dim,
-            None,
-            data_dim,
         )
         layout_map[
             "transformer_layer.*feedforward_intermediate_dense.kernel"

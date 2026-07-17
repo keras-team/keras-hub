@@ -193,6 +193,78 @@ class Qwen3Test(TestCase):
             allow_replicated=(),
         )
 
+    @pytest.mark.multi_device
+    def test_layout_map_query_heads_fallback(self):
+        # Regression test for the query-head-count-divisibility fallback:
+        # a small mesh whose model axis does not divide num_query_heads
+        # must not raise IndivisibleError -- get_layout_map should fall
+        # back to fully replicating the query/attention_output head axis,
+        # mirroring the existing key/value fallback.
+        if keras.backend.backend() != "jax":
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
+        devices = keras.distribution.list_devices("CPU")
+        if len(devices) < 8:
+            self.skipTest(
+                "This test requires 8 devices. Run with "
+                "XLA_FLAGS=--xla_force_host_platform_device_count=8 to "
+                "exercise this locally."
+            )
+        devices = devices[:8]
+        # num_query_heads=4 does not divide a model-axis size of 8 -- an
+        # inherent tensor-parallelism ceiling that used to raise
+        # IndivisibleError; get_layout_map should now fall back to
+        # replication instead.
+        num_query_heads = 4
+        self.assertNotEqual(num_query_heads % 8, 0)
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(1, 8),
+            axis_names=("batch", "model"),
+            devices=devices,
+        )
+        layout_map = Qwen3Backbone.get_layout_map(
+            device_mesh, num_query_heads=num_query_heads
+        )
+        distribution = keras.distribution.ModelParallel(
+            layout_map=layout_map, batch_dim_name="batch"
+        )
+        # vocabulary_size/hidden_dim are bumped from self.init_kwargs'
+        # defaults to multiples of 8 -- this test targets the query-head
+        # fallback specifically, so the embedding table (a separate,
+        # already-known divisibility concern, out of scope here) must
+        # itself divide the model-axis size cleanly, or its own
+        # IndivisibleError would mask the assertion this test exists for.
+        init_kwargs = dict(
+            self.init_kwargs,
+            vocabulary_size=16,
+            hidden_dim=8,
+            num_query_heads=num_query_heads,
+            num_key_value_heads=2,
+        )
+        with distribution.scope():
+            model = Qwen3Backbone(**init_kwargs)
+            query_weights = [
+                w
+                for w in model.weights
+                if re.search(r"self_attention/query/kernel", w.path)
+            ]
+            self.assertGreater(len(query_weights), 0)
+            for w in query_weights:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", None, None)
+                )
+            output_weights = [
+                w
+                for w in model.weights
+                if re.search(r"self_attention/attention_output/kernel", w.path)
+            ]
+            self.assertGreater(len(output_weights), 0)
+            for w in output_weights:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, "batch")
+                )
+        del model
+        gc.collect()
+
     @parameterized.named_parameters(
         (
             f"{dims['source_preset'].split(' ')[0]}_mesh"
