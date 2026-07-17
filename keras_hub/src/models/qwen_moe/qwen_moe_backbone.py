@@ -303,69 +303,105 @@ class QwenMoeBackbone(Backbone):
             `keras.distribution.LayoutMap` that contains the sharding spec
             for all the model weights.
         """
-        # The weight path and shape of the Llama backbone is like below
-        # token_embedding/embeddings                              (128256, 2048)
-        # repeat block for decoder
-        # transformer_layer_0/self_attention/query/kernel         (2048, 32, 64)
-        # transformer_layer_0/self_attention/key/kernel           (2048, 8, 64)
-        # transformer_layer_0/self_attention/value/kernel         (2048, 8, 64)
-        # transformer_layer_0/self_attention/attention_output/kernel
-        #                                                         (32, 64, 2048)
-        # transformer_layer_0/self_attention_layernorm/scale      (2048,)
-        # transformer_layer_0/feedforward_intermediate_dense/kernel
-        #                                                         (2048, 8192)
-        # transformer_layer_0/feedforward_gate_dense/kernel       (2048, 8192)
-        # transformer_layer_0/feedforward_output_dense/kerne      (8192, 2048)
-        # transformer_layer_0/feedforward_layernorm/scale         (2048,)
-
         if not isinstance(device_mesh, keras.distribution.DeviceMesh):
             raise ValueError(
                 "Invalid device_mesh type. Expected "
-                f"`keras.distribution.Device`, got {type(device_mesh)}"
+                f"`keras.distribution.DeviceMesh`, got {type(device_mesh)}"
             )
         if model_parallel_dim_name not in device_mesh.axis_names:
             raise ValueError(
                 f"{model_parallel_dim_name} is not found in the "
-                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
             )
         if data_parallel_dim_name not in device_mesh.axis_names:
             raise ValueError(
                 f"{data_parallel_dim_name} is not found in the "
-                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
             )
-        # Note that it is possible to further config the mesh to be 3D, eg
-        # (data, seq, model). We leave it as 2D for now for simplicity.
+
         data_dim = data_parallel_dim_name
         model_dim = model_parallel_dim_name
-        # The sharding config is based on the Gemma team training config.
-        # See https://arxiv.org/abs/2403.08295
         layout_map = keras.distribution.LayoutMap(device_mesh)
         layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
-        layout_map[
-            "transformer_layer.*self_attention.*(query|key|value).kernel"
-        ] = (
-            model_dim,
+        # `reverse_embeddings` is the output-projection tensor of shape
+        # (hidden, vocab); vocab-parallel output wants vocab on `model_dim`,
+        # consistent with `token_embedding/embeddings` above -- same
+        # transposition-bug class as the query/key/value kernels below.
+        layout_map["token_embedding/reverse_embeddings"] = (
             data_dim,
+            model_dim,
+        )
+        # QwenMoeAttention's query/key/value kernels are `EinsumDense` with
+        # equation "b{q,k}m,m{u,v}h->b{q,k}{u,v}h", i.e. kernel shape
+        # (hidden, num_heads, head_dim) -- the hidden dim is the contracting
+        # dim, and it must go on `data_dim` (not `model_dim`) so that heads
+        # are sharded on `model_dim`, matching Megatron column-parallelism
+        # and this layer's own `attention_output` row-parallel rule below
+        # (previously backwards: hidden was sharded on `model_dim` and heads
+        # were left on `data_dim`, which is both inefficient -- ~2.7x extra
+        # collective traffic per attention block -- and internally
+        # inconsistent with `attention_output`).
+        # Key/value kernels are sized by num_key_value_heads (GQA), which is
+        # independent of and typically much smaller than num_query_heads --
+        # sharding that small heads axis on `model_dim` would raise an
+        # IndivisibleError whenever the model-axis mesh size doesn't divide
+        # it, so key/value heads are left fully replicated on that axis
+        # while hidden still shards on `data_dim` for memory savings
+        # (mirrors the merged Gemma convention).
+        layout_map["transformer_layer.*self_attention.*query.kernel"] = (
+            data_dim,
+            model_dim,
             None,
         )
+        layout_map["transformer_layer.*self_attention.*(key|value).kernel"] = (
+            data_dim,
+            None,
+            None,
+        )
+        # q/k/v biases are 2-D (num_heads, head_dim) -- too small to shard
+        # usefully and sharding the heads axis would raise an
+        # IndivisibleError for GQA configs (see the kernel comment above),
+        # so they are intentionally left fully replicated.
         layout_map["transformer_layer.*attention_output.kernel"] = (
             model_dim,
             None,
             data_dim,
         )
+        # Dense FFN fallback used in mlp_only_layers.
         layout_map[
-            "transformer_layer.*feedforward_intermediate_dense.kernel"
-        ] = (
+            "transformer_layer.*qwen_moe_mlp.*feedforward_intermediate_dense.kernel"
+        ] = (data_dim, model_dim)
+        layout_map[
+            "transformer_layer.*qwen_moe_mlp.*feedforward_gate_dense.kernel"
+        ] = (data_dim, model_dim)
+        layout_map[
+            "transformer_layer.*qwen_moe_mlp.*feedforward_output_dense.kernel"
+        ] = (model_dim, data_dim)
+        # Shared expert dense FFN.
+        layout_map[
+            "transformer_layer.*shared_expert_dense/feedforward_intermediate_dense.kernel"
+        ] = (data_dim, model_dim)
+        layout_map[
+            "transformer_layer.*shared_expert_dense/feedforward_gate_dense.kernel"
+        ] = (data_dim, model_dim)
+        layout_map[
+            "transformer_layer.*shared_expert_dense/feedforward_output_dense.kernel"
+        ] = (model_dim, data_dim)
+        # Routed experts. The leading dimension is the expert count and is
+        # left replicated so the map remains valid for small test configs.
+        layout_map[
+            "transformer_layer.*experts/expert_feedforward_gate_dense"
+        ] = (None, data_dim, model_dim)
+        layout_map[
+            "transformer_layer.*experts/expert_feedforward_output_dense"
+        ] = (None, model_dim, data_dim)
+        # Router and shared-expert gate are small matrices; shard only the
+        # hidden dimension and replicate the expert dimension.
+        layout_map[
+            "transformer_layer.*sparse_feedforward_gate_dense/kernel"
+        ] = (data_dim, None)
+        layout_map["transformer_layer.*shared_expert_gate_dense/kernel"] = (
             data_dim,
-            model_dim,
+            None,
         )
-        layout_map["transformer_layer.*feedforward_gate_dense.kernel"] = (
-            data_dim,
-            model_dim,
-        )
-        layout_map["transformer_layer.*feedforward_output_dense.kernel"] = (
-            model_dim,
-            data_dim,
-        )
-
         return layout_map
