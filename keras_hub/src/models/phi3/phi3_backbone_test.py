@@ -147,6 +147,7 @@ class Phi3Test(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # Note (preserved from the pre-refactor manual test): the default
         # test config's num_key_value_heads=2 divides the pinned 2-device
@@ -230,6 +231,7 @@ class Phi3Test(TestCase):
         for dims in (PHI3_MINI_DIMS, PHI3_SMALL_GQA_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
