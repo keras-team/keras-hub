@@ -368,8 +368,6 @@ class T5GemmaBackbone(Backbone):
         device_mesh,
         model_parallel_dim_name="model",
         data_parallel_dim_name="batch",
-        encoder_num_attention_heads=None,
-        decoder_num_attention_heads=None,
     ):
         """Get a `keras.distribution.LayoutMap` for model parallel distribution.
 
@@ -384,19 +382,6 @@ class T5GemmaBackbone(Backbone):
                 where the weights should be partitioned on.
             data_parallel_dim_name: str. The axis name of the device mesh,
                 where the data should be partitioned on.
-            encoder_num_attention_heads: int, optional. The model's
-                `encoder_num_attention_heads`. When given and the
-                model-parallel axis size does not evenly divide it, the
-                encoder's query/attention_output kernels' head axis falls
-                back to fully replicated instead of sharded, avoiding an
-                `IndivisibleError` -- mirroring the key/value fallback
-                below. When `None` (default), the head axis is always
-                sharded on the model-parallel dim, matching prior behavior.
-            decoder_num_attention_heads: int, optional. The model's
-                `decoder_num_attention_heads`, used the same way as
-                `encoder_num_attention_heads` above for the decoder's
-                self-attention and cross-attention query/attention_output
-                kernels.
 
         Returns:
             `keras.distribution.LayoutMap` that contains the sharding spec
@@ -458,82 +443,35 @@ class T5GemmaBackbone(Backbone):
         # wildcard covers both the encoder/decoder self-attention and the
         # decoder's cross-attention layers, which share the same
         # query/key/value/attention_output naming.
-        #
-        # num_query_heads itself is not immune to the same problem: real
-        # T5Gemma presets range as low as 4 query heads (e.g.
-        # t5gemma_ml_ml), and large model-parallel mesh axes (16-way, 32-way,
-        # ...) do not evenly divide every preset's head count either. When
-        # the caller tells us encoder_num_attention_heads/
-        # decoder_num_attention_heads and one doesn't divide the model-axis
-        # mesh size, fall back to fully replicating that side's query/
-        # attention_output head axis instead of sharding it -- the same
-        # fallback already applied to key/value above. When a head count
-        # isn't provided, we can't evaluate the divisibility condition, so
-        # that side's axis is sharded as before.
-        model_axis_size = device_mesh.shape[
-            device_mesh.axis_names.index(model_dim)
-        ]
-        encoder_query_heads_divisible = (
-            encoder_num_attention_heads is None
-            or encoder_num_attention_heads % model_axis_size == 0
+        layout_map["encoder_layer.*attention.*query.kernel"] = (
+            data_dim,
+            model_dim,
+            None,
         )
-        decoder_query_heads_divisible = (
-            decoder_num_attention_heads is None
-            or decoder_num_attention_heads % model_axis_size == 0
-        )
-        if encoder_query_heads_divisible:
-            layout_map["encoder_layer.*attention.*query.kernel"] = (
-                data_dim,
-                model_dim,
-                None,
-            )
-            layout_map["encoder_layer.*attention.*attention_output.kernel"] = (
-                model_dim,
-                None,
-                data_dim,
-            )
-        else:
-            layout_map["encoder_layer.*attention.*query.kernel"] = (
-                data_dim,
-                None,
-                None,
-            )
-            layout_map["encoder_layer.*attention.*attention_output.kernel"] = (
-                None,
-                None,
-                data_dim,
-            )
         layout_map["encoder_layer.*attention.*(key|value).kernel"] = (
             data_dim,
             None,
             None,
         )
-        if decoder_query_heads_divisible:
-            layout_map["decoder_layer.*attention.*query.kernel"] = (
-                data_dim,
-                model_dim,
-                None,
-            )
-            layout_map["decoder_layer.*attention.*attention_output.kernel"] = (
-                model_dim,
-                None,
-                data_dim,
-            )
-        else:
-            layout_map["decoder_layer.*attention.*query.kernel"] = (
-                data_dim,
-                None,
-                None,
-            )
-            layout_map["decoder_layer.*attention.*attention_output.kernel"] = (
-                None,
-                None,
-                data_dim,
-            )
+        layout_map["encoder_layer.*attention.*attention_output.kernel"] = (
+            model_dim,
+            None,
+            data_dim,
+        )
+        layout_map["decoder_layer.*attention.*query.kernel"] = (
+            data_dim,
+            model_dim,
+            None,
+        )
         layout_map["decoder_layer.*attention.*(key|value).kernel"] = (
             data_dim,
             None,
             None,
+        )
+        layout_map["decoder_layer.*attention.*attention_output.kernel"] = (
+            model_dim,
+            None,
+            data_dim,
         )
         layout_map["encoder_layer.*gate_proj.kernel"] = (data_dim, model_dim)
         layout_map["encoder_layer.*up_proj.kernel"] = (data_dim, model_dim)
