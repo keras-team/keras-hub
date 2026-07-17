@@ -174,6 +174,7 @@ class LlamaTest(TestCase):
                 input_data=self.input_data,
             )
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # Note (preserved from the pre-refactor manual test): mesh is
         # pinned to exactly 2 devices (not len(devices), see the shared
@@ -203,6 +204,7 @@ class LlamaTest(TestCase):
             allow_replicated=(),
         )
 
+    @pytest.mark.multi_device
     def test_distribution_with_lora(self):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
@@ -248,6 +250,7 @@ class LlamaTest(TestCase):
         for dims in (LLAMA2_7B_DIMS, LLAMA2_70B_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
