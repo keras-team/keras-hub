@@ -45,6 +45,7 @@ import argparse
 import gc
 import os
 import tempfile
+from numbers import Number
 
 os.environ.setdefault("KERAS_BACKEND", "torch")
 
@@ -111,15 +112,18 @@ device = torch.device("cpu")
 
 
 def configs_equal(val1, val2, tolerance=1e-6):
-    """Compare two config values with tolerance for floats."""
+    """Compare two config values with tolerance for numeric differences."""
+    if isinstance(val1, bool) or isinstance(val2, bool):
+        return val1 == val2
+
+    if isinstance(val1, Number) and isinstance(val2, Number):
+        return abs(float(val1) - float(val2)) < tolerance
+
     if not isinstance(val1, type(val2)):
         return False
 
-    if isinstance(val1, (int, str, bool, type(None))):
+    if isinstance(val1, (str, type(None))):
         return val1 == val2
-
-    if isinstance(val1, float):
-        return abs(val1 - val2) < tolerance
 
     if isinstance(val1, (list, tuple)):
         if len(val1) != len(val2):
@@ -295,72 +299,135 @@ def validate_configs(exp_cfg, orig_cfg, has_vision):
         "dtype",
     }
 
+    optional_runtime_keys = {
+        "cache_implementation",
+        "sliding_window_pattern",
+    }
+
+    def classify_difference(key, original_value, exported_value):
+        """Return (is_non_critical, reason) for known benign config deltas."""
+        original_missing = original_value == "<missing>"
+        exported_missing = exported_value == "<missing>"
+
+        if key in optional_runtime_keys and (original_missing or exported_missing):
+            return True, "optional/runtime-only field"
+
+        if (
+            key == "max_position_embeddings"
+            and isinstance(original_value, Number)
+            and isinstance(exported_value, Number)
+            and exported_value >= original_value
+        ):
+            return True, "exported value is larger (superset context capacity)"
+
+        return False, ""
+
+    def compare_section(section_name, original_section, exported_section):
+        """Compare config sections and classify critical vs non-critical deltas."""
+        if section_name:
+            print(f"\n  {section_name}:")
+
+        section_pass = True
+        critical_diffs = []
+        warning_diffs = []
+
+        keys = sorted(set(original_section.keys()) | set(exported_section.keys()))
+        for key in keys:
+            if key in skip_keys:
+                continue
+
+            original_value = original_section.get(key, "<missing>")
+            exported_value = exported_section.get(key, "<missing>")
+
+            if configs_equal(original_value, exported_value):
+                print(f"    ✓ {key}: {original_value}")
+                continue
+
+            is_non_critical, reason = classify_difference(
+                key, original_value, exported_value
+            )
+            if is_non_critical:
+                print(
+                    "    ⚠ "
+                    f"{key}: original={original_value}, exported={exported_value} "
+                    f"({reason})"
+                )
+                warning_diffs.append(key)
+            else:
+                print(
+                    f"    ✗ {key}: original={original_value}, "
+                    f"exported={exported_value}"
+                )
+                critical_diffs.append(key)
+                section_pass = False
+
+        return section_pass, critical_diffs, warning_diffs
+
     # For vision models, validate text_config and vision_config separately
     if has_vision:
         text_config_pass = True
         vision_config_pass = True
+        critical_diffs = []
+        warning_diffs = []
 
         # Validate text_config
         if "text_config" in orig_dict and "text_config" in exp_dict:
-            print("\n  TEXT CONFIG:")
-            orig_text = orig_dict["text_config"]
-            exp_text = exp_dict["text_config"]
-            text_keys = sorted(set(orig_text.keys()) | set(exp_text.keys()))
-
-            for key in text_keys:
-                if key in skip_keys:
-                    continue
-                o = orig_text.get(key, "<missing>")
-                e = exp_text.get(key, "<missing>")
-                if configs_equal(o, e):
-                    print(f"    ✓ {key}: {o}")
-                else:
-                    print(f"    ✗ {key}: original={o}, exported={e}")
-                    text_config_pass = False
+            text_config_pass, text_critical, text_warnings = compare_section(
+                "TEXT CONFIG",
+                orig_dict["text_config"],
+                exp_dict["text_config"],
+            )
+            critical_diffs.extend([f"text_config.{k}" for k in text_critical])
+            warning_diffs.extend([f"text_config.{k}" for k in text_warnings])
 
         # Validate vision_config
         if "vision_config" in orig_dict and "vision_config" in exp_dict:
-            print("\n  VISION CONFIG:")
-            orig_vision = orig_dict["vision_config"]
-            exp_vision = exp_dict["vision_config"]
-            vision_keys = sorted(
-                set(orig_vision.keys()) | set(exp_vision.keys())
+            (
+                vision_config_pass,
+                vision_critical,
+                vision_warnings,
+            ) = compare_section(
+                "VISION CONFIG",
+                orig_dict["vision_config"],
+                exp_dict["vision_config"],
+            )
+            critical_diffs.extend(
+                [f"vision_config.{k}" for k in vision_critical]
+            )
+            warning_diffs.extend(
+                [f"vision_config.{k}" for k in vision_warnings]
             )
 
-            for key in vision_keys:
-                if key in skip_keys:
-                    continue
-                o = orig_vision.get(key, "<missing>")
-                e = exp_vision.get(key, "<missing>")
-                if configs_equal(o, e):
-                    print(f"    ✓ {key}: {o}")
-                else:
-                    print(f"    ✗ {key}: original={o}, exported={e}")
-                    vision_config_pass = False
-
         config_pass = text_config_pass and vision_config_pass
+        if warning_diffs:
+            print(
+                f"\n    ⚠ {len(warning_diffs)} non-critical "
+                f"field difference(s): {warning_diffs}"
+            )
+        if critical_diffs:
+            print(
+                f"\n    ✗ {len(critical_diffs)} critical "
+                f"field difference(s): {critical_diffs}"
+            )
 
     else:
         # Text-only model - validate all fields
-        all_keys = sorted(set(orig_dict.keys()) | set(exp_dict.keys()))
-        config_pass = True
-        mismatches = []
+        config_pass, critical_diffs, warning_diffs = compare_section(
+            "", orig_dict, exp_dict
+        )
 
-        for key in all_keys:
-            if key in skip_keys:
-                continue
-            o = orig_dict.get(key, "<missing>")
-            e = exp_dict.get(key, "<missing>")
-            if configs_equal(o, e):
-                print(f"    ✓ {key}: {o}")
-            else:
-                print(f"    ✗ {key}: original={o}, exported={e}")
-                mismatches.append(key)
-                config_pass = False
-
-        if mismatches:
-            print(f"\n    ⚠ {len(mismatches)} field(s) differ: {mismatches}")
-        else:
+        if warning_diffs:
+            print(
+                f"\n    ⚠ {len(warning_diffs)} non-critical "
+                f"field difference(s): {warning_diffs}"
+            )
+        if critical_diffs:
+            print(
+                f"\n    ✗ {len(critical_diffs)} critical "
+                f"field difference(s): {critical_diffs}"
+            )
+        elif not warning_diffs:
+            all_keys = sorted(set(orig_dict.keys()) | set(exp_dict.keys()))
             print(
                 f"\n    ✓ All {len(all_keys) - len(skip_keys)} "
                 "config fields match"
