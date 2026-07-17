@@ -222,6 +222,7 @@ class Qwen3_5BackboneTest(TestCase):
         model = Qwen3_5Backbone(**self.init_kwargs)
         self.assertGreater(model.count_params(), 0)
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # The default config mixes linear_attention and full_attention
         # layers so both token-mixer rule sets are exercised, and keeps
@@ -265,6 +266,7 @@ class Qwen3_5BackboneTest(TestCase):
         for dims in (QWEN3_5_0_8B_DIMS, QWEN3_5_9B_DIMS, QWEN3_5_27B_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
