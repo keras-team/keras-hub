@@ -1,5 +1,6 @@
 import gc
 import json
+import os
 import re
 
 import keras
@@ -17,26 +18,27 @@ from keras_hub.src.utils.preset_utils import get_file
 # `get_file` call to the Tier-2 test body itself (that's what Tier 3,
 # `test_layout_map_live_presets` below, is for).
 #
-# MEMORY NOTE: this local dev machine cannot load full-scale model dims (see
-# gemma_backbone_test.py's identical note for the OOM history that motivated
-# this rule). What matters for the divisibility/sharding properties this
-# tier tests is the RATIO of query heads to kv heads and whether
-# hidden/intermediate/vocab divide the mesh's model-axis sizes -- not the
-# absolute parameter count. So these dims are scaled down ~16x from the real
-# Mistral-7B preset config (`hidden_size=4096`, `num_attention_heads=32`,
-# `num_key_value_heads=8`, `intermediate_size=14336`, `vocab_size=32000`,
-# all five presets in `mistral_presets.py` share this single architecture
-# width class -- there is no smaller/larger Mistral preset in the registry
-# to source a second class from) while preserving the real 4:1 query:kv
-# GQA ratio and keeping hidden/intermediate/vocab as clean values divisible
-# by every mesh shape in CAPPED_MESH_SHAPES. A second, larger synthetic
-# class is included to exercise an 8:1 GQA ratio and a bigger width tier
-# (a plausible larger-Mistral extrapolation, not a real preset -- documented
-# as such). Full-scale real dims are exercised by
-# `test_layout_map_live_presets` below, which has its own per-width-class
-# memory-budget skip so it never attempts a full-scale build locally either
-# -- true full-scale verification happens offline on a machine with more
-# RAM, not on this box.
+# MEMORY NOTE: memory-constrained local environments cannot load full-scale
+# model dims (see gemma_backbone_test.py's identical note for the OOM
+# history that motivated this rule). What matters for the divisibility/
+# sharding properties this tier tests is the RATIO of query heads to kv
+# heads and whether hidden/intermediate/vocab divide the mesh's model-axis
+# sizes -- not the absolute parameter count. So these dims are scaled down
+# ~16x from the real Mistral-7B preset config (`hidden_size=4096`,
+# `num_attention_heads=32`, `num_key_value_heads=8`,
+# `intermediate_size=14336`, `vocab_size=32000`, all five presets in
+# `mistral_presets.py` share this single architecture width class -- there
+# is no smaller/larger Mistral preset in the registry to source a second
+# class from) while preserving the real 4:1 query:kv GQA ratio and keeping
+# hidden/intermediate/vocab as clean values divisible by every mesh shape in
+# CAPPED_MESH_SHAPES. A second, larger synthetic class is included to
+# exercise an 8:1 GQA ratio and a bigger width tier (a plausible
+# larger-Mistral extrapolation, not a real preset -- documented as such).
+# Full-scale real dims are exercised by `test_layout_map_live_presets`
+# below, which has its own per-width-class memory-budget skip so it never
+# attempts a full-scale build in a memory-constrained environment either --
+# true full-scale verification happens on a dedicated or CI machine with
+# more memory.
 MISTRAL_7B_DIMS = {
     "source_preset": "mistral_7b_en (real ratio, memory-scaled dims)",
     "vocabulary_size": 2000,  # real: 32000, scaled /16.
@@ -61,10 +63,11 @@ MISTRAL_LARGE_DIMS = {
     "sliding_window": 128,
 }
 
-# Hard-capped mesh-shape list for this shared 37GB dev machine. See
-# gemma_backbone_test.py's identical constant for the full rationale
-# (systemd-oomd OOM kill history on this box) -- the dropped shapes
-# (8x8, 16x16, 4x4x4, 4x4x8) are never attempted here either.
+# Hard-capped mesh-shape list for memory-constrained local environments. See
+# gemma_backbone_test.py's identical constant for the full rationale (an
+# OOM kill history from an earlier run of this pipeline in a
+# memory-constrained environment) -- the dropped shapes (8x8, 16x16, 4x4x4,
+# 4x4x8) are never attempted here either.
 CAPPED_MESH_SHAPES = [
     (2, 4),
     (1, 8),
@@ -237,8 +240,8 @@ class MistralBackboneTest(TestCase):
         )
         init_kwargs = {k: v for k, v in dims.items() if k != "source_preset"}
         with distribution.scope():
-            # bfloat16: a memory mitigation for this shared dev machine --
-            # spec assertions are dtype-independent.
+            # bfloat16: a memory mitigation for memory-constrained
+            # environments -- spec assertions are dtype-independent.
             model = MistralBackbone(dtype="bfloat16", **init_kwargs)
             _assert_mistral_shardings_and_coverage(self, model, layout_map)
         del model
@@ -281,7 +284,8 @@ class MistralBackboneTest(TestCase):
             # num_layers is forced to 1 below regardless of the real
             # value -- layout rules are per-decoder-block regexes, so
             # depth is irrelevant to spec matching/divisibility, and 1
-            # layer keeps build memory bounded on this shared machine.
+            # layer keeps build memory bounded in memory-constrained
+            # environments.
             cfg = dict(cfg)
             cfg["num_layers"] = 1
             key = tuple(cfg.get(k) for k in dim_keys)
@@ -340,32 +344,50 @@ class MistralBackboneTest(TestCase):
                         skip_reasons.append(reason)
                         continue
 
-                    # Memory-budget guard: this shared dev machine cannot
-                    # locally build full-scale presets (see
+                    # Memory-budget guard: memory-constrained local
+                    # environments cannot build full-scale presets (see
                     # CAPPED_MESH_SHAPES' comment for the OOM history).
-                    # Estimate this width-class's single-decoder-block
-                    # bf16 footprint (embedding table + one FFN block's 3
-                    # matrices, times a 3x safety margin for JAX/XLA
-                    # transient copies during construction/resharding) and
-                    # skip the actual build if it exceeds a conservative
-                    # local threshold. The config-fetch, dedup, and
+                    # Estimate this width-class's single-decoder-block bf16
+                    # footprint and skip the actual build if it exceeds a
+                    # conservative local threshold. Mistral has UNTIED
+                    # embeddings (`tie_weights=False` in MistralBackbone),
+                    # so the embedding term is counted twice (forward +
+                    # reverse output projection). Attention projections map
+                    # hidden<->hidden for query/output and hidden<->(hidden
+                    # scaled by the kv/query head ratio) for GQA's key/value.
+                    # The FFN is SwiGLU (gate + intermediate + output, 3
+                    # hidden*intermediate matrices), matching this model's
+                    # dense (non-MoE) feedforward block. Times a 3x safety
+                    # margin for JAX/XLA transient copies during
+                    # construction/resharding. The config-fetch, dedup, and
                     # divisibility-skip logic above still exercises every
                     # registry preset either way; only the expensive
                     # build+assert step is capped.
+                    hidden = cfg["hidden_dim"]
+                    num_kv_heads = cfg["num_key_value_heads"]
+                    kv_ratio = num_kv_heads / num_query_heads
                     est_params = (
-                        cfg["vocabulary_size"] * cfg["hidden_dim"]
-                        + 3 * cfg["hidden_dim"] * cfg["intermediate_dim"]
+                        2 * cfg["vocabulary_size"] * hidden  # untied embed
+                        + 2 * hidden * hidden  # attention q/o
+                        + 2 * hidden * hidden * kv_ratio  # attention k/v
+                        + 3 * hidden * cfg["intermediate_dim"]  # SwiGLU FFN
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
-                    max_local_bytes = 300 * 1024 * 1024  # 300MB
+                    max_local_bytes = int(
+                        os.environ.get(
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET",
+                            300 * 1024 * 1024,
+                        )
+                    )
                     if est_bytes > max_local_bytes:
                         reason = (
                             f"{combo_label}: estimated build memory "
                             f"~{est_bytes / 1e9:.2f}GB exceeds the "
                             f"{max_local_bytes / 1e6:.0f}MB local safety "
-                            "threshold on this shared, RAM-constrained "
-                            "dev machine -- verify this width-class on a "
-                            "machine with more RAM or in CI"
+                            "threshold for memory-constrained environments "
+                            "-- verify this width-class on a machine with "
+                            "more memory or in CI (raise the budget via the "
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET env var)"
                         )
                         skip_reasons.append(reason)
                         continue
@@ -384,9 +406,16 @@ class MistralBackboneTest(TestCase):
                     distribution = keras.distribution.ModelParallel(
                         layout_map=layout_map, batch_dim_name="batch"
                     )
-                    init_kwargs = {
-                        k: v for k, v in cfg.items() if k in dim_keys
-                    }
+                    # `cfg` is the preset's full serialized `get_config()`
+                    # dict; pass all of it (real architecture flags such as
+                    # rope scaling, tie-embeddings, etc. must survive to
+                    # actually exercise the live preset's real architecture)
+                    # and only drop `"dtype"` so the explicit
+                    # `dtype="bfloat16"` override below doesn't collide with
+                    # a duplicate keyword argument. `num_layers` is forced to
+                    # 1 (layout rules are per-decoder-block, so depth is
+                    # irrelevant and 1 layer keeps build memory bounded).
+                    init_kwargs = {k: v for k, v in cfg.items() if k != "dtype"}
                     init_kwargs["num_layers"] = 1
                     with distribution.scope():
                         model = MistralBackbone(dtype="bfloat16", **init_kwargs)
