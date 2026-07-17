@@ -217,6 +217,7 @@ class QwenMoeBackboneTest(TestCase):
         expected_layers = 6
         self.assertEqual(len(model.layers), expected_layers)
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # NOTE: `mlp_only_layers=[1]` is intended to make layer 1 use the
         # dense FFN fallback (`qwen_moe_mlp`) while layer 0 stays sparse, so
@@ -299,6 +300,7 @@ class QwenMoeBackboneTest(TestCase):
         for dims in (QWEN_MOE_2_7B_DIMS, QWEN_MOE_SMALL_GQA_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
