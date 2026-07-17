@@ -1,5 +1,6 @@
 import gc
 import json
+import os
 import re
 
 import keras
@@ -17,9 +18,9 @@ from keras_hub.src.utils.preset_utils import get_file
 # `get_file` call to the Tier-2 test body itself (that's what Tier 3,
 # `test_layout_map_live_presets` below, is for).
 #
-# MEMORY NOTE: this local dev machine cannot load full-scale model dims.
-# What actually matters for the divisibility/sharding properties this tier
-# tests is the RATIO of query heads to kv heads and whether
+# MEMORY NOTE: memory-constrained local environments cannot load full-scale
+# model dims. What actually matters for the divisibility/sharding properties
+# this tier tests is the RATIO of query heads to kv heads and whether
 # hidden/intermediate/vocab divide the mesh's model-axis sizes -- not the
 # absolute parameter count. So these dims are scaled down roughly 20-60x
 # from the real preset(s) while preserving the real query:kv head ratio and
@@ -63,14 +64,14 @@ QWEN_MOE_SMALL_GQA_DIMS = {
     "top_k": 4,
 }
 
-# Hard-capped mesh-shape list for this shared 37GB dev machine. The full
-# 10-shape matrix from the testing-strategy doc is
+# Hard-capped mesh-shape list for memory-constrained local environments. The
+# full 10-shape matrix from the testing-strategy doc is
 # 2x4, 1x8, 4x4, 8x8, 16x16, 2x2x2, 1x1x8, 2x2x4, 4x4x4, 4x4x8 -- shapes
 # 8x8, 16x16, 4x4x4, 4x4x8 (64-256 virtual devices) are DELIBERATELY
-# DROPPED here to stay within this shared machine's memory budget (see the
-# gemma reference implementation, which hit a demonstrated OOM kill with
-# those shapes). Do not attempt the dropped shapes even experimentally on
-# this box.
+# DROPPED here to stay within a typical local machine's memory budget (see
+# the gemma reference implementation, which hit a demonstrated OOM kill with
+# those shapes). These shapes require a dedicated or CI machine with more
+# memory.
 CAPPED_MESH_SHAPES = [
     (2, 4),
     (1, 8),
@@ -347,8 +348,8 @@ class QwenMoeBackboneTest(TestCase):
         )
         init_kwargs = {k: v for k, v in dims.items() if k != "source_preset"}
         with distribution.scope():
-            # bfloat16: a memory mitigation for this shared dev machine --
-            # spec assertions are dtype-independent.
+            # bfloat16: a memory mitigation for memory-constrained local
+            # environments -- spec assertions are dtype-independent.
             model = QwenMoeBackbone(dtype="bfloat16", **init_kwargs)
             _assert_qwen_moe_shardings_and_coverage(self, model, layout_map)
         del model
@@ -363,9 +364,10 @@ class QwenMoeBackboneTest(TestCase):
 
         # Fetch every preset's config only (no weights), then dedupe by the
         # divisibility-relevant dims so width-classes that share a config
-        # are only built once per mesh shape -- a memory/time necessity on
-        # this machine, while every preset in the registry is still fetched
-        # and evaluated, preserving full registry coverage.
+        # are only built once per mesh shape -- a memory/time necessity in
+        # memory-constrained local environments, while every preset in the
+        # registry is still fetched and evaluated, preserving full registry
+        # coverage.
         dim_keys = (
             "vocabulary_size",
             "num_query_heads",
@@ -382,7 +384,8 @@ class QwenMoeBackboneTest(TestCase):
         for preset in QwenMoeBackbone.presets:
             try:
                 path = get_file(preset, CONFIG_FILE)
-                cfg = json.load(open(path))["config"]
+                with open(path) as f:
+                    cfg = json.load(f)["config"]
             except Exception as e:
                 # A preset this account can't reach (e.g. an unaccepted
                 # Kaggle license consent click-through) is logged, not
@@ -392,7 +395,8 @@ class QwenMoeBackboneTest(TestCase):
             # num_layers is forced to 1 below regardless of the real
             # value -- layout rules are per-decoder-block regexes, so
             # depth is irrelevant to spec matching/divisibility, and 1
-            # layer keeps build memory bounded on this shared machine.
+            # layer keeps build memory bounded in memory-constrained local
+            # environments.
             cfg = dict(cfg)
             cfg["num_layers"] = 1
             key = tuple(cfg.get(k) for k in dim_keys)
@@ -451,30 +455,67 @@ class QwenMoeBackboneTest(TestCase):
                         skip_reasons.append(reason)
                         continue
 
-                    # Memory-budget guard: this shared dev machine cannot
-                    # locally build full-scale presets. Estimate this
-                    # width-class's bf16 footprint (embedding table + 3
-                    # dense-equivalent hidden*intermediate matrices, times a
-                    # 3x safety margin for JAX/XLA transient copies during
-                    # construction/resharding) and skip the actual build if
-                    # it exceeds a conservative local threshold. The
-                    # config-fetch, dedup, and divisibility-skip logic above
-                    # still exercises every registry preset either way;
-                    # only the expensive build+assert step is capped.
+                    # Memory-budget guard: memory-constrained local
+                    # environments cannot always build full-scale presets.
+                    # Estimate this width-class's single-decoder-block bf16
+                    # footprint and skip the actual build if it exceeds a
+                    # conservative local threshold. Unlike a dense model,
+                    # QwenMoe's parameter bulk is its routed expert bank
+                    # (expert_feedforward_gate_dense +
+                    # expert_feedforward_output_dense, per expert) plus the
+                    # always-present shared-expert dense FFN tower -- the
+                    # estimate explicitly includes
+                    # num_experts * 3 * hidden * moe_intermediate for the
+                    # expert bank (matching QwenMoeExperts.build's kernel
+                    # shapes) and 3 * hidden * shared_expert_intermediate
+                    # for the shared expert, on top of the embedding-table
+                    # (counted twice: QwenMoeBackbone's default
+                    # tie_word_embeddings=False means `reverse_embeddings`
+                    # also materializes as a second real vocab*hidden
+                    # tensor, not a view of `embeddings`) and
+                    # GQA-scaled-attention-projection estimate -- omitting
+                    # the expert banks would dangerously undercount a MoE
+                    # model's real footprint (real qwen1.5_moe_2.7b_en's 60
+                    # experts alone make the old dense-FFN-only formula a
+                    # ~2.5x undercount). Times a 3x safety margin for
+                    # JAX/XLA transient copies during
+                    # construction/resharding. The config-fetch, dedup, and
+                    # divisibility-skip logic above still exercises every
+                    # registry preset either way; only the expensive
+                    # build+assert step is capped.
+                    hidden = cfg["hidden_dim"]
+                    moe_inter = cfg["moe_intermediate_dim"]
+                    shared_inter = cfg["shared_expert_intermediate_dim"]
+                    num_experts = cfg["num_experts"]
+                    num_kv_heads = cfg["num_key_value_heads"]
+                    # Attention projections map hidden_dim<->hidden_dim
+                    # (q and o), and hidden_dim<->(hidden_dim scaled by the
+                    # kv/query head ratio) for GQA's k and v -- none of the
+                    # four touch intermediate_dim, which is the FFN/expert
+                    # width instead.
+                    kv_ratio = num_kv_heads / num_query_heads
                     est_params = (
-                        cfg["vocabulary_size"] * cfg["hidden_dim"]
-                        + 3 * cfg["hidden_dim"] * cfg["intermediate_dim"]
+                        2 * cfg["vocabulary_size"] * hidden  # untied embeds
+                        + 2 * hidden * hidden  # attention q/o
+                        + 2 * hidden * hidden * kv_ratio  # attention k/v
+                        + num_experts * 3 * hidden * moe_inter  # expert bank
+                        + 3 * hidden * shared_inter  # shared expert dense
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
-                    max_local_bytes = 300 * 1024 * 1024  # 300MB
+                    max_local_bytes = int(
+                        os.environ.get(
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET",
+                            300 * 1024 * 1024,
+                        )
+                    )
                     if est_bytes > max_local_bytes:
                         reason = (
                             f"{combo_label}: estimated build memory "
                             f"~{est_bytes / 1e9:.2f}GB exceeds the "
                             f"{max_local_bytes / 1e6:.0f}MB local safety "
-                            "threshold on this shared, RAM-constrained "
-                            "dev machine -- verify this width-class on a "
-                            "machine with more RAM or in CI"
+                            "threshold for memory-constrained local "
+                            "environments -- verify this width-class on a "
+                            "dedicated or CI machine with more memory"
                         )
                         skip_reasons.append(reason)
                         continue
@@ -493,9 +534,16 @@ class QwenMoeBackboneTest(TestCase):
                     distribution = keras.distribution.ModelParallel(
                         layout_map=layout_map, batch_dim_name="batch"
                     )
-                    init_kwargs = {
-                        k: v for k, v in cfg.items() if k in dim_keys
-                    }
+                    # Use the full preset config, not just dim_keys --
+                    # filtering to dim_keys would silently drop real
+                    # architecture flags (rope scaling, MoE routing knobs,
+                    # tie_word_embeddings, etc.), building every preset with
+                    # QwenMoeBackbone's constructor defaults instead of its
+                    # real architecture. Only "dtype" needs stripping, since
+                    # the build call below passes dtype="bfloat16" itself
+                    # (a duplicate-kwarg TypeError otherwise); name/trainable
+                    # pass through harmlessly via **kwargs.
+                    init_kwargs = {k: v for k, v in cfg.items() if k != "dtype"}
                     init_kwargs["num_layers"] = 1
                     with distribution.scope():
                         model = QwenMoeBackbone(dtype="bfloat16", **init_kwargs)

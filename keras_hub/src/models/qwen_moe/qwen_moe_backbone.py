@@ -80,7 +80,7 @@ class QwenMoeBackbone(Backbone):
         vocabulary_size=151936,
         num_layers=28,
         num_query_heads=16,
-        num_key_value_heads=8,
+        num_key_value_heads=16,
         hidden_dim=2048,
         intermediate_dim=4096,
         moe_intermediate_dim=128,
