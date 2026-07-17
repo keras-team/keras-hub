@@ -360,6 +360,126 @@ class Qwen3_5Backbone(Backbone):
         )
         return config
 
+    @staticmethod
+    def get_layout_map(
+        device_mesh,
+        model_parallel_dim_name="model",
+        data_parallel_dim_name="batch",
+    ):
+        """Get a `keras.distribution.LayoutMap` for model parallel distribution.
+
+        The returned `LayoutMap` contains the sharding spec for the
+        Qwen3_5 backbone's text-decoder full-attention layers,
+        linear-attention (GatedDeltaNet) layers, feedforward layers, and
+        embeddings. The vision encoder/interleave weights are left
+        replicated for now -- see Limitations in the PR description.
+
+        Args:
+            device_mesh: keras.distribution.DeviceMesh. The device mesh
+                instance for distribution.
+            model_parallel_dim_name: str. The axis name of the device mesh,
+                where the weights should be partitioned on.
+            data_parallel_dim_name: str. The axis name of the device mesh,
+                where the data should be partitioned on.
+
+        Returns:
+            `keras.distribution.LayoutMap` that contains the sharding spec
+            for all the model weights.
+        """
+        if not isinstance(device_mesh, keras.distribution.DeviceMesh):
+            raise ValueError(
+                "Invalid device_mesh type. Expected "
+                f"`keras.distribution.DeviceMesh`, got {type(device_mesh)}"
+            )
+        if model_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{model_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+        if data_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{data_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+
+        data_dim = data_parallel_dim_name
+        model_dim = model_parallel_dim_name
+        layout_map = keras.distribution.LayoutMap(device_mesh)
+        layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
+        # reverse_embeddings is the (hidden, vocab) output-projection tensor
+        # (untied when tie_word_embeddings=False, the default). Its vocab
+        # axis is vocab-parallel on model_dim, mirroring the vocab-on-model
+        # sharding of token_embedding/embeddings above.
+        layout_map["token_embedding/reverse_embeddings"] = (
+            data_dim,
+            model_dim,
+        )
+        # Full-attention QKV kernels are (hidden, num_heads, head_dim): the
+        # heads axis is the tensor-parallel (Megatron column-parallel) axis
+        # and goes on model_dim, while the contracting hidden axis goes on
+        # data_dim for memory sharding. Key/value use num_key_value_heads
+        # (GQA), which is small and independent of num_query_heads, so their
+        # heads axis is left replicated -- sharding that small axis on
+        # model_dim would raise an IndivisibleError whenever the mesh
+        # dimension does not evenly divide it. These rules only match
+        # full_attention layers; the linear_attn (GatedDeltaNet) sublayer is
+        # handled by its own rules below.
+        layout_map["transformer_layer.*self_attention.*query.kernel"] = (
+            data_dim,
+            model_dim,
+            None,
+        )
+        layout_map["transformer_layer.*self_attention.*(key|value).kernel"] = (
+            data_dim,
+            None,
+            None,
+        )
+        layout_map[
+            "transformer_layer.*self_attention.*attention_output.kernel"
+        ] = (
+            model_dim,
+            None,
+            data_dim,
+        )
+        layout_map[
+            "transformer_layer.*feedforward_intermediate_dense.kernel"
+        ] = (data_dim, model_dim)
+        layout_map["transformer_layer.*feedforward_gate_dense.kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["transformer_layer.*feedforward_output_dense.kernel"] = (
+            model_dim,
+            data_dim,
+        )
+        # Linear-attention (GatedDeltaNet) layers -- the parameter bulk of
+        # real presets, where most layers are linear_attention. All these
+        # kernels are 2-D (in, out) Dense weights. in_proj_qkv and in_proj_z
+        # are column-parallel (fused projection output on model_dim, hidden
+        # contracting axis on data_dim); out_proj is row-parallel (mirrors
+        # the feedforward_output_dense convention above).
+        layout_map["transformer_layer.*linear_attn.*in_proj_qkv.kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["transformer_layer.*linear_attn.*in_proj_z.kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["transformer_layer.*linear_attn.*out_proj.kernel"] = (
+            model_dim,
+            data_dim,
+        )
+        # Deliberately left replicated (covered by the test's allow_replicated
+        # list): in_proj_a / in_proj_b project to num_value_heads, a small
+        # axis that need not be sharded and would risk indivisibility on
+        # model_dim; conv1d_kernel is a tiny depthwise (conv_dim, kernel_size)
+        # weight -- the depthwise conv runs per-channel over the
+        # model_dim-sharded in_proj_qkv output, so a replicated kernel stays
+        # local to each shard. dt_bias, A_log, and the RMSNorm scales are
+        # rank-1 and always replicated.
+        return layout_map
+
     @classmethod
     def from_config(cls, config):
         config.update(
