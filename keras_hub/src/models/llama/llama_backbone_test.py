@@ -1,5 +1,4 @@
 import gc
-import json
 import os
 import re
 
@@ -10,8 +9,7 @@ from keras import ops
 
 from keras_hub.src.models.llama.llama_backbone import LlamaBackbone
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.preset_utils import CONFIG_FILE
-from keras_hub.src.utils.preset_utils import get_file
+from keras_hub.src.utils.preset_utils import load_json
 
 # Dims for the Tier-2 CI-safe mesh-shape sweep: representative real-preset
 # dimensions, frozen as literals and sourced once, offline -- do not add a
@@ -209,7 +207,7 @@ class LlamaTest(TestCase):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
         devices = keras.distribution.list_devices("CPU")
-        if len(devices) == 1:
+        if len(devices) < 2:
             # Need more than 1 device for distribution testing.
             self.skipTest("`ModelParallel` testing requires multiple devices.")
         # Pinned to exactly 2 devices -- see test_distribution's comment.
@@ -330,9 +328,7 @@ class LlamaTest(TestCase):
         fetch_failures = []
         for preset in LlamaBackbone.presets:
             try:
-                path = get_file(preset, CONFIG_FILE)
-                with open(path) as f:
-                    cfg = json.load(f)["config"]
+                cfg = load_json(preset)["config"]
             except Exception as e:
                 # A preset this account can't reach (e.g. an unaccepted
                 # Kaggle license consent click-through, or no
