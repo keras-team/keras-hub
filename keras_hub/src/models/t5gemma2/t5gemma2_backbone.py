@@ -544,9 +544,15 @@ class T5Gemma2Backbone(Backbone):
         cross-attention are fused into a single `merged_attention` layer
         (see `T5Gemma2MergedAttention`), which shares the same
         query/key/value/attention_output naming as the encoder's
-        self-attention and is covered by the same rules. Vision/interleave/
-        EOI-embedding weights are left replicated for now -- see Limitations
-        in the PR description.
+        self-attention and is covered by the same rules.
+
+        When a `Gemma3VisionEncoder` is attached, its transformer weights are
+        also sharded (2-D `(in, out)` Dense kernels, following the Megatron
+        column-/row-parallel convention). Weights that are intentionally left
+        replicated -- the patch `embedding_conv`, `position_embedding`,
+        pooling, all vision norms/biases, and the interleave/EOI embeddings --
+        are small and do not benefit from sharding; see the vision-encoder
+        rules below.
 
         Args:
             device_mesh: keras.distribution.DeviceMesh. The device mesh
@@ -587,26 +593,37 @@ class T5Gemma2Backbone(Backbone):
             model_dim,
             data_dim,
         )
+        # reverse_embeddings is the output-projection tensor of shape
+        # (hidden, vocab); the vocab-parallel output projection wants vocab on
+        # the model axis, mirroring token_embedding's (vocab, hidden) =
+        # (model_dim, data_dim). Only untied embeddings materialize this
+        # tensor, but tie_word_embeddings is a real constructor arg propagated
+        # from HF configs, so it must not be left silently replicated.
         layout_map["decoder_token_embedding/reverse_embeddings"] = (
-            model_dim,
             data_dim,
+            model_dim,
         )
-        # Key/value kernels are sized by num_key_value_heads (GQA), which is
-        # independent of and typically much smaller than num_query_heads --
-        # sharding that small axis would raise an IndivisibleError whenever
-        # the mesh dimension doesn't evenly divide it, so that axis is left
-        # replicated; the large hidden_dim axis is still sharded via
-        # model_dim. The broad "attention" wildcard covers both the
-        # encoder's self_attention and the decoder's merged (self+cross)
-        # attention, which share the same
+        # QKV kernels are (hidden, num_heads, head_dim) (einsum btd,dnh->btnh):
+        # the query kernel shards the contracting hidden dim on data_dim and
+        # the head dim on model_dim (Megatron column-parallel), and its
+        # attention_output (num_heads, head_dim, hidden) shards heads on
+        # model_dim to match -- so the two collectives cancel into one
+        # all-reduce per attention block. Key/value kernels are sized by
+        # num_key_value_heads (GQA), which is independent of and typically much
+        # smaller than num_query_heads -- sharding that small head axis on
+        # model_dim would raise an IndivisibleError whenever the mesh dimension
+        # doesn't evenly divide it, so it is left replicated; the large hidden
+        # dim is still sharded on data_dim for memory. The broad "attention"
+        # wildcard covers both the encoder's self_attention and the decoder's
+        # merged (self+cross) attention, which share the same
         # query/key/value/attention_output naming.
         layout_map["encoder_layer.*attention.*query.kernel"] = (
-            model_dim,
             data_dim,
+            model_dim,
             None,
         )
         layout_map["encoder_layer.*attention.*(key|value).kernel"] = (
-            model_dim,
+            data_dim,
             None,
             None,
         )
@@ -616,12 +633,12 @@ class T5Gemma2Backbone(Backbone):
             data_dim,
         )
         layout_map["decoder_layer.*attention.*query.kernel"] = (
-            model_dim,
             data_dim,
+            model_dim,
             None,
         )
         layout_map["decoder_layer.*attention.*(key|value).kernel"] = (
-            model_dim,
+            data_dim,
             None,
             None,
         )
@@ -636,6 +653,29 @@ class T5Gemma2Backbone(Backbone):
         layout_map["decoder_layer.*gate_proj.kernel"] = (data_dim, model_dim)
         layout_map["decoder_layer.*up_proj.kernel"] = (data_dim, model_dim)
         layout_map["decoder_layer.*down_proj.kernel"] = (model_dim, data_dim)
+
+        # Vision encoder (Gemma3VisionEncoder), present only for multimodal
+        # variants. All 2-D Dense kernels `(in, out)`: qkv/mlp_dense_1 are
+        # column-parallel (fused output on model_dim), out_proj/mlp_dense_2 and
+        # the vision_input_projection are row-parallel. The patch
+        # `embedding_conv`, `position_embedding`, pooling, all vision
+        # norms/biases, and the interleave/EOI embeddings are intentionally
+        # left replicated (small; sharding them adds divisibility risk for no
+        # memory benefit). These rules are inert when `vision_encoder=None`.
+        layout_map[
+            "image_encoder.*multi_head_attention.*"
+            "(query_proj|key_proj|value_proj).kernel"
+        ] = (data_dim, model_dim)
+        layout_map["image_encoder.*multi_head_attention.*out_proj.kernel"] = (
+            model_dim,
+            data_dim,
+        )
+        layout_map["image_encoder.*mlp_dense_1.kernel"] = (data_dim, model_dim)
+        layout_map["image_encoder.*mlp_dense_2.kernel"] = (model_dim, data_dim)
+        layout_map["vision_output_encoder.*vision_input_projection.kernel"] = (
+            model_dim,
+            data_dim,
+        )
         return layout_map
 
     @classmethod
