@@ -369,8 +369,8 @@ class Qwen3_5MoeBackbone(Backbone):
         bank/router/shared-expert, and embeddings. A few tiny linear-attention
         weights (in_proj_a/in_proj_b, conv1d_kernel, dt_bias, A_log), the
         shared-expert gate, and the vision encoder/interleave weights are
-        intentionally left replicated -- see the comments below and the
-        Limitations in the PR description.
+        intentionally left replicated -- see the comments below for the
+        rationale for each.
 
         Args:
             device_mesh: keras.distribution.DeviceMesh. The device mesh

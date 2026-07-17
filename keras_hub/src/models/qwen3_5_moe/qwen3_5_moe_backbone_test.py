@@ -32,20 +32,26 @@ from keras_hub.src.utils.preset_utils import get_file
 #     hidden, num_query_heads, moe_intermediate, shared-expert intermediate,
 #     and the linear value/qkv projection widths) by every mesh model-axis
 #     size in CAPPED_MESH_SHAPES (2, 4, 8).
-# num_layers is 1 always (layout rules are per-decoder-block regexes, so depth
-# is irrelevant to spec matching/divisibility) and the single layer is a
-# `full_attention` layer so the sweep exercises the corrected QKV-axis
-# divisibility -- the core of this fix -- alongside the always-present MoE
-# expert/router/shared-expert rules. The linear-attention projection rules are
-# exercised by the four-layer `test_distribution` config above, which runs a
-# real forward+backward pass over both layer types. Full-scale real dims are
+# num_layers is fixed at 2 (not 1) because Qwen3.5-MoE is a *hybrid* stack:
+# a single layer would only exercise one of the two token mixers, so the
+# sweep would silently never assert on either the full-attention or the
+# linear-attention rule set -- in particular the fused in_proj_qkv width
+# divisibility guard below would guard a weight that never exists in the
+# built model. Two decoder blocks (one of each type) alongside the
+# always-present MoE expert/router/shared-expert rules keep build memory
+# bounded while exercising both mixers' rule sets in every (width, mesh)
+# combo, not just in the four-layer `test_distribution` config above (which
+# only ever exercises a fixed 2-device mesh). Full-scale real dims are
 # exercised offline / by `test_layout_map_live_presets` (which has its own
 # per-width-class memory-budget skip so it never attempts a full-scale build
 # locally either).
+# One layer of each token mixer, matching sibling qwen3_5's hybrid sweep
+# (see qwen3_5_backbone_test.py's _LINEAR_LAYER_TYPES).
+_LINEAR_LAYER_TYPES = ["linear_attention", "full_attention"]
 QWEN3_5_MOE_35B_A3B_DIMS = {
     "source_preset": "qwen3_5_moe_35b_a3b (real ratios, memory-scaled dims)",
     "vocabulary_size": 2048,
-    "num_layers": 1,
+    "num_layers": 2,
     "num_query_heads": 32,
     "num_key_value_heads": 4,  # real ratio: GQA, 8:1.
     "head_dim": 32,
@@ -54,7 +60,7 @@ QWEN3_5_MOE_35B_A3B_DIMS = {
     "shared_expert_intermediate_size": 64,
     "num_experts": 8,
     "top_k": 2,
-    "layer_types": ["full_attention"],
+    "layer_types": _LINEAR_LAYER_TYPES,
     "partial_rotary_factor": 0.25,
     "linear_num_key_heads": 16,
     "linear_num_value_heads": 32,  # real ratio: 16:32 = 1:2.
@@ -68,7 +74,7 @@ QWEN3_5_MOE_35B_A3B_DIMS = {
 QWEN3_5_MOE_SMALL_DIMS = {
     "source_preset": "qwen3_5_moe_small (real ratios, memory-scaled dims)",
     "vocabulary_size": 2048,
-    "num_layers": 1,
+    "num_layers": 2,
     "num_query_heads": 16,
     "num_key_value_heads": 2,  # real ratio: GQA, 8:1.
     "head_dim": 32,
@@ -77,7 +83,7 @@ QWEN3_5_MOE_SMALL_DIMS = {
     "shared_expert_intermediate_size": 32,
     "num_experts": 8,
     "top_k": 2,
-    "layer_types": ["full_attention"],
+    "layer_types": _LINEAR_LAYER_TYPES,
     "partial_rotary_factor": 0.25,
     "linear_num_key_heads": 16,
     "linear_num_value_heads": 32,  # real ratio: 16:32 = 1:2.
@@ -104,9 +110,9 @@ CAPPED_MESH_SHAPES = [
 ]
 
 # Expected sharding specs shared by the Tier-2 and Tier-3 mesh sweeps. These
-# cover the always-present (embedding + full-attention + MoE) weight classes;
-# the single sweep layer is `full_attention`, so linear-attention specs are
-# intentionally absent here (they are asserted by test_distribution instead).
+# cover both the full-attention and linear-attention (GatedDeltaNet) sublayer
+# weight classes -- the sweep builds one layer of each mixer (see
+# _LINEAR_LAYER_TYPES above) -- plus the always-present MoE weight classes.
 _SWEEP_EXPECTED_SHARDINGS = {
     "token_embedding/embeddings": ("model", "batch"),
     "token_embedding/reverse_embeddings": ("batch", "model"),
@@ -114,6 +120,9 @@ _SWEEP_EXPECTED_SHARDINGS = {
     "self_attention.*key.kernel": ("batch", None, None),
     "self_attention.*value.kernel": ("batch", None, None),
     "self_attention.*attention_output.kernel": ("model", None, "batch"),
+    "linear_attn.*in_proj_qkv.kernel": ("batch", "model"),
+    "linear_attn.*in_proj_z.kernel": ("batch", "model"),
+    "linear_attn.*out_proj.kernel": ("model", "batch"),
     "shared_expert/feedforward_gate_dense.kernel": ("batch", "model"),
     "shared_expert/feedforward_intermediate_dense.kernel": ("batch", "model"),
     "shared_expert/feedforward_output_dense.kernel": ("model", "batch"),
@@ -395,12 +404,15 @@ class Qwen3_5MoeBackboneTest(TestCase):
                 fetch_failures.append((preset, str(e)))
                 continue
             cfg = dict(cfg)
-            cfg["num_layers"] = 1
-            # Force a single full_attention layer: layout rules are
-            # per-decoder-block regexes, so depth/type mix is irrelevant to
-            # spec matching, and one attention layer keeps build memory
-            # bounded while still exercising the QKV-axis + MoE rules.
-            cfg["layer_types"] = ["full_attention"]
+            # Force a tiny hybrid stack: one layer of each token mixer so
+            # both the full-attention and linear-attention rule sets are
+            # asserted -- a single-type stack would silently never assert
+            # one mixer's rule set (see _LINEAR_LAYER_TYPES above) -- while
+            # keeping depth (and thus build memory) minimal. Layout rules
+            # are per-decoder-block regexes, so depth beyond one-of-each is
+            # irrelevant to spec matching.
+            cfg["num_layers"] = 2
+            cfg["layer_types"] = _LINEAR_LAYER_TYPES
             key = tuple(cfg.get(k) for k in dim_keys)
             if key not in width_classes:
                 width_classes[key] = (cfg, [])
@@ -476,18 +488,22 @@ class Qwen3_5MoeBackboneTest(TestCase):
 
                     # Memory-budget guard: memory-constrained local
                     # environments cannot locally build full-scale presets.
-                    # Estimate this width-class's single-decoder-block bf16
-                    # footprint -- embedding table (counted twice: Qwen3.5-MoE
-                    # defaults to untied embeddings, so
-                    # token_embedding/reverse_embeddings is a second real
-                    # vocab*hidden weight, not just the input embedding) +
-                    # GQA-scaled attention QKVO + the shared (always-active)
-                    # expert's 3 matrices + the routed expert bank's two
-                    # fused matrices, times a 3x safety margin for JAX/XLA
-                    # transient copies -- and skip the build if it exceeds a
-                    # tunable local threshold. The fetch/dedup/divisibility
-                    # logic above still exercises every registry preset
-                    # regardless.
+                    # Estimate this width-class's two-decoder-block (one
+                    # full-attention, one linear-attention -- see
+                    # _LINEAR_LAYER_TYPES above) bf16 footprint -- embedding
+                    # table (counted twice: Qwen3.5-MoE defaults to untied
+                    # embeddings, so token_embedding/reverse_embeddings is a
+                    # second real vocab*hidden weight, not just the input
+                    # embedding) + GQA-scaled attention QKVO + the linear-
+                    # attention block's in_proj_qkv/in_proj_z/out_proj
+                    # projections (the parameter bulk of real presets, where
+                    # most layers are linear_attention) + the shared
+                    # (always-active) expert's 3 matrices + the routed
+                    # expert bank's two fused matrices, times a 3x safety
+                    # margin for JAX/XLA transient copies -- and skip the
+                    # build if it exceeds a tunable local threshold. The
+                    # fetch/dedup/divisibility logic above still exercises
+                    # every registry preset regardless.
                     vocab = cfg["vocabulary_size"]
                     hidden = cfg["hidden_dim"]
                     moe_int = cfg["moe_intermediate_dim"]
@@ -495,10 +511,17 @@ class Qwen3_5MoeBackboneTest(TestCase):
                     n_exp = cfg["num_experts"]
                     num_kv_heads = cfg["num_key_value_heads"]
                     kv_ratio = num_kv_heads / num_query_heads
+                    linear_z_width = (
+                        cfg["linear_num_value_heads"]
+                        * cfg["linear_value_head_dim"]
+                    )
                     est_params = (
                         2 * vocab * hidden  # untied embeddings
                         + 2 * hidden * hidden  # attention q/o
                         + 2 * hidden * hidden * kv_ratio  # attention k/v
+                        + hidden * linear_qkv_width  # linear_attn in_proj_qkv
+                        + hidden * linear_z_width  # linear_attn in_proj_z
+                        + linear_z_width * hidden  # linear_attn out_proj
                         + 3 * hidden * shared_int  # shared expert
                         + n_exp * hidden * 2 * moe_int  # routed gate+up
                         + n_exp * moe_int * hidden  # routed down
