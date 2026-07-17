@@ -295,49 +295,42 @@ class Qwen3MoeBackbone(Backbone):
             `keras.distribution.LayoutMap` that contains the sharding spec
             for all the model weights.
         """
-        # The weight path and shape of the Llama backbone is like below
-        # token_embedding/embeddings                              (128256, 2048)
-        # repeat block for decoder
-        # transformer_layer_0/self_attention/query/kernel         (2048, 32, 64)
-        # transformer_layer_0/self_attention/key/kernel           (2048, 8, 64)
-        # transformer_layer_0/self_attention/value/kernel         (2048, 8, 64)
-        # transformer_layer_0/self_attention/attention_output/kernel
-        #                                                         (32, 64, 2048)
-        # transformer_layer_0/self_attention_layernorm/scale      (2048,)
-        # transformer_layer_0/feedforward_intermediate_dense/kernel
-        #                                                         (2048, 8192)
-        # transformer_layer_0/feedforward_gate_dense/kernel       (2048, 8192)
-        # transformer_layer_0/feedforward_output_dense/kerne      (8192, 2048)
-        # transformer_layer_0/feedforward_layernorm/scale         (2048,)
-
         if not isinstance(device_mesh, keras.distribution.DeviceMesh):
             raise ValueError(
                 "Invalid device_mesh type. Expected "
-                f"`keras.distribution.Device`, got {type(device_mesh)}"
+                f"`keras.distribution.DeviceMesh`, got {type(device_mesh)}"
             )
         if model_parallel_dim_name not in device_mesh.axis_names:
             raise ValueError(
                 f"{model_parallel_dim_name} is not found in the "
-                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
             )
         if data_parallel_dim_name not in device_mesh.axis_names:
             raise ValueError(
                 f"{data_parallel_dim_name} is not found in the "
-                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
             )
-        # Note that it is possible to further config the mesh to be 3D, eg
-        # (data, seq, model). We leave it as 2D for now for simplicity.
         data_dim = data_parallel_dim_name
         model_dim = model_parallel_dim_name
-        # The sharding config is based on the Gemma team training config.
-        # See https://arxiv.org/abs/2403.08295
         layout_map = keras.distribution.LayoutMap(device_mesh)
         layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
-        layout_map[
-            "transformer_layer.*self_attention.*(query|key|value).kernel"
-        ] = (
+        layout_map["token_embedding/reverse_embeddings"] = (
             model_dim,
             data_dim,
+        )
+        # Key/value kernels are sized by num_key_value_heads (GQA), which is
+        # independent of and typically much smaller than num_query_heads --
+        # sharding that small axis on the data-parallel dim would raise an
+        # IndivisibleError whenever the batch mesh dimension doesn't divide
+        # it, so key/value are left fully replicated on that axis.
+        layout_map["transformer_layer.*self_attention.*query.kernel"] = (
+            model_dim,
+            data_dim,
+            None,
+        )
+        layout_map["transformer_layer.*self_attention.*(key|value).kernel"] = (
+            model_dim,
+            None,
             None,
         )
         layout_map["transformer_layer.*attention_output.kernel"] = (
@@ -345,19 +338,25 @@ class Qwen3MoeBackbone(Backbone):
             None,
             data_dim,
         )
+        # Dense FFN fallback used in mlp_only_layers.
         layout_map[
-            "transformer_layer.*feedforward_intermediate_dense.kernel"
-        ] = (
-            data_dim,
-            model_dim,
-        )
-        layout_map["transformer_layer.*feedforward_gate_dense.kernel"] = (
-            data_dim,
-            model_dim,
-        )
-        layout_map["transformer_layer.*feedforward_output_dense.kernel"] = (
-            model_dim,
-            data_dim,
-        )
-
+            "transformer_layer.*qwen3_moe_mlp.*feedforward_intermediate_dense.kernel"
+        ] = (data_dim, model_dim)
+        layout_map[
+            "transformer_layer.*qwen3_moe_mlp.*feedforward_gate_dense.kernel"
+        ] = (data_dim, model_dim)
+        layout_map[
+            "transformer_layer.*qwen3_moe_mlp.*feedforward_output_dense.kernel"
+        ] = (model_dim, data_dim)
+        # Routed experts.
+        layout_map[
+            "transformer_layer.*experts/expert_feedforward_gate_dense"
+        ] = (None, data_dim, model_dim)
+        layout_map[
+            "transformer_layer.*experts/expert_feedforward_output_dense"
+        ] = (None, model_dim, data_dim)
+        # Router.
+        layout_map[
+            "transformer_layer.*sparse_feedforward_gate_dense/kernel"
+        ] = (data_dim, None)
         return layout_map
