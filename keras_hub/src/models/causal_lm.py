@@ -313,7 +313,7 @@ class CausalLM(Task):
             max_length: Optional. int. The max length of the generated sequence.
                 Will default to the max configured `sequence_length` of the
                 `preprocessor`. If `preprocessor` is `None`, `inputs` should
-                already bepadded to the desired maximum length.
+                already be added to the desired maximum length.
                 Passing `max_length` in this case raises a `ValueError`.
             stop_token_ids: Optional. `None`, "auto", or tuple of token ids.
                 Defaults to "auto" which uses the
