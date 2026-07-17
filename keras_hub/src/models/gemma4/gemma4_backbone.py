@@ -773,6 +773,231 @@ class Gemma4Backbone(Backbone):
         )
         return config
 
+    @staticmethod
+    def get_layout_map(
+        device_mesh,
+        model_parallel_dim_name="model",
+        data_parallel_dim_name="batch",
+    ):
+        """Get a `keras.distribution.LayoutMap` for model parallel distribution.
+
+        The returned `LayoutMap` contains the sharding spec for the Gemma4
+        backbone weights: the text decoder (including the MoE expert-bank and
+        router weights used by the 26b-a4b architecture), the vision tower
+        (`Gemma4VisionEncoder`), and the audio conformer encoder
+        (`Gemma4AudioEncoder`). The vision and audio towers reuse the same
+        Megatron column/row-parallel convention as the text decoder:
+        attention query and the first FFW/gating projection are
+        column-parallel (sharded on the `model` axis), while attention output
+        and the down-projection are row-parallel. Key/value projections are
+        left replicated on the `model` axis (their head counts can be small
+        and need not divide the device count), with their hidden dimension
+        sharded on the `data` axis for memory. A handful of weights are
+        intentionally left replicated: the vision patch-embedding projection
+        and 2D position-embedding table, the audio sub-sampling / depthwise
+        convolutions, the audio relative-position projection, the audio input
+        feature projection, and all embedding-model pooling-head and
+        per-layer-input weights. Because the vision encoder is constructed in
+        float32, distributed multimodal use must build it inside the
+        `distribution.scope()` (otherwise `fit()` mixes local and distributed
+        variables and raises a device-placement error).
+
+        Args:
+            device_mesh: keras.distribution.DeviceMesh. The device mesh
+                instance for distribution.
+            model_parallel_dim_name: str. The axis name of the device mesh,
+                where the weights should be partitioned on.
+            data_parallel_dim_name: str. The axis name of the device mesh,
+                where the data should be partitioned on.
+
+        Returns:
+            `keras.distribution.LayoutMap` that contains the sharding spec
+            for all the model weights.
+        """
+        if not isinstance(device_mesh, keras.distribution.DeviceMesh):
+            raise ValueError(
+                "Invalid device_mesh type. Expected "
+                f"`keras.distribution.DeviceMesh`, got {type(device_mesh)}"
+            )
+        if model_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{model_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+        if data_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{data_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+
+        data_dim = data_parallel_dim_name
+        model_dim = model_parallel_dim_name
+        layout_map = keras.distribution.LayoutMap(device_mesh)
+        layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
+        # Key/value kernels are sized by `effective_num_kv_heads`, which can
+        # be as few as 1-2 (e.g. global-attention layers via
+        # `num_global_key_value_heads`) and independent of `num_query_heads`
+        # -- sharding them on the model axis would raise an IndivisibleError
+        # whenever the device count doesn't divide that small head count, so
+        # they are left replicated while query stays sharded.
+        layout_map["decoder_block.*attention.*query.kernel"] = (
+            model_dim,
+            data_dim,
+            None,
+        )
+        layout_map["decoder_block.*attention.*(key|value).kernel"] = (
+            None,
+            data_dim,
+            None,
+        )
+        layout_map["decoder_block.*attention_output.kernel"] = (
+            model_dim,
+            None,
+            data_dim,
+        )
+        layout_map["decoder_block.*ffw_gating.kernel"] = (data_dim, model_dim)
+        layout_map["decoder_block.*ffw_gating_2.kernel"] = (data_dim, model_dim)
+        layout_map["decoder_block.*ffw_linear.kernel"] = (model_dim, data_dim)
+        # MoE experts (26b-a4b). The leading dimension is the expert count
+        # and is left replicated so the map works for small test configs.
+        layout_map["decoder_block.*moe_expert_bank/gate_proj"] = (
+            None,
+            data_dim,
+            model_dim,
+        )
+        layout_map["decoder_block.*moe_expert_bank/up_proj"] = (
+            None,
+            data_dim,
+            model_dim,
+        )
+        layout_map["decoder_block.*moe_expert_bank/down_proj"] = (
+            None,
+            model_dim,
+            data_dim,
+        )
+        # Router.
+        layout_map["decoder_block.*moe_router/proj/kernel"] = (
+            data_dim,
+            None,
+        )
+
+        # === Vision tower (Gemma4VisionEncoder) ===
+        # The vision encoder reuses Gemma4 decoder blocks, so its attention
+        # and FFW kernels share the text decoder's 3-D Gemma-convention axis
+        # order -- query/key/value kernel = (heads, hidden, head_dim) via
+        # einsum `bsd,qdh->bsqh`; attention_output = (heads, head_dim, hidden)
+        # via `btnh,nhd->btd`. The clippable-einsum wrapper nests the real
+        # weight one level deeper (`.../attention/query/dense/kernel`), so
+        # these patterns end in `/dense.kernel`. Query is column-parallel
+        # (heads on the model axis); key/value stay replicated on the model
+        # axis (small kv-head count) with hidden sharded on data, mirroring
+        # the text decoder above.
+        layout_map["image_encoder.*attention.*query/dense.kernel"] = (
+            model_dim,
+            data_dim,
+            None,
+        )
+        layout_map["image_encoder.*attention.*(key|value)/dense.kernel"] = (
+            None,
+            data_dim,
+            None,
+        )
+        layout_map["image_encoder.*attention_output/dense.kernel"] = (
+            model_dim,
+            None,
+            data_dim,
+        )
+        # Vision FFW: gating projections are column-parallel (hidden ->
+        # intermediate, sharded on model); the down-projection is
+        # row-parallel.
+        layout_map["image_encoder.*ffw_gating/dense.kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["image_encoder.*ffw_gating_2/dense.kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["image_encoder.*ffw_linear/dense.kernel"] = (
+            model_dim,
+            data_dim,
+        )
+        # Post-pooling projection into the text hidden space (row-parallel).
+        layout_map["vision_output_encoder.*vision_input_projection.kernel"] = (
+            model_dim,
+            data_dim,
+        )
+        # Intentionally replicated in the vision tower (small / not a matmul
+        # contraction the way the sharded kernels are):
+        #   * `patch_embedder/input_proj/kernel` -- flat patch-pixel -> hidden
+        #     projection; the patch-pixel input dim is not a model-parallel
+        #     axis.
+        #   * `patch_embedder/position_embedding_table` -- 2D learnable
+        #     position embedding, gathered per-position not matmul-contracted.
+
+        # === Audio conformer encoder (Gemma4AudioEncoder) ===
+        # The conformer's feed-forward, attention, and lightweight-conv linear
+        # projections are 2-D Dense kernels `(in, out)` wrapped in the
+        # clippable-dense layer (weight at `.../<name>_dense/kernel`). Apply
+        # the same column/row-parallel convention: the "up" projections
+        # (ffw_1, lconv linear_start, attention q/k/v) are column-parallel
+        # (out dim on the model axis); the "down" projections (ffw_2, lconv
+        # linear_end, attention out_proj) are row-parallel (contracting dim on
+        # the model axis).
+        layout_map["conformer.*ffw_start_ffw_1.*dense/kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["conformer.*ffw_start_ffw_2.*dense/kernel"] = (
+            model_dim,
+            data_dim,
+        )
+        layout_map["conformer.*ffw_end_ffw_1.*dense/kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["conformer.*ffw_end_ffw_2.*dense/kernel"] = (
+            model_dim,
+            data_dim,
+        )
+        layout_map["conformer.*attention_attn_q_proj.*dense/kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["conformer.*attention_attn_k_proj.*dense/kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["conformer.*attention_attn_v_proj.*dense/kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["conformer.*attention_out_proj.*dense/kernel"] = (
+            model_dim,
+            data_dim,
+        )
+        layout_map["conformer.*lconv_linear_start.*dense/kernel"] = (
+            data_dim,
+            model_dim,
+        )
+        layout_map["conformer.*lconv_linear_end.*dense/kernel"] = (
+            model_dim,
+            data_dim,
+        )
+        # Final projection of audio soft tokens into the text hidden space
+        # (column-parallel is arbitrary here; pick the up-projection form).
+        layout_map["audio_output_projection/kernel"] = (data_dim, model_dim)
+        # Intentionally replicated in the audio tower:
+        #   * `conv/kernel` / `depthwise_conv/kernel` -- the sub-sampling
+        #     Conv2D stack and the conformer depthwise Conv1D; convolution
+        #     kernels are left replicated (channel counts are small and the
+        #     depthwise conv operates per-channel on channel-sharded
+        #     activations, so a replicated kernel stays local).
+        #   * `rpe/pos_proj` -- relative-position embedding projection.
+        #   * `input_proj/kernel` -- mel-feature -> hidden input projection;
+        #     the input feature dim is not a model-parallel axis.
+        return layout_map
+
     def default_lora_layer_names(self):
         target_names = super().default_lora_layer_names()
         if not self.text_only_model:
