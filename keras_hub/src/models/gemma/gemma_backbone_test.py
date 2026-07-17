@@ -191,6 +191,7 @@ class GemmaBackboneTest(TestCase):
         self.assertEqual(model.count_params(), 3216)
         self.assertEqual(len(model.layers), 6)
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # Note (preserved from the pre-refactor manual test): mesh is
         # pinned to exactly 2 devices (not len(devices), see the shared
@@ -219,6 +220,7 @@ class GemmaBackboneTest(TestCase):
             allow_replicated=(),
         )
 
+    @pytest.mark.multi_device
     def test_distribution_with_lora(self):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
