@@ -145,6 +145,7 @@ class MistralBackboneTest(TestCase):
         # Reference value calculated using the PyTorch model
         self.assertEqual(model.count_params(), 2704)
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # Note (preserved from the pre-refactor manual test): mesh is
         # pinned to exactly 2 devices (not len(devices), see the shared
@@ -190,6 +191,7 @@ class MistralBackboneTest(TestCase):
         for dims in (MISTRAL_7B_DIMS, MISTRAL_LARGE_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
