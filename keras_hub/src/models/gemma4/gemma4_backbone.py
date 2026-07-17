@@ -880,6 +880,31 @@ class Gemma4Backbone(Backbone):
             data_dim,
             None,
         )
+        # Intentionally replicated: the per-layer-input weights (built only
+        # when `hidden_size_per_layer_input > 0`, see the backbone's
+        # docstring/`__init__`). Both the backbone-level weights and the
+        # per-decoder-block weights below are gated by the same flag.
+        #   * `per_layer_token_embedding/embeddings` -- an `Embedding` table
+        #     of shape `(vocab, num_layers * hidden_size_per_layer_input)`,
+        #     gathered per-token like `token_embedding`, but its output
+        #     column count is not itself a matmul-contraction the way the
+        #     decoder kernels above are.
+        #   * `per_layer_model_projection/kernel` -- a `Dense` kernel of
+        #     shape `(hidden_dim, num_layers * hidden_size_per_layer_input)`
+        #     projecting the (small) scaled text embedding into the
+        #     per-layer-input space. Sharding it would need a matching
+        #     unshard/reshard around the per-layer slicing done in
+        #     `Gemma4Backbone.__init__` (`proj_i = per_layer_proj_flat[:, :,
+        #     i * hpl : (i + 1) * hpl]`), so it is left replicated like the
+        #     vision/audio tower's small non-contraction weights above.
+        #   * `decoder_block.*per_layer_input_gate/kernel` /
+        #     `decoder_block.*per_layer_up_proj/kernel` -- the per-block
+        #     token-conditioned gate (see
+        #     `Gemma4TextDecoderBlock.__init__`); both project the small
+        #     `hidden_size_per_layer_input`-wide per-layer slice, not the
+        #     full `hidden_dim`/`intermediate_dim` contraction the
+        #     attention/FFW rules above target, so they are left replicated
+        #     too.
 
         # === Vision tower (Gemma4VisionEncoder) ===
         # The vision encoder reuses Gemma4 decoder blocks, so its attention
