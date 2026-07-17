@@ -305,11 +305,37 @@ class LlamaBackbone(Backbone):
         # See https://arxiv.org/abs/2403.08295
         layout_map = keras.distribution.LayoutMap(device_mesh)
         layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
-        layout_map[
-            "transformer_layer.*self_attention.*(query|key|value).kernel"
-        ] = (
-            model_dim,
+        # tie_word_embeddings defaults to False, so a separate
+        # token_embedding/reverse_embeddings output-projection tensor exists
+        # for essentially every real Llama model. The tensor is
+        # (hidden_dim, vocabulary_size); vocab-parallel output projection
+        # wants vocab sharded on the model axis, consistent with
+        # token_embedding/embeddings (vocab, hidden) = (model_dim, data_dim)
+        # above.
+        layout_map["token_embedding/reverse_embeddings"] = (
             data_dim,
+            model_dim,
+        )
+        # Query kernel is (hidden_dim, num_query_heads, head_dim) -- the
+        # contracting hidden dim goes on the data axis and heads go on the
+        # model axis (Megatron column-parallel), matching
+        # attention_output's own (heads, head_dim, hidden) -> (model, None,
+        # data) row-parallel convention below.
+        layout_map["transformer_layer.*self_attention.*query.kernel"] = (
+            data_dim,
+            model_dim,
+            None,
+        )
+        # Key/value kernels are sized by num_key_value_heads (GQA), which is
+        # independent of and typically much smaller than num_query_heads --
+        # sharding that small heads axis on the model-parallel dim would
+        # raise an IndivisibleError whenever the model mesh dimension
+        # doesn't divide it, so the heads axis is left fully replicated on
+        # model while the hidden (contracting) dim is sharded on data for
+        # memory savings, mirroring the Gemma-family convention.
+        layout_map["transformer_layer.*self_attention.*(key|value).kernel"] = (
+            data_dim,
+            None,
             None,
         )
         layout_map["transformer_layer.*attention_output.kernel"] = (
