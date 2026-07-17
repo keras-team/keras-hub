@@ -281,12 +281,12 @@ class GemmaBackbone(Backbone):
         if model_parallel_dim_name not in device_mesh.axis_names:
             raise ValueError(
                 f"{model_parallel_dim_name} is not found in the "
-                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
             )
         if data_parallel_dim_name not in device_mesh.axis_names:
             raise ValueError(
                 f"{data_parallel_dim_name} is not found in the "
-                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
             )
         # Note that it is possible to further config the mesh to be 3D, eg
         # (data, seq, model). We leave it as 2D for now for simplicity.
