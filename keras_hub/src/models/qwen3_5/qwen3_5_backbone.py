@@ -371,8 +371,8 @@ class Qwen3_5Backbone(Backbone):
         The returned `LayoutMap` contains the sharding spec for the
         Qwen3_5 backbone's text-decoder full-attention layers,
         linear-attention (GatedDeltaNet) layers, feedforward layers, and
-        embeddings. The vision encoder/interleave weights are left
-        replicated for now -- see Limitations in the PR description.
+        embeddings. The optional vision encoder's weights are intentionally
+        left replicated for now; only the text decoder is sharded.
 
         Args:
             device_mesh: keras.distribution.DeviceMesh. The device mesh
