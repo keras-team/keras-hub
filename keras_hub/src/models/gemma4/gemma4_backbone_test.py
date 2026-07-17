@@ -91,6 +91,20 @@ _AUDIO_ALLOW_REPLICATED = (
     r"rpe/pos_proj",  # relative-position projection
     r"(^|/)input_proj/kernel",  # mel-feature -> hidden input projection
 )
+# Per-layer-input weights (built only when `hidden_size_per_layer_input > 0`,
+# see `get_layout_map`'s docstring). Covers both the backbone-level weights
+# (`per_layer_token_embedding`, `per_layer_model_projection`) and the
+# per-decoder-block weights (`per_layer_input_gate`, `per_layer_up_proj` --
+# see `Gemma4TextDecoderBlock.__init__`), which are gated by the same flag
+# and are equally unmapped. No current registry preset enables this feature,
+# but the Tier-2/Tier-3 mesh sweeps must not fail coverage the moment a
+# future preset or width class does.
+_TEXT_ALLOW_REPLICATED = (
+    r"per_layer_token_embedding/embeddings",
+    r"per_layer_model_projection/kernel",
+    r"decoder_block.*per_layer_input_gate/kernel",
+    r"decoder_block.*per_layer_up_proj/kernel",
+)
 
 # Dims for the Tier-2 CI-safe mesh-shape sweep: representative real-preset
 # dimensions, frozen as literals and sourced once, offline -- do not add a
@@ -169,7 +183,9 @@ CAPPED_MESH_SHAPES = [
 ]
 
 
-def _assert_text_shardings_and_coverage(test_case, model, layout_map):
+def _assert_text_shardings_and_coverage(
+    test_case, model, layout_map, allow_replicated=_TEXT_ALLOW_REPLICATED
+):
     """Shared spec + coverage assertions for the Tier-2/3 text mesh sweeps."""
     for pattern, expected in _TEXT_EXPECTED_SHARDINGS.items():
         matches = [w for w in model.weights if re.search(pattern, w.path)]
@@ -183,7 +199,9 @@ def _assert_text_shardings_and_coverage(test_case, model, layout_map):
     offending = [
         w.path
         for w in model.weights
-        if len(w.shape) >= 2 and layout_map[w.path] is None
+        if len(w.shape) >= 2
+        and layout_map[w.path] is None
+        and not any(re.search(p, w.path) for p in allow_replicated)
     ]
     test_case.assertEqual(
         offending,
