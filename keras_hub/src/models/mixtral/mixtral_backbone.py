@@ -203,3 +203,98 @@ class MixtralBackbone(Backbone):
             }
         )
         return config
+
+    @staticmethod
+    def get_layout_map(
+        device_mesh,
+        model_parallel_dim_name="model",
+        data_parallel_dim_name="batch",
+    ):
+        """Get a `keras.distribution.LayoutMap` for model parallel distribution.
+
+        The returned `LayoutMap` contains the sharding spec for the Mixtral
+        backbone weights.
+
+        Args:
+            device_mesh: keras.distribution.DeviceMesh. The device mesh
+                instance for distribution.
+            model_parallel_dim_name: str. The axis name of the device mesh,
+                where the weights should be partitioned on.
+            data_parallel_dim_name: str. The axis name of the device mesh,
+                where the data should be partitioned on.
+
+        Returns:
+            `keras.distribution.LayoutMap` that contains the sharding spec
+            for all the model weights.
+        """
+        if not isinstance(device_mesh, keras.distribution.DeviceMesh):
+            raise ValueError(
+                "Invalid device_mesh type. Expected "
+                f"`keras.distribution.DeviceMesh`, got {type(device_mesh)}"
+            )
+        if model_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{model_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+        if data_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{data_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+
+        data_dim = data_parallel_dim_name
+        model_dim = model_parallel_dim_name
+        layout_map = keras.distribution.LayoutMap(device_mesh)
+        layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
+        # The output projection is `(hidden, vocab)` -- vocab-parallel wants
+        # vocab-on-model, consistent with the `embeddings` rule above; this
+        # is the reverse of the query/kv convention below since the
+        # contracting dim here is hidden, not the sharded output dim.
+        layout_map["token_embedding/reverse_embeddings"] = (
+            data_dim,
+            model_dim,
+        )
+        # Query/key/value kernels are `(hidden, heads, head_dim)` (einsum
+        # `bqm,muh->bquh`), i.e. hidden is the contracting dim, not the
+        # heads axis -- unlike Gemma's `(heads, hidden, head_dim)` layout.
+        # So hidden (the contracting dim) goes on the data-parallel axis and
+        # heads go on the model-parallel axis (Megatron column-parallel),
+        # matching this layer's own `attention_output` rule below. Key/value
+        # kernels are sized by num_key_value_heads (GQA), which is
+        # independent of and typically much smaller than num_query_heads --
+        # sharding that small axis on the model-parallel dim would raise an
+        # IndivisibleError whenever the model mesh dimension doesn't divide
+        # it, so key/value heads are left fully replicated on that axis
+        # while hidden still shards on the data-parallel axis for memory.
+        layout_map["transformer_layer.*self_attention.*query.kernel"] = (
+            data_dim,
+            model_dim,
+            None,
+        )
+        layout_map["transformer_layer.*self_attention.*(key|value).kernel"] = (
+            data_dim,
+            None,
+            None,
+        )
+        layout_map["transformer_layer.*attention_output.kernel"] = (
+            model_dim,
+            None,
+            data_dim,
+        )
+        # MoE experts. The leading dimension is the expert count and is left
+        # replicated so the map works for small test configs.
+        layout_map[
+            "transformer_layer.*experts/expert_feedforward_gate_dense"
+        ] = (None, data_dim, model_dim)
+        layout_map[
+            "transformer_layer.*experts/expert_feedforward_intermediate_dense"
+        ] = (None, data_dim, model_dim)
+        layout_map[
+            "transformer_layer.*experts/expert_feedforward_output_dense"
+        ] = (None, model_dim, data_dim)
+        # Router.
+        layout_map[
+            "transformer_layer.*sparse_feedforward_gate_dense/kernel"
+        ] = (data_dim, None)
+        return layout_map
