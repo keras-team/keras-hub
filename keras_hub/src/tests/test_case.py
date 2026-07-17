@@ -1092,6 +1092,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             # Forward.
             out = model(input_data)
             for leaf in tree.flatten(out):
+                # Some backbones can return an optional None leaf (e.g. an
+                # unset auxiliary output) -- skip rather than fail on it.
+                if leaf is None:
+                    continue
                 self.assertTrue(
                     np.isfinite(ops.convert_to_numpy(leaf)).all(),
                     "Forward output contains non-finite values.",
@@ -1100,7 +1104,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             # Backward + optimizer step.
             if run_training:
                 y = tree.map_structure(
-                    lambda o: np.zeros(o.shape, "float32"), out
+                    lambda o: (
+                        None if o is None else np.zeros(o.shape, "float32")
+                    ),
+                    out,
                 )
                 batch_size = tree.flatten(input_data)[0].shape[0]
                 model.compile(optimizer="sgd", loss="mse")
@@ -1152,7 +1159,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 ]
                 parity_mesh = keras.distribution.DeviceMesh(
                     shape=mesh_shape,
-                    axis_names=("batch", "model"),
+                    axis_names=(
+                        ("batch", "model")
+                        if len(mesh_shape) == 2
+                        else ("batch", "seq", "model")
+                    ),
                     devices=parity_devices,
                 )
                 parity_layout_map = cls.get_layout_map(
@@ -1172,21 +1183,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     distributed_model = cls(**kwargs)
                     distributed_out = distributed_model(input_data)
 
-                # Forward parity. Both calls happen outside any
-                # distribution scope so neither model's ops pick up a
-                # scope they weren't built under -- `distributed_out` was
-                # already computed above, inside the scope where
-                # `distributed_model` lives; only comparing here.
-                for u_leaf, d_leaf in zip(
-                    tree.flatten(undistributed_out),
-                    tree.flatten(distributed_out),
-                ):
-                    self.assertAllClose(
-                        ops.convert_to_numpy(u_leaf),
-                        ops.convert_to_numpy(d_leaf),
-                        rtol=rtol,
-                        atol=atol,
-                    )
+                # Forward parity. `assertAllClose` already recurses through
+                # nested structures (see the class override above) -- a
+                # manual tree.flatten()+zip() here would silently truncate
+                # on a structure-length mismatch instead of failing loudly,
+                # so compare the structures directly.
+                self.assertAllClose(
+                    undistributed_out, distributed_out, rtol=rtol, atol=atol
+                )
 
                 # 5-step training-convergence parity. Fixed SGD+mse
                 # choice -- do not substitute Adam without re-verifying,
@@ -1197,7 +1201,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 # single shared `with` block mixes local and distributed
                 # device placement and raises a JAX device-mismatch error.
                 y = tree.map_structure(
-                    lambda o: np.zeros(o.shape, "float32"),
+                    lambda o: (
+                        None if o is None else np.zeros(o.shape, "float32")
+                    ),
                     undistributed_out,
                 )
                 batch_size = tree.flatten(input_data)[0].shape[0]
@@ -1208,28 +1214,31 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     distributed_model.compile(
                         optimizer=keras.optimizers.SGD(0.01), loss="mse"
                     )
-                for _ in range(5):
-                    u_history = undistributed_model.fit(
+                # A single fit(epochs=5) call over one batch runs exactly 5
+                # train steps and returns all 5 losses in history.history
+                # ["loss"] -- equivalent to looping fit(epochs=1) 5 times,
+                # but avoids 5x the per-call Keras/JAX setup overhead.
+                u_history = undistributed_model.fit(
+                    input_data,
+                    y,
+                    batch_size=batch_size,
+                    epochs=5,
+                    verbose=0,
+                )
+                with parity_distribution.scope():
+                    d_history = distributed_model.fit(
                         input_data,
                         y,
                         batch_size=batch_size,
-                        epochs=1,
+                        epochs=5,
                         verbose=0,
                     )
-                    with parity_distribution.scope():
-                        d_history = distributed_model.fit(
-                            input_data,
-                            y,
-                            batch_size=batch_size,
-                            epochs=1,
-                            verbose=0,
-                        )
-                    self.assertAllClose(
-                        u_history.history["loss"][0],
-                        d_history.history["loss"][0],
-                        rtol=rtol,
-                        atol=atol,
-                    )
+                self.assertAllClose(
+                    u_history.history["loss"],
+                    d_history.history["loss"],
+                    rtol=rtol,
+                    atol=atol,
+                )
                 del undistributed_model, distributed_model
                 gc.collect()
 
