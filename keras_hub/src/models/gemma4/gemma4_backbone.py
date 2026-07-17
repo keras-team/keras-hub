@@ -984,6 +984,15 @@ class Gemma4Backbone(Backbone):
             model_dim,
             data_dim,
         )
+        # Intermediate projection (built whenever `output_proj_dims` is not
+        # `None`; the class default is `1536`, so real presets build this
+        # weight): conformer hidden_size -> output_proj_dims, immediately
+        # upstream of `audio_output_projection`. Row-parallel (contracting
+        # dim on the model axis), consistent with the tower's other
+        # out-projections (`ffw_end_ffw_2`, `lconv_linear_end`,
+        # `attention_out_proj`) -- its input activations arrive already
+        # row-parallel-reduced from the conformer stack above.
+        layout_map["output_proj/kernel"] = (model_dim, data_dim)
         # Final projection of audio soft tokens into the text hidden space
         # (column-parallel is arbitrary here; pick the up-projection form).
         layout_map["audio_output_projection/kernel"] = (data_dim, model_dim)
