@@ -1,5 +1,6 @@
 import gc
 import json
+import os
 import re
 
 import keras
@@ -17,9 +18,9 @@ from keras_hub.src.utils.preset_utils import get_file
 # `get_file` call to the Tier-2 test body itself (that's what Tier 3,
 # `test_layout_map_live_presets` below, is for).
 #
-# MEMORY NOTE: this local dev machine cannot load full-scale model dims (see
-# `gemma_backbone_test.py`'s identical note for the OOM history that
-# established this rule). GPT-OSS real presets (`gpt_oss_20b_en`,
+# MEMORY NOTE: memory-constrained local environments cannot load full-scale
+# model dims (see `gemma_backbone_test.py`'s identical note for the OOM
+# history that established this rule). GPT-OSS real presets (`gpt_oss_20b_en`,
 # `gpt_oss_120b_en`) share `num_attention_heads=64`, `num_key_value_heads=8`
 # (an 8:1 GQA ratio), `hidden_size=2880`, `head_dim=64`, and differ mainly in
 # `num_local_experts` (32 vs 128) and `num_hidden_layers` (24 vs 36). What
@@ -37,7 +38,7 @@ from keras_hub.src.utils.preset_utils import get_file
 # per-width-class memory-budget skip (accounting for the MoE expert banks,
 # the real parameter bulk) so it never attempts a full-scale build locally
 # either -- true full-scale verification happens offline on a machine with
-# more RAM (Tier 4 in the design doc), not on this box.
+# more RAM (Tier 4 in the design doc), not in this environment.
 GPT_OSS_20B_DIMS = {
     "source_preset": "gpt_oss_20b_en (real ratio, memory-scaled dims)",
     "vocabulary_size": 2000,
@@ -63,16 +64,15 @@ GPT_OSS_120B_DIMS = {
     "top_k": 4,  # matches real top_k=4.
 }
 
-# Hard-capped mesh-shape list for this shared 37GB dev machine. The full
-# 10-shape matrix from the testing-strategy doc is
+# Hard-capped mesh-shape list for memory-constrained local environments. The
+# full 10-shape matrix from the testing-strategy doc is
 # 2x4, 1x8, 4x4, 8x8, 16x16, 2x2x2, 1x1x8, 2x2x4, 4x4x4, 4x4x8 -- shapes
 # 8x8, 16x16, 4x4x4, 4x4x8 (64-256 virtual devices) are DELIBERATELY
-# DROPPED here due to a demonstrated systemd-oomd OOM kill of the entire
-# desktop app on this shared machine during an earlier attempt at this same
-# pipeline (confirmed via journalctl; see `gemma_backbone_test.py`'s
-# identical constant/comment). Do not attempt the dropped shapes even
-# experimentally on this box -- revisiting them requires a dedicated or CI
-# machine, not this one.
+# DROPPED here due to a demonstrated OOM kill of the entire desktop
+# environment during an earlier attempt at this same pipeline (confirmed via
+# journalctl; see `gemma_backbone_test.py`'s identical constant/comment). Do
+# not attempt the dropped shapes even experimentally in these environments --
+# revisiting them requires a dedicated or CI machine with more memory.
 CAPPED_MESH_SHAPES = [
     (2, 4),
     (1, 8),
@@ -136,7 +136,7 @@ class GptOssBackboneTest(TestCase):
             "num_key_value_heads": 4,
             "hidden_dim": 16,
             "intermediate_dim": 8,
-            "num_experts": 2,
+            "num_experts": 4,
             "top_k": 2,
             "sliding_window": 2,
         }
@@ -171,7 +171,7 @@ class GptOssBackboneTest(TestCase):
         # - Attention: q, k, v, o projections + sinks
         # - MoE: router (w+b) + experts (gate_up_proj (w+b), down_proj (w+b))
         # - Layer norms: hidden_dim each
-        self.assertEqual(model.count_params(), 3780)
+        self.assertEqual(model.count_params(), 5512)
 
     def test_distribution(self):
         # Note (preserved from the pre-refactor manual test): mesh is
@@ -254,8 +254,8 @@ class GptOssBackboneTest(TestCase):
         )
         init_kwargs = {k: v for k, v in dims.items() if k != "source_preset"}
         with distribution.scope():
-            # bfloat16: a memory mitigation for this shared dev machine --
-            # spec assertions are dtype-independent.
+            # bfloat16: a memory mitigation for memory-constrained local
+            # environments -- spec assertions are dtype-independent.
             model = GptOssBackbone(dtype="bfloat16", **init_kwargs)
             _assert_gpt_oss_shardings_and_coverage(self, model, layout_map)
         del model
@@ -270,9 +270,10 @@ class GptOssBackboneTest(TestCase):
 
         # Fetch every preset's config only (no weights), then dedupe by the
         # divisibility-relevant dims so width-classes that share a config
-        # are only built once per mesh shape -- a memory/time necessity on
-        # this machine, while every preset in the registry is still fetched
-        # and evaluated, preserving full registry coverage.
+        # are only built once per mesh shape -- a memory/time necessity in
+        # memory-constrained local environments, while every preset in the
+        # registry is still fetched and evaluated, preserving full registry
+        # coverage.
         dim_keys = (
             "vocabulary_size",
             "num_query_heads",
@@ -299,7 +300,8 @@ class GptOssBackboneTest(TestCase):
             # num_layers is forced to 1 below regardless of the real
             # value -- layout rules are per-decoder-block regexes, so
             # depth is irrelevant to spec matching/divisibility, and 1
-            # layer keeps build memory bounded on this shared machine.
+            # layer keeps build memory bounded in memory-constrained local
+            # environments.
             cfg = dict(cfg)
             cfg["num_layers"] = 1
             key = tuple(cfg.get(k) for k in dim_keys)
@@ -358,10 +360,10 @@ class GptOssBackboneTest(TestCase):
                         skip_reasons.append(reason)
                         continue
 
-                    # Memory-budget guard: this shared dev machine cannot
-                    # locally build full-scale presets (see
-                    # CAPPED_MESH_SHAPES' comment for the OOM history that
-                    # established this rule). Estimate this width-class's
+                    # Memory-budget guard: memory-constrained local
+                    # environments cannot locally build full-scale presets
+                    # (see CAPPED_MESH_SHAPES' comment for the OOM history
+                    # that established this rule). Estimate this width-class's
                     # single-decoder-block bf16 footprint. Unlike a dense
                     # model, GPT-OSS's parameter bulk is its MoE expert
                     # banks (gate_up_proj + down_proj, per expert), so the
@@ -395,14 +397,19 @@ class GptOssBackboneTest(TestCase):
                         + num_experts * (hidden * 2 * inter + inter * hidden)
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
-                    max_local_bytes = 300 * 1024 * 1024  # 300MB
+                    max_local_bytes = int(
+                        os.environ.get(
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET",
+                            300 * 1024 * 1024,
+                        )
+                    )
                     if est_bytes > max_local_bytes:
                         reason = (
                             f"{combo_label}: estimated build memory "
                             f"~{est_bytes / 1e9:.2f}GB exceeds the "
                             f"{max_local_bytes / 1e6:.0f}MB local safety "
-                            "threshold on this shared, RAM-constrained "
-                            "dev machine -- verify this width-class on a "
+                            "threshold for memory-constrained local "
+                            "environments -- verify this width-class on a "
                             "machine with more RAM or in CI"
                         )
                         skip_reasons.append(reason)
@@ -422,9 +429,7 @@ class GptOssBackboneTest(TestCase):
                     distribution = keras.distribution.ModelParallel(
                         layout_map=layout_map, batch_dim_name="batch"
                     )
-                    init_kwargs = {
-                        k: v for k, v in cfg.items() if k in dim_keys
-                    }
+                    init_kwargs = {k: v for k, v in cfg.items() if k != "dtype"}
                     init_kwargs["num_layers"] = 1
                     with distribution.scope():
                         model = GptOssBackbone(dtype="bfloat16", **init_kwargs)
