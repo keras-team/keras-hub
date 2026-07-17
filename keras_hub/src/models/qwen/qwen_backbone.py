@@ -258,34 +258,39 @@ class QwenBackbone(Backbone):
             for all the model weights.
         """
         # The weight path and shape of the Qwen backbone is like below
-        # token_embedding/embeddings                              (128256, 2048)
+        # (dims shown for qwen2.5_0.5b_en: vocab=151936, hidden=896,
+        # num_query_heads=14, num_key_value_heads=2, head_dim=64,
+        # intermediate_dim=4864):
+        # token_embedding/embeddings                              (151936, 896)
         # repeat block for decoder
-        # transformer_layer_0/self_attention/query/kernel         (2048, 32, 64)
-        # transformer_layer_0/self_attention/key/kernel           (2048, 8, 64)
-        # transformer_layer_0/self_attention/value/kernel         (2048, 8, 64)
+        # transformer_layer_0/self_attention/query/kernel         (896, 14, 64)
+        # transformer_layer_0/self_attention/key/kernel           (896, 2, 64)
+        # transformer_layer_0/self_attention/value/kernel         (896, 2, 64)
         # transformer_layer_0/self_attention/attention_output/kernel
-        #                                                         (32, 64, 2048)
-        # transformer_layer_0/self_attention_layernorm/scale      (2048,)
+        #                                                         (14, 64, 896)
+        # transformer_layer_0/self_attention_layernorm/scale      (896,)
         # transformer_layer_0/feedforward_intermediate_dense/kernel
-        #                                                         (2048, 8192)
-        # transformer_layer_0/feedforward_gate_dense/kernel       (2048, 8192)
-        # transformer_layer_0/feedforward_output_dense/kerne      (8192, 2048)
-        # transformer_layer_0/feedforward_layernorm/scale         (2048,)
+        #                                                         (896, 4864)
+        # transformer_layer_0/feedforward_gate_dense/kernel       (896, 4864)
+        # transformer_layer_0/feedforward_output_dense/kernel     (4864, 896)
+        # transformer_layer_0/feedforward_layernorm/scale         (896,)
+        # (only present when tie_word_embeddings=False)
+        # token_embedding/reverse_embeddings                      (896, 151936)
 
         if not isinstance(device_mesh, keras.distribution.DeviceMesh):
             raise ValueError(
                 "Invalid device_mesh type. Expected "
-                f"`keras.distribution.Device`, got {type(device_mesh)}"
+                f"`keras.distribution.DeviceMesh`, got {type(device_mesh)}"
             )
         if model_parallel_dim_name not in device_mesh.axis_names:
             raise ValueError(
                 f"{model_parallel_dim_name} is not found in the "
-                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
             )
         if data_parallel_dim_name not in device_mesh.axis_names:
             raise ValueError(
                 f"{data_parallel_dim_name} is not found in the "
-                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
             )
         # Note that it is possible to further config the mesh to be 3D, eg
         # (data, seq, model). We leave it as 2D for now for simplicity.
