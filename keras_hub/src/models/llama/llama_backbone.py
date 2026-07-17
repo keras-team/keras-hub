@@ -285,24 +285,22 @@ class LlamaBackbone(Backbone):
         if not isinstance(device_mesh, keras.distribution.DeviceMesh):
             raise ValueError(
                 "Invalid device_mesh type. Expected "
-                f"`keras.distribution.Device`, got {type(device_mesh)}"
+                f"`keras.distribution.DeviceMesh`, got {type(device_mesh)}"
             )
         if model_parallel_dim_name not in device_mesh.axis_names:
             raise ValueError(
                 f"{model_parallel_dim_name} is not found in the "
-                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
             )
         if data_parallel_dim_name not in device_mesh.axis_names:
             raise ValueError(
                 f"{data_parallel_dim_name} is not found in the "
-                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
             )
         # Note that it is possible to further config the mesh to be 3D, eg
         # (data, seq, model). We leave it as 2D for now for simplicity.
         data_dim = data_parallel_dim_name
         model_dim = model_parallel_dim_name
-        # The sharding config is based on the Gemma team training config.
-        # See https://arxiv.org/abs/2403.08295
         layout_map = keras.distribution.LayoutMap(device_mesh)
         layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
         # tie_word_embeddings defaults to False, so a separate

@@ -1,5 +1,6 @@
 import gc
 import json
+import os
 import re
 
 import keras
@@ -17,9 +18,10 @@ from keras_hub.src.utils.preset_utils import get_file
 # `get_file` call to the Tier-2 test body itself (that's what Tier 3,
 # `test_layout_map_live_presets` below, is for).
 #
-# MEMORY NOTE: this local dev machine cannot load full-scale model dims (see
-# gemma_backbone_test.py's identical note for the OOM history that motivated
-# this pattern). What actually matters for the divisibility/sharding
+# MEMORY NOTE: memory-constrained local environments cannot load full-scale
+# model dims (see gemma_backbone_test.py's identical note for the OOM
+# history that motivated this pattern). What actually matters for the
+# divisibility/sharding
 # properties this tier tests is the RATIO of query heads to kv heads and
 # whether hidden/intermediate/vocab divide the mesh's model-axis sizes -- not
 # the absolute parameter count. So these dims are scaled down by roughly
@@ -37,7 +39,7 @@ from keras_hub.src.utils.preset_utils import get_file
 # the 13B/70B scale, which is not in this repo's preset registry but is a
 # well-known public dimension used here only to exercise a second,
 # GQA-ratio width class in the CI-safe sweep). Kaggle credentials were not
-# available in this environment to fetch the registry configs live, so
+# available when authoring this test to fetch the registry configs live, so
 # these dims are taken from the well-documented public Llama-2 architecture
 # rather than a live `get_file` pull -- `test_layout_map_live_presets`
 # performs the live pull for the actual registry presets.
@@ -61,14 +63,14 @@ LLAMA2_70B_DIMS = {
     "intermediate_dim": 1408,  # real 28672, scaled ~20x.
 }
 
-# Hard-capped mesh-shape list for this shared 37GB dev machine. The full
-# 10-shape matrix from the testing-strategy doc is
+# Hard-capped mesh-shape list for memory-constrained local environments. The
+# full 10-shape matrix from the testing-strategy doc is
 # 2x4, 1x8, 4x4, 8x8, 16x16, 2x2x2, 1x1x8, 2x2x4, 4x4x4, 4x4x8 -- shapes
 # 8x8, 16x16, 4x4x4, 4x4x8 (64-256 virtual devices) are DELIBERATELY
-# DROPPED here due to a demonstrated systemd-oomd OOM kill of the entire
-# desktop app on this shared machine during an earlier attempt at this same
-# pipeline. Do not attempt the dropped shapes even experimentally on this
-# box -- revisiting them requires a dedicated or CI machine, not this one.
+# DROPPED here due to a demonstrated OOM kill during an earlier attempt at
+# this same pipeline on a memory-constrained machine. Do not attempt the
+# dropped shapes even experimentally on such environments -- revisiting
+# them requires a dedicated or CI machine with more memory.
 CAPPED_MESH_SHAPES = [
     (2, 4),
     (1, 8),
@@ -296,8 +298,8 @@ class LlamaTest(TestCase):
         )
         init_kwargs = {k: v for k, v in dims.items() if k != "source_preset"}
         with distribution.scope():
-            # bfloat16: a memory mitigation for this shared dev machine --
-            # spec assertions are dtype-independent.
+            # bfloat16: a memory mitigation for memory-constrained local
+            # environments -- spec assertions are dtype-independent.
             model = LlamaBackbone(dtype="bfloat16", **init_kwargs)
             _assert_llama_shardings_and_coverage(self, model, layout_map)
         del model
@@ -314,8 +316,9 @@ class LlamaTest(TestCase):
         # divisibility-relevant dims so width-classes that share a config
         # (e.g. the int8/instruct/vicuna variants, all real Llama-2-7B
         # width) are only built once per mesh shape -- a memory/time
-        # necessity on this machine, while every preset in the registry is
-        # still fetched and evaluated, preserving full registry coverage.
+        # necessity for memory-constrained local environments, while every
+        # preset in the registry is still fetched and evaluated, preserving
+        # full registry coverage.
         dim_keys = (
             "vocabulary_size",
             "num_query_heads",
@@ -328,7 +331,8 @@ class LlamaTest(TestCase):
         for preset in LlamaBackbone.presets:
             try:
                 path = get_file(preset, CONFIG_FILE)
-                cfg = json.load(open(path))["config"]
+                with open(path) as f:
+                    cfg = json.load(f)["config"]
             except Exception as e:
                 # A preset this account can't reach (e.g. an unaccepted
                 # Kaggle license consent click-through, or no
@@ -339,7 +343,8 @@ class LlamaTest(TestCase):
             # num_layers is forced to 1 below regardless of the real
             # value -- layout rules are per-decoder-block regexes, so
             # depth is irrelevant to spec matching/divisibility, and 1
-            # layer keeps build memory bounded on this shared machine.
+            # layer keeps build memory bounded in memory-constrained local
+            # environments.
             cfg = dict(cfg)
             cfg["num_layers"] = 1
             key = tuple(cfg.get(k) for k in dim_keys)
@@ -398,10 +403,10 @@ class LlamaTest(TestCase):
                         skip_reasons.append(reason)
                         continue
 
-                    # Memory-budget guard: this shared dev machine cannot
-                    # locally build full-scale presets (see
-                    # CAPPED_MESH_SHAPES' comment for the OOM history that
-                    # motivated this). Estimate this width-class's
+                    # Memory-budget guard: memory-constrained local
+                    # environments cannot locally build full-scale presets
+                    # (see CAPPED_MESH_SHAPES' comment for the OOM history
+                    # that motivated this). Estimate this width-class's
                     # single-decoder-block bf16 footprint (embedding table
                     # + one FFN block's 3 matrices, times a 3x safety
                     # margin for JAX/XLA transient copies during
@@ -410,19 +415,38 @@ class LlamaTest(TestCase):
                     # config-fetch, dedup, and divisibility-skip logic
                     # above still exercises every registry preset either
                     # way; only the expensive build+assert step is capped.
+                    # `tie_word_embeddings` defaults to False for Llama, so
+                    # the input embedding table and the output
+                    # `reverse_embeddings` projection are two separate
+                    # vocab*hidden tensors -- both are counted. Query and
+                    # attention_output are each hidden*hidden (contracting
+                    # dim times num_query_heads*head_dim, which equals
+                    # hidden_dim); key/value scale down from that by the
+                    # kv/query head ratio (GQA).
+                    hidden = cfg["hidden_dim"]
+                    num_query_heads = cfg["num_query_heads"]
+                    num_kv_heads = cfg["num_key_value_heads"]
+                    kv_ratio = num_kv_heads / num_query_heads
                     est_params = (
-                        cfg["vocabulary_size"] * cfg["hidden_dim"]
-                        + 3 * cfg["hidden_dim"] * cfg["intermediate_dim"]
+                        2 * cfg["vocabulary_size"] * hidden  # embed + revemb
+                        + 2 * hidden * hidden  # attention q/o
+                        + 2 * hidden * hidden * kv_ratio  # attention k/v
+                        + 3 * hidden * cfg["intermediate_dim"]  # FFN
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
-                    max_local_bytes = 300 * 1024 * 1024  # 300MB
+                    max_local_bytes = int(
+                        os.environ.get(
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET",
+                            300 * 1024 * 1024,
+                        )
+                    )
                     if est_bytes > max_local_bytes:
                         reason = (
                             f"{combo_label}: estimated build memory "
                             f"~{est_bytes / 1e9:.2f}GB exceeds the "
                             f"{max_local_bytes / 1e6:.0f}MB local safety "
-                            "threshold on this shared, RAM-constrained "
-                            "dev machine -- verify this width-class on a "
+                            "threshold for memory-constrained local "
+                            "environments -- verify this width-class on a "
                             "machine with more RAM or in CI"
                         )
                         skip_reasons.append(reason)
@@ -442,9 +466,12 @@ class LlamaTest(TestCase):
                     distribution = keras.distribution.ModelParallel(
                         layout_map=layout_map, batch_dim_name="batch"
                     )
-                    init_kwargs = {
-                        k: v for k, v in cfg.items() if k in dim_keys
-                    }
+                    # `cfg` is a full serialized `get_config()` dict, which
+                    # may include a `"dtype"` key (a serialized dtype-policy
+                    # dict, only present for quantized presets) -- drop it
+                    # so the explicit `dtype="bfloat16"` override below
+                    # doesn't collide with a duplicate keyword argument.
+                    init_kwargs = {k: v for k, v in cfg.items() if k != "dtype"}
                     init_kwargs["num_layers"] = 1
                     with distribution.scope():
                         model = LlamaBackbone(dtype="bfloat16", **init_kwargs)
