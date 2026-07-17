@@ -1,5 +1,4 @@
 import gc
-import json
 import os
 import re
 
@@ -9,8 +8,7 @@ from absl.testing import parameterized
 
 from keras_hub.src.models.t5gemma.t5gemma_backbone import T5GemmaBackbone
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.preset_utils import CONFIG_FILE
-from keras_hub.src.utils.preset_utils import get_file
+from keras_hub.src.utils.preset_utils import load_json
 
 # Dims for the Tier-2 CI-safe mesh-shape sweep: representative real-preset
 # dimensions, frozen as literals and sourced once, offline -- do not add a
@@ -441,10 +439,10 @@ class T5GemmaBackboneTest(TestCase):
         # necessity in memory-constrained local environments, while every
         # preset in the registry is still fetched and evaluated, preserving
         # full registry coverage.
-        # `get_file(preset, CONFIG_FILE)` fetches this repo's own
-        # `config.json` (a serialized `T5GemmaBackbone.get_config()`, i.e.
-        # already in the flat encoder_*/decoder_* backbone-kwarg shape used
-        # by `T5GemmaBackbone.__init__` -- NOT the raw nested HF
+        # `load_json(preset)` fetches this repo's own `config.json` (a
+        # serialized `T5GemmaBackbone.get_config()`, i.e. already in the
+        # flat encoder_*/decoder_* backbone-kwarg shape used by
+        # `T5GemmaBackbone.__init__` -- NOT the raw nested HF
         # `{"encoder": {...}, "decoder": {...}}` shape, which lives under
         # the separate `HF_CONFIG_FILE` used only by the Transformers
         # preset loader), wrapped under a top-level `"config"` key (see
@@ -466,9 +464,7 @@ class T5GemmaBackboneTest(TestCase):
         fetch_failures = []
         for preset in T5GemmaBackbone.presets:
             try:
-                path = get_file(preset, CONFIG_FILE)
-                with open(path) as f:
-                    cfg = json.load(f)["config"]
+                cfg = load_json(preset)["config"]
             except Exception as e:
                 # A preset this account can't reach (e.g. an unaccepted
                 # Kaggle license consent click-through, or no
