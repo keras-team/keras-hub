@@ -1,5 +1,6 @@
 import gc
 import json
+import os
 import re
 
 import keras
@@ -17,23 +18,23 @@ from keras_hub.src.utils.preset_utils import get_file
 # `get_file` call to the Tier-2 test body itself (that's what Tier 3,
 # `test_layout_map_live_presets` below, is for).
 #
-# MEMORY NOTE: this local dev machine cannot load full-scale model dims (see
-# `gemma_backbone_test.py`'s identical-purpose comment for the OOM history
-# that established this rule). What actually matters for the divisibility/
-# sharding properties this tier tests is the RATIO of query heads to kv
-# heads and whether hidden/intermediate/vocab divide the mesh's model-axis
-# sizes -- not the absolute parameter count. So these dims are scaled down
-# by roughly 20-30x from the real presets (fetched live once via
-# `get_file`/CONFIG_FILE against the `qwen-3` Kaggle handle -- see the
-# module-level fetch this file's author ran, values below) while preserving
-# each preset's real query:kv head ratio (2:1, 4:1, 8:1 -- all GQA, note
-# unlike Gemma's MQA this family never drops to a 1-head kv bank) and
-# keeping hidden/intermediate/vocab as clean powers of 2 divisible by every
-# mesh shape in CAPPED_MESH_SHAPES. Full-scale real dims are exercised by
-# `test_layout_map_live_presets` below, which has its own per-width-class
-# memory-budget skip so it never attempts a full-scale build locally either
-# -- true full-scale verification happens offline on a machine with more
-# RAM, not on this box.
+# MEMORY NOTE: memory-constrained local environments cannot load full-scale
+# model dims (see `gemma_backbone_test.py`'s identical-purpose comment for
+# the OOM history that established this rule). What actually matters for
+# the divisibility/sharding properties this tier tests is the RATIO of
+# query heads to kv heads and whether hidden/intermediate/vocab divide the
+# mesh's model-axis sizes -- not the absolute parameter count. So these
+# dims are scaled down by roughly 20-30x from the real presets (fetched
+# live once via `get_file`/CONFIG_FILE against the `qwen-3` Kaggle handle
+# -- see the module-level fetch this file's author ran, values below)
+# while preserving each preset's real query:kv head ratio (2:1, 4:1, 8:1 --
+# all GQA, note unlike Gemma's MQA this family never drops to a 1-head kv
+# bank) and keeping hidden/intermediate/vocab as clean powers of 2
+# divisible by every mesh shape in CAPPED_MESH_SHAPES. Full-scale real dims
+# are exercised by `test_layout_map_live_presets` below, which has its own
+# per-width-class memory-budget skip so it never attempts a full-scale
+# build in memory-constrained environments either -- true full-scale
+# verification happens on a machine with more RAM, e.g. in CI.
 QWEN3_0_6B_DIMS = {
     "source_preset": "qwen3_0.6b_en (real ratio, memory-scaled dims)",
     "vocabulary_size": 3072,  # real: 151936
@@ -65,16 +66,16 @@ QWEN3_32B_DIMS = {
     "head_dim": 32,  # real: 128
 }
 
-# Hard-capped mesh-shape list for this shared 37GB dev machine. The full
-# 10-shape matrix from the testing-strategy doc is
+# Hard-capped mesh-shape list for memory-constrained local environments.
+# The full 10-shape matrix from the testing-strategy doc is
 # 2x4, 1x8, 4x4, 8x8, 16x16, 2x2x2, 1x1x8, 2x2x4, 4x4x4, 4x4x8 -- shapes
 # 8x8, 16x16, 4x4x4, 4x4x8 (64-256 virtual devices) are DELIBERATELY
 # DROPPED here due to a demonstrated systemd-oomd OOM kill of the entire
-# desktop app on this shared machine during an earlier attempt at this same
-# pipeline (see `gemma_backbone_test.py`'s identical-purpose comment; the
-# same history applies to every model in this series, not just Gemma). Do
-# not attempt the dropped shapes even experimentally on this box --
-# revisiting them requires a dedicated or CI machine, not this one.
+# desktop app during an earlier attempt at this same pipeline (see
+# `gemma_backbone_test.py`'s identical-purpose comment; the same history
+# applies to every model in this series, not just Gemma). These shapes
+# require a dedicated or CI machine with more memory to exercise, even
+# experimentally.
 CAPPED_MESH_SHAPES = [
     (2, 4),
     (1, 8),
@@ -249,8 +250,8 @@ class Qwen3Test(TestCase):
         )
         init_kwargs = {k: v for k, v in dims.items() if k != "source_preset"}
         with distribution.scope():
-            # bfloat16: a memory mitigation for this shared dev machine --
-            # spec assertions are dtype-independent.
+            # bfloat16: a memory mitigation for memory-constrained local
+            # environments -- spec assertions are dtype-independent.
             model = Qwen3Backbone(dtype="bfloat16", **init_kwargs)
             _assert_qwen3_shardings_and_coverage(self, model, layout_map)
         del model
@@ -266,9 +267,10 @@ class Qwen3Test(TestCase):
         # Fetch every preset's config only (no weights), then dedupe by the
         # divisibility-relevant dims so width-classes that share a config
         # (e.g. base vs instruction-tuned variants of the same size) are
-        # only built once per mesh shape -- a memory/time necessity on this
-        # machine, while every preset in the registry is still fetched and
-        # evaluated, preserving full registry coverage.
+        # only built once per mesh shape -- a memory/time necessity in
+        # memory-constrained environments, while every preset in the
+        # registry is still fetched and evaluated, preserving full
+        # registry coverage.
         dim_keys = (
             "vocabulary_size",
             "num_query_heads",
@@ -293,7 +295,8 @@ class Qwen3Test(TestCase):
             # num_layers is forced to 1 below regardless of the real
             # value -- layout rules are per-decoder-block regexes, so
             # depth is irrelevant to spec matching/divisibility, and 1
-            # layer keeps build memory bounded on this shared machine.
+            # layer keeps build memory bounded in memory-constrained
+            # environments.
             cfg = dict(cfg)
             cfg["num_layers"] = 1
             key = tuple(cfg.get(k) for k in dim_keys)
@@ -311,9 +314,8 @@ class Qwen3Test(TestCase):
             self.skipTest(
                 "No preset configs were reachable "
                 f"({len(fetch_failures)} fetch failures) -- likely a "
-                "Kaggle license-consent gate on this account for the "
-                "qwen3 family. See the module comment above "
-                "CAPPED_MESH_SHAPES."
+                "Kaggle license-consent gate for the qwen3 family. See "
+                "the module comment above CAPPED_MESH_SHAPES."
             )
         print(
             f"test_layout_map_live_presets: {len(width_classes)} unique "
@@ -352,33 +354,65 @@ class Qwen3Test(TestCase):
                         skip_reasons.append(reason)
                         continue
 
-                    # Memory-budget guard: this shared dev machine cannot
-                    # locally build full-scale presets (see
-                    # `gemma_backbone_test.py`'s identical-purpose comment
-                    # for the OOM history that established this rule).
-                    # Estimate this width-class's single-decoder-block
-                    # bf16 footprint (embedding table + one FFN block's 3
-                    # matrices, times a 3x safety margin for JAX/XLA
-                    # transient copies during construction/resharding) and
-                    # skip the actual build if it exceeds a conservative
-                    # local threshold. The config-fetch, dedup, and
-                    # divisibility-skip logic above still exercises every
-                    # registry preset either way; only the expensive
-                    # build+assert step is capped.
-                    est_params = (
+                    # Memory-budget guard: memory-constrained local
+                    # environments cannot always build full-scale presets
+                    # (see `gemma_backbone_test.py`'s identical-purpose
+                    # comment for the OOM history that established this
+                    # rule). Estimate this width-class's single-decoder-
+                    # block bf16 footprint (embedding table [+ untied
+                    # output embedding, if applicable] + GQA-scaled
+                    # attention QKVO + one FFN block's 3 matrices, times a
+                    # 3x safety margin for JAX/XLA transient copies during
+                    # construction/resharding) and skip the actual build
+                    # if it exceeds a configurable local threshold. The
+                    # config-fetch, dedup, and divisibility-skip logic
+                    # above still exercises every registry preset either
+                    # way; only the expensive build+assert step is capped.
+                    head_dim = cfg["head_dim"]
+                    qkvo_params = (
+                        cfg["hidden_dim"]
+                        * cfg["num_query_heads"]
+                        * head_dim  # query
+                        + cfg["hidden_dim"]
+                        * cfg["num_key_value_heads"]
+                        * head_dim  # key
+                        + cfg["hidden_dim"]
+                        * cfg["num_key_value_heads"]
+                        * head_dim  # value
+                        + cfg["num_query_heads"]
+                        * head_dim
+                        * cfg["hidden_dim"]  # attention_output
+                    )
+                    embedding_params = (
                         cfg["vocabulary_size"] * cfg["hidden_dim"]
+                    )
+                    if not cfg.get("tie_word_embeddings", True):
+                        # Untied `reverse_embeddings` is a second, separate
+                        # vocab*hidden weight, not shared with the input
+                        # embedding table.
+                        embedding_params *= 2
+                    est_params = (
+                        embedding_params
+                        + qkvo_params
                         + 3 * cfg["hidden_dim"] * cfg["intermediate_dim"]
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
-                    max_local_bytes = 300 * 1024 * 1024  # 300MB
+                    max_local_bytes = int(
+                        os.environ.get(
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET",
+                            300 * 1024 * 1024,
+                        )
+                    )
                     if est_bytes > max_local_bytes:
                         reason = (
                             f"{combo_label}: estimated build memory "
                             f"~{est_bytes / 1e9:.2f}GB exceeds the "
                             f"{max_local_bytes / 1e6:.0f}MB local safety "
-                            "threshold on this shared, RAM-constrained "
-                            "dev machine -- verify this width-class on a "
-                            "machine with more RAM or in CI"
+                            "threshold for memory-constrained local "
+                            "environments -- verify this width-class on "
+                            "a machine with more RAM or in CI (override "
+                            "via the KERAS_HUB_DISTRIBUTION_TEST_MEM_"
+                            "BUDGET env var, in bytes)"
                         )
                         skip_reasons.append(reason)
                         continue
@@ -397,9 +431,7 @@ class Qwen3Test(TestCase):
                     distribution = keras.distribution.ModelParallel(
                         layout_map=layout_map, batch_dim_name="batch"
                     )
-                    init_kwargs = {
-                        k: v for k, v in cfg.items() if k in dim_keys
-                    }
+                    init_kwargs = {k: v for k, v in cfg.items() if k != "dtype"}
                     init_kwargs["num_layers"] = 1
                     with distribution.scope():
                         model = Qwen3Backbone(dtype="bfloat16", **init_kwargs)
