@@ -312,8 +312,8 @@ class CausalLM(Task):
                 structure expected the `backbone` model.
             max_length: Optional. int. The max length of the generated sequence.
                 Will default to the max configured `sequence_length` of the
-                `preprocessor`. When `preprocessor` is None, inputs should
-                already be tokenized and padded to the desired maximum length.
+                `preprocessor`. If `preprocessor` is `None`, `inputs` should
+                already bepadded to the desired maximum length.
                 Passing `max_length` in this case raises a `ValueError`.
             stop_token_ids: Optional. `None`, "auto", or tuple of token ids.
                 Defaults to "auto" which uses the
@@ -328,9 +328,6 @@ class CausalLM(Task):
                 this option is set to True, only the newly generated text is
                 returned.
         """
-        if max_length is None and self.preprocessor is not None:
-            max_length = getattr(self.preprocessor, "sequence_length", None)
-
         if self.preprocessor is None and max_length is not None:
             raise ValueError(
                 "`max_length` has no effect when `preprocessor=None`. "
@@ -382,7 +379,7 @@ class CausalLM(Task):
 
             return tree.map_structure(_distribute_tensor, x)
 
-        def run_generate(x):
+        def generate(x):
             return generate_function(x, stop_token_ids=stop_token_ids)
 
         def strip_prompt_function(x, prompt):
@@ -390,7 +387,7 @@ class CausalLM(Task):
             # response, in a batch-friendly fashion.
             y = {}
             prompt_mask = prompt["padding_mask"]
-            seq_len = ops.shape(prompt_mask)[1]
+            seq_len = prompt_mask.shape[1]
 
             # We need to shift every output sequence by the size of the prompt.
             shifts = -ops.sum(ops.cast(prompt_mask, "int"), axis=1) % seq_len
@@ -426,11 +423,9 @@ class CausalLM(Task):
         inputs = [distribute(x) for x in inputs]
 
         if strip_prompt:
-            outputs = [
-                strip_prompt_function(run_generate(x), x) for x in inputs
-            ]
+            outputs = [strip_prompt_function(generate(x), x) for x in inputs]
         else:
-            outputs = [run_generate(x) for x in inputs]
+            outputs = [generate(x) for x in inputs]
 
         if self.preprocessor is not None:
             outputs = [postprocess(x) for x in outputs]
