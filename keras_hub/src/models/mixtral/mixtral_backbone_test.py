@@ -1,5 +1,6 @@
 import gc
 import json
+import os
 import re
 
 import keras
@@ -17,14 +18,14 @@ from keras_hub.src.utils.preset_utils import get_file
 # `get_file` call to the Tier-2 test body itself (that's what Tier 3,
 # `test_layout_map_live_presets` below, is for).
 #
-# MEMORY NOTE: this local dev machine cannot load full-scale model dims (see
-# gemma_backbone_test.py's identical note for the OOM history that
-# established this rule). What actually matters for the divisibility/
-# sharding properties this tier tests is the RATIO of query heads to kv
-# heads (and the MoE expert/top_k config) -- not the absolute parameter
-# count. So these dims are scaled down by roughly 20-30x from the single
-# real Mixtral preset (`mixtral_8_7b_en` / `mixtral_8_instruct_7b_en`, which
-# share one architecture: vocabulary_size=32000, hidden_dim=4096,
+# MEMORY NOTE: memory-constrained local environments cannot load full-scale
+# model dims (see gemma_backbone_test.py's identical note for the OOM
+# history that established this rule). What actually matters for the
+# divisibility/sharding properties this tier tests is the RATIO of query
+# heads to kv heads (and the MoE expert/top_k config) -- not the absolute
+# parameter count. So these dims are scaled down by roughly 20-30x from the
+# single real Mixtral preset (`mixtral_8_7b_en` / `mixtral_8_instruct_7b_en`,
+# which share one architecture: vocabulary_size=32000, hidden_dim=4096,
 # intermediate_dim=14336, num_query_heads=32, num_key_value_heads=8 (4:1
 # GQA), head_dim=128, num_experts=8, top_k=2 -- confirmed via a live
 # `get_file(preset, CONFIG_FILE)` config fetch, 2026-07-17) while preserving
@@ -37,8 +38,7 @@ from keras_hub.src.utils.preset_utils import get_file
 # real dims are exercised by `test_layout_map_live_presets` below, which has
 # its own per-width-class memory-budget skip so it never attempts a
 # full-scale build locally either -- true full-scale verification happens
-# offline on a machine with more RAM (Tier 4 in the design doc), not on this
-# box.
+# offline on a machine with more RAM (Tier 4 in the design doc).
 MIXTRAL_SMALL_DIMS = {
     # Single-token label (no space before the parenthetical) so
     # `.split(' ')[0]` below yields a name distinct from
@@ -69,15 +69,15 @@ MIXTRAL_BASE_DIMS = {
     "sliding_window": None,
 }
 
-# Hard-capped mesh-shape list for this shared 37GB dev machine. The full
-# 10-shape matrix from the testing-strategy doc is
+# Hard-capped mesh-shape list for memory-constrained local environments. The
+# full 10-shape matrix from the testing-strategy doc is
 # 2x4, 1x8, 4x4, 8x8, 16x16, 2x2x2, 1x1x8, 2x2x4, 4x4x4, 4x4x8 -- shapes
 # 8x8, 16x16, 4x4x4, 4x4x8 (64-256 virtual devices) are DELIBERATELY
-# DROPPED here due to a demonstrated systemd-oomd OOM kill of the entire
-# desktop app on this shared machine during an earlier attempt at this same
-# pipeline (see gemma_backbone_test.py's identical comment). Do not attempt
-# the dropped shapes even experimentally on this box -- revisiting them
-# requires a dedicated or CI machine, not this one.
+# DROPPED here due to a demonstrated OOM kill of the entire desktop app in
+# such an environment during an earlier attempt at this same pipeline (see
+# gemma_backbone_test.py's identical comment). Do not attempt the dropped
+# shapes even experimentally in a similar environment -- revisiting them
+# requires a dedicated or CI machine with more memory.
 CAPPED_MESH_SHAPES = [
     (2, 4),
     (1, 8),
@@ -194,9 +194,17 @@ class MixtralBackboneTest(TestCase):
         self.assertEqual(model.count_params(), expected_params)
 
     def test_distribution(self):
+        # num_experts=4, top_k=2 (distribution-test-only override, not the
+        # shared setUp): with the shared setUp's num_experts=2, top_k=2,
+        # top_k equals num_experts, so every expert is always selected and
+        # partial MoE routing/exclusion is never exercised. This matches
+        # qwen_moe/qwen3_5_moe's setUp convention. self.init_kwargs itself
+        # is left untouched since test_num_parameters hardcodes a formula
+        # against num_experts=2.
+        init_kwargs = dict(self.init_kwargs, num_experts=4, top_k=2)
         self.run_distribution_test(
             cls=MixtralBackbone,
-            init_kwargs=self.init_kwargs,
+            init_kwargs=init_kwargs,
             input_data=self.input_data,
             expected_shardings={
                 "token_embedding/embeddings": ("model", "batch"),
@@ -296,8 +304,8 @@ class MixtralBackboneTest(TestCase):
         )
         init_kwargs = {k: v for k, v in dims.items() if k != "source_preset"}
         with distribution.scope():
-            # bfloat16: a memory mitigation for this shared dev machine --
-            # spec assertions are dtype-independent.
+            # bfloat16: a memory mitigation for memory-constrained local
+            # environments -- spec assertions are dtype-independent.
             model = MixtralBackbone(dtype="bfloat16", **init_kwargs)
             _assert_mixtral_shardings_and_coverage(self, model, layout_map)
         del model
@@ -314,11 +322,11 @@ class MixtralBackboneTest(TestCase):
         # divisibility-relevant dims so width-classes that share a config
         # (mixtral_8_7b_en and mixtral_8_instruct_7b_en share one identical
         # architecture, confirmed via a live config fetch 2026-07-17) are
-        # only built once per mesh shape -- a memory/time necessity on this
-        # machine (mixtral_8_7b-width builds are ~1.8GB estimated even at 1
-        # layer bf16, see the memory-budget guard below), while every preset
-        # in the registry is still fetched and evaluated, preserving full
-        # registry coverage.
+        # only built once per mesh shape -- a memory/time necessity in
+        # memory-constrained local environments (mixtral_8_7b-width builds
+        # are ~1.8GB estimated even at 1 layer bf16, see the memory-budget
+        # guard below), while every preset in the registry is still fetched
+        # and evaluated, preserving full registry coverage.
         dim_keys = (
             "vocabulary_size",
             "num_query_heads",
@@ -333,7 +341,8 @@ class MixtralBackboneTest(TestCase):
         for preset in MixtralBackbone.presets:
             try:
                 path = get_file(preset, CONFIG_FILE)
-                cfg = json.load(open(path))["config"]
+                with open(path) as f:
+                    cfg = json.load(f)["config"]
             except Exception as e:
                 # A preset this account can't reach (e.g. an unaccepted
                 # Kaggle license consent click-through) is logged, not
@@ -343,7 +352,8 @@ class MixtralBackboneTest(TestCase):
             # num_layers is forced to 1 below regardless of the real
             # value -- layout rules are per-decoder-block regexes, so
             # depth is irrelevant to spec matching/divisibility, and 1
-            # layer keeps build memory bounded on this shared machine.
+            # layer keeps build memory bounded in memory-constrained local
+            # environments.
             cfg = dict(cfg)
             cfg["num_layers"] = 1
             key = tuple(cfg.get(k) for k in dim_keys)
@@ -402,39 +412,56 @@ class MixtralBackboneTest(TestCase):
                         skip_reasons.append(reason)
                         continue
 
-                    # Memory-budget guard: this shared dev machine cannot
-                    # locally build full-scale presets (see
-                    # gemma_backbone_test.py's identical guard and its OOM
-                    # history). Estimate this width-class's single-decoder-
-                    # block bf16 footprint (embedding table + one FFN
-                    # block's 3 matrices, times a 3x safety margin for
-                    # JAX/XLA transient copies during construction/
-                    # resharding) and skip the actual build if it exceeds a
-                    # conservative local threshold. The config-fetch,
-                    # dedup, and divisibility-skip logic above still
-                    # exercises every registry preset either way; only the
-                    # expensive build+assert step is capped. Note this
-                    # formula intentionally does not add the MoE expert
-                    # banks (num_experts x 3 matrices) -- it mirrors the
-                    # dense-model estimate other models in this series use,
-                    # which already produces a comfortably-over-threshold
-                    # estimate for Mixtral's real preset (~1.8GB, verified
-                    # 2026-07-17), so the omission does not change the
-                    # skip outcome; it is not claimed to be a tight bound.
+                    # Memory-budget guard: memory-constrained local
+                    # environments cannot always build full-scale presets
+                    # (see gemma_backbone_test.py's identical guard).
+                    # Estimate this width-class's single-decoder-block
+                    # bf16 footprint and skip the actual build if it
+                    # exceeds a configurable local threshold. Token
+                    # embeddings are untied for Mixtral (`tie_weights=
+                    # False`), so both the input `embeddings` table and
+                    # the output `reverse_embeddings` projection are
+                    # counted as separate vocab*hidden terms. Attention
+                    # q/o project hidden_dim<->hidden_dim, while k/v are
+                    # scaled down by the kv/query head ratio (GQA). The
+                    # MoE expert banks -- gate + intermediate (each
+                    # hidden*intermediate) plus output (intermediate*
+                    # hidden) per expert -- dominate the real parameter
+                    # count and are included explicitly; omitting them
+                    # would dangerously undercount a MoE model's real
+                    # footprint. Times a 3x safety margin for JAX/XLA
+                    # transient copies during construction/resharding.
+                    # The config-fetch, dedup, and divisibility-skip logic
+                    # above still exercises every registry preset either
+                    # way; only the expensive build+assert step is capped.
+                    hidden = cfg["hidden_dim"]
+                    inter = cfg["intermediate_dim"]
+                    num_experts = cfg["num_experts"]
+                    num_kv_heads = cfg["num_key_value_heads"]
+                    kv_ratio = num_kv_heads / num_query_heads
                     est_params = (
-                        cfg["vocabulary_size"] * cfg["hidden_dim"]
-                        + 3 * cfg["hidden_dim"] * cfg["intermediate_dim"]
+                        2 * cfg["vocabulary_size"] * hidden  # embed + revemb
+                        + 2 * hidden * hidden  # attention q/o
+                        + 2 * hidden * hidden * kv_ratio  # attention k/v
+                        + num_experts * (3 * hidden * inter)  # expert banks
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
-                    max_local_bytes = 300 * 1024 * 1024  # 300MB
+                    max_local_bytes = int(
+                        os.environ.get(
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET",
+                            300 * 1024 * 1024,
+                        )
+                    )
                     if est_bytes > max_local_bytes:
                         reason = (
                             f"{combo_label}: estimated build memory "
                             f"~{est_bytes / 1e9:.2f}GB exceeds the "
                             f"{max_local_bytes / 1e6:.0f}MB local safety "
-                            "threshold on this shared, RAM-constrained "
-                            "dev machine -- verify this width-class on a "
-                            "machine with more RAM or in CI"
+                            "threshold for memory-constrained local "
+                            "environments -- verify this width-class on a "
+                            "machine with more RAM or in CI (override via "
+                            "the KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET "
+                            "env var)"
                         )
                         skip_reasons.append(reason)
                         continue
@@ -453,9 +480,7 @@ class MixtralBackboneTest(TestCase):
                     distribution = keras.distribution.ModelParallel(
                         layout_map=layout_map, batch_dim_name="batch"
                     )
-                    init_kwargs = {
-                        k: v for k, v in cfg.items() if k in dim_keys
-                    }
+                    init_kwargs = {k: v for k, v in cfg.items() if k != "dtype"}
                     init_kwargs["num_layers"] = 1
                     with distribution.scope():
                         model = MixtralBackbone(dtype="bfloat16", **init_kwargs)
