@@ -160,6 +160,7 @@ class Qwen3Test(TestCase):
         model = Qwen3Backbone(**self.init_kwargs)
         self.assertEqual(model.count_params(), 896)
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # tie_word_embeddings=False so `reverse_embeddings` exists as a real
         # weight and its sharding spec is actually exercised -- real Qwen3
@@ -202,6 +203,7 @@ class Qwen3Test(TestCase):
         for dims in (QWEN3_0_6B_DIMS, QWEN3_4B_DIMS, QWEN3_32B_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
