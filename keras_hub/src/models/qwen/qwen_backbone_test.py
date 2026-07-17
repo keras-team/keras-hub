@@ -171,6 +171,7 @@ class QwenBackboneTest(TestCase):
         model = QwenBackbone(**self.init_kwargs)
         self.assertEqual(model.count_params(), 1384)
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         self.run_distribution_test(
             cls=QwenBackbone,
@@ -206,6 +207,7 @@ class QwenBackboneTest(TestCase):
         for dims in (QWEN_0_5B_DIMS, QWEN_3B_DIMS, QWEN_7B_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
