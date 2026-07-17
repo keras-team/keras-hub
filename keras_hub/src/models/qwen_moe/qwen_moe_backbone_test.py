@@ -1,5 +1,4 @@
 import gc
-import json
 import os
 import re
 
@@ -10,8 +9,7 @@ from keras import ops
 
 from keras_hub.src.models.qwen_moe.qwen_moe_backbone import QwenMoeBackbone
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.preset_utils import CONFIG_FILE
-from keras_hub.src.utils.preset_utils import get_file
+from keras_hub.src.utils.preset_utils import load_json
 
 # Dims for the Tier-2 CI-safe mesh-shape sweep: representative real-preset
 # dimensions, frozen as literals and sourced once, offline -- do not add a
@@ -104,16 +102,15 @@ _EXPECTED_SHARDINGS = {
 # (see get_layout_map's comment): sharding the heads axis would raise an
 # IndivisibleError for GQA configs, and the tensors are too small to be
 # worth sharding. `qwen_moe_mlp.*` (the dense-FFN fallback used by
-# `mlp_only_layers`) is included even though it is currently unreachable
-# from `QwenMoeBackbone`'s layer-construction loop (a pre-existing,
-# out-of-scope bug -- see test_distribution's comment) so that coverage
-# stays correct if/when that bug is fixed.
-_ALLOW_REPLICATED = (
-    "self_attention.*(query|key|value)/bias",
-    "qwen_moe_mlp.*feedforward_intermediate_dense.kernel",
-    "qwen_moe_mlp.*feedforward_gate_dense.kernel",
-    "qwen_moe_mlp.*feedforward_output_dense.kernel",
-)
+# `mlp_only_layers`) is NOT listed here: `get_layout_map` already carries
+# sharding rules for those weights, so they would be caught by the coverage
+# check's own "does the layout map already match this path" skip, not by
+# this allow-list -- listing them here would be dead. Those weights are
+# currently unreachable anyway due to a pre-existing, out-of-scope bug (see
+# test_distribution's comment): once that bug is fixed elsewhere, the
+# existing `get_layout_map` rules -- not this allow-list -- are what will
+# shard them.
+_ALLOW_REPLICATED = ("self_attention.*(query|key|value)/bias",)
 
 
 def _assert_qwen_moe_shardings_and_coverage(test_case, model, layout_map):
@@ -230,9 +227,11 @@ class QwenMoeBackboneTest(TestCase):
         # layer's `layer_index` is 0 regardless of position, so
         # `mlp_only_layers` never actually selects a layer. This is a
         # pre-existing bug unrelated to sharding/layout maps (out of scope
-        # for this PR); the `qwen_moe_mlp.*` weights are correctly
-        # allow-replicated below but currently never actually get built by
-        # this test config until that bug is fixed elsewhere.
+        # for this PR); `get_layout_map` already carries sharding rules for
+        # the `qwen_moe_mlp.*` dense-fallback weights, so once that bug is
+        # fixed elsewhere those rules -- not `_ALLOW_REPLICATED` -- are what
+        # will shard them. Until then, this test config never actually
+        # builds those weights.
         init_kwargs = dict(self.init_kwargs, mlp_only_layers=[1])
         self.run_distribution_test(
             cls=QwenMoeBackbone,
@@ -383,9 +382,7 @@ class QwenMoeBackboneTest(TestCase):
         fetch_failures = []
         for preset in QwenMoeBackbone.presets:
             try:
-                path = get_file(preset, CONFIG_FILE)
-                with open(path) as f:
-                    cfg = json.load(f)["config"]
+                cfg = load_json(preset)["config"]
             except Exception as e:
                 # A preset this account can't reach (e.g. an unaccepted
                 # Kaggle license consent click-through) is logged, not
