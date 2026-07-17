@@ -76,11 +76,7 @@ class SegFormerTest(TestCase):
 
     @pytest.mark.xfail(
         condition=keras.backend.backend() == "torch",
-        strict=False,
-        reason=(
-            "Upstream litert-torch limitation: SegFormer encounters "
-            "unsupported operations during torch export decomposition. "
-        ),
+        reason="Unsupported ops during SegFormer's torch export decomposition.",
     )
     def test_litert_export(self):
         self.run_litert_export_test(

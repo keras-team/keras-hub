@@ -7,7 +7,6 @@ import tempfile
 
 import keras
 import numpy as np
-import packaging.version
 import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
@@ -638,16 +637,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         comparison_mode = export_kwargs.pop("comparison_mode", "strict")
         backend = keras.backend.backend()
 
-        # The rewritten LiteRT export path requires Keras >= 3.15 and currently
-        # runs on the PyTorch backend only.
-        if not (
-            backend == "torch"
-            and packaging.version.Version(keras.__version__)
-            >= packaging.version.Version("3.15.0")
-        ):
+        # The rewritten LiteRT export path currently runs on the PyTorch
+        # backend only.
+        if backend != "torch":
             self.skipTest(
-                "LiteRT export requires Keras >= 3.15 and is supported on "
-                "the PyTorch backend only."
+                "LiteRT export is supported on the PyTorch backend only."
             )
 
         # The torch export path is provided by the optional litert-torch

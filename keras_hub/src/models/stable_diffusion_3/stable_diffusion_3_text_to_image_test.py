@@ -203,11 +203,7 @@ class StableDiffusion3TextToImageTest(TestCase):
 
     @pytest.mark.xfail(
         condition=keras.backend.backend() == "torch",
-        strict=False,
-        reason=(
-            "Upstream litert-torch limitation: StableDiffusion3's "
-            "AdjustablePositionEmbedding cannot be lowered by torch.export."
-        ),
+        reason="AdjustablePositionEmbedding cannot be lowered by torch.export.",
     )
     def test_litert_export(self):
         self.run_litert_export_test(

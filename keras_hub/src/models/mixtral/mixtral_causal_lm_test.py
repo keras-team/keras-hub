@@ -110,12 +110,7 @@ class MixtralCausalLMTest(TestCase):
 
     @pytest.mark.xfail(
         condition=keras.backend.backend() == "torch",
-        strict=False,
-        reason=(
-            "Upstream litert-torch limitation: Mixtral's MoE routing emits "
-            "aten._assert_async, which torch.export / litert-torch cannot "
-            "lower ('Lowering not found: aten._assert_async.msg')."
-        ),
+        reason="litert-torch cannot lower aten._assert_async from MoE routing.",
     )
     def test_litert_export(self):
         self.run_litert_export_test(

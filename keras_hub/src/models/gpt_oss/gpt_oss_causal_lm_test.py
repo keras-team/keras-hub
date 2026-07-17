@@ -116,12 +116,7 @@ class GptOssCausalLMTest(TestCase):
 
     @pytest.mark.xfail(
         condition=backend.backend() == "torch",
-        strict=False,
-        reason=(
-            "Upstream litert-torch limitation: the NHWC layout rewriter does "
-            "not support aten.amax, causing 'NHWC node rewriter not found: "
-            "amax'. Will pass once litert-torch adds amax support."
-        ),
+        reason="litert-torch NHWC rewriter has no lowering for aten.amax.",
     )
     def test_litert_export(self):
         self.run_litert_export_test(

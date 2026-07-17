@@ -87,12 +87,7 @@ class FluxBackboneTest(TestCase):
 
     @pytest.mark.xfail(
         condition=backend.backend() == "torch",
-        strict=False,
-        reason=(
-            "Upstream torch.export limitation: Flux's attention reshape uses "
-            "a dynamic num_heads value, causing GuardOnDataDependentSymNode. "
-            "Will pass once torch.export supports data-dependent shapes here."
-        ),
+        reason="torch.export guard from Flux's dynamic num_heads reshape.",
     )
     def test_litert_export(self):
         self.run_litert_export_test(
