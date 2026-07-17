@@ -231,6 +231,7 @@ class T5Gemma2BackboneTest(TestCase):
                 input_data=self.input_data,
             )
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # Encoder self_attention and decoder merged_attention share the
         # query/key/value/attention_output naming, so the attention patterns
@@ -279,6 +280,7 @@ class T5Gemma2BackboneTest(TestCase):
             parity_rtol=1e-4,
         )
 
+    @pytest.mark.multi_device
     def test_distribution_vision(self):
         # Multimodal variant: build a tiny Gemma3VisionEncoder INSIDE the
         # distribution scope via a callable init_kwargs (required -- a vision
@@ -379,6 +381,7 @@ class T5Gemma2BackboneTest(TestCase):
         )
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
