@@ -115,7 +115,7 @@ jobs:
           pip install --no-deps -e "." --progress-bar off
     - name: Run distribution tests
       run: |
-        pytest keras_hub/ -k "test_distribution or test_layout_map"
+        pytest keras_hub/ -m "multi_device and not kaggle_key_required and not extra_large"
   check_format:
     name: Check the code format
     runs-on: ubuntu-latest
