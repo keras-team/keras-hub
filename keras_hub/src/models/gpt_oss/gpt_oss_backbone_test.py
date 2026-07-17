@@ -288,7 +288,8 @@ class GptOssBackboneTest(TestCase):
         for preset in GptOssBackbone.presets:
             try:
                 path = get_file(preset, CONFIG_FILE)
-                cfg = json.load(open(path))["config"]
+                with open(path, encoding="utf-8") as f:
+                    cfg = json.load(f)["config"]
             except Exception as e:
                 # A preset this account can't reach (e.g. an unaccepted
                 # Kaggle license consent click-through) is logged, not
@@ -380,9 +381,17 @@ class GptOssBackboneTest(TestCase):
                     hidden = cfg["hidden_dim"]
                     inter = cfg["intermediate_dim"]
                     num_experts = cfg["num_experts"]
+                    num_kv_heads = cfg["num_key_value_heads"]
+                    # Attention projections map hidden_dim<->hidden_dim
+                    # (q and o), and hidden_dim<->(hidden_dim scaled by
+                    # the kv/query head ratio) for GQA's k and v -- none
+                    # of the four touch intermediate_dim, which is the
+                    # FFN/expert width instead.
+                    kv_ratio = num_kv_heads / num_query_heads
                     est_params = (
                         cfg["vocabulary_size"] * hidden
-                        + 3 * hidden * inter  # attention q/k/v/o approx.
+                        + 2 * hidden * hidden  # attention q/o
+                        + 2 * hidden * hidden * kv_ratio  # attention k/v
                         + num_experts * (hidden * 2 * inter + inter * hidden)
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
