@@ -335,6 +335,7 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
                 else self.input_data,
             )
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # Text-only config. The default num_key_value_heads=1 is intentionally
         # left as-is (not divisible by the 2-device model-parallel mesh the
@@ -366,6 +367,7 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
             allow_replicated=(),
         )
 
+    @pytest.mark.multi_device
     def test_distribution_vision(self):
         # Vision + text config -- answers the maintainer's inline comment that
         # the vision tower was previously left entirely replicated. The vision
@@ -450,6 +452,7 @@ class Gemma3BackboneTest(TestCase, parameterized.TestCase):
         for dims in (GEMMA3_1B_DIMS, GEMMA3_4B_DIMS, GEMMA3_27B_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
