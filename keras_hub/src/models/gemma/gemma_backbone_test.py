@@ -64,6 +64,14 @@ GEMMA2_9B_DIMS = {
     "hidden_dim": 512,
     "intermediate_dim": 2048,
     "head_dim": 32,
+    # Real Gemma-2 architecture flags -- without these this "Gemma2" config
+    # would silently build with Gemma-1 defaults (both False) instead.
+    "use_post_ffw_norm": True,
+    "use_post_attention_norm": True,
+    "attention_logit_soft_cap": 50.0,
+    "final_logit_soft_cap": 30.0,
+    "use_sliding_window_attention": True,
+    "sliding_window_size": 4096,
 }
 
 # Hard-capped mesh-shape list for this shared 37GB dev machine. The full
@@ -452,10 +460,16 @@ class GemmaBackboneTest(TestCase):
                     distribution = keras.distribution.ModelParallel(
                         layout_map=layout_map, batch_dim_name="batch"
                     )
-                    init_kwargs = {
-                        k: v for k, v in cfg.items() if k in dim_keys
-                    }
-                    init_kwargs["num_layers"] = 1
+                    # Use the full preset config (already num_layers=1'd
+                    # above), not just dim_keys -- filtering to dim_keys
+                    # here would discard architecture flags like
+                    # use_post_attention_norm/use_post_ffw_norm/
+                    # attention_logit_soft_cap, silently building every
+                    # Gemma-2-family preset with Gemma-1 defaults instead.
+                    # cfg is the preset's serialized `config` dict, which
+                    # keras's get_config()/from_config() convention already
+                    # restricts to valid constructor kwargs.
+                    init_kwargs = dict(cfg)
                     with distribution.scope():
                         model = GemmaBackbone(dtype="bfloat16", **init_kwargs)
                         _assert_gemma_shardings_and_coverage(
