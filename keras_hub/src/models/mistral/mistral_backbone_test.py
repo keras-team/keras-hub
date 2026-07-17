@@ -1,5 +1,4 @@
 import gc
-import json
 import os
 import re
 
@@ -10,8 +9,7 @@ from keras import ops
 
 from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.preset_utils import CONFIG_FILE
-from keras_hub.src.utils.preset_utils import get_file
+from keras_hub.src.utils.preset_utils import load_json
 
 # Dims for the Tier-2 CI-safe mesh-shape sweep: representative real-preset
 # dimensions, frozen as literals and sourced once, offline -- do not add a
@@ -272,9 +270,7 @@ class MistralBackboneTest(TestCase):
         fetch_failures = []
         for preset in MistralBackbone.presets:
             try:
-                path = get_file(preset, CONFIG_FILE)
-                with open(path) as f:
-                    cfg = json.load(f)["config"]
+                cfg = load_json(preset)["config"]
             except Exception as e:
                 # A preset this account can't reach (e.g. an unaccepted
                 # Kaggle license consent click-through) is logged, not
