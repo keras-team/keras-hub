@@ -193,6 +193,7 @@ class MixtralBackboneTest(TestCase):
         )
         self.assertEqual(model.count_params(), expected_params)
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # num_experts=4, top_k=2 (distribution-test-only override, not the
         # shared setUp): with the shared setUp's num_experts=2, top_k=2,
@@ -253,6 +254,7 @@ class MixtralBackboneTest(TestCase):
         for dims in (MIXTRAL_SMALL_DIMS, MIXTRAL_BASE_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
