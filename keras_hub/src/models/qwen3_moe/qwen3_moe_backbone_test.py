@@ -176,6 +176,7 @@ class Qwen3MoeBackboneTest(TestCase):
         for loss in model.losses:
             self.assertGreater(loss, 0.0, "Auxiliary loss should be positive")
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # Note: the shared helper pins the mesh to exactly 2 devices (not
         # len(devices)), so the default test config's num_key_value_heads=2
@@ -244,6 +245,7 @@ class Qwen3MoeBackboneTest(TestCase):
         for dims in (QWEN3_MOE_30B_A3B_DIMS, QWEN3_MOE_235B_A22B_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
