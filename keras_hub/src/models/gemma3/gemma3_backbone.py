@@ -467,6 +467,140 @@ class Gemma3Backbone(Backbone):
         )
         return config
 
+    @staticmethod
+    def get_layout_map(
+        device_mesh,
+        model_parallel_dim_name="model",
+        data_parallel_dim_name="batch",
+    ):
+        """Get a `keras.distribution.LayoutMap` for model parallel distribution.
+
+        The returned `LayoutMap` contains the sharding spec for the Gemma3
+        backbone text-decoder weights as well as the vision-encoder tower
+        weights (SigLIP-style ViT): the vision attention and MLP dense kernels
+        are sharded column/row parallel, matching the text decoder. The vision
+        patch-embedding convolution, learned position embeddings, all biases
+        and norms, and (when `is_embedding_model=True`) the pooling-projection
+        head are left replicated -- they are 4-D (conv) or rank<2, or small
+        enough that sharding them only adds divisibility risk for no memory
+        win.
+
+        Note: when distributing a vision + language Gemma3 model, the
+        `Gemma3VisionEncoder` must be constructed *inside* the
+        `distribution.scope()` (see the example below), otherwise `fit()`
+        raises a mixed local/distributed device error.
+
+        Args:
+            device_mesh: keras.distribution.DeviceMesh. The device mesh
+                instance for distribution.
+            model_parallel_dim_name: str. The axis name of the device mesh,
+                where the weights should be partitioned on.
+            data_parallel_dim_name: str. The axis name of the device mesh,
+                where the data should be partitioned on.
+
+        Returns:
+            `keras.distribution.LayoutMap` that contains the sharding spec
+            for all the model weights.
+
+        Example:
+        ```python
+        # Feel free to change the mesh shape to fit your hardware.
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(1, 8),
+            axis_names=("batch", "model"),
+            devices=keras.distribution.list_devices(),
+        )
+        layout_map = Gemma3Backbone.get_layout_map(
+            device_mesh,
+            model_parallel_dim_name="model",
+            data_parallel_dim_name="batch",
+        )
+        distribution = keras.distribution.ModelParallel(
+            layout_map=layout_map,
+            batch_dim_name="batch",
+        )
+        with distribution.scope():
+            # The vision encoder must be built inside the scope too.
+            vision_encoder = keras_hub.models.Gemma3VisionEncoder(...)
+            gemma3 = keras_hub.models.Gemma3Backbone.from_preset(
+                "gemma3_instruct_4b", vision_encoder=vision_encoder,
+            )
+        ```
+        """
+        if not isinstance(device_mesh, keras.distribution.DeviceMesh):
+            raise ValueError(
+                "Invalid device_mesh type. Expected "
+                f"`keras.distribution.DeviceMesh`, got {type(device_mesh)}"
+            )
+        if model_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{model_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+        if data_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{data_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+
+        data_dim = data_parallel_dim_name
+        model_dim = model_parallel_dim_name
+        layout_map = keras.distribution.LayoutMap(device_mesh)
+        layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
+        # Key/value kernels are sized by `num_key_value_heads`, which is
+        # independent of and typically smaller than `num_query_heads` (GQA/MQA
+        # -- it can be as few as 1). Sharding that small head count on the
+        # model axis would raise an IndivisibleError whenever the device count
+        # doesn't divide it, so key/value are left replicated on that axis
+        # while query stays sharded.
+        layout_map["decoder_block.*attention.*query.kernel"] = (
+            model_dim,
+            data_dim,
+            None,
+        )
+        layout_map["decoder_block.*attention.*(key|value).kernel"] = (
+            None,
+            data_dim,
+            None,
+        )
+        layout_map["decoder_block.*attention_output.kernel"] = (
+            model_dim,
+            None,
+            data_dim,
+        )
+        layout_map["decoder_block.*ffw_gating.kernel"] = (data_dim, model_dim)
+        layout_map["decoder_block.*ffw_gating_2.kernel"] = (data_dim, model_dim)
+        layout_map["decoder_block.*ffw_linear.kernel"] = (model_dim, data_dim)
+
+        # === Vision encoder (SigLIP-style ViT) ===
+        # 2-D Dense kernels `(in, out)`. Attention q/k/v are the fused
+        # `hidden -> num_heads*head_dim` projection: shard the output
+        # (`num_heads*head_dim`) on the model axis -> column-parallel. The
+        # attention `out_proj` and the second MLP dense are row-parallel
+        # (contracting dim on the model axis). SigLIP-so400m dims (1152 /
+        # 4304) divide both 8- and 16-way, so no indivisibility risk.
+        layout_map[
+            "image_encoder.*multi_head_attention.*"
+            "(query_proj|key_proj|value_proj).kernel"
+        ] = (data_dim, model_dim)
+        layout_map["image_encoder.*multi_head_attention.*out_proj.kernel"] = (
+            model_dim,
+            data_dim,
+        )
+        layout_map["image_encoder.*mlp_dense_1.kernel"] = (data_dim, model_dim)
+        layout_map["image_encoder.*mlp_dense_2.kernel"] = (model_dim, data_dim)
+        layout_map["vision_output_encoder.*vision_input_projection.kernel"] = (
+            model_dim,
+            data_dim,
+        )
+        # Intentionally left replicated: the patch-embedding conv kernel
+        # (`embedding_conv`, 4-D), the learned `position_embedding` table, all
+        # vision biases/norms (rank<2), and -- for the `is_embedding_model`
+        # variant -- the mean-pooling projection head (`pooling_dense_1`,
+        # `embedding_projection`). These are either not 2-D matmul kernels or
+        # small enough that sharding only adds divisibility risk for no gain.
+        return layout_map
+
     def default_lora_layer_names(self):
         target_names = super().default_lora_layer_names()
 
