@@ -314,22 +314,34 @@ class Qwen3MoeBackbone(Backbone):
         model_dim = model_parallel_dim_name
         layout_map = keras.distribution.LayoutMap(device_mesh)
         layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
+        # tie_word_embeddings defaults to False for this model, and untied
+        # real presets exist, so `reverse_embeddings` is a real, separate
+        # output-projection tensor. Its shape is (hidden, vocab); vocab-
+        # parallel output projection wants vocab-on-model, consistent with
+        # `token_embedding/embeddings` above -- i.e. transposed relative to
+        # embeddings, not the same tuple.
         layout_map["token_embedding/reverse_embeddings"] = (
-            model_dim,
             data_dim,
+            model_dim,
         )
-        # Key/value kernels are sized by num_key_value_heads (GQA), which is
+        # QKV kernel is (hidden, heads, head_dim) (einsum "bqm,muh->bquh"),
+        # i.e. contracting-dim-first, unlike Gemma's (heads, hidden,
+        # head_dim). Query is column-parallel (Megatron): shard the
+        # contracting hidden dim on data and the heads dim on model.
+        # Key/value heads are sized by num_key_value_heads (GQA), which is
         # independent of and typically much smaller than num_query_heads --
-        # sharding that small axis on the data-parallel dim would raise an
-        # IndivisibleError whenever the batch mesh dimension doesn't divide
-        # it, so key/value are left fully replicated on that axis.
+        # sharding that small axis on the model-parallel dim would raise an
+        # IndivisibleError whenever the mesh's model-axis size doesn't
+        # divide it, so key/value are left replicated on that axis and only
+        # the (large, always-divisible) hidden dim is sharded on data for
+        # memory savings.
         layout_map["transformer_layer.*self_attention.*query.kernel"] = (
-            model_dim,
             data_dim,
+            model_dim,
             None,
         )
         layout_map["transformer_layer.*self_attention.*(key|value).kernel"] = (
-            model_dim,
+            data_dim,
             None,
             None,
         )
