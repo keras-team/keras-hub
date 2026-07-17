@@ -248,6 +248,7 @@ class T5GemmaBackboneTest(TestCase):
                 input_data=self.input_data,
             )
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # Note: mesh is pinned to exactly 2 devices (not len(devices), see
         # the shared helper) so that the default test config's
@@ -353,6 +354,7 @@ class T5GemmaBackboneTest(TestCase):
         for dims in (T5GEMMA_S_S_DIMS, T5GEMMA_L_L_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
