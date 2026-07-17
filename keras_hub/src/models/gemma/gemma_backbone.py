@@ -296,8 +296,19 @@ class GemmaBackbone(Backbone):
         # See https://arxiv.org/abs/2403.08295
         layout_map = keras.distribution.LayoutMap(device_mesh)
         layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
-        layout_map["decoder_block.*attention.*(query|key|value).kernel"] = (
+        # Key/value kernels are sized by num_key_value_heads (GQA/MQA),
+        # which is independent of and typically much smaller than
+        # num_query_heads -- sharding that small axis on the model-parallel
+        # dim would raise an IndivisibleError whenever the device count
+        # doesn't divide it, so they are left replicated on that axis while
+        # query stays sharded.
+        layout_map["decoder_block.*attention.*query.kernel"] = (
             model_dim,
+            data_dim,
+            None,
+        )
+        layout_map["decoder_block.*attention.*(key|value).kernel"] = (
+            None,
             data_dim,
             None,
         )
