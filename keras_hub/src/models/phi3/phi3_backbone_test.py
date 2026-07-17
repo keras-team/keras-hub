@@ -2,6 +2,7 @@ import gc
 import json
 import os
 import re
+import unittest
 
 import keras
 import pytest
@@ -286,6 +287,56 @@ class Phi3Test(TestCase):
             _assert_phi3_shardings_and_coverage(self, model, layout_map)
         del model
         gc.collect()
+
+    @pytest.mark.multi_device
+    def test_layout_map_mesh_shapes_skips_when_query_heads_indivisible(self):
+        # Regression test for the query-head-divisibility skip rule itself
+        # (as opposed to the parameterized test_layout_map_mesh_shapes*
+        # cases above, which only ever exercise mesh shapes where the skip
+        # rule happens not to fire): PHI3_MINI_DIMS' real-preset ratio has
+        # num_query_heads=32, so a model-axis size of 3 -- which does not
+        # divide 32 -- must trigger the skip, proving the guard actually
+        # fires rather than silently letting an IndivisibleError escape or
+        # letting a bad (non-divisible) shard through. This calls the same
+        # skip idiom used inside test_layout_map_mesh_shapes directly
+        # (that method is parameterized via @parameterized.named_parameters,
+        # which replaces the base method with per-case variants, so it
+        # can't be invoked here by name).
+        if keras.backend.backend() != "jax":
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
+        mesh_shape = (1, 3)
+        devices = keras.distribution.list_devices("CPU")
+        n_needed = 1
+        for s in mesh_shape:
+            n_needed *= s
+        if n_needed > len(devices):
+            self.skipTest(
+                f"Mesh shape {mesh_shape} needs {n_needed} devices, only "
+                f"{len(devices)} available. Run with "
+                f"XLA_FLAGS=--xla_force_host_platform_device_count="
+                f"{n_needed} to exercise this shape locally."
+            )
+        model_axis_size = mesh_shape[-1]
+        num_query_heads = PHI3_MINI_DIMS["num_query_heads"]
+        self.assertNotEqual(num_query_heads % model_axis_size, 0)
+
+        def _build_with_skip_guard():
+            if num_query_heads % model_axis_size != 0:
+                self.skipTest(
+                    f"num_query_heads={num_query_heads} not divisible by "
+                    f"model-axis={model_axis_size}: inherent "
+                    "tensor-parallelism limit, not a bug"
+                )
+            axis_names = ("batch", "model")
+            device_mesh = keras.distribution.DeviceMesh(
+                shape=mesh_shape,
+                axis_names=axis_names,
+                devices=devices[:n_needed],
+            )
+            return Phi3Backbone.get_layout_map(device_mesh)
+
+        with self.assertRaises(unittest.SkipTest):
+            _build_with_skip_guard()
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.multi_device
