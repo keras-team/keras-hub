@@ -1,5 +1,6 @@
 import gc
 import json
+import os
 import re
 
 import keras
@@ -21,26 +22,26 @@ from keras_hub.src.utils.preset_utils import get_file
 # `get_file` call to the Tier-2 test body itself (that's what Tier 3,
 # `test_layout_map_live_presets` below, is for).
 #
-# MEMORY NOTE: this local dev machine cannot load full-scale Qwen3.5 dims.
-# The real presets have vocabulary_size=248320 and hidden_dim up to 5120 with
-# 24-64 layers -- building even one such preset OOM-kills this shared 37GB
-# box. What actually matters for the divisibility/sharding properties this
-# tier tests is (a) whether num_query_heads divides the mesh's model-axis
-# size and (b) whether vocab/hidden/intermediate and the linear-attention
-# fused projection dims divide it -- not the absolute parameter count. So
-# these dims are scaled down ~20-120x from the real presets while preserving
-# each preset's real query:kv head ratio and its linear value:key head ratio
-# exactly, and keeping every model-axis-sharded dimension divisible by every
-# model-axis size in CAPPED_MESH_SHAPES (2, 4, 8). Real head_dim (256) and
-# real linear head dims (128) are also scaled to 32/16 to bound the fused
-# in_proj_qkv width. num_layers is fixed at 2 (not 1) because Qwen3.5 is a
-# *hybrid* stack: a single layer would only exercise one of the two token
-# mixers, so the sweep would silently never assert on either the
-# full-attention or the linear-attention rule set. Two scaled decoder blocks
-# (one of each type) are still ~1GB total RSS at the widest class -- verified.
-# Full-scale real dims are exercised by `test_layout_map_live_presets` below,
-# which has its own per-width-class memory-budget skip so it never attempts a
-# full-scale build locally either.
+# MEMORY NOTE: memory-constrained local environments cannot load full-scale
+# Qwen3.5 dims. The real presets have vocabulary_size=248320 and hidden_dim
+# up to 5120 with 24-64 layers -- building even one such preset can OOM a
+# constrained machine. What actually matters for the divisibility/sharding
+# properties this tier tests is (a) whether num_query_heads divides the
+# mesh's model-axis size and (b) whether vocab/hidden/intermediate and the
+# linear-attention fused projection dims divide it -- not the absolute
+# parameter count. So these dims are scaled down ~20-120x from the real
+# presets while preserving each preset's real query:kv head ratio and its
+# linear value:key head ratio exactly, and keeping every model-axis-sharded
+# dimension divisible by every model-axis size in CAPPED_MESH_SHAPES (2, 4,
+# 8). Real head_dim (256) and real linear head dims (128) are also scaled to
+# 32/16 to bound the fused in_proj_qkv width. num_layers is fixed at 2 (not
+# 1) because Qwen3.5 is a *hybrid* stack: a single layer would only exercise
+# one of the two token mixers, so the sweep would silently never assert on
+# either the full-attention or the linear-attention rule set. Two scaled
+# decoder blocks (one of each type) are still ~1GB total RSS at the widest
+# class -- verified. Full-scale real dims are exercised by
+# `test_layout_map_live_presets` below, which has its own per-width-class
+# memory-budget skip so it never attempts a full-scale build locally either.
 #
 # Provenance (fetched once via get_file(<preset>, CONFIG_FILE), 2026-07-17):
 #   qwen3_5_0.8b_base: vocab 248320, hidden 1024, intermediate 3584,
@@ -102,14 +103,13 @@ QWEN3_5_27B_DIMS = {
     "linear_conv_kernel_dim": 4,
 }
 
-# Hard-capped mesh-shape list for this shared 37GB dev machine. The full
-# 10-shape matrix from the testing-strategy doc is
+# Hard-capped mesh-shape list for memory-constrained local environments. The
+# full 10-shape matrix from the testing-strategy doc is
 # 2x4, 1x8, 4x4, 8x8, 16x16, 2x2x2, 1x1x8, 2x2x4, 4x4x4, 4x4x8 -- shapes
 # 8x8, 16x16, 4x4x4, 4x4x8 (64-256 virtual devices) are DELIBERATELY
-# DROPPED here due to a demonstrated systemd-oomd OOM kill of the entire
-# desktop app on this shared machine during an earlier attempt at this same
-# pipeline. Do not attempt the dropped shapes even experimentally on this
-# box -- revisiting them requires a dedicated or CI machine, not this one.
+# DROPPED here due to a demonstrated OOM kill during an earlier attempt at
+# this same pipeline on a memory-constrained machine. These shapes require a
+# dedicated or CI machine with more memory to exercise, even experimentally.
 CAPPED_MESH_SHAPES = [
     (2, 4),
     (1, 8),
@@ -292,6 +292,22 @@ class Qwen3_5BackboneTest(TestCase):
                 "tensor-parallelism limit, not a bug"
             )
 
+        # Linear-attention fused in_proj_qkv width must also divide the
+        # model axis: get_layout_map shards in_proj_qkv's fused output
+        # (2*key_dim + value_dim) on model_dim, so an indivisible width
+        # would otherwise fail inside `ModelParallel` construction below
+        # with an opaque error instead of a clean, documented skip.
+        linear_qkv_width = (
+            2 * dims["linear_num_key_heads"] * dims["linear_key_head_dim"]
+            + dims["linear_num_value_heads"] * dims["linear_value_head_dim"]
+        )
+        if linear_qkv_width % model_axis_size != 0:
+            self.skipTest(
+                f"linear_attn in_proj_qkv fused width={linear_qkv_width} "
+                f"not divisible by model-axis={model_axis_size}: inherent "
+                "tensor-parallelism limit, not a bug"
+            )
+
         devices = devices[:n_needed]
         if len(mesh_shape) == 2:
             axis_names = ("batch", "model")
@@ -312,8 +328,8 @@ class Qwen3_5BackboneTest(TestCase):
         )
         init_kwargs = {k: v for k, v in dims.items() if k != "source_preset"}
         with distribution.scope():
-            # bfloat16: a memory mitigation for this shared dev machine --
-            # spec assertions are dtype-independent.
+            # bfloat16: a memory mitigation for memory-constrained local
+            # environments -- spec assertions are dtype-independent.
             model = Qwen3_5Backbone(dtype="bfloat16", **init_kwargs)
             _assert_qwen3_5_shardings_and_coverage(self, model, layout_map)
         del model
@@ -329,9 +345,10 @@ class Qwen3_5BackboneTest(TestCase):
         # Fetch every preset's config only (no weights), then dedupe by the
         # divisibility-relevant dims so width-classes that share a config
         # (e.g. base vs instruction-tuned variants of the same size) are
-        # only built once per mesh shape -- a memory/time necessity on this
-        # machine -- while every preset in the registry is still fetched and
-        # evaluated, preserving full registry coverage.
+        # only built once per mesh shape -- a memory/time necessity in
+        # memory-constrained local environments -- while every preset in
+        # the registry is still fetched and evaluated, preserving full
+        # registry coverage.
         dim_keys = (
             "vocabulary_size",
             "num_query_heads",
@@ -414,32 +431,77 @@ class Qwen3_5BackboneTest(TestCase):
                         skip_reasons.append(reason)
                         continue
 
-                    # Memory-budget guard: this shared dev machine cannot
-                    # locally build full-scale presets. Estimate this
-                    # width-class's embedding table + one FFN block's 3
-                    # matrices (times a 3x safety margin for JAX/XLA
-                    # transient copies during construction/resharding) and
-                    # skip the actual build if it exceeds a conservative
-                    # local threshold. The config-fetch, dedup, and
-                    # divisibility-skip logic above still exercises every
-                    # registry preset either way; only the expensive
-                    # build+assert step is capped. (Real Qwen3.5 presets --
-                    # vocab 248320, hidden up to 5120 -- all exceed this and
-                    # are therefore verified offline / in CI, not here.)
+                    # Linear-attention fused in_proj_qkv width must also
+                    # divide the model axis -- see the matching guard and
+                    # comment in test_layout_map_mesh_shapes above.
+                    linear_qkv_width = (
+                        2
+                        * cfg["linear_num_key_heads"]
+                        * cfg["linear_key_head_dim"]
+                        + cfg["linear_num_value_heads"]
+                        * cfg["linear_value_head_dim"]
+                    )
+                    if linear_qkv_width % model_axis_size != 0:
+                        reason = (
+                            f"{combo_label}: linear_attn in_proj_qkv fused "
+                            f"width={linear_qkv_width} not divisible by "
+                            f"model-axis={model_axis_size}: inherent "
+                            "tensor-parallelism limit, not a bug"
+                        )
+                        skip_reasons.append(reason)
+                        continue
+
+                    # Memory-budget guard: memory-constrained local
+                    # environments cannot locally build full-scale presets.
+                    # Estimate this width-class's embedding table (counted
+                    # twice: Qwen3.5 defaults to untied embeddings, so
+                    # token_embedding/reverse_embeddings is a second real
+                    # vocab*hidden weight, not just the input embedding) +
+                    # one FFN block's 3 matrices + one linear-attention
+                    # block's projections (in_proj_qkv, in_proj_z, out_proj
+                    # -- the parameter bulk of real presets, where most
+                    # layers are linear_attention) (times a 3x safety margin
+                    # for JAX/XLA transient copies during
+                    # construction/resharding) and skip the actual build if
+                    # it exceeds a tunable local threshold. The config-fetch,
+                    # dedup, and divisibility-skip logic above still
+                    # exercises every registry preset either way; only the
+                    # expensive build+assert step is capped. (Real Qwen3.5
+                    # presets -- vocab 248320, hidden up to 5120 -- all
+                    # exceed the default threshold and are therefore
+                    # verified on a bigger machine / in CI via the
+                    # KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET env var, not
+                    # here by default.)
+                    key_dim = (
+                        cfg["linear_num_key_heads"] * cfg["linear_key_head_dim"]
+                    )
+                    value_dim = (
+                        cfg["linear_num_value_heads"]
+                        * cfg["linear_value_head_dim"]
+                    )
                     est_params = (
-                        cfg["vocabulary_size"] * cfg["hidden_dim"]
+                        2 * cfg["vocabulary_size"] * cfg["hidden_dim"]
                         + 3 * cfg["hidden_dim"] * cfg["intermediate_dim"]
+                        + cfg["hidden_dim"] * (2 * key_dim + value_dim)
+                        + 2 * cfg["hidden_dim"] * value_dim
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
-                    max_local_bytes = 300 * 1024 * 1024  # 300MB
+                    max_local_bytes = int(
+                        os.environ.get(
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET",
+                            300 * 1024 * 1024,
+                        )
+                    )
                     if est_bytes > max_local_bytes:
                         reason = (
                             f"{combo_label}: estimated build memory "
                             f"~{est_bytes / 1e9:.2f}GB exceeds the "
                             f"{max_local_bytes / 1e6:.0f}MB local safety "
-                            "threshold on this shared, RAM-constrained "
-                            "dev machine -- verify this width-class on a "
-                            "machine with more RAM or in CI"
+                            "threshold on memory-constrained local "
+                            "environments -- verify this width-class on a "
+                            "machine with more RAM or in CI (override via "
+                            "the KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET "
+                            "env var)"
                         )
                         skip_reasons.append(reason)
                         continue
@@ -458,9 +520,12 @@ class Qwen3_5BackboneTest(TestCase):
                     distribution = keras.distribution.ModelParallel(
                         layout_map=layout_map, batch_dim_name="batch"
                     )
-                    init_kwargs = {
-                        k: v for k, v in cfg.items() if k in dim_keys
-                    }
+                    # `cfg` is a full serialized `get_config()` dict, which
+                    # may include a `"dtype"` key (a serialized dtype-policy
+                    # dict, only present for quantized presets) -- drop it
+                    # so the explicit `dtype="bfloat16"` override below
+                    # doesn't collide with a duplicate keyword argument.
+                    init_kwargs = {k: v for k, v in cfg.items() if k != "dtype"}
                     # Force a tiny hybrid stack: one layer of each token
                     # mixer so both the full-attention and linear-attention
                     # rule sets are asserted, while keeping depth (and thus
