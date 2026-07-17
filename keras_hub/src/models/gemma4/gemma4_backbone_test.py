@@ -588,6 +588,7 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
             input_data=input_data,
         )
 
+    @pytest.mark.multi_device
     def test_distribution(self):
         # Text-only config with the MoE block enabled so the expert-bank/router
         # layout rules are also exercised. The default num_key_value_heads=1 is
@@ -644,6 +645,7 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
             is_moe=True,
         )
 
+    @pytest.mark.multi_device
     def test_distribution_vision(self):
         # Vision + text config -- validates the vision-tower sharding entries
         # added in this PR (plan Part B.4). The vision encoder MUST be
@@ -680,6 +682,7 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
             assert_parity_vs_undistributed=False,
         )
 
+    @pytest.mark.multi_device
     def test_distribution_audio(self):
         # Text + audio config -- validates the audio-conformer sharding entries
         # added in this PR (plan Part B.4). Forward-only (no fit, no parity
@@ -725,6 +728,7 @@ class Gemma4BackboneTest(TestCase, parameterized.TestCase):
         for dims in (GEMMA4_2B_DIMS, GEMMA4_4B_DIMS, GEMMA4_26B_A4B_DIMS)
         for shape in CAPPED_MESH_SHAPES
     )
+    @pytest.mark.multi_device
     def test_layout_map_mesh_shapes(self, dims, mesh_shape):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
