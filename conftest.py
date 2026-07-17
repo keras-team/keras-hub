@@ -95,6 +95,10 @@ def pytest_configure(config):
         "markers",
         "kaggle_key_required: mark test needing a kaggle key",
     )
+    config.addinivalue_line(
+        "markers",
+        "multi_device: mark test as needing multiple devices",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
