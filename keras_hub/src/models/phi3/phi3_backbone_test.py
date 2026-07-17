@@ -17,9 +17,9 @@ from keras_hub.src.utils.preset_utils import get_file
 # `get_file` call to the Tier-2 test body itself (that's what Tier 3,
 # `test_layout_map_live_presets` below, is for).
 #
-# MEMORY NOTE: this local dev machine cannot load full-scale model dims (see
-# gemma_backbone_test.py's identically-named constant for the OOM history
-# that established this pattern). What actually matters for the
+# MEMORY NOTE: full-scale model dims cannot be loaded under CI resource
+# limits (see gemma_backbone_test.py's identically-named constant for the
+# OOM history that established this pattern). What actually matters for the
 # divisibility/sharding properties this tier tests is the RATIO of query
 # heads to kv heads and whether hidden/intermediate/vocab divide the mesh's
 # model-axis sizes -- not the absolute parameter count. Both registered Phi3
@@ -54,11 +54,11 @@ PHI3_SMALL_GQA_DIMS = {
     "intermediate_dim": 512,
 }
 
-# Hard-capped mesh-shape list for this shared 37GB dev machine -- see
+# Hard-capped mesh-shape list to stay within CI resource limits -- see
 # gemma_backbone_test.py's identically-named constant for the full
 # rationale and OOM history. Shapes 8x8, 16x16, 4x4x4, 4x4x8 (64-256
-# virtual devices) are deliberately dropped; do not attempt them on this
-# box.
+# virtual devices) are deliberately dropped; do not attempt them in this
+# environment.
 CAPPED_MESH_SHAPES = [
     (2, 4),
     (1, 8),
@@ -277,7 +277,7 @@ class Phi3Test(TestCase):
         )
         init_kwargs = {k: v for k, v in dims.items() if k != "source_preset"}
         with distribution.scope():
-            # bfloat16: a memory mitigation for this shared dev machine --
+            # bfloat16: a memory mitigation for the local test environment --
             # spec assertions are dtype-independent.
             model = Phi3Backbone(dtype="bfloat16", **init_kwargs)
             _assert_phi3_shardings_and_coverage(self, model, layout_map)
@@ -295,9 +295,9 @@ class Phi3Test(TestCase):
         # divisibility-relevant dims so width-classes that share a config
         # (both registered Phi3 presets are the same "mini" architecture at
         # different context lengths) are only built once per mesh shape -- a
-        # memory/time necessity on this machine, while every preset in the
-        # registry is still fetched and evaluated, preserving full registry
-        # coverage.
+        # memory/time necessity under CI resource limits, while every preset
+        # in the registry is still fetched and evaluated, preserving full
+        # registry coverage.
         dim_keys = (
             "vocabulary_size",
             "num_query_heads",
@@ -310,7 +310,8 @@ class Phi3Test(TestCase):
         for preset in Phi3Backbone.presets:
             try:
                 path = get_file(preset, CONFIG_FILE)
-                cfg = json.load(open(path))["config"]
+                with open(path, encoding="utf-8") as f:
+                    cfg = json.load(f)["config"]
             except Exception as e:
                 # A preset this account can't reach (e.g. an unaccepted
                 # Kaggle license consent click-through) is logged, not
@@ -320,7 +321,7 @@ class Phi3Test(TestCase):
             # num_layers is forced to 1 below regardless of the real
             # value -- layout rules are per-decoder-block regexes, so
             # depth is irrelevant to spec matching/divisibility, and 1
-            # layer keeps build memory bounded on this shared machine.
+            # layer keeps build memory bounded under CI resource limits.
             cfg = dict(cfg)
             cfg["num_layers"] = 1
             key = tuple(cfg.get(k) for k in dim_keys)
@@ -379,19 +380,25 @@ class Phi3Test(TestCase):
                         skip_reasons.append(reason)
                         continue
 
-                    # Memory-budget guard: this shared dev machine cannot
-                    # locally build full-scale presets. Estimate this
+                    # Memory-budget guard: full-scale presets cannot be
+                    # built locally under CI resource limits. Estimate this
                     # width-class's single-decoder-block bf16 footprint
-                    # (embedding table + one FFN block's 3 matrices, times
-                    # a 3x safety margin for JAX/XLA transient copies
-                    # during construction/resharding) and skip the actual
-                    # build if it exceeds a conservative local threshold.
-                    # The config-fetch, dedup, and divisibility-skip logic
-                    # above still exercises every registry preset either
-                    # way; only the expensive build+assert step is capped.
+                    # (embedding table + attention projections + one FFN
+                    # block's 3 matrices, times a 3x safety margin for
+                    # JAX/XLA transient copies during construction/
+                    # resharding) and skip the actual build if it exceeds a
+                    # conservative local threshold. The config-fetch, dedup,
+                    # and divisibility-skip logic above still exercises
+                    # every registry preset either way; only the expensive
+                    # build+assert step is capped.
                     est_params = (
                         cfg["vocabulary_size"] * cfg["hidden_dim"]
                         + 3 * cfg["hidden_dim"] * cfg["intermediate_dim"]
+                        # Attention q/k/v/o projections: upper-bounded as
+                        # four hidden_dim x hidden_dim matrices (exact for
+                        # full MHA; GQA configs use less, so this stays a
+                        # conservative overestimate for those).
+                        + 4 * cfg["hidden_dim"] * cfg["hidden_dim"]
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
                     max_local_bytes = 300 * 1024 * 1024  # 300MB
@@ -400,9 +407,9 @@ class Phi3Test(TestCase):
                             f"{combo_label}: estimated build memory "
                             f"~{est_bytes / 1e9:.2f}GB exceeds the "
                             f"{max_local_bytes / 1e6:.0f}MB local safety "
-                            "threshold on this shared, RAM-constrained "
-                            "dev machine -- verify this width-class on a "
-                            "machine with more RAM or in CI"
+                            "threshold under CI resource limits -- verify "
+                            "this width-class on a machine with more RAM "
+                            "or in a less-constrained CI environment"
                         )
                         skip_reasons.append(reason)
                         continue
