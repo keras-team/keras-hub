@@ -217,3 +217,116 @@ class GptOssBackbone(Backbone):
             }
         )
         return config
+
+    @staticmethod
+    def get_layout_map(
+        device_mesh,
+        model_parallel_dim_name="model",
+        data_parallel_dim_name="batch",
+    ):
+        """Get a `keras.distribution.LayoutMap` for model parallel distribution.
+
+        The returned `LayoutMap` contains the sharding spec for the GptOss
+        backbone weights, including the MoE expert-bank and router weights.
+
+        Args:
+            device_mesh: keras.distribution.DeviceMesh. The device mesh
+                instance for distribution.
+            model_parallel_dim_name: str. The axis name of the device mesh,
+                where the weights should be partitioned on.
+            data_parallel_dim_name: str. The axis name of the device mesh,
+                where the data should be partitioned on.
+
+        Returns:
+            `keras.distribution.LayoutMap` that contains the sharding spec
+            for all the model weights.
+        """
+        if not isinstance(device_mesh, keras.distribution.DeviceMesh):
+            raise ValueError(
+                "Invalid device_mesh type. Expected "
+                f"`keras.distribution.DeviceMesh`, got {type(device_mesh)}"
+            )
+        if model_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{model_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+        if data_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{data_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_names=}"
+            )
+
+        data_dim = data_parallel_dim_name
+        model_dim = model_parallel_dim_name
+        layout_map = keras.distribution.LayoutMap(device_mesh)
+        layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
+        # `reverse_embeddings` is `(hidden_dim, vocabulary_size)` -- the
+        # transpose of `embeddings` -- so the vocab-parallel output
+        # projection wants vocab-on-model, hidden-on-data, matching
+        # `embeddings` above.
+        layout_map["token_embedding/reverse_embeddings"] = (
+            data_dim,
+            model_dim,
+        )
+        # Query/key/value kernels are `(hidden_dim, num_heads, head_dim)`
+        # (einsum `bqm,muh->bquh` / `bkm,mvh->bkvh`), i.e. the contracting
+        # hidden_dim axis comes first, not the heads axis -- unlike Gemma's
+        # `(num_heads, hidden_dim, head_dim)` kernels. So the hidden_dim
+        # axis (data_dim) is sharded for column-parallelism, matching
+        # Megatron-style tensor parallelism and this layer's own
+        # `attention_output` rule below. Key/value are additionally sized by
+        # num_key_value_heads (GQA), which is independent of and typically
+        # much smaller than num_query_heads; both the heads and head_dim
+        # axes are left replicated for key/value (as for query) since only
+        # the large hidden_dim contracting axis is sharded.
+        layout_map["transformer_layer.*self_attention.*query.kernel"] = (
+            data_dim,
+            model_dim,
+            None,
+        )
+        layout_map["transformer_layer.*self_attention.*(key|value).kernel"] = (
+            data_dim,
+            None,
+            None,
+        )
+        # Query/key/value biases are `(num_heads, head_dim)` -- 2-D, but
+        # tiny relative to the kernels, and sharding either axis adds
+        # divisibility risk (num_key_value_heads is often small, e.g. GQA)
+        # for negligible memory savings. Left fully replicated; covered via
+        # the test's `allow_replicated` list, not a layout_map rule.
+        layout_map[
+            "transformer_layer.*self_attention.*attention_output.kernel"
+        ] = (
+            model_dim,
+            None,
+            data_dim,
+        )
+        # MoE experts. The leading dimension is the expert count and is left
+        # replicated so the map works for small num_experts values used in
+        # tests. gate_up_proj fuses the SwiGLU gate and up projections into
+        # one tensor (column-parallel); down_proj is row-parallel. Expert
+        # biases (`(num_experts, ...)`, 2-D) are left fully replicated, same
+        # rationale as the attention biases above -- negligible size, not
+        # worth the divisibility risk; covered via `allow_replicated`.
+        layout_map[
+            "transformer_layer.*sparse_moe_block/experts/gate_up_proj$"
+        ] = (
+            None,
+            data_dim,
+            model_dim,
+        )
+        layout_map["transformer_layer.*sparse_moe_block/experts/down_proj$"] = (
+            None,
+            model_dim,
+            data_dim,
+        )
+        # Router. num_experts is typically small, so only the hidden-dim
+        # axis is sharded.
+        layout_map[
+            "transformer_layer.*sparse_moe_block/router/router_dense.kernel"
+        ] = (
+            data_dim,
+            None,
+        )
+        return layout_map
