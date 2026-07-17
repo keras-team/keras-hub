@@ -257,7 +257,7 @@ class QwenBackbone(Backbone):
             `keras.distribution.LayoutMap` that contains the sharding spec
             for all the model weights.
         """
-        # The weight path and shape of the Llama backbone is like below
+        # The weight path and shape of the Qwen backbone is like below
         # token_embedding/embeddings                              (128256, 2048)
         # repeat block for decoder
         # transformer_layer_0/self_attention/query/kernel         (2048, 32, 64)
@@ -295,11 +295,32 @@ class QwenBackbone(Backbone):
         # See https://arxiv.org/abs/2403.08295
         layout_map = keras.distribution.LayoutMap(device_mesh)
         layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
-        layout_map[
-            "transformer_layer.*self_attention.*(query|key|value).kernel"
-        ] = (
-            model_dim,
+        # tie_word_embeddings defaults to True, but convert_qwen.py propagates
+        # the real HF config value and untied real presets exist, so a
+        # separate token_embedding/reverse_embeddings output-projection tensor
+        # (hidden_dim, vocab_size) can exist and must not be left replicated.
+        # Vocab goes on the model axis (vocab-parallel output projection),
+        # consistent with token_embedding/embeddings being (vocab, hidden).
+        layout_map["token_embedding/reverse_embeddings"] = (
             data_dim,
+            model_dim,
+        )
+        # The query kernel is (hidden_dim, num_query_heads, head_dim); shard
+        # the query heads on the model axis (Megatron column-parallel) and the
+        # contracting hidden dim on the data axis for memory sharding.
+        layout_map["transformer_layer.*self_attention.*query.kernel"] = (
+            data_dim,
+            model_dim,
+            None,
+        )
+        # The key/value kernels are (hidden_dim, num_key_value_heads,
+        # head_dim). num_key_value_heads is small under GQA/MQA (and can be
+        # indivisible by the model-axis size), so the key/value heads are left
+        # replicated on the model axis; only the contracting hidden dim is
+        # sharded, on the data axis, mirroring the Gemma-family convention.
+        layout_map["transformer_layer.*self_attention.*(key|value).kernel"] = (
+            data_dim,
+            None,
             None,
         )
         layout_map["transformer_layer.*attention_output.kernel"] = (
