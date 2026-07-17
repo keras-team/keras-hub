@@ -1,4 +1,6 @@
 import gc
+import json
+import os
 import re
 
 import keras
@@ -10,17 +12,19 @@ from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_backbone import (
     Qwen3_5MoeBackbone,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.preset_utils import CONFIG_FILE
+from keras_hub.src.utils.preset_utils import get_file
 
 # Dims for the Tier-2 CI-safe mesh-shape sweep: representative
 # Qwen3.5-MoE-35B-A3B-class shapes, frozen as literals and scaled down for
-# this shared, RAM-constrained dev box -- do NOT add a live `get_file` call to
-# the Tier-2 test body (that is what Tier 3, `test_layout_map_live_presets`,
+# memory-constrained local environments -- do NOT add a live `get_file` call
+# to the Tier-2 test body (that is what Tier 3, `test_layout_map_live_presets`,
 # is for).
 #
-# MEMORY NOTE: this local dev machine cannot load full-scale model dims, so
-# every dimension (vocab, hidden, intermediate, expert widths, head dims) is
-# scaled down ~20-30x from the real `Qwen/Qwen3.5-35B-A3B` config while
-# preserving the two properties this tier actually tests:
+# MEMORY NOTE: memory-constrained local environments cannot load full-scale
+# model dims, so every dimension (vocab, hidden, intermediate, expert widths,
+# head dims) is scaled down ~20-30x from the real `Qwen/Qwen3.5-35B-A3B`
+# config while preserving the two properties this tier actually tests:
 #   * the real query:kv head RATIO (8:1 GQA) and the real
 #     linear key:value head ratio (16:32 = 1:2), which drive the
 #     divisibility/sharding behaviour under test, and
@@ -83,13 +87,13 @@ QWEN3_5_MOE_SMALL_DIMS = {
     "router_aux_loss_coefficient": 0.001,
 }
 
-# Hard-capped mesh-shape list for this shared 37GB dev machine. The full
-# 10-shape matrix from the testing-strategy doc is
+# Hard-capped mesh-shape list for memory-constrained local environments. The
+# full 10-shape matrix from the testing-strategy doc is
 # 2x4, 1x8, 4x4, 8x8, 16x16, 2x2x2, 1x1x8, 2x2x4, 4x4x4, 4x4x8 -- shapes
 # 8x8, 16x16, 4x4x4, 4x4x8 (64-256 virtual devices) are DELIBERATELY DROPPED
-# here (they need >16 simulated devices and OOM-kill this shared box). Do not
-# add them even experimentally on this machine; they belong on a dedicated or
-# CI runner. Every shape below fits within 16 virtual devices.
+# here (they need >16 simulated devices and can OOM-kill a memory-constrained
+# machine). These shapes require a dedicated or CI machine with more memory.
+# Every shape below fits within 16 virtual devices.
 CAPPED_MESH_SHAPES = [
     (2, 4),
     (1, 8),
@@ -309,6 +313,22 @@ class Qwen3_5MoeBackboneTest(TestCase):
                 "tensor-parallelism limit, not a bug"
             )
 
+        # Linear-attention (GatedDeltaNet) fused in_proj_qkv width must also
+        # divide the model axis: get_layout_map shards in_proj_qkv's fused
+        # output (2*key_dim + value_dim) on model_dim, so an indivisible
+        # width would otherwise fail inside `ModelParallel` construction
+        # below with an opaque error instead of a clean, documented skip.
+        linear_qkv_width = (
+            2 * dims["linear_num_key_heads"] * dims["linear_key_head_dim"]
+            + dims["linear_num_value_heads"] * dims["linear_value_head_dim"]
+        )
+        if linear_qkv_width % model_axis_size != 0:
+            self.skipTest(
+                f"linear_attn in_proj_qkv fused width={linear_qkv_width} "
+                f"not divisible by model-axis={model_axis_size}: inherent "
+                "tensor-parallelism limit, not a bug"
+            )
+
         devices = devices[:n_needed]
         if len(mesh_shape) == 2:
             axis_names = ("batch", "model")
@@ -329,8 +349,8 @@ class Qwen3_5MoeBackboneTest(TestCase):
         )
         init_kwargs = {k: v for k, v in dims.items() if k != "source_preset"}
         with distribution.scope():
-            # bfloat16: a memory mitigation for this shared dev machine --
-            # spec assertions are dtype-independent.
+            # bfloat16: a memory mitigation for memory-constrained local
+            # environments -- spec assertions are dtype-independent.
             model = Qwen3_5MoeBackbone(dtype="bfloat16", **init_kwargs)
             _assert_shardings_and_coverage(
                 self, model, layout_map, _SWEEP_EXPECTED_SHARDINGS
@@ -342,19 +362,15 @@ class Qwen3_5MoeBackboneTest(TestCase):
     @pytest.mark.multi_device
     @pytest.mark.extra_large
     def test_layout_map_live_presets(self):
-        import json
-
-        from keras_hub.src.utils.preset_utils import CONFIG_FILE
-        from keras_hub.src.utils.preset_utils import get_file
-
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
 
         # Fetch every preset's config only (no weights), then dedupe by the
         # divisibility-relevant dims so width-classes that share a config are
-        # only built once per mesh shape -- a memory/time necessity on this
-        # machine -- while every preset in the registry is still fetched and
-        # evaluated, preserving full registry coverage.
+        # only built once per mesh shape -- a memory/time necessity for
+        # memory-constrained local environments -- while every preset in the
+        # registry is still fetched and evaluated, preserving full registry
+        # coverage.
         dim_keys = (
             "vocabulary_size",
             "num_query_heads",
@@ -439,34 +455,71 @@ class Qwen3_5MoeBackboneTest(TestCase):
                         )
                         continue
 
-                    # Memory-budget guard: this shared dev machine cannot
-                    # locally build full-scale presets. Estimate this
-                    # width-class's single-decoder-block bf16 footprint
-                    # (embedding table + one expert bank's two fused
-                    # matrices, times a 3x safety margin for JAX/XLA
-                    # transient copies) and skip the build if it exceeds a
-                    # conservative local threshold. The fetch/dedup/
-                    # divisibility logic above still exercises every
-                    # registry preset regardless.
+                    # Linear-attention fused in_proj_qkv width must also
+                    # divide the model axis -- see the matching guard and
+                    # comment in test_layout_map_mesh_shapes above.
+                    linear_qkv_width = (
+                        2
+                        * cfg["linear_num_key_heads"]
+                        * cfg["linear_key_head_dim"]
+                        + cfg["linear_num_value_heads"]
+                        * cfg["linear_value_head_dim"]
+                    )
+                    if linear_qkv_width % model_axis_size != 0:
+                        skip_reasons.append(
+                            f"{combo_label}: linear_attn in_proj_qkv fused "
+                            f"width={linear_qkv_width} not divisible by "
+                            f"model-axis={model_axis_size}: inherent "
+                            "tensor-parallelism limit, not a bug"
+                        )
+                        continue
+
+                    # Memory-budget guard: memory-constrained local
+                    # environments cannot locally build full-scale presets.
+                    # Estimate this width-class's single-decoder-block bf16
+                    # footprint -- embedding table (counted twice: Qwen3.5-MoE
+                    # defaults to untied embeddings, so
+                    # token_embedding/reverse_embeddings is a second real
+                    # vocab*hidden weight, not just the input embedding) +
+                    # GQA-scaled attention QKVO + the shared (always-active)
+                    # expert's 3 matrices + the routed expert bank's two
+                    # fused matrices, times a 3x safety margin for JAX/XLA
+                    # transient copies -- and skip the build if it exceeds a
+                    # tunable local threshold. The fetch/dedup/divisibility
+                    # logic above still exercises every registry preset
+                    # regardless.
                     vocab = cfg["vocabulary_size"]
                     hidden = cfg["hidden_dim"]
                     moe_int = cfg["moe_intermediate_dim"]
+                    shared_int = cfg["shared_expert_intermediate_size"]
                     n_exp = cfg["num_experts"]
+                    num_kv_heads = cfg["num_key_value_heads"]
+                    kv_ratio = num_kv_heads / num_query_heads
                     est_params = (
-                        vocab * hidden
-                        + n_exp * hidden * 2 * moe_int
-                        + n_exp * moe_int * hidden
+                        2 * vocab * hidden  # untied embeddings
+                        + 2 * hidden * hidden  # attention q/o
+                        + 2 * hidden * hidden * kv_ratio  # attention k/v
+                        + 3 * hidden * shared_int  # shared expert
+                        + n_exp * hidden * 2 * moe_int  # routed gate+up
+                        + n_exp * moe_int * hidden  # routed down
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
-                    max_local_bytes = 300 * 1024 * 1024  # 300MB
+                    max_local_bytes = int(
+                        os.environ.get(
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET",
+                            300 * 1024 * 1024,
+                        )
+                    )
                     if est_bytes > max_local_bytes:
                         skip_reasons.append(
                             f"{combo_label}: estimated build memory "
                             f"~{est_bytes / 1e9:.2f}GB exceeds the "
                             f"{max_local_bytes / 1e6:.0f}MB local safety "
-                            "threshold on this shared, RAM-constrained "
-                            "dev machine -- verify this width-class on a "
-                            "machine with more RAM or in CI"
+                            "threshold for memory-constrained local "
+                            "environments -- verify this width-class on a "
+                            "machine with more RAM or in CI (override via "
+                            "the KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET "
+                            "env var)"
                         )
                         continue
 
@@ -484,29 +537,32 @@ class Qwen3_5MoeBackboneTest(TestCase):
                     distribution = keras.distribution.ModelParallel(
                         layout_map=layout_map, batch_dim_name="batch"
                     )
-                    # Build text-only from the constructor-relevant config
-                    # keys (drop serialized sub-objects like vision_encoder
-                    # and any get_config-only fields such as name/dtype).
-                    build_keys = (
-                        "vocabulary_size",
-                        "num_layers",
-                        "num_query_heads",
-                        "num_key_value_heads",
-                        "head_dim",
-                        "hidden_dim",
-                        "moe_intermediate_dim",
-                        "shared_expert_intermediate_size",
-                        "num_experts",
-                        "top_k",
-                        "layer_types",
-                        "partial_rotary_factor",
-                        "linear_num_key_heads",
-                        "linear_num_value_heads",
-                        "linear_key_head_dim",
-                        "linear_value_head_dim",
-                        "linear_conv_kernel_dim",
+                    # `cfg` is a full serialized `get_config()` dict, which
+                    # may include a `"dtype"` key (a serialized dtype-policy
+                    # dict, only present for quantized presets) -- drop it
+                    # so the explicit `dtype="bfloat16"` override below
+                    # doesn't collide with a duplicate keyword argument.
+                    # `name`/`trainable` pass through harmlessly via
+                    # `**kwargs`. Every other real architecture flag (rope
+                    # scaling, tie_word_embeddings, dropout,
+                    # sliding_window_size, mrope_section,
+                    # router_aux_loss_coefficient, ...) is preserved, unlike
+                    # a dims-only allowlist.
+                    build_kwargs = {
+                        k: v for k, v in cfg.items() if k != "dtype"
+                    }
+                    # `vision_encoder` is serialized by `get_config` via
+                    # `keras.layers.serialize` and must be deserialized back
+                    # into a layer instance (or left `None`) before it can be
+                    # passed to `__init__`, matching `from_config`'s handling
+                    # of this field.
+                    build_kwargs["vision_encoder"] = (
+                        None
+                        if build_kwargs.get("vision_encoder") is None
+                        else keras.layers.deserialize(
+                            build_kwargs["vision_encoder"]
+                        )
                     )
-                    build_kwargs = {k: cfg[k] for k in build_keys if k in cfg}
                     with distribution.scope():
                         model = Qwen3_5MoeBackbone(
                             dtype="bfloat16", **build_kwargs
