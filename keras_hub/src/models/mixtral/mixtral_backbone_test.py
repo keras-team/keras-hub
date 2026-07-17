@@ -341,7 +341,7 @@ class MixtralBackboneTest(TestCase):
         for preset in MixtralBackbone.presets:
             try:
                 path = get_file(preset, CONFIG_FILE)
-                with open(path) as f:
+                with open(path, encoding="utf-8") as f:
                     cfg = json.load(f)["config"]
             except Exception as e:
                 # A preset this account can't reach (e.g. an unaccepted
