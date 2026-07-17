@@ -1116,13 +1116,19 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
                 # Distributed twin.
                 parity_devices = all_devices[:n_needed]
+                # axis_names length must equal the mesh rank or DeviceMesh
+                # raises -- pick the naming that matches len(mesh_shape) so a
+                # 1D (pure batch- or model-parallel) shape works too, not just
+                # the 2D/3D defaults.
+                if len(mesh_shape) == 1:
+                    axis_names = ("batch",)
+                elif len(mesh_shape) == 2:
+                    axis_names = ("batch", "model")
+                else:
+                    axis_names = ("batch", "seq", "model")
                 parity_mesh = keras.distribution.DeviceMesh(
                     shape=mesh_shape,
-                    axis_names=(
-                        ("batch", "model")
-                        if len(mesh_shape) == 2
-                        else ("batch", "seq", "model")
-                    ),
+                    axis_names=axis_names,
                     devices=parity_devices,
                 )
                 parity_layout_map = cls.get_layout_map(
@@ -1139,14 +1145,21 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     distributed_model = cls(**get_kwargs())
                     distributed_out = distributed_model(input_data)
 
-                # Forward parity. `assertAllClose` already recurses through
-                # nested structures (see the class override above) -- a
-                # manual tree.flatten()+zip() here would silently truncate
-                # on a structure-length mismatch instead of failing loudly,
-                # so compare the structures directly.
-                self.assertAllClose(
-                    undistributed_out, distributed_out, rtol=rtol, atol=atol
-                )
+                # Forward parity. Assert the two output structures match
+                # first -- this fails loudly on a structure mismatch, unlike a
+                # bare tree.flatten()+zip() which would silently truncate to
+                # the shorter one. Then compare leaf-by-leaf, skipping paired
+                # None leaves (an unset optional output on both twins):
+                # `assertAllClose` on a raw None pair raises TypeError rather
+                # than treating them as equal.
+                tree.assert_same_structure(undistributed_out, distributed_out)
+                for u_leaf, d_leaf in zip(
+                    tree.flatten(undistributed_out),
+                    tree.flatten(distributed_out),
+                ):
+                    if u_leaf is None and d_leaf is None:
+                        continue
+                    self.assertAllClose(u_leaf, d_leaf, rtol=rtol, atol=atol)
 
                 # 5-step training-convergence parity. Fixed SGD+mse
                 # choice -- do not substitute Adam without re-verifying,
