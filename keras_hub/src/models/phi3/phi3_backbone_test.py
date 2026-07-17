@@ -1,5 +1,6 @@
 import gc
 import json
+import os
 import re
 
 import keras
@@ -292,18 +293,26 @@ class Phi3Test(TestCase):
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
 
         # Fetch every preset's config only (no weights), then dedupe by the
-        # divisibility-relevant dims so width-classes that share a config
-        # (both registered Phi3 presets are the same "mini" architecture at
-        # different context lengths) are only built once per mesh shape -- a
-        # memory/time necessity under CI resource limits, while every preset
-        # in the registry is still fetched and evaluated, preserving full
-        # registry coverage.
+        # divisibility-relevant dims so width-classes that share both a
+        # dims profile AND an architecture (e.g. exact duplicate registry
+        # entries) are only built once per mesh shape -- a memory/time
+        # necessity under CI resource limits, while every preset in the
+        # registry is still fetched and evaluated, preserving full registry
+        # coverage. `rope_scaling_type` is included alongside the raw dims
+        # because the two registered Phi3 presets share identical dims but
+        # differ in RoPE architecture: `phi3_mini_4k_instruct_en` uses plain
+        # RoPE (`rope_scaling_type=None`) while `phi3_mini_128k_instruct_en`
+        # uses SuScaled RoPE (`rope_scaling_type="su"`) to reach its longer
+        # context length -- without this key, the 128k preset would be
+        # discarded as a "duplicate" of the 4k preset before ever being
+        # built, and its distinct architecture would go untested.
         dim_keys = (
             "vocabulary_size",
             "num_query_heads",
             "num_key_value_heads",
             "hidden_dim",
             "intermediate_dim",
+            "rope_scaling_type",
         )
         width_classes = {}  # dedupe key -> (config dict, [preset names])
         fetch_failures = []
@@ -380,19 +389,25 @@ class Phi3Test(TestCase):
                         skip_reasons.append(reason)
                         continue
 
-                    # Memory-budget guard: full-scale presets cannot be
-                    # built locally under CI resource limits. Estimate this
-                    # width-class's single-decoder-block bf16 footprint
-                    # (embedding table + attention projections + one FFN
-                    # block's 3 matrices, times a 3x safety margin for
-                    # JAX/XLA transient copies during construction/
+                    # Memory-budget guard: full-scale presets cannot always
+                    # be built under constrained local/CI resource limits.
+                    # Estimate this width-class's single-decoder-block bf16
+                    # footprint (embedding table + attention projections +
+                    # one FFN block's 3 matrices, times a 3x safety margin
+                    # for JAX/XLA transient copies during construction/
                     # resharding) and skip the actual build if it exceeds a
-                    # conservative local threshold. The config-fetch, dedup,
-                    # and divisibility-skip logic above still exercises
-                    # every registry preset either way; only the expensive
-                    # build+assert step is capped.
+                    # conservative threshold. The config-fetch, dedup, and
+                    # divisibility-skip logic above still exercises every
+                    # registry preset either way; only the expensive
+                    # build+assert step is capped. Phi3's `token_embedding`
+                    # always uses `tie_weights=False` (see
+                    # `Phi3Backbone.__init__`), so a separate
+                    # `reverse_embeddings` weight of the same
+                    # `vocabulary_size * hidden_dim` size always exists in
+                    # addition to the input embedding table -- both terms
+                    # are counted below, not just one.
                     est_params = (
-                        cfg["vocabulary_size"] * cfg["hidden_dim"]
+                        2 * cfg["vocabulary_size"] * cfg["hidden_dim"]
                         + 3 * cfg["hidden_dim"] * cfg["intermediate_dim"]
                         # Attention q/k/v/o projections: upper-bounded as
                         # four hidden_dim x hidden_dim matrices (exact for
@@ -401,7 +416,18 @@ class Phi3Test(TestCase):
                         + 4 * cfg["hidden_dim"] * cfg["hidden_dim"]
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
-                    max_local_bytes = 300 * 1024 * 1024  # 300MB
+                    # Tunable via env var so CI or a larger machine can opt
+                    # into exercising width-classes that a 300MB default
+                    # would always skip (the embedding table alone exceeds
+                    # 300MB for any real Phi3 preset, so the default keeps
+                    # today's local-run behavior unchanged while allowing
+                    # real full-scale verification elsewhere).
+                    max_local_bytes = int(
+                        os.environ.get(
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET",
+                            300 * 1024 * 1024,
+                        )
+                    )
                     if est_bytes > max_local_bytes:
                         reason = (
                             f"{combo_label}: estimated build memory "
@@ -428,9 +454,18 @@ class Phi3Test(TestCase):
                     distribution = keras.distribution.ModelParallel(
                         layout_map=layout_map, batch_dim_name="batch"
                     )
-                    init_kwargs = {
-                        k: v for k, v in cfg.items() if k in dim_keys
-                    }
+                    # `cfg` is a full serialized `get_config()` dict, which
+                    # may include a `"dtype"` key (a serialized dtype-policy
+                    # dict, only present for quantized presets) -- drop it
+                    # so the explicit `dtype="bfloat16"` override below
+                    # doesn't collide with a duplicate keyword argument.
+                    # Using the full config (not a dims-only allowlist)
+                    # preserves real architecture flags such as
+                    # `rope_scaling_type`/`rope_scaling_short_factor`/
+                    # `rope_scaling_long_factor`, which distinguish
+                    # `phi3_mini_128k_instruct_en`'s SuScaled-RoPE
+                    # architecture from the plain-RoPE 4k preset.
+                    init_kwargs = {k: v for k, v in cfg.items() if k != "dtype"}
                     init_kwargs["num_layers"] = 1
                     with distribution.scope():
                         model = Phi3Backbone(dtype="bfloat16", **init_kwargs)
