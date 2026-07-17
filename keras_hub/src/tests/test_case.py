@@ -961,13 +961,28 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         """
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
-        devices = keras.distribution.list_devices("CPU")
-        if len(devices) < 2:
+        # A bare string is iterable character-by-character, silently turning
+        # `allow_replicated="foo"` into per-character regexes instead of one
+        # pattern -- guard against that footgun explicitly.
+        assert not isinstance(allow_replicated, str), (
+            "allow_replicated must be a tuple/list of patterns, not a bare "
+            "string"
+        )
+        all_devices = keras.distribution.list_devices("CPU")
+        if len(all_devices) < 2:
             self.skipTest("`ModelParallel` testing requires multiple devices.")
-        # Pinned to exactly 2 devices (not len(devices)): preserves
+
+        def get_kwargs():
+            # A fresh copy each call -- a dict init_kwargs must not be
+            # mutated in place by one construction and leak into the next
+            # (e.g. Backbone.__init__ popping/normalizing a kwarg).
+            kwargs = init_kwargs() if callable(init_kwargs) else init_kwargs
+            return dict(kwargs) if isinstance(kwargs, dict) else kwargs
+
+        # Pinned to exactly 2 devices (not len(all_devices)): preserves
         # indivisibility regression semantics (e.g. a GQA model's
         # num_key_value_heads=1) deterministically across environments.
-        devices = devices[:2]
+        devices = all_devices[:2]
         device_mesh = keras.distribution.DeviceMesh(
             shape=(1, 2),
             axis_names=("batch", "model"),
@@ -1019,8 +1034,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             layout_map=layout_map, batch_dim_name="batch"
         )
         with distribution.scope():
-            kwargs = init_kwargs() if callable(init_kwargs) else init_kwargs
-            model = cls(**kwargs)
+            model = cls(**get_kwargs())
 
             # Spec + coverage assertions.
             assert_shardings(model)
@@ -1031,7 +1045,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             for leaf in tree.flatten(out):
                 # Some backbones can return an optional None leaf (e.g. an
                 # unset auxiliary output) -- skip rather than fail on it.
-                if leaf is None:
+                # Also skip non-float leaves (e.g. integer token-id or bool
+                # mask outputs) -- np.isfinite on them is meaningless and
+                # can warn/error depending on backend and numpy version.
+                if leaf is None or not is_float_dtype(leaf.dtype):
                     continue
                 self.assertTrue(
                     np.isfinite(ops.convert_to_numpy(leaf)).all(),
@@ -1047,7 +1064,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     out,
                 )
                 batch_size = tree.flatten(input_data)[0].shape[0]
-                model.compile(optimizer="sgd", loss="mse")
+                # Loss structure must match the output structure -- a bare
+                # "mse" broadcasts to every leaf, which breaks if any leaf
+                # is None (an unset optional output).
+                loss = tree.map_structure(
+                    lambda o: None if o is None else "mse", out
+                )
+                model.compile(optimizer="sgd", loss=loss)
                 history = model.fit(
                     input_data,
                     y,
@@ -1080,20 +1103,19 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             for mesh_shape in parity_mesh_shapes:
                 n_needed = int(np.prod(mesh_shape))
                 # Defensive guard for externally-constrained environments;
-                # the conftest change guarantees 8 devices in CI.
-                if len(keras.distribution.list_devices("CPU")) < n_needed:
+                # the conftest change guarantees 8 devices in CI. Reuses
+                # all_devices fetched once above rather than re-querying
+                # list_devices() on every mesh-shape iteration.
+                if len(all_devices) < n_needed:
                     continue
 
                 # Undistributed twin.
                 keras.utils.set_random_seed(seed)
-                kwargs = init_kwargs() if callable(init_kwargs) else init_kwargs
-                undistributed_model = cls(**kwargs)
+                undistributed_model = cls(**get_kwargs())
                 undistributed_out = undistributed_model(input_data)
 
                 # Distributed twin.
-                parity_devices = keras.distribution.list_devices("CPU")[
-                    :n_needed
-                ]
+                parity_devices = all_devices[:n_needed]
                 parity_mesh = keras.distribution.DeviceMesh(
                     shape=mesh_shape,
                     axis_names=(
@@ -1114,10 +1136,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     # construction reproduces identical initial weights on
                     # both twins -- verified in the design doc.
                     keras.utils.set_random_seed(seed)
-                    kwargs = (
-                        init_kwargs() if callable(init_kwargs) else init_kwargs
-                    )
-                    distributed_model = cls(**kwargs)
+                    distributed_model = cls(**get_kwargs())
                     distributed_out = distributed_model(input_data)
 
                 # Forward parity. `assertAllClose` already recurses through
@@ -1144,12 +1163,15 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     undistributed_out,
                 )
                 batch_size = tree.flatten(input_data)[0].shape[0]
+                parity_loss = tree.map_structure(
+                    lambda o: None if o is None else "mse", undistributed_out
+                )
                 undistributed_model.compile(
-                    optimizer=keras.optimizers.SGD(0.01), loss="mse"
+                    optimizer=keras.optimizers.SGD(0.01), loss=parity_loss
                 )
                 with parity_distribution.scope():
                     distributed_model.compile(
-                        optimizer=keras.optimizers.SGD(0.01), loss="mse"
+                        optimizer=keras.optimizers.SGD(0.01), loss=parity_loss
                     )
                 # A single fit(epochs=5) call over one batch runs exactly 5
                 # train steps and returns all 5 losses in history.history
