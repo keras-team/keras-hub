@@ -78,6 +78,44 @@ jobs:
       run: |
         pip uninstall -y tensorflow-text tensorflow
         cd integration_tests && pytest . -k "NoTensorflow"
+  run_distribution_tests:
+    name: Test ModelParallel distribution (simulated multi-device)
+    runs-on: ubuntu-latest
+    env:
+      KERAS_BACKEND: jax
+      # Scoped to this job only -- exposes 8 simulated CPU devices so
+      # `keras.distribution` tests run instead of skipping (a real
+      # accelerator mesh isn't available in CI). Deliberately NOT set for
+      # the main `run_tests` job/conftest.py: changing the visible device
+      # count for the entire jax-backend test matrix risks affecting
+      # unrelated tests that assume a single device.
+      XLA_FLAGS: --xla_force_host_platform_device_count=8
+    steps:
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      with:
+        persist-credentials: false
+    - name: Set up Python 3.11
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      with:
+        python-version: '3.11'
+    - name: Get pip cache dir
+      id: pip-cache
+      run: |
+        python -m pip install --upgrade pip setuptools
+        echo "::set-output name=dir::$(pip cache dir)"
+    - name: pip cache
+      # zizmor: ignore[cache-poisoning]
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.pip-cache.outputs.dir }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements-common.txt') }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('pyproject.toml') }}
+    - name: Install dependencies
+      run: |
+          pip install -r requirements.txt --progress-bar off
+          pip install --no-deps -e "." --progress-bar off
+    - name: Run distribution tests
+      run: |
+        pytest keras_hub/ -k "test_distribution or test_layout_map"
   check_format:
     name: Check the code format
     runs-on: ubuntu-latest

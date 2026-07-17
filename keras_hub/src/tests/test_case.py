@@ -884,6 +884,294 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         if run_quantization_check:
             self.run_quantization_test(backbone, cls, init_kwargs, input_data)
 
+    def run_distribution_test(
+        self,
+        cls,
+        init_kwargs,
+        input_data,
+        expected_shardings,
+        allow_replicated=(),
+        layout_map_kwargs=None,
+        run_training=True,
+        assert_parity_vs_undistributed=True,
+        parity_mesh_shapes=((1, 2), (2, 2)),
+        parity_rtol=1e-5,
+        parity_atol=1e-6,
+        parity_moe_rtol=1e-4,
+        parity_moe_atol=1e-5,
+        is_moe=False,
+    ):
+        """Run shared `ModelParallel` layout-map tests for a backbone.
+
+        This is the shared structural/coverage/training test used by every
+        model's `test_distribution`. It builds `cls` under
+        a fixed `(1, 2)` `("batch", "model")` mesh (pinned to exactly 2
+        devices via `devices[:2]`, not `len(devices)`, so indivisibility
+        regressions -- e.g. a GQA model with `num_key_value_heads=1` -- are
+        exercised deterministically regardless of how many virtual devices
+        the test environment exposes), asserts every expected sharding spec,
+        asserts every rank>=2 weight is either mapped or explicitly allowed
+        to stay replicated, runs a real forward + backward + optimizer step,
+        re-asserts specs post-step, and (by default) checks numerical parity
+        and short-training-convergence against an undistributed twin.
+
+        Args:
+            cls: The backbone class to build.
+            init_kwargs: A dict of constructor kwargs, or a zero-arg callable
+                returning such a dict. The callable form is invoked *inside*
+                the distribution scope -- required for models that take a
+                prebuilt sub-encoder (e.g. a vision tower) as a constructor
+                argument, since that sub-encoder must itself be constructed
+                inside the scope or `fit()` raises a mixed local/distributed
+                device error.
+            input_data: A dict of input arrays, batch dimension first.
+            expected_shardings: A dict mapping a weight-path regex to the
+                expected sharding spec tuple for every weight whose path
+                matches (via `re.search`), e.g.
+                `{r"attention.*query.kernel": ("model", "batch", None)}`.
+            allow_replicated: An iterable of weight-path regexes for weights
+                that are intentionally left fully replicated. Must be
+                exhaustive: every rank>=2 weight not covered by the layout
+                map must match one of these patterns or the test fails.
+            layout_map_kwargs: Extra kwargs forwarded to `cls.get_layout_map`.
+            run_training: If True, run one `fit()` step and assert the loss
+                is finite and that specs survive the optimizer step.
+            assert_parity_vs_undistributed: If True (default), also assert
+                that this model's forward output and 5-step training-loss
+                trajectory numerically match an undistributed twin built
+                from identical seeded weights, at each shape in
+                `parity_mesh_shapes`. Note this does *not* validate that a
+                layout map chose the communication-efficient axis
+                convention -- GSPMD reshards transparently under either a
+                correct or an inefficient-but-valid axis choice, so parity
+                is blind to that class of bug. That is answered by separate
+                HLO/communication-volume analysis, not by this check.
+            parity_mesh_shapes: Mesh shapes to check parity at.
+            parity_rtol: Relative tolerance for dense-model parity checks.
+            parity_atol: Absolute tolerance for dense-model parity checks.
+            parity_moe_rtol: Relative tolerance for MoE-model parity checks
+                (looser -- sharded-reduction float noise is larger for MoE).
+            parity_moe_atol: Absolute tolerance for MoE-model parity checks.
+            is_moe: If True, use the `parity_moe_rtol`/`parity_moe_atol` pair
+                instead of `parity_rtol`/`parity_atol`.
+
+        Returns:
+            The distributed model built in this call, for any additional
+            model-specific assertions the caller wants to run.
+        """
+        if keras.backend.backend() != "jax":
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
+        devices = keras.distribution.list_devices("CPU")
+        if len(devices) < 2:
+            self.skipTest("`ModelParallel` testing requires multiple devices.")
+        # Pinned to exactly 2 devices (not len(devices)): preserves
+        # indivisibility regression semantics (e.g. a GQA model's
+        # num_key_value_heads=1) deterministically across environments.
+        devices = devices[:2]
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(1, 2),
+            axis_names=("batch", "model"),
+            devices=devices,
+        )
+
+        def assert_shardings(model):
+            for pattern, expected in expected_shardings.items():
+                matches = [
+                    w for w in model.weights if re.search(pattern, w.path)
+                ]
+                self.assertGreater(
+                    len(matches),
+                    0,
+                    f"Expected sharding pattern {pattern!r} matched no "
+                    "weights -- dead assertion.",
+                )
+                for w in matches:
+                    self.assertEqual(
+                        tuple(w.value.sharding.spec),
+                        expected,
+                        f"Weight {w.path} has sharding "
+                        f"{tuple(w.value.sharding.spec)}, expected "
+                        f"{expected}.",
+                    )
+
+        def assert_coverage(model, layout_map):
+            offending = []
+            for w in model.weights:
+                if len(w.shape) < 2:
+                    continue
+                if layout_map[w.path] is not None:
+                    continue
+                if any(re.search(p, w.path) for p in allow_replicated):
+                    continue
+                offending.append(w.path)
+            self.assertEqual(
+                offending,
+                [],
+                "The following rank>=2 weights are neither mapped by the "
+                "layout map nor explicitly allow-replicated: "
+                f"{offending}",
+            )
+
+        layout_map = cls.get_layout_map(
+            device_mesh, **(layout_map_kwargs or {})
+        )
+        distribution = keras.distribution.ModelParallel(
+            layout_map=layout_map, batch_dim_name="batch"
+        )
+        with distribution.scope():
+            kwargs = init_kwargs() if callable(init_kwargs) else init_kwargs
+            model = cls(**kwargs)
+
+            # Spec + coverage assertions.
+            assert_shardings(model)
+            assert_coverage(model, layout_map)
+
+            # Forward.
+            out = model(input_data)
+            for leaf in tree.flatten(out):
+                self.assertTrue(
+                    np.isfinite(ops.convert_to_numpy(leaf)).all(),
+                    "Forward output contains non-finite values.",
+                )
+
+            # Backward + optimizer step.
+            if run_training:
+                y = tree.map_structure(
+                    lambda o: np.zeros(o.shape, "float32"), out
+                )
+                batch_size = tree.flatten(input_data)[0].shape[0]
+                model.compile(optimizer="sgd", loss="mse")
+                history = model.fit(
+                    input_data,
+                    y,
+                    batch_size=batch_size,
+                    epochs=1,
+                    verbose=0,
+                )
+                loss = history.history["loss"][0]
+                self.assertTrue(
+                    np.isfinite(loss), "Training loss is not finite."
+                )
+                # Re-assert specs: catches optimizer-state resharding
+                # regressions. Deliberately does NOT assert output
+                # activation shardings -- those are GSPMD-chosen and
+                # brittle to assert on.
+                assert_shardings(model)
+
+        # Numerical parity + convergence vs. an undistributed twin. Does not
+        # and cannot detect axis-convention efficiency bugs (GSPMD reshards
+        # transparently either way, see the docstring above) -- this only
+        # catches numerically-wrong GSPMD lowering, a distinct bug class
+        # from axis inefficiency.
+        if assert_parity_vs_undistributed:
+            rtol, atol = (
+                (parity_moe_rtol, parity_moe_atol)
+                if is_moe
+                else (parity_rtol, parity_atol)
+            )
+            seed = 42
+            for mesh_shape in parity_mesh_shapes:
+                n_needed = int(np.prod(mesh_shape))
+                # Defensive guard for externally-constrained environments;
+                # the conftest change guarantees 8 devices in CI.
+                if len(keras.distribution.list_devices("CPU")) < n_needed:
+                    continue
+
+                # Undistributed twin.
+                keras.utils.set_random_seed(seed)
+                kwargs = init_kwargs() if callable(init_kwargs) else init_kwargs
+                undistributed_model = cls(**kwargs)
+                undistributed_out = undistributed_model(input_data)
+
+                # Distributed twin.
+                parity_devices = keras.distribution.list_devices("CPU")[
+                    :n_needed
+                ]
+                parity_mesh = keras.distribution.DeviceMesh(
+                    shape=mesh_shape,
+                    axis_names=("batch", "model"),
+                    devices=parity_devices,
+                )
+                parity_layout_map = cls.get_layout_map(
+                    parity_mesh, **(layout_map_kwargs or {})
+                )
+                parity_distribution = keras.distribution.ModelParallel(
+                    layout_map=parity_layout_map, batch_dim_name="batch"
+                )
+                with parity_distribution.scope():
+                    # Seed-reset (not weight-copy) immediately before
+                    # construction reproduces identical initial weights on
+                    # both twins -- verified in the design doc.
+                    keras.utils.set_random_seed(seed)
+                    kwargs = (
+                        init_kwargs() if callable(init_kwargs) else init_kwargs
+                    )
+                    distributed_model = cls(**kwargs)
+                    distributed_out = distributed_model(input_data)
+
+                # Forward parity. Both calls happen outside any
+                # distribution scope so neither model's ops pick up a
+                # scope they weren't built under -- `distributed_out` was
+                # already computed above, inside the scope where
+                # `distributed_model` lives; only comparing here.
+                for u_leaf, d_leaf in zip(
+                    tree.flatten(undistributed_out),
+                    tree.flatten(distributed_out),
+                ):
+                    self.assertAllClose(
+                        ops.convert_to_numpy(u_leaf),
+                        ops.convert_to_numpy(d_leaf),
+                        rtol=rtol,
+                        atol=atol,
+                    )
+
+                # 5-step training-convergence parity. Fixed SGD+mse
+                # choice -- do not substitute Adam without re-verifying,
+                # see the helper's docstring/plan. Each twin's compile()
+                # and fit() calls run under their own construction
+                # context (undistributed: no scope; distributed: its own
+                # ModelParallel scope) -- interleaving fit() calls under a
+                # single shared `with` block mixes local and distributed
+                # device placement and raises a JAX device-mismatch error.
+                y = tree.map_structure(
+                    lambda o: np.zeros(o.shape, "float32"),
+                    undistributed_out,
+                )
+                batch_size = tree.flatten(input_data)[0].shape[0]
+                undistributed_model.compile(
+                    optimizer=keras.optimizers.SGD(0.01), loss="mse"
+                )
+                with parity_distribution.scope():
+                    distributed_model.compile(
+                        optimizer=keras.optimizers.SGD(0.01), loss="mse"
+                    )
+                for _ in range(5):
+                    u_history = undistributed_model.fit(
+                        input_data,
+                        y,
+                        batch_size=batch_size,
+                        epochs=1,
+                        verbose=0,
+                    )
+                    with parity_distribution.scope():
+                        d_history = distributed_model.fit(
+                            input_data,
+                            y,
+                            batch_size=batch_size,
+                            epochs=1,
+                            verbose=0,
+                        )
+                    self.assertAllClose(
+                        u_history.history["loss"][0],
+                        d_history.history["loss"][0],
+                        rtol=rtol,
+                        atol=atol,
+                    )
+                del undistributed_model, distributed_model
+                gc.collect()
+
+        return model
+
     def run_vision_backbone_test(
         self,
         cls,
