@@ -1,5 +1,6 @@
 import gc
 import json
+import os
 import re
 
 import keras
@@ -17,24 +18,24 @@ from keras_hub.src.utils.preset_utils import get_file
 # `get_file` call to the Tier-2 test body itself (that's what Tier 3,
 # `test_layout_map_live_presets` below, is for).
 #
-# MEMORY NOTE: this local dev machine cannot load full-scale model dims --
-# an earlier attempt using literal preset dims (e.g. Gemma-2 27B-class:
-# hidden 4608 / intermediate 73728 / vocab 256128, even at num_layers=1)
-# drove a single test process to ~23GB RSS across the 18 parameterized
-# cases and triggered an OOM kill (see CAPPED_MESH_SHAPES comment for the
-# mesh-size OOM history; this was a second, distinct OOM from dimension
-# size, not mesh size). What actually matters for the divisibility/
-# sharding properties this tier tests is the RATIO of query heads to kv
-# heads and whether hidden/intermediate/vocab divide the mesh's model-axis
-# sizes -- not the absolute parameter count. So these dims are scaled down
-# by roughly 20-30x from the real presets while preserving each preset's
-# real query:kv head ratio (8:1 MQA, 16:1 MQA, 32:16 GQA) and keeping
-# hidden/intermediate/vocab as clean powers of 2 divisible by every mesh
-# shape in CAPPED_MESH_SHAPES. Full-scale real dims are exercised by
+# MEMORY NOTE: memory-constrained local environments cannot load full-scale
+# model dims -- an earlier attempt using literal preset dims (e.g. Gemma-2
+# 27B-class: hidden 4608 / intermediate 73728 / vocab 256128, even at
+# num_layers=1) drove a single test process to ~23GB RSS across the 18
+# parameterized cases and triggered an OOM kill (see CAPPED_MESH_SHAPES
+# comment for the mesh-size OOM history; this was a second, distinct OOM
+# from dimension size, not mesh size). What actually matters for the
+# divisibility/sharding properties this tier tests is the RATIO of query
+# heads to kv heads and whether hidden/intermediate/vocab divide the mesh's
+# model-axis sizes -- not the absolute parameter count. So these dims are
+# scaled down by roughly 20-30x from the real presets while preserving each
+# preset's real query:kv head ratio (8:1 MQA, 16:1 MQA, 32:16 GQA) and
+# keeping hidden/intermediate/vocab as clean powers of 2 divisible by every
+# mesh shape in CAPPED_MESH_SHAPES. Full-scale real dims are exercised by
 # `test_layout_map_live_presets` below, which has its own per-width-class
-# memory-budget skip so it never attempts a full-scale build locally
-# either -- true full-scale verification happens offline on a machine with
-# more RAM (Tier 4 in the design doc), not on this box.
+# memory-budget skip so it never attempts a full-scale build in a
+# memory-constrained environment either -- true full-scale verification
+# happens on a machine with more RAM or in CI (Tier 4 in the design doc).
 GEMMA_2B_DIMS = {
     "source_preset": "gemma_2b_en (real ratio, memory-scaled dims)",
     "vocabulary_size": 2048,
@@ -74,15 +75,16 @@ GEMMA2_9B_DIMS = {
     "sliding_window_size": 4096,
 }
 
-# Hard-capped mesh-shape list for this shared 37GB dev machine. The full
-# 10-shape matrix from the testing-strategy doc is
+# Hard-capped mesh-shape list for memory-constrained local environments.
+# The full 10-shape matrix from the testing-strategy doc is
 # 2x4, 1x8, 4x4, 8x8, 16x16, 2x2x2, 1x1x8, 2x2x4, 4x4x4, 4x4x8 -- shapes
 # 8x8, 16x16, 4x4x4, 4x4x8 (64-256 virtual devices) are DELIBERATELY
-# DROPPED here due to a demonstrated systemd-oomd OOM kill of the entire
-# desktop app on this shared machine during an earlier attempt at this same
-# pipeline (confirmed via journalctl). Do not attempt the dropped shapes
-# even experimentally on this box -- revisiting them requires a dedicated
-# or CI machine, not this one.
+# DROPPED here: they exceed a typical memory-constrained local environment's
+# memory budget (a demonstrated systemd-oomd OOM kill of the entire desktop
+# app during an earlier attempt at this same pipeline, confirmed via
+# journalctl). Do not attempt the dropped shapes experimentally in such an
+# environment -- revisiting them requires a dedicated or CI machine with
+# more memory.
 CAPPED_MESH_SHAPES = [
     (2, 4),
     (1, 8),
@@ -225,7 +227,7 @@ class GemmaBackboneTest(TestCase):
         if keras.backend.backend() != "jax":
             self.skipTest("`ModelParallel` testing requires the Jax backend.")
         devices = keras.distribution.list_devices("CPU")
-        if len(devices) == 1:
+        if len(devices) < 2:
             self.skipTest("`ModelParallel` testing requires multiple devices.")
         # Pinned to exactly 2 devices -- see test_distribution's comment.
         devices = devices[:2]
@@ -313,8 +315,8 @@ class GemmaBackboneTest(TestCase):
         )
         init_kwargs = {k: v for k, v in dims.items() if k != "source_preset"}
         with distribution.scope():
-            # bfloat16: a memory mitigation for this shared dev machine --
-            # spec assertions are dtype-independent.
+            # bfloat16: a memory mitigation for memory-constrained local
+            # environments -- spec assertions are dtype-independent.
             model = GemmaBackbone(dtype="bfloat16", **init_kwargs)
             _assert_gemma_shardings_and_coverage(self, model, layout_map)
         del model
@@ -330,10 +332,11 @@ class GemmaBackboneTest(TestCase):
         # Fetch every preset's config only (no weights), then dedupe by the
         # divisibility-relevant dims so width-classes that share a config
         # (e.g. base vs instruction-tuned variants of the same size) are
-        # only built once per mesh shape -- a memory/time necessity on this
-        # machine (gemma2_27b-width builds are ~2.5GB even at 1 layer
-        # bf16), while every preset in the registry is still fetched and
-        # evaluated, preserving full registry coverage.
+        # only built once per mesh shape -- a memory/time necessity in
+        # memory-constrained local environments (gemma2_27b-width builds
+        # are ~2.5GB even at 1 layer bf16), while every preset in the
+        # registry is still fetched and evaluated, preserving full registry
+        # coverage.
         dim_keys = (
             "vocabulary_size",
             "num_query_heads",
@@ -358,7 +361,8 @@ class GemmaBackboneTest(TestCase):
             # num_layers is forced to 1 below regardless of the real
             # value -- layout rules are per-decoder-block regexes, so
             # depth is irrelevant to spec matching/divisibility, and 1
-            # layer keeps build memory bounded on this shared machine.
+            # layer keeps build memory bounded in memory-constrained local
+            # environments.
             cfg = dict(cfg)
             cfg["num_layers"] = 1
             key = tuple(cfg.get(k) for k in dim_keys)
@@ -417,11 +421,11 @@ class GemmaBackboneTest(TestCase):
                         skip_reasons.append(reason)
                         continue
 
-                    # Memory-budget guard: this shared dev machine cannot
-                    # locally build full-scale presets (a prior attempt at
-                    # gemma2_27b-class dims alone drove one process to
-                    # ~23GB RSS and triggered an OOM kill -- see
-                    # CAPPED_MESH_SHAPES' comment). Estimate this
+                    # Memory-budget guard: memory-constrained local
+                    # environments cannot locally build full-scale presets
+                    # (a prior attempt at gemma2_27b-class dims alone drove
+                    # one process to ~23GB RSS and triggered an OOM kill --
+                    # see CAPPED_MESH_SHAPES' comment). Estimate this
                     # width-class's single-decoder-block bf16 footprint
                     # (embedding table + one FFN block's 3 matrices, times
                     # a 3x safety margin for JAX/XLA transient copies
@@ -435,15 +439,25 @@ class GemmaBackboneTest(TestCase):
                         + 3 * cfg["hidden_dim"] * cfg["intermediate_dim"]
                     )
                     est_bytes = est_params * 2 * 3  # bf16 * safety margin
-                    max_local_bytes = 300 * 1024 * 1024  # 300MB
+                    # Tunable via env var so CI or a bigger machine can opt
+                    # into real full-scale verification; defaults to 300MB
+                    # to preserve today's behavior on memory-constrained
+                    # local environments.
+                    max_local_bytes = int(
+                        os.environ.get(
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET",
+                            300 * 1024 * 1024,
+                        )
+                    )
                     if est_bytes > max_local_bytes:
                         reason = (
                             f"{combo_label}: estimated build memory "
                             f"~{est_bytes / 1e9:.2f}GB exceeds the "
                             f"{max_local_bytes / 1e6:.0f}MB local safety "
-                            "threshold on this shared, RAM-constrained "
-                            "dev machine -- verify this width-class on a "
-                            "machine with more RAM or in CI"
+                            "threshold for memory-constrained local "
+                            "environments -- verify this width-class on a "
+                            "machine with more RAM or in CI (override with "
+                            "KERAS_HUB_DISTRIBUTION_TEST_MEM_BUDGET)"
                         )
                         skip_reasons.append(reason)
                         continue
