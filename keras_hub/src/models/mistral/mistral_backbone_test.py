@@ -247,6 +247,60 @@ class MistralBackboneTest(TestCase):
         del model
         gc.collect()
 
+    @pytest.mark.multi_device
+    def test_query_head_divisibility_skip_triggers(self):
+        """Regression test: the skip rule in `test_layout_map_mesh_shapes`
+        is not dead code -- it must actually trigger for a config where
+        `num_query_heads` does not divide the mesh's model-axis size, and
+        that indivisibility must be real (i.e. building without the skip
+        would raise, proving the guard is load-bearing rather than
+        decorative).
+        """
+        if keras.backend.backend() != "jax":
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
+        devices = keras.distribution.list_devices("CPU")
+        # Pinned to exactly 2 devices, matching run_distribution_test's
+        # convention -- deterministic regardless of how many virtual
+        # devices the test environment exposes.
+        if len(devices) < 2:
+            self.skipTest("`ModelParallel` testing requires multiple devices.")
+        devices = devices[:2]
+        mesh_shape = (1, 2)
+        model_axis_size = mesh_shape[-1]
+
+        # num_query_heads=3 does not divide model_axis_size=2 -- this is
+        # the condition the skip rule in test_layout_map_mesh_shapes
+        # guards against.
+        num_query_heads = 3
+        self.assertNotEqual(num_query_heads % model_axis_size, 0)
+
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=mesh_shape,
+            axis_names=("batch", "model"),
+            devices=devices,
+        )
+        layout_map = MistralBackbone.get_layout_map(device_mesh)
+        distribution = keras.distribution.ModelParallel(
+            layout_map=layout_map, batch_dim_name="batch"
+        )
+        # Proves the skip rule is necessary: building this genuinely
+        # indivisible config under the same layout map that
+        # test_layout_map_mesh_shapes would have used (had it not skipped)
+        # actually raises, rather than silently succeeding.
+        with self.assertRaises(Exception):
+            with distribution.scope():
+                MistralBackbone(
+                    vocabulary_size=40,
+                    num_layers=1,
+                    num_query_heads=num_query_heads,
+                    num_key_value_heads=1,
+                    hidden_dim=24,
+                    intermediate_dim=16,
+                    sliding_window=4,
+                    dtype="bfloat16",
+                )
+        gc.collect()
+
     @pytest.mark.kaggle_key_required
     @pytest.mark.multi_device
     @pytest.mark.extra_large
