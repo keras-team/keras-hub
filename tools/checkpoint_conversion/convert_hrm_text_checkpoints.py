@@ -1,9 +1,18 @@
-"""Convert and validate the official HRM-Text checkpoint.
+"""Convert and validate the official HRM-Text-1B checkpoint.
+
+The script downloads the Apache-2.0 ``sapientinc/HRM-Text-1B`` checkpoint,
+maps every Hugging Face tensor to KerasHub, verifies logits against
+Transformers with ``atol=rtol=2e-4``, and writes a loadable local Keras preset.
+The converted preset includes the backbone, causal-LM task, and tokenizer.
 
 Run with:
 
     python tools/checkpoint_conversion/convert_hrm_text_checkpoints.py \
         --output_dir /tmp/hrm_text_1b
+
+Use ``--source`` to point at a pinned local Hugging Face snapshot. The source
+revision used for the initial port is
+``9f082d68b8cd0ebc56e33f1c88c45609174c272c``.
 """
 
 import json

@@ -1,4 +1,5 @@
 import numpy as np
+from keras import ops
 
 from keras_hub.src.models.hrm_text.hrm_text_backbone import HrmTextBackbone
 from keras_hub.src.models.hrm_text.hrm_text_causal_lm import HrmTextCausalLM
@@ -66,9 +67,13 @@ class HrmTextCausalLMTest(TestCase):
             {"prefix": [" airplane"], "response": [" at airport"]}
         )
         self.assertEqual(inputs["token_type_ids"][0, 0], 1)
-        self.assertTrue(np.any(inputs["token_type_ids"][0] == 0))
+        self.assertTrue(
+            np.any(ops.convert_to_numpy(inputs["token_type_ids"][0] == 0))
+        )
         self.assertEqual(sample_weight[0, 0], 0)
-        self.assertTrue(np.any(sample_weight[0] == 1))
+        self.assertTrue(
+            np.any(ops.convert_to_numpy(sample_weight[0] == 1))
+        )
 
     def test_generate(self):
         causal_lm = HrmTextCausalLM(**self.init_kwargs)

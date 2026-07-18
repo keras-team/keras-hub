@@ -14,7 +14,46 @@ from keras_hub.src.utils.tensor_utils import any_equal
 
 @keras_hub_export("keras_hub.models.HrmTextCausalLM")
 class HrmTextCausalLM(CausalLM):
-    """End-to-end HRM-Text causal language model."""
+    """End-to-end HRM-Text model for causal language modeling.
+
+    This task pairs :class:`HrmTextBackbone` with an LM head and KerasHub's
+    sampler interface. It supports ordinary causal training as well as the
+    PrefixLM format used to pretrain HRM-Text. When a preprocessor is attached,
+    plain strings are causal examples and dictionaries with ``prefix`` and
+    ``response`` are packed as PrefixLM examples.
+
+    The official 1B weights are not bundled with the source distribution. Use
+    the conversion script to create a local preset, then load it with
+    :meth:`from_preset`.
+
+    Args:
+        backbone: An instance of `keras_hub.models.HrmTextBackbone`.
+        preprocessor: An optional
+            `keras_hub.models.HrmTextCausalLMPreprocessor`. If set, string
+            inputs are preprocessed during `fit()`, `evaluate()`, `predict()`,
+            and `generate()`.
+
+    Examples:
+
+    Generate from a converted local preset.
+    ```python
+    model = keras_hub.models.HrmTextCausalLM.from_preset(
+        "/path/to/hrm_text_1b"
+    )
+    model.compile(sampler="greedy")
+    model.generate("Summarize: Keras runs on multiple backends.", max_length=64)
+    ```
+
+    Train with PrefixLM inputs. Prefix tokens attend bidirectionally, while
+    response tokens are trained causally.
+    ```python
+    examples = {
+        "prefix": ["Question: What is 2 + 2?\\nAnswer:"],
+        "response": [" 4"],
+    }
+    model.fit(examples, batch_size=1)
+    ```
+    """
 
     backbone_cls = HrmTextBackbone
     preprocessor_cls = HrmTextCausalLMPreprocessor

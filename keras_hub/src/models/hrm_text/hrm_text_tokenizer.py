@@ -15,7 +15,25 @@ class HrmTextTokenizer(BytePairTokenizer):
     """Byte-pair tokenizer used by HRM-Text.
 
     The official checkpoint uses the Qwen2 BPE vocabulary with HRM-Text's
-    start, end, and padding special tokens.
+    start, end, and padding special tokens. Instantiate it from a converted
+    local preset, or construct it from the official tokenizer vocabulary and
+    merge rules.
+
+    Args:
+        vocabulary: Mapping from token strings to token ids.
+        merges: Ordered BPE merge rules.
+
+    The start, end, and padding tokens are ``<|im_start|>``, ``<|box_end|>``,
+    and ``<|endoftext|>``, respectively.
+
+    Examples:
+
+    ```python
+    tokenizer = keras_hub.models.HrmTextTokenizer.from_preset(
+        "/path/to/hrm_text_1b"
+    )
+    token_ids = tokenizer(["HRM-Text uses two recurrent Transformer stacks."])
+    ```
     """
 
     backbone_cls = HrmTextBackbone

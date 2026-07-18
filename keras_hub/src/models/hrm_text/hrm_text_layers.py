@@ -128,7 +128,7 @@ class HrmTextAttention(keras.layers.Layer):
 
     def _apply_rope(self, inputs, start_index):
         sequence_length = ops.shape(inputs)[1]
-        positions = ops.arange(start_index, start_index + sequence_length)
+        positions = ops.arange(sequence_length, dtype="int32") + start_index
         frequencies = ops.arange(0, self.head_dim, 2, dtype="float32")
         frequencies = 1.0 / (self.rope_theta ** (frequencies / self.head_dim))
         angles = (
@@ -176,15 +176,10 @@ class HrmTextAttention(keras.layers.Layer):
             value_cache = ops.slice_update(
                 value_cache, [0, start_index, 0, 0], value_update
             )
-            key_length = start_index + sequence_length
-            cache_shape = [
-                batch_size,
-                key_length,
-                self.num_heads,
-                self.head_dim,
-            ]
-            key = ops.slice(key_cache, [0, 0, 0, 0], cache_shape)
-            value = ops.slice(value_cache, [0, 0, 0, 0], cache_shape)
+            # Attend over the full, statically shaped cache. The causal mask
+            # excludes its not-yet-written positions. This avoids dynamic
+            # slice sizes in JAX's compiled generation loop.
+            key, value = key_cache, value_cache
             cache = ops.stack((key_cache, value_cache), axis=1)
 
         scores = ops.einsum("bqhd,bkhd->bhqk", query, key)

@@ -25,31 +25,96 @@ def make_hrm_text_attention_mask(token_type_ids, padding_mask):
 
 
 def make_hrm_text_cache_mask(
-    token_ids, cache_update_index, token_type_ids=None
+    token_ids, cache_update_index, cache_length, token_type_ids=None
 ):
     """Builds a prefill PrefixLM mask or a causal decode mask."""
     batch_size = ops.shape(token_ids)[0]
     sequence_length = ops.shape(token_ids)[1]
-    query_positions = ops.arange(
-        cache_update_index, cache_update_index + sequence_length
+    # Keep `arange()` bounds static for JAX's compiled sampler loop. The cache
+    # offset is dynamic during decoding, so add it after creating the range.
+    query_positions = (
+        ops.arange(sequence_length, dtype="int32") + cache_update_index
     )[:, None]
-    key_positions = ops.arange(cache_update_index + sequence_length)[None, :]
+    key_positions = ops.arange(cache_length, dtype="int32")[None, :]
     causal = key_positions <= query_positions
     causal = ops.broadcast_to(
         causal[None, :, :],
-        (batch_size, sequence_length, cache_update_index + sequence_length),
+        (batch_size, sequence_length, cache_length),
     )
     if token_type_ids is None:
         return causal
     prefix = ops.cast(token_type_ids == 1, "bool")
+    prefix_padding = ops.zeros(
+        (batch_size, cache_length - sequence_length), dtype="bool"
+    )
+    prefix_keys = ops.concatenate((prefix, prefix_padding), axis=1)
     return ops.logical_or(
-        causal, ops.logical_and(prefix[:, :, None], prefix[:, None, :])
+        causal,
+        ops.logical_and(prefix[:, :, None], prefix_keys[:, None, :]),
     )
 
 
 @keras_hub_export("keras_hub.models.HrmTextBackbone")
 class HrmTextBackbone(Backbone):
-    """HRM-Text recurrent decoder backbone."""
+    """HRM-Text hierarchical recurrent decoder backbone.
+
+    HRM-Text uses two shared Transformer stacks rather than a single sequence
+    of independent decoder layers. In every forward pass, a fast low-level
+    (L) stack runs ``l_cycles`` times for each high-level (H) stack update.
+    Each stack uses parameterless pre-RMS normalization, RoPE, gated
+    multi-head attention, and SwiGLU. The L and H states are reinitialized for
+    each model call; autoregressive generation instead caches the key/value
+    tensors for every logical stack invocation.
+
+    Inputs are a dictionary with ``token_ids``, ``padding_mask``, and
+    ``token_type_ids``. Set ``token_type_ids`` to zero for ordinary causal
+    attention. Positions marked one form a bidirectional PrefixLM prefix;
+    later positions remain causal.
+
+    Args:
+        vocabulary_size: Number of tokens in the vocabulary.
+        hidden_dim: Width of the token embeddings and Transformer states.
+        intermediate_dim: Width of the SwiGLU intermediate projection.
+        num_layers_per_stack: Number of shared decoder blocks in each H and L
+            stack.
+        num_attention_heads: Number of attention heads.
+        head_dim: Dimension of each attention head.
+        h_cycles: Number of high-level recurrent cycles. Defaults to ``2``.
+        l_cycles: Number of low-level updates within each high-level cycle.
+            Defaults to ``3``.
+        max_sequence_length: Maximum sequence length used by the preset.
+            Defaults to ``4096``.
+        rope_theta: Rotary-position-embedding base. Defaults to ``10000.0``.
+        rms_norm_epsilon: Epsilon used by RMS normalization. Defaults to
+            ``1e-6``.
+        embedding_scale: Scale applied to token embeddings before recurrence.
+            Defaults to ``1.0``.
+        tie_word_embeddings: Whether input and output embeddings are tied.
+            Defaults to ``False``.
+        dtype: Dtype policy for the backbone.
+
+    Examples:
+
+    ```python
+    backbone = keras_hub.models.HrmTextBackbone(
+        vocabulary_size=128,
+        hidden_dim=64,
+        intermediate_dim=128,
+        num_layers_per_stack=2,
+        num_attention_heads=4,
+        head_dim=16,
+        h_cycles=2,
+        l_cycles=2,
+        max_sequence_length=32,
+    )
+    inputs = {
+        "token_ids": np.array([[5, 9, 17, 0]], dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 0]], dtype="int32"),
+        "token_type_ids": np.zeros((1, 4), dtype="int32"),
+    }
+    hidden_states = backbone(inputs)
+    ```
+    """
 
     def __init__(
         self,
@@ -155,9 +220,18 @@ class HrmTextBackbone(Backbone):
     def call_with_cache(
         self, token_ids, cache, cache_update_index, token_type_ids=None
     ):
-        """Runs HRM-Text with one KV cache per recurrent invocation."""
+        """Runs HRM-Text with one KV cache per recurrent invocation.
+
+        The official 1B configuration has 16 layers in each stack, two H
+        cycles, and three L cycles, so it needs ``16 * 2 * (3 + 1) == 128``
+        logical cache slots. These slots correspond to recurrent invocations,
+        not to the 32 parameterized Transformer blocks.
+        """
         attention_mask = make_hrm_text_cache_mask(
-            token_ids, cache_update_index, token_type_ids
+            token_ids,
+            cache_update_index,
+            ops.shape(cache)[3],
+            token_type_ids,
         )
         high = self.token_embedding(token_ids) * self.embedding_scale
         low = self.initial_state(high)
