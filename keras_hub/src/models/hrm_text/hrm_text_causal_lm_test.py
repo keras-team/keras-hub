@@ -71,9 +71,7 @@ class HrmTextCausalLMTest(TestCase):
             np.any(ops.convert_to_numpy(inputs["token_type_ids"][0] == 0))
         )
         self.assertEqual(sample_weight[0, 0], 0)
-        self.assertTrue(
-            np.any(ops.convert_to_numpy(sample_weight[0] == 1))
-        )
+        self.assertTrue(np.any(ops.convert_to_numpy(sample_weight[0] == 1)))
 
     def test_generate(self):
         causal_lm = HrmTextCausalLM(**self.init_kwargs)
