@@ -1023,6 +1023,54 @@ class Llama3Spec(LiteRTLMExportSpec):
         return [eot_id] if eot_id is not None else []
 
 
+class Phi3Spec(LiteRTLMExportSpec):
+    """Phi-3's chat template ends every turn with ``<|end|>``.
+
+    Phi-3's chat template wraps each turn as ``<|role|>\\n{content}<|end|>\\n``
+    (HF ``microsoft/Phi-3-mini-4k-instruct`` ``tokenizer_config.json``), so
+    ``<|end|>`` -- distinct from the primary EOS ``<|endoftext|>`` -- is the
+    chat-turn-boundary token. ``Phi3Tokenizer`` registers ``<|endoftext|>``
+    as ``end_token`` (the packing/training EOS, see ``phi3_tokenizer.py``),
+    so ``<|end|>`` never reaches the exported metadata without this
+    override, leaving on-device chat generation no way to stop at a turn
+    boundary. ``<|end|>`` is an ordinary special token in the vocab (not a
+    named tokenizer attribute), so look it up by string; return ``[]`` when
+    it is absent (base/non-instruct Phi-3 vocabularies) so the override
+    never invents a token that isn't there.
+    """
+
+    def get_chat_stop_token_ids(self, tokenizer):
+        token_id = _lookup_token_id(tokenizer, "<|end|>")
+        return [token_id] if token_id is not None else []
+
+
+# -- Text families with no distinct chat-turn stop token -------------------
+#
+# These families are deliberately NOT given their own spec class or
+# `_EXPORT_SPEC_REGISTRY` entry: they already resolve to the plain
+# `LiteRTLMExportSpec` default (`model_type="generic_model"`,
+# `get_chat_stop_token_ids` -> `[]`, i.e. EOS-only), and that default is
+# already correct for them -- an empty subclass whose override returns `[]`
+# would be dead code restating the default. Recorded here instead, per
+# family, with the source that was checked:
+#
+# - Mistral / Mixtral: EOS-only by design. Their instruct chat template
+#   terminates each turn with the primary EOS `</s>` itself
+#   (`[INST] ... [/INST]</s>`; HF `mistralai/Mistral-7B-Instruct-v0.2`
+#   `tokenizer_config.json`, `additional_special_tokens` empty), not a
+#   distinct chat-turn token. `MistralTokenizer`/`MixtralTokenizer` register
+#   only `<s>`/`</s>` (see their `__init__`) -- no second stop token exists
+#   to surface.
+# - Base Llama (v1/v2): EOS-only by design -- see the `LlamaCausalLM`
+#   registry entry's NOTE below, which already documents this.
+# - GPT2 / Bloom / GPT-NeoX / OPT: EOS-only by design (no chat template --
+#   these are pure base LMs). `GPT2Tokenizer`/`GPTNeoXTokenizer` register
+#   `<|endoftext|>` as both start and end token; `BloomTokenizer` registers
+#   `<s>`/`</s>`/`<pad>`; `OPTTokenizer` registers `</s>` as both start and
+#   end token plus `<pad>`. None have a chat template or a second
+#   chat-turn-boundary token in their tokenizer definitions.
+
+
 class Qwen3FamilySpec(LiteRTLMExportSpec):
     """Qwen3, Qwen3-MoE, and Qwen3.5 all map to the "qwen3" oneof."""
 
@@ -1176,7 +1224,42 @@ _EXPORT_SPEC_REGISTRY = (
         "LlamaCausalLM",
         LiteRTLMExportSpec,
     ),
+    (
+        "keras_hub.src.models.phi3.phi3_causal_lm",
+        "Phi3CausalLM",
+        Phi3Spec,
+    ),
 )
+
+# -- Deferred / not-yet-decided chat-stop-token cases -----------------------
+#
+# - SmolLM3: the real HF SmolLM3 (`HuggingFaceTB/SmolLM3-3B`) uses a ChatML
+#   template that terminates turns with `<|im_end|>` (id 128012), distinct
+#   from its EOS `<|end_of_text|>` (id 128001). But keras-hub's
+#   `SmolLM3Tokenizer` does not register `<|im_end|>` at all (only
+#   `<|end_of_text|>` as `end_token`, plus `<|begin_of_text|>`, `<think>`,
+#   `</think>` -- see `smollm3_tokenizer.py`), and no keras-hub SmolLM3
+#   tokenizer vocabulary (including the test fixture) contains that token.
+#   A `_lookup_token_id(tokenizer, "<|im_end|>")` override would therefore
+#   be a silent no-op for every keras-hub SmolLM3 tokenizer -- an override
+#   that reads as if it does something but never fires. Left EOS-only
+#   (default `LiteRTLMExportSpec`, no spec class) until the tokenizer is
+#   taught to register `<|im_end|>`; revisit then (Future Work).
+# - GPT-OSS: harmony-format stop-token choice remains a genuine judgment
+#   trap independent of export status (export itself is unblocked -- see
+#   `gpt_oss_causal_lm_test.py::test_litertlm_export`, no xfail).
+#   `GptOssTokenizer` registers only `<|endoftext|>` as `end_token`
+#   (`gpt_oss_tokenizer.py`);
+#   the harmony-format tokens `<|return|>`/`<|end|>`/`<|call|>` are not
+#   registered as named attributes, and choosing which one is "the"
+#   chat-turn stop requires harmony role/channel semantics (end-of-message
+#   vs end-of-turn vs tool-call boundary) that keras-hub does not encode
+#   anywhere. Picking wrong ships an incorrect stop token to on-device
+#   generation. Deferred; left EOS-only (default spec, no override) until a
+#   harmony-format-aware decision is made (Future Work).
+# - Falcon: export-blocked (tracked separately, see
+#   `falcon_causal_lm_test.py`'s xfail); no chat-stop-token work attempted
+#   here regardless of its export status.
 
 
 # Explicit model-type overrides for presets that are architecturally

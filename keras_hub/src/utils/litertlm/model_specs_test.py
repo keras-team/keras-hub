@@ -24,6 +24,8 @@ from keras_hub.src.models.llama.llama_backbone import LlamaBackbone
 from keras_hub.src.models.llama.llama_causal_lm import LlamaCausalLM
 from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
 from keras_hub.src.models.llama3.llama3_causal_lm import Llama3CausalLM
+from keras_hub.src.models.phi3.phi3_backbone import Phi3Backbone
+from keras_hub.src.models.phi3.phi3_causal_lm import Phi3CausalLM
 from keras_hub.src.models.qwen.qwen_backbone import QwenBackbone
 from keras_hub.src.models.qwen.qwen_causal_lm import QwenCausalLM
 from keras_hub.src.models.qwen3.qwen3_backbone import Qwen3Backbone
@@ -40,6 +42,7 @@ from keras_hub.src.utils.litertlm.model_specs import GemmaSpec
 from keras_hub.src.utils.litertlm.model_specs import LiteRTLMExportSpec
 from keras_hub.src.utils.litertlm.model_specs import Llama3Spec
 from keras_hub.src.utils.litertlm.model_specs import PaliGemmaSpec
+from keras_hub.src.utils.litertlm.model_specs import Phi3Spec
 from keras_hub.src.utils.litertlm.model_specs import Qwen2p5FamilySpec
 from keras_hub.src.utils.litertlm.model_specs import Qwen3_5Spec
 from keras_hub.src.utils.litertlm.model_specs import Qwen3FamilySpec
@@ -110,6 +113,17 @@ class ExportSpecRegistryIntegrityTest(TestCase):
             intermediate_dim=16,
         )
         return Llama3CausalLM(backbone=backbone)
+
+    def _tiny_phi3(self):
+        backbone = Phi3Backbone(
+            vocabulary_size=10,
+            num_layers=1,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+        )
+        return Phi3CausalLM(backbone=backbone)
 
     def _tiny_gemma(self):
         backbone = GemmaBackbone(
@@ -273,6 +287,14 @@ class ExportSpecRegistryIntegrityTest(TestCase):
         self.assertIsInstance(spec, Llama3Spec)
         self.assertEqual(spec.model_type, "generic_model")
 
+    def test_phi3_causal_lm_resolves_to_phi3_spec(self):
+        """`Phi3CausalLM` must resolve to `Phi3Spec` (not fall through to
+        the plain `LiteRTLMExportSpec` default), so its `<|end|>`
+        chat-stop-token override actually fires."""
+        spec = resolve_export_spec(self._tiny_phi3())
+        self.assertIsInstance(spec, Phi3Spec)
+        self.assertEqual(spec.model_type, "generic_model")
+
     # -- Chat-turn stop-token overrides -------------------------------------
     #
     # Dependency-free checks of `get_chat_stop_token_ids` against small fake
@@ -328,6 +350,25 @@ class ExportSpecRegistryIntegrityTest(TestCase):
         self.assertEqual(
             Qwen2p5FamilySpec().get_chat_stop_token_ids(tokenizer), []
         )
+
+    def test_phi3_spec_chat_stop_token_ids_looks_up_end(self):
+        """Phi-3's chat template ends each turn with `<|end|>` (distinct
+        from the `<|endoftext|>` EOS); the override must surface it.
+        `<|end|>` is an ordinary special token looked up by string, not a
+        named tokenizer attribute."""
+        vocab = {"<|end|>": 18}
+        tokenizer = types.SimpleNamespace(
+            token_to_id=vocab.__getitem__, _unk_token_id=0
+        )
+        self.assertEqual(Phi3Spec().get_chat_stop_token_ids(tokenizer), [18])
+
+    def test_phi3_spec_chat_stop_token_ids_absent_returns_empty(self):
+        """Base/non-instruct Phi-3 vocabularies without `<|end|>` get no
+        chat-stop token; the override must not invent one."""
+        tokenizer = types.SimpleNamespace(
+            token_to_id=lambda token: (_ for _ in ()).throw(KeyError(token))
+        )
+        self.assertEqual(Phi3Spec().get_chat_stop_token_ids(tokenizer), [])
 
     # -- Unsupported cache-structure messaging ------------------------------
 
