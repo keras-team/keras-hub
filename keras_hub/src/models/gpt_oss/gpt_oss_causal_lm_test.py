@@ -124,7 +124,8 @@ class GptOssCausalLMTest(TestCase):
         strict=True,
         reason=(
             "litert-torch layout pass: no NHWC rewriter for aten.amax "
-            "(MoE top-k routing); upstream converter gap"
+            "(MoE top-k routing); upstream converter gap; upstream issue: "
+            "https://github.com/google-ai-edge/litert-torch/issues/1126"
         ),
     )
     def test_litertlm_export(self):
