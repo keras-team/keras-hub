@@ -355,6 +355,39 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
         self.assertLess(result["prefill_kv_max_abs_err"], 1e-4)
         self.assertLess(result["decode_logits_max_abs_err"], 1e-4)
 
+    def test_litertlm_export_skip_mel_metadata(self):
+        """Gemma4's bundle must declare skip_mel_spectrogram_extraction.
+
+        Gemma4's exported audio path feeds a pre-extracted log-mel
+        spectrogram straight into ``backbone.audio_encoder``, so the bundle
+        must declare ``skip_mel_spectrogram_extraction=False`` (the runtime
+        performs mel extraction; it must not skip it and hand the graph raw
+        PCM instead). This test asserts that direction as a contract guard.
+        ``False`` is also the proto3 default for this scalar bool (no field
+        presence on this type), so a green assertion here does NOT by
+        itself prove the exporter wrote the field onto the wire -- its
+        purpose is to catch a future regression that flips the contract to
+        ``True``. See ``Gemma4Spec.populate_audio_metadata`` in
+        model_specs.py for the citation establishing the boolean direction.
+        """
+        self._attach_sentencepiece_tokenizer_asset(
+            self.tokenizer,
+            os.path.join(self.get_test_data_dir(), "gemma4_test_vocab.spm"),
+        )
+        model = Gemma4CausalLM(**self.init_kwargs)
+        path = os.path.join(self.get_temp_dir(), "gemma4_skip_mel.litertlm")
+        model.export(path, format="litertlm", prefill_seq_len=20)
+        self.assertTrue(os.path.exists(path))
+
+        llm_metadata = self._parse_litertlm_llm_metadata(path)
+        self.assertIsNotNone(llm_metadata)
+        self.assertEqual(
+            llm_metadata.llm_model_type.WhichOneof("model_type"), "gemma4"
+        )
+        self.assertFalse(
+            llm_metadata.llm_model_type.gemma4.skip_mel_spectrogram_extraction
+        )
+
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):

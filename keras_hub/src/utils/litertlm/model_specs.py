@@ -666,10 +666,41 @@ class Gemma4Spec(GemmaSpec):
             subtype.pooling_kernel_size = pool_size
 
     def populate_audio_metadata(self, meta, audio_cfg):
+        # `audio_cfg` (max_clips_per_prompt / num_frames / num_audio_tokens /
+        # audio_input_feat_size, from `get_audio_config`) is used only to
+        # size the audio trace inputs during export -- the installed
+        # litert-lm-builder 0.13.0 `Gemma4` LlmModelType subtype has no proto
+        # fields to carry those derived values, so they are intentionally
+        # not forwarded here.
         del audio_cfg
         subtype = meta.llm_model_type.gemma4
         subtype.start_of_audio_token.token_str = _AUDIO_START_TOKEN
         subtype.end_of_audio_token.token_str = _AUDIO_END_TOKEN
+        # `skip_mel_spectrogram_extraction=False` tells the LiteRT-LM
+        # runtime's audio preprocessor to PERFORM mel-spectrogram extraction
+        # and hand the bundle a log-mel spectrogram. This matches
+        # keras-hub's Gemma4 export contract: `Gemma4AudioConverter` already
+        # produces log-mel features on the host side, and the exported
+        # trace feeds that `audio_mel` straight into
+        # `backbone.audio_encoder` (see
+        # `KerasHubLiteRTAdapter._prepare_audio_embeddings` in
+        # adapter.py), so the runtime must not skip extraction (`True`
+        # would feed framed raw PCM instead of mel). Direction confirmed
+        # against the runtime consumer of this flag, ai-edge-litert's
+        # `AudioPreprocessorMiniAudio::Preprocess`
+        # (support/preprocessor/audio_preprocessor_miniaudio.cc:351): `if
+        # (!SkipMelSpectrogramExtraction())` runs STFT + log-mel extraction,
+        # the `else` branch emits framed raw PCM instead (confirmed by
+        # `audio_preprocessor_miniaudio_test.cc`'s
+        # `SkipMelSpectrogramExtraction` test, which asserts the output
+        # equals the raw PCM frames). Field docstring:
+        # support/preprocessor/audio_preprocessor.h:177 ("Whether to skip
+        # the Mel spectrogram extraction."). NOTE: `False` is also the
+        # proto3 default for this scalar bool (no field presence on this
+        # type), so this assignment does not change the serialized bytes --
+        # it is an explicit statement of the contract, and a regression
+        # guard against a future flip to `True`.
+        subtype.skip_mel_spectrogram_extraction = False
 
     def reshape_separate_vision_embeddings(
         self, img_embeddings, tokens, preprocessor
