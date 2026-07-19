@@ -1001,12 +1001,38 @@ def export_to_litertlm(
             if ``backend_constraint`` is invalid, if any
             ``prefill_seq_len`` exceeds ``cache_length``, if a multimodal
             model is exported with mismatched ``prefill_seq_len`` values, if
-            ``sampler_config`` is not a ``SamplerConfig`` instance, or if
-            ``llm_model_type`` is not a recognized override.
+            ``sampler_config`` is not a ``SamplerConfig`` instance, if
+            ``llm_model_type`` is not a recognized override, or if the model
+            is a non-exportable MTP draft model (``Gemma4AssistantCausalLM``).
         ImportError: If ``litert-torch`` or ``litert-lm-builder`` are not
             installed.
     """
     path = os.fspath(path)
+    # Fail fast on MTP draft models, which are not standalone-exportable.
+    # `Gemma4AssistantCausalLM` is a multi-token-prediction (MTP) draft model
+    # for speculative decoding: its `call_with_cache()` requires a target
+    # model's hidden state, last-token embedding, and borrowed KV cache, so it
+    # has no self-contained prefill/decode graph to export. It subclasses
+    # `CausalLM` directly (not `Gemma4CausalLM`), so `resolve_export_spec`
+    # would otherwise silently fall through to the generic spec and crash deep
+    # in tracing. Reject it here, before tokenizer/backend checks, with a
+    # clear message. See `Gemma4AssistantCausalLM` docstring ("This model must
+    # NOT be used standalone").
+    from keras_hub.src.models.gemma4.gemma4_assistant_causal_lm import (
+        Gemma4AssistantCausalLM,
+    )
+
+    if isinstance(model, Gemma4AssistantCausalLM):
+        raise ValueError(
+            f"LiteRT-LM export does not support `{type(model).__name__}`: it "
+            "is a multi-token-prediction (MTP) draft model for speculative "
+            "decoding, not a standalone model. Its `call_with_cache()` "
+            "depends on a target model's hidden state, last-token embedding, "
+            "and borrowed KV cache, so it cannot be exported on its own. "
+            "Export the target `Gemma4CausalLM` instead; the runtime uses "
+            "the draft model via `target_model.generate(..., "
+            "assistant_model=...)`."
+        )
     if sampler_config is not None and not isinstance(
         sampler_config, SamplerConfig
     ):

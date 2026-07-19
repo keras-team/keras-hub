@@ -9,6 +9,9 @@ import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 
+from keras_hub.src.models.gemma4.gemma4_assistant_causal_lm import (
+    Gemma4AssistantCausalLM,
+)
 from keras_hub.src.models.gemma4.gemma4_audio_converter import (
     Gemma4AudioConverter,
 )
@@ -385,6 +388,44 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
         self.assertFalse(
             llm_metadata.llm_model_type.gemma4.skip_mel_spectrogram_extraction
         )
+
+    def test_litertlm_export_unsupported_assistant_model(self):
+        """MTP draft models are not standalone-exportable.
+
+        `Gemma4AssistantCausalLM` is a multi-token-prediction draft model for
+        speculative decoding and cannot be exported on its own; the exporter
+        must reject it with a clear, typed error rather than crashing deep in
+        tracing (it subclasses `CausalLM`, not `Gemma4CausalLM`, so it would
+        otherwise fall through to the generic export spec).
+        """
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        assistant_backbone = Gemma4Backbone(
+            vocabulary_size=256,
+            image_size=16,
+            num_layers=4,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            num_kv_shared_layers=4,
+            vision_encoder=None,
+        )
+        assistant = Gemma4AssistantCausalLM(
+            backbone=assistant_backbone,
+            backbone_hidden_size=8,
+            num_centroids=16,
+            centroid_intermediate_top_k=4,
+            use_ordered_embeddings=True,
+        )
+        path = os.path.join(self.get_temp_dir(), "assistant.litertlm")
+        with self.assertRaisesRegex(
+            ValueError,
+            "multi-token-prediction",
+        ):
+            assistant.export(path, format="litertlm", prefill_seq_len=8)
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
