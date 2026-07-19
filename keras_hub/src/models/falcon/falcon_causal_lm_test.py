@@ -176,7 +176,12 @@ class FalconCausalLMTest(TestCase):
         )
 
     @pytest.mark.xfail(
-        strict=True, reason="Non-tokenizer LiteRT-LM runtime gap"
+        strict=True,
+        reason=(
+            "torch.export tracing failure: broadcast shape mismatch "
+            "[1,2,1,8] vs [1,2,8,12] at export time (not a runtime gap); "
+            "under diagnosis"
+        ),
     )
     def test_litertlm_export(self):
         self.run_litertlm_export_test(

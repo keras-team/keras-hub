@@ -121,7 +121,11 @@ class GptOssCausalLMTest(TestCase):
         )
 
     @pytest.mark.xfail(
-        strict=True, reason="Non-tokenizer LiteRT-LM runtime gap"
+        strict=True,
+        reason=(
+            "litert-torch layout pass: no NHWC rewriter for aten.amax "
+            "(MoE top-k routing); upstream converter gap"
+        ),
     )
     def test_litertlm_export(self):
         self.run_litertlm_export_test(
