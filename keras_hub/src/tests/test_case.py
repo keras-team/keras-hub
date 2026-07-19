@@ -1397,6 +1397,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         input_data=None,
         prefill_seq_len=None,
         verify_numerics=True,
+        verify_multimodal_numerics=False,
         verify_model_type=None,
         verify_generation=False,
         generation_prompt="hi",
@@ -1419,6 +1420,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             verify_numerics: Whether to run Keras vs TFLite numeric parity. Set
                 to ``False`` for multimodal models or preset models with
                 random weights.
+            verify_multimodal_numerics: Whether to run the multimodal Keras-
+                vs-TFLite parity check (``_verify_litertlm_multimodal_numerics``)
+                against the exported bundle. Mutually exclusive in practice
+                with text-only ``verify_numerics`` (a model is either
+                text-only or multimodal). When ``True``, ``prefill_seq_len``
+                must be a single ``int`` (multimodal export is single-bucket:
+                ``cache_length == prefill_seq_len``). Returns the helper's
+                result dict.
             verify_model_type: Expected ``LlmMetadata`` oneof name, e.g.
                 ``"gemma3"``, ``"gemma4"`` or ``"generic_model"``.
             verify_generation: Whether to load the exported bundle with the
@@ -1589,12 +1598,30 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 cache_length=verify_cache_length,
             )
 
+        multimodal_result = None
+        if verify_multimodal_numerics:
+            if not isinstance(prefill_seq_len, int):
+                raise ValueError(
+                    "verify_multimodal_numerics requires an int "
+                    "`prefill_seq_len` (multimodal export is single-bucket). "
+                    f"Received: {prefill_seq_len!r}"
+                )
+            multimodal_result = self._verify_litertlm_multimodal_numerics(
+                model,
+                main_interpreter,
+                prefill_seq_len=prefill_seq_len,
+                atol=atol,
+                rtol=rtol,
+            )
+
         if verify_generation:
             self._verify_litertlm_generation(
                 path,
                 prompt=generation_prompt,
                 max_num_tokens=generation_max_tokens,
             )
+
+        return multimodal_result
 
     def _compare_outputs(
         self,
