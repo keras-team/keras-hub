@@ -1228,6 +1228,113 @@ class TestLiteRTLmAdapterHelpers(TestCase):
             self.assertEqual(torch.get_default_device(), torch.device("cpu"))
         self.assertEqual(torch.get_default_device(), original)
 
+    def test_prepare_image_embeddings_raw_images_rejects_pixel_values(self):
+        """A raw_images spec fed pixel_values raises the typed mismatch error.
+
+        WS1.2: the adapter dispatches on spec.vision_input_style, and a
+        style/args disagreement is a hard error (previously a silent
+        `return None, None`).
+        """
+        from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+        from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
+        from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+            Gemma3VisionEncoder,
+        )
+        from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
+        from keras_hub.src.utils.litertlm.model_specs import resolve_export_spec
+
+        vision_encoder = Gemma3VisionEncoder(
+            image_size=16,
+            patch_size=4,
+            pool_size=2,
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            output_dim=8,
+        )
+        backbone = Gemma3Backbone(
+            vocabulary_size=32,
+            image_size=16,
+            num_layers=2,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            vision_encoder=vision_encoder,
+        )
+        model = Gemma3CausalLM(preprocessor=None, backbone=backbone)
+        spec = resolve_export_spec(model)
+        self.assertEqual(spec.vision_input_style, "raw_images")
+
+        num_layers, cache_length = 2, 20
+        adapter = KerasHubLiteRTAdapter(
+            model, num_layers, cache_length, export_spec=spec
+        )
+        tokens = torch.zeros((1, 4), dtype=torch.int32)
+        pixel_values = torch.zeros((1, 1, 4, 48), dtype=torch.float32)
+
+        with self.assertRaisesRegex(
+            ValueError, "vision_input_style='raw_images' requires"
+        ):
+            adapter._prepare_image_embeddings(
+                tokens=tokens,
+                images=None,
+                pixel_values=pixel_values,
+                pixel_position_ids=None,
+                mm_embedding=None,
+            )
+
+    def test_vision_encoder_adapter_dispatches_on_spec_style(self):
+        """KerasHubVisionEncoderAdapter.forward is keyed on the spec style,
+        not on which argument is supplied: feeding the wrong tensor for the
+        declared style raises the typed mismatch error before the encoder is
+        ever called (WS1.2 item a).
+
+        Uses a stub backbone whose vision_encoder is a sentinel that would
+        raise if invoked -- proving the dispatch rejects the call up front,
+        without needing a real (expensive) Functional encoder.
+        """
+        from keras_hub.src.utils.litertlm.adapter import (
+            KerasHubVisionEncoderAdapter,
+        )
+
+        def _never_call(*args, **kwargs):
+            raise AssertionError(
+                "vision_encoder must not be called on a style/args mismatch"
+            )
+
+        backbone = types.SimpleNamespace(vision_encoder=_never_call)
+        keras_model = types.SimpleNamespace(backbone=backbone)
+
+        # raw_images adapter fed pixel_values (wrong) -> raises.
+        raw_adapter = KerasHubVisionEncoderAdapter(
+            keras_model,
+            vision_input_style="raw_images",
+            flatten_image_batch=False,
+        )
+        with self.assertRaisesRegex(
+            ValueError, "vision_input_style='raw_images' requires"
+        ):
+            raw_adapter.forward(
+                pixel_values=torch.zeros((1, 1, 4, 48), dtype=torch.float32),
+                pixel_position_ids=torch.zeros((1, 1, 4), dtype=torch.int32),
+            )
+
+        # patch_values adapter fed images (wrong) -> raises.
+        patch_adapter = KerasHubVisionEncoderAdapter(
+            keras_model,
+            vision_input_style="patch_values",
+            flatten_image_batch=False,
+        )
+        with self.assertRaisesRegex(
+            ValueError, "vision_input_style='patch_values' requires"
+        ):
+            patch_adapter.forward(
+                images=torch.zeros((1, 1, 16, 16, 3), dtype=torch.float32),
+            )
+
 
 class TestHfTokenizerVocabCompatibility(TestCase):
     """Unit tests for the `hf_tokenizer_path` vocab-size sanity check.

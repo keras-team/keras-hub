@@ -318,3 +318,39 @@ class ExportSpecRegistryIntegrityTest(TestCase):
         self.assertIsNone(GemmaSpec().audio_input_style)
         self.assertIsNone(Gemma3Spec().audio_input_style)
         self.assertIsNone(PaliGemmaSpec().audio_input_style)
+
+    # -- flatten_image_batch (single-image ViT declaration) ----------------
+
+    def test_single_image_family_declares_flatten_image_batch(self):
+        """PaliGemma's ViT is 4-D-only; its spec must declare
+        flatten_image_batch=True so the adapter flattens the batched images
+        stack instead of sniffing the encoder's Functional input rank."""
+        self.assertTrue(PaliGemmaSpec().flatten_image_batch)
+
+    def test_multi_image_families_do_not_flatten(self):
+        """Every other vision family accepts the batched stack (or does not
+        run the encoder standalone), so flatten_image_batch stays False."""
+        self.assertFalse(LiteRTLMExportSpec().flatten_image_batch)
+        self.assertFalse(Gemma3Spec().flatten_image_batch)
+        self.assertFalse(Gemma3nSpec().flatten_image_batch)
+        self.assertFalse(Gemma4Spec().flatten_image_batch)
+
+    # -- get_max_images_per_prompt (explicit, no silent default) -----------
+
+    def test_max_images_reads_preprocessor_attribute(self):
+        pre = types.SimpleNamespace(max_images_per_prompt=4)
+        self.assertEqual(Gemma4Spec().get_max_images_per_prompt(pre), 4)
+
+    def test_max_images_single_image_family_defaults_to_one(self):
+        """PaliGemma's preprocessor has no max_images_per_prompt; because it
+        declares flatten_image_batch=True, resolving to 1 is legitimate."""
+        pre = types.SimpleNamespace()  # no max_images_per_prompt attribute
+        self.assertEqual(PaliGemmaSpec().get_max_images_per_prompt(pre), 1)
+
+    def test_max_images_missing_on_multi_image_family_raises(self):
+        """A multi-image (flatten_image_batch=False) family with no
+        max_images_per_prompt is a misconfiguration -- must raise, not
+        silently default to 1 (the old getattr(..., 1) behavior)."""
+        pre = types.SimpleNamespace()  # no max_images_per_prompt attribute
+        with self.assertRaisesRegex(ValueError, "flatten_image_batch=False"):
+            Gemma4Spec().get_max_images_per_prompt(pre)

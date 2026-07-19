@@ -105,6 +105,19 @@ class LiteRTLMExportSpec:
     #: already knows this about its own family, so ask it instead of
     #: re-deriving the fact from signature introspection at trace time.
     audio_input_style = None
+    #: Whether this family's vision encoder accepts only a single image per
+    #: call (a 4-D ``[B, H, W, 3]`` input), so the adapter must collapse the
+    #: LiteRT-LM runtime's ``[B, N, H, W, 3]`` images tensor to
+    #: ``[B * N, H, W, 3]`` before calling it and treat the result as
+    #: ``[B * N, tokens_per_image, dim]``. Default ``False``: the encoder
+    #: accepts the batched 5-D stack directly (Gemma3). ``True`` for PaliGemma,
+    #: whose ViT is 4-D-only. This replaces the old
+    #: ``_encoder_expects_single_image`` Functional-input-spec sniff in
+    #: ``adapter.py`` -- the same spec-over-introspection migration
+    #: ``vision_input_style``/``audio_input_style`` already made: the family
+    #: registry already knows this fact, so declare it instead of re-deriving
+    #: it from ``vision_encoder.inputs[0].shape`` at trace time.
+    flatten_image_batch = False
 
     # -- Cache / vision / audio config -----------------------------------
 
@@ -223,7 +236,7 @@ class LiteRTLMExportSpec:
         if vision_encoder is None:
             return None
         preprocessor = getattr(model, "preprocessor", None)
-        max_images = getattr(preprocessor, "max_images_per_prompt", 1)
+        max_images = self.get_max_images_per_prompt(preprocessor)
 
         image_size = getattr(backbone, "image_size", None)
         if image_size is None:
@@ -338,6 +351,32 @@ class LiteRTLMExportSpec:
             # dimension instead of ``output_dim``.
             dim = getattr(vision_encoder, "num_classes", None)
         return dim
+
+    def get_max_images_per_prompt(self, preprocessor):
+        """Return the max images the runtime may pass per prompt.
+
+        Read from ``preprocessor.max_images_per_prompt`` for multi-image
+        families. Families whose preprocessor does not define it are
+        single-image by construction (PaliGemma: its ViT takes one image and
+        its preprocessor has no ``max_images_per_prompt`` attribute at all),
+        which the ``flatten_image_batch`` spec flag already declares -- so a
+        missing attribute is only valid when ``flatten_image_batch`` is True.
+        A missing attribute on a multi-image (``flatten_image_batch=False``)
+        family is a real misconfiguration and must not silently default to 1.
+        """
+        max_images = getattr(preprocessor, "max_images_per_prompt", None)
+        if max_images is not None:
+            return max_images
+        if self.flatten_image_batch:
+            return 1
+        raise ValueError(
+            f"{type(self).__name__} declares flatten_image_batch=False "
+            "(multi-image family) but its preprocessor has no "
+            "`max_images_per_prompt` attribute, so the number of images per "
+            "prompt cannot be determined. Set `max_images_per_prompt` on the "
+            "preprocessor, or (for a genuinely single-image family) set "
+            "`flatten_image_batch = True` on the spec."
+        )
 
     # -- LlmMetadata population -------------------------------------------
 
@@ -641,7 +680,7 @@ class Gemma4Spec(GemmaSpec):
         # (batch, num_images, tokens_per_image, hidden_dim). The separate
         # vision encoder/adapter produces a flat (batch*num_images, ...)
         # tensor, so reshape it back before passing to the language model.
-        max_images = getattr(preprocessor, "max_images_per_prompt", 1)
+        max_images = self.get_max_images_per_prompt(preprocessor)
         batch_size = tokens.shape[0]
         return img_embeddings.reshape(
             batch_size,
@@ -660,6 +699,11 @@ class PaliGemmaSpec(GemmaSpec):
     ``GemmaSpec`` (not ``LiteRTLMExportSpec`` directly) since PaliGemma uses
     a Gemma tokenizer and shares the same ``<end_of_turn>`` convention.
     """
+
+    #: PaliGemma's ViT accepts one image at a time (4-D input); the adapter
+    #: flattens the batched images stack before calling it. See
+    #: ``LiteRTLMExportSpec.flatten_image_batch``.
+    flatten_image_batch = True
 
 
 class Llama3Spec(LiteRTLMExportSpec):

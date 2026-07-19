@@ -37,31 +37,18 @@ def _get_vision_encoder(backbone):
     )
 
 
-def _encoder_expects_single_image(vision_encoder):
-    """Return ``True`` if the vision encoder takes one image at a time.
-
-    Gemma3 accepts a batched stack of images with shape
-    ``[B, N, H, W, 3]``. PaliGemma's ViT only accepts ``[B, H, W, 3]``. We
-    detect this from the Functional model's input spec: a single-image
-    encoder has one input whose shape (including the batch dimension) is
-    4-D.
-    """
-    if not hasattr(vision_encoder, "inputs"):
-        return False
-    if len(vision_encoder.inputs) != 1:
-        return False
-    return len(vision_encoder.inputs[0].shape) == 4
-
-
-def _run_vision_encoder(vision_encoder, images):
+def _run_vision_encoder(vision_encoder, images, flatten_image_batch):
     """Run the vision encoder, reshaping inputs if necessary.
 
-    For encoders that expect a single image per sample (e.g. PaliGemma),
-    the LiteRT-LM runtime contract still passes ``[B, N, H, W, 3]``. We
-    collapse the batch and image dimensions, run the encoder, and return
-    features with shape ``[B * N, tokens_per_image, dim]``.
+    For encoders that expect a single image per sample (``flatten_image_batch
+    =True``, e.g. PaliGemma), the LiteRT-LM runtime contract still passes
+    ``[B, N, H, W, 3]``. We collapse the batch and image dimensions, run the
+    encoder, and return features with shape
+    ``[B * N, tokens_per_image, dim]``. Whether to flatten is a per-family
+    spec fact (``LiteRTLMExportSpec.flatten_image_batch``), passed in by the
+    caller, not re-derived from the encoder's Functional input spec here.
     """
-    if not _encoder_expects_single_image(vision_encoder):
+    if not flatten_image_batch:
         out = vision_encoder(images)
     else:
         batch_size, num_images, height, width, channels = images.shape
@@ -82,6 +69,31 @@ def _extract_vision_features(out):
     if isinstance(out, (tuple, list)):
         return out[0]
     return out
+
+
+def _vision_style_mismatch_message(
+    style, expected, got_images, got_pixel_values, got_pixel_position_ids
+):
+    """Build the error for a vision_input_style / supplied-args mismatch."""
+    supplied = [
+        name
+        for name, present in (
+            ("images", got_images),
+            ("pixel_values", got_pixel_values),
+            ("pixel_position_ids", got_pixel_position_ids),
+        )
+        if present
+    ]
+    supplied_str = ", ".join(supplied) if supplied else "none of them"
+    return (
+        f"vision_input_style={style!r} requires {expected} to be supplied "
+        f"to the prefill call, but the supplied vision inputs were: "
+        f"{supplied_str}. This means the declared spec style and the "
+        f"actual arguments disagree -- e.g. passing `pixel_values` to a "
+        f"family declared 'raw_images', or `images` to a 'patch_values' "
+        f"family. Check the model's LiteRTLMExportSpec.vision_input_style "
+        f"and the exported prefill signature's inputs."
+    )
 
 
 class KerasHubLiteRTAdapter(nn.Module):
@@ -148,6 +160,15 @@ class KerasHubLiteRTAdapter(nn.Module):
         # encoder at all.
         self.vision_input_style = (
             export_spec.vision_input_style if self.has_vision else None
+        )
+        # Whether this family's vision encoder is single-image (4-D input) and
+        # the adapter must flatten the runtime's [B, N, H, W, 3] stack before
+        # calling it -- a per-family spec fact (see
+        # `LiteRTLMExportSpec.flatten_image_batch`), consulted instead of
+        # sniffing the encoder's Functional input rank. `False` when the model
+        # has no vision encoder.
+        self.flatten_image_batch = (
+            export_spec.flatten_image_batch if self.has_vision else False
         )
         # When exporting a separate vision encoder, keep the vision tower out of
         # the PREFILL_DECODE graph so its weights are not duplicated in the main
@@ -284,20 +305,51 @@ class KerasHubLiteRTAdapter(nn.Module):
             return img_embeddings, None
 
         if self.vision_input_style == "patch_values":
-            if pixel_values is not None and pixel_position_ids is not None:
-                img_embeddings = self.vision_encoder(
-                    {
-                        "pixel_values": pixel_values,
-                        "pixel_position_ids": pixel_position_ids,
-                    }
+            if pixel_values is None or pixel_position_ids is None:
+                raise ValueError(
+                    _vision_style_mismatch_message(
+                        style="patch_values",
+                        expected="`pixel_values` and `pixel_position_ids`",
+                        got_images=images is not None,
+                        got_pixel_values=pixel_values is not None,
+                        got_pixel_position_ids=pixel_position_ids is not None,
+                    )
                 )
-                return _extract_vision_features(img_embeddings), None
-            return None, None
+            img_embeddings = self.vision_encoder(
+                {
+                    "pixel_values": pixel_values,
+                    "pixel_position_ids": pixel_position_ids,
+                }
+            )
+            return _extract_vision_features(img_embeddings), None
 
-        if images is not None:
-            return _run_vision_encoder(self.vision_encoder, images), None
+        if self.vision_input_style == "raw_images":
+            if images is None:
+                raise ValueError(
+                    _vision_style_mismatch_message(
+                        style="raw_images",
+                        expected="`images`",
+                        got_images=images is not None,
+                        got_pixel_values=pixel_values is not None,
+                        got_pixel_position_ids=pixel_position_ids is not None,
+                    )
+                )
+            return (
+                _run_vision_encoder(
+                    self.vision_encoder, images, self.flatten_image_batch
+                ),
+                None,
+            )
 
-        return None, None
+        # has_vision is True and none of the known styles matched -- a spec
+        # declared a vision_input_style the adapter does not handle. Fail
+        # loudly rather than silently returning no embeddings.
+        raise ValueError(
+            "Unhandled vision_input_style "
+            f"{self.vision_input_style!r} for a model with a vision encoder. "
+            "Expected one of 'raw_images', 'patch_values', "
+            "'embedded_pixel_values'."
+        )
 
     def _prepare_audio_embeddings(self, audio_mel, audio_mel_mask):
         """Return audio embeddings and optional input feature tensors.
@@ -416,29 +468,60 @@ class KerasHubVisionEncoderAdapter(nn.Module):
     """Adapter that wraps a KerasHub vision encoder for separate export.
 
     Gemma3 accepts raw ``images`` [B, N, H, W, 3]. Gemma4 accepts preprocessed
-    patches via ``pixel_values`` and ``pixel_position_ids``. The output is
+    patches via ``pixel_values`` and ``pixel_position_ids``. Which of the two
+    the encoder is called with is dispatched on the family's declared
+    ``spec.vision_input_style`` (passed in at construction), not inferred from
+    which argument the caller happened to supply -- the same
+    spec-over-introspection contract the baked-in adapter uses. The output is
     always returned as a dictionary named ``features`` so that the LiteRT-LM
     signature matches upstream tensor names.
     """
 
-    def __init__(self, keras_model):
+    def __init__(self, keras_model, vision_input_style, flatten_image_batch):
         super().__init__()
         self.vision_encoder = _get_vision_encoder(keras_model.backbone)
+        self.vision_input_style = vision_input_style
+        self.flatten_image_batch = flatten_image_batch
 
     def forward(self, images=None, pixel_values=None, pixel_position_ids=None):
-        if pixel_values is not None and pixel_position_ids is not None:
+        if self.vision_input_style == "patch_values":
+            if pixel_values is None or pixel_position_ids is None:
+                raise ValueError(
+                    _vision_style_mismatch_message(
+                        style="patch_values",
+                        expected="`pixel_values` and `pixel_position_ids`",
+                        got_images=images is not None,
+                        got_pixel_values=pixel_values is not None,
+                        got_pixel_position_ids=pixel_position_ids is not None,
+                    )
+                )
             out = self.vision_encoder(
                 {
                     "pixel_values": pixel_values,
                     "pixel_position_ids": pixel_position_ids,
                 }
             )
-        elif images is not None:
-            out = _run_vision_encoder(self.vision_encoder, images)
+        elif self.vision_input_style == "raw_images":
+            if images is None:
+                raise ValueError(
+                    _vision_style_mismatch_message(
+                        style="raw_images",
+                        expected="`images`",
+                        got_images=images is not None,
+                        got_pixel_values=pixel_values is not None,
+                        got_pixel_position_ids=pixel_position_ids is not None,
+                    )
+                )
+            out = _run_vision_encoder(
+                self.vision_encoder, images, self.flatten_image_batch
+            )
         else:
             raise ValueError(
-                "Vision encoder export requires either ``images`` or "
-                "``pixel_values`` + ``pixel_position_ids``."
+                "Separate vision-encoder export does not support "
+                f"vision_input_style={self.vision_input_style!r}. Separate "
+                "export is only defined for 'raw_images' and 'patch_values' "
+                "(embedded_pixel_values families run the encoder inside the "
+                "backbone and reject separate export in export_to_litertlm)."
             )
 
         return {"features": _extract_vision_features(out)}

@@ -662,7 +662,11 @@ def _trace_and_convert(
                 vision_output_dim=plan.vision_output_dim,
                 dtype=plan.dtype,
             )
-            vision_encoder_adapter = KerasHubVisionEncoderAdapter(model).eval()
+            vision_encoder_adapter = KerasHubVisionEncoderAdapter(
+                model,
+                vision_input_style=plan.vision_input_style,
+                flatten_image_batch=plan.spec.flatten_image_batch,
+            ).eval()
             vision_adapter = KerasHubVisionAdapter().eval()
 
             vision_encoder_edge = litert_torch.signature(
