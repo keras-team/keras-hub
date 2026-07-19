@@ -855,6 +855,173 @@ class TestLiteRTLmExport(TestCase):
                 rtol=1e-3,
             )
 
+    def _litertlm_section_model_types(self, path):
+        """Return the ``model_type`` string of every section in a bundle.
+
+        Reads the same ``LiteRTLMMetaData`` flatbuffer
+        ``_extract_litertlm_tflite_interpreters`` parses, but instead of
+        materializing each TFLite payload, decodes every section object's
+        ``Items()`` key/value pairs and returns the ``model_type`` value
+        (e.g. ``"tf_lite_prefill_decode"``, ``"tf_lite_end_of_vision"`` --
+        the ``TfLiteModelType.value`` strings ``add_tflite_model`` writes,
+        not the bare enum names) for every section that has one. This is a
+        section-*existence* assertion that does not depend on TFLite
+        signature names, which matters here since an end-of-image model's
+        signature name is fixed by this exporter (``"end_of_vision"``) but
+        a signature-name check alone would not distinguish "the model got
+        bundled" from "the model got bundled as the right section type".
+        """
+        from litert_lm_builder import (
+            litertlm_header_schema_py_generated as schema_mod,
+        )
+
+        _, metadata = self._parse_litertlm_bundle(path)
+        section_metadata = metadata.SectionMetadata()
+        model_types = []
+        for i in range(section_metadata.ObjectsLength()):
+            obj = section_metadata.Objects(i)
+            for j in range(obj.ItemsLength()):
+                kv = obj.Items(j)
+                key = kv.Key()
+                key_str = key.decode() if isinstance(key, bytes) else key
+                if key_str != "model_type":
+                    continue
+                if kv.ValueType() != schema_mod.VData.StringValue:
+                    continue
+                value_table = kv.Value()
+                string_value = schema_mod.StringValue()
+                string_value.Init(value_table.Bytes, value_table.Pos)
+                value = string_value.Value()
+                model_types.append(
+                    value.decode() if isinstance(value, bytes) else value
+                )
+        return model_types
+
+    def test_export_separate_vision_encoder_has_end_of_vision_section(self):
+        """A separate-vision Gemma3 export gains an END_OF_VISION section.
+
+        Before WS1.4, a separate-vision-encoder bundle's TFLite sections
+        were exactly ``{PREFILL_DECODE, VISION_ENCODER, VISION_ADAPTER}``
+        (see ``test_export_separate_vision_encoder_gemma3`` above, which
+        never asserts an END_OF_VISION section because none existed) --
+        this test builds the identical bundle and asserts the new
+        ``tf_lite_end_of_vision`` section is now present alongside the
+        three that were already there, mirroring litert-torch's
+        `export_hf` module packing an optional ``eoi.tflite`` model (see
+        `KerasHubEndOfImageAdapter` in ``adapter.py``).
+        """
+        from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+        from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
+        from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
+            Gemma3CausalLMPreprocessor,
+        )
+        from keras_hub.src.models.gemma3.gemma3_image_converter import (
+            Gemma3ImageConverter,
+        )
+        from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+            Gemma3VisionEncoder,
+        )
+        from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import (
+            MockGemma3Tokenizer,
+        )
+
+        tokenizer = MockGemma3Tokenizer()
+        self._attach_sentencepiece_tokenizer_asset(
+            tokenizer,
+            os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm"),
+        )
+
+        image_converter = Gemma3ImageConverter(image_size=(16, 16))
+        preprocessor = Gemma3CausalLMPreprocessor(
+            image_converter=image_converter,
+            tokenizer=tokenizer,
+            sequence_length=20,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=4,
+        )
+        vision_encoder = Gemma3VisionEncoder(
+            image_size=16,
+            patch_size=4,
+            pool_size=2,
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            output_dim=8,
+        )
+        backbone = Gemma3Backbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            image_size=16,
+            num_layers=2,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            vision_encoder=vision_encoder,
+        )
+        model = Gemma3CausalLM(preprocessor=preprocessor, backbone=backbone)
+        self._set_random_weights(model)
+
+        path = os.path.join(
+            self.get_temp_dir(), "test_separate_vision_eoi.litertlm"
+        )
+        model.export(
+            path,
+            format="litertlm",
+            prefill_seq_len=20,
+            separate_vision_encoder=True,
+        )
+
+        section_model_types = self._litertlm_section_model_types(path)
+        self.assertIn("tf_lite_end_of_vision", section_model_types)
+        # The ordinary sections from the pre-WS1.4 bundle are still present
+        # unchanged -- adding END_OF_VISION does not remove or replace any
+        # of them.
+        self.assertIn("tf_lite_prefill_decode", section_model_types)
+        self.assertIn("tf_lite_vision_encoder", section_model_types)
+        self.assertIn("tf_lite_vision_adapter", section_model_types)
+
+        # The END_OF_VISION model itself: an input-less "end_of_vision"
+        # signature producing a single "eoi_embedding" output, matching
+        # `KerasHubEndOfImageAdapter.forward`.
+        interpreters = self._extract_litertlm_tflite_interpreters(path)
+        all_signatures = {}
+        for interpreter in interpreters:
+            all_signatures.update(interpreter._get_full_signature_list())
+        self.assertIn("end_of_vision", all_signatures)
+        eoi_signature = all_signatures["end_of_vision"]
+        self.assertEqual(eoi_signature["inputs"], {})
+        self.assertIn("eoi_embedding", eoi_signature["outputs"])
+
+        interpreters_by_sig = {}
+        for interpreter in interpreters:
+            for sig_name in interpreter._get_full_signature_list():
+                interpreters_by_sig[sig_name] = interpreter
+        eoi_runner = interpreters_by_sig["end_of_vision"].get_signature_runner(
+            "end_of_vision"
+        )
+        eoi_out = eoi_runner()["eoi_embedding"]
+
+        # Numeric parity: the bundled embedding should be exactly the
+        # Keras reference's `token_embedding` lookup for Gemma3's
+        # end-of-image token id, the same value
+        # `KerasHubEndOfImageAdapter.forward` computes at trace time.
+        from keras_hub.src.utils.litertlm.model_specs import Gemma3Spec
+
+        eoi_token_ids = Gemma3Spec().get_end_of_vision_token_ids(tokenizer)
+        self.assertIsNotNone(eoi_token_ids)
+        with torch.no_grad():
+            keras_eoi_embedding = backbone.token_embedding(
+                torch.tensor([eoi_token_ids], dtype=torch.int32)
+            )
+        self.assertAllClose(
+            keras_eoi_embedding.detach().cpu().numpy(),
+            eoi_out,
+            atol=1e-5,
+            rtol=1e-5,
+        )
+
     def test_export_multimodal_outputs_match_keras(self):
         """Verify multimodal Keras eager and TFLite outputs match."""
         from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone

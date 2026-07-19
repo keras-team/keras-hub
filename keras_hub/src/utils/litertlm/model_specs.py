@@ -35,6 +35,25 @@ def _first_attr(obj, *names, default=None):
     return default
 
 
+# Special token strings used when populating vision/audio metadata. Keeping
+# them as named constants makes it easy to audit which tokens each model
+# family expects and avoids scattering literals through the spec classes.
+# Defined ahead of the spec classes below (rather than at the bottom of the
+# file, where they used to live) because ``Gemma3Spec``/``Gemma4Spec`` now
+# also reference ``_GEMMA3_END_OF_IMAGE_TOKEN``/``_GEMMA4_END_OF_IMAGE_TOKEN``
+# as plain class attributes (``end_of_vision_token =`` below), which
+# evaluate immediately at class-body execution time -- unlike the
+# ``populate_vision_metadata`` method bodies further down, which only
+# resolve these names later, at export time, once the whole module has
+# finished loading.
+_GEMMA3_START_OF_IMAGE_TOKEN = "<start_of_image>"
+_GEMMA3_END_OF_IMAGE_TOKEN = "<end_of_image>"
+_GEMMA4_START_OF_IMAGE_TOKEN = "<|image>"
+_GEMMA4_END_OF_IMAGE_TOKEN = "<image|>"
+_AUDIO_START_TOKEN = "<|audio>"
+_AUDIO_END_TOKEN = "<audio|>"
+
+
 class LiteRTLMExportSpec:
     """Default LiteRT-LM export behavior for a model family.
 
@@ -118,6 +137,23 @@ class LiteRTLMExportSpec:
     #: registry already knows this fact, so declare it instead of re-deriving
     #: it from ``vision_encoder.inputs[0].shape`` at trace time.
     flatten_image_batch = False
+    #: The end-of-image (EOI) special-token string for this family, or
+    #: ``None`` (default) if the family has no distinct EOI token. Only
+    #: consulted on the separate-vision-encoder export path
+    #: (``export_to_litertlm(..., separate_vision_encoder=True)``), where it
+    #: controls whether an ``END_OF_VISION`` bundle section is emitted --
+    #: mirroring litert-torch's ``export_hf`` module, which packs an
+    #: ``eoi.tflite`` model producing ``get_input_embeddings()(eoi_token_ids)``
+    #: (see ``export_hf/model_ext/gemma4_unified/vision_exportable.py``'s
+    #: ``LiteRTExportableModuleForGemma4UnifiedEndOfImage`` and
+    #: ``export_hf/core/litert_lm_builder.py``'s conditional
+    #: ``END_OF_VISION`` section). Set this to the family's EOI token string
+    #: (e.g. Gemma3's ``"<end_of_image>"``, Gemma4's ``"<image|>"``) to opt
+    #: in; leave ``None`` for families with no EOI token (e.g. PaliGemma,
+    #: which has no end-of-image special token at all) or whose separate-
+    #: vision export never reaches this point (e.g. Gemma3n, which rejects
+    #: `separate_vision_encoder=True` before vision-model building).
+    end_of_vision_token = None
 
     # -- Cache / vision / audio config -----------------------------------
 
@@ -549,6 +585,28 @@ class LiteRTLMExportSpec:
         del tokenizer
         return []
 
+    # -- Metadata: end-of-vision (EOI) section -----------------------------
+
+    def get_end_of_vision_token_ids(self, tokenizer):
+        """Return this family's end-of-image token id(s), or ``None``.
+
+        Used only by the separate-vision-encoder export path to decide
+        whether to build and bundle an ``END_OF_VISION`` model (see
+        ``end_of_vision_token`` above for the upstream-parity rationale).
+        Returns ``None`` -- not a wrong id -- whenever the family declares no
+        EOI token, or the declared token string cannot be resolved to a real
+        (non-unknown) id in *tokenizer*'s vocabulary, so the caller can skip
+        the section instead of ever bundling an embedding for the wrong
+        token: a missing ``END_OF_VISION`` section is a no-op omission, but
+        one built from a resolved-to-unk id would silently ship an
+        incorrect embedding under a section the runtime is expected to
+        trust.
+        """
+        if self.end_of_vision_token is None:
+            return None
+        token_id = _lookup_token_id(tokenizer, self.end_of_vision_token)
+        return [token_id] if token_id is not None else None
+
 
 def _lookup_token_id(tokenizer, token_str):
     """Return the id for *token_str* in *tokenizer*'s vocab, or ``None``.
@@ -605,6 +663,10 @@ class GemmaSpec(LiteRTLMExportSpec):
 
 class Gemma3Spec(GemmaSpec):
     model_type = "gemma3"
+    #: See ``LiteRTLMExportSpec.end_of_vision_token``. Reuses the same
+    #: string already used for ``LlmModelType.gemma3.end_of_image_token``
+    #: below, rather than a second literal.
+    end_of_vision_token = _GEMMA3_END_OF_IMAGE_TOKEN
 
     def populate_vision_metadata(self, meta, vision_cfg):
         _populate_gemma3_family_vision_metadata(
@@ -650,6 +712,10 @@ class Gemma4Spec(GemmaSpec):
     model_type = "gemma4"
     vision_input_style = "patch_values"
     audio_input_style = "standalone_mel"
+    #: See ``LiteRTLMExportSpec.end_of_vision_token``. Reuses the same
+    #: string already used for ``LlmModelType.gemma4.end_of_image_token``
+    #: below, rather than a second literal.
+    end_of_vision_token = _GEMMA4_END_OF_IMAGE_TOKEN
 
     def populate_vision_metadata(self, meta, vision_cfg):
         image_size = vision_cfg["image_size"]
@@ -736,6 +802,14 @@ class PaliGemmaSpec(GemmaSpec):
     #: ``LiteRTLMExportSpec.flatten_image_batch``.
     flatten_image_batch = True
 
+    # `end_of_vision_token` stays the `LiteRTLMExportSpec` default of `None`:
+    # PaliGemma's preprocessor/tokenizer define no end-of-image special
+    # token (unlike Gemma3/Gemma4's `end_of_image_token`), so there is no
+    # real token string to declare here -- a separate-vision PaliGemma
+    # export emits no `END_OF_VISION` section, matching its existing
+    # metadata-vacuum documented above (no dedicated `LlmModelType` subtype
+    # either).
+
 
 class Llama3Spec(LiteRTLMExportSpec):
     """Llama3's chat template ends a turn with ``<|eot_id|>``.
@@ -811,17 +885,6 @@ class Qwen2p5FamilySpec(LiteRTLMExportSpec):
         # (base/non-chat Qwen 2.5 vocabularies).
         token_id = _lookup_token_id(tokenizer, "<|im_end|>")
         return [token_id] if token_id is not None else []
-
-
-# Special token strings used when populating vision/audio metadata. Keeping
-# them as named constants makes it easy to audit which tokens each model
-# family expects and avoids scattering literals through the spec classes.
-_GEMMA3_START_OF_IMAGE_TOKEN = "<start_of_image>"
-_GEMMA3_END_OF_IMAGE_TOKEN = "<end_of_image>"
-_GEMMA4_START_OF_IMAGE_TOKEN = "<|image>"
-_GEMMA4_END_OF_IMAGE_TOKEN = "<image|>"
-_AUDIO_START_TOKEN = "<|audio>"
-_AUDIO_END_TOKEN = "<audio|>"
 
 
 def _populate_gemma3_family_vision_metadata(meta, model_type, vision_cfg):

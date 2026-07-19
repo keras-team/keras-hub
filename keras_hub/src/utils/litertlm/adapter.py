@@ -541,3 +541,43 @@ class KerasHubVisionAdapter(nn.Module):
 
     def forward(self, features):
         return {"mm_embedding": features}
+
+
+class KerasHubEndOfImageAdapter(nn.Module):
+    """End-of-image (EOI) embedding, exported as a separate LiteRT-LM model.
+
+    Mirrors litert-torch's ``END_OF_VISION`` bundle section: upstream's
+    ``export_hf`` packs a small ``eoi.tflite`` model whose only output is
+    ``get_input_embeddings()(eoi_token_ids)`` (see
+    ``export_hf/model_ext/gemma4_unified/vision_exportable.py``'s
+    ``LiteRTExportableModuleForGemma4UnifiedEndOfImage``), and
+    ``export_hf/core/litert_lm_builder.py`` adds it as ``END_OF_VISION``
+    whenever that model is present. KerasHub's own vision adapter
+    (``KerasHubVisionAdapter`` above) is a plain rename and does not fold an
+    EOI embedding into ``mm_embedding`` the way upstream's gemma3/gemma3n
+    adapters do (they concat ``eoi_emb`` onto ``image_features``), so this
+    module supplies the same embedding as its own bundle section instead,
+    for separate-vision exports of families that declare an
+    ``end_of_vision_token`` (see ``LiteRTLMExportSpec`` in
+    ``model_specs.py``).
+
+    Takes no runtime inputs -- the end-of-image token id(s) are fixed at
+    export time (resolved once from the family's tokenizer before this
+    module is constructed), so the embedding lookup constant-folds during
+    tracing, exactly like the upstream module it mirrors.
+    """
+
+    def __init__(self, keras_model, eoi_token_ids):
+        super().__init__()
+        self.token_embedding = keras_model.backbone.token_embedding
+        # A plain Python list baked in at construction time, matching
+        # upstream's inline `torch.tensor(...)` inside `forward` (see
+        # `LiteRTExportableModuleForGemma4UnifiedEndOfImage.forward`) rather
+        # than a registered buffer: the id(s) are export-time constants, not
+        # model state, and this is the proven-working upstream form for an
+        # input-less traced signature.
+        self._eoi_token_ids = list(eoi_token_ids)
+
+    def forward(self):
+        eoi_ids = torch.tensor([self._eoi_token_ids], dtype=torch.int32)
+        return {"eoi_embedding": self.token_embedding(eoi_ids)}

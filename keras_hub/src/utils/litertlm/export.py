@@ -622,6 +622,7 @@ def _chain_signatures(litert_torch, signatures, **kwargs):
 def _trace_and_convert(
     litert_torch,
     model,
+    tokenizer,
     prefill_adapter,
     decode_adapter,
     prefill_inputs_map,
@@ -633,6 +634,7 @@ def _trace_and_convert(
     """Trace prefill/decode (and optional vision) signatures and convert."""
     # Defer torch-specific adapter imports until the backend has been verified
     # as torch, so that non-torch callers get the friendly backend error.
+    from keras_hub.src.utils.litertlm.adapter import KerasHubEndOfImageAdapter
     from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
     from keras_hub.src.utils.litertlm.adapter import (
         KerasHubVisionEncoderAdapter,
@@ -642,6 +644,7 @@ def _trace_and_convert(
     with traceable_ops_scope():
         vision_encoder_edge = None
         vision_adapter_edge = None
+        eoi_edge = None
 
         # Optionally export the vision encoder and adapter as separate models.
         if plan.separate_vision_encoder and plan.has_vision:
@@ -682,6 +685,44 @@ def _trace_and_convert(
                 **kwargs,
             ).convert(quant_config=quant_config, lightweight_conversion=True)
 
+            # Optionally export an END_OF_VISION model: a small, input-less
+            # signature whose only output is the family's end-of-image
+            # token embedding, mirroring litert-torch's `export_hf` module
+            # (see `KerasHubEndOfImageAdapter`'s docstring). Only families
+            # that declare `LiteRTLMExportSpec.end_of_vision_token` and
+            # whose tokenizer actually resolves it opt in; every other
+            # family's bundle is unaffected (`eoi_edge` stays `None`, so
+            # `_assemble_bundle` below adds no `END_OF_VISION` section).
+            eoi_token_ids = plan.spec.get_end_of_vision_token_ids(tokenizer)
+            if eoi_token_ids is not None:
+                eoi_adapter = KerasHubEndOfImageAdapter(
+                    model, eoi_token_ids
+                ).eval()
+                eoi_edge = litert_torch.signature(
+                    "end_of_vision",
+                    eoi_adapter,
+                    sample_kwargs={},
+                    **kwargs,
+                ).convert(
+                    quant_config=quant_config, lightweight_conversion=True
+                )
+            elif plan.spec.end_of_vision_token is not None:
+                # The family declares an EOI token, but it did not resolve
+                # to a real id in this tokenizer's vocabulary (e.g. a test
+                # fixture with a truncated vocab). Skip the section rather
+                # than bundle an embedding for the wrong (unknown) token --
+                # an absent END_OF_VISION section is a no-op; a wrong one
+                # would silently ship an incorrect embedding under a
+                # section name the runtime is expected to trust.
+                warnings.warn(
+                    "Could not resolve end-of-image token "
+                    f"{plan.spec.end_of_vision_token!r} to a token id for "
+                    f"{type(model).__name__}'s tokenizer; skipping the "
+                    "END_OF_VISION bundle section.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
         # Chain one signature per prefill bucket plus the decode signature.
         signatures = []
         for seq_len in plan.prefill_seq_lens:
@@ -700,7 +741,7 @@ def _trace_and_convert(
             quant_config=quant_config, lightweight_conversion=False
         )
 
-    return edge_model, vision_encoder_edge, vision_adapter_edge
+    return edge_model, vision_encoder_edge, vision_adapter_edge, eoi_edge
 
 
 def _assemble_bundle(
@@ -711,10 +752,12 @@ def _assemble_bundle(
     edge_model,
     vision_encoder_edge,
     vision_adapter_edge,
+    eoi_edge,
     plan,
     hf_tokenizer_path,
 ):
     """Write TFLite files, bundle the tokenizer, and assemble ``.litertlm``."""
+    eoi_tflite_path = None
     if plan.separate_vision_encoder and plan.has_vision:
         prefill_tflite_path = os.path.join(temp_dir, "prefill_decode.tflite")
         edge_model.export(prefill_tflite_path)
@@ -726,6 +769,9 @@ def _assemble_bundle(
             temp_dir, "vision_adapter.tflite"
         )
         vision_adapter_edge.export(vision_adapter_tflite_path)
+        if eoi_edge is not None:
+            eoi_tflite_path = os.path.join(temp_dir, "end_of_vision.tflite")
+            eoi_edge.export(eoi_tflite_path)
     else:
         prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
         edge_model.export(prefill_tflite_path)
@@ -777,6 +823,17 @@ def _assemble_bundle(
             litert_lm_builder.TfLiteModelType.VISION_ADAPTER,
             backend_constraint=backend_constraint,
         )
+        if eoi_tflite_path is not None:
+            # Ordered after VISION_ADAPTER, matching upstream's section
+            # order (`export_hf/core/litert_lm_builder.py`:
+            # PREFILL_DECODE -> ... -> VISION_ENCODER -> VISION_ADAPTER ->
+            # END_OF_VISION). See `KerasHubEndOfImageAdapter`'s docstring
+            # for why this section exists and which families emit it.
+            builder.add_tflite_model(
+                eoi_tflite_path,
+                litert_lm_builder.TfLiteModelType.END_OF_VISION,
+                backend_constraint=backend_constraint,
+            )
     if use_hf_tokenizer:
         builder.add_hf_tokenizer(tokenizer_path)
     else:
@@ -840,7 +897,13 @@ def export_to_litertlm(
     ``VISION_ENCODER`` (raw images/patches -> features),
     ``VISION_ADAPTER`` (features -> ``mm_embedding``), and
     ``PREFILL_DECODE`` (text + ``mm_embedding`` -> KV caches/logits). This
-    matches the upstream LiteRT-LM multimodal runtime contract.
+    matches the upstream LiteRT-LM multimodal runtime contract. Families
+    that declare an end-of-image token (``LiteRTLMExportSpec.
+    end_of_vision_token``, e.g. Gemma3/Gemma4) additionally get a fourth,
+    input-less ``END_OF_VISION`` model whose only output is that token's
+    embedding, mirroring upstream ``export_hf``'s optional ``eoi.tflite``
+    section -- an upstream-parity addition; families with no declared
+    end-of-image token (e.g. PaliGemma) emit no such section.
 
     **Bucketing:** ``prefill_seq_len`` accepts either a single ``int`` or a
     ``list[int]``. When a list is provided (e.g.
@@ -1111,10 +1174,11 @@ def export_to_litertlm(
             import litert_torch
 
             _validate_quant_config(quant_config)
-            edge_model, vision_encoder_edge, vision_adapter_edge = (
+            edge_model, vision_encoder_edge, vision_adapter_edge, eoi_edge = (
                 _trace_and_convert(
                     litert_torch,
                     model,
+                    tokenizer,
                     prefill_adapter,
                     decode_adapter,
                     prefill_inputs_map,
@@ -1134,6 +1198,7 @@ def export_to_litertlm(
             edge_model,
             vision_encoder_edge,
             vision_adapter_edge,
+            eoi_edge,
             plan,
             hf_tokenizer_path,
         )
