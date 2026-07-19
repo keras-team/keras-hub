@@ -1,37 +1,83 @@
 """Export KerasHub CausalLM models to LiteRT-LM `.litertlm` bundles."""
 
 import contextlib
+import dataclasses
 import importlib.util
-import inspect
+import json
 import os
 import tempfile
+import warnings
 
 import keras
-import torch
+
+try:
+    import torch
+except ImportError:
+    torch = None
 
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
-from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
-from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
-from keras_hub.src.utils.litertlm.adapter import KerasHubVisionEncoderAdapter
-from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
-from keras_hub.src.utils.litertlm.adapter import _get_vision_encoder
-from keras_hub.src.utils.litertlm.adapter import _is_gemma4_vision_encoder
-from keras_hub.src.utils.litertlm.adapter import _traceable_arange_scope
-from keras_hub.src.utils.litertlm.adapter import (
-    _traceable_dot_product_attention_scope,
-)
-from keras_hub.src.utils.litertlm.adapter import _traceable_one_hot_scope
-from keras_hub.src.utils.litertlm.adapter import _traceable_repeat_scope
-from keras_hub.src.utils.litertlm.adapter import _traceable_scatter_update_scope
-from keras_hub.src.utils.litertlm.adapter import _traceable_slice_update_scope
-from keras_hub.src.utils.litertlm.adapter import _traceable_take_scope
 from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
     materialize_hf_tokenizer_json,
 )
+from keras_hub.src.utils.litertlm.model_specs import resolve_export_spec
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
+
+# Quantization recipes and attributes are long, stable reference material.
+# Keeping them at module level keeps the ``export_to_litertlm`` docstring
+# focused on the API while still making the details greppable.
+_QUANTIZATION_RECIPES_NOTE = """
+Supported ``quant_config`` recipes (from
+``litert_torch.generative.quantize.quant_recipes``):
+
+- ``full_dynamic_recipe()`` — dynamic-range quantization of weights
+  (activations stay FP32). Recommended default.
+- ``full_weight_only_recipe()`` — weight-only quantization. Weights are
+  statically quantized; activations remain FP32.
+- ``full_fp16_recipe()`` — FP16 weights and activations.
+
+Each recipe accepts the following parameters:
+
+- ``mcfg`` — optional ``ModelConfig`` for the target model. Usually omitted
+  for KerasHub exports.
+- ``weight_dtype`` — one of:
+  ``quant_attrs.Dtype.INT8`` (default),
+  ``quant_attrs.Dtype.INT4``,
+  ``quant_attrs.Dtype.FP16``,
+  ``quant_attrs.Dtype.FP32``.
+- ``granularity`` — one of:
+  ``quant_attrs.Granularity.CHANNELWISE`` (default),
+  ``quant_attrs.Granularity.BLOCKWISE_32``,
+  ``quant_attrs.Granularity.BLOCKWISE_64``,
+  ``quant_attrs.Granularity.BLOCKWISE_128``,
+  ``quant_attrs.Granularity.BLOCKWISE_256``.
+
+Example configurations:
+
+```python
+from litert_torch.generative.quantize.quant_recipes import (
+    full_dynamic_recipe,
+    full_weight_only_recipe,
+)
+import litert_torch.generative.quantize.quant_attrs as quant_attrs
+
+# Dynamic INT8 weights, FP32 activations (good balance)
+quant_config = full_dynamic_recipe()
+
+# Weight-only INT4 (smallest size)
+quant_config = full_weight_only_recipe(
+    weight_dtype=quant_attrs.Dtype.INT4
+)
+
+# Weight-only INT8 with block-wise granularity
+quant_config = full_weight_only_recipe(
+    weight_dtype=quant_attrs.Dtype.INT8,
+    granularity=quant_attrs.Granularity.BLOCKWISE_128,
+)
+```
+"""
 
 # ``litert_torch`` is an optional dependency. Use ``find_spec`` to check for
 # availability without importing it at module level, because importing
@@ -61,144 +107,201 @@ def _preserve_jax_x64_state():
             jax.config.update("jax_enable_x64", original_x64)
 
 
-def export_to_litertlm(
+@contextlib.contextmanager
+def _preserve_jax_platforms_state():
+    """Preserve the JAX ``jax_platforms`` flag around ``litert_torch`` usage.
+
+    LiteRT-LM's JAX bridge (used internally by ``litert_torch`` during MLIR
+    lowering) defaults to the TPU platform if one is visible, but export must
+    run on CPU so it does not contend with other processes using the TPU. We
+    force ``jax_platforms=cpu`` for the duration of tracing/conversion and
+    restore the caller's original setting afterward, mirroring
+    ``_preserve_jax_x64_state``.
+    """
+    try:
+        import jax
+    except ImportError:
+        jax = None
+        original_platforms = None
+    else:
+        original_platforms = jax.config.jax_platforms
+    if jax is not None:
+        jax.config.update("jax_platforms", "cpu")
+    try:
+        yield
+    finally:
+        if jax is not None:
+            jax.config.update("jax_platforms", original_platforms)
+
+
+# ``torch`` is optional. Defining the adapter bases conditionally lets the
+# module import cleanly in non-PyTorch environments while still giving
+# ``torch.nn.Module`` semantics when PyTorch is present.
+if torch is not None:
+    _AdapterBase = torch.nn.Module
+else:
+    _AdapterBase = object
+
+
+class _PrefillAdapter(_AdapterBase):
+    """Thin wrapper that exposes ``adapter.forward_prefill`` to litert_torch."""
+
+    def __init__(self, base):
+        super().__init__()
+        self.base = base
+
+    def forward(self, *args, **kwargs):
+        return self.base.forward_prefill(*args, **kwargs)
+
+
+class _DecodeAdapter(_AdapterBase):
+    """Thin wrapper that exposes ``adapter.forward_decode`` to litert_torch."""
+
+    def __init__(self, base):
+        super().__init__()
+        self.base = base
+
+    def forward(self, *args, **kwargs):
+        return self.base.forward_decode(*args, **kwargs)
+
+
+def _validate_quant_config(quant_config):
+    """Validate that ``quant_config`` is a litert_torch QuantConfig or None."""
+    if quant_config is None:
+        return
+    try:
+        from litert_torch.quantize.quant_config import QuantConfig
+    except ImportError:
+        return
+    if not isinstance(quant_config, QuantConfig):
+        raise ValueError(
+            "`quant_config` must be an instance of "
+            "`litert_torch.quantize.quant_config.QuantConfig` or None. "
+            f"Received: {type(quant_config).__name__}."
+        )
+
+
+# A cheap sanity check on `hf_tokenizer_path` compatibility, not exact
+# validation: small differences (e.g. a handful of reserved/special tokens)
+# are expected and not flagged. Only a difference of more than a few hundred
+# tokens *and* a meaningfully different order of magnitude (a >=5x ratio)
+# together indicate the bundled tokenizer almost certainly does not match
+# the model's embedding table -- e.g. bundling a ~32k-vocab Llama tokenizer
+# with a model whose embedding table was sized for a ~256k-vocab Gemma
+# tokenizer.
+_HF_TOKENIZER_VOCAB_MISMATCH_ABS_THRESHOLD = 300
+_HF_TOKENIZER_VOCAB_MISMATCH_RATIO_THRESHOLD = 5.0
+
+
+def _model_embedding_vocab_size(model):
+    """Return the model's embedding vocabulary size, or ``None`` if unknown.
+
+    Prefers ``backbone.vocabulary_size`` (the constructor argument most
+    backbones store directly, e.g. ``GemmaBackbone``/``LlamaBackbone``/
+    ``GPT2Backbone``); falls back to ``backbone.token_embedding.input_dim``
+    (the actual embedding table size) for backbones that do not expose
+    ``vocabulary_size`` directly.
+    """
+    backbone = getattr(model, "backbone", None)
+    vocab_size = getattr(backbone, "vocabulary_size", None)
+    if vocab_size is not None:
+        return int(vocab_size)
+    token_embedding = getattr(backbone, "token_embedding", None)
+    input_dim = getattr(token_embedding, "input_dim", None)
+    if input_dim is not None:
+        return int(input_dim)
+    return None
+
+
+def _hf_tokenizer_vocab_size(hf_tokenizer_path):
+    """Return the vocab size implied by a HuggingFace ``tokenizer.json``.
+
+    Reads the file directly as JSON (``tokenizer.json`` is plain JSON; this
+    avoids a hard dependency on the ``tokenizers`` library just to sanity
+    check a vocab size) and returns ``max_token_id + 1`` across both the
+    base ``model.vocab`` mapping and any ``added_tokens`` entries (special
+    tokens are often listed separately from the base vocab) -- matching how
+    large the embedding table must be to cover every id the tokenizer can
+    produce. Returns ``None`` if the file cannot be parsed as the expected
+    ``tokenizer.json`` structure.
+    """
+    try:
+        with open(hf_tokenizer_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    model_vocab = (data.get("model") or {}).get("vocab") or {}
+    try:
+        max_id = max(model_vocab.values(), default=-1)
+    except (TypeError, ValueError):
+        return None
+    for token in data.get("added_tokens") or []:
+        token_id = token.get("id")
+        if isinstance(token_id, int):
+            max_id = max(max_id, token_id)
+    if max_id < 0:
+        return None
+    return max_id + 1
+
+
+def _check_hf_tokenizer_vocab_compatible(hf_tokenizer_path, model):
+    """Raise ``ValueError`` if the HF tokenizer's vocab looks incompatible.
+
+    This is a cheap sanity check (see the module-level threshold constants
+    above), not exact validation -- it exists to catch the case of bundling
+    a tokenizer from an entirely different model/family, not to enforce
+    that the tokenizer and model agree token-for-token.
+    """
+    hf_vocab_size = _hf_tokenizer_vocab_size(hf_tokenizer_path)
+    model_vocab_size = _model_embedding_vocab_size(model)
+    if hf_vocab_size is None or not model_vocab_size:
+        # Could not determine one of the two sizes; skip rather than risk a
+        # false positive from an unusual tokenizer.json structure or backbone.
+        return
+    diff = abs(hf_vocab_size - model_vocab_size)
+    ratio = hf_vocab_size / model_vocab_size
+    is_grossly_mismatched = (
+        diff > _HF_TOKENIZER_VOCAB_MISMATCH_ABS_THRESHOLD
+        and (
+            ratio >= _HF_TOKENIZER_VOCAB_MISMATCH_RATIO_THRESHOLD
+            or ratio <= 1 / _HF_TOKENIZER_VOCAB_MISMATCH_RATIO_THRESHOLD
+        )
+    )
+    if is_grossly_mismatched:
+        raise ValueError(
+            "`hf_tokenizer_path` appears incompatible with the model: the "
+            f"tokenizer implies a vocabulary of {hf_vocab_size} tokens "
+            f"(highest token id + 1 across `model.vocab` and "
+            f"`added_tokens` in {hf_tokenizer_path!r}), but the model's "
+            f"embedding table is sized for {model_vocab_size} tokens "
+            f"(`{type(model.backbone).__name__}`). This looks like a "
+            "tokenizer from a different model/family rather than a small "
+            "reserved-token discrepancy -- pass the tokenizer that matches "
+            "this model, or omit `hf_tokenizer_path` to use the model's own "
+            "tokenizer."
+        )
+
+
+def _validate_export_args(
     model,
     path,
-    backend_constraint=None,
-    prefill_seq_len=None,
-    quant_config=None,
-    separate_vision_encoder=False,
-    hf_tokenizer_path=None,
-    **kwargs,
+    tokenizer,
+    backend_constraint,
+    hf_tokenizer_path,
+    prefill_seq_len,
 ):
-    """Export a KerasHub CausalLM model to a LiteRT-LM bundle.
+    """Fail fast on invalid export arguments.
 
-    This exports the model with ``prefill`` and ``decode`` signatures required by
-    the LiteRT-LM executor, bundles the tokenizer (SentencePiece ``.spm`` for
-    SentencePiece models, or a HuggingFace ``tokenizer.json`` produced by
-    auto-converting any ``BytePairTokenizer`` subclass), and writes an
-    ``LlmMetadata`` protobuf into the ``.litertlm`` artifact.
-
-    **Multimodal:** When the model has a ``vision_encoder`` (e.g. Gemma3),
-    the vision encoder is baked into the prefill signature so that image
-    inputs are processed alongside text tokens.  The decode signature
-    remains text-only because image KV-caches are already seeded after
-    prefill.
-
-    When ``separate_vision_encoder=True`` and the model has a vision
-    encoder, the vision processing is split into three TFLite models:
-    ``VISION_ENCODER`` (raw images/patches -> features),
-    ``VISION_ADAPTER`` (features -> ``mm_embedding``), and
-    ``PREFILL_DECODE`` (text + ``mm_embedding`` -> KV caches/logits). This
-    matches the upstream LiteRT-LM multimodal runtime contract.
-
-    **Bucketing:** ``prefill_seq_len`` accepts either a single ``int`` or a
-    ``list[int]``. When a list is provided (e.g.
-    ``[32, 64, 128, 256, 512, 1024]``), the exporter traces one prefill
-    signature per bucket. At runtime the LiteRT-LM executor dispatches to
-    the smallest bucket that fits the actual prompt, avoiding wasted
-    computation on padding. For multimodal models (e.g. Gemma3), bucketing
-    is not supported because the vision attention mask computation requires
-    cache length to equal input length.
-
-    **Quantization:** ``quant_config`` is forwarded to
-    ``litert_torch.convert()`` for in-graph quantization. It must be an
-    instance of ``litert_torch.quantize.quant_config.QuantConfig``.
-
-    For generative models the supported recipes (from
-    ``litert_torch.generative.quantize.quant_recipes``) are:
-
-    - ``full_dynamic_recipe()`` — dynamic-range quantization of weights
-      (activations stay FP32). Recommended default.
-    - ``full_weight_only_recipe()`` — weight-only quantization. Weights are
-      statically quantized; activations remain FP32.
-    - ``full_fp16_recipe()`` — FP16 weights and activations.
-
-    Each recipe accepts the following parameters:
-
-    - ``mcfg`` — optional ``ModelConfig`` for the target model. Usually
-      omitted for KerasHub exports.
-    - ``weight_dtype`` — one of:
-      ``quant_attrs.Dtype.INT8`` (default),
-      ``quant_attrs.Dtype.INT4``,
-      ``quant_attrs.Dtype.FP16``,
-      ``quant_attrs.Dtype.FP32``.
-    - ``granularity`` — one of:
-      ``quant_attrs.Granularity.CHANNELWISE`` (default),
-      ``quant_attrs.Granularity.BLOCKWISE_32``,
-      ``quant_attrs.Granularity.BLOCKWISE_64``,
-      ``quant_attrs.Granularity.BLOCKWISE_128``,
-      ``quant_attrs.Granularity.BLOCKWISE_256``.
-
-    Example configurations:
-
-    ```python
-    from litert_torch.generative.quantize.quant_recipes import (
-        full_dynamic_recipe,
-        full_weight_only_recipe,
-    )
-    import litert_torch.generative.quantize.quant_attrs as quant_attrs
-
-    # Dynamic INT8 weights, FP32 activations (good balance)
-    quant_config = full_dynamic_recipe()
-
-    # Weight-only INT4 (smallest size)
-    quant_config = full_weight_only_recipe(
-        weight_dtype=quant_attrs.Dtype.INT4
-    )
-
-    # Weight-only INT8 with block-wise granularity
-    quant_config = full_weight_only_recipe(
-        weight_dtype=quant_attrs.Dtype.INT8,
-        granularity=quant_attrs.Granularity.BLOCKWISE_128,
-    )
-    ```
-
-    Args:
-        model: A KerasHub ``CausalLM`` instance with an attached preprocessor
-            and tokenizer.
-        path: str. Path to save the ``.litertlm`` file.
-        backend_constraint: Optional LiteRT-LM backend constraint, such as
-            ``"cpu"`` or ``"gpu"``. Defaults to ``None``.
-        prefill_seq_len: int or list[int]. Sequence length(s) used when
-            tracing the prefill signature(s). Defaults to the model's
-            maximum sequence length. Each value must not exceed
-            ``cache_length``.
-        quant_config: Optional
-            ``litert_torch.quantize.quant_config.QuantConfig`` for
-            in-conversion quantization. Use ``full_dynamic_recipe()``,
-            ``full_weight_only_recipe()``, or ``full_fp16_recipe()`` from
-            ``litert_torch.generative.quantize.quant_recipes``. Defaults to
-            ``None`` (no quantization, FP32).
-        separate_vision_encoder: bool. If ``True`` and the model has a vision
-            encoder, export the vision encoder and a no-op vision adapter as
-            separate ``VISION_ENCODER`` and ``VISION_ADAPTER`` TFLite models,
-            and have ``PREFILL_DECODE`` consume pre-computed ``mm_embedding``
-            tensors instead of raw images. Defaults to ``False``.
-        hf_tokenizer_path: Optional str. Path to a HuggingFace
-            ``tokenizer.json`` file to bundle instead of the model's native
-            tokenizer. Use this for BytePair / HuggingFace tokenizers that
-            cannot be materialized as a SentencePiece ``.spm`` file. When
-            provided, the native tokenizer validation is skipped. If ``None``,
-            SentencePiece tokenizers are bundled as ``.spm`` and any
-            ``BytePairTokenizer`` subclass is automatically converted to
-            ``tokenizer.json``. Defaults to ``None``.
-        **kwargs: Additional kwargs forwarded to ``litert_torch`` signature
-            tracing.
-
-    Returns:
-        The output ``path``.
-
-    Raises:
-        ValueError: If the backend is not ``"torch"``, if ``path`` does not
-            end with ``.litertlm``, if the model lacks ``call_with_cache``,
-            if ``backend_constraint`` is invalid, if any
-            ``prefill_seq_len`` exceeds ``cache_length``, or if a multimodal
-            model is exported with mismatched ``prefill_seq_len`` values.
-        ImportError: If ``litert-torch`` or ``litert-lm-builder`` are not
-            installed.
+    Returns a ``(prefill_seq_lens, backend_constraint)`` tuple: the
+    normalized list of prefill sequence lengths, and the normalized
+    (lowercased) ``backend_constraint`` string (or ``None``). Callers must
+    use the returned ``backend_constraint`` -- not the original argument --
+    so the lowercased value actually reaches ``_assemble_bundle`` /
+    ``builder.add_tflite_model``. Importing ``litert_torch`` is deferred to
+    the orchestrator so that the JAX ``jax_enable_x64`` side effect can be
+    kept under one preserve/restore context that covers both import and
+    tracing.
     """
-    path = os.fspath(path)
     if not path.endswith(".litertlm"):
         raise ValueError(
             "LiteRT-LM export requires a filepath ending in `.litertlm`. "
@@ -225,7 +328,6 @@ def export_to_litertlm(
                 f"Must be one of {sorted(valid_backends)}."
             )
 
-    tokenizer = _get_tokenizer(model)
     if hf_tokenizer_path is not None:
         hf_tokenizer_path = os.fspath(hf_tokenizer_path)
         if not os.path.isfile(hf_tokenizer_path):
@@ -238,6 +340,7 @@ def export_to_litertlm(
                 "`hf_tokenizer_path` must point to a `tokenizer.json` file. "
                 f"Received: {hf_tokenizer_path!r}"
             )
+        _check_hf_tokenizer_vocab_compatible(hf_tokenizer_path, model)
     elif _is_sentencepiece_tokenizer(tokenizer):
         _validate_sentencepiece_tokenizer(tokenizer)
     elif isinstance(tokenizer, BytePairTokenizer):
@@ -248,6 +351,15 @@ def export_to_litertlm(
             "LiteRT-LM export supports SentencePiece tokenizers and any "
             "BytePairTokenizer subclass. Received: "
             f"{type(tokenizer).__module__}.{type(tokenizer).__name__}."
+        )
+
+    # PyTorch is required for tracing and for building sample inputs. Surface
+    # this before the backend check so a JAX/TF caller without torch installed
+    # gets a clear message instead of a raw ``ModuleNotFoundError``.
+    if torch is None:
+        raise ImportError(
+            "LiteRT-LM export requires PyTorch. "
+            "Install it with: pip install torch"
         )
 
     # LiteRT-LM export relies on litert_torch, which only supports the
@@ -268,85 +380,11 @@ def export_to_litertlm(
             "Install it with: pip install litert-torch"
         )
 
-    # Import ``litert_torch`` inside a context manager that preserves the JAX
-    # x64 setting. Importing ``litert_torch`` unconditionally enables
-    # ``jax_enable_x64``, which leaks into dtype-sensitive JAX tests elsewhere.
-    # LiteRT-LM's JAX bridge defaults to the TPU platform if one is visible,
-    # but export must run on CPU so it does not contend with other processes
-    # using the TPU. We update the JAX config before any backend access; the
-    # environment variable alone is not enough if JAX was imported before
-    # ``keras_hub.src`` set it.
-    import jax
-
-    # Force JAX to initialize on CPU for both tracing and the LiteRT-Torch
-    # runtime. This is intentionally left as "cpu" because ``litert_torch``
-    # may use JAX after this function returns.
-    jax.config.update("jax_platforms", "cpu")
-
-    with _preserve_jax_x64_state():
-        import litert_torch
-
-        if quant_config is not None:
-            quant_config_cls = getattr(
-                getattr(litert_torch, "quantize", None), "quant_config", None
-            )
-            if quant_config_cls is not None and not isinstance(
-                quant_config, quant_config_cls.QuantConfig
-            ):
-                raise ValueError(
-                    "`quant_config` must be an instance of "
-                    "`litert_torch.quantize.quant_config.QuantConfig` or None. "
-                    f"Received: {type(quant_config).__name__}."
-                )
-
-    cache_cfg = _get_cache_config(model)
-    num_layers = cache_cfg["num_layers"]
-    cache_length = cache_cfg["cache_length"]
-    num_kv_heads = cache_cfg["num_kv_heads"]
-    head_dim = cache_cfg["head_dim"]
-    cache_layout = cache_cfg["cache_layout"]
-
-    # Detect multimodal capabilities.
-    vision_cfg = _get_vision_config(model)
-    audio_cfg = _get_audio_config(model)
-    has_vision = vision_cfg is not None
-    has_audio = audio_cfg is not None
-
-    is_gemma4_vision = False
-    vision_output_dim = None
-    if has_vision:
-        vision_encoder = _get_vision_encoder(model.backbone)
-        is_gemma4_vision = _is_gemma4_vision_encoder(vision_encoder)
-        vision_output_dim = getattr(vision_encoder, "output_dim", None)
-        if vision_output_dim is None:
-            # PaliGemma's ViT uses ``num_classes`` as the projected vision
-            # dimension instead of ``output_dim``.
-            vision_output_dim = getattr(vision_encoder, "num_classes", None)
-        if separate_vision_encoder and vision_output_dim is None:
-            raise ValueError(
-                "LiteRT-LM separate vision encoder export requires "
-                "`vision_encoder.output_dim` or `vision_encoder.num_classes`."
-            )
-    elif separate_vision_encoder:
-        raise ValueError(
-            "`separate_vision_encoder=True` requires a model with a vision "
-            "encoder."
-        )
-
-    # Gemma3n runs vision/audio encoders inside the backbone and expects raw
-    # pixel_values / input_features, so a separate vision encoder is not
-    # meaningful for that architecture.
-    if separate_vision_encoder and has_vision:
-        call_params = set(inspect.signature(model.call_with_cache).parameters)
-        if "pixel_values" in call_params:
-            raise ValueError(
-                "`separate_vision_encoder=True` is not supported for models "
-                "that expect raw `pixel_values` (e.g. Gemma3n)."
-            )
-
-    # Normalise prefill_seq_len to a sorted list.
+    # Normalise prefill_seq_len to a sorted list. Cache-length checks are left
+    # to the orchestrator because ``cache_length`` is not known until after
+    # ``spec.get_cache_config`` runs.
     if prefill_seq_len is None:
-        prefill_seq_lens = [cache_length]
+        prefill_seq_lens = None
     elif isinstance(prefill_seq_len, int):
         prefill_seq_lens = [prefill_seq_len]
     elif isinstance(prefill_seq_len, (list, tuple)):
@@ -359,17 +397,632 @@ def export_to_litertlm(
             f"Received: {prefill_seq_len!r}"
         )
 
-    for seq_len in prefill_seq_lens:
-        if not isinstance(seq_len, int) or seq_len <= 0:
-            raise ValueError(
-                "`prefill_seq_len` values must be positive integers. "
-                f"Received: {seq_len!r}"
+    if prefill_seq_lens is not None:
+        for seq_len in prefill_seq_lens:
+            if not isinstance(seq_len, int) or seq_len <= 0:
+                raise ValueError(
+                    "`prefill_seq_len` values must be positive integers. "
+                    f"Received: {seq_len!r}"
+                )
+
+    return prefill_seq_lens, backend_constraint
+
+
+@dataclasses.dataclass(frozen=True)
+class ExportPlan:
+    """Immutable bundle of per-export-run settings for a single export call.
+
+    ``export_to_litertlm`` computes all of these values once, early in the
+    pipeline (resolving the model-family spec, cache config, and
+    vision/audio config), then passes a single ``ExportPlan`` to the later
+    pipeline phases (building sample inputs, tracing/converting, assembling
+    the bundle) instead of a long, order-sensitive positional-argument list.
+    """
+
+    spec: object
+    num_layers: int
+    cache_length: int
+    num_kv_heads: int
+    head_dim: int
+    cache_layout: str
+    prefill_seq_lens: list
+    dtype: object
+    has_vision: bool
+    has_audio: bool
+    vision_cfg: dict | None
+    audio_cfg: dict | None
+    vision_input_style: str | None
+    vision_output_dim: int | None
+    max_images: int | None
+    tokens_per_image: int | None
+    separate_vision_encoder: bool
+
+
+def _build_prefill_inputs(plan):
+    """Build a ``{seq_len: sample_inputs}`` map for every prefill bucket."""
+    prefill_inputs_map = {}
+    for seq_len in plan.prefill_seq_lens:
+        base = _build_sample_inputs(
+            batch_size=1,
+            seq_len=seq_len,
+            num_layers=plan.num_layers,
+            cache_length=plan.cache_length,
+            num_kv_heads=plan.num_kv_heads,
+            head_dim=plan.head_dim,
+            dtype=plan.dtype,
+            cache_layout=plan.cache_layout,
+        )
+        if plan.has_vision:
+            vision_cfg = plan.vision_cfg
+            max_images = vision_cfg["max_images_per_prompt"]
+            num_vision_tokens = vision_cfg["num_vision_tokens"]
+            if plan.separate_vision_encoder:
+                tokens_per_image = (
+                    num_vision_tokens // max_images if max_images else 1
+                )
+                base.update(
+                    {
+                        "mm_embedding": torch.zeros(
+                            (
+                                1 * max_images,
+                                tokens_per_image,
+                                plan.vision_output_dim,
+                            ),
+                            dtype=plan.dtype,
+                            device="cpu",
+                        ),
+                        "vision_indices": torch.zeros(
+                            (1, num_vision_tokens), dtype=torch.int32
+                        ),
+                        "vision_mask": torch.zeros(
+                            (1, seq_len), dtype=torch.int32
+                        ),
+                    }
+                )
+            elif plan.vision_input_style == "patch_values":
+                base.update(
+                    _build_gemma4_vision_sample_inputs(
+                        batch_size=1,
+                        max_images=max_images,
+                        patch_size=vision_cfg.get("patch_size", 16),
+                        image_size=vision_cfg["image_size"],
+                        num_vision_tokens=num_vision_tokens,
+                        seq_len=seq_len,
+                        dtype=plan.dtype,
+                    )
+                )
+            else:
+                # "raw_images" (Gemma3/PaliGemma) and "embedded_pixel_values"
+                # (Gemma3n) both need the same raw `[B, N, H, W, 3]` images
+                # sample tensor here -- they only diverge in how the adapter
+                # *runs* the vision encoder at trace time (see
+                # `KerasHubLiteRTAdapter._prepare_image_embeddings`), not in
+                # what shape the prefill signature needs.
+                base.update(
+                    _build_vision_sample_inputs(
+                        batch_size=1,
+                        max_images=max_images,
+                        image_size=vision_cfg["image_size"],
+                        num_vision_tokens=num_vision_tokens,
+                        seq_len=seq_len,
+                        dtype=plan.dtype,
+                    )
+                )
+        if plan.has_audio:
+            audio_cfg = plan.audio_cfg
+            base.update(
+                _build_audio_sample_inputs(
+                    batch_size=1,
+                    max_clips=audio_cfg["max_clips_per_prompt"],
+                    num_frames=audio_cfg["num_frames"],
+                    num_audio_tokens=audio_cfg["num_audio_tokens"],
+                    seq_len=seq_len,
+                    audio_input_feat_size=audio_cfg.get(
+                        "audio_input_feat_size", 128
+                    ),
+                    dtype=plan.dtype,
+                )
             )
+        prefill_inputs_map[seq_len] = base
+    return prefill_inputs_map
+
+
+def _build_vision_encoder_sample_inputs(
+    batch_size,
+    max_images,
+    image_size,
+    patch_size,
+    dtype,
+    vision_input_style="raw_images",
+):
+    """Create concrete sample inputs for a separate vision-encoder signature."""
+    device = "cpu"
+    if vision_input_style == "patch_values":
+        num_patches = (image_size // patch_size) ** 2
+        patch_dim = patch_size**2 * 3
+        return {
+            "pixel_values": torch.zeros(
+                (
+                    batch_size,
+                    max_images,
+                    num_patches,
+                    patch_dim,
+                ),
+                dtype=dtype,
+                device=device,
+            ),
+            "pixel_position_ids": torch.zeros(
+                (
+                    batch_size,
+                    max_images,
+                    num_patches,
+                    2,
+                ),
+                dtype=torch.int32,
+                device=device,
+            ),
+        }
+    return {
+        "images": torch.zeros(
+            (
+                batch_size,
+                max_images,
+                image_size,
+                image_size,
+                3,
+            ),
+            dtype=dtype,
+            device=device,
+        )
+    }
+
+
+def _build_vision_adapter_sample_inputs(
+    batch_size,
+    max_images,
+    tokens_per_image,
+    vision_output_dim,
+    dtype,
+):
+    """Create concrete sample inputs for a separate vision-adapter signature."""
+    return {
+        "features": torch.zeros(
+            (
+                batch_size * max_images,
+                tokens_per_image,
+                vision_output_dim,
+            ),
+            dtype=dtype,
+            device="cpu",
+        )
+    }
+
+
+def _chain_signatures(litert_torch, signatures, **kwargs):
+    """Chain multiple litert_torch signatures, hiding first/rest asymmetry."""
+    converter = None
+    for sig_name, adapter, sample_kwargs in signatures:
+        if converter is None:
+            converter = litert_torch.signature(
+                sig_name,
+                adapter,
+                sample_kwargs=sample_kwargs,
+                **kwargs,
+            )
+        else:
+            converter = converter.signature(
+                sig_name,
+                adapter,
+                sample_kwargs=sample_kwargs,
+                **kwargs,
+            )
+    return converter
+
+
+def _trace_and_convert(
+    litert_torch,
+    model,
+    prefill_adapter,
+    decode_adapter,
+    prefill_inputs_map,
+    decode_inputs,
+    plan,
+    quant_config,
+    **kwargs,
+):
+    """Trace prefill/decode (and optional vision) signatures and convert."""
+    # Defer torch-specific adapter imports until the backend has been verified
+    # as torch, so that non-torch callers get the friendly backend error.
+    from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
+    from keras_hub.src.utils.litertlm.adapter import (
+        KerasHubVisionEncoderAdapter,
+    )
+    from keras_hub.src.utils.litertlm.traceable_ops import traceable_ops_scope
+
+    with traceable_ops_scope():
+        vision_encoder_edge = None
+        vision_adapter_edge = None
+
+        # Optionally export the vision encoder and adapter as separate models.
+        if plan.separate_vision_encoder and plan.has_vision:
+            vision_cfg = plan.vision_cfg
+            patch_size = vision_cfg.get("patch_size", 16)
+            vision_encoder_inputs = _build_vision_encoder_sample_inputs(
+                batch_size=1,
+                max_images=plan.max_images,
+                image_size=vision_cfg["image_size"],
+                patch_size=patch_size,
+                dtype=plan.dtype,
+                vision_input_style=plan.vision_input_style,
+            )
+            vision_adapter_inputs = _build_vision_adapter_sample_inputs(
+                batch_size=1,
+                max_images=plan.max_images,
+                tokens_per_image=plan.tokens_per_image,
+                vision_output_dim=plan.vision_output_dim,
+                dtype=plan.dtype,
+            )
+            vision_encoder_adapter = KerasHubVisionEncoderAdapter(model).eval()
+            vision_adapter = KerasHubVisionAdapter().eval()
+
+            vision_encoder_edge = litert_torch.signature(
+                "vision_encoder",
+                vision_encoder_adapter,
+                sample_kwargs=vision_encoder_inputs,
+                **kwargs,
+            ).convert(quant_config=quant_config, lightweight_conversion=True)
+            vision_adapter_edge = litert_torch.signature(
+                "vision_adapter",
+                vision_adapter,
+                sample_kwargs=vision_adapter_inputs,
+                **kwargs,
+            ).convert(quant_config=quant_config, lightweight_conversion=True)
+
+        # Chain one signature per prefill bucket plus the decode signature.
+        signatures = []
+        for seq_len in plan.prefill_seq_lens:
+            sig_name = (
+                "prefill"
+                if len(plan.prefill_seq_lens) == 1
+                else f"prefill_{seq_len}"
+            )
+            signatures.append(
+                (sig_name, prefill_adapter, prefill_inputs_map[seq_len])
+            )
+        signatures.append(("decode", decode_adapter, decode_inputs))
+
+        converter = _chain_signatures(litert_torch, signatures, **kwargs)
+        edge_model = converter.convert(
+            quant_config=quant_config, lightweight_conversion=False
+        )
+
+    return edge_model, vision_encoder_edge, vision_adapter_edge
+
+
+def _assemble_bundle(
+    path,
+    temp_dir,
+    tokenizer,
+    backend_constraint,
+    edge_model,
+    vision_encoder_edge,
+    vision_adapter_edge,
+    plan,
+    hf_tokenizer_path,
+):
+    """Write TFLite files, bundle the tokenizer, and assemble ``.litertlm``."""
+    if plan.separate_vision_encoder and plan.has_vision:
+        prefill_tflite_path = os.path.join(temp_dir, "prefill_decode.tflite")
+        edge_model.export(prefill_tflite_path)
+        vision_encoder_tflite_path = os.path.join(
+            temp_dir, "vision_encoder.tflite"
+        )
+        vision_encoder_edge.export(vision_encoder_tflite_path)
+        vision_adapter_tflite_path = os.path.join(
+            temp_dir, "vision_adapter.tflite"
+        )
+        vision_adapter_edge.export(vision_adapter_tflite_path)
+    else:
+        prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
+        edge_model.export(prefill_tflite_path)
+
+    if hf_tokenizer_path is not None:
+        tokenizer_path = hf_tokenizer_path
+        use_hf_tokenizer = True
+    elif _is_sentencepiece_tokenizer(tokenizer):
+        tokenizer_path = _materialize_sentencepiece_tokenizer(
+            tokenizer, temp_dir
+        )
+        use_hf_tokenizer = False
+    else:
+        tokenizer_path = materialize_hf_tokenizer_json(tokenizer, temp_dir)
+        use_hf_tokenizer = True
+
+    meta_path = os.path.join(temp_dir, "llm_metadata.pb")
+    _build_llm_metadata(
+        plan.spec,
+        tokenizer,
+        plan.cache_length,
+        meta_path,
+        vision_cfg=plan.vision_cfg,
+        audio_cfg=plan.audio_cfg,
+    )
+
+    litert_lm_builder = _import_litert_lm_builder()
+    builder = litert_lm_builder.LitertLmFileBuilder()
+    builder.add_system_metadata(
+        litert_lm_builder.Metadata(
+            key="Authors",
+            value="KerasHub",
+            dtype=litert_lm_builder.DType.STRING,
+        )
+    )
+    builder.add_tflite_model(
+        prefill_tflite_path,
+        litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
+        backend_constraint=backend_constraint,
+    )
+    if plan.separate_vision_encoder and plan.has_vision:
+        builder.add_tflite_model(
+            vision_encoder_tflite_path,
+            litert_lm_builder.TfLiteModelType.VISION_ENCODER,
+            backend_constraint=backend_constraint,
+        )
+        builder.add_tflite_model(
+            vision_adapter_tflite_path,
+            litert_lm_builder.TfLiteModelType.VISION_ADAPTER,
+            backend_constraint=backend_constraint,
+        )
+    if use_hf_tokenizer:
+        builder.add_hf_tokenizer(tokenizer_path)
+    else:
+        builder.add_sentencepiece_tokenizer(tokenizer_path)
+    builder.add_llm_metadata(meta_path)
+
+    # Write to a temp file in the same directory as `path` and atomically
+    # rename it into place on success, so a crash mid-build (the bundle can be
+    # large) never leaves a truncated `.litertlm` file at the destination.
+    output_dir = os.path.dirname(os.path.abspath(path)) or "."
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        dir=output_dir,
+        prefix=f".{os.path.basename(path)}.",
+        suffix=".tmp",
+    )
+    try:
+        # `mkstemp` always creates the file 0600. Match the permissions a
+        # plain `open(path, "wb")` would have produced (0666 minus umask) so
+        # switching to an atomic write doesn't silently make bundles
+        # unreadable by other users/services that consumed them before.
+        umask = os.umask(0)
+        os.umask(umask)
+        os.fchmod(tmp_fd, 0o666 & ~umask)
+        with os.fdopen(tmp_fd, "wb") as output_file:
+            builder.build(output_file)
+    except BaseException:
+        os.remove(tmp_path)
+        raise
+    os.replace(tmp_path, path)
+
+    return path
+
+
+def export_to_litertlm(
+    model,
+    path,
+    backend_constraint=None,
+    prefill_seq_len=None,
+    cache_length=None,
+    quant_config=None,
+    separate_vision_encoder=False,
+    hf_tokenizer_path=None,
+    **kwargs,
+):
+    """Export a KerasHub CausalLM model to a LiteRT-LM bundle.
+
+    This exports the model with ``prefill`` and ``decode`` signatures
+    required by the LiteRT-LM executor, bundles the tokenizer (SentencePiece
+    ``.spm`` for SentencePiece models, or a HuggingFace ``tokenizer.json``
+    produced by auto-converting any ``BytePairTokenizer`` subclass), and
+    writes an ``LlmMetadata`` protobuf into the ``.litertlm`` artifact.
+
+    **Multimodal:** When the model has a ``vision_encoder`` (e.g. Gemma3),
+    the vision encoder is baked into the prefill signature so that image
+    inputs are processed alongside text tokens. The decode signature
+    remains text-only because image KV-caches are already seeded after
+    prefill.
+
+    When ``separate_vision_encoder=True`` and the model has a vision
+    encoder, the vision processing is split into three TFLite models:
+    ``VISION_ENCODER`` (raw images/patches -> features),
+    ``VISION_ADAPTER`` (features -> ``mm_embedding``), and
+    ``PREFILL_DECODE`` (text + ``mm_embedding`` -> KV caches/logits). This
+    matches the upstream LiteRT-LM multimodal runtime contract.
+
+    **Bucketing:** ``prefill_seq_len`` accepts either a single ``int`` or a
+    ``list[int]``. When a list is provided (e.g.
+    ``[32, 64, 128, 256, 512, 1024]``), the exporter traces one prefill
+    signature per bucket. At runtime the LiteRT-LM executor dispatches to
+    the smallest bucket that fits the actual prompt, avoiding wasted
+    computation on padding. For multimodal models (e.g. Gemma3), bucketing
+    is not supported because the vision attention mask computation requires
+    cache length to equal input length.
+
+    **Quantization:** ``quant_config`` is forwarded to
+    ``litert_torch.convert()`` for in-graph quantization. It must be an
+    instance of ``litert_torch.quantize.quant_config.QuantConfig``. See
+    ``_QUANTIZATION_RECIPES_NOTE`` for supported recipes and attributes.
+
+    Args:
+        model: A KerasHub ``CausalLM`` instance with an attached preprocessor
+            and tokenizer.
+        path: str. Path to save the ``.litertlm`` file.
+        backend_constraint: Optional LiteRT-LM backend constraint, such as
+            ``"cpu"`` or ``"gpu"``. Defaults to ``None``.
+        prefill_seq_len: int or list[int]. Sequence length(s) used when
+            tracing the prefill signature(s). Each value must not exceed
+            ``cache_length``. Defaults to ``cache_length`` itself.
+        cache_length: Optional int. The KV-cache length (the model's maximum
+            context window) to trace the export with. If ``None``, this is
+            inferred from ``backbone.max_sequence_length`` when the backbone
+            defines it; most backbones (e.g. Gemma, Llama, Mistral, Qwen) do
+            not, in which case the exporter falls back to
+            ``preprocessor.sequence_length`` and emits a ``UserWarning``,
+            since that value is a tokenization default chosen for training or
+            preprocessing and is not necessarily the model's true maximum
+            context length. Pass this explicitly to avoid the warning and to
+            get a cache length independent of the preprocessor. Defaults to
+            ``None``.
+        quant_config: Optional
+            ``litert_torch.quantize.quant_config.QuantConfig`` for
+            in-conversion quantization. Defaults to ``None`` (no
+            quantization, FP32).
+        separate_vision_encoder: bool. If ``True`` and the model has a vision
+            encoder, export the vision encoder and a no-op vision adapter as
+            separate ``VISION_ENCODER`` and ``VISION_ADAPTER`` TFLite models,
+            and have ``PREFILL_DECODE`` consume pre-computed ``mm_embedding``
+            tensors instead of raw images. Defaults to ``False``. Either way
+            the exported bundle is a complete multimodal model —
+            ``PREFILL_DECODE`` always consumes text tokens; this flag only
+            controls whether vision is baked into that trace or factored
+            into reusable models, never producing a vision-only export.
+        hf_tokenizer_path: Optional str. Path to a HuggingFace
+            ``tokenizer.json`` file to bundle instead of the model's native
+            tokenizer. Use this for BytePair / HuggingFace tokenizers that
+            cannot be materialized as a SentencePiece ``.spm`` file. When
+            provided, the native tokenizer validation is skipped. If ``None``,
+            SentencePiece tokenizers are bundled as ``.spm`` and any
+            ``BytePairTokenizer`` subclass is automatically converted to
+            ``tokenizer.json``. Defaults to ``None``.
+        **kwargs: Additional kwargs forwarded to ``litert_torch`` signature
+            tracing.
+
+    Returns:
+        The output ``path``.
+
+    Raises:
+        ValueError: If the backend is not ``"torch"``, if ``path`` does not
+            end with ``.litertlm``, if the model lacks ``call_with_cache``,
+            if ``backend_constraint`` is invalid, if any
+            ``prefill_seq_len`` exceeds ``cache_length``, or if a multimodal
+            model is exported with mismatched ``prefill_seq_len`` values.
+        ImportError: If ``litert-torch`` or ``litert-lm-builder`` are not
+            installed.
+    """
+    path = os.fspath(path)
+    tokenizer = _get_tokenizer(model)
+    # `_validate_export_args` returns the normalized (lowercased)
+    # `backend_constraint` alongside `prefill_seq_lens`; rebind the local
+    # here so the normalized value -- not the original, possibly
+    # mixed-case, argument -- is what flows into `_assemble_bundle` /
+    # `builder.add_tflite_model` below.
+    prefill_seq_lens, backend_constraint = _validate_export_args(
+        model,
+        path,
+        tokenizer,
+        backend_constraint,
+        hf_tokenizer_path,
+        prefill_seq_len,
+    )
+
+    # Defer torch-specific adapter imports until after the backend check so
+    # that a JAX/TF caller without torch gets the friendly backend error.
+    from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
+    from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
+    from keras_hub.src.utils.litertlm.adapter import _get_vision_encoder
+
+    # Resolve the model-family export spec once and thread it through the
+    # rest of the pipeline (and into the adapter), instead of re-deriving
+    # family checks at each site.
+    spec = resolve_export_spec(model)
+
+    # Fail fast on model families whose cache structure the adapter cannot
+    # build. Every currently-supported family uses a single stacked KV-cache
+    # tensor ("single_stacked"); see `LiteRTLMExportSpec.cache_structure` and
+    # `describe_unsupported_cache_structure` for what a family-specific
+    # mismatch (e.g. Qwen3.5's hybrid cache) looks like and how to explain
+    # it -- this generic check/message applies to any such family, not just
+    # Qwen3.5, so a family-specific explanation belongs on that family's own
+    # spec class, not as a growing set of branches here. Checking this here,
+    # right after the spec is resolved and before any cache-config
+    # derivation or tracing, turns what used to be a cryptic `IndexError`
+    # deep inside `LiteRTLMExportSpec.stack_kv_cache` into a clear,
+    # documented error raised before any expensive work happens.
+    if spec.cache_structure != "single_stacked":
+        raise ValueError(
+            f"LiteRT-LM export does not support `{type(model).__name__}`: "
+            f"`{type(model.backbone).__name__}` "
+            f"{spec.describe_unsupported_cache_structure()}"
+        )
+
+    cache_cfg = spec.get_cache_config(model, cache_length=cache_length)
+    num_layers = cache_cfg["num_layers"]
+    cache_length = cache_cfg["cache_length"]
+    num_kv_heads = cache_cfg["num_kv_heads"]
+    head_dim = cache_cfg["head_dim"]
+    cache_layout = cache_cfg["cache_layout"]
+    if cache_cfg["used_preprocessor_fallback"]:
+        warnings.warn(
+            "`cache_length` was not specified and "
+            f"`{type(model.backbone).__name__}` does not define "
+            "`max_sequence_length`. Falling back to "
+            f"`preprocessor.sequence_length` ({cache_length}) as the "
+            "KV-cache length. This is a tokenization default, not "
+            "necessarily the model's true maximum context length. Pass "
+            "`cache_length` explicitly to `export_to_litertlm` / "
+            '`model.export(..., format="litertlm")` to set it directly.',
+            stacklevel=2,
+        )
+
+    # Prefill seq_len values must be validated against the real cache length.
+    if prefill_seq_lens is None:
+        prefill_seq_lens = [cache_length]
+    for seq_len in prefill_seq_lens:
         if seq_len > cache_length:
             raise ValueError(
                 f"prefill_seq_len ({seq_len}) cannot exceed "
                 f"cache_length ({cache_length})."
             )
+
+    # Detect multimodal capabilities.
+    vision_cfg = spec.get_vision_config(model)
+    audio_cfg = spec.get_audio_config(model)
+    has_vision = vision_cfg is not None
+    has_audio = audio_cfg is not None
+
+    vision_input_style = None
+    vision_output_dim = None
+    if has_vision:
+        vision_encoder = _get_vision_encoder(model.backbone)
+        vision_input_style = spec.vision_input_style
+        vision_output_dim = spec.get_vision_output_dim(vision_encoder)
+        if separate_vision_encoder and vision_output_dim is None:
+            raise ValueError(
+                "LiteRT-LM separate vision encoder export requires "
+                "`vision_encoder.output_dim` or `vision_encoder.num_classes`."
+            )
+    elif separate_vision_encoder:
+        raise ValueError(
+            "`separate_vision_encoder=True` requires a model with a vision "
+            "encoder."
+        )
+
+    # Gemma3n runs vision/audio encoders inside the backbone and expects raw
+    # pixel_values / input_features (`vision_input_style ==
+    # "embedded_pixel_values"`), so a separate vision encoder is not
+    # meaningful for that architecture. This used to be detected by
+    # inspecting whether `call_with_cache`'s signature has a `pixel_values`
+    # parameter; the spec already knows this about its own family (via the
+    # registry that resolved it), so ask it directly instead of re-deriving
+    # the same fact from signature introspection.
+    if (
+        separate_vision_encoder
+        and has_vision
+        and vision_input_style == "embedded_pixel_values"
+    ):
+        raise ValueError(
+            "`separate_vision_encoder=True` is not supported for models "
+            "that expect raw `pixel_values` (e.g. Gemma3n)."
+        )
 
     # Multimodal models require cache_length == token_length due to how
     # Gemma3 computes bidirectional image attention masks. Enforce this.
@@ -384,501 +1037,104 @@ def export_to_litertlm(
             f"from input length."
         )
 
+    # Hoist vision shape values that are used both when building prefill inputs
+    # and when exporting a separate vision encoder/adapter. Keeping them outside
+    # the loop prevents accidental scope leakage and makes the loop body easier
+    # to read.
+    max_images = None
+    tokens_per_image = None
+    if has_vision:
+        max_images = vision_cfg["max_images_per_prompt"]
+        num_vision_tokens = vision_cfg["num_vision_tokens"]
+        tokens_per_image = num_vision_tokens // max_images if max_images else 1
+
     dtype = _torch_dtype_from_model(model)
+
+    # Phases 1-2 (above) resolve the model-family spec and compute every
+    # per-export-run setting. Bundle them into a single immutable plan so the
+    # remaining phases (building sample inputs, tracing/converting, and
+    # assembling the bundle) take one object instead of a long,
+    # order-sensitive positional-argument list.
+    plan = ExportPlan(
+        spec=spec,
+        num_layers=num_layers,
+        cache_length=cache_length,
+        num_kv_heads=num_kv_heads,
+        head_dim=head_dim,
+        cache_layout=cache_layout,
+        prefill_seq_lens=prefill_seq_lens,
+        dtype=dtype,
+        has_vision=has_vision,
+        has_audio=has_audio,
+        vision_cfg=vision_cfg,
+        audio_cfg=audio_cfg,
+        vision_input_style=vision_input_style,
+        vision_output_dim=vision_output_dim,
+        max_images=max_images,
+        tokens_per_image=tokens_per_image,
+        separate_vision_encoder=separate_vision_encoder,
+    )
+
     with _cpu_default_device_scope():
-        prefill_inputs_map = {}
-        for seq_len in prefill_seq_lens:
-            base = _build_sample_inputs(
-                batch_size=1,
-                seq_len=seq_len,
-                num_layers=num_layers,
-                cache_length=cache_length,
-                num_kv_heads=num_kv_heads,
-                head_dim=head_dim,
-                dtype=dtype,
-                cache_layout=cache_layout,
-            )
-            if has_vision:
-                if separate_vision_encoder:
-                    max_images = vision_cfg["max_images_per_prompt"]
-                    num_vision_tokens = vision_cfg["num_vision_tokens"]
-                    tokens_per_image = (
-                        num_vision_tokens // max_images if max_images else 1
-                    )
-                    base.update(
-                        {
-                            "mm_embedding": torch.zeros(
-                                (
-                                    1 * max_images,
-                                    tokens_per_image,
-                                    vision_output_dim,
-                                ),
-                                dtype=dtype,
-                                device="cpu",
-                            ),
-                            "vision_indices": torch.zeros(
-                                (1, num_vision_tokens), dtype=torch.int32
-                            ),
-                            "vision_mask": torch.zeros(
-                                (1, seq_len), dtype=torch.int32
-                            ),
-                        }
-                    )
-                elif is_gemma4_vision:
-                    base.update(
-                        _build_gemma4_vision_sample_inputs(
-                            batch_size=1,
-                            max_images=vision_cfg["max_images_per_prompt"],
-                            patch_size=vision_cfg.get("patch_size", 16),
-                            image_size=vision_cfg["image_size"],
-                            num_vision_tokens=vision_cfg["num_vision_tokens"],
-                            seq_len=seq_len,
-                            dtype=dtype,
-                        )
-                    )
-                else:
-                    base.update(
-                        _build_vision_sample_inputs(
-                            batch_size=1,
-                            max_images=vision_cfg["max_images_per_prompt"],
-                            image_size=vision_cfg["image_size"],
-                            num_vision_tokens=vision_cfg["num_vision_tokens"],
-                            seq_len=seq_len,
-                            dtype=dtype,
-                        )
-                    )
-            if has_audio:
-                base.update(
-                    _build_audio_sample_inputs(
-                        batch_size=1,
-                        max_clips=audio_cfg["max_clips_per_prompt"],
-                        num_frames=audio_cfg["num_frames"],
-                        num_audio_tokens=audio_cfg["num_audio_tokens"],
-                        seq_len=seq_len,
-                        audio_input_feat_size=audio_cfg.get(
-                            "audio_input_feat_size", 128
-                        ),
-                        dtype=dtype,
-                    )
-                )
-            prefill_inputs_map[seq_len] = base
+        prefill_inputs_map = _build_prefill_inputs(plan)
 
         decode_inputs = _build_sample_inputs(
             batch_size=1,
             seq_len=1,
-            num_layers=num_layers,
-            cache_length=cache_length,
-            num_kv_heads=num_kv_heads,
-            head_dim=head_dim,
-            dtype=dtype,
-            cache_layout=cache_layout,
+            num_layers=plan.num_layers,
+            cache_length=plan.cache_length,
+            num_kv_heads=plan.num_kv_heads,
+            head_dim=plan.head_dim,
+            dtype=plan.dtype,
+            cache_layout=plan.cache_layout,
         )
 
         adapter = KerasHubLiteRTAdapter(
             model,
-            num_layers,
-            cache_length,
-            separate_vision_encoder=(separate_vision_encoder and has_vision),
-            cache_layout=cache_layout,
+            plan.num_layers,
+            plan.cache_length,
+            separate_vision_encoder=(
+                plan.separate_vision_encoder and plan.has_vision
+            ),
+            export_spec=spec,
         )
         adapter.eval()
-
-        # Prefill and decode wrappers give litert_torch clean module boundaries.
-        class _PrefillAdapter(torch.nn.Module):
-            def __init__(self, base):
-                super().__init__()
-                self.base = base
-
-            def forward(self, *args, **kwargs):
-                return self.base.forward_prefill(*args, **kwargs)
-
-        class _DecodeAdapter(torch.nn.Module):
-            def __init__(self, base):
-                super().__init__()
-                self.base = base
-
-            def forward(self, *args, **kwargs):
-                return self.base.forward_decode(*args, **kwargs)
 
         prefill_adapter = _PrefillAdapter(adapter).eval()
         decode_adapter = _DecodeAdapter(adapter).eval()
 
-        with _preserve_jax_x64_state():
+        with _preserve_jax_x64_state(), _preserve_jax_platforms_state():
             import litert_torch
 
-            with (
-                _traceable_slice_update_scope(),
-                _traceable_dot_product_attention_scope(),
-                _traceable_one_hot_scope(),
-                _traceable_repeat_scope(),
-                _traceable_arange_scope(),
-                _traceable_take_scope(),
-                _traceable_scatter_update_scope(),
-            ):
-                # Optionally export the vision encoder and adapter as separate
-                # models.
-                if separate_vision_encoder and has_vision:
-                    if is_gemma4_vision:
-                        patch_size = vision_cfg.get("patch_size", 16)
-                        num_patches = (
-                            vision_cfg["image_size"] // patch_size
-                        ) ** 2
-                        patch_dim = patch_size**2 * 3
-                        vision_encoder_inputs = {
-                            "pixel_values": torch.zeros(
-                                (
-                                    1,
-                                    vision_cfg["max_images_per_prompt"],
-                                    num_patches,
-                                    patch_dim,
-                                ),
-                                dtype=dtype,
-                                device="cpu",
-                            ),
-                            "pixel_position_ids": torch.zeros(
-                                (
-                                    1,
-                                    vision_cfg["max_images_per_prompt"],
-                                    num_patches,
-                                    2,
-                                ),
-                                dtype=torch.int32,
-                                device="cpu",
-                            ),
-                        }
-                    else:
-                        vision_encoder_inputs = {
-                            "images": torch.zeros(
-                                (
-                                    1,
-                                    vision_cfg["max_images_per_prompt"],
-                                    vision_cfg["image_size"],
-                                    vision_cfg["image_size"],
-                                    3,
-                                ),
-                                dtype=dtype,
-                                device="cpu",
-                            )
-                        }
-                    vision_adapter_inputs = {
-                        "features": torch.zeros(
-                            (
-                                1 * max_images,
-                                tokens_per_image,
-                                vision_output_dim,
-                            ),
-                            dtype=dtype,
-                            device="cpu",
-                        )
-                    }
-                    vision_encoder_adapter = KerasHubVisionEncoderAdapter(
-                        model
-                    ).eval()
-                    vision_adapter = KerasHubVisionAdapter().eval()
-
-                    vision_encoder_edge = litert_torch.signature(
-                        "vision_encoder",
-                        vision_encoder_adapter,
-                        sample_kwargs=vision_encoder_inputs,
-                        **kwargs,
-                    ).convert(
-                        quant_config=quant_config, lightweight_conversion=True
-                    )
-                    vision_adapter_edge = litert_torch.signature(
-                        "vision_adapter",
-                        vision_adapter,
-                        sample_kwargs=vision_adapter_inputs,
-                        **kwargs,
-                    ).convert(
-                        quant_config=quant_config, lightweight_conversion=True
-                    )
-
-                # Chain one signature per prefill bucket.
-                converter = None
-                for seq_len in prefill_seq_lens:
-                    sig_name = (
-                        "prefill"
-                        if len(prefill_seq_lens) == 1
-                        else f"prefill_{seq_len}"
-                    )
-                    if converter is None:
-                        converter = litert_torch.signature(
-                            sig_name,
-                            prefill_adapter,
-                            sample_kwargs=prefill_inputs_map[seq_len],
-                            **kwargs,
-                        )
-                    else:
-                        converter = converter.signature(
-                            sig_name,
-                            prefill_adapter,
-                            sample_kwargs=prefill_inputs_map[seq_len],
-                            **kwargs,
-                        )
-
-                converter = converter.signature(
-                    "decode",
+            _validate_quant_config(quant_config)
+            edge_model, vision_encoder_edge, vision_adapter_edge = (
+                _trace_and_convert(
+                    litert_torch,
+                    model,
+                    prefill_adapter,
                     decode_adapter,
-                    sample_kwargs=decode_inputs,
+                    prefill_inputs_map,
+                    decode_inputs,
+                    plan,
+                    quant_config,
                     **kwargs,
                 )
-
-                edge_model = converter.convert(
-                    quant_config=quant_config, lightweight_conversion=False
-                )
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            if separate_vision_encoder and has_vision:
-                prefill_tflite_path = os.path.join(
-                    temp_dir, "prefill_decode.tflite"
-                )
-                edge_model.export(prefill_tflite_path)
-                vision_encoder_tflite_path = os.path.join(
-                    temp_dir, "vision_encoder.tflite"
-                )
-                vision_encoder_edge.export(vision_encoder_tflite_path)
-                vision_adapter_tflite_path = os.path.join(
-                    temp_dir, "vision_adapter.tflite"
-                )
-                vision_adapter_edge.export(vision_adapter_tflite_path)
-            else:
-                prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
-                edge_model.export(prefill_tflite_path)
-
-            if hf_tokenizer_path is not None:
-                tokenizer_path = hf_tokenizer_path
-                use_hf_tokenizer = True
-            elif _is_sentencepiece_tokenizer(tokenizer):
-                tokenizer_path = _materialize_sentencepiece_tokenizer(
-                    tokenizer, temp_dir
-                )
-                use_hf_tokenizer = False
-            else:
-                tokenizer_path = materialize_hf_tokenizer_json(
-                    tokenizer, temp_dir
-                )
-                use_hf_tokenizer = True
-
-            meta_path = os.path.join(temp_dir, "llm_metadata.pb")
-            _build_llm_metadata(
-                model,
-                cache_length,
-                meta_path,
-                vision_cfg=vision_cfg,
-                audio_cfg=audio_cfg,
             )
 
-            litert_lm_builder = _import_litert_lm_builder()
-            builder = litert_lm_builder.LitertLmFileBuilder()
-            builder.add_system_metadata(
-                litert_lm_builder.Metadata(
-                    key="Authors",
-                    value="KerasHub",
-                    dtype=litert_lm_builder.DType.STRING,
-                )
-            )
-            builder.add_tflite_model(
-                prefill_tflite_path,
-                litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
-                backend_constraint=backend_constraint,
-            )
-            if separate_vision_encoder and has_vision:
-                builder.add_tflite_model(
-                    vision_encoder_tflite_path,
-                    litert_lm_builder.TfLiteModelType.VISION_ENCODER,
-                    backend_constraint=backend_constraint,
-                )
-                builder.add_tflite_model(
-                    vision_adapter_tflite_path,
-                    litert_lm_builder.TfLiteModelType.VISION_ADAPTER,
-                    backend_constraint=backend_constraint,
-                )
-            if use_hf_tokenizer:
-                builder.add_hf_tokenizer(tokenizer_path)
-            else:
-                builder.add_sentencepiece_tokenizer(tokenizer_path)
-            builder.add_llm_metadata(meta_path)
-
-            with open(path, "wb") as output_file:
-                builder.build(output_file)
-
-        return path
-
-
-def _get_cache_config(model):
-    """Extract KV-cache dimensions and layout from the model."""
-    backbone = model.backbone
-    num_layers = getattr(backbone, "num_layers", None)
-    if num_layers is None:
-        num_layers = getattr(backbone, "num_hidden_layers", None)
-    if num_layers is None:
-        raise ValueError(
-            "Could not determine number of layers from model backbone. "
-            "Expected `backbone.num_layers` or `backbone.num_hidden_layers`."
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _assemble_bundle(
+            path,
+            temp_dir,
+            tokenizer,
+            backend_constraint,
+            edge_model,
+            vision_encoder_edge,
+            vision_adapter_edge,
+            plan,
+            hf_tokenizer_path,
         )
 
-    cache_length = getattr(backbone, "max_sequence_length", None)
-    if cache_length is None:
-        preprocessor = getattr(model, "preprocessor", None)
-        if preprocessor is not None:
-            cache_length = getattr(preprocessor, "sequence_length", None)
-    if cache_length is None:
-        raise ValueError(
-            "Could not determine cache length from model backbone or "
-            "preprocessor. Please specify `prefill_seq_len` or ensure the "
-            "model has `max_sequence_length`."
-        )
-
-    num_kv_heads = getattr(backbone, "num_key_value_heads", None)
-    if num_kv_heads is None:
-        num_kv_heads = getattr(
-            backbone,
-            "num_query_heads",
-            getattr(
-                backbone,
-                "num_heads",
-                getattr(backbone, "num_attention_heads", 1),
-            ),
-        )
-
-    head_dim = getattr(backbone, "head_dim", None)
-    if head_dim is None:
-        hidden_dim = getattr(backbone, "hidden_dim", None)
-        num_qh = getattr(
-            backbone,
-            "num_query_heads",
-            getattr(
-                backbone,
-                "num_heads",
-                getattr(backbone, "num_attention_heads", None),
-            ),
-        )
-        if hidden_dim is not None and num_qh is not None and num_qh > 0:
-            head_dim = hidden_dim // num_qh
-
-    if head_dim is None:
-        raise ValueError(
-            "Could not determine attention head dimension from model "
-            "attributes. Expected `backbone.head_dim` or both "
-            "`backbone.hidden_dim` and `backbone.num_query_heads`."
-        )
-
-    # Gemma3n uses a [B, L, 2, H, T, D] cache layout, whereas most other
-    # KerasHub models use [B, L, 2, T, H, D].  We detect this from the
-    # backbone class name so the adapter can build sample inputs with the
-    # correct per-layer cache shape.
-    cache_layout = "standard"
-    if type(backbone).__name__.startswith("Gemma3n"):
-        cache_layout = "gemma3n"
-
-    return {
-        "num_layers": num_layers,
-        "cache_length": cache_length,
-        "num_kv_heads": num_kv_heads,
-        "head_dim": head_dim,
-        "cache_layout": cache_layout,
-    }
-
-
-def _get_vision_config(model):
-    """Return vision metadata if *model* has a vision encoder, else ``None``."""
-    backbone = getattr(model, "backbone", None)
-    if backbone is None:
-        return None
-    vision_encoder = getattr(backbone, "vision_encoder", None) or getattr(
-        backbone, "vit_encoder", None
-    )
-    if vision_encoder is None:
-        return None
-    preprocessor = getattr(model, "preprocessor", None)
-    max_images = getattr(preprocessor, "max_images_per_prompt", 1)
-
-    image_size = getattr(backbone, "image_size", None)
-    if image_size is None:
-        # Gemma3n does not set backbone.image_size; read from the preprocessor
-        # image converter first, then fall back to the encoder config.
-        image_converter = getattr(preprocessor, "image_converter", None)
-        if image_converter is not None:
-            image_size = getattr(image_converter, "image_size", None)
-        if image_size is None:
-            vision_encoder_config = getattr(
-                backbone, "vision_encoder_config", {}
-            )
-            image_shape = vision_encoder_config.get("image_shape")
-            if image_shape is not None:
-                image_size = image_shape[0]
-    if image_size is None:
-        image_size = 224
-    # Image converters may report a (height, width) tuple; downstream code
-    # currently assumes a square image, so use the height as the size.
-    if isinstance(image_size, (list, tuple)):
-        image_size = image_size[0]
-
-    num_vision_tokens_per_image = getattr(
-        backbone, "num_vision_tokens_per_image", None
-    )
-    if num_vision_tokens_per_image is None:
-        # PaliGemma exposes the per-image token count via
-        # ``image_sequence_length`` rather than ``num_vision_tokens_per_image``.
-        num_vision_tokens_per_image = getattr(
-            backbone, "image_sequence_length", None
-        )
-    if num_vision_tokens_per_image is None and preprocessor is not None:
-        # Gemma3/Gemma3n expose the per-image token count on the preprocessor.
-        num_vision_tokens_per_image = getattr(
-            preprocessor, "num_vision_tokens_per_image", 0
-        )
-    num_vision_tokens = num_vision_tokens_per_image * max_images
-    patch_size = getattr(vision_encoder, "patch_size", None)
-    pool_size = getattr(vision_encoder, "pool_size", None)
-    return {
-        "max_images_per_prompt": max_images,
-        "image_size": image_size,
-        "num_vision_tokens": num_vision_tokens,
-        "num_vision_tokens_per_image": num_vision_tokens_per_image,
-        "patch_size": patch_size,
-        "pool_size": pool_size,
-    }
-
-
-def _get_audio_config(model):
-    """Return audio metadata if *model* has an audio encoder, else ``None``."""
-    backbone = getattr(model, "backbone", None)
-    if backbone is None:
-        return None
-    audio_encoder = getattr(backbone, "audio_encoder", None)
-    if audio_encoder is None:
-        return None
-    preprocessor = getattr(model, "preprocessor", None)
-    max_clips = getattr(preprocessor, "max_audio_clips_per_prompt", None)
-    if max_clips is None:
-        # Gemma3n names this attribute ``max_audios_per_prompt``.
-        max_clips = getattr(preprocessor, "max_audios_per_prompt", 1)
-    num_frames = getattr(preprocessor, "max_audio_frames", 100)
-    num_audio_tokens_per_clip = getattr(
-        backbone, "num_audio_tokens_per_clip", None
-    )
-    if num_audio_tokens_per_clip is None and preprocessor is not None:
-        # Gemma3n names this attribute ``num_audio_tokens_per_audio``.
-        num_audio_tokens_per_clip = getattr(
-            preprocessor, "num_audio_tokens_per_audio", 0
-        )
-    num_audio_tokens = num_audio_tokens_per_clip * max_clips
-    audio_input_feat_size = getattr(preprocessor, "audio_input_feat_size", None)
-    if audio_input_feat_size is None and preprocessor is not None:
-        audio_converter = getattr(preprocessor, "audio_converter", None)
-        if audio_converter is not None:
-            audio_input_feat_size = getattr(
-                audio_converter, "feature_size", 128
-            )
-    if audio_input_feat_size is None:
-        audio_input_feat_size = 128
-    return {
-        "max_clips_per_prompt": max_clips,
-        "num_frames": num_frames,
-        "num_audio_tokens": num_audio_tokens,
-        "audio_input_feat_size": audio_input_feat_size,
-    }
+    return path
 
 
 def _build_sample_inputs(
@@ -888,7 +1144,7 @@ def _build_sample_inputs(
     cache_length,
     num_kv_heads,
     head_dim,
-    dtype=torch.float32,
+    dtype=None,
     cache_layout="standard",
 ):
     """Create concrete sample tensors for one signature.
@@ -898,6 +1154,8 @@ def _build_sample_inputs(
     - ``"standard"``: ``[batch_size, cache_length, num_kv_heads, head_dim]``
     - ``"gemma3n"``: ``[batch_size, num_kv_heads, cache_length, head_dim]``
     """
+    if dtype is None:
+        dtype = torch.float32
     device = "cpu"
     tokens = torch.zeros(
         (batch_size, seq_len), dtype=torch.int32, device=device
@@ -932,9 +1190,11 @@ def _build_vision_sample_inputs(
     image_size,
     num_vision_tokens,
     seq_len,
-    dtype=torch.float32,
+    dtype=None,
 ):
     """Create concrete vision sample tensors for a prefill signature."""
+    if dtype is None:
+        dtype = torch.float32
     device = "cpu"
     images = torch.zeros(
         (batch_size, max_images, image_size, image_size, 3),
@@ -961,13 +1221,15 @@ def _build_gemma4_vision_sample_inputs(
     image_size,
     num_vision_tokens,
     seq_len,
-    dtype=torch.float32,
+    dtype=None,
 ):
     """Create concrete Gemma4 vision sample tensors for a prefill signature.
 
     Gemma4's vision encoder expects pre-processed patches
     (``pixel_values`` + ``pixel_position_ids``) rather than raw RGB images.
     """
+    if dtype is None:
+        dtype = torch.float32
     device = "cpu"
     num_patches = (image_size // patch_size) ** 2
     patch_dim = patch_size * patch_size * 3
@@ -1002,9 +1264,11 @@ def _build_audio_sample_inputs(
     num_audio_tokens,
     seq_len,
     audio_input_feat_size=128,
-    dtype=torch.float32,
+    dtype=None,
 ):
     """Create concrete audio sample tensors for a prefill signature."""
+    if dtype is None:
+        dtype = torch.float32
     device = "cpu"
     audio_mel = torch.zeros(
         (batch_size, max_clips, num_frames, audio_input_feat_size),
@@ -1075,40 +1339,8 @@ def _materialize_sentencepiece_tokenizer(tokenizer, temp_dir):
     return tokenizer_path
 
 
-def _populate_vision_metadata(meta, model_type, vision_cfg, tokenizer):
-    """Populate vision-related fields in the LlmMetadata protobuf."""
-    image_size = vision_cfg.get("image_size", 224)
-    patch_size = vision_cfg.get("patch_size")
-    pool_size = vision_cfg.get("pool_size")
-
-    if model_type in ("gemma3", "gemma3n"):
-        subtype = getattr(meta.llm_model_type, model_type)
-        subtype.start_of_image_token.token_str = "<start_of_image>"
-        subtype.end_of_image_token.token_str = "<end_of_image>"
-        subtype.image_tensor_height = image_size
-        subtype.image_tensor_width = image_size
-    elif model_type == "gemma4":
-        subtype = meta.llm_model_type.gemma4
-        subtype.start_of_image_token.token_str = "<|image>"
-        subtype.end_of_image_token.token_str = "<image|>"
-        if patch_size is not None:
-            subtype.patch_width = patch_size
-            subtype.patch_height = patch_size
-            subtype.max_num_patches = (image_size // patch_size) ** 2
-        if pool_size is not None:
-            subtype.pooling_kernel_size = pool_size
-
-
-def _populate_audio_metadata(meta, model_type, audio_cfg, tokenizer):
-    """Populate audio-related fields in the LlmMetadata protobuf."""
-    if model_type in ("gemma3n", "gemma4"):
-        subtype = getattr(meta.llm_model_type, model_type)
-        subtype.start_of_audio_token.token_str = "<|audio>"
-        subtype.end_of_audio_token.token_str = "<audio|>"
-
-
 def _build_llm_metadata(
-    model, max_num_tokens, path, vision_cfg=None, audio_cfg=None
+    spec, tokenizer, max_num_tokens, path, vision_cfg=None, audio_cfg=None
 ):
     """Serialize an ``LlmMetadata`` protobuf to *path*."""
     # The protobuf lives under an internal-looking subpackage of
@@ -1126,114 +1358,49 @@ def _build_llm_metadata(
 
     meta = llm_metadata_pb2.LlmMetadata()
 
-    tokenizer = _get_tokenizer(model)
     start_id = getattr(tokenizer, "start_token_id", None)
     if start_id is not None:
         meta.start_token.token_ids.ids.append(int(start_id))
 
+    # The primary EOS (used for packing/training) is always a stop token.
+    stop_token_ids = []
     end_id = getattr(tokenizer, "end_token_id", None)
     if end_id is not None:
-        meta.stop_tokens.add().token_ids.ids.append(int(end_id))
+        stop_token_ids.append(int(end_id))
 
-    try:
-        eot_id = tokenizer.token_to_id("<end_of_turn>")
-        unk_id = getattr(tokenizer, "_unk_token_id", None)
-        if eot_id is not None and eot_id != unk_id:
-            meta.stop_tokens.add().token_ids.ids.append(int(eot_id))
-    except (KeyError, ValueError):
-        pass
+    # Some families additionally mark the end of a *chat turn* with a
+    # second, distinct token (e.g. Gemma's ``<end_of_turn>``, Llama3's
+    # ``<|eot_id|>``) -- see ``LiteRTLMExportSpec.get_chat_stop_token_ids``.
+    # This used to be a single hardcoded ``<end_of_turn>`` lookup here,
+    # unconditionally applied to every tokenizer regardless of family (it
+    # simply no-opped for non-Gemma tokenizers that don't have the token in
+    # vocab) -- silently giving no chat-stop-token to e.g. Llama3 or Qwen
+    # families that need a *different* second token. Deduplicate against
+    # ``end_token_id`` since some families' override intentionally returns
+    # the same id (e.g. Qwen3's ``<|im_end|>``, documenting that it is
+    # already the primary EOS rather than a coincidence).
+    for extra_id in spec.get_chat_stop_token_ids(tokenizer):
+        extra_id = int(extra_id)
+        if extra_id not in stop_token_ids:
+            stop_token_ids.append(extra_id)
+
+    for stop_id in stop_token_ids:
+        meta.stop_tokens.add().token_ids.ids.append(stop_id)
 
     meta.max_num_tokens = int(max_num_tokens)
 
-    model_type = _detect_llm_model_type(model)
-    getattr(meta.llm_model_type, model_type).SetInParent()
+    getattr(meta.llm_model_type, spec.model_type).SetInParent()
 
     # Populate vision fields for supported model types.
     if vision_cfg is not None:
-        _populate_vision_metadata(meta, model_type, vision_cfg, tokenizer)
+        spec.populate_vision_metadata(meta, vision_cfg)
 
     # Populate audio fields for supported model types.
     if audio_cfg is not None:
-        _populate_audio_metadata(meta, model_type, audio_cfg, tokenizer)
+        spec.populate_audio_metadata(meta, audio_cfg)
 
     with open(path, "wb") as f:
         f.write(meta.SerializeToString())
-
-
-def _detect_llm_model_type(model):
-    """Return the LiteRT-LM LlmModelType name for *model*.
-
-    Uses ``isinstance`` checks where possible to avoid mis-identifying
-    user-defined subclasses, then falls back to a class-name heuristic.
-    """
-    # Lazy imports to avoid heavy top-level dependencies.
-    # (module_path, class_name, model_type)
-    _MODEL_TYPE_MAPPING = (
-        (
-            "keras_hub.src.models.gemma4.gemma4_causal_lm",
-            "Gemma4CausalLM",
-            "gemma4",
-        ),
-        (
-            "keras_hub.src.models.gemma3n.gemma3n_causal_lm",
-            "Gemma3nCausalLM",
-            "gemma3n",
-        ),
-        (
-            "keras_hub.src.models.gemma3.gemma3_causal_lm",
-            "Gemma3CausalLM",
-            "gemma3",
-        ),
-        (
-            "keras_hub.src.models.gemma.gemma_causal_lm",
-            "GemmaCausalLM",
-            "generic_model",
-        ),
-        (
-            "keras_hub.src.models.qwen3.qwen3_causal_lm",
-            "Qwen3CausalLM",
-            "qwen3",
-        ),
-        (
-            "keras_hub.src.models.qwen.qwen_causal_lm",
-            "QwenCausalLM",
-            "qwen2p5",
-        ),
-        # NOTE: LlmModelType does not have a dedicated "llama" field; map
-        # Llama checkpoints to generic_model so the protobuf oneof stays valid.
-        (
-            "keras_hub.src.models.llama.llama_causal_lm",
-            "LlamaCausalLM",
-            "generic_model",
-        ),
-    )
-
-    for module_path, class_name, model_type in _MODEL_TYPE_MAPPING:
-        try:
-            module = __import__(module_path, fromlist=[class_name])
-            cls = getattr(module, class_name)
-            if isinstance(model, cls):
-                return model_type
-        except ImportError:
-            pass
-
-    # Fallback to class-name heuristic for models not explicitly imported.
-    cls_name = type(model).__name__
-    if "Gemma4" in cls_name:
-        return "gemma4"
-    if "Gemma3n" in cls_name:
-        return "gemma3n"
-    if "Gemma3" in cls_name:
-        return "gemma3"
-    if "Gemma" in cls_name:
-        return "generic_model"
-    if "Qwen3" in cls_name:
-        return "qwen3"
-    if "Qwen" in cls_name:
-        return "qwen2p5"
-    if "Llama" in cls_name:
-        return "generic_model"
-    return "generic_model"
 
 
 def _torch_dtype_from_model(model):
@@ -1253,6 +1420,16 @@ def _torch_dtype_from_model(model):
         raise ValueError(
             f"Unsupported compute_dtype for LiteRT-LM export: "
             f"{compute_dtype!r}. Expected a PyTorch dtype string."
+        )
+    if torch_dtype is torch.bfloat16:
+        warnings.warn(
+            "Exporting with `compute_dtype=bfloat16`. BF16 LiteRT-LM export "
+            "is untested; numeric parity with the Keras model and runtime "
+            "support are not guaranteed. Consider using float32 (optionally "
+            "combined with `quant_config` for post-training quantization) "
+            "unless you have independently verified BF16 export for this "
+            "model.",
+            stacklevel=2,
         )
     return torch_dtype
 

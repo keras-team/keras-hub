@@ -331,16 +331,10 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
             os.path.join(self.get_test_data_dir(), "gemma4_test_vocab.spm"),
         )
 
-        input_data = self.input_data.copy()
-        if "padding_mask" in input_data:
-            input_data["padding_mask"] = ops.cast(
-                input_data["padding_mask"], "int32"
-            )
-
         self.run_litertlm_export_test(
             cls=Gemma4CausalLM,
             init_kwargs=self.init_kwargs,
-            input_data=input_data,
+            input_data=self.input_data,
             prefill_seq_len=20,
             verify_model_type="gemma4",
             verify_numerics=False,

@@ -121,7 +121,7 @@ class GptOssCausalLMTest(TestCase):
         )
 
     @pytest.mark.xfail(
-        strict=False, reason="Non-tokenizer LiteRT-LM runtime gap"
+        strict=True, reason="Non-tokenizer LiteRT-LM runtime gap"
     )
     def test_litertlm_export(self):
         self.run_litertlm_export_test(

@@ -10,4 +10,9 @@ torchvision==0.22.1+cu126
 # Jax cpu-only version.
 jax[cpu]
 
+# LiteRT (for torch-backend TFLite export and LiteRT-LM testing). Only
+# meaningful with the PyTorch backend above.
+litert-torch>=0.9.0
+litert-lm-builder>=0.11.0
+
 -r requirements-common.txt

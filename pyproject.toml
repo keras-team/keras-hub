@@ -34,9 +34,20 @@ dependencies = [
     "regex",
     "rich",
     "kagglehub!=1.0.1",
+    "kagglesdk==0.1.28",
     "sentencepiece",
     "tokenizers",
     "tensorflow-text;platform_system != 'Windows'",
+]
+
+[project.optional-dependencies]
+# LiteRT-LM export (`CausalLM.export(..., format="litertlm")`) is only
+# supported with the PyTorch backend; keras_hub's litertlm export code
+# already guards its usage at runtime via `importlib.util.find_spec`, so this
+# is an opt-in extra rather than an unconditional dependency.
+litertlm = [
+    "litert-torch>=0.9.0",
+    "litert-lm-builder>=0.11.0",
 ]
 
 [project.urls]

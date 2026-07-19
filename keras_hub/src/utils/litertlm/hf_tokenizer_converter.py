@@ -1,15 +1,41 @@
-"""Convert KerasHub BytePair tokenizers to HuggingFace tokenizer.json format.
+"""Serialize a KerasHub BytePairTokenizer to a HuggingFace tokenizer.json.
 
-The converter is intentionally dependency-free at runtime: it builds the JSON
-structure that ``tokenizers.Tokenizer.from_file()`` expects without importing
-the ``tokenizers`` library.  The ``tokenizers`` library is only used in tests
-to validate the output.
+Every ``BytePairTokenizer`` already wraps a live ``tokenizers.Tokenizer``
+object (``self._tokenizer``, built in ``_set_vocabulary_and_merges_tokenizers``
+from KerasHub's own vocab/merges and used for every ``encode_batch``/
+``decode_batch``). This module calls ``.to_str()`` on that same object — it
+is *not* a format conversion and re-derives no token ids, so token identity
+is byte-exact by construction. HF ``tokenizer.json`` is the target because
+the LiteRT-LM runtime accepts only two on-device tokenizer formats
+(SentencePiece and ``HF_Tokenizer_Zlib``); there is no KerasHub-native
+on-device format to emit instead.
+
+This module does not itself import ``tokenizers`` (it only serializes an
+object built elsewhere); the library is used directly only in tests, to
+validate the output.
 """
 
 import json
 import os
 
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+
+
+def _validate_and_ensure_initialized(tokenizer, caller_name):
+    """Validate ``tokenizer`` is a ``BytePairTokenizer`` and is initialized.
+
+    This helper centralizes the isinstance guard and the private
+    ``_maybe_initialized_tokenizers`` call used by the converter routines.
+    It relies on the private ``BytePairTokenizer._tokenizer`` attribute and
+    its ``_maybe_initialized_tokenizers`` method; renaming either in
+    ``BytePairTokenizer`` will require updating this helper.
+    """
+    if not isinstance(tokenizer, BytePairTokenizer):
+        raise TypeError(
+            f"`{caller_name}` expects a BytePairTokenizer instance. "
+            f"Received: {type(tokenizer).__name__}."
+        )
+    tokenizer._maybe_initialized_tokenizers()
 
 
 def convert_byte_pair_to_hf(tokenizer):
@@ -24,12 +50,7 @@ def convert_byte_pair_to_hf(tokenizer):
         dict: A ``tokenizer.json``-compatible dictionary that can be written to
         disk and loaded with ``tokenizers.Tokenizer.from_file(path)``.
     """
-    if not isinstance(tokenizer, BytePairTokenizer):
-        raise TypeError(
-            "`convert_byte_pair_to_hf` expects a BytePairTokenizer instance. "
-            f"Received: {type(tokenizer).__name__}."
-        )
-    tokenizer._maybe_initialized_tokenizers()
+    _validate_and_ensure_initialized(tokenizer, "convert_byte_pair_to_hf")
     return json.loads(tokenizer._tokenizer.to_str())
 
 
@@ -43,12 +64,7 @@ def materialize_hf_tokenizer_json(tokenizer, temp_dir):
     Returns:
         str: Path to the written ``tokenizer.json`` file.
     """
-    if not isinstance(tokenizer, BytePairTokenizer):
-        raise TypeError(
-            "`materialize_hf_tokenizer_json` expects a BytePairTokenizer "
-            f"instance. Received: {type(tokenizer).__name__}."
-        )
-    tokenizer._maybe_initialized_tokenizers()
+    _validate_and_ensure_initialized(tokenizer, "materialize_hf_tokenizer_json")
     tokenizer_path = os.path.join(temp_dir, "tokenizer.json")
     with open(tokenizer_path, "w", encoding="utf-8") as f:
         f.write(tokenizer._tokenizer.to_str())
