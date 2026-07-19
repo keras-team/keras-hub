@@ -881,6 +881,7 @@ def export_to_litertlm(
     separate_vision_encoder=False,
     hf_tokenizer_path=None,
     sampler_config=None,
+    llm_model_type=None,
     **kwargs,
 ):
     """Export a KerasHub CausalLM model to a LiteRT-LM bundle.
@@ -979,6 +980,15 @@ def export_to_litertlm(
             verification. Defaults to ``None``, which leaves
             ``sampler_params`` entirely unset so the runtime chooses its own
             sampling policy.
+        llm_model_type: Optional str. Explicit ``LlmMetadata.llm_model_type``
+            override for presets that are architecturally identical to another
+            family and so cannot be auto-detected by class, config, or
+            tokenizer -- currently ``"function_gemma"`` (the
+            ``function_gemma_instruct_270m`` preset, which loads as a plain
+            ``Gemma3CausalLM`` but must export as the ``function_gemma`` model
+            type with its function-calling metadata, not as ``gemma3``).
+            Mirrors litert-torch's ``litert_lm_model_type_override``. Defaults
+            to ``None`` (auto-detect the family by class).
         **kwargs: Additional kwargs forwarded to ``litert_torch`` signature
             tracing.
 
@@ -990,8 +1000,9 @@ def export_to_litertlm(
             end with ``.litertlm``, if the model lacks ``call_with_cache``,
             if ``backend_constraint`` is invalid, if any
             ``prefill_seq_len`` exceeds ``cache_length``, if a multimodal
-            model is exported with mismatched ``prefill_seq_len`` values, or
-            if ``sampler_config`` is not a ``SamplerConfig`` instance.
+            model is exported with mismatched ``prefill_seq_len`` values, if
+            ``sampler_config`` is not a ``SamplerConfig`` instance, or if
+            ``llm_model_type`` is not a recognized override.
         ImportError: If ``litert-torch`` or ``litert-lm-builder`` are not
             installed.
     """
@@ -1028,8 +1039,10 @@ def export_to_litertlm(
 
     # Resolve the model-family export spec once and thread it through the
     # rest of the pipeline (and into the adapter), instead of re-deriving
-    # family checks at each site.
-    spec = resolve_export_spec(model)
+    # family checks at each site. `llm_model_type`, when given, is an explicit
+    # caller override for presets indistinguishable from another family by
+    # class (e.g. `function_gemma`, a plain `Gemma3CausalLM`).
+    spec = resolve_export_spec(model, llm_model_type=llm_model_type)
 
     # Fail fast on model families whose cache structure the adapter cannot
     # build. Every currently-supported family uses a single stacked KV-cache
@@ -1520,6 +1533,13 @@ def _build_llm_metadata(
     # Populate audio fields for supported model types.
     if audio_cfg is not None:
         spec.populate_audio_metadata(meta, audio_cfg)
+
+    # Populate function-calling fields for specs that declare them (currently
+    # only `FunctionGemmaSpec`, selected via the `llm_model_type` override).
+    # A base-class no-op for every other family, so this adds nothing to
+    # existing model types -- the same convention as the vision/audio hooks
+    # above.
+    spec.populate_function_gemma_metadata(meta)
 
     # Sampler defaults are written only when the caller explicitly passes a
     # `sampler_config`; otherwise the field is omitted so the runtime picks

@@ -522,6 +522,13 @@ class CausalLM(Task):
                   generation). Defaults to ``None``, which leaves
                   ``sampler_params`` unset (the runtime picks its own
                   default sampling policy).
+                - ``llm_model_type``: Optional ``str``. Explicit model-type
+                  override for presets indistinguishable from another family
+                  by class/config/tokenizer -- currently ``"function_gemma"``
+                  (the ``function_gemma_instruct_270m`` preset). Exports as
+                  the ``function_gemma`` model type with function-calling
+                  metadata instead of ``gemma3``. Defaults to ``None``
+                  (auto-detect).
                 - ``**kwargs``: Any remaining keyword arguments are forwarded
                   to ``litert_torch.signature(...)`` for advanced signature
                   customization.
@@ -544,6 +551,7 @@ class CausalLM(Task):
                 ),
                 hf_tokenizer_path=kwargs.pop("hf_tokenizer_path", None),
                 sampler_config=kwargs.pop("sampler_config", None),
+                llm_model_type=kwargs.pop("llm_model_type", None),
                 **kwargs,
             )
         return super().export(

@@ -1,4 +1,5 @@
 import copy
+import os
 from unittest.mock import patch
 
 import keras
@@ -273,6 +274,62 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         self.assertGreater(result["decode_logits_max_abs_err"], 0.0)
         self.assertLess(result["prefill_kv_max_abs_err"], 1e-4)
         self.assertLess(result["decode_logits_max_abs_err"], 1e-4)
+
+    def test_litertlm_export_function_gemma(self):
+        """The `function_gemma_instruct_270m` preset loads as a plain
+        `Gemma3CausalLM` but, when exported with
+        `llm_model_type="function_gemma"`, must map to the `function_gemma`
+        `LlmModelType` (not `gemma3`) with its function-calling metadata
+        populated -- closing the preset mismapping (I-3b). Uses a tiny dummy
+        text-only model; the real 270M preset is never loaded."""
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        import importlib.util
+
+        if importlib.util.find_spec("litert_torch") is None:
+            self.skipTest("LiteRT-LM export requires `litert-torch`.")
+        if importlib.util.find_spec("litert_lm_builder") is None:
+            self.skipTest("LiteRT-LM export requires `litert-lm-builder`.")
+
+        from keras_hub.src.utils.litertlm.model_specs import (
+            _FUNCTION_GEMMA_CODE_FENCE_END,
+        )
+        from keras_hub.src.utils.litertlm.model_specs import (
+            _FUNCTION_GEMMA_CODE_FENCE_START,
+        )
+        from keras_hub.src.utils.litertlm.model_specs import (
+            _FUNCTION_GEMMA_FUNCTION_RESPONSE_START,
+        )
+
+        model = Gemma3CausalLM(**self.text_init_kwargs)
+        path = os.path.join(self.get_temp_dir(), "function_gemma.litertlm")
+        # Pass both `prefill_seq_len` and `cache_length` explicitly to avoid
+        # the cache-length inference `UserWarning` and keep the trace tiny.
+        model.export(
+            path,
+            format="litertlm",
+            prefill_seq_len=20,
+            cache_length=20,
+            llm_model_type="function_gemma",
+        )
+        self.assertTrue(os.path.exists(path))
+
+        meta = self._parse_litertlm_llm_metadata(path)
+        self.assertIsNotNone(meta)
+        self.assertEqual(
+            meta.llm_model_type.WhichOneof("model_type"), "function_gemma"
+        )
+        fg = meta.llm_model_type.function_gemma
+        # Tool-call fields populated (not empty/default).
+        self.assertEqual(fg.code_fence_start, _FUNCTION_GEMMA_CODE_FENCE_START)
+        self.assertEqual(fg.code_fence_end, _FUNCTION_GEMMA_CODE_FENCE_END)
+        self.assertEqual(
+            fg.function_response_start,
+            _FUNCTION_GEMMA_FUNCTION_RESPONSE_START,
+        )
+        self.assertTrue(fg.use_template_for_fc_format)
+        self.assertNotEqual(fg.code_fence_start, "")
 
     @pytest.mark.large
     def test_litert_export_multimodal(self):

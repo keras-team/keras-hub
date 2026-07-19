@@ -55,6 +55,21 @@ _GEMMA4_END_OF_IMAGE_TOKEN = "<image|>"
 _AUDIO_START_TOKEN = "<|audio>"
 _AUDIO_END_TOKEN = "<audio|>"
 
+# Function-calling ("function_gemma") metadata strings. keras-hub's Gemma3
+# SentencePiece tokenizer does not expose the named function-calling tokens
+# litert-torch's Gemma4 metadata builder reads from a HuggingFace
+# ``special_tokens_map`` (``stc_token``/``etc_token``/``escape_token``/
+# ``str_token``), so the strings are declared here as named constants instead
+# of sniffed from the tokenizer -- the same spec-supplies-the-literal pattern
+# the vision/audio token constants above already use. These are the standard
+# Gemma ``tool_code`` fence convention, and mirror the fields litert-torch's
+# ``export_hf/model_ext/gemma4/metadata_builder.py`` (~39-54) populates for
+# its own function-calling support (``FunctionGemma`` shares Gemma4's exact
+# function-calling proto field block, field numbers 5-14).
+_FUNCTION_GEMMA_CODE_FENCE_START = "```tool_code"
+_FUNCTION_GEMMA_CODE_FENCE_END = "```"
+_FUNCTION_GEMMA_FUNCTION_RESPONSE_START = "```tool_output"
+
 
 @dataclasses.dataclass(frozen=True)
 class SamplerConfig:
@@ -532,6 +547,19 @@ class LiteRTLMExportSpec:
         """
         del meta, audio_cfg
 
+    def populate_function_gemma_metadata(self, meta):
+        """Populate function-calling fields in the ``LlmMetadata`` protobuf.
+
+        Default: no-op. Only ``FunctionGemmaSpec`` (the
+        ``function_gemma_instruct_270m`` preset) overrides this to fill the
+        ``FunctionGemma`` proto's function-calling fields; every other family
+        leaves the field block untouched. Called unconditionally by
+        ``_build_llm_metadata`` right after the ``llm_model_type`` oneof is
+        selected -- the same base-no-op convention ``populate_vision_metadata``
+        / ``populate_audio_metadata`` use.
+        """
+        del meta
+
     # -- Adapter-level multimodal handling ---------------------------------
 
     def reshape_separate_vision_embeddings(
@@ -771,6 +799,68 @@ class Gemma3Spec(GemmaSpec):
         _populate_gemma3_family_vision_metadata(
             meta, self.model_type, vision_cfg
         )
+
+
+class FunctionGemmaSpec(Gemma3Spec):
+    """The ``function_gemma_instruct_270m`` preset.
+
+    Architecturally identical to Gemma3 -- it loads as a plain
+    ``Gemma3CausalLM`` (its preset entry uses ``"path": "gemma3"``) -- so it
+    cannot be distinguished by ``isinstance`` in ``resolve_export_spec``, by a
+    config ``model_type`` field (keras-hub's Gemma3 config has none), or by
+    tokenizer special tokens (the Gemma3 SentencePiece tokenizer exposes no
+    function-calling tokens). It is therefore selected explicitly, via
+    ``export_to_litertlm``'s ``llm_model_type="function_gemma"`` override --
+    mirroring litert-torch's own ``litert_lm_model_type_override`` for the same
+    architecturally-indistinguishable case
+    (``export_hf/core/litert_lm_builder.py``). Emitting
+    ``model_type = "function_gemma"`` maps it to the
+    ``LlmMetadata.llm_model_type`` ``function_gemma`` oneof (a
+    ``FunctionGemma`` proto) instead of ``gemma3``, preserving the
+    function-calling metadata that a plain Gemma3 export silently drops
+    (I-3b).
+
+    Deliberately NOT registered in ``_EXPORT_SPEC_REGISTRY``: since it is a
+    plain ``Gemma3CausalLM``, an ``isinstance`` entry would shadow
+    ``Gemma3Spec`` for *every* Gemma3 model. It is reachable only through the
+    explicit override (see ``_MODEL_TYPE_OVERRIDE_SPECS``).
+    """
+
+    model_type = "function_gemma"
+
+    def populate_vision_metadata(self, meta, vision_cfg):
+        # function_gemma is a text-only preset; the active ``llm_model_type``
+        # oneof is ``function_gemma`` (a ``FunctionGemma`` proto with no image
+        # fields), so ``Gemma3Spec``'s gemma3-subtype vision population must
+        # not run here. In practice ``vision_cfg`` is always ``None`` for this
+        # text-only preset, so ``_build_llm_metadata`` never even calls this;
+        # overridden to the base no-op defensively.
+        del meta, vision_cfg
+
+    def populate_function_gemma_metadata(self, meta):
+        """Populate the ``FunctionGemma`` function-calling proto fields.
+
+        Mirrors the fields litert-torch's Gemma4 metadata builder populates
+        for its own function-calling support
+        (``export_hf/model_ext/gemma4/metadata_builder.py`` ~39-54):
+        code-fence start/end, function-response start, and the
+        use-template-for-function-call-format flag. ``FunctionGemma`` shares
+        Gemma4's exact function-calling field block (proto field numbers
+        5-14). keras-hub supplies the fence strings as spec constants
+        because its Gemma3 tokenizer, unlike the HuggingFace checkpoint
+        litert-torch reads, has no ``special_tokens_map`` carrying them.
+
+        ``constraint_mode`` is left at its proto default
+        (``CONSTRAINT_MODE_UNSPECIFIED``): litert-torch's Gemma4 builder does
+        not set it, and the scope here is to mirror that builder.
+        """
+        subtype = meta.llm_model_type.function_gemma
+        subtype.code_fence_start = _FUNCTION_GEMMA_CODE_FENCE_START
+        subtype.code_fence_end = _FUNCTION_GEMMA_CODE_FENCE_END
+        subtype.function_response_start = (
+            _FUNCTION_GEMMA_FUNCTION_RESPONSE_START
+        )
+        subtype.use_template_for_fc_format = True
 
 
 class Gemma3nSpec(GemmaSpec):
@@ -1089,15 +1179,44 @@ _EXPORT_SPEC_REGISTRY = (
 )
 
 
-def resolve_export_spec(model):
+# Explicit model-type overrides for presets that are architecturally
+# identical to another family and so cannot be told apart by ``isinstance``,
+# config, or tokenizer (see ``FunctionGemmaSpec``). Keyed by the
+# ``llm_model_type`` string a caller passes to ``export_to_litertlm``. Mirrors
+# litert-torch's ``litert_lm_model_type_override``
+# (``export_hf/core/litert_lm_builder.py``). NOTE: these spec classes are
+# deliberately NOT in ``_EXPORT_SPEC_REGISTRY`` -- they must only be reached
+# via an explicit override, never via ``isinstance`` (``FunctionGemmaSpec``
+# would otherwise shadow ``Gemma3Spec`` for every Gemma3 model).
+_MODEL_TYPE_OVERRIDE_SPECS = {
+    "function_gemma": FunctionGemmaSpec,
+}
+
+
+def resolve_export_spec(model, llm_model_type=None):
     """Return the ``LiteRTLMExportSpec`` for *model*.
 
-    Uses ``isinstance`` checks against ``_EXPORT_SPEC_REGISTRY`` to avoid
-    mis-identifying user-defined subclasses, in registration order (the
-    first match wins). Unrecognized models get the default
-    ``LiteRTLMExportSpec()`` (``model_type="generic_model"``,
-    ``cache_layout="standard"``), matching today's fallback behavior.
+    If *llm_model_type* is given, it is an explicit caller override that
+    selects a spec by ``LlmMetadata.llm_model_type`` name for presets that are
+    architecturally indistinguishable from another family (e.g.
+    ``function_gemma``, which loads as a plain ``Gemma3CausalLM``); see
+    ``_MODEL_TYPE_OVERRIDE_SPECS``. Otherwise the spec is resolved by
+    ``isinstance`` checks against ``_EXPORT_SPEC_REGISTRY`` (in registration
+    order, first match wins, to avoid mis-identifying user-defined
+    subclasses). Unrecognized models get the default ``LiteRTLMExportSpec()``
+    (``model_type="generic_model"``, ``cache_layout="standard"``), matching
+    today's fallback behavior.
     """
+    if llm_model_type is not None:
+        try:
+            return _MODEL_TYPE_OVERRIDE_SPECS[llm_model_type]()
+        except KeyError:
+            raise ValueError(
+                f"Unknown `llm_model_type` override {llm_model_type!r}. "
+                "Supported overrides: "
+                f"{sorted(_MODEL_TYPE_OVERRIDE_SPECS)}. Omit the argument to "
+                "auto-detect the model family by class."
+            )
     for module_path, class_name, spec_factory in _EXPORT_SPEC_REGISTRY:
         try:
             module = __import__(module_path, fromlist=[class_name])

@@ -18,6 +18,8 @@ import types
 
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.models.gemma.gemma_causal_lm import GemmaCausalLM
+from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
 from keras_hub.src.models.llama.llama_backbone import LlamaBackbone
 from keras_hub.src.models.llama.llama_causal_lm import LlamaCausalLM
 from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
@@ -30,6 +32,7 @@ from keras_hub.src.models.qwen3_5.qwen3_5_backbone import Qwen3_5Backbone
 from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm import Qwen3_5CausalLM
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.litertlm.model_specs import _EXPORT_SPEC_REGISTRY
+from keras_hub.src.utils.litertlm.model_specs import FunctionGemmaSpec
 from keras_hub.src.utils.litertlm.model_specs import Gemma3nSpec
 from keras_hub.src.utils.litertlm.model_specs import Gemma3Spec
 from keras_hub.src.utils.litertlm.model_specs import Gemma4Spec
@@ -120,6 +123,24 @@ class ExportSpecRegistryIntegrityTest(TestCase):
         )
         return GemmaCausalLM(backbone=backbone)
 
+    def _tiny_gemma3(self):
+        # Text-only Gemma3 (`vision_encoder=None`); `resolve_export_spec` only
+        # does `isinstance`, so no preprocessor or real weights are needed.
+        backbone = Gemma3Backbone(
+            vocabulary_size=10,
+            image_size=16,
+            num_layers=1,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            head_dim=4,
+            intermediate_dim=16,
+            vision_encoder=None,
+        )
+        # `Gemma3CausalLM` requires `preprocessor`, but `resolve_export_spec`
+        # only does an `isinstance` check, so a null preprocessor is fine.
+        return Gemma3CausalLM(preprocessor=None, backbone=backbone)
+
     def _tiny_qwen(self):
         backbone = QwenBackbone(
             vocabulary_size=10,
@@ -207,6 +228,42 @@ class ExportSpecRegistryIntegrityTest(TestCase):
         spec = resolve_export_spec(self._tiny_gemma())
         self.assertIsInstance(spec, GemmaSpec)
         self.assertEqual(spec.model_type, "generic_model")
+
+    def test_gemma3_resolves_to_gemma3_spec_by_default(self):
+        """A plain Gemma3 (no override) resolves to `Gemma3Spec` -- the
+        regression guard that the `function_gemma` override never leaks into
+        ordinary Gemma3 exports."""
+        spec = resolve_export_spec(self._tiny_gemma3())
+        self.assertIsInstance(spec, Gemma3Spec)
+        self.assertNotIsInstance(spec, FunctionGemmaSpec)
+        self.assertEqual(spec.model_type, "gemma3")
+
+    def test_function_gemma_override_resolves_to_function_gemma_spec(self):
+        """The explicit `llm_model_type="function_gemma"` override selects
+        `FunctionGemmaSpec` (`model_type="function_gemma"`), even though the
+        model is a plain `Gemma3CausalLM` that would otherwise resolve to
+        `Gemma3Spec`."""
+        model = self._tiny_gemma3()
+        self.assertEqual(resolve_export_spec(model).model_type, "gemma3")
+        spec = resolve_export_spec(model, llm_model_type="function_gemma")
+        self.assertIsInstance(spec, FunctionGemmaSpec)
+        self.assertEqual(spec.model_type, "function_gemma")
+
+    def test_function_gemma_spec_not_in_isinstance_registry(self):
+        """`FunctionGemmaSpec` must NOT be in `_EXPORT_SPEC_REGISTRY`: since it
+        is a plain `Gemma3CausalLM`, an `isinstance` entry would shadow
+        `Gemma3Spec` for every Gemma3 model. It is reachable only via the
+        explicit override."""
+        self.assertNotIn(
+            FunctionGemmaSpec, [f for _, _, f in _EXPORT_SPEC_REGISTRY]
+        )
+
+    def test_unknown_llm_model_type_override_raises(self):
+        """An unrecognized `llm_model_type` override is a hard error, not a
+        silent fall-through to isinstance resolution."""
+        model = self._tiny_gemma3()
+        with self.assertRaisesRegex(ValueError, "Unknown `llm_model_type`"):
+            resolve_export_spec(model, llm_model_type="not_a_real_type")
 
     def test_llama3_resolves_to_llama3_spec(self):
         """`Llama3CausalLM` is a subclass of `LlamaCausalLM`; it must resolve
