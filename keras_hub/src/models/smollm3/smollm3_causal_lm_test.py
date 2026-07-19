@@ -137,13 +137,6 @@ class SmolLM3CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Keras nested-call tracing: mixed tensor/int kwargs in "
-            "call_with_cache"
-        ),
-    )
     def test_litertlm_export(self):
         self.run_litertlm_export_test(
             cls=SmolLM3CausalLM,
