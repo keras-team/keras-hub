@@ -164,6 +164,48 @@ class PaliGemmaCausalLMTest(TestCase):
             verify_generation=False,
         )
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "PaliGemma multimodal numeric parity is unverifiable until the "
+            "bundle cache is sized for vision tokens: call_with_cache "
+            "concatenates image+text embeddings (len 32 = text 16 + "
+            "image_sequence_length 16), but the bundle exports cache_length "
+            "= prefill_seq_len = 16, so the eager reference overflows the "
+            "cache (IndexError in CachedGemmaAttention). Latent export "
+            "cache-sizing defect (WS3.3 finding), not a harness bug."
+        ),
+    )
+    def test_litertlm_export_multimodal_numerics(self):
+        input_data = {
+            "token_ids": np.random.randint(
+                0,
+                self.vocabulary_size,
+                size=(self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+            "images": np.ones(
+                (self.batch_size, self.image_size, self.image_size, 3)
+            ),
+            "padding_mask": np.ones(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+            "response_mask": np.zeros(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+        }
+        self.run_litertlm_export_test(
+            cls=PaliGemmaCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=input_data,
+            prefill_seq_len=self.text_sequence_length,
+            verify_model_type="generic_model",
+            verify_multimodal_numerics=True,
+            verify_generation=False,
+        )
+
     def test_pali_gemma_causal_model(self):
         preprocessed, _, _ = self.preprocessor(
             {
