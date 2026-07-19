@@ -154,6 +154,21 @@ class LiteRTLMExportSpec:
     #: vision export never reaches this point (e.g. Gemma3n, which rejects
     #: `separate_vision_encoder=True` before vision-model building).
     end_of_vision_token = None
+    #: Whether this family's vision path supports multi-bucket prefill
+    #: (a ``prefill_seq_len`` list with values other than ``cache_length``).
+    #: Default ``False`` for every vision-capable family: the multimodal
+    #: export path currently requires every prefill bucket to equal
+    #: ``cache_length`` (enforced in ``export_to_litertlm``). That restriction
+    #: is applied family-wide as a conservative default -- it was originally
+    #: characterized as a Gemma3-specific attention-mask constraint, but it has
+    #: never been assessed per family (Gemma3n/Gemma4/PaliGemma inherit it
+    #: without a family-specific analysis of whether their vision attention
+    #: actually needs it). Relaxing it for a family that provably does not need
+    #: cache_length == input_length is a future, numerics-gated change: set
+    #: ``allows_vision_bucketing = True`` on that family's spec once verified.
+    #: (Only consulted when ``get_vision_config`` returns non-``None``;
+    #: text-only families are unaffected and keep full bucketing support.)
+    allows_vision_bucketing = False
 
     # -- Cache / vision / audio config -----------------------------------
 

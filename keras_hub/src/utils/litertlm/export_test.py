@@ -401,8 +401,11 @@ class TestLiteRTLmExport(TestCase):
                 backend_constraint="invalid_backend",
             )
 
-    def test_export_multimodal_bucketing_raises(self):
-        """Verify multimodal export rejects mismatched prefill_seq_len."""
+    def _build_tiny_gemma3_multimodal_model(self):
+        """Build a minimal Gemma3 vision-capable model for bucketing-ban
+        tests. Shared by `test_export_multimodal_bucketing_raises` and
+        `test_export_multimodal_bucketing_error_is_family_wide` -- both only
+        need the rejection to fire, not any particular model content."""
         from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
         from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
         from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
@@ -453,7 +456,11 @@ class TestLiteRTLmExport(TestCase):
             head_dim=4,
             vision_encoder=vision_encoder,
         )
-        model = Gemma3CausalLM(preprocessor=preprocessor, backbone=backbone)
+        return Gemma3CausalLM(preprocessor=preprocessor, backbone=backbone)
+
+    def test_export_multimodal_bucketing_raises(self):
+        """Verify multimodal export rejects mismatched prefill_seq_len."""
+        model = self._build_tiny_gemma3_multimodal_model()
 
         path = os.path.join(
             self.get_temp_dir(), "test_multimodal_buckets.litertlm"
@@ -463,6 +470,39 @@ class TestLiteRTLmExport(TestCase):
             "Multimodal LiteRT-LM export currently requires",
         ):
             model.export(path, format="litertlm", prefill_seq_len=[8, 20])
+
+    def test_export_multimodal_bucketing_error_is_family_wide(self):
+        """The bucketing-rejection error must describe the restriction as
+        enforced for all vision-capable families pending a per-family
+        assessment -- not as a Gemma3-specific attention-mask limitation.
+
+        This is the accuracy half of V-7: the restriction itself is unchanged
+        (see `test_export_multimodal_bucketing_raises`); only its stated
+        justification was corrected. Guards against the message regressing to
+        the old "This is a limitation of the Gemma3 attention mask
+        computation" wording that over-attributed a family-wide default to
+        one family.
+        """
+        model = self._build_tiny_gemma3_multimodal_model()
+        path = os.path.join(
+            self.get_temp_dir(), "test_multimodal_buckets_msg.litertlm"
+        )
+        with self.assertRaises(ValueError) as ctx:
+            model.export(path, format="litertlm", prefill_seq_len=[8, 20])
+        message = str(ctx.exception)
+        # Stable prefix (also asserted by the sibling rejection test).
+        self.assertIn(
+            "Multimodal LiteRT-LM export currently requires", message
+        )
+        # Accuracy: scoped to all vision families, not just Gemma3.
+        self.assertIn("all vision-capable families", message)
+        for family in ("Gemma3", "Gemma3n", "Gemma4", "PaliGemma"):
+            self.assertIn(family, message)
+        # Must NOT re-assert the old Gemma3-only attribution.
+        self.assertNotIn(
+            "This is a limitation of the Gemma3 attention mask",
+            message,
+        )
 
     def test_export_model_type_metadata(self):
         """Verify the .litertlm metadata contains the correct model type."""

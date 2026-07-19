@@ -354,3 +354,31 @@ class ExportSpecRegistryIntegrityTest(TestCase):
         pre = types.SimpleNamespace()  # no max_images_per_prompt attribute
         with self.assertRaisesRegex(ValueError, "flatten_image_batch=False"):
             Gemma4Spec().get_max_images_per_prompt(pre)
+
+    # -- allows_vision_bucketing (family-wide bucketing ban, V-7) -----------
+    #
+    # The multimodal export path currently requires every prefill bucket to
+    # equal cache_length. That ban is enforced family-wide via this flag
+    # defaulting to False on every spec (see the bucketing check in
+    # `export.py`), NOT as a Gemma3-specific rule -- these tests lock the
+    # default so a future per-family relaxation is a deliberate, visible
+    # one-line `allows_vision_bucketing = True` override, and catch an
+    # accidental early flip.
+
+    def test_all_vision_families_disallow_bucketing_by_default(self):
+        """Every vision-capable family inherits allows_vision_bucketing=False,
+        so the family-wide bucketing ban stays in force until a family is
+        explicitly, deliberately relaxed with a numerics-gated override."""
+        self.assertFalse(Gemma3Spec().allows_vision_bucketing)
+        self.assertFalse(Gemma3nSpec().allows_vision_bucketing)
+        self.assertFalse(Gemma4Spec().allows_vision_bucketing)
+        self.assertFalse(PaliGemmaSpec().allows_vision_bucketing)
+
+    def test_base_and_text_specs_default_disallow_vision_bucketing(self):
+        """The base spec and text-only families also default to False. The
+        flag is only consulted when `get_vision_config` returns non-None (see
+        `export.py`'s `has_vision` guard), so text-only families keep full
+        bucketing support regardless of this value; the default is asserted
+        here for completeness and to document the base-class contract."""
+        self.assertFalse(LiteRTLMExportSpec().allows_vision_bucketing)
+        self.assertFalse(GemmaSpec().allows_vision_bucketing)

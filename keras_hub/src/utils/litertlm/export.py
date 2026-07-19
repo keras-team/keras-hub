@@ -910,9 +910,13 @@ def export_to_litertlm(
     ``[32, 64, 128, 256, 512, 1024]``), the exporter traces one prefill
     signature per bucket. At runtime the LiteRT-LM executor dispatches to
     the smallest bucket that fits the actual prompt, avoiding wasted
-    computation on padding. For multimodal models (e.g. Gemma3), bucketing
-    is not supported because the vision attention mask computation requires
-    cache length to equal input length.
+    computation on padding. For vision-capable models (Gemma3, Gemma3n,
+    Gemma4, PaliGemma), bucketing is currently disabled family-wide: every
+    prefill bucket must equal ``cache_length``. This is a conservative
+    default (governed by the ``allows_vision_bucketing`` export spec flag),
+    not a confirmed per-family limitation -- it was first observed for
+    Gemma3's image attention-mask computation and has not been re-assessed
+    for the other vision families.
 
     **Quantization:** ``quant_config`` is forwarded to
     ``litert_torch.convert()`` for in-graph quantization. It must be an
@@ -1091,17 +1095,30 @@ def export_to_litertlm(
             "that expect raw `pixel_values` (e.g. Gemma3n)."
         )
 
-    # Multimodal models require cache_length == token_length due to how
-    # Gemma3 computes bidirectional image attention masks. Enforce this.
-    if has_vision and any(
-        seq_len != cache_length for seq_len in prefill_seq_lens
+    # Vision-capable models currently require every prefill bucket to equal
+    # cache_length. This is enforced family-wide (Gemma3, Gemma3n, Gemma4,
+    # PaliGemma) as a conservative default via the `allows_vision_bucketing`
+    # spec flag, not a Gemma3-specific rule: the constraint was first observed
+    # for Gemma3's image attention-mask computation, but no per-family
+    # assessment has confirmed whether the other three vision families
+    # actually need cache_length == input_length. Relaxing it for a family
+    # that provably does not is a future, numerics-gated change -- flip that
+    # family's `allows_vision_bucketing` to True (see the spec field), no edit
+    # here required.
+    if (
+        has_vision
+        and not spec.allows_vision_bucketing
+        and any(seq_len != cache_length for seq_len in prefill_seq_lens)
     ):
         raise ValueError(
             f"Multimodal LiteRT-LM export currently requires all "
             f"`prefill_seq_len` values ({prefill_seq_lens}) to match the "
-            f"cache_length ({cache_length}). This is a limitation of the "
-            f"Gemma3 attention mask computation when cache length differs "
-            f"from input length."
+            f"cache_length ({cache_length}). This restriction is enforced for "
+            f"all vision-capable families (Gemma3, Gemma3n, Gemma4, "
+            f"PaliGemma) pending a per-family assessment; it was originally "
+            f"characterized as specific to Gemma3's image attention-mask "
+            f"computation but has not been verified to be Gemma3-specific. "
+            f"Pass a single `prefill_seq_len` equal to `cache_length`."
         )
 
     # Hoist vision shape values that are used both when building prefill inputs
