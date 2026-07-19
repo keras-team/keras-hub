@@ -150,7 +150,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     def _set_proto_spm(self, proto):
         self._sentence_piece_spm = spm.SentencePieceProcessor()
         out_type = str if is_string_dtype(self.compute_dtype) else int
-        
+
         if hasattr(self._sentence_piece_spm, "Init"):
             # Older SWIG wrapper (<0.2.2)
             self._sentence_piece_spm.Init(
