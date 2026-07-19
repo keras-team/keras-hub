@@ -477,3 +477,73 @@ class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
             verify_model_type="gemma3n",
             verify_numerics=False,
         )
+
+    def test_litertlm_export_rejects_separate_vision(self):
+        """Gemma3n runs its vision encoder inside the backbone
+        (supports_separate_vision=False), so separate_vision_encoder=True is
+        rejected before any tracing -- unchanged behavior, now driven by the
+        spec flag instead of an inline vision_input_style check (WS1.7, V-6).
+        """
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        import importlib.util
+
+        if importlib.util.find_spec("litert_torch") is None:
+            self.skipTest(
+                "LiteRT-LM export requires `litert-torch`. "
+                "Install it with: pip install litert-torch"
+            )
+
+        if importlib.util.find_spec("litert_lm_builder") is None:
+            self.skipTest(
+                "LiteRT-LM export requires `litert-lm-builder`. "
+                "Install it with: pip install litert-lm-builder"
+            )
+
+        from keras_hub.src.models.gemma3n.gemma3n_tokenizer import (
+            Gemma3nTokenizer,
+        )
+
+        tokenizer = Gemma3nTokenizer(
+            proto=os.path.join(
+                self.get_test_data_dir(), "gemma3n_test_vocab.spm"
+            )
+        )
+        preprocessor = Gemma3nCausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=self.image_converter,
+            audio_converter=self.audio_converter,
+            sequence_length=30,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=4,
+            max_audios_per_prompt=2,
+            num_audio_tokens_per_audio=3,
+        )
+        model = Gemma3nCausalLM(
+            preprocessor=preprocessor,
+            backbone=self.multimodal_backbone,
+        )
+        # Gemma3n's MobileNetV5-based vision encoder has neither an
+        # `output_dim` nor a `num_classes` attribute (it is not designed to
+        # be called standalone), so it would otherwise trip the earlier,
+        # unrelated "vision_encoder.output_dim required" check
+        # (export.py:1070-1074, out of scope for this test) before reaching
+        # the `supports_separate_vision` rejection under test. Stub the
+        # attribute so that earlier, orthogonal check passes through and the
+        # `supports_separate_vision=False` rejection is the one that fires.
+        model.backbone.vision_encoder.output_dim = 8
+
+        path = os.path.join(
+            self.get_temp_dir(), "test_separate_vision_rejected.litertlm"
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "separate_vision_encoder=True.*is not supported",
+        ):
+            model.export(
+                path,
+                format="litertlm",
+                prefill_seq_len=30,
+                separate_vision_encoder=True,
+            )

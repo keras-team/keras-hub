@@ -382,3 +382,40 @@ class ExportSpecRegistryIntegrityTest(TestCase):
         here for completeness and to document the base-class contract."""
         self.assertFalse(LiteRTLMExportSpec().allows_vision_bucketing)
         self.assertFalse(GemmaSpec().allows_vision_bucketing)
+
+    # -- supports_separate_vision (baked/separate matrix, V-6) --------------
+    #
+    # The separate-vision-encoder export path is allowed for every vision
+    # family except those whose encoder runs inside the backbone (Gemma3n).
+    # This capability is declared per family on the spec (default True, one
+    # override to False) so the {baked, separate} support matrix is readable
+    # from the spec table rather than reconstructed from a rejection branch
+    # in export.py. These tests lock the matrix so a change is deliberate.
+
+    def test_vision_families_declare_supports_separate_vision(self):
+        """Every vision-capable family declares supports_separate_vision
+        explicitly, and its value matches today's support matrix: Gemma3,
+        Gemma4 and PaliGemma support the separate path; Gemma3n (encoder
+        inside the backbone) does not."""
+        self.assertTrue(Gemma3Spec().supports_separate_vision)
+        self.assertTrue(Gemma4Spec().supports_separate_vision)
+        self.assertTrue(PaliGemmaSpec().supports_separate_vision)
+        self.assertFalse(Gemma3nSpec().supports_separate_vision)
+
+    def test_embedded_vision_family_disallows_separate_vision(self):
+        """The `supports_separate_vision=False` families are exactly the
+        `embedded_pixel_values` ones (encoder runs in-backbone). Lock the two
+        facts together so the flag can't drift away from the input style it
+        summarizes."""
+        for spec in (Gemma3nSpec(),):
+            self.assertEqual(spec.vision_input_style, "embedded_pixel_values")
+            self.assertFalse(spec.supports_separate_vision)
+
+    def test_base_and_text_specs_default_support_separate_vision(self):
+        """The base spec and text-only families inherit the permissive
+        default (True). The flag is only consulted when `get_vision_config`
+        returns non-None (see export.py's `has_vision` guard), so its value on
+        text-only families is inert; asserted here for the base-class
+        contract, matching the allows_vision_bucketing default test above."""
+        self.assertTrue(LiteRTLMExportSpec().supports_separate_vision)
+        self.assertTrue(GemmaSpec().supports_separate_vision)

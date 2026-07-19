@@ -169,6 +169,27 @@ class LiteRTLMExportSpec:
     #: (Only consulted when ``get_vision_config`` returns non-``None``;
     #: text-only families are unaffected and keep full bucketing support.)
     allows_vision_bucketing = False
+    #: Whether this family supports the separate-vision-encoder export path
+    #: (``export_to_litertlm(..., separate_vision_encoder=True)``), which
+    #: packs the vision encoder as its own ``VISION_ENCODER`` +
+    #: ``VISION_ADAPTER`` (+ ``END_OF_VISION``) bundle sections instead of
+    #: fusing it into ``PREFILL_DECODE``. Default ``True``: every vision
+    #: family whose encoder is callable as a standalone stage (Gemma3,
+    #: Gemma4, PaliGemma, and the generic fallback) supports both the
+    #: baked-in and the separate mode. ``False`` for families whose vision
+    #: encoder runs *inside* the backbone (Gemma3n, ``vision_input_style ==
+    #: "embedded_pixel_values"``): there is no separable encoder to export,
+    #: so ``export_to_litertlm`` rejects ``separate_vision_encoder=True`` for
+    #: them. This flag makes the per-family {baked, separate} support matrix
+    #: readable directly from the spec table -- previously the rejection was
+    #: an implicit ``vision_input_style == "embedded_pixel_values"`` check
+    #: buried in ``export.py``; declaring the capability explicitly (rather
+    #: than re-deriving it from the input style) is the same spec-over-
+    #: inference migration ``vision_input_style``/``audio_input_style``/
+    #: ``flatten_image_batch`` already made. (Only consulted when
+    #: ``get_vision_config`` returns non-``None``; text-only families keep the
+    #: permissive default, which is inert for them.)
+    supports_separate_vision = True
 
     # -- Cache / vision / audio config -----------------------------------
 
@@ -694,6 +715,11 @@ class Gemma3nSpec(GemmaSpec):
     cache_layout = "gemma3n"
     vision_input_style = "embedded_pixel_values"
     audio_input_style = "embedded_mel"
+    #: Gemma3n runs its vision encoder inside the backbone (see
+    #: ``vision_input_style`` above), so there is no standalone encoder to
+    #: pack as a separate bundle section. See
+    #: ``LiteRTLMExportSpec.supports_separate_vision``.
+    supports_separate_vision = False
 
     def populate_vision_metadata(self, meta, vision_cfg):
         _populate_gemma3_family_vision_metadata(

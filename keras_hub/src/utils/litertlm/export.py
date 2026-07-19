@@ -1078,22 +1078,26 @@ def export_to_litertlm(
             "encoder."
         )
 
-    # Gemma3n runs vision/audio encoders inside the backbone and expects raw
-    # pixel_values / input_features (`vision_input_style ==
-    # "embedded_pixel_values"`), so a separate vision encoder is not
-    # meaningful for that architecture. This used to be detected by
-    # inspecting whether `call_with_cache`'s signature has a `pixel_values`
-    # parameter; the spec already knows this about its own family (via the
-    # registry that resolved it), so ask it directly instead of re-deriving
-    # the same fact from signature introspection.
+    # Some vision families run their encoder *inside* the backbone
+    # (`vision_input_style == "embedded_pixel_values"`, e.g. Gemma3n), so
+    # there is no separable vision encoder to pack as its own bundle
+    # section. Whether a family supports the separate-vision export path is
+    # declared once, per family, on the spec (`supports_separate_vision`) --
+    # ask it directly instead of re-deriving the fact from the input style
+    # here, so the {baked, separate} support matrix is readable from the
+    # spec table rather than reconstructed from this branch.
     if (
         separate_vision_encoder
         and has_vision
-        and vision_input_style == "embedded_pixel_values"
+        and not spec.supports_separate_vision
     ):
         raise ValueError(
-            "`separate_vision_encoder=True` is not supported for models "
-            "that expect raw `pixel_values` (e.g. Gemma3n)."
+            "`separate_vision_encoder=True` is not supported for "
+            f"`{type(model).__name__}`: its vision encoder runs inside the "
+            "backbone (it expects raw `pixel_values`, e.g. Gemma3n), so "
+            "there is no standalone vision encoder to export as a separate "
+            "bundle section. Export it with `separate_vision_encoder=False` "
+            "(the default)."
         )
 
     # Vision-capable models currently require every prefill bucket to equal
