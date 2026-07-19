@@ -255,14 +255,24 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
 
     def test_litertlm_export(self):
         """Test LiteRT-LM export for Gemma3CausalLM with small test model."""
-        self.run_litertlm_export_test(
+        result = self.run_litertlm_export_test(
             cls=Gemma3CausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             prefill_seq_len=20,
             verify_model_type="gemma3",
-            verify_numerics=False,
+            verify_multimodal_numerics=True,
         )
+        # Gemma3 baked-in vision: prefill KV + first-decode logits parity at
+        # the harness default 1e-4 (proven; not relaxed). Non-zero measured
+        # errors (~1e-6) confirm the comparison is real, not vacuous.
+        self.assertTrue(result["has_vision"])
+        self.assertFalse(result["has_audio"])
+        self.assertEqual(result["verification_level"], "end_to_end_vision")
+        self.assertGreater(result["prefill_kv_max_abs_err"], 0.0)
+        self.assertGreater(result["decode_logits_max_abs_err"], 0.0)
+        self.assertLess(result["prefill_kv_max_abs_err"], 1e-4)
+        self.assertLess(result["decode_logits_max_abs_err"], 1e-4)
 
     @pytest.mark.large
     def test_litert_export_multimodal(self):

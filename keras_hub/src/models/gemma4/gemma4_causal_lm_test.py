@@ -331,14 +331,29 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
             os.path.join(self.get_test_data_dir(), "gemma4_test_vocab.spm"),
         )
 
-        self.run_litertlm_export_test(
+        result = self.run_litertlm_export_test(
             cls=Gemma4CausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             prefill_seq_len=20,
             verify_model_type="gemma4",
-            verify_numerics=False,
+            verify_multimodal_numerics=True,
         )
+        # Gemma4 passes pixel + audio-mel inputs; its audio encoder is a
+        # standalone in-trace stage, so end-to-end multimodal parity is
+        # achievable and audio is isolable. Harness default 1e-4 (not
+        # relaxed); non-zero measured errors confirm a real, non-vacuous
+        # comparison.
+        self.assertTrue(result["has_vision"])
+        self.assertTrue(result["has_audio"])
+        self.assertTrue(result["audio_isolable"])
+        self.assertEqual(
+            result["verification_level"], "end_to_end_multimodal"
+        )
+        self.assertGreater(result["prefill_kv_max_abs_err"], 0.0)
+        self.assertGreater(result["decode_logits_max_abs_err"], 0.0)
+        self.assertLess(result["prefill_kv_max_abs_err"], 1e-4)
+        self.assertLess(result["decode_logits_max_abs_err"], 1e-4)
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
