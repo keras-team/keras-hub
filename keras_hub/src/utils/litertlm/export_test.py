@@ -513,6 +513,70 @@ class TestLiteRTLmExport(TestCase):
         actual_type = model_type_msg.WhichOneof("model_type")
         self.assertEqual(actual_type, "generic_model")
 
+    def test_export_omits_sampler_params_by_default(self):
+        """No `sampler_config` -> `sampler_params` absent from metadata.
+
+        Mirrors litert-torch export_hf: the field is written only when a
+        caller explicitly requests it. keras-hub ships no default sampler.
+        """
+        path = os.path.join(self.get_temp_dir(), "no_sampler.litertlm")
+        self.model.export(path, format="litertlm", prefill_seq_len=8)
+
+        llm_metadata = self._parse_litertlm_llm_metadata(path)
+        self.assertIsNotNone(llm_metadata)
+        self.assertFalse(
+            llm_metadata.HasField("sampler_params"),
+            "sampler_params must be omitted when no sampler_config is passed.",
+        )
+
+    def test_export_greedy_sampler_config_roundtrip(self):
+        """`GREEDY_SAMPLER_CONFIG` -> GREEDY type + k=1 in re-read metadata."""
+        from litert_lm_builder.runtime.proto import sampler_params_pb2
+
+        from keras_hub.src.utils.litertlm.model_specs import (
+            GREEDY_SAMPLER_CONFIG,
+        )
+
+        path = os.path.join(self.get_temp_dir(), "greedy_sampler.litertlm")
+        self.model.export(
+            path,
+            format="litertlm",
+            prefill_seq_len=8,
+            sampler_config=GREEDY_SAMPLER_CONFIG,
+        )
+
+        llm_metadata = self._parse_litertlm_llm_metadata(path)
+        self.assertIsNotNone(llm_metadata)
+        self.assertTrue(llm_metadata.HasField("sampler_params"))
+        sp = llm_metadata.sampler_params
+        self.assertEqual(sp.type, sampler_params_pb2.SamplerParameters.GREEDY)
+        self.assertEqual(sp.k, 1)
+
+    def test_sampler_config_validation_and_export_rejects_bad_type(self):
+        """Invalid `SamplerConfig` values and non-config types raise."""
+        from keras_hub.src.utils.litertlm.model_specs import SamplerConfig
+
+        # Dataclass-level validation: top_k < 1 is invalid.
+        with self.assertRaises(ValueError):
+            SamplerConfig(top_k=0)
+        # All-None is invalid (would produce an empty sampler_params).
+        with self.assertRaises(ValueError):
+            SamplerConfig()
+        # top_p out of range.
+        with self.assertRaises(ValueError):
+            SamplerConfig(top_p=1.5)
+
+        # Exporter-level guard: a non-SamplerConfig value is rejected before
+        # any tracing/bundling work.
+        path = os.path.join(self.get_temp_dir(), "bad_sampler.litertlm")
+        with self.assertRaises(ValueError):
+            self.model.export(
+                path,
+                format="litertlm",
+                prefill_seq_len=8,
+                sampler_config={"top_k": 1},  # dict, not a SamplerConfig
+            )
+
     def test_text_only_model_has_no_vision_inputs(self):
         """Verify text-only models do not expose vision inputs in signatures."""
         path = os.path.join(self.get_temp_dir(), "test_text_only.litertlm")

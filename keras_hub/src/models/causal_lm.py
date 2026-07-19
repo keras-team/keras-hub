@@ -514,6 +514,14 @@ class CausalLM(Task):
                   user-provided HuggingFace ``tokenizer.json`` file. When
                   provided, it is bundled directly and native tokenizer
                   validation is skipped. Defaults to ``None``.
+                - ``sampler_config``: Optional
+                  ``keras_hub.src.utils.litertlm.model_specs.SamplerConfig``.
+                  When given, populates the bundle's
+                  ``LlmMetadata.sampler_params``. The only named preset is
+                  ``GREEDY_SAMPLER_CONFIG`` (``top_k=1``, for deterministic
+                  generation). Defaults to ``None``, which leaves
+                  ``sampler_params`` unset (the runtime picks its own
+                  default sampling policy).
                 - ``**kwargs``: Any remaining keyword arguments are forwarded
                   to ``litert_torch.signature(...)`` for advanced signature
                   customization.
@@ -535,6 +543,7 @@ class CausalLM(Task):
                     "separate_vision_encoder", False
                 ),
                 hf_tokenizer_path=kwargs.pop("hf_tokenizer_path", None),
+                sampler_config=kwargs.pop("sampler_config", None),
                 **kwargs,
             )
         return super().export(

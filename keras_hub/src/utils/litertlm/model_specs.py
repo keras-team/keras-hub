@@ -23,6 +23,8 @@ generic_model" behavior). This is a pure refactor of detection/config
 lookup -- it does not change behavior for any currently-supported model.
 """
 
+import dataclasses
+
 
 def _first_attr(obj, *names, default=None):
     """Return the first non-``None`` attribute from *obj*, or *default*."""
@@ -52,6 +54,67 @@ _GEMMA4_START_OF_IMAGE_TOKEN = "<|image>"
 _GEMMA4_END_OF_IMAGE_TOKEN = "<image|>"
 _AUDIO_START_TOKEN = "<|audio>"
 _AUDIO_END_TOKEN = "<audio|>"
+
+
+@dataclasses.dataclass(frozen=True)
+class SamplerConfig:
+    """Sampler defaults embedded in a LiteRT-LM bundle's ``LlmMetadata``.
+
+    This mirrors the conditional ``sampler_params`` semantics of
+    litert-torch's ``export_hf`` (``core/litert_lm_builder.py`` ~189-232):
+    the proto field is only written when a caller explicitly requests it,
+    and the sampler *type* (GREEDY / TOP_K / TOP_P) is derived from the
+    supplied ``top_k``/``top_p`` the same way upstream derives it.
+
+    NOTE (scope): this exists to give on-device verification a way to force
+    deterministic greedy generation (``GREEDY_SAMPLER_CONFIG``); it is not a
+    general user-facing sampler API. keras-hub deliberately ships **no
+    default** sampler -- omitting ``sampler_config`` omits the proto field
+    entirely, letting the runtime pick its own sampling policy.
+
+    Args:
+        top_k: Optional int >= 1. ``top_k == 1`` selects GREEDY.
+        top_p: Optional float in (0.0, 1.0].
+        temperature: Optional float >= 0.0.
+        seed: Optional int RNG seed.
+    """
+
+    top_k: int | None = None
+    top_p: float | None = None
+    temperature: float | None = None
+    seed: int | None = None
+
+    def __post_init__(self):
+        if (
+            self.top_k is None
+            and self.top_p is None
+            and self.temperature is None
+        ):
+            raise ValueError(
+                "SamplerConfig requires at least one of `top_k`, `top_p`, or "
+                "`temperature` to be set; an all-None config would produce "
+                "an empty sampler_params. Omit `sampler_config` entirely to "
+                "leave the field unset."
+            )
+        if self.top_k is not None and self.top_k < 1:
+            raise ValueError(
+                f"SamplerConfig.top_k must be >= 1, got {self.top_k}."
+            )
+        if self.top_p is not None and not (0.0 < self.top_p <= 1.0):
+            raise ValueError(
+                f"SamplerConfig.top_p must be in (0.0, 1.0], got {self.top_p}."
+            )
+        if self.temperature is not None and self.temperature < 0.0:
+            raise ValueError(
+                "SamplerConfig.temperature must be >= 0.0, got "
+                f"{self.temperature}."
+            )
+
+
+#: Deterministic greedy sampling (``top_k == 1``). Used by the on-device
+#: host-vs-device verification path (WS4.5) to force reproducible generation.
+#: This is the ONLY named preset keras-hub ships -- see ``SamplerConfig``.
+GREEDY_SAMPLER_CONFIG = SamplerConfig(top_k=1)
 
 
 class LiteRTLMExportSpec:

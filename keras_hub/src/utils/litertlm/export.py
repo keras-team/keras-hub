@@ -22,6 +22,7 @@ from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
 from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
     materialize_hf_tokenizer_json,
 )
+from keras_hub.src.utils.litertlm.model_specs import SamplerConfig
 from keras_hub.src.utils.litertlm.model_specs import resolve_export_spec
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
@@ -436,6 +437,7 @@ class ExportPlan:
     max_images: int | None
     tokens_per_image: int | None
     separate_vision_encoder: bool
+    sampler_config: object | None
 
 
 def _build_prefill_inputs(plan):
@@ -797,6 +799,7 @@ def _assemble_bundle(
         meta_path,
         vision_cfg=plan.vision_cfg,
         audio_cfg=plan.audio_cfg,
+        sampler_config=plan.sampler_config,
     )
 
     litert_lm_builder = _import_litert_lm_builder()
@@ -877,6 +880,7 @@ def export_to_litertlm(
     quant_config=None,
     separate_vision_encoder=False,
     hf_tokenizer_path=None,
+    sampler_config=None,
     **kwargs,
 ):
     """Export a KerasHub CausalLM model to a LiteRT-LM bundle.
@@ -965,6 +969,16 @@ def export_to_litertlm(
             SentencePiece tokenizers are bundled as ``.spm`` and any
             ``BytePairTokenizer`` subclass is automatically converted to
             ``tokenizer.json``. Defaults to ``None``.
+        sampler_config: Optional
+            ``keras_hub.src.utils.litertlm.model_specs.SamplerConfig``
+            instance. When given, the bundle's ``LlmMetadata.sampler_params``
+            field is populated from it (mirroring litert-torch export_hf's
+            conditional sampler semantics). The only named preset keras-hub
+            ships is ``GREEDY_SAMPLER_CONFIG`` (``top_k=1``), for forcing
+            deterministic greedy generation during host-vs-device
+            verification. Defaults to ``None``, which leaves
+            ``sampler_params`` entirely unset so the runtime chooses its own
+            sampling policy.
         **kwargs: Additional kwargs forwarded to ``litert_torch`` signature
             tracing.
 
@@ -975,12 +989,22 @@ def export_to_litertlm(
         ValueError: If the backend is not ``"torch"``, if ``path`` does not
             end with ``.litertlm``, if the model lacks ``call_with_cache``,
             if ``backend_constraint`` is invalid, if any
-            ``prefill_seq_len`` exceeds ``cache_length``, or if a multimodal
-            model is exported with mismatched ``prefill_seq_len`` values.
+            ``prefill_seq_len`` exceeds ``cache_length``, if a multimodal
+            model is exported with mismatched ``prefill_seq_len`` values, or
+            if ``sampler_config`` is not a ``SamplerConfig`` instance.
         ImportError: If ``litert-torch`` or ``litert-lm-builder`` are not
             installed.
     """
     path = os.fspath(path)
+    if sampler_config is not None and not isinstance(
+        sampler_config, SamplerConfig
+    ):
+        raise ValueError(
+            "`sampler_config` must be a "
+            "`keras_hub.src.utils.litertlm.model_specs.SamplerConfig` "
+            "instance (e.g. `GREEDY_SAMPLER_CONFIG`), got "
+            f"{type(sampler_config).__name__}."
+        )
     tokenizer = _get_tokenizer(model)
     # `_validate_export_args` returns the normalized (lowercased)
     # `backend_constraint` alongside `prefill_seq_lens`; rebind the local
@@ -1162,6 +1186,7 @@ def export_to_litertlm(
         max_images=max_images,
         tokens_per_image=tokens_per_image,
         separate_vision_encoder=separate_vision_encoder,
+        sampler_config=sampler_config,
     )
 
     with _cpu_default_device_scope():
@@ -1431,7 +1456,13 @@ def _materialize_sentencepiece_tokenizer(tokenizer, temp_dir):
 
 
 def _build_llm_metadata(
-    spec, tokenizer, max_num_tokens, path, vision_cfg=None, audio_cfg=None
+    spec,
+    tokenizer,
+    max_num_tokens,
+    path,
+    vision_cfg=None,
+    audio_cfg=None,
+    sampler_config=None,
 ):
     """Serialize an ``LlmMetadata`` protobuf to *path*."""
     # The protobuf lives under an internal-looking subpackage of
@@ -1489,6 +1520,45 @@ def _build_llm_metadata(
     # Populate audio fields for supported model types.
     if audio_cfg is not None:
         spec.populate_audio_metadata(meta, audio_cfg)
+
+    # Sampler defaults are written only when the caller explicitly passes a
+    # `sampler_config`; otherwise the field is omitted so the runtime picks
+    # its own sampling policy. Mirrors litert-torch export_hf's conditional
+    # `sampler_params` population (core/litert_lm_builder.py ~189-232),
+    # including its GREEDY(top_k==1)/TOP_P/TOP_K type-derivation precedence.
+    # keras-hub ships no default sampler (see model_specs.SamplerConfig).
+    if sampler_config is not None:
+        try:
+            from litert_lm_builder.runtime.proto import sampler_params_pb2
+        except ImportError as e:
+            raise ImportError(
+                "LiteRT-LM export requires the sampler protobuf from "
+                "`litert-lm-builder`. The internal module layout appears to "
+                "have changed. Please verify your `litert-lm-builder` "
+                "installation."
+            ) from e
+
+        sp = meta.sampler_params
+        top_k = sampler_config.top_k
+        top_p = sampler_config.top_p
+        if sampler_config.top_k is not None:
+            sp.k = sampler_config.top_k
+        if sampler_config.top_p is not None:
+            sp.p = sampler_config.top_p
+        if sampler_config.temperature is not None:
+            sp.temperature = sampler_config.temperature
+        if sampler_config.seed is not None:
+            sp.seed = sampler_config.seed
+
+        SamplerParameters = sampler_params_pb2.SamplerParameters
+        if top_k == 1:
+            sp.type = SamplerParameters.GREEDY
+        elif top_p is not None:
+            sp.type = SamplerParameters.TOP_P
+        elif top_k is not None:
+            sp.type = SamplerParameters.TOP_K
+        else:
+            sp.type = SamplerParameters.TOP_P
 
     with open(path, "wb") as f:
         f.write(meta.SerializeToString())

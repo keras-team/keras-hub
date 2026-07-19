@@ -1179,6 +1179,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             # bundle, which is what the family tests export. Separate-vision
             # parity is a separate task.
             separate_vision_encoder=False,
+            # This harness always mirrors an unconfigured `model.export(...)`
+            # call (no `sampler_config`), matching what the family tests
+            # under verification actually export.
+            sampler_config=None,
         )
         prefill_inputs = _export._build_prefill_inputs(plan)[prefill_seq_len]
 
