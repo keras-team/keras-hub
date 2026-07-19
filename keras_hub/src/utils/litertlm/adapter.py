@@ -149,7 +149,6 @@ class KerasHubLiteRTAdapter(nn.Module):
         self.cache_length = cache_length
         self.separate_vision_encoder = separate_vision_encoder
         self.export_spec = export_spec
-        self.cache_layout = export_spec.cache_layout
 
         vision_encoder = _get_vision_encoder(keras_model.backbone)
         self.has_vision = vision_encoder is not None

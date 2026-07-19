@@ -745,6 +745,7 @@ def _trace_and_convert(
 
 
 def _assemble_bundle(
+    *,
     path,
     temp_dir,
     tokenizer,
@@ -1208,16 +1209,16 @@ def export_to_litertlm(
 
     with tempfile.TemporaryDirectory() as temp_dir:
         _assemble_bundle(
-            path,
-            temp_dir,
-            tokenizer,
-            backend_constraint,
-            edge_model,
-            vision_encoder_edge,
-            vision_adapter_edge,
-            eoi_edge,
-            plan,
-            hf_tokenizer_path,
+            path=path,
+            temp_dir=temp_dir,
+            tokenizer=tokenizer,
+            backend_constraint=backend_constraint,
+            edge_model=edge_model,
+            vision_encoder_edge=vision_encoder_edge,
+            vision_adapter_edge=vision_adapter_edge,
+            eoi_edge=eoi_edge,
+            plan=plan,
+            hf_tokenizer_path=hf_tokenizer_path,
         )
 
     return path
