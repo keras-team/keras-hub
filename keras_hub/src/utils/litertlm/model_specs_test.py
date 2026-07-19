@@ -35,8 +35,8 @@ from keras_hub.src.utils.litertlm.model_specs import Gemma3Spec
 from keras_hub.src.utils.litertlm.model_specs import Gemma4Spec
 from keras_hub.src.utils.litertlm.model_specs import GemmaSpec
 from keras_hub.src.utils.litertlm.model_specs import LiteRTLMExportSpec
-from keras_hub.src.utils.litertlm.model_specs import PaliGemmaSpec
 from keras_hub.src.utils.litertlm.model_specs import Llama3Spec
+from keras_hub.src.utils.litertlm.model_specs import PaliGemmaSpec
 from keras_hub.src.utils.litertlm.model_specs import Qwen2p5FamilySpec
 from keras_hub.src.utils.litertlm.model_specs import Qwen3_5Spec
 from keras_hub.src.utils.litertlm.model_specs import Qwen3FamilySpec

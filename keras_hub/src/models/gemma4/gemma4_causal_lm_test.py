@@ -347,9 +347,7 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
         self.assertTrue(result["has_vision"])
         self.assertTrue(result["has_audio"])
         self.assertTrue(result["audio_isolable"])
-        self.assertEqual(
-            result["verification_level"], "end_to_end_multimodal"
-        )
+        self.assertEqual(result["verification_level"], "end_to_end_multimodal")
         self.assertGreater(result["prefill_kv_max_abs_err"], 0.0)
         self.assertGreater(result["decode_logits_max_abs_err"], 0.0)
         self.assertLess(result["prefill_kv_max_abs_err"], 1e-4)

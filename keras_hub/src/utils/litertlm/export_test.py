@@ -491,9 +491,7 @@ class TestLiteRTLmExport(TestCase):
             model.export(path, format="litertlm", prefill_seq_len=[8, 20])
         message = str(ctx.exception)
         # Stable prefix (also asserted by the sibling rejection test).
-        self.assertIn(
-            "Multimodal LiteRT-LM export currently requires", message
-        )
+        self.assertIn("Multimodal LiteRT-LM export currently requires", message)
         # Accuracy: scoped to all vision families, not just Gemma3.
         self.assertIn("all vision-capable families", message)
         for family in ("Gemma3", "Gemma3n", "Gemma4", "PaliGemma"):
