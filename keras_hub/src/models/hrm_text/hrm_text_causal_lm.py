@@ -22,6 +22,10 @@ class HrmTextCausalLM(CausalLM):
     plain strings are causal examples and dictionaries with ``prefix`` and
     ``response`` are packed as PrefixLM examples.
 
+    Condition tokens such as the official ``direct`` or ``synth,cot`` tokens
+    belong inside the PrefixLM prefix. They are prompt-formatting inputs, not
+    separate recurrent state.
+
     The official 1B weights are not bundled with the source distribution. Use
     the conversion script to create a local preset, then load it with
     :meth:`from_preset`.

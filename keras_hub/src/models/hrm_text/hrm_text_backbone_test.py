@@ -57,19 +57,54 @@ class HrmTextBackboneTest(TestCase):
 
     def test_cached_forward_matches_full_forward(self):
         backbone = HrmTextBackbone(**self.init_kwargs)
-        full_output = backbone(self.input_data)
+        input_data = {
+            "token_ids": np.array([[1, 2, 3, 4, 5, 6]], dtype="int32"),
+            "padding_mask": np.ones((1, 6), dtype="int32"),
+            "token_type_ids": np.array([[1, 1, 1, 0, 0, 0]], dtype="int32"),
+        }
+        full_output = backbone(input_data)
         cache = ops.zeros(
-            (1, backbone.cache_slots, 2, 4, 4, 4), dtype=backbone.compute_dtype
+            (1, backbone.cache_slots, 2, 6, 4, 4), dtype=backbone.compute_dtype
         )
         _, cache = backbone.call_with_cache(
-            self.input_data["token_ids"][:, :3],
+            input_data["token_ids"][:, :3],
             cache,
             cache_update_index=0,
-            token_type_ids=self.input_data["token_type_ids"][:, :3],
+            token_type_ids=input_data["token_type_ids"][:, :3],
         )
-        cached_output, _ = backbone.call_with_cache(
-            self.input_data["token_ids"][:, 3:],
-            cache,
-            cache_update_index=3,
+        for index in range(3, 6):
+            cached_output, cache = backbone.call_with_cache(
+                input_data["token_ids"][:, index : index + 1],
+                cache,
+                cache_update_index=index,
+            )
+            self.assertAllClose(
+                full_output[:, index : index + 1], cached_output, atol=1e-5
+            )
+
+    def test_frozen_initial_state(self):
+        backbone = HrmTextBackbone(**self.init_kwargs)
+        self.assertFalse(backbone.initial_state.z_L_init.trainable)
+        self.assertIn(
+            backbone.initial_state.z_L_init, backbone.non_trainable_weights
         )
-        self.assertAllClose(full_output[:, 3:], cached_output, atol=1e-5)
+
+    def test_l_bp_cycles_config(self):
+        backbone = HrmTextBackbone(
+            **self.init_kwargs,
+            l_bp_cycles=[0, 2],
+            initializer_range=0.03,
+            embedding_scale=None,
+        )
+        config = backbone.get_config()
+        self.assertEqual(config["l_bp_cycles"], [0, 2])
+        self.assertEqual(config["initializer_range"], 0.03)
+        self.assertAllClose(config["embedding_scale"], 1.0 / 0.03)
+
+    def test_l_bp_cycles_validation(self):
+        with self.assertRaises(ValueError):
+            HrmTextBackbone(**self.init_kwargs, l_bp_cycles=[1, 1, 1])
+        with self.assertRaises(ValueError):
+            HrmTextBackbone(**self.init_kwargs, l_bp_cycles=[-1])
+        with self.assertRaises(ValueError):
+            HrmTextBackbone(**self.init_kwargs, l_bp_cycles=[1.5])

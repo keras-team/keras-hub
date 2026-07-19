@@ -66,6 +66,11 @@ class HrmTextBackbone(Backbone):
     each model call; autoregressive generation instead caches the key/value
     tensors for every logical stack invocation.
 
+    During training, ``l_bp_cycles`` reproduces HRM-Text's bounded-gradient
+    recurrence: only the configured trailing L updates in each H cycle retain
+    gradients. It does not change forward or inference results. The checkpoint
+    low-level initial state is frozen, matching the reference implementation.
+
     Inputs are a dictionary with ``token_ids``, ``padding_mask``, and
     ``token_type_ids``. Set ``token_type_ids`` to zero for ordinary causal
     attention. Positions marked one form a bidirectional PrefixLM prefix;
@@ -87,8 +92,13 @@ class HrmTextBackbone(Backbone):
         rope_theta: Rotary-position-embedding base. Defaults to ``10000.0``.
         rms_norm_epsilon: Epsilon used by RMS normalization. Defaults to
             ``1e-6``.
+        l_bp_cycles: Per-H-cycle counts of trailing L iterations that retain
+            gradients. Short lists are left-padded with one. Defaults to
+            ``[2]``. This is an inference-time no-op.
+        initializer_range: Standard deviation of the normal initializer used
+            for embedding and projection weights. Defaults to ``0.02``.
         embedding_scale: Scale applied to token embeddings before recurrence.
-            Defaults to ``1.0``.
+            When ``None``, defaults to ``1 / initializer_range``.
         tie_word_embeddings: Whether input and output embeddings are tied.
             Defaults to ``False``.
         dtype: Dtype policy for the backbone.
@@ -129,7 +139,9 @@ class HrmTextBackbone(Backbone):
         max_sequence_length=4096,
         rope_theta=10000.0,
         rms_norm_epsilon=1e-6,
-        embedding_scale=1.0,
+        l_bp_cycles=None,
+        initializer_range=0.02,
+        embedding_scale=None,
         tie_word_embeddings=False,
         dtype=None,
         **kwargs,
@@ -145,12 +157,39 @@ class HrmTextBackbone(Backbone):
         self.max_sequence_length = max_sequence_length
         self.rope_theta = rope_theta
         self.rms_norm_epsilon = rms_norm_epsilon
-        self.embedding_scale = embedding_scale
+        if initializer_range <= 0:
+            raise ValueError("`initializer_range` must be positive.")
+        if l_bp_cycles is None:
+            l_bp_cycles = [2]
+        if len(l_bp_cycles) > h_cycles:
+            raise ValueError(
+                "`l_bp_cycles` cannot contain more entries than `h_cycles`."
+            )
+        if any(
+            not isinstance(value, int) or value < 0 for value in l_bp_cycles
+        ):
+            raise ValueError(
+                "`l_bp_cycles` entries must be non-negative integers."
+            )
+        self.l_bp_cycles = list(l_bp_cycles)
+        self._l_bp_cycles_padded = [1] * (
+            h_cycles - len(self.l_bp_cycles)
+        ) + self.l_bp_cycles
+        self.initializer_range = initializer_range
+        self.embedding_scale = (
+            1.0 / initializer_range
+            if embedding_scale is None
+            else embedding_scale
+        )
         self.tie_word_embeddings = tie_word_embeddings
+        kernel_initializer = keras.initializers.RandomNormal(
+            stddev=initializer_range
+        )
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=tie_word_embeddings,
+            embeddings_initializer=kernel_initializer,
             name="token_embedding",
             dtype=dtype,
         )
@@ -160,6 +199,7 @@ class HrmTextBackbone(Backbone):
             "intermediate_dim": intermediate_dim,
             "rope_theta": rope_theta,
             "rms_norm_epsilon": rms_norm_epsilon,
+            "kernel_initializer": kernel_initializer,
         }
         self.L_module = HrmTextStack(
             num_layers_per_stack, name="L_module", dtype=dtype, **block_kwargs
@@ -202,6 +242,8 @@ class HrmTextBackbone(Backbone):
         high = self.token_embedding(token_ids) * self.embedding_scale
         low = self.initial_state(high)
         for high_cycle in range(self.h_cycles):
+            num_grad_iterations = self._l_bp_cycles_padded[high_cycle]
+            grad_threshold = self.l_cycles - num_grad_iterations
             for low_cycle in range(self.l_cycles):
                 offset = (
                     high_cycle * (self.l_cycles + 1) + low_cycle
@@ -209,6 +251,8 @@ class HrmTextBackbone(Backbone):
                 low = self.L_module(
                     low + high, attention_mask, cycle_offset=offset
                 )
+                if low_cycle < grad_threshold:
+                    low = ops.stop_gradient(low)
             offset = (
                 high_cycle * (self.l_cycles + 1) + self.l_cycles
             ) * self.num_layers_per_stack
@@ -284,6 +328,8 @@ class HrmTextBackbone(Backbone):
                 "max_sequence_length": self.max_sequence_length,
                 "rope_theta": self.rope_theta,
                 "rms_norm_epsilon": self.rms_norm_epsilon,
+                "l_bp_cycles": self.l_bp_cycles,
+                "initializer_range": self.initializer_range,
                 "embedding_scale": self.embedding_scale,
                 "tie_word_embeddings": self.tie_word_embeddings,
             }

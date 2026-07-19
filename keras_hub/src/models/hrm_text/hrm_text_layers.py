@@ -3,6 +3,8 @@
 import keras
 from keras import ops
 
+from keras_hub.src.utils.keras_utils import clone_initializer
+
 
 class HrmTextAttentionMask(keras.layers.Layer):
     """Builds the dynamic causal or PrefixLM attention mask."""
@@ -38,7 +40,7 @@ class HrmTextRMSNorm(keras.layers.Layer):
 
 
 class HrmTextInitialState(keras.layers.Layer):
-    """Broadcasts HRM-Text's learned low-level initial state."""
+    """Broadcasts HRM-Text's frozen checkpoint low-level initial state."""
 
     def __init__(self, hidden_dim, **kwargs):
         super().__init__(**kwargs)
@@ -49,7 +51,7 @@ class HrmTextInitialState(keras.layers.Layer):
             name="z_L_init",
             shape=(self.hidden_dim,),
             initializer="zeros",
-            trainable=True,
+            trainable=False,
         )
         super().build(inputs_shape)
 
@@ -66,9 +68,12 @@ class HrmTextInitialState(keras.layers.Layer):
 class HrmTextMLP(keras.layers.Layer):
     """SwiGLU feed-forward network."""
 
-    def __init__(self, intermediate_dim, **kwargs):
+    def __init__(
+        self, intermediate_dim, kernel_initializer="glorot_uniform", **kwargs
+    ):
         super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, inputs_shape):
         hidden_dim = inputs_shape[-1]
@@ -77,18 +82,21 @@ class HrmTextMLP(keras.layers.Layer):
             use_bias=False,
             name="gate_proj",
             dtype=self.dtype_policy,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
         )
         self.up_proj = keras.layers.Dense(
             self.intermediate_dim,
             use_bias=False,
             name="up_proj",
             dtype=self.dtype_policy,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
         )
         self.down_proj = keras.layers.Dense(
             hidden_dim,
             use_bias=False,
             name="down_proj",
             dtype=self.dtype_policy,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
         )
         super().build(inputs_shape)
 
@@ -98,19 +106,34 @@ class HrmTextMLP(keras.layers.Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({"intermediate_dim": self.intermediate_dim})
+        config.update(
+            {
+                "intermediate_dim": self.intermediate_dim,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+            }
+        )
         return config
 
 
 class HrmTextAttention(keras.layers.Layer):
     """Multi-head RoPE attention with HRM-Text's sigmoid output gate."""
 
-    def __init__(self, num_heads, head_dim, rope_theta=10000.0, **kwargs):
+    def __init__(
+        self,
+        num_heads,
+        head_dim,
+        rope_theta=10000.0,
+        kernel_initializer="glorot_uniform",
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.num_heads = num_heads
         self.head_dim = head_dim
         self.rope_theta = rope_theta
         self.hidden_dim = num_heads * head_dim
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, inputs_shape):
         for name in ("q_proj", "k_proj", "v_proj", "gate_proj", "o_proj"):
@@ -122,6 +145,9 @@ class HrmTextAttention(keras.layers.Layer):
                     use_bias=False,
                     name=name,
                     dtype=self.dtype_policy,
+                    kernel_initializer=clone_initializer(
+                        self.kernel_initializer
+                    ),
                 ),
             )
         super().build(inputs_shape)
@@ -202,6 +228,9 @@ class HrmTextAttention(keras.layers.Layer):
                 "num_heads": self.num_heads,
                 "head_dim": self.head_dim,
                 "rope_theta": self.rope_theta,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
             }
         )
         return config
@@ -217,6 +246,7 @@ class HrmTextDecoderBlock(keras.layers.Layer):
         intermediate_dim,
         rope_theta=10000.0,
         rms_norm_epsilon=1e-6,
+        kernel_initializer="glorot_uniform",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -225,6 +255,7 @@ class HrmTextDecoderBlock(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
         self.rope_theta = rope_theta
         self.rms_norm_epsilon = rms_norm_epsilon
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, inputs_shape):
         self.input_layernorm = HrmTextRMSNorm(
@@ -236,6 +267,7 @@ class HrmTextDecoderBlock(keras.layers.Layer):
             self.num_heads,
             self.head_dim,
             self.rope_theta,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
             name="self_attn",
             dtype=self.dtype_policy,
         )
@@ -245,7 +277,10 @@ class HrmTextDecoderBlock(keras.layers.Layer):
             dtype=self.dtype_policy,
         )
         self.mlp = HrmTextMLP(
-            self.intermediate_dim, name="mlp", dtype=self.dtype_policy
+            self.intermediate_dim,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            name="mlp",
+            dtype=self.dtype_policy,
         )
         super().build(inputs_shape)
 
@@ -276,6 +311,9 @@ class HrmTextDecoderBlock(keras.layers.Layer):
                 "intermediate_dim": self.intermediate_dim,
                 "rope_theta": self.rope_theta,
                 "rms_norm_epsilon": self.rms_norm_epsilon,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
             }
         )
         return config

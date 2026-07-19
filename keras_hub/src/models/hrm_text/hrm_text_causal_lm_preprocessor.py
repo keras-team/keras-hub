@@ -22,7 +22,10 @@ class HrmTextCausalLMPreprocessor(CausalLMPreprocessor):
     A plain string is treated as causal language-model text. For PrefixLM
     training, pass a dictionary containing ``prefix`` and ``response``. Only
     response-token labels receive training weight; prefix tokens can attend to
-    one another bidirectionally.
+    one another bidirectionally. Place official condition tokens inside the
+    ``prefix`` string, after ``<|im_start|>``; for example, the upstream
+    ``synth,cot`` condition begins with
+    ``<|im_start|><|quad_end|><|object_ref_end|>``.
 
     Args:
         tokenizer: An instance of `keras_hub.models.HrmTextTokenizer`.

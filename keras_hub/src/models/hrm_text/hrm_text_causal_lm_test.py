@@ -1,4 +1,9 @@
+import os
+from unittest.mock import patch
+
+import keras
 import numpy as np
+import pytest
 from keras import ops
 
 from keras_hub.src.models.hrm_text.hrm_text_backbone import HrmTextBackbone
@@ -76,6 +81,9 @@ class HrmTextCausalLMTest(TestCase):
     def test_generate(self):
         causal_lm = HrmTextCausalLM(**self.init_kwargs)
         prompt = " airplane"
+        output = causal_lm.generate(prompt)
+        self.assertTrue(isinstance(output, str))
+        self.assertTrue(prompt in output)
         prompt_ids = self.preprocessor.generate_preprocess(
             [prompt], sequence_length=7
         )
@@ -87,3 +95,133 @@ class HrmTextCausalLMTest(TestCase):
         self.assertAllEqual(
             outputs["padding_mask"][:, :2], prompt_ids["padding_mask"][:, :2]
         )
+
+    def test_generate_strip_prompt(self):
+        causal_lm = HrmTextCausalLM(**self.init_kwargs)
+        prompt = " airplane"
+        output = causal_lm.generate(prompt, strip_prompt=True)
+        self.assertFalse(output.startswith(prompt))
+
+    def test_generate_compilation(self):
+        causal_lm = HrmTextCausalLM(**self.init_kwargs)
+        causal_lm.generate(" airplane")
+        first_function = causal_lm.generate_function
+        causal_lm.generate(" airplane")
+        self.assertEqual(first_function, causal_lm.generate_function)
+        causal_lm.compile(sampler="greedy")
+        self.assertIsNone(causal_lm.generate_function)
+
+    def test_early_stopping_with_unequal_prompts(self):
+        causal_lm = HrmTextCausalLM(**self.init_kwargs)
+        call_with_cache = causal_lm.call_with_cache
+
+        def wrapper(*args, **kwargs):
+            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
+            index = self.preprocessor.tokenizer.end_token_id
+            update = ops.ones_like(logits)[:, :, index] * 1.0e9
+            logits = ops.slice_update(
+                logits,
+                (0, 0, index),
+                ops.expand_dims(update, axis=-1),
+            )
+            return logits, hidden_states, cache
+
+        prompts = [" airplane at airport", " airplane"]
+        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
+            outputs = causal_lm.generate(prompts)
+        self.assertEqual(outputs, prompts)
+
+    def test_tied_and_untied_embeddings(self):
+        for tie_word_embeddings in (True, False):
+            backbone = HrmTextBackbone(
+                vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+                hidden_dim=16,
+                intermediate_dim=32,
+                num_layers_per_stack=1,
+                num_attention_heads=4,
+                head_dim=4,
+                h_cycles=1,
+                l_cycles=1,
+                tie_word_embeddings=tie_word_embeddings,
+            )
+            model = HrmTextCausalLM(backbone, self.preprocessor)
+            outputs = model(self.input_data)
+            self.assertEqual(
+                outputs.shape[-1], self.preprocessor.tokenizer.vocabulary_size()
+            )
+            self.assertEqual(
+                backbone.token_embedding.tie_weights, tie_word_embeddings
+            )
+
+    def test_l_bp_cycles_control_training_gradients(self):
+        def make_model(l_bp_cycles):
+            backbone = HrmTextBackbone(
+                vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+                hidden_dim=16,
+                intermediate_dim=32,
+                num_layers_per_stack=1,
+                num_attention_heads=4,
+                head_dim=4,
+                h_cycles=2,
+                l_cycles=2,
+                l_bp_cycles=l_bp_cycles,
+            )
+            model = HrmTextCausalLM(backbone, self.preprocessor)
+            model.compile(
+                optimizer=keras.optimizers.SGD(learning_rate=0.01),
+                loss=keras.losses.SparseCategoricalCrossentropy(
+                    from_logits=True
+                ),
+            )
+            return model
+
+        train_data = {
+            "prefix": [" airplane", " airplane"],
+            "response": [" at airport", " at airport"],
+        }
+        frozen_model = make_model([0, 0])
+        frozen_before = [
+            ops.convert_to_numpy(weight).copy()
+            for weight in frozen_model.backbone.L_module.weights
+        ]
+        frozen_model.fit(train_data, batch_size=2, epochs=1, verbose=0)
+        frozen_after = [
+            ops.convert_to_numpy(weight)
+            for weight in frozen_model.backbone.L_module.weights
+        ]
+        for before, after in zip(frozen_before, frozen_after):
+            self.assertAllClose(before, after)
+
+        enabled_model = make_model([2, 2])
+        enabled_before = [
+            ops.convert_to_numpy(weight).copy()
+            for weight in enabled_model.backbone.L_module.weights
+        ]
+        enabled_model.fit(train_data, batch_size=2, epochs=1, verbose=0)
+        enabled_after = [
+            ops.convert_to_numpy(weight)
+            for weight in enabled_model.backbone.L_module.weights
+        ]
+        self.assertTrue(
+            any(
+                not np.allclose(before, after)
+                for before, after in zip(enabled_before, enabled_after)
+            )
+        )
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=HrmTextCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    @pytest.mark.large
+    def test_local_preset_round_trip(self):
+        model = HrmTextCausalLM(**self.init_kwargs)
+        expected = model(self.input_data)
+        preset_dir = os.path.join(self.get_temp_dir(), "hrm_text_preset")
+        model.save_to_preset(preset_dir)
+        restored = HrmTextCausalLM.from_preset(preset_dir)
+        self.assertAllClose(expected, restored(self.input_data))
