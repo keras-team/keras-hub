@@ -562,6 +562,99 @@ class TestLiteRTLmExport(TestCase):
         self.assertIn("vision_indices", prefill_inputs)
         self.assertIn("vision_mask", prefill_inputs)
 
+    def test_multimodal_numeric_parity_gemma3(self):
+        """WS3.2: host-side multimodal (baked-in vision) numeric parity.
+
+        Locks a regression baseline against the CURRENT code before the
+        multimodal architecture refactor. Gemma3 is chosen because its
+        baked-in vision parity is already proven elsewhere; the tolerance is
+        1e-4 (Gemma3's proven value), not relaxed.
+        """
+        from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+        from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
+        from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
+            Gemma3CausalLMPreprocessor,
+        )
+        from keras_hub.src.models.gemma3.gemma3_image_converter import (
+            Gemma3ImageConverter,
+        )
+        from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+            Gemma3VisionEncoder,
+        )
+        from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import (
+            MockGemma3Tokenizer,
+        )
+
+        tokenizer = MockGemma3Tokenizer()
+        # Without a tokenizer asset the export raises; attach one exactly as
+        # the sibling `test_export_multimodal_tiny_gemma3` does.
+        self._attach_sentencepiece_tokenizer_asset(
+            tokenizer,
+            os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm"),
+        )
+
+        image_converter = Gemma3ImageConverter(image_size=(16, 16))
+        preprocessor = Gemma3CausalLMPreprocessor(
+            image_converter=image_converter,
+            tokenizer=tokenizer,
+            sequence_length=20,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=4,
+        )
+        vision_encoder = Gemma3VisionEncoder(
+            image_size=16,
+            patch_size=4,
+            pool_size=2,
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            output_dim=8,
+        )
+        backbone = Gemma3Backbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            image_size=16,
+            num_layers=2,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            vision_encoder=vision_encoder,
+        )
+        model = Gemma3CausalLM(preprocessor=preprocessor, backbone=backbone)
+        # Random (not default) weights so the parity check is meaningful --
+        # otherwise both backends would compute on identical default values.
+        self._set_random_weights(model)
+
+        prefill_seq_len = 20
+        path = os.path.join(self.get_temp_dir(), "test_mm_parity.litertlm")
+        model.export(path, format="litertlm", prefill_seq_len=prefill_seq_len)
+
+        interpreters = self._extract_litertlm_tflite_interpreters(path)
+        main = None
+        for it in interpreters:
+            sigs = it._get_full_signature_list()
+            if any(s.startswith("prefill") for s in sigs) and "decode" in sigs:
+                main = it
+                break
+        main = main or interpreters[0]
+
+        result = self._verify_litertlm_multimodal_numerics(
+            model,
+            main,
+            prefill_seq_len=prefill_seq_len,
+            atol=1e-4,
+            rtol=1e-4,
+        )
+
+        # Prove it verified something real, at the level it claims.
+        self.assertTrue(result["has_vision"])
+        self.assertFalse(result["has_audio"])
+        self.assertEqual(result["verification_level"], "end_to_end_vision")
+        self.assertLess(result["prefill_kv_max_abs_err"], 1e-4)
+        self.assertLess(result["decode_logits_max_abs_err"], 1e-4)
+
     def test_export_separate_vision_encoder_gemma3(self):
         """Export Gemma3 with separate vision encoder/adapter models."""
         from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
