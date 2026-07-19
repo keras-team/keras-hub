@@ -87,6 +87,24 @@ class LiteRTLMExportSpec:
     #:   all (Gemma3n). `separate_vision_encoder=True` is meaningless for
     #:   this style and is rejected in `export_to_litertlm`.
     vision_input_style = "raw_images"
+    #: How this family's audio encoder consumes its input (only meaningful
+    #: when `get_audio_config` returns non-``None``). One of:
+    #: - ``None`` (default): the family has no audio encoder.
+    #: - ``"embedded_mel"``: the audio encoder runs *inside* the backbone, so
+    #:   `call_with_cache` itself consumes the pre-extracted mel spectrogram
+    #:   (``input_features``/``input_features_mask``) directly and the adapter
+    #:   never calls a separate audio encoder (Gemma3n).
+    #: - ``"standalone_mel"``: the adapter calls
+    #:   ``backbone.audio_encoder(audio_mel, audio_mel_mask)`` as a standalone
+    #:   in-trace stage and passes the resulting embeddings into
+    #:   `call_with_cache` (Gemma4).
+    #: This replaces the old ``"input_features" in call_with_cache signature``
+    #: sniff in ``adapter.py`` -- the same migration ``vision_input_style``
+    #: already made (see the comment near the separate-vision-encoder rejection
+    #: in ``export.py``): the spec, resolved once from the family registry,
+    #: already knows this about its own family, so ask it instead of
+    #: re-deriving the fact from signature introspection at trace time.
+    audio_input_style = None
 
     # -- Cache / vision / audio config -----------------------------------
 
@@ -559,6 +577,7 @@ class Gemma3nSpec(GemmaSpec):
     model_type = "gemma3n"
     cache_layout = "gemma3n"
     vision_input_style = "embedded_pixel_values"
+    audio_input_style = "embedded_mel"
 
     def populate_vision_metadata(self, meta, vision_cfg):
         _populate_gemma3_family_vision_metadata(
@@ -591,6 +610,7 @@ class Gemma3nSpec(GemmaSpec):
 class Gemma4Spec(GemmaSpec):
     model_type = "gemma4"
     vision_input_style = "patch_values"
+    audio_input_style = "standalone_mel"
 
     def populate_vision_metadata(self, meta, vision_cfg):
         image_size = vision_cfg["image_size"]

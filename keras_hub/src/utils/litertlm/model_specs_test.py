@@ -30,8 +30,12 @@ from keras_hub.src.models.qwen3_5.qwen3_5_backbone import Qwen3_5Backbone
 from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm import Qwen3_5CausalLM
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.litertlm.model_specs import _EXPORT_SPEC_REGISTRY
+from keras_hub.src.utils.litertlm.model_specs import Gemma3nSpec
+from keras_hub.src.utils.litertlm.model_specs import Gemma3Spec
+from keras_hub.src.utils.litertlm.model_specs import Gemma4Spec
 from keras_hub.src.utils.litertlm.model_specs import GemmaSpec
 from keras_hub.src.utils.litertlm.model_specs import LiteRTLMExportSpec
+from keras_hub.src.utils.litertlm.model_specs import PaliGemmaSpec
 from keras_hub.src.utils.litertlm.model_specs import Llama3Spec
 from keras_hub.src.utils.litertlm.model_specs import Qwen2p5FamilySpec
 from keras_hub.src.utils.litertlm.model_specs import Qwen3_5Spec
@@ -289,3 +293,28 @@ class ExportSpecRegistryIntegrityTest(TestCase):
     def test_qwen3_5_spec_describes_hybrid_cache_specifically(self):
         message = Qwen3_5Spec().describe_unsupported_cache_structure()
         self.assertIn("hybrid full_attention/linear_attention", message)
+
+    # -- Audio input style --------------------------------------------------
+    #
+    # Every audio-capable family (a spec that overrides
+    # `populate_audio_metadata` with real audio tokens) must also declare an
+    # `audio_input_style` so the adapter dispatches on the spec instead of
+    # sniffing `call_with_cache`'s signature. This is the audio analogue of
+    # `vision_input_style` and mirrors the migration vision already got.
+
+    def test_audio_capable_specs_declare_audio_input_style(self):
+        """Gemma3n and Gemma4 are the only audio-capable families; each must
+        declare a concrete `audio_input_style` matching how its audio encoder
+        consumes input (embedded-in-backbone vs standalone in-trace)."""
+        self.assertEqual(Gemma3nSpec().audio_input_style, "embedded_mel")
+        self.assertEqual(Gemma4Spec().audio_input_style, "standalone_mel")
+
+    def test_non_audio_specs_have_no_audio_input_style(self):
+        """The base spec and non-audio families default to `None`, so the
+        registry test's audio-capability signal stays a clean non-None check
+        (mirrors `vision_input_style` being `None` only via the adapter's
+        `has_audio` guard -- here it is the spec-declared default)."""
+        self.assertIsNone(LiteRTLMExportSpec().audio_input_style)
+        self.assertIsNone(GemmaSpec().audio_input_style)
+        self.assertIsNone(Gemma3Spec().audio_input_style)
+        self.assertIsNone(PaliGemmaSpec().audio_input_style)

@@ -160,6 +160,17 @@ class KerasHubLiteRTAdapter(nn.Module):
             hasattr(keras_model.backbone, "audio_encoder")
             and keras_model.backbone.audio_encoder is not None
         )
+        # How this family's audio encoder consumes its input -- see
+        # `LiteRTLMExportSpec.audio_input_style` in model_specs.py
+        # ("embedded_mel" = encoder runs inside the backbone, "standalone_mel"
+        # = adapter calls backbone.audio_encoder directly). `None` when the
+        # model has no audio encoder. This replaces the old
+        # `"input_features" in call_with_cache params` signature sniff with the
+        # spec fact the family registry already resolved -- the same migration
+        # `vision_input_style` made (see export.py's separate-vision rejection).
+        self.audio_input_style = (
+            export_spec.audio_input_style if self.has_audio else None
+        )
 
         # Cache the call_with_cache signature so we don't re-inspect it on every
         # forward pass during export tracing.
@@ -167,7 +178,6 @@ class KerasHubLiteRTAdapter(nn.Module):
             inspect.signature(keras_model.call_with_cache).parameters.keys()
         )
         self._call_with_cache_params = call_params
-        self._expects_input_features = "input_features" in call_params
 
     def forward_prefill(
         self,
@@ -306,10 +316,12 @@ class KerasHubLiteRTAdapter(nn.Module):
         if not self.has_audio or audio_mel is None:
             return None, None, None
 
-        if self._expects_input_features:
-            # Gemma3n runs the audio encoder inside the backbone.
+        if self.audio_input_style == "embedded_mel":
+            # Gemma3n runs the audio encoder inside the backbone; pass the
+            # pre-extracted mel (input_features) + mask through.
             return None, audio_mel, audio_mel_mask
 
+        # standalone_mel (Gemma4): audio encoder is a standalone in-trace stage.
         audio_embeddings = self.keras_model.backbone.audio_encoder(
             audio_mel, audio_mel_mask
         )
