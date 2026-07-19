@@ -6,7 +6,7 @@ some introduce fused ATen ops, runtime assertions, or unbacked symbolic
 shapes that ``litert_torch`` cannot translate to TFLite. This module holds
 self-contained, drop-in replacements for the handful of ops that need this
 treatment (``one_hot``, ``repeat``, ``slice``, ``take``, ``scatter_update``,
-``dot_product_attention``, ``arange``), plus context managers that
+``dot_product_attention``, ``arange``, ``amax``), plus context managers that
 temporarily monkeypatch Keras's torch backend to use them. This has no
 relationship to ``KerasHubLiteRTAdapter`` beyond being a dependency used
 while tracing it -- it is a standalone "make these ops traceable" shim
@@ -462,14 +462,49 @@ _traceable_repeat_scope = _make_scope(
 )
 
 
+# Capture the original ``amax`` at module load so the patched version can
+# delegate to it for every input form that does not trigger the layout bug.
+_ORIGINAL_AMAX = torch_backend_numpy.amax
+
+
+def _patched_amax(x, axis=None, keepdims=False):
+    """Traceable replacement for Keras torch-backend ``amax``.
+
+    ``keras.ops.max`` / ``keras.ops.amax`` with an integer ``axis`` lower to
+    ``aten.amax``. ``litert_torch``'s layout-optimization pass registers a
+    *checker* for ``aten.amax`` that forces the op to NHWC whenever its input
+    is 4-D (``layout_check.py``), but registers **no matching NHWC rewriter**
+    (``layout_rewrite.py``), so a 4-D ``aten.amax`` aborts conversion with
+    ``RuntimeError: NHWC node rewriter not found: amax``. GPT-OSS hits this in
+    its attention-sink softmax stabilization
+    (``gpt_oss_attention.py``: ``ops.max(combined_logits, axis=-1,
+    keepdims=True)`` on a ``[batch, heads, q, k]`` tensor); the upstream gap is
+    https://github.com/google-ai-edge/litert-torch/issues/1126.
+
+    For the single-integer-axis reduction of a 4-D tensor -- the only case that
+    trips the missing rewriter -- this routes through ``torch.max(dim=...)``,
+    which lowers to ``aten.max.dim`` (a *registered* rewriter). That is the
+    identical reduction and yields bit-identical values. Every other input form
+    (other ranks, tuple axes, ``axis=None``) defers to the original ``amax``
+    unchanged, so this is a no-op transform outside the triggering case.
+    """
+    x = torch_core.convert_to_tensor(x)
+    if axis is not None and isinstance(axis, int) and x.ndim == 4:
+        return torch.max(x, dim=axis, keepdim=keepdims).values
+    return _ORIGINAL_AMAX(x, axis=axis, keepdims=keepdims)
+
+
+_traceable_amax_scope = _make_scope(torch_backend_numpy, "amax", _patched_amax)
+
+
 @contextlib.contextmanager
 def traceable_ops_scope():
     """Enter every traceable-op patch scope at once.
 
-    Combines the seven individual patch scopes (slice, dot_product_attention,
-    one_hot, repeat, arange, take, scatter_update) into a single context
+    Combines the eight individual patch scopes (slice, dot_product_attention,
+    one_hot, repeat, arange, take, scatter_update, amax) into a single context
     manager via ``contextlib.ExitStack``, so callers open one scope instead of
-    nesting seven ``with`` statements.
+    nesting eight ``with`` statements.
     """
     with contextlib.ExitStack() as stack:
         stack.enter_context(_traceable_slice_scope())
@@ -479,4 +514,5 @@ def traceable_ops_scope():
         stack.enter_context(_traceable_arange_scope())
         stack.enter_context(_traceable_take_scope())
         stack.enter_context(_traceable_scatter_update_scope())
+        stack.enter_context(_traceable_amax_scope())
         yield

@@ -2,7 +2,8 @@
 
 ``traceable_ops.py`` temporarily replaces a handful of Keras torch-backend
 ops (``one_hot``, ``repeat``, ``slice``, ``take``, ``scatter_update``,
-``dot_product_attention``, ``arange``) with reimplementations that are
+``dot_product_attention``, ``arange``, ``amax``) with reimplementations that
+are
 friendlier to ``torch.export`` tracing (see each function's docstring for
 the specific tracing issue it works around). These tests do not exercise
 ``torch.export`` at all -- they call the patched functions directly, on
@@ -421,3 +422,51 @@ class TraceableOpsParityTest(TestCase):
         self.assertAllClose(
             _to_np(expected), _to_np(patched), atol=1e-5, rtol=1e-5
         )
+
+    # ------------------------------------------------------------------
+    # amax
+    # ------------------------------------------------------------------
+    def test_amax_matches_original(self):
+        from keras.src.backend.torch import numpy as torch_backend_numpy
+
+        cases = [
+            (torch.randn(2, 3, 4, 5), -1, True),  # 4-D last axis, keepdims
+            (torch.randn(2, 3, 4, 5), -1, False),  # 4-D last axis, no keepdims
+            (torch.randn(2, 3, 4, 5), 1, True),  # 4-D middle axis
+            (torch.randn(2, 3, 4, 5), 0, False),  # 4-D leading axis
+            (torch.randn(2, 4, 5), -1, True),  # 3-D (fallthrough)
+            (torch.randn(4, 5), -1, True),  # 2-D (fallthrough)
+            (torch.randn(7), 0, True),  # 1-D (fallthrough)
+            (torch.randn(2, 2, 3, 4, 5), -1, True),  # 5-D (fallthrough)
+            (torch.randn(2, 3, 4, 5), (2, 3), True),  # 4-D tuple (fallthrough)
+        ]
+        for x, axis, keepdims in cases:
+            with self.subTest(
+                shape=tuple(x.shape), axis=axis, keepdims=keepdims
+            ):
+                original = torch_backend_numpy.amax(
+                    x, axis=axis, keepdims=keepdims
+                )
+                patched = traceable_ops._patched_amax(
+                    x, axis=axis, keepdims=keepdims
+                )
+                self.assertEqual(tuple(original.shape), tuple(patched.shape))
+                # The reformulation is the identical reduction; values must be
+                # bit-identical, not merely close (a silent numeric drift here
+                # would corrupt attention-sink softmax stabilization).
+                self.assertTrue(torch.equal(original, patched))
+
+    def test_amax_public_ops_max_4d_matches(self):
+        # The public keras op that GPT-OSS attention actually calls.
+        import unittest.mock
+
+        from keras import ops as keras_ops
+        from keras.src.backend.torch import numpy as torch_backend_numpy
+
+        x = torch.randn(2, 3, 4, 5)
+        ref = keras_ops.max(x, axis=-1, keepdims=True)
+        with unittest.mock.patch.object(
+            torch_backend_numpy, "amax", traceable_ops._patched_amax
+        ):
+            got = keras_ops.max(x, axis=-1, keepdims=True)
+        self.assertTrue(torch.equal(ref, got))

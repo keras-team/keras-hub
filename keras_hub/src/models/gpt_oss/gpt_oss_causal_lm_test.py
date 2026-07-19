@@ -120,14 +120,6 @@ class GptOssCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "litert-torch layout pass: no NHWC rewriter for aten.amax "
-            "(MoE top-k routing); upstream converter gap; upstream issue: "
-            "https://github.com/google-ai-edge/litert-torch/issues/1126"
-        ),
-    )
     def test_litertlm_export(self):
         self.run_litertlm_export_test(
             cls=GptOssCausalLM,
