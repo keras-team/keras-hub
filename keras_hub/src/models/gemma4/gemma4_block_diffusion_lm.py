@@ -62,9 +62,20 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         preprocessor=None,
         **kwargs,
     ):
+        # === Layers ===
         self.backbone = backbone
         self.preprocessor = preprocessor
-        super().__init__(**kwargs)
+
+        # === Functional Model ===
+        inputs = backbone.input
+        hidden = backbone(inputs)
+        outputs = self._canvas_logits(hidden)
+
+        super().__init__(
+            inputs=inputs,
+            outputs=outputs,
+            **kwargs,
+        )
 
     def _encode_prompt(self, inputs):
         token_ids = inputs["token_ids"]
@@ -210,8 +221,6 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         # canvas_mask marks every canvas position as bidirectional.
         canvas_mask = ops.ones((batch_size, canvas_length), dtype="bool")
 
-        # The HF decoder does not inject per-layer embeddings during the canvas
-        # pass — it is a plain residual transformer loop.
         caches = []
         for i, layer in enumerate(self.backbone.transformer_layers):
             current_cache = combined_cache[:, i, ...]
@@ -238,32 +247,4 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         return self.backbone.layer_norm(x)
 
     def _canvas_logits(self, hidden):
-        logits = self.backbone.token_embedding(hidden, reverse=True)
-        soft_cap = self.backbone.final_logit_soft_cap
-        if soft_cap is not None:
-            logits = ops.tanh(logits / soft_cap) * soft_cap
-        return logits
-
-    def call(self, x, training=False):
-        token_ids = x["token_ids"]
-        padding_mask = x.get("padding_mask", None)
-
-        backbone_inputs = {
-            "token_ids": token_ids,
-            "padding_mask": padding_mask,
-            "position_ids": ops.expand_dims(
-                ops.arange(ops.shape(token_ids)[1], dtype="int32"), axis=0
-            ),
-        }
-        # Pass vision fields to the backbone when a vision encoder is present.
-        if not self.backbone.text_only_model:
-            for key in (
-                "pixel_values",
-                "pixel_position_ids",
-                "vision_indices",
-                "vision_mask",
-            ):
-                if key in x:
-                    backbone_inputs[key] = x[key]
-        hidden = self.backbone(backbone_inputs, training=training)
-        return self._canvas_logits(hidden)
+        return self.backbone.token_embedding(hidden, reverse=True)

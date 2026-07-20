@@ -81,9 +81,10 @@ class EntropyBoundSampler(Sampler):
         self.seed_generator = random.SeedGenerator(seed)
         # Shape is set lazily on first call to _ensure_prev_argmax.
         self._prev_argmax = None
+        self._stable_steps = 0  # plain Python int; sampler is always eager
 
     def _ensure_prev_argmax(self, shape):
-        """Lazily initialise prev_argmax to shape (B, canvas_length)."""
+        """Lazily initialise prev_argmax on first call."""
         if self._prev_argmax is None:
             self._prev_argmax = keras.Variable(
                 initializer=ops.zeros(shape, dtype="int32"),
@@ -92,6 +93,7 @@ class EntropyBoundSampler(Sampler):
                 trainable=False,
                 name="prev_argmax",
             )
+            self._stable_steps = 0
 
     def __call__(self, canvas, logits, step):
         logits = ops.cast(logits, "float32")
@@ -140,16 +142,24 @@ class EntropyBoundSampler(Sampler):
         confidence_met = ops.all(mean_H < self.confidence_threshold)
 
         self._ensure_prev_argmax(ops.shape(cur_argmax))
-        # Stability: argmax unchanged since the previous call.
-        # On step 0 there is no prior state, so stability is never met alone.
+        # Stability: argmax must be unchanged for `stability_threshold`
+        # consecutive steps.  On step 0 there is no prior state so the
+        # counter is reset and stability is never considered met.
         if step > 0:
-            stability_met = ops.all(ops.equal(cur_argmax, self._prev_argmax))
+            argmax_unchanged = bool(
+                ops.convert_to_numpy(
+                    ops.all(ops.equal(cur_argmax, self._prev_argmax))
+                )
+            )
+            self._stable_steps = (
+                self._stable_steps + 1 if argmax_unchanged else 0
+            )
+            stability_met = self._stable_steps >= self.stability_threshold
         else:
-            stability_met = ops.convert_to_tensor(False, dtype="bool")
+            self._stable_steps = 0
+            stability_met = False
 
-        stop = bool(ops.convert_to_numpy(confidence_met)) and bool(
-            ops.convert_to_numpy(stability_met)
-        )
+        stop = bool(ops.convert_to_numpy(confidence_met)) and stability_met
 
         self._prev_argmax.assign(cur_argmax)
 
@@ -158,6 +168,7 @@ class EntropyBoundSampler(Sampler):
     def reset(self):
         """Reset per-call state between independent generate() calls."""
         self._prev_argmax = None
+        self._stable_steps = 0
 
     def get_config(self):
         config = super().get_config()

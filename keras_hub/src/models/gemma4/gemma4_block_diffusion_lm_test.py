@@ -66,25 +66,12 @@ class Gemma4BlockDiffusionLMTest(TestCase, parameterized.TestCase):
         self.assertEqual(logits.shape, (2, 8, self.tokenizer.vocabulary_size()))
 
     def test_task_basics(self):
-        # run_task_test relies on task._inputs_struct, which Keras sets at
-        # construction only for functional models. Gemma4BlockDiffusionLM
-        # defines its own call(), making it a subclassed model where
-        # _inputs_struct is absent until after the first forward pass.
-        # Replicate the key fit/predict/serialization checks manually.
-        task = Gemma4BlockDiffusionLM(**self.init_kwargs)
-        self.run_serialization_test(task)
-
-        # Pass raw prompts/responses — Task.preprocess_samples routes through
-        # the preprocessor automatically, so pre-processed data would cause a
-        # double-preprocessing KeyError.
-        raw_x = self.train_data[0]
-
-        # Predict through task + preprocessor pipeline; verify output shape.
-        output = task.predict(raw_x)
-        self.assertEqual(output.shape, (2, 8, self.tokenizer.vocabulary_size()))
-
-        # Fit through task + preprocessor pipeline for one epoch.
-        task.fit(raw_x, epochs=1)
+        self.run_task_test(
+            cls=Gemma4BlockDiffusionLM,
+            init_kwargs=self.init_kwargs,
+            train_data=self.train_data,
+            expected_output_shape=(2, 8, self.tokenizer.vocabulary_size()),
+        )
 
     def test_generate_single_string(self):
         model = Gemma4BlockDiffusionLM(**self.init_kwargs)

@@ -189,24 +189,6 @@ def _hf_forward(
         proc_kwargs["images"] = raw_image
     hf_inputs = processor(**proc_kwargs)
     hf_inputs = {k: v.cpu() for k, v in hf_inputs.items()}
-    # Gemma4Processor skips BOS; prepend it to match KerasHub behavior.
-    bos_id = processor.tokenizer.bos_token_id
-    if bos_id is not None and hf_inputs["input_ids"][0, 0].item() != bos_id:
-        bos = torch.full(
-            (hf_inputs["input_ids"].shape[0], 1),
-            bos_id,
-            dtype=hf_inputs["input_ids"].dtype,
-        )
-        hf_inputs["input_ids"] = torch.cat([bos, hf_inputs["input_ids"]], dim=1)
-        hf_inputs["attention_mask"] = torch.ones_like(hf_inputs["input_ids"])
-        if "mm_token_type_ids" in hf_inputs:
-            mm_pad = torch.zeros(
-                (hf_inputs["mm_token_type_ids"].shape[0], 1),
-                dtype=hf_inputs["mm_token_type_ids"].dtype,
-            )
-            hf_inputs["mm_token_type_ids"] = torch.cat(
-                [mm_pad, hf_inputs["mm_token_type_ids"]], dim=1
-            )
     if decoder_input_ids is not None:
         hf_inputs["decoder_input_ids"] = decoder_input_ids.cpu()
     with _no_grad():
@@ -551,7 +533,7 @@ def main(_):
     hf_data = _gather_hf_data(hf_repo_id)
     print(f"-> Loading Gemma4BlockDiffusionLM from {hf_preset} …")
     diffusion_lm = keras_hub.models.Gemma4BlockDiffusionLM.from_preset(
-        f"./{preset_name}", dtype="float32"
+        hf_preset, dtype="float32"
     )
     print("✓ All weights loaded")
 

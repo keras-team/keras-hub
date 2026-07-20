@@ -172,7 +172,7 @@ class BlockDiffusionLM(Task):
                     canvas, stop = self.sampler(canvas, logits, step)
                     if stop:
                         break
-                return canvas
+                return ops.cast(ops.argmax(prev_logits, axis=-1), "int32")
 
             self.generate_function = wrapped_generate_function
 
@@ -259,7 +259,7 @@ class BlockDiffusionLM(Task):
                     canvas, stop = self.sampler(canvas, logits, step)
                     prev_logits = logits
 
-                return canvas
+                return ops.cast(ops.argmax(prev_logits, axis=-1), "int32")
 
             self.generate_function = wrapped_generate_function
 
@@ -340,7 +340,7 @@ class BlockDiffusionLM(Task):
             if stop:
                 break
 
-        return canvas
+        return ops.cast(ops.argmax(prev_logits, axis=-1), "int32")
 
     def generate(self, inputs, max_length=None):
         """Generate a denoised canvas given prompt inputs.

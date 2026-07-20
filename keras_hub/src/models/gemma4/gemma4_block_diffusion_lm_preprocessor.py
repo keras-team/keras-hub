@@ -873,7 +873,9 @@ class Gemma4BlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             )
             response_mask = segment_ids == 1
 
-        # Text-only shortcut — minimal output matching base class format.
+        # Text-only shortcut — emits the same keys as `Gemma4BlockDiffusion
+        # LMPreprocessor`'s multimodal branch so the LM can consume
+        # `backbone.input` directly.
         if self.text_only_model:
             label_ids = token_ids[..., 1:]
             sw = (
@@ -881,14 +883,25 @@ class Gemma4BlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
                 if responses is not None
                 else padding_mask[..., 1:]
             )
+            trimmed_token_ids = token_ids[..., :-1]
+            trimmed_padding_mask = padding_mask[..., :-1]
+            batch_size = tf.shape(trimmed_token_ids)[0]
+            seq_len = tf.shape(trimmed_token_ids)[1]
+            position_ids = tf.range(seq_len, dtype=tf.int32)
+            position_ids = tf.expand_dims(position_ids, axis=0)
+            position_ids = tf.tile(position_ids, [batch_size, 1])
             out_x = {
-                "token_ids": token_ids[..., :-1],
-                "padding_mask": padding_mask[..., :-1],
+                "token_ids": trimmed_token_ids,
+                "padding_mask": trimmed_padding_mask,
+                "position_ids": position_ids,
             }
             if not batched:
                 out_x["token_ids"] = tf.squeeze(out_x["token_ids"], axis=0)
                 out_x["padding_mask"] = tf.squeeze(
                     out_x["padding_mask"], axis=0
+                )
+                out_x["position_ids"] = tf.squeeze(
+                    out_x["position_ids"], axis=0
                 )
                 label_ids = tf.squeeze(label_ids, axis=0)
                 sw = tf.squeeze(sw, axis=0)
@@ -1026,7 +1039,9 @@ class Gemma4BlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
                 audio_mel_mask,
             )
 
-        # Text-only: just append canvas and return minimal dict.
+        # Text-only: append canvas and emit position_ids alongside the
+        # standard token / mask fields so the LM's functional graph can
+        # consume the dict directly.
         if self.text_only_model:
             batch_size = tf.shape(token_ids)[0]
             mask_id = self.tokenizer.pad_token_id
@@ -1037,10 +1052,19 @@ class Gemma4BlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             )
             token_ids = tf.concat([token_ids, canvas_tokens], axis=1)
             padding_mask = tf.concat([padding_mask, canvas_mask], axis=1)
+            seq_len = tf.shape(token_ids)[1]
+            position_ids = tf.range(seq_len, dtype=tf.int32)
+            position_ids = tf.expand_dims(position_ids, axis=0)
+            position_ids = tf.tile(position_ids, [batch_size, 1])
             if not batched:
                 token_ids = tf.squeeze(token_ids, axis=0)
                 padding_mask = tf.squeeze(padding_mask, axis=0)
-            return {"token_ids": token_ids, "padding_mask": padding_mask}
+                position_ids = tf.squeeze(position_ids, axis=0)
+            return {
+                "token_ids": token_ids,
+                "padding_mask": padding_mask,
+                "position_ids": position_ids,
+            }
 
         batch_size = tf.shape(token_ids)[0]
 
