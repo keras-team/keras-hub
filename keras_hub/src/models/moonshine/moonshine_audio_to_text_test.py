@@ -151,20 +151,12 @@ class MoonshineAudioToTextTest(TestCase):
         # The model expects boolean masks, but the test data provides int32.
 
         # 1. Convert ALL inputs to numpy first to avoid "mixing tensors" error.
-        input_data = {}
-        for k, v in self.input_data.items():
-            input_data[k] = ops.convert_to_numpy(v)
+        input_data = {k: ops.convert_to_numpy(v) for k, v in self.input_data.items()}
 
         # 2. Force masks to boolean
-        if "encoder_padding_mask" in input_data:
-            input_data["encoder_padding_mask"] = np.array(
-                input_data["encoder_padding_mask"], dtype=bool
-            )
-
-        if "decoder_padding_mask" in input_data:
-            input_data["decoder_padding_mask"] = np.array(
-                input_data["decoder_padding_mask"], dtype=bool
-            )
+        for mask_key in ("encoder_padding_mask", "decoder_padding_mask"):
+            if mask_key in input_data:
+                input_data[mask_key] = input_data[mask_key].astype(bool)
 
         self.run_litert_export_test(
             cls=MoonshineAudioToText,
