@@ -22,6 +22,14 @@ def make_tokenizer_assets():
     vocabulary = {
         token: index for index, token in enumerate(sorted(set(vocabulary)))
     }
+    for token in (
+        "<|im_end|>",
+        "<|object_ref_start|>",
+        "<|object_ref_end|>",
+        "<|quad_start|>",
+        "<|quad_end|>",
+    ):
+        vocabulary[token] = len(vocabulary)
     return vocabulary, merges
 
 
@@ -53,11 +61,32 @@ class HrmTextTokenizerTest(TestCase):
 
     def test_special_tokens(self):
         self.assertEqual(self.tokenizer.start_token, "<|im_start|>")
+        self.assertEqual(self.tokenizer.prefix_end_token, "<|im_end|>")
         self.assertEqual(self.tokenizer.end_token, "<|box_end|>")
         self.assertEqual(self.tokenizer.pad_token, "<|endoftext|>")
         self.assertEqual(
+            self.tokenizer.direct_condition_token,
+            "<|object_ref_start|>",
+        )
+        self.assertEqual(
+            self.tokenizer.cot_condition_token,
+            "<|object_ref_end|>",
+        )
+        self.assertEqual(
+            self.tokenizer.noisy_condition_token,
+            "<|quad_start|>",
+        )
+        self.assertEqual(
+            self.tokenizer.synth_condition_token,
+            "<|quad_end|>",
+        )
+        self.assertEqual(
             self.tokenizer.start_token_id,
             self.vocabulary["<|im_start|>"],
+        )
+        self.assertEqual(
+            self.tokenizer.prefix_end_token_id,
+            self.vocabulary["<|im_end|>"],
         )
         self.assertEqual(
             self.tokenizer.end_token_id, self.vocabulary["<|box_end|>"]
@@ -66,10 +95,30 @@ class HrmTextTokenizerTest(TestCase):
             self.tokenizer.pad_token_id, self.vocabulary["<|endoftext|>"]
         )
 
+    def test_active_inference_tokens_are_atomic(self):
+        tokens = [
+            "<|im_start|>",
+            "<|im_end|>",
+            "<|box_end|>",
+            "<|endoftext|>",
+            "<|object_ref_start|>",
+            "<|object_ref_end|>",
+            "<|quad_start|>",
+            "<|quad_end|>",
+        ]
+        self.assertAllEqual(
+            self.tokenizer(tokens),
+            [[self.vocabulary[token]] for token in tokens],
+        )
+
     def test_config_round_trip(self):
         config = self.tokenizer.get_config()
         restored = HrmTextTokenizer.from_config(config)
         restored.set_vocabulary_and_merges(self.vocabulary, self.merges)
         self.assertAllEqual(
             self.tokenizer([" airplane"]), restored([" airplane"])
+        )
+        self.assertAllEqual(
+            self.tokenizer(["<|im_start|><|quad_end|><|im_end|>"]),
+            restored(["<|im_start|><|quad_end|><|im_end|>"]),
         )

@@ -37,6 +37,14 @@ class HrmTextCausalLMTest(TestCase):
             (token, index)
             for index, token in enumerate(sorted(set(vocabulary)))
         )
+        for token in (
+            "<|im_end|>",
+            "<|object_ref_start|>",
+            "<|object_ref_end|>",
+            "<|quad_start|>",
+            "<|quad_end|>",
+        ):
+            vocabulary[token] = len(vocabulary)
         self.preprocessor = HrmTextCausalLMPreprocessor(
             HrmTextTokenizer(vocabulary=vocabulary, merges=self.merges),
             sequence_length=7,
@@ -221,7 +229,29 @@ class HrmTextCausalLMTest(TestCase):
     def test_local_preset_round_trip(self):
         model = HrmTextCausalLM(**self.init_kwargs)
         expected = model(self.input_data)
+        expected_special_token_ids = {
+            "start": self.preprocessor.tokenizer.start_token_id,
+            "prefix_end": self.preprocessor.tokenizer.prefix_end_token_id,
+            "end": self.preprocessor.tokenizer.end_token_id,
+            "pad": self.preprocessor.tokenizer.pad_token_id,
+            "direct": self.preprocessor.tokenizer.direct_condition_token_id,
+            "cot": self.preprocessor.tokenizer.cot_condition_token_id,
+            "noisy": self.preprocessor.tokenizer.noisy_condition_token_id,
+            "synth": self.preprocessor.tokenizer.synth_condition_token_id,
+        }
         preset_dir = os.path.join(self.get_temp_dir(), "hrm_text_preset")
         model.save_to_preset(preset_dir)
         restored = HrmTextCausalLM.from_preset(preset_dir)
         self.assertAllClose(expected, restored(self.input_data))
+        restored_tokenizer = restored.preprocessor.tokenizer
+        actual_special_token_ids = {
+            "start": restored_tokenizer.start_token_id,
+            "prefix_end": restored_tokenizer.prefix_end_token_id,
+            "end": restored_tokenizer.end_token_id,
+            "pad": restored_tokenizer.pad_token_id,
+            "direct": restored_tokenizer.direct_condition_token_id,
+            "cot": restored_tokenizer.cot_condition_token_id,
+            "noisy": restored_tokenizer.noisy_condition_token_id,
+            "synth": restored_tokenizer.synth_condition_token_id,
+        }
+        self.assertEqual(actual_special_token_ids, expected_special_token_ids)

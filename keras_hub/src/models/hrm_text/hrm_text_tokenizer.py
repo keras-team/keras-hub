@@ -23,8 +23,13 @@ class HrmTextTokenizer(BytePairTokenizer):
         vocabulary: Mapping from token strings to token ids.
         merges: Ordered BPE merge rules.
 
-    The start, end, and padding tokens are ``<|im_start|>``, ``<|box_end|>``,
-    and ``<|endoftext|>``, respectively.
+    The active HRM-Text inference tokens are ``<|im_start|>``,
+    ``<|im_end|>``, ``<|box_end|>``, ``<|endoftext|>``, and the four
+    condition tokens ``<|object_ref_start|>``, ``<|object_ref_end|>``,
+    ``<|quad_start|>``, and ``<|quad_end|>``. They are registered as special
+    tokens so they are encoded atomically. The checkpoint retains additional
+    Qwen-style vocabulary tokens, but those are not part of this tokenizer's
+    active HRM-Text inference protocol.
 
     Examples:
 
@@ -40,6 +45,13 @@ class HrmTextTokenizer(BytePairTokenizer):
 
     def __init__(self, vocabulary=None, merges=None, **kwargs):
         self._add_special_token("<|im_start|>", "start_token")
+        self._add_special_token("<|im_end|>", "prefix_end_token")
         self._add_special_token("<|box_end|>", "end_token")
         self._add_special_token("<|endoftext|>", "pad_token")
+        self._add_special_token(
+            "<|object_ref_start|>", "direct_condition_token"
+        )
+        self._add_special_token("<|object_ref_end|>", "cot_condition_token")
+        self._add_special_token("<|quad_start|>", "noisy_condition_token")
+        self._add_special_token("<|quad_end|>", "synth_condition_token")
         super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
