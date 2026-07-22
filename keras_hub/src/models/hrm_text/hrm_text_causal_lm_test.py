@@ -92,8 +92,9 @@ class HrmTextCausalLMTest(TestCase):
         output = causal_lm.generate(prompt)
         self.assertTrue(isinstance(output, str))
         self.assertTrue(prompt in output)
+        formatted_prompt = self.preprocessor.format_instruction(prompt)
         prompt_ids = self.preprocessor.generate_preprocess(
-            [prompt], sequence_length=7
+            [formatted_prompt], sequence_length=7
         )
         causal_lm.preprocessor = None
         outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)

@@ -74,6 +74,29 @@ class HrmTextCausalLMPreprocessorTest(TestCase):
 
     def test_generate_round_trip(self):
         preprocessor = HrmTextCausalLMPreprocessor(**self.init_kwargs)
-        inputs = preprocessor.generate_preprocess(" airplane")
+        formatted = preprocessor.format_instruction(" airplane")
+        self.assertEqual(
+            formatted, "<|object_ref_start|> airplane<|im_end|>"
+        )
+        inputs = preprocessor.generate_preprocess(formatted)
         self.assertAllEqual(inputs["token_type_ids"], inputs["padding_mask"])
-        self.assertEqual(preprocessor.generate_postprocess(inputs), " airplane")
+        self.assertAllEqual(
+            inputs["token_ids"],
+            [
+                3,
+                self.tokenizer.direct_condition_token_id,
+                27,
+                18,
+                self.tokenizer.prefix_end_token_id,
+                2,
+                2,
+            ],
+        )
+        self.assertEqual(
+            preprocessor.generate_postprocess(inputs), " airplane"
+        )
+
+    def test_format_instruction_rejects_unknown_condition(self):
+        preprocessor = HrmTextCausalLMPreprocessor(**self.init_kwargs)
+        with self.assertRaisesRegex(ValueError, "Unknown HRM-Text condition"):
+            preprocessor.format_instruction(" airplane", "unknown")

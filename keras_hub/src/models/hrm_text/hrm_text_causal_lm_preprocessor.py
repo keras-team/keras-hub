@@ -56,6 +56,39 @@ class HrmTextCausalLMPreprocessor(CausalLMPreprocessor):
     backbone_cls = HrmTextBackbone
     tokenizer_cls = HrmTextTokenizer
 
+    condition_tokens = {
+        "direct": "<|object_ref_start|>",
+        "cot": "<|object_ref_end|>",
+        "noisy": "<|quad_start|>",
+        "synth": "<|quad_end|>",
+    }
+
+    def format_instruction(self, instruction, condition="direct"):
+        """Format an HRM inference instruction without ``<|im_start|>``.
+
+        ``HrmTextCausalLM.generate()`` calls this method for raw string
+        inputs. ``generate_preprocess()`` then owns the leading
+        ``<|im_start|>`` token, producing the upstream PrefixLM prompt:
+        ``<|im_start|><condition>instruction<|im_end|>``. Generated output is
+        terminated by the tokenizer's ``<|box_end|>`` end token.
+        """
+        if condition not in self.condition_tokens:
+            raise ValueError(
+                "Unknown HRM-Text condition. Expected one of "
+                f"{sorted(self.condition_tokens)}."
+            )
+        prefix = self.condition_tokens[condition]
+        suffix = self.tokenizer.prefix_end_token
+        if isinstance(instruction, str):
+            return prefix + instruction + suffix
+        if isinstance(instruction, (list, tuple)):
+            if not all(isinstance(value, str) for value in instruction):
+                raise ValueError("HRM-Text instructions must be strings.")
+            return [prefix + value + suffix for value in instruction]
+        if getattr(instruction, "dtype", None) == tf.string:
+            return tf.strings.join([prefix, instruction, suffix])
+        raise ValueError("HRM-Text instructions must be strings.")
+
     def build(self, input_shape):
         self.packer = MultiSegmentPacker(
             start_value=self.tokenizer.start_token_id,

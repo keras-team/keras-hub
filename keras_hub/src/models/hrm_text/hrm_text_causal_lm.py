@@ -70,6 +70,31 @@ class HrmTextCausalLM(CausalLM):
         outputs = backbone.token_embedding(hidden_states, reverse=True)
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
 
+    def generate(
+        self,
+        inputs,
+        max_length=None,
+        stop_token_ids="auto",
+        strip_prompt=False,
+    ):
+        """Generate from canonical HRM PrefixLM inference prompts.
+
+        Raw string instructions use the base model's ``direct`` condition.
+        The preprocessor adds ``<|im_start|>`` and ``generate()`` stops on its
+        ``<|box_end|>`` end token. Passing preprocessed backbone tensors still
+        follows the standard ``CausalLM.generate()`` contract.
+        """
+        if self.preprocessor is not None and isinstance(
+            inputs, (str, list, tuple)
+        ):
+            inputs = self.preprocessor.format_instruction(inputs, "direct")
+        return super().generate(
+            inputs,
+            max_length=max_length,
+            stop_token_ids=stop_token_ids,
+            strip_prompt=strip_prompt,
+        )
+
     def call_with_cache(
         self, token_ids, cache, cache_update_index, token_type_ids=None
     ):
