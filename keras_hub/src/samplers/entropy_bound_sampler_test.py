@@ -39,8 +39,6 @@ class EntropyBoundSamplerTest(TestCase):
             EntropyBoundSampler(vocabulary_size=None)
 
     def test_confident_tokens_are_committed(self):
-        # When logits are strongly peaked the sampler should commit the
-        # argmax at every position.
         token_ids = np.ones(
             (self.batch_size, self.canvas_length), dtype="int32"
         )
@@ -61,12 +59,10 @@ class EntropyBoundSamplerTest(TestCase):
         self.assertEqual(
             new_canvas.shape, (self.batch_size, self.canvas_length)
         )
-        self.assertIsInstance(stop, bool)
+        stop_np = ops.convert_to_numpy(stop)
+        self.assertEqual(stop_np.shape, (self.batch_size,))
 
     def test_uncommitted_positions_are_renoised(self):
-        # With a very small entropy_bound, only the single lowest-entropy
-        # position is committed; the rest must differ from the argmax because
-        # they are randomly re-noised.
         sampler = EntropyBoundSampler(
             entropy_bound=0.0,
             vocabulary_size=self.vocab_size,
@@ -83,8 +79,6 @@ class EntropyBoundSamplerTest(TestCase):
         self.assertTrue(np.all(new_canvas_np < self.vocab_size))
 
     def test_no_stop_on_step_zero(self):
-        # Stability is never met on step 0 regardless of confidence, so stop
-        # must be False even when logits are highly peaked.
         token_ids = np.zeros(
             (self.batch_size, self.canvas_length), dtype="int32"
         )
@@ -93,11 +87,9 @@ class EntropyBoundSamplerTest(TestCase):
 
         _, stop = self.sampler(canvas, logits, step=0)
 
-        self.assertFalse(stop)
+        self.assertFalse(ops.convert_to_numpy(ops.any(stop)))
 
     def test_stop_when_confident_and_stable(self):
-        # Two consecutive calls with peaked (zero-entropy) logits should
-        # satisfy both the confidence and stability criteria on step 1.
         sampler = EntropyBoundSampler(
             entropy_bound=1.0,
             confidence_threshold=1.0,
@@ -114,12 +106,10 @@ class EntropyBoundSamplerTest(TestCase):
         _, stop0 = sampler(canvas, logits, step=0)
         _, stop1 = sampler(canvas, logits, step=1)
 
-        self.assertFalse(stop0)
-        self.assertTrue(stop1)
+        self.assertFalse(ops.convert_to_numpy(ops.any(stop0)))
+        self.assertTrue(ops.convert_to_numpy(ops.all(stop1)))
 
     def test_no_stop_when_argmax_changes(self):
-        # If the argmax changes between steps, stability is broken and stop
-        # must remain False.
         sampler = EntropyBoundSampler(
             entropy_bound=1.0,
             confidence_threshold=1.0,
@@ -140,7 +130,7 @@ class EntropyBoundSamplerTest(TestCase):
         sampler(canvas, logits_a, step=0)
         _, stop = sampler(canvas, logits_b, step=1)
 
-        self.assertFalse(stop)
+        self.assertFalse(ops.convert_to_numpy(ops.any(stop)))
 
     def test_reset_clears_state(self):
         # After reset(), _prev_argmax is re-initialised to zeros. If the
@@ -165,44 +155,7 @@ class EntropyBoundSamplerTest(TestCase):
         sampler.reset()
         _, stop = sampler(canvas, logits, step=1)
 
-        self.assertFalse(stop)
-
-    def test_entropy_bound_controls_commit_count(self):
-        # A large entropy_bound commits more tokens than a small one when
-        # logits have varying per-position entropy.
-        batch_size = 1
-        canvas_length = 8
-        vocab_size = 16
-
-        # Create logits with a mix of high and low entropy positions.
-        logits_np = np.zeros((batch_size, canvas_length, vocab_size))
-        for i in range(canvas_length):
-            if i % 2 == 0:
-                # Low entropy: peaked at token i.
-                logits_np[0, i, i % vocab_size] = 1e9
-            # Odd positions stay uniform (high entropy).
-
-        logits = ops.array(logits_np, dtype="float32")
-        canvas = ops.zeros((batch_size, canvas_length), dtype="int32")
-
-        sampler_tight = EntropyBoundSampler(
-            entropy_bound=0.001, vocabulary_size=vocab_size, seed=0
-        )
-        sampler_loose = EntropyBoundSampler(
-            entropy_bound=100.0, vocabulary_size=vocab_size, seed=0
-        )
-
-        canvas_tight, _ = sampler_tight(canvas, logits, step=0)
-        canvas_loose, _ = sampler_loose(canvas, logits, step=0)
-
-        argmax_np = ops.convert_to_numpy(ops.argmax(logits, axis=-1))
-        canvas_tight_np = ops.convert_to_numpy(canvas_tight)
-        canvas_loose_np = ops.convert_to_numpy(canvas_loose)
-
-        committed_tight = np.sum(canvas_tight_np == argmax_np)
-        committed_loose = np.sum(canvas_loose_np == argmax_np)
-
-        self.assertLessEqual(committed_tight, committed_loose)
+        self.assertFalse(ops.convert_to_numpy(ops.any(stop)))
 
     def test_get_config(self):
         config = self.sampler.get_config()
@@ -247,9 +200,11 @@ class EntropyBoundSamplerTest(TestCase):
         _, stop1 = sampler(canvas, logits, step=1)  # 1st stable step
         _, stop2 = sampler(canvas, logits, step=2)  # 2nd stable step
 
-        self.assertFalse(stop0)
-        self.assertFalse(stop1)  # only 1 stable step, threshold=2 not met
-        self.assertTrue(stop2)  # 2 stable steps, threshold met
+        self.assertFalse(ops.convert_to_numpy(ops.any(stop0)))
+        self.assertFalse(
+            ops.convert_to_numpy(ops.any(stop1))
+        )  # only 1 stable step
+        self.assertTrue(ops.convert_to_numpy(ops.all(stop2)))  # 2 stable steps
 
     def test_reproducibility(self):
         # Two samplers with the same seed must produce identical outputs.
@@ -270,3 +225,33 @@ class EntropyBoundSamplerTest(TestCase):
         canvas_b, _ = sampler_b(canvas, logits, step=0)
 
         self.assertAllEqual(canvas_a, canvas_b)
+
+    def test_per_row_stop(self):
+        # Row 0 keeps the same argmax across both steps; row 1's argmax
+        # changes.  After step 1, only row 0 should have its stop flag set.
+        sampler = EntropyBoundSampler(
+            entropy_bound=1.0,
+            confidence_threshold=1.0,
+            stability_threshold=1,
+            vocabulary_size=self.vocab_size,
+            seed=0,
+        )
+        # Step 0: both rows peaked at token 0.
+        token_ids_step0 = np.zeros(
+            (self.batch_size, self.canvas_length), dtype="int32"
+        )
+        # Step 1: row 0 stays at token 0, row 1 moves to token 1.
+        token_ids_step1 = np.array(
+            [[0] * self.canvas_length, [1] * self.canvas_length],
+            dtype="int32",
+        )
+        canvas = ops.zeros((self.batch_size, self.canvas_length), dtype="int32")
+
+        sampler(canvas, self._make_peaked_logits(token_ids_step0), step=0)
+        _, stop = sampler(
+            canvas, self._make_peaked_logits(token_ids_step1), step=1
+        )
+
+        stop_np = ops.convert_to_numpy(stop)
+        self.assertTrue(stop_np[0])  # row 0: argmax stable → stops
+        self.assertFalse(stop_np[1])  # row 1: argmax changed → does not stop

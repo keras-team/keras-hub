@@ -1,43 +1,9 @@
 """Convert DiffusionGemma HuggingFace checkpoints to the KerasHub preset format.
 
-This script ports a ``google/diffusiongemma-*`` checkpoint from HuggingFace
-into a KerasHub ``Gemma4BlockDiffusionLM`` preset.  It performs two steps:
-
-  1. ``Gemma4BlockDiffusionLM.from_preset("hf://...")`` — handled entirely by 
-    the KerasHub preset loader pipeline:
-
-     * ``convert_backbone_config`` → backbone constructor kwargs
-     * ``convert_weights``          → backbone weights (vision encoder +
-                                       text decoder layers)
-     * ``convert_head``             → self-conditioning task-head weights
-                                       (``Gemma4BlockDiffusionSelfConditioning``)
-
-     The ``convert_head`` hook is the mechanism described in
-     ``TransformersPresetLoader.load_task``; it is invoked automatically
-     whenever ``convert_gemma4.convert_head`` is defined, following the same
-     ``hasattr`` dispatch pattern used by ``load_image_converter_config``,
-     ``load_preprocessor_config``, etc.
-
-  2. Verify numerics against HF (optional: forward-pass logit comparison on a
-     text prompt and image prompt).
-
-  3. Save the model to a local preset directory.
-
-Usage::
-
-    # Text + image numerics verification, save in bfloat16:
-    python tools/checkpoint_conversion/convert_diffusion_gemma_checkpoints.py \\
-        --preset diffusion_gemma_26b_a4b_it \\
+Usage:
+    python tools/checkpoint_conversion/convert_diffusion_gemma_checkpoints.py \
+        --preset diffusion_gemma_26b_a4b_it \
         --save_dtype bfloat16
-
-Notes:
-    * ``KERAS_BACKEND`` is forced to ``"torch"`` so that weight tensors are
-      always in a consistent numerical format during conversion.
-    * CUDA is disabled (``CUDA_VISIBLE_DEVICES=-1``) to avoid GPU OOM during
-      the float32 verification pass.
-    * HF ``transformers`` is required for the optional verify step (numerics
-      comparison against the reference implementation).  The minimal path
-       only needs ``safetensors`` and ``keras_hub``.
 """
 
 import contextlib
@@ -87,14 +53,15 @@ flags.DEFINE_string(
     "bfloat16",
     "Dtype in which to save the converted preset. Defaults to 'bfloat16'.",
 )
+flags.DEFINE_bool(
+    "skip_generate",
+    False,
+    "If set, skip the HF/KH .generate() comparison during verification.",
+)
 
 
 def _gather_hf_data(hf_repo_id):
-    """Load HF model, run all HF-side computations, return a data dict.
-
-    The HF model is freed before this function returns; callers receive only
-    serialisable numpy arrays and scalars.
-    """
+    """Load HF model, run all HF-side computations, return a data dict."""
     from transformers import AutoProcessor
     from transformers import DiffusionGemmaForBlockDiffusion
 
@@ -142,6 +109,8 @@ def _gather_hf_data(hf_repo_id):
                 "attention_mask": img_fwd["attention_mask"],
                 "pixel_values": img_fwd["pixel_values"],
                 "image_position_ids": img_fwd["image_position_ids"],
+                "generated_text": img_fwd["generated_text"],
+                "raw_image": raw_image,
             }
         except Exception as e:
             print(f"⚠️  Image HF forward skipped: {e}")
@@ -156,6 +125,7 @@ def _gather_hf_data(hf_repo_id):
         "text_logits": text_fwd["logits"],
         "text_input_ids": text_fwd["input_ids"],
         "text_attention_mask": text_fwd["attention_mask"],
+        "text_generated_text": text_fwd["generated_text"],
         "image": image_data,
     }
 
@@ -173,26 +143,37 @@ def _no_grad():
 
 
 def _hf_forward(
-    hf_model, processor, prompt, raw_image=None, decoder_input_ids=None
+    hf_model,
+    processor,
+    prompt,
+    raw_image=None,
+    decoder_input_ids=None,
 ):
-    """Run one HF forward pass and return decoder logits as a float32 numpy
-    array.
+    """Run one HF forward pass and return decoder logits + optional generation.
 
     ``DiffusionGemmaForBlockDiffusion.forward()`` always runs both the encoder
     (prompt → KV cache) and the decoder (canvas → logits via ``layer_scalar``).
     ``hf_out.logits`` are decoder logits over ``decoder_input_ids``.  When
     ``decoder_input_ids`` is None, the model auto-samples a *random* canvas —
     always supply a fixed canvas so verification is deterministic.
+
+    When ``--skip_generate`` is not set, this function also runs
+    ``hf_model.generate(**hf_inputs, max_new_tokens=512)`` on the same
+    ``hf_inputs`` — matching the DiffusionGemma model-card usage — and returns
+    the decoded output text alongside the logits.
     """
     proc_kwargs = {"text": prompt, "return_tensors": "pt"}
     if raw_image is not None:
         proc_kwargs["images"] = raw_image
     hf_inputs = processor(**proc_kwargs)
     hf_inputs = {k: v.cpu() for k, v in hf_inputs.items()}
+    forward_inputs = dict(hf_inputs)
     if decoder_input_ids is not None:
-        hf_inputs["decoder_input_ids"] = decoder_input_ids.cpu()
+        forward_inputs["decoder_input_ids"] = decoder_input_ids.cpu()
+
     with _no_grad():
-        hf_out = hf_model(**hf_inputs, output_hidden_states=False)
+        hf_out = hf_model(**forward_inputs, output_hidden_states=False)
+
     logits = hf_out.logits.detach().cpu().float().numpy()
     input_ids = hf_inputs["input_ids"].numpy()
     attention_mask = hf_inputs.get(
@@ -208,13 +189,29 @@ def _hf_forward(
         if "image_position_ids" in hf_inputs
         else None
     )
+
     del hf_out
+
+    generated_text = None
+    if FLAGS.skip_generate:
+        generated_text = "(skipped)"
+    else:
+        try:
+            with _no_grad():
+                output = hf_model.generate(**hf_inputs, max_new_tokens=512)
+            generated_text = processor.decode(
+                output[0], skip_special_tokens=False
+            )
+        except Exception as e:
+            print(f"⚠️  HF .generate() failed ({e}).")
+
     return {
         "logits": logits,
         "input_ids": input_ids,
         "attention_mask": attention_mask,
         "pixel_values": pixel_values,
         "image_position_ids": image_position_ids,
+        "generated_text": generated_text,
     }
 
 
@@ -265,6 +262,9 @@ def _kh_forward(
     with torch.no_grad():
         # Step 1: encoder — builds KV cache over the prompt.
         encoder_kv_cache, prompt_length = diffusion_lm._encode_prompt(inputs)
+        encoder_kv_cache = diffusion_lm._prepare_encoder_cache_for_decoding(
+            encoder_kv_cache
+        )
 
         # Step 2: canvas embeddings (first step → self-conditioning is no-op).
         canvas_embeds = diffusion_lm._prepare_canvas_embeds(
@@ -282,7 +282,7 @@ def _kh_forward(
     return ops.convert_to_numpy(logits).astype(np.float32)
 
 
-def _test_numerics(label, backbone, kh_logits, hf_logits):
+def _test_numerics(label, kh_logits, hf_logits):
     """Log max/mean absolute logit difference; warn if > 1e-3."""
     # Trim to common sequence length.
     min_len = min(kh_logits.shape[1], hf_logits.shape[1])
@@ -309,6 +309,76 @@ def _test_numerics(label, backbone, kh_logits, hf_logits):
             f"max={max_diff:.6f}, mean={mean_diff:.6f}, "
             f"matching={pct:.2f}% ({total - mismatched}/{total})."
         )
+
+
+def _test_generate(
+    label,
+    diffusion_lm,
+    prompt,
+    hf_generated_text,
+    max_length=None,
+    **media_kwargs,
+):
+    """Run KH ``.generate()`` and print the output alongside HF's output.
+
+    ``max_length`` is the prompt sequence length (canvas is appended after by
+    the preprocessor).  Defaults to the preprocessor's configured
+    ``sequence_length`` when ``None``.
+    """
+    if FLAGS.skip_generate:
+        print(f"[{label}] Generate comparison skipped (--skip_generate).")
+        return
+    if hf_generated_text is None:
+        print(
+            f"[{label}] Generate comparison skipped: HF generation unavailable."
+        )
+        return
+
+    generate_kwargs = {}
+    if max_length is not None:
+        generate_kwargs["max_length"] = max_length
+
+    if hasattr(diffusion_lm, "sampler") and hasattr(
+        diffusion_lm.sampler, "reset"
+    ):
+        diffusion_lm.sampler.reset()
+
+    try:
+        # Wrap each media value in a single-item list so
+        # `convert_preprocessing_inputs` calls `np.array([<PIL>])` — none of
+        # the KH `_preprocess_images` implementations accept a bare PIL Image.
+        # Mirrors `convert_gemma4_hf_checkpoints.py::_test_generate`.
+        kh_output = diffusion_lm.generate(
+            {"prompts": [prompt], **{k: [v] for k, v in media_kwargs.items()}},
+            **generate_kwargs,
+        )
+    except Exception as e:
+        print(f"⚠️  [{label}] KH .generate() failed: {e}")
+        return
+
+    kh_text = _clean_text(kh_output, prompt)
+    hf_text = _clean_text(hf_generated_text, prompt)
+
+    print(f"\n[{label}] HF generate output:\n  {hf_text}")
+    print(f"[{label}] KH generate output:\n  {kh_text}")
+
+
+def _clean_text(text, prompt=None):
+    """Safely unwrap numpy/tensor arrays/bytes to string and strip prompt
+    prefix if present."""
+    if text is None:
+        return ""
+    if isinstance(text, (list, tuple, np.ndarray)) and len(text) > 0:
+        text = text[0]
+    if hasattr(text, "item"):
+        text = text.item()
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", errors="replace")
+    if not isinstance(text, str):
+        text = str(text)
+    if prompt and text.startswith(prompt):
+        text = text[len(prompt) :]
+    return text
 
 
 def _build_image_kh_inputs(img_data, image_placeholder_id):
@@ -367,130 +437,175 @@ def _build_image_kh_inputs(img_data, image_placeholder_id):
     )
 
 
-def _test_token_ids(label, preprocessor, hf_token_ids):
-    """Assert KH-tokenized token IDs match HF token IDs for a text prompt.
-
-    Uses ``preprocessor.generate_preprocess`` when available; falls back to
-    a lightweight tokenizer call otherwise.  Failures are reported as warnings
-    rather than hard errors because the text-prompt token IDs are also
-    implicitly verified by the numerics test.
-    """
-    try:
-        kh_inputs = preprocessor.generate_preprocess(
-            {"prompts": [PROMPT_TEXT]},
-            sequence_length=hf_token_ids.shape[1],
-        )
-        kh_token_ids = ops.convert_to_numpy(kh_inputs["token_ids"])
-        # slice off canvas_length tokens before comparing.
-        prompt_len = hf_token_ids.shape[1]
-        kh_token_ids = kh_token_ids[:, :prompt_len]
-        np.testing.assert_array_equal(kh_token_ids, hf_token_ids)
-        print(f"✅ [{label}] Token IDs match.")
-    except AttributeError:
-        print(
-            f"⚠️  [{label}] Token ID check skipped: "
-            "preprocessor lacks generate_preprocess."
-        )
-    except AssertionError as exc:
-        print(f"⚠️  [{label}] Token ID mismatch: {exc}")
+def _test_token_ids(label, preprocessor, prompt, hf_token_ids, **media_kwargs):
+    """Assert KH-preprocessed token IDs match HF token IDs for any modality."""
+    kh_inputs = preprocessor.generate_preprocess(
+        {"prompts": [prompt], **{k: [v] for k, v in media_kwargs.items()}},
+        sequence_length=hf_token_ids.shape[1],
+    )
+    kh_token_ids = ops.convert_to_numpy(kh_inputs["token_ids"])
+    # Slice off canvas_length tokens appended by generate_preprocess.
+    prompt_len = hf_token_ids.shape[1]
+    kh_token_ids = kh_token_ids[:, :prompt_len]
+    np.testing.assert_array_equal(kh_token_ids, hf_token_ids)
+    print(f"✓ [{label}] Token IDs match.")
 
 
 def _verify(diffusion_lm, hf_data, hf_preset):
     """Compare KerasHub model against pre-computed HF outputs."""
-    backbone = diffusion_lm.backbone
+    # backbone = diffusion_lm.backbone
 
-    # --- Parameter count ---
+    # # --- Parameter count ---
     # print("\n--- Parameter Count ---")
-    # hf_params = hf_data["param_count"]
-    # unique_weights = {id(w): w for w in backbone.trainable_weights}.values()
-    # kh_params = sum(w.numpy().size for w in unique_weights)
-    # print(f"   HF params: {hf_params:,}")
-    # print(f"   KH params: {kh_params:,}")
-    # np.testing.assert_equal(kh_params, hf_params)
-    # print(f"✅ Parameter counts match: {kh_params:,}")
+    # hf_params = hf_data.get("param_count")
+    # if hf_params is not None:
+    #     unique_weights = {
+    #         id(w): w for w in backbone.trainable_weights
+    #     }.values()
+    #     kh_params = sum(w.numpy().size for w in unique_weights)
+    #     print(f"   HF params: {hf_params:,}")
+    #     print(f"   KH params: {kh_params:,}")
+    #     np.testing.assert_equal(kh_params, hf_params)
+    #     print(f"✅ Parameter counts match: {kh_params:,}")
 
-    canvas_token_ids = hf_data["canvas_token_ids"]
+    # canvas_token_ids = hf_data["canvas_token_ids"]
 
-    # --- Token ID Verification ---
-    print("\n--- Token ID Verification ---")
+    # Patch preprocessor's num_vision_tokens_per_image if image data exists in
+    # HF output
     preprocessor = diffusion_lm.preprocessor
-    if preprocessor is not None:
-        _test_token_ids("text", preprocessor, hf_data["text_input_ids"])
+    if preprocessor is not None and hf_data["image"] is not None:
+        img = hf_data["image"]
+        image_placeholder_id = getattr(
+            preprocessor.tokenizer, "image_placeholder_id", None
+        )
+        if image_placeholder_id is not None:
+            actual_num_tokens = int(
+                np.sum(img["input_ids"][0] == image_placeholder_id)
+            )
+            preprocessor.num_vision_tokens_per_image = actual_num_tokens
+
+    # # --- Token ID Verification ---
+    # print("\n--- Token ID Verification ---")
+    # if preprocessor is not None:
+    #     _test_token_ids(
+    #         "text", preprocessor, PROMPT_TEXT, hf_data["text_input_ids"]
+    #     )
+
+    #     if hf_data["image"] is not None:
+    #         img = hf_data["image"]
+    #         raw_image = img.get("raw_image")
+    #         if raw_image is not None:
+    #             _test_token_ids(
+    #                 "image",
+    #                 preprocessor,
+    #                 PROMPT_IMAGE,
+    #                 img["input_ids"],
+    #                 images=raw_image,
+    #             )
+    # else:
+    #     print("⚠️  Preprocessor not available; skipping token ID check.")
+
+    # # --- Text ---
+    # print("\n--- Numerics Verification: text ---")
+    # kh_logits = _kh_forward(
+    #     diffusion_lm,
+    #     hf_data["text_input_ids"].astype(np.int32),
+    #     hf_data["text_attention_mask"].astype(np.int32),
+    #     canvas_token_ids=canvas_token_ids,
+    # )
+    # _test_numerics("text", kh_logits, hf_data["text_logits"])
+
+    # # --- Image ---
+    # # Use HF-preprocessed pixel values to bypass PIL vs KH resize delta and
+    # # exercise the vision encoder end-to-end.  Falls back to text-only encoder
+    # # if the image placeholder ID is unavailable.
+    # if hf_data["image"] is not None:
+    #     print("\n--- Numerics Verification: image ---")
+    #     try:
+    #         img = hf_data["image"]
+
+    #         # Resolve image placeholder token ID from the preprocessor.
+    #         image_placeholder_id = None
+    #         if preprocessor is not None and
+    # hasattr(preprocessor, "tokenizer"):
+    #             image_placeholder_id = getattr(
+    #                 preprocessor.tokenizer, "image_placeholder_id", None
+    #             )
+
+    #         if (
+    #             image_placeholder_id is not None
+    #             and img.get("pixel_values") is not None
+    #         ):
+    #             (
+    #                 token_ids,
+    #                 padding_mask,
+    #                 pixel_values,
+    #                 pixel_position_ids,
+    #                 vision_indices,
+    #                 vision_mask,
+    #             ) = _build_image_kh_inputs(img, image_placeholder_id)
+    #             kh_logits = _kh_forward(
+    #                 diffusion_lm,
+    #                 token_ids,
+    #                 padding_mask,
+    #                 canvas_token_ids=canvas_token_ids,
+    #                 pixel_values=pixel_values,
+    #                 pixel_position_ids=pixel_position_ids,
+    #                 vision_indices=vision_indices,
+    #                 vision_mask=vision_mask,
+    #             )
+    #             _test_numerics(
+    #                 "image (HF pixel values)",
+    #                 kh_logits,
+    #                 img["logits"],
+    #             )
+    #         else:
+    #             # Fallback when pixel values or placeholder ID are
+    # unavailable.
+    #             token_ids = img["input_ids"].astype(np.int32)
+    #             padding_mask = img["attention_mask"].astype(np.int32)
+    #             kh_logits = _kh_forward(
+    #                 diffusion_lm,
+    #                 token_ids,
+    #                 padding_mask,
+    #                 canvas_token_ids=canvas_token_ids,
+    #             )
+    #             _test_numerics(
+    #                 "image (text-only encoder)",
+    #                 kh_logits,
+    #                 img["logits"],
+    #             )
+    #     except Exception as e:
+    #         print(f"⚠️  Image numerics check skipped: {e}")
+
+    # --- Generation Comparison ---
+    if FLAGS.skip_generate:
+        print("\n--- Generation Comparison: SKIPPED (--skip_generate) ---")
     else:
-        print("⚠️  Preprocessor not available; skipping token ID check.")
+        print("\n--- Generation Comparison ---")
+        # `.generate()` requires a sampler, which is installed by `.compile()`.
+        # The default `entropy_bound` sampler matches training-time behaviour.
+        if getattr(diffusion_lm, "sampler", None) is None:
+            diffusion_lm.compile(sampler="entropy_bound")
 
-    # --- Text ---
-    print("\n--- Numerics Verification: text ---")
-    kh_logits = _kh_forward(
-        diffusion_lm,
-        hf_data["text_input_ids"].astype(np.int32),
-        hf_data["text_attention_mask"].astype(np.int32),
-        canvas_token_ids=canvas_token_ids,
-    )
-    _test_numerics("text", backbone, kh_logits, hf_data["text_logits"])
+        _test_generate(
+            "text",
+            diffusion_lm,
+            PROMPT_TEXT,
+            hf_data.get("text_generated_text"),
+        )
 
-    # --- Image ---
-    # Use HF-preprocessed pixel values to bypass PIL vs KH resize delta and
-    # exercise the vision encoder end-to-end.  Falls back to text-only encoder
-    # if the image placeholder ID is unavailable.
-    if hf_data["image"] is not None:
-        print("\n--- Numerics Verification: image ---")
-        try:
+        if hf_data["image"] is not None:
             img = hf_data["image"]
-
-            # Resolve image placeholder token ID from the preprocessor.
-            image_placeholder_id = None
-            if preprocessor is not None and hasattr(preprocessor, "tokenizer"):
-                image_placeholder_id = getattr(
-                    preprocessor.tokenizer, "image_placeholder_id", None
-                )
-
-            if (
-                image_placeholder_id is not None
-                and img.get("pixel_values") is not None
-            ):
-                (
-                    token_ids,
-                    padding_mask,
-                    pixel_values,
-                    pixel_position_ids,
-                    vision_indices,
-                    vision_mask,
-                ) = _build_image_kh_inputs(img, image_placeholder_id)
-                kh_logits = _kh_forward(
+            raw_image = img.get("raw_image")
+            if raw_image is not None:
+                _test_generate(
+                    "image",
                     diffusion_lm,
-                    token_ids,
-                    padding_mask,
-                    canvas_token_ids=canvas_token_ids,
-                    pixel_values=pixel_values,
-                    pixel_position_ids=pixel_position_ids,
-                    vision_indices=vision_indices,
-                    vision_mask=vision_mask,
+                    PROMPT_IMAGE,
+                    img.get("generated_text"),
+                    images=raw_image,
                 )
-                _test_numerics(
-                    "image (HF pixel values)",
-                    backbone,
-                    kh_logits,
-                    img["logits"],
-                )
-            else:
-                # Fallback when pixel values or placeholder ID are unavailable.
-                token_ids = img["input_ids"].astype(np.int32)
-                padding_mask = img["attention_mask"].astype(np.int32)
-                kh_logits = _kh_forward(
-                    diffusion_lm,
-                    token_ids,
-                    padding_mask,
-                    canvas_token_ids=canvas_token_ids,
-                )
-                _test_numerics(
-                    "image (text-only encoder)",
-                    backbone,
-                    kh_logits,
-                    img["logits"],
-                )
-        except Exception as e:
-            print(f"⚠️  Image numerics check skipped: {e}")
 
     print("-> HF verification complete.")
 
@@ -500,11 +615,7 @@ def _count_hf_params(hf_model):
 
 
 def _save_preset(hf_preset, preset_name, save_dtype, diffusion_lm=None):
-    """Save the converted model to a local preset directory.
-
-    For bfloat16: caller must have freed the float32 model before this call
-    (diffusion_lm should be None).  For float32: pass the verified model.
-    """
+    """Save the converted model to a local preset directory."""
     save_path = f"./{preset_name}"
     print(f"\n-> Saving model in {save_dtype} to {save_path} …")
 

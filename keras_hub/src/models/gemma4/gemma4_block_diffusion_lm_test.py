@@ -267,6 +267,10 @@ class Gemma4BlockDiffusionLMTest(TestCase, parameterized.TestCase):
             "padding_mask": ops.expand_dims(processed["padding_mask"], axis=0),
         }
         encoder_kv_cache, prompt_length = model._encode_prompt(inputs)
+
+        encoder_kv_cache = model._prepare_encoder_cache_for_decoding(
+            encoder_kv_cache
+        )
         canvas_length = self.preprocessor.canvas_length
         canvas = ops.zeros(
             (1, canvas_length),

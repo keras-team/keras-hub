@@ -170,7 +170,7 @@ class BlockDiffusionLM(Task):
                     )
                     prev_logits = logits
                     canvas, stop = self.sampler(canvas, logits, step)
-                    if stop:
+                    if bool(ops.convert_to_numpy(ops.all(stop))):
                         break
                 return ops.cast(ops.argmax(prev_logits, axis=-1), "int32")
 
@@ -241,7 +241,7 @@ class BlockDiffusionLM(Task):
                 prev_logits = logits
 
                 for step in range(1, self.max_denoising_steps):
-                    if stop:
+                    if bool(ops.convert_to_numpy(ops.all(stop))):
                         break
                     temperature = self.t_max - (
                         (self.t_max - self.t_min)
@@ -337,7 +337,7 @@ class BlockDiffusionLM(Task):
             )
             prev_logits = logits
             canvas, stop = self.sampler(canvas, logits, step)
-            if stop:
+            if bool(ops.convert_to_numpy(ops.all(stop))):
                 break
 
         return ops.cast(ops.argmax(prev_logits, axis=-1), "int32")
@@ -359,6 +359,9 @@ class BlockDiffusionLM(Task):
             Decoded string(s) or integer token arrays, depending on whether
             a `preprocessor` is attached.
         """
+        if hasattr(self, "sampler") and hasattr(self.sampler, "reset"):
+            self.sampler.reset()
+
         generate_function = self.make_generate_function()
 
         def normalize(x):

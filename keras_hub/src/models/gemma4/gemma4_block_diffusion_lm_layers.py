@@ -21,7 +21,7 @@ class Gemma4BlockDiffusionSelfConditioning(keras.layers.Layer):
         x           = pre_norm(soft_embeds)
         gate        = gelu(gate_proj(x), approximate=True)
         out         = down_proj(gate * up_proj(x))
-        return post_norm(out)
+        return post_norm(canvas_embeds + out)
 
     `pre_norm` has a learnable scale (standard RMSNorm).
     `post_norm` has NO learnable scale (pure L2 normalisation via
@@ -33,6 +33,19 @@ class Gemma4BlockDiffusionSelfConditioning(keras.layers.Layer):
         intermediate_dim: int. Intermediate dimension of the gated MLP.
         epsilon: float. Epsilon for RMS normalization layers. Defaults to
             `1e-6`.
+
+    Call arguments:
+        canvas_embeds: float tensor of shape `(B, canvas_length, hidden_dim)`.
+            Raw canvas token embeddings from the current step.
+        prev_logits: float tensor of shape `(B, canvas_length, vocab_size)`
+            from the previous denoising step, or `None` on the first step.
+        embed_tokens_weight: float tensor of shape `(vocab_size, hidden_dim)`.
+            Shared token embedding matrix.
+        embed_scale: float scalar. Embedding scale factor (typically
+            `sqrt(hidden_dim)`).
+
+    Returns:
+        Float tensor of shape `(B, canvas_length, hidden_dim)`.
     """
 
     def __init__(
@@ -96,25 +109,7 @@ class Gemma4BlockDiffusionSelfConditioning(keras.layers.Layer):
     def call(
         self, canvas_embeds, prev_logits, embed_tokens_weight, embed_scale
     ):
-        """Apply self-conditioning to canvas embeddings.
-
-        Args:
-            canvas_embeds:
-                float tensor of shape `(B, canvas_length, hidden_dim)`. Raw
-                canvas token embeddings from the current step.
-            prev_logits: float tensor of shape
-                `(B, canvas_length, vocab_size)` from the previous denoising
-                step, or `None` on the first step.
-            embed_tokens_weight: float tensor of shape
-                `(vocab_size, hidden_dim)`.  Shared token embedding matrix.
-            embed_scale: float scalar.  Embedding scale factor
-                (typically `sqrt(hidden_dim)`).
-
-        Returns:
-            Float tensor of shape `(B, canvas_length, hidden_dim)`.
-        """
         if prev_logits is None:
-            # HF: zeros conditioning → sc_signal=0 → post_norm(inputs_embeds).
             return self.post_norm(canvas_embeds)
 
         # Soft token embeddings: weighted combination of embedding rows.
@@ -129,7 +124,6 @@ class Gemma4BlockDiffusionSelfConditioning(keras.layers.Layer):
         gate = keras.activations.gelu(self.gate_proj(x), approximate=True)
         out = self.down_proj(gate * self.up_proj(x))
 
-        # HF applies post_norm to the combined result, not sc_signal alone.
         return self.post_norm(canvas_embeds + out)
 
     def compute_output_shape(self, input_shape):

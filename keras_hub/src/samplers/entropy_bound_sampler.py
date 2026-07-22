@@ -40,8 +40,9 @@ class EntropyBoundSampler(Sampler):
 
     Returns:
         A tuple `(new_canvas, stop)` where `new_canvas` is an int tensor
-        of shape `(B, canvas_length)` and `stop` is a Python `bool`
-        indicating whether the adaptive stopping criterion is met.
+        of shape `(B, canvas_length)` and `stop` is a bool tensor of shape
+        `(B,)` indicating per-row whether the adaptive stopping criterion
+        is met.
 
     Examples:
     ```python
@@ -79,12 +80,12 @@ class EntropyBoundSampler(Sampler):
         self.vocabulary_size = vocabulary_size
         self.seed = seed
         self.seed_generator = random.SeedGenerator(seed)
-        # Shape is set lazily on first call to _ensure_prev_argmax.
+        # Both are set lazily on first call to _ensure_prev_argmax.
         self._prev_argmax = None
-        self._stable_steps = 0  # plain Python int; sampler is always eager
+        self._stable_steps = None  # list of B ints, one counter per row
 
-    def _ensure_prev_argmax(self, shape):
-        """Lazily initialise prev_argmax on first call."""
+    def _ensure_prev_argmax(self, shape, batch_size):
+        """Lazily initialise prev_argmax and per-row stable counters."""
         if self._prev_argmax is None:
             self._prev_argmax = keras.Variable(
                 initializer=ops.zeros(shape, dtype="int32"),
@@ -93,14 +94,14 @@ class EntropyBoundSampler(Sampler):
                 trainable=False,
                 name="prev_argmax",
             )
-            self._stable_steps = 0
+            self._stable_steps = [0] * batch_size
 
     def __call__(self, canvas, logits, step):
         logits = ops.cast(logits, "float32")
 
         # Per-token entropy: H[i] = -sum(softmax(l) * log_softmax(l))
         log_probs = ops.log_softmax(logits, axis=-1)
-        probs = ops.softmax(logits, axis=-1)
+        probs = ops.exp(log_probs)
         # H shape: (B, canvas_length)
         H = -ops.sum(probs * log_probs, axis=-1)
 
@@ -108,22 +109,22 @@ class EntropyBoundSampler(Sampler):
         sort_idx = ops.argsort(H, axis=-1)
         cumsum_H = ops.cumsum(sorted_H, axis=-1)
 
-        # Accept position i iff the cumulative entropy of all positions
-        # strictly before i (i.e. cumsum_H[i] - sorted_H[i]) is <=
-        # entropy_bound.  This means: including position i doesn't itself
-        # overflow the budget — all positions cheaper than i have been paid
-        # for already.
+        # Accept position i iff cumsum_H[i] - sorted_H[i] <= entropy_bound.
         accept_sorted = (cumsum_H - sorted_H) <= self.entropy_bound
 
         unsort_idx = ops.argsort(sort_idx, axis=-1)
         accept_mask = ops.take_along_axis(accept_sorted, unsort_idx, axis=-1)
 
-        # Commit: accepted positions get the greedy (argmax) prediction.
-        accepted_canvas = ops.where(
-            accept_mask,
-            ops.cast(ops.argmax(logits, axis=-1), canvas.dtype),
-            canvas,
+        # Commit: accepted positions get a multinomial sample from the logits.
+        canvas_shape = ops.shape(canvas)
+        flat_logits = ops.reshape(logits, [-1, ops.shape(logits)[-1]])
+        sampled_tokens = keras.random.categorical(
+            flat_logits, num_samples=1, seed=self.seed_generator
         )
+        sampled_canvas = ops.cast(
+            ops.reshape(sampled_tokens[..., 0], canvas_shape), canvas.dtype
+        )
+        accepted_canvas = ops.where(accept_mask, sampled_canvas, canvas)
 
         # Re-noise: uncommitted positions get uniformly random new tokens so
         # the model cannot carry forward uncertain predictions across steps.
@@ -136,39 +137,43 @@ class EntropyBoundSampler(Sampler):
         )
         new_canvas = ops.where(accept_mask, accepted_canvas, random_canvas)
 
-        # --- Adaptive stopping ---
+        # --- Adaptive stopping (per-row) ---
         cur_argmax = ops.cast(ops.argmax(logits, axis=-1), "int32")
+        # Per-row mean entropy and confidence, shape (B,)
         mean_H = ops.mean(H, axis=-1)
-        confidence_met = ops.all(mean_H < self.confidence_threshold)
+        confidence_met = mean_H < self.confidence_threshold
 
-        self._ensure_prev_argmax(ops.shape(cur_argmax))
-        # Stability: argmax must be unchanged for `stability_threshold`
-        # consecutive steps.  On step 0 there is no prior state so the
-        # counter is reset and stability is never considered met.
+        batch_size_int = int(ops.convert_to_numpy(ops.shape(canvas)[0]))
+        self._ensure_prev_argmax(ops.shape(cur_argmax), batch_size_int)
+
+        # Stability: per-row argmax must be unchanged for `stability_threshold`
+        # consecutive steps.  On step 0 there is no prior state; reset counters.
         if step > 0:
-            argmax_unchanged = bool(
-                ops.convert_to_numpy(
-                    ops.all(ops.equal(cur_argmax, self._prev_argmax))
-                )
+            row_unchanged = ops.convert_to_numpy(
+                ops.all(ops.equal(cur_argmax, self._prev_argmax), axis=-1)
+            )  # numpy (B,) bool
+            self._stable_steps = [
+                (sc + 1 if bool(u) else 0)
+                for sc, u in zip(self._stable_steps, row_unchanged)
+            ]
+            stability_met = ops.convert_to_tensor(
+                [sc >= self.stability_threshold for sc in self._stable_steps],
+                dtype="bool",
             )
-            self._stable_steps = (
-                self._stable_steps + 1 if argmax_unchanged else 0
-            )
-            stability_met = self._stable_steps >= self.stability_threshold
         else:
-            self._stable_steps = 0
-            stability_met = False
+            self._stable_steps = [0] * batch_size_int
+            stability_met = ops.zeros((batch_size_int,), dtype="bool")
 
-        stop = bool(ops.convert_to_numpy(confidence_met)) and stability_met
+        # Per-row stop: shape (B,) bool
+        stop = confidence_met & stability_met
 
         self._prev_argmax.assign(cur_argmax)
-
         return new_canvas, stop
 
     def reset(self):
         """Reset per-call state between independent generate() calls."""
         self._prev_argmax = None
-        self._stable_steps = 0
+        self._stable_steps = None
 
     def get_config(self):
         config = super().get_config()

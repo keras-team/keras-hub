@@ -1,4 +1,10 @@
+import numpy as np
 from keras import ops
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.block_diffusion_lm import BlockDiffusionLM
@@ -18,14 +24,14 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
     `max_denoising_steps` times as a bidirectional decoder over a fixed-length
     canvas of tokens.
 
-    Supports both text-only and multimodal (image/video) prompts.  Vision
+    Supports both text-only and multimodal (image) prompts.  Vision
     embeddings are pre-scaled by `1/sqrt(hidden_dim)` before interleaving so
     that the global `embed_scale` factor does not distort them.
 
     Args:
-        backbone: A `keras_hub.models.Gemma4Backbone` instance.
         preprocessor: A `keras_hub.models.Gemma4BlockDiffusionLMPreprocessor`
             or `None`.
+        backbone: A `keras_hub.models.Gemma4Backbone` instance.
         canvas_length: int. Number of tokens in the denoising canvas.
             Defaults to `256`.
         max_denoising_steps: int. Maximum number of denoising iterations per
@@ -36,21 +42,26 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
             denoising step. Defaults to `0.8`.
         **kwargs: Additional keyword arguments passed to the parent class.
 
-    Example:
+    Examples:
 
-    >>> backbone = keras_hub.models.Gemma4Backbone.from_preset(
-    ...     "gemma4_2b_en"
-    ... )
-    >>> preprocessor = (
-    ...     keras_hub.models.Gemma4BlockDiffusionLMPreprocessor.from_preset(
-    ...         "gemma4_2b_en"
-    ...     )
-    ... )
-    >>> model = keras_hub.models.Gemma4BlockDiffusionLM(
-    ...     backbone=backbone,
-    ...     preprocessor=preprocessor,
-    ... )
-    >>> model.generate("The quick brown fox")
+    Text generation from a text prompt.
+    ```python
+    model = keras_hub.models.Gemma4BlockDiffusionLM.from_preset(
+        "diffusion_gemma_26b_a4b_it",
+    )
+    model.generate("The quick brown fox")
+    ```
+
+    Image + text generation.
+    ```python
+    model = keras_hub.models.Gemma4BlockDiffusionLM.from_preset(
+        "diffusion_gemma_26b_a4b_it",
+    )
+    model.generate({
+        "prompts": "Describe this image: <|image|>",
+        "images": image_array,  # np.ndarray of shape (H, W, 3)
+    })
+    ```
     """
 
     backbone_cls = Gemma4Backbone
@@ -58,13 +69,13 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
 
     def __init__(
         self,
+        preprocessor,
         backbone,
-        preprocessor=None,
         **kwargs,
     ):
         # === Layers ===
-        self.backbone = backbone
         self.preprocessor = preprocessor
+        self.backbone = backbone
 
         # === Functional Model ===
         inputs = backbone.input
@@ -77,6 +88,43 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
             **kwargs,
         )
 
+    def _normalize_generate_inputs(self, inputs):
+        """Overrides the base class to handle unbatched multimodal inputs."""
+        if tf and isinstance(inputs, tf.data.Dataset):
+            return inputs.as_numpy_iterator(), False
+
+        if self.preprocessor is None:
+            return [inputs], False
+
+        def normalize(x):
+            if isinstance(x, str):
+                return [x], True
+            if tf and isinstance(x, tf.Tensor) and x.shape.rank == 0:
+                return x[tf.newaxis], True
+            return x, False
+
+        if isinstance(inputs, dict):
+            inputs["prompts"], input_is_scalar = normalize(inputs["prompts"])
+
+            # If prompt is scalar, images can be either a 3-D NumPy array /
+            # Tensor, or a list of 3-D arrays. Uprank images accordingly.
+            if input_is_scalar and "images" in inputs:
+                x = inputs["images"]
+                if isinstance(x, np.ndarray) and len(x.shape) == 3:
+                    inputs["images"] = [x]
+                elif tf and isinstance(x, tf.Tensor) and x.shape.rank == 3:
+                    inputs["images"] = x[tf.newaxis]
+                elif isinstance(x, list):
+                    inputs["images"] = [x]
+        else:
+            inputs, input_is_scalar = normalize(inputs)
+
+        return [inputs], input_is_scalar
+
+    def get_config(self):
+        config = super().get_config()
+        return config
+
     def _encode_prompt(self, inputs):
         token_ids = inputs["token_ids"]
         padding_mask = inputs.get("padding_mask", None)
@@ -86,18 +134,28 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         vision_indices = inputs.get("vision_indices", None)
         vision_mask = inputs.get("vision_mask", None)
 
-        # Text embeddings — kept unscaled until after vision interleaving so
-        # that pre-scaled vision embeddings land at the correct magnitude after
-        # the global `x = x * embed_scale` step below.
+        # `generate_preprocess` appends `canvas_length` mask tokens to
+        # `token_ids` for the generation loop.  Strip them here so the encoder
+        # computes KV cache over prompt tokens only.
+        if (
+            hasattr(self, "canvas_length")
+            and self.canvas_length
+            and ops.shape(token_ids)[1] > self.canvas_length
+        ):
+            canvas_len = self.canvas_length
+            token_ids = token_ids[:, :-canvas_len]
+            if padding_mask is not None:
+                padding_mask = padding_mask[:, :-canvas_len]
+            if vision_mask is not None:
+                vision_mask = vision_mask[:, :-canvas_len]
+
+        # Text embeddings are unscaled until after vision interleaving.
         x = self.backbone.token_embedding(token_ids)
         embed_scale = ops.cast(
             ops.sqrt(ops.cast(self.backbone.hidden_dim, "float32")), x.dtype
         )
 
-        # Interleave vision embeddings (images or video frames).
-        # Pre-scale by 1/sqrt(hidden_dim) so that after the global scale the
-        # vision positions stay at their natural embed_vision magnitude,
-        # matching the pattern in Gemma4CausalLM.call_with_cache().
+        # Interleave vision embeddings (images).
         num_images = 0
         if (
             pixel_values is not None
@@ -136,7 +194,9 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         head_dim = self.backbone.head_dim
         global_head_dim = self.backbone.global_head_dim
         max_head_dim = (
-            max(head_dim, global_head_dim) if global_head_dim else head_dim
+            max(head_dim, global_head_dim)
+            if global_head_dim is not None
+            else head_dim
         )
         cache_shape = [
             batch_size,
@@ -148,8 +208,6 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         ]
         cache = ops.zeros(cache_shape, dtype=self.compute_dtype)
 
-        # The HF encoder does not inject per-layer embeddings — it is a plain
-        # residual transformer loop (see `DiffusionGemmaEncoderTextLayer`).
         caches = []
         for i, layer in enumerate(self.backbone.transformer_layers):
             current_cache = cache[:, i, ...]
@@ -178,6 +236,75 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         encoder_kv_cache = ops.stack(caches, axis=1)
         return encoder_kv_cache, prompt_length
 
+    def _encode_canvas_as_context(
+        self, canvas_token_ids, encoder_kv_cache, context_length
+    ):
+        """Incrementally extend the encoder KV cache with canvas tokens.
+
+        Encodes only the new `canvas_length` tokens — not the full growing
+        prompt — by starting from the existing KV cache at
+        `cache_update_index=context_length`.  This reduces the per-canvas
+        encoder cost from O(context_length) to O(canvas_length), converting
+        the multi-canvas generation loop from O(n²) to O(n · canvas_length).
+
+        No vision processing is performed: image embeddings are consumed once
+        in `_encode_prompt` and never re-injected on subsequent canvas blocks,
+        matching the HuggingFace DiffusionGemmaGenerationMixin behaviour.
+
+        Args:
+            canvas_token_ids: int tensor of shape `(B, canvas_length)`.
+            encoder_kv_cache: float tensor of shape
+                `(B, num_layers, 2, context_length, num_heads, head_dim)`.
+            context_length: int scalar; number of tokens already encoded.
+
+        Returns:
+            Extended KV cache of shape
+            `(B, num_layers, 2, context_length + canvas_length, ...)`.
+        """
+        x = self.backbone.token_embedding(canvas_token_ids)
+        embed_scale = ops.cast(
+            ops.sqrt(ops.cast(self.backbone.hidden_dim, "float32")), x.dtype
+        )
+        x = x * embed_scale
+
+        canvas_length = ops.shape(canvas_token_ids)[1]
+
+        # Extend the existing encoder KV cache to make room for canvas KVs.
+        paddings = [
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, canvas_length],
+            [0, 0],
+            [0, 0],
+        ]
+        extended_cache = ops.pad(encoder_kv_cache, paddings)
+
+        caches = []
+        for i, layer in enumerate(self.backbone.transformer_layers):
+            current_cache = extended_cache[:, i, ...]
+            shared_kv = None
+            if (
+                layer.is_kv_shared_layer
+                and layer.kv_shared_layer_index is not None
+            ):
+                idx = layer.kv_shared_layer_index
+                if idx < len(caches):
+                    shared_kv = caches[idx]
+                else:
+                    shared_kv = extended_cache[:, idx, ...]
+
+            x, next_cache = layer(
+                x,
+                cache=current_cache,
+                cache_update_index=context_length,
+                shared_kv=shared_kv,
+                use_encoder_scalar=True,
+            )
+            caches.append(next_cache)
+
+        return ops.stack(caches, axis=1)
+
     def _prepare_canvas_embeds(self, canvas, prev_logits):
         x = self.backbone.token_embedding(canvas)
         embed_scale = ops.cast(
@@ -185,13 +312,26 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         )
         x = x * embed_scale
 
-        x = self.backbone.diffusion_self_conditioning(
-            x,
-            prev_logits,
-            self.backbone.token_embedding.embeddings,
-            embed_scale,
-        )
+        sc = getattr(self.backbone, "diffusion_self_conditioning", None)
+        if sc is not None:
+            x = sc(
+                x,
+                prev_logits,
+                self.backbone.token_embedding.embeddings,
+                embed_scale,
+            )
         return x
+
+    def _prepare_encoder_cache_for_decoding(self, encoder_cache):
+        paddings = [
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, self.canvas_length],
+            [0, 0],
+            [0, 0],
+        ]
+        return ops.pad(encoder_cache, paddings)
 
     def _decode_canvas_step(
         self, canvas_embeds, encoder_kv_cache, prompt_length
@@ -200,23 +340,21 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         batch_size = ops.shape(x)[0]
         canvas_length = ops.shape(x)[1]
 
-        # Build a combined cache: the encoder slice is pre-filled; the canvas
-        # slice will be written during this forward pass.  Only the sequence
-        # axis (axis 3) needs padding; all other dims match the encoder cache.
-
-        # Pad encoder cache to cover prompt + canvas along the sequence axis
-        # (axis 3).  encoder_kv_cache shape: (B, L, 2, prompt_len, heads, hd)
-        pad_len = canvas_length
-        # Pad: (before, after) for each dimension — only pad axis 3.
-        paddings = [
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, pad_len],
-            [0, 0],
-            [0, 0],
-        ]
-        combined_cache = ops.pad(encoder_kv_cache, paddings)
+        # Auto-pad encoder KV cache to prompt + canvas length if not pre-padded.
+        cache_seq_len = ops.shape(encoder_kv_cache)[3]
+        if cache_seq_len < prompt_length + canvas_length:
+            pad_len = (prompt_length + canvas_length) - cache_seq_len
+            paddings = [
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, pad_len],
+                [0, 0],
+                [0, 0],
+            ]
+            combined_cache = ops.pad(encoder_kv_cache, paddings)
+        else:
+            combined_cache = encoder_kv_cache
 
         # canvas_mask marks every canvas position as bidirectional.
         canvas_mask = ops.ones((batch_size, canvas_length), dtype="bool")

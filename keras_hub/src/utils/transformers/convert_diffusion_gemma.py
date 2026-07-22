@@ -18,9 +18,6 @@ from keras_hub.src.utils.transformers.convert_gemma4 import (
 from keras_hub.src.utils.transformers.convert_gemma4 import (
     load_image_converter_config as target_load_image_converter_config,
 )
-from keras_hub.src.utils.transformers.convert_gemma4 import (
-    load_video_converter_config as target_load_video_converter_config,
-)
 
 
 def convert_tokenizer(cls, preset, **kwargs):
@@ -29,10 +26,6 @@ def convert_tokenizer(cls, preset, **kwargs):
 
 def load_image_converter_config(preset, transformers_config):
     return target_load_image_converter_config(preset, transformers_config)
-
-
-def load_video_converter_config(preset, transformers_config):
-    return target_load_video_converter_config(preset, transformers_config)
 
 
 backbone_cls = Gemma4Backbone
@@ -48,9 +41,6 @@ def convert_backbone_config(transformers_config):
         vision_encoder = None
         image_size = None
     else:
-        # DiffusionGemma may nest text fields under "text_config" (like
-        # standard Gemma4) or expose them at the top level — fall back to the
-        # top-level dict if "text_config" is absent.
         text_cfg = transformers_config.get("text_config", transformers_config)
         image_size = 896
 
@@ -117,8 +107,6 @@ def convert_backbone_config(transformers_config):
     hf_bidir = text_cfg.get("use_bidirectional_attention")
     use_vision_bidirectional_attention = hf_bidir == "vision"
 
-    # MoE: DiffusionGemma may omit enable_moe_block and signal MoE via
-    # num_experts alone.
     enable_moe_block = text_cfg.get("enable_moe_block") or bool(
         text_cfg.get("num_experts", 0)
     )
@@ -168,11 +156,7 @@ def convert_backbone_config(transformers_config):
         "use_vision_bidirectional_attention": (
             use_vision_bidirectional_attention
         ),
-        # DiffusionGemma encoder and decoder passes use separate per-layer
-        # scalars (HF buffers are not tied across the two passes).
         "has_encoder_layer_scalar": True,
-        # Self-conditioning lives inside model.decoder in HF; mirror that by
-        # keeping it in the backbone rather than the task.
         "has_diffusion_self_conditioning": True,
     }
 
@@ -281,9 +265,7 @@ def convert_weights(backbone, loader, transformers_config):
         decoder_layer = backbone.get_layer(f"decoder_block_{i}")
         _convert_decoder_block(decoder_layer, i, loader, hf_key)
 
-    # encoder_layer_scalar: DiffusionGemma stores separate per-layer scalars
-    # for the encoder and decoder passes; the shared _convert_decoder_block
-    # only ports the decoder copy (under model.decoder.*).
+    # Port encoder-pass per-layer scalars.
     for i in range(backbone.num_layers):
         decoder_layer = backbone.get_layer(f"decoder_block_{i}")
         loader.port_weight(
@@ -332,10 +314,7 @@ def load_task_config(preset, transformers_config):
         return {}
     gen_cfg = load_json(preset, "generation_config.json")
     kwargs = {}
-    # HF may store canvas length as "block_length" or "canvas_length".
-    canvas_length = gen_cfg.get("canvas_length") or gen_cfg.get("block_length")
-    if canvas_length is not None:
-        kwargs["canvas_length"] = canvas_length
+
     if "max_denoising_steps" in gen_cfg:
         kwargs["max_denoising_steps"] = gen_cfg["max_denoising_steps"]
     if "t_min" in gen_cfg:
@@ -359,11 +338,4 @@ def load_preprocessor_config(preset, transformers_config):
         kwargs["num_vision_tokens_per_image"] = image_proc.get(
             "max_soft_tokens", 280
         )
-        kwargs["sequence_length"] = 1024
-    if "video_processor" in processor_config:
-        video_proc = processor_config["video_processor"]
-        kwargs["num_frames_per_video"] = video_proc["num_frames"]
-        kwargs["num_vision_tokens_per_frame"] = video_proc["max_soft_tokens"]
-        kwargs["video_fps"] = 24.0
-        kwargs["sequence_length"] = 1024
     return kwargs
