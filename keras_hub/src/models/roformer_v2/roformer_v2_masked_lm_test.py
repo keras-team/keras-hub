@@ -72,7 +72,6 @@ class RoformerV2MaskedLMDynamicMaskTest(TestCase):
         inputs = {
             "token_ids": np.array([[1, 2, 3, 4, 5]] * 2, dtype="int32"),
             "segment_ids": np.zeros((2, 5), dtype="int32"),
-            "padding_mask": np.ones((2, 5), dtype="int32"),
         }
 
         for mask_count in (2, 4):
