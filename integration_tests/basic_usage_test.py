@@ -40,7 +40,7 @@ class BasicUsageTest(unittest.TestCase):
             loss="binary_crossentropy",
         )
         initial_loss = model.evaluate(x, y, verbose=0)
-        model.fit(x, y, epochs=5, verbose=0)
+        model.fit(x, y, epochs=15, verbose=0)
         final_loss = model.evaluate(x, y, verbose=0)
 
         # Make sure training produces a finite, decreasing loss.
