@@ -558,10 +558,13 @@ class LiteRTLMExportSpec:
         Default: no-op. Only ``FunctionGemmaSpec`` (the
         ``function_gemma_instruct_270m`` preset) overrides this to fill the
         ``FunctionGemma`` proto's function-calling fields; every other family
-        leaves the field block untouched. Called unconditionally by
-        ``_build_llm_metadata`` right after the ``llm_model_type`` oneof is
-        selected -- the same base-no-op convention ``populate_vision_metadata``
-        / ``populate_audio_metadata`` use.
+        leaves the field block untouched. Called by ``_build_llm_metadata``
+        right after the ``llm_model_type`` oneof is selected -- the same
+        base-no-op convention ``populate_vision_metadata`` /
+        ``populate_audio_metadata`` use -- except when ``llm_model_type`` was
+        an explicit caller override, mirroring litert-torch skipping its
+        model-specific metadata builder on override
+        (``export_hf/core/litert_lm_builder.py`` ~296).
         """
         del meta
 

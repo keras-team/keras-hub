@@ -438,6 +438,7 @@ class ExportPlan:
     tokens_per_image: int | None
     separate_vision_encoder: bool
     sampler_config: object | None
+    model_type_overridden: bool
 
 
 def _build_prefill_inputs(plan):
@@ -800,6 +801,7 @@ def _assemble_bundle(
         vision_cfg=plan.vision_cfg,
         audio_cfg=plan.audio_cfg,
         sampler_config=plan.sampler_config,
+        model_type_overridden=plan.model_type_overridden,
     )
 
     litert_lm_builder = _import_litert_lm_builder()
@@ -1226,6 +1228,7 @@ def export_to_litertlm(
         tokens_per_image=tokens_per_image,
         separate_vision_encoder=separate_vision_encoder,
         sampler_config=sampler_config,
+        model_type_overridden=llm_model_type is not None,
     )
 
     with _cpu_default_device_scope():
@@ -1502,6 +1505,7 @@ def _build_llm_metadata(
     vision_cfg=None,
     audio_cfg=None,
     sampler_config=None,
+    model_type_overridden=False,
 ):
     """Serialize an ``LlmMetadata`` protobuf to *path*."""
     # The protobuf lives under an internal-looking subpackage of
@@ -1561,11 +1565,16 @@ def _build_llm_metadata(
         spec.populate_audio_metadata(meta, audio_cfg)
 
     # Populate function-calling fields for specs that declare them (currently
-    # only `FunctionGemmaSpec`, selected via the `llm_model_type` override).
+    # only `FunctionGemmaSpec`, reached via tokenizer auto-detection).
     # A base-class no-op for every other family, so this adds nothing to
     # existing model types -- the same convention as the vision/audio hooks
-    # above.
-    spec.populate_function_gemma_metadata(meta)
+    # above. Skipped when `llm_model_type` is an explicit caller override:
+    # litert-torch skips its model-specific metadata builder whenever
+    # `litert_lm_model_type_override` is set
+    # (`export_hf/core/litert_lm_builder.py` ~296), so an override yields the
+    # bare `llm_model_type` oneof with no model-specific fields.
+    if not model_type_overridden:
+        spec.populate_function_gemma_metadata(meta)
 
     # Sampler defaults are written only when the caller explicitly passes a
     # `sampler_config`; otherwise the field is omitted so the runtime picks

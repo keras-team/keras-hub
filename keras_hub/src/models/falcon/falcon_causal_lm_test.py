@@ -178,8 +178,9 @@ class FalconCausalLMTest(TestCase):
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "torch.export tracing failure: broadcast shape mismatch "
-            "[1,2,1,8] vs [1,2,8,12] at export time (not a runtime gap); "
+            "torch.export tracing failure: "
+            "torch.fx._ModuleNotInstalledAsSubmoduleError in FalconAttention "
+            "(module not registered as a submodule during tracing); "
             "under diagnosis"
         ),
     )

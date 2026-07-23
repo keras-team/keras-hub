@@ -1183,6 +1183,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             # call (no `sampler_config`), matching what the family tests
             # under verification actually export.
             sampler_config=None,
+            # The harness never passes an `llm_model_type` override.
+            model_type_overridden=False,
         )
         prefill_inputs = _export._build_prefill_inputs(plan)[prefill_seq_len]
 

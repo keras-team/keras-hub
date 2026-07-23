@@ -16,6 +16,7 @@ library.
 import contextlib
 import unittest.mock
 
+import numpy as np
 import torch
 from keras.src import backend
 from keras.src.backend.common import dtypes as keras_dtypes
@@ -489,6 +490,10 @@ def _patched_amax(x, axis=None, keepdims=False):
     unchanged, so this is a no-op transform outside the triggering case.
     """
     x = torch_core.convert_to_tensor(x)
+    # NumPy integer axes (e.g. ``np.int64`` from shape arithmetic) are not
+    # Python ``int``; normalize so they take the same traceable path.
+    if isinstance(axis, np.integer):
+        axis = int(axis)
     if axis is not None and isinstance(axis, int) and x.ndim == 4:
         return torch.max(x, dim=axis, keepdim=keepdims).values
     return _ORIGINAL_AMAX(x, axis=axis, keepdims=keepdims)

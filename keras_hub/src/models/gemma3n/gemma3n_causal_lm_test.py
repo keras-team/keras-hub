@@ -437,10 +437,10 @@ class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
         strict=True,
         reason=(
             "Gemma3n LiteRT-LM export fails in litert-torch conversion: "
-            "aten.view shape/stride mismatch ([3,64,8] strides (512,1,64) -> "
-            "[192,8]) during forward_prefill decomposition. Pre-existing "
-            "export bug, not a numeric-parity gap; blocks multimodal numeric "
-            "wiring (WS3.3). Under diagnosis."
+            "aten.view shape/stride mismatch ([3,8,8,16] strides "
+            "(1024,8,1,64) -> [192,16]) during forward_prefill decomposition. "
+            "Pre-existing export bug, not a numeric-parity gap; blocks "
+            "multimodal numeric wiring (WS3.3). Under diagnosis."
         ),
     )
     def test_litertlm_export(self):

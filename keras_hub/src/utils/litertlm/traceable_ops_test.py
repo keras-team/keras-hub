@@ -439,22 +439,35 @@ class TraceableOpsParityTest(TestCase):
             (torch.randn(7), 0, True),  # 1-D (fallthrough)
             (torch.randn(2, 2, 3, 4, 5), -1, True),  # 5-D (fallthrough)
             (torch.randn(2, 3, 4, 5), (2, 3), True),  # 4-D tuple (fallthrough)
+            (torch.randn(2, 3, 4, 5), np.int64(-1), True),  # np.int64 axis
+            (torch.randn(2, 3, 4, 5), np.int32(1), True),  # np.int32 axis
         ]
         for x, axis, keepdims in cases:
             with self.subTest(
                 shape=tuple(x.shape), axis=axis, keepdims=keepdims
             ):
-                original = torch_backend_numpy.amax(
-                    x, axis=axis, keepdims=keepdims
-                )
                 patched = traceable_ops._patched_amax(
                     x, axis=axis, keepdims=keepdims
                 )
-                self.assertEqual(tuple(original.shape), tuple(patched.shape))
-                # The reformulation is the identical reduction; values must be
-                # bit-identical, not merely close (a silent numeric drift here
-                # would corrupt attention-sink softmax stabilization).
-                self.assertTrue(torch.equal(original, patched))
+                # The original Keras amax cannot handle NumPy integer axes
+                # (raises "truth value of an empty array is ambiguous"); for
+                # those cases verify only that the patched version works and
+                # matches torch.max directly.
+                if isinstance(axis, np.integer):
+                    expected = torch.max(
+                        x, dim=int(axis), keepdim=keepdims
+                    ).values
+                    self.assertTrue(torch.equal(expected, patched))
+                else:
+                    original = torch_backend_numpy.amax(
+                        x, axis=axis, keepdims=keepdims
+                    )
+                    self.assertEqual(tuple(original.shape), tuple(patched.shape))
+                    # The reformulation is the identical reduction; values must
+                    # be bit-identical, not merely close (a silent numeric
+                    # drift here would corrupt attention-sink softmax
+                    # stabilization).
+                    self.assertTrue(torch.equal(original, patched))
 
     def test_amax_public_ops_max_4d_matches(self):
         # The public keras op that GPT-OSS attention actually calls.
