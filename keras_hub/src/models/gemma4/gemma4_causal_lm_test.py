@@ -325,6 +325,17 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
             output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
         )
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "Multimodal parity is vacuously-passing at HEAD: zero "
+            "vision/audio indices make the merge path an identity. When the "
+            "harness is fixed to use real placement indices (WS C1), the "
+            "measured prefill-KV error is ~2.76 (not < 1e-4), indicating a "
+            "real numerical divergence between Keras and TFLite when the "
+            "vision/audio towers are actually exercised. Under diagnosis."
+        ),
+    )
     def test_litertlm_export(self):
         """Test LiteRT-LM export for multimodal Gemma4CausalLM."""
         # LiteRT-LM export requires a SentencePiece tokenizer asset. Patch

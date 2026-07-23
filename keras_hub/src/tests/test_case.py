@@ -1186,24 +1186,117 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         )
         prefill_inputs = _export._build_prefill_inputs(plan)[prefill_seq_len]
 
-        # `_build_prefill_inputs` returns zeros; randomize ONLY the
-        # data-bearing tensors so parity is a meaningful (non-trivial) check.
-        # Index/mask/`input_pos`/kv-cache-seed tensors stay as built -- they
-        # encode the structure the trace baked in.
+        # `_build_prefill_inputs` returns zeros for index/mask tensors; the
+        # data-bearing tensors are randomized below, but leaving indices/masks
+        # zero makes the entire vision/audio merge path an identity (slot 0 is
+        # restored to the text embedding by Gemma3/Gemma4's `interleave_embeddings`).
+        # We therefore synthesize real placement indices and masks so the parity
+        # check actually exercises the vision/audio towers. We also keep a copy
+        # of the zero-index structure for a sensitivity check.
         rng = np.random.default_rng(seed)
         vocab_size = _export._model_embedding_vocab_size(model)
         if vocab_size is None:
             vocab_size = model.backbone.vocabulary_size
+
+        # Real placement: start after the BOS slot to avoid the restore-to-text
+        # behavior at index 0. Cap the number of placed tokens to what fits in
+        # the sequence, because some configs (e.g. Gemma4 audio) declare more
+        # tokens than the trace-time sequence length.
+        seq_len = prefill_inputs["tokens"].shape[1]
+        max_places = seq_len - 1
+        cursor = 1
+        if "vision_indices" in prefill_inputs:
+            num_vision_tokens = min(
+                prefill_inputs["vision_indices"].shape[1], max_places
+            )
+            vision_start = cursor
+            prefill_inputs["vision_indices"] = torch.zeros_like(
+                prefill_inputs["vision_indices"]
+            )
+            prefill_inputs["vision_indices"][:, :num_vision_tokens] = (
+                torch.arange(
+                    vision_start,
+                    vision_start + num_vision_tokens,
+                    dtype=torch.int32,
+                ).unsqueeze(0)
+            )
+            vision_mask = torch.zeros_like(prefill_inputs["vision_mask"])
+            vision_mask[:, vision_start:vision_start + num_vision_tokens] = 1
+            prefill_inputs["vision_mask"] = vision_mask
+            cursor += num_vision_tokens
+            max_places -= num_vision_tokens
+        if "audio_indices" in prefill_inputs:
+            num_audio_tokens = min(
+                prefill_inputs["audio_indices"].shape[1], max_places
+            )
+            audio_start = cursor
+            prefill_inputs["audio_indices"] = torch.zeros_like(
+                prefill_inputs["audio_indices"]
+            )
+            prefill_inputs["audio_indices"][:, :num_audio_tokens] = (
+                torch.arange(
+                    audio_start,
+                    audio_start + num_audio_tokens,
+                    dtype=torch.int32,
+                ).unsqueeze(0)
+            )
+            audio_mask = torch.zeros_like(prefill_inputs["audio_mask"])
+            audio_mask[:, audio_start:audio_start + num_audio_tokens] = 1
+            prefill_inputs["audio_mask"] = audio_mask
+            cursor += num_audio_tokens
+            max_places -= num_audio_tokens
+        if "audio_mel_mask" in prefill_inputs:
+            prefill_inputs["audio_mel_mask"] = torch.ones_like(
+                prefill_inputs["audio_mel_mask"]
+            )
+        if "pixel_position_ids" in prefill_inputs:
+            # Gemma4 2D patch positions must be non-zero to exercise the
+            # positional embedding path.
+            pixel_position_ids = torch.zeros_like(
+                prefill_inputs["pixel_position_ids"]
+            )
+            num_patches = pixel_position_ids.shape[2]
+            grid = int(num_patches ** 0.5)
+            for i in range(grid):
+                for j in range(grid):
+                    pixel_position_ids[:, :, i * grid + j, 0] = i
+                    pixel_position_ids[:, :, i * grid + j, 1] = j
+            prefill_inputs["pixel_position_ids"] = pixel_position_ids
+
+        zero_structure_prefill_inputs = {
+            k: v.clone() if isinstance(v, torch.Tensor) else v
+            for k, v in prefill_inputs.items()
+        }
+        if "vision_indices" in zero_structure_prefill_inputs:
+            zero_structure_prefill_inputs["vision_indices"] = torch.zeros_like(
+                zero_structure_prefill_inputs["vision_indices"]
+            )
+            zero_structure_prefill_inputs["vision_mask"] = torch.zeros_like(
+                zero_structure_prefill_inputs["vision_mask"]
+            )
+        if "audio_indices" in zero_structure_prefill_inputs:
+            zero_structure_prefill_inputs["audio_indices"] = torch.zeros_like(
+                zero_structure_prefill_inputs["audio_indices"]
+            )
+            zero_structure_prefill_inputs["audio_mask"] = torch.zeros_like(
+                zero_structure_prefill_inputs["audio_mask"]
+            )
+            zero_structure_prefill_inputs["audio_mel_mask"] = torch.zeros_like(
+                zero_structure_prefill_inputs["audio_mel_mask"]
+            )
+
         for name, t in list(prefill_inputs.items()):
             shape = tuple(t.shape)
             if name == "tokens":
                 prefill_inputs[name] = torch.from_numpy(
                     rng.integers(1, vocab_size, size=shape).astype("int32")
                 )
+                zero_structure_prefill_inputs[name] = prefill_inputs[name].clone()
             elif name in ("images", "pixel_values", "audio_mel"):
                 prefill_inputs[name] = torch.from_numpy(
                     rng.standard_normal(shape).astype("float32")
                 )
+                zero_structure_prefill_inputs[name] = prefill_inputs[name].clone()
 
         # Auto-detect the verification level unless overridden.
         if verification_level is None:
@@ -1258,6 +1351,32 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         ).eval()
         with torch.no_grad():
             keras_prefill_out = adapter.forward_prefill(**prefill_inputs)
+
+        # Sensitivity check: if the vision/audio towers are truly wired into
+        # the trace, changing the placement indices/masks from zeros to real
+        # values must change the KV cache. If it does not, the towers are not
+        # connected and the parity check is vacuous.
+        with torch.no_grad():
+            keras_zero_out = adapter.forward_prefill(
+                **zero_structure_prefill_inputs
+            )
+        sensitivity_diff = 0.0
+        for i in range(num_layers):
+            for kv in ("k", "v"):
+                key = f"kv_cache_{kv}_{i}"
+                real_kv = keras_prefill_out[key].detach().cpu().numpy()
+                zero_kv = keras_zero_out[key].detach().cpu().numpy()
+                sensitivity_diff = max(
+                    sensitivity_diff,
+                    float(np.max(np.abs(real_kv - zero_kv))),
+                )
+        self.assertGreater(
+            sensitivity_diff,
+            1e-6,
+            f"Vision/audio towers are not wired into the trace: "
+            f"sensitivity diff {sensitivity_diff} <= 1e-6. "
+            f"The multimodal parity check is vacuous.",
+        )
 
         # -- Compare prefill KV caches (prefill emits no logits) --
         prefill_kv_max_abs_err = 0.0
@@ -1338,10 +1457,34 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             msg="Multimodal first-decode logits mismatch",
         )
 
+        # Compare decode-step KV caches as well (the text helper does this;
+        # the multimodal helper previously omitted it, making decode KV
+        # changes invisible).
+        decode_kv_max_abs_err = 0.0
+        for i in range(num_layers):
+            for kv in ("k", "v"):
+                key = f"kv_cache_{kv}_{i}"
+                if key not in tflite_decode_out:
+                    continue
+                keras_kv = keras_decode_out[key].detach().cpu().numpy()
+                tflite_kv = tflite_decode_out[key]
+                decode_kv_max_abs_err = max(
+                    decode_kv_max_abs_err,
+                    float(np.max(np.abs(keras_kv - tflite_kv))),
+                )
+                self.assertAllClose(
+                    keras_kv,
+                    tflite_kv,
+                    atol=atol,
+                    rtol=rtol,
+                    msg=f"Multimodal decode KV mismatch at {key}",
+                )
+
         return {
             "verification_level": verification_level,
             "prefill_kv_max_abs_err": prefill_kv_max_abs_err,
             "decode_logits_max_abs_err": decode_logits_max_abs_err,
+            "decode_kv_max_abs_err": decode_kv_max_abs_err,
             "has_vision": has_vision,
             "has_audio": has_audio,
             "audio_isolable": audio_isolable,
