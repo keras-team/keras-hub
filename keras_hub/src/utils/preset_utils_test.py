@@ -1,9 +1,11 @@
 import json
 import os
+from unittest import mock
 
 import keras
 import pytest
 from absl.testing import parameterized
+from kagglehub.exceptions import KaggleApiHTTPError
 
 from keras_hub.src.models.albert.albert_text_classifier import (
     AlbertTextClassifier,
@@ -16,6 +18,11 @@ from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import upload_preset
+
+try:
+    from huggingface_hub.utils import EntryNotFoundError
+except ImportError:
+    EntryNotFoundError = None
 
 
 class PresetUtilsTest(TestCase):
@@ -201,3 +208,34 @@ class PresetUtilsTest(TestCase):
 
         with self.assertRaises(FileNotFoundError):
             get_file(local_dir, fake_path)
+
+    def test_kaggle_error_translation(self):
+        preset = "kaggle://keras/bert/keras/bert_base_en"
+        # Kaggle serves a missing file as a 404 and a gated file as a 403;
+        # both translate to FileNotFoundError (check_file_exists relies on
+        # this to probe optional preset files).
+        for status in ("404 Client Error.", "403 Client Error: Forbidden"):
+            error = KaggleApiHTTPError(status)
+            with mock.patch("kagglehub.model_download", side_effect=error):
+                with self.assertRaises(FileNotFoundError):
+                    get_file(preset, "missing.json")
+        # Any other Kaggle API error should surface as-is, not as a
+        # missing file.
+        error = KaggleApiHTTPError("1994")
+        with mock.patch("kagglehub.model_download", side_effect=error):
+            with self.assertRaisesRegex(ValueError, "1994"):
+                get_file(preset, "vocabulary.json")
+        # Unrelated ValueErrors propagate as-is, never as a missing file.
+        error = ValueError("some other error")
+        with mock.patch("kagglehub.model_download", side_effect=error):
+            with self.assertRaisesRegex(ValueError, "some other error"):
+                get_file(preset, "vocabulary.json")
+
+    @pytest.mark.skipif(
+        EntryNotFoundError is None, reason="huggingface_hub is not installed"
+    )
+    def test_hf_missing_entry_translation(self):
+        error = EntryNotFoundError("404 Client Error")
+        with mock.patch("huggingface_hub.hf_hub_download", side_effect=error):
+            with self.assertRaises(FileNotFoundError):
+                get_file("hf://username/bert_base_en", "missing.json")

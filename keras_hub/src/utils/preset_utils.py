@@ -163,7 +163,10 @@ def get_file(preset, path):
             return kagglehub.model_download(kaggle_handle, path)
         except KaggleApiHTTPError as e:
             message = str(e)
-            if message.find("403 Client Error"):
+            # Kaggle serves a missing file as a 404 and a file that needs
+            # consent as a 403; both mean the preset has no usable file at
+            # `path`. Anything else is a real API error and surfaces as-is.
+            if "404 Client Error" in message or "403 Client Error" in message:
                 raise FileNotFoundError(
                     f"`{path}` doesn't exist in preset directory `{preset}`."
                 )
@@ -171,12 +174,12 @@ def get_file(preset, path):
                 raise ValueError(message)
         except ValueError as e:
             message = str(e)
-            if message.find("is not present in the model files"):
+            if "is not present in the model files" in message:
                 raise FileNotFoundError(
                     f"`{path}` doesn't exist in preset directory `{preset}`."
                 )
             else:
-                raise ValueError(message)
+                raise
     elif scheme in tf_registered_schemes():
         return tf_copy_gfile_to_cache(preset, path)
     elif scheme == MODELSCOPE_SCHEME:
@@ -202,14 +205,6 @@ def get_file(preset, path):
                 "(e.g., 'modelscope://username/bert_base_en')."
                 f"Received: preset='{preset}.'"
             ) from e
-        except EntryNotFoundError as e:
-            message = str(e)
-            if message.find("403 Client Error"):
-                raise FileNotFoundError(
-                    f"`{path}` not exist in preset directory `{preset}`."
-                )
-            else:
-                raise ValueError(message)
     elif scheme == HF_SCHEME:
         if huggingface_hub is None:
             raise ImportError(
@@ -229,13 +224,9 @@ def get_file(preset, path):
                 f"'hf://username/bert_base_en'. Received: preset={preset}."
             ) from e
         except EntryNotFoundError as e:
-            message = str(e)
-            if message.find("403 Client Error"):
-                raise FileNotFoundError(
-                    f"`{path}` doesn't exist in preset directory `{preset}`."
-                )
-            else:
-                raise ValueError(message)
+            raise FileNotFoundError(
+                f"`{path}` doesn't exist in preset directory `{preset}`."
+            ) from e
     elif os.path.exists(preset):
         # Assume a local filepath.pyth
         local_path = os.path.join(preset, path)
