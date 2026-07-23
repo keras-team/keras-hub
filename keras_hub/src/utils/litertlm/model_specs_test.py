@@ -272,6 +272,31 @@ class ExportSpecRegistryIntegrityTest(TestCase):
             FunctionGemmaSpec, [f for _, _, f in _EXPORT_SPEC_REGISTRY]
         )
 
+    def test_function_gemma_auto_detected_by_tokenizer_tokens(self):
+        """A `Gemma3CausalLM` whose tokenizer exposes function-calling special
+        tokens (`<start_function_call>`) auto-resolves to `FunctionGemmaSpec`
+        even without an explicit `llm_model_type` override."""
+
+        class MockTokenizer:
+            def token_to_id(self, token):
+                if token == "<start_function_call>":
+                    return 48
+                return -1
+
+            def id_to_token(self, token_id):
+                if token_id == 48:
+                    return "<start_function_call>"
+                return "<unk>"
+
+        class MockPreprocessor:
+            tokenizer = MockTokenizer()
+
+        model = self._tiny_gemma3()
+        model.preprocessor = MockPreprocessor()
+        spec = resolve_export_spec(model)
+        self.assertIsInstance(spec, FunctionGemmaSpec)
+        self.assertEqual(spec.model_type, "function_gemma")
+
     def test_unknown_llm_model_type_override_raises(self):
         """An unrecognized `llm_model_type` override is a hard error, not a
         silent fall-through to isinstance resolution."""

@@ -299,6 +299,9 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
             _FUNCTION_GEMMA_CODE_FENCE_START,
         )
         from keras_hub.src.utils.litertlm.model_specs import (
+            _FUNCTION_GEMMA_ESCAPE_TOKEN,
+        )
+        from keras_hub.src.utils.litertlm.model_specs import (
             _FUNCTION_GEMMA_FUNCTION_RESPONSE_START,
         )
 
@@ -324,6 +327,8 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         # Tool-call fields populated (not empty/default).
         self.assertEqual(fg.code_fence_start, _FUNCTION_GEMMA_CODE_FENCE_START)
         self.assertEqual(fg.code_fence_end, _FUNCTION_GEMMA_CODE_FENCE_END)
+        self.assertEqual(fg.open_quote, _FUNCTION_GEMMA_ESCAPE_TOKEN)
+        self.assertEqual(fg.close_quote, _FUNCTION_GEMMA_ESCAPE_TOKEN)
         self.assertEqual(
             fg.function_response_start,
             _FUNCTION_GEMMA_FUNCTION_RESPONSE_START,

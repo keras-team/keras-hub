@@ -69,6 +69,7 @@ _AUDIO_END_TOKEN = "<audio|>"
 _FUNCTION_GEMMA_CODE_FENCE_START = "```tool_code"
 _FUNCTION_GEMMA_CODE_FENCE_END = "```"
 _FUNCTION_GEMMA_FUNCTION_RESPONSE_START = "```tool_output"
+_FUNCTION_GEMMA_ESCAPE_TOKEN = "<escape>"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -847,12 +848,12 @@ class FunctionGemmaSpec(Gemma3Spec):
         Mirrors the fields litert-torch's Gemma4 metadata builder populates
         for its own function-calling support
         (``export_hf/model_ext/gemma4/metadata_builder.py`` ~39-54):
-        code-fence start/end, function-response start, and the
-        use-template-for-function-call-format flag. ``FunctionGemma`` shares
+        code-fence start/end, open/close quote, function-response start, and
+        the use-template-for-function-call-format flag. ``FunctionGemma`` shares
         Gemma4's exact function-calling field block (proto field numbers
-        5-14). keras-hub supplies the fence strings as spec constants
-        because its Gemma3 tokenizer, unlike the HuggingFace checkpoint
-        litert-torch reads, has no ``special_tokens_map`` carrying them.
+        5-14). keras-hub supplies the fence strings as spec constants because
+        its Gemma3 tokenizer, unlike the HuggingFace checkpoint litert-torch
+        reads, has no ``special_tokens_map`` carrying them.
 
         ``constraint_mode`` is left at its proto default
         (``CONSTRAINT_MODE_UNSPECIFIED``): litert-torch's Gemma4 builder does
@@ -861,6 +862,8 @@ class FunctionGemmaSpec(Gemma3Spec):
         subtype = meta.llm_model_type.function_gemma
         subtype.code_fence_start = _FUNCTION_GEMMA_CODE_FENCE_START
         subtype.code_fence_end = _FUNCTION_GEMMA_CODE_FENCE_END
+        subtype.open_quote = _FUNCTION_GEMMA_ESCAPE_TOKEN
+        subtype.close_quote = _FUNCTION_GEMMA_ESCAPE_TOKEN
         subtype.function_response_start = (
             _FUNCTION_GEMMA_FUNCTION_RESPONSE_START
         )
@@ -1280,6 +1283,25 @@ _MODEL_TYPE_OVERRIDE_SPECS = {
 }
 
 
+def _is_function_gemma(model):
+    """Detect the ``function_gemma_instruct_270m`` preset by tokenizer tokens.
+
+    The preset loads as a plain ``Gemma3CausalLM`` (architecturally identical
+    to Gemma3), but its ``Gemma3Tokenizer`` vocabulary contains the
+    function-calling special tokens ``<start_function_call>`` and
+    ``<end_function_call>``. Plain Gemma3 presets do not.
+
+    We must verify the token round-trips, because some tokenizers map
+    out-of-vocabulary strings to a fixed ``<unk>`` id instead of raising.
+    """
+    try:
+        tokenizer = model.preprocessor.tokenizer
+        token_id = tokenizer.token_to_id("<start_function_call>")
+        return tokenizer.id_to_token(token_id) == "<start_function_call>"
+    except (AttributeError, ValueError, KeyError, TypeError):
+        return False
+
+
 def resolve_export_spec(model, llm_model_type=None):
     """Return the ``LiteRTLMExportSpec`` for *model*.
 
@@ -1304,6 +1326,11 @@ def resolve_export_spec(model, llm_model_type=None):
                 f"{sorted(_MODEL_TYPE_OVERRIDE_SPECS)}. Omit the argument to "
                 "auto-detect the model family by class."
             )
+    # function_gemma loads as a plain Gemma3CausalLM but is distinguished by
+    # function-calling special tokens in its tokenizer. Check before the
+    # registry so it does not fall through to Gemma3Spec.
+    if _is_function_gemma(model):
+        return FunctionGemmaSpec()
     for module_path, class_name, spec_factory in _EXPORT_SPEC_REGISTRY:
         try:
             module = __import__(module_path, fromlist=[class_name])
