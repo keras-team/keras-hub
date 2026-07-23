@@ -5,7 +5,7 @@ rich
 kagglehub!=1.0.1
 kagglesdk==0.1.28
 tokenizers
-sentencepiece
+sentencepiece<0.2.2
 # Tooling deps.
 pre-commit
 astor

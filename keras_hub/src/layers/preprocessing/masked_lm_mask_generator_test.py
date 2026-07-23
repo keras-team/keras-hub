@@ -102,7 +102,7 @@ class MaskedLMMaskGeneratorTest(TestCase):
             mask_selection_length=mask_selection_length,
         )
         outputs = masked_lm_masker(inputs)
-        self.assertEqual(tf.reduce_sum(outputs["mask_positions"]), 0)
+        self.assertEqual(ops.sum(outputs["mask_positions"]), 0)
 
     def test_invalid_mask_token(self):
         with self.assertRaisesRegex(ValueError, "Mask token id should be*"):

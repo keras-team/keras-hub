@@ -5,16 +5,20 @@ tensorflow-text>=2.20.1;platform_system != 'Windows'
 
 # Torch.
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.13.0
-torchvision==0.28.0
+litert-torch
+torch>=2.12
+torchvision
 
 # Jax.
 jax[cpu]
 
-# LiteRT (for torch-backend TFLite export and LiteRT-LM testing) lives in the
-# `litertlm` extra (see pyproject.toml) and `requirements-torch-cuda.txt`, not
-# here: it is only usable with the PyTorch backend, and keras_hub's litertlm
-# export code already guards its usage at runtime via `importlib.util.
-# find_spec`, so JAX/TF CI environments do not need it installed.
+# LiteRT (for the model.export(format="litert") tests).
+ai-edge-litert
+
+# LiteRT-LM export dependencies (litert-lm-builder) live in the `litertlm`
+# extra (see pyproject.toml), not here: they are only usable with the PyTorch
+# backend, and keras_hub's litertlm export code already guards its usage at
+# runtime via `importlib.util.find_spec`, so JAX/TF CI environments do not
+# need them installed.
 
 -r requirements-common.txt

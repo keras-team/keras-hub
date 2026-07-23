@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 
@@ -73,6 +74,10 @@ class SegFormerTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        reason="Unsupported ops during SegFormer's torch export decomposition.",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=SegFormerImageSegmenter,

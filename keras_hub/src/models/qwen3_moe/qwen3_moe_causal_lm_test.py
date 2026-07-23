@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import keras
 import pytest
 from keras import ops
 
@@ -121,6 +122,10 @@ class Qwen3MoeCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        reason="litert-torch cannot lower aten._assert_async from MoE routing.",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=Qwen3MoeCausalLM,

@@ -24,7 +24,7 @@ jobs:
         version: [keras-stable]
         include:
           - backend: jax
-            version: keras-3.14
+            version: keras-3.15
           - backend: jax
             version: keras-nightly
           - backend: openvino
@@ -33,9 +33,11 @@ jobs:
     env:
       KERAS_BACKEND: ${{ matrix.backend }}
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        persist-credentials: false
     - name: Set up Python 3.11
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
       with:
         python-version: '3.11'
     - name: Get pip cache dir
@@ -44,7 +46,8 @@ jobs:
         python -m pip install --upgrade pip setuptools
         echo "::set-output name=dir::$(pip cache dir)"
     - name: pip cache
-      uses: actions/cache@v6
+      # zizmor: ignore[cache-poisoning]
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.pip-cache.outputs.dir }}
         key: ${{ runner.os }}-pip-${{ hashFiles('requirements-common.txt') }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('pyproject.toml') }}
@@ -56,11 +59,11 @@ jobs:
       if: ${{ matrix.backend == 'torch' }}
       run: |
           pip install -e ".[litertlm]" --progress-bar off
-    - name: Pin Keras 3.14
-      if: ${{ matrix.version == 'keras-3.14'}}
+    - name: Pin Keras 3.15
+      if: ${{ matrix.version == 'keras-3.15'}}
       run: |
         pip uninstall -y keras jaxlib jax
-        pip install keras==3.14.0 --progress-bar off
+        pip install keras==3.15.0 --progress-bar off
         pip install jax==0.6.0 --progress-bar off
     - name: Pin Keras Nightly
       if: ${{ matrix.version == 'keras-nightly'}}
@@ -83,9 +86,11 @@ jobs:
     name: Check the code format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - name: Set up Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.11'
       - name: Get pip cache dir
@@ -94,7 +99,8 @@ jobs:
           python -m pip install --upgrade pip setuptools
           echo "::set-output name=dir::$(pip cache dir)"
       - name: pip cache
-        uses: actions/cache@v6
+        # zizmor: ignore[cache-poisoning]
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.pip-cache.outputs.dir }}
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements-common.txt') }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('pyproject.toml') }}

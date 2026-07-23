@@ -52,16 +52,17 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             `cache` (usually the index of the current token being processed
             when running generation). If `cache_update_index=None` while `cache`
             is set, the cache will not be updated.
+        return_attention_scores: a boolean indicating whether the output
+            should include attention scores.
         training: a boolean indicating whether the layer should behave in
             training mode or in inference mode.
 
     Returns:
-        An `(attention_output, cache)` tuple. `attention_output` is the result
-        of the computation, of shape `(B, T, dim)`, where `T` is for target
-        sequence shapes and `dim` is the query input last dimension if
-        `output_shape` is `None`. Otherwise, the multi-head outputs are
-        projected to the shape specified by `output_shape`. `cache` is the
-        updated cache.
+        One of the following:
+        - `attention_output`
+        - `(attention_output, attention_scores)`
+        - `(attention_output, cache)`
+        - `(attention_output, attention_scores, cache)`
     """
 
     def call(
@@ -72,6 +73,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         attention_mask=None,
         cache=None,
         cache_update_index=None,
+        return_attention_scores=False,
         training=None,
     ):
         if key is None:
@@ -113,11 +115,17 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             key=key,
             value=value,
             attention_mask=attention_mask,
+            return_attention_scores=return_attention_scores,
             training=training,
         )
 
         attention_output = self._output_dense(attention_output)
 
-        if cache is not None:
+        if return_attention_scores and cache is not None:
+            return attention_output, attention_scores, cache
+        elif return_attention_scores:
+            return attention_output, attention_scores
+        elif cache is not None:
             return attention_output, cache
-        return attention_output
+        else:
+            return attention_output

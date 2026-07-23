@@ -47,6 +47,30 @@ class MistralCausalLMTest(TestCase):
             expected_output_shape=(2, 8, 10),
         )
 
+    def test_generate_with_explicit_head_dim(self):
+        # Magistral-style config where `head_dim` is set explicitly and does
+        # not equal `hidden_dim // num_query_heads`. The generation cache must
+        # be built with the explicit `head_dim`, not the derived value.
+        backbone = MistralBackbone(
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=6,
+            sliding_window=None,
+        )
+        self.assertNotEqual(
+            backbone.head_dim, backbone.hidden_dim // backbone.num_query_heads
+        )
+        causal_lm = MistralCausalLM(
+            preprocessor=self.preprocessor, backbone=backbone
+        )
+        prompt = "the quick brown fox"
+        output = causal_lm.generate(prompt)
+        self.assertTrue(prompt in output)
+
     def test_generate(self):
         causal_lm = MistralCausalLM(**self.init_kwargs)
         # String input.
