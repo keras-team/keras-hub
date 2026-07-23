@@ -1198,16 +1198,40 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         if vocab_size is None:
             vocab_size = model.backbone.vocabulary_size
 
+        # Compute the actual number of tokens each encoder produces, because
+        # some configs (e.g. Gemma4 audio) declare a theoretical maximum that
+        # exceeds the actual encoder output for the trace-time input shape.
+        actual_vision_tokens = None
+        actual_audio_tokens = None
+        with torch.no_grad():
+            if has_vision and "pixel_values" in prefill_inputs:
+                vision_encoder = _get_vision_encoder(model.backbone)
+                vision_out = vision_encoder(
+                    {
+                        "pixel_values": prefill_inputs["pixel_values"],
+                        "pixel_position_ids": prefill_inputs["pixel_position_ids"],
+                    }
+                )
+                # vision_out shape is (batch, max_images, tokens_per_image, dim)
+                actual_vision_tokens = vision_out.shape[1] * vision_out.shape[2]
+            if has_audio and "audio_mel" in prefill_inputs:
+                audio_out = model.backbone.audio_encoder(
+                    prefill_inputs["audio_mel"], prefill_inputs["audio_mel_mask"]
+                )
+                # audio_out shape is (batch, max_clips, tokens_per_clip, dim)
+                actual_audio_tokens = audio_out.shape[1] * audio_out.shape[2]
+
         # Real placement: start after the BOS slot to avoid the restore-to-text
         # behavior at index 0. Cap the number of placed tokens to what fits in
-        # the sequence, because some configs (e.g. Gemma4 audio) declare more
-        # tokens than the trace-time sequence length.
+        # the sequence and to the actual encoder output count.
         seq_len = prefill_inputs["tokens"].shape[1]
         max_places = seq_len - 1
         cursor = 1
         if "vision_indices" in prefill_inputs:
             num_vision_tokens = min(
-                prefill_inputs["vision_indices"].shape[1], max_places
+                prefill_inputs["vision_indices"].shape[1],
+                actual_vision_tokens or prefill_inputs["vision_indices"].shape[1],
+                max_places,
             )
             vision_start = cursor
             prefill_inputs["vision_indices"] = torch.zeros_like(
@@ -1227,7 +1251,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             max_places -= num_vision_tokens
         if "audio_indices" in prefill_inputs:
             num_audio_tokens = min(
-                prefill_inputs["audio_indices"].shape[1], max_places
+                prefill_inputs["audio_indices"].shape[1],
+                actual_audio_tokens or prefill_inputs["audio_indices"].shape[1],
+                max_places,
             )
             audio_start = cursor
             prefill_inputs["audio_indices"] = torch.zeros_like(
@@ -1250,18 +1276,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 prefill_inputs["audio_mel_mask"]
             )
         if "pixel_position_ids" in prefill_inputs:
-            # Gemma4 2D patch positions must be non-zero to exercise the
-            # positional embedding path.
-            pixel_position_ids = torch.zeros_like(
+            # Gemma4's test preprocessor produces all-1s 2D patch positions.
+            # Mirror that rather than a synthetic grid so the vision-encoder
+            # positional embedding path is exercised with the same values the
+            # export was traced against.
+            prefill_inputs["pixel_position_ids"] = torch.ones_like(
                 prefill_inputs["pixel_position_ids"]
             )
-            num_patches = pixel_position_ids.shape[2]
-            grid = int(num_patches ** 0.5)
-            for i in range(grid):
-                for j in range(grid):
-                    pixel_position_ids[:, :, i * grid + j, 0] = i
-                    pixel_position_ids[:, :, i * grid + j, 1] = j
-            prefill_inputs["pixel_position_ids"] = pixel_position_ids
 
         zero_structure_prefill_inputs = {
             k: v.clone() if isinstance(v, torch.Tensor) else v

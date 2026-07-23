@@ -328,12 +328,12 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "Multimodal parity is vacuously-passing at HEAD: zero "
-            "vision/audio indices make the merge path an identity. When the "
-            "harness is fixed to use real placement indices (WS C1), the "
-            "measured prefill-KV error is ~2.76 (not < 1e-4), indicating a "
-            "real numerical divergence between Keras and TFLite when the "
-            "vision/audio towers are actually exercised. Under diagnosis."
+            "Multimodal parity fails at vision/audio merged positions: with "
+            "real placement indices (WS C1 fix), prefill-KV mismatches are "
+            "concentrated at exactly the merged token positions (max abs "
+            "diff ~1.33 at position 1, ~0.68 at position 5), while text "
+            "positions match. The TFLite export computes different merged "
+            "embeddings than Keras eager. Under diagnosis."
         ),
     )
     def test_litertlm_export(self):
