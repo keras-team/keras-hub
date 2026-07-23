@@ -77,9 +77,12 @@ class SamplerConfig:
 
     This mirrors the conditional ``sampler_params`` semantics of
     litert-torch's ``export_hf`` (``core/litert_lm_builder.py`` ~189-232):
-    the proto field is only written when a caller explicitly requests it,
-    and the sampler *type* (GREEDY / TOP_K / TOP_P) is derived from the
-    supplied ``top_k``/``top_p`` the same way upstream derives it.
+    the proto field is only written when a caller explicitly requests it.
+    The sampler *type* is derived from the supplied ``top_k``/``top_p``.
+
+    NOTE: the runtime (litertlm-android 0.13.1, host ``litert_lm`` 0.13.1)
+    does **not** implement the proto ``GREEDY`` sampler type. We therefore
+    emit ``TOP_K`` with ``k=1`` for greedy generation instead.
 
     NOTE (scope): this exists to give on-device verification a way to force
     deterministic greedy generation (``GREEDY_SAMPLER_CONFIG``); it is not a
@@ -88,7 +91,8 @@ class SamplerConfig:
     entirely, letting the runtime pick its own sampling policy.
 
     Args:
-        top_k: Optional int >= 1. ``top_k == 1`` selects GREEDY.
+        top_k: Optional int >= 1. ``top_k == 1`` selects deterministic
+            greedy generation (encoded as ``TOP_K``).
         top_p: Optional float in (0.0, 1.0].
         temperature: Optional float >= 0.0.
         seed: Optional int RNG seed.

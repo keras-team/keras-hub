@@ -530,7 +530,12 @@ class TestLiteRTLmExport(TestCase):
         )
 
     def test_export_greedy_sampler_config_roundtrip(self):
-        """`GREEDY_SAMPLER_CONFIG` -> GREEDY type + k=1 in re-read metadata."""
+        """`GREEDY_SAMPLER_CONFIG` -> TOP_K type + k=1 in re-read metadata.
+
+        We intentionally emit TOP_K instead of GREEDY because litertlm-android
+        0.13.1 and host litert_lm 0.13.1 do not implement sampler type 3
+        (GREEDY). TOP_K with k=1 is functionally equivalent.
+        """
         from litert_lm_builder.runtime.proto import sampler_params_pb2
 
         from keras_hub.src.utils.litertlm.model_specs import (
@@ -549,7 +554,7 @@ class TestLiteRTLmExport(TestCase):
         self.assertIsNotNone(llm_metadata)
         self.assertTrue(llm_metadata.HasField("sampler_params"))
         sp = llm_metadata.sampler_params
-        self.assertEqual(sp.type, sampler_params_pb2.SamplerParameters.GREEDY)
+        self.assertEqual(sp.type, sampler_params_pb2.SamplerParameters.TOP_K)
         self.assertEqual(sp.k, 1)
 
     def test_sampler_config_validation_and_export_rejects_bad_type(self):

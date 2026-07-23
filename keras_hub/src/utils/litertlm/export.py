@@ -1597,12 +1597,13 @@ def _build_llm_metadata(
             sp.seed = sampler_config.seed
 
         SamplerParameters = sampler_params_pb2.SamplerParameters
-        if top_k == 1:
-            sp.type = SamplerParameters.GREEDY
+        # `GREEDY` (type 3) is not implemented by litertlm-android 0.13.1 or
+        # the host Python `litert_lm` 0.13.1 runtime. Emit `TOP_K` with k=1
+        # instead, which is functionally equivalent and is implemented.
+        if top_k is not None:
+            sp.type = SamplerParameters.TOP_K
         elif top_p is not None:
             sp.type = SamplerParameters.TOP_P
-        elif top_k is not None:
-            sp.type = SamplerParameters.TOP_K
         else:
             sp.type = SamplerParameters.TOP_P
 
