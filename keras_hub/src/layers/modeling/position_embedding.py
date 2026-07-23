@@ -2,6 +2,7 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.vllm.context import get_vllm_context
 
 
 @keras_hub_export("keras_hub.layers.PositionEmbedding")
@@ -104,6 +105,13 @@ class PositionEmbedding(keras.layers.Layer):
         # than the sequence_length of the layer.
         position_embeddings = ops.convert_to_tensor(self.position_embeddings)
         if positions is None:
+            # When serving through vLLM, the engine assigns each token an
+            # absolute position (driving the paged KV cache) that a plain
+            # 0..seq_len slice would not match. If a serving context is
+            # active, take those positions from it; otherwise this is a
+            # no-op and the standard slice path below runs.
+            positions = _vllm_serving_positions()
+        if positions is None:
             position_embeddings = ops.slice(
                 position_embeddings,
                 (start_index, 0),
@@ -122,3 +130,23 @@ class PositionEmbedding(keras.layers.Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape
+
+
+def _vllm_serving_positions():
+    """Absolute position ids assigned by vLLM, or ``None`` outside serving.
+
+    Under vLLM's paged / continuous-batched decode, tokens from many requests
+    are packed into one flat sequence and each carries its own absolute
+    position, so learned position embeddings cannot use a contiguous
+    ``0..seq_len`` slice — they must index by these per-token positions to stay
+    aligned with the paged KV cache.
+
+    Returns ``None`` unless a serving context is active, so normal training and
+    inference are unaffected. When active, the positions are reshaped to
+    ``(num_tokens, 1)`` to match the flattened ``(num_tokens, 1, hidden)`` token
+    layout the serving model feeds in.
+    """
+    ctx = get_vllm_context()
+    if ctx is None or ctx.positions is None:
+        return None
+    return ops.reshape(ctx.positions, (-1, 1))
