@@ -39,6 +39,9 @@ from keras_hub.src.utils.transformers import convert_t5gemma2
 from keras_hub.src.utils.transformers import convert_vit
 from keras_hub.src.utils.transformers import convert_xlm_roberta
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
+from keras_hub.src.utils.transformers.safetensor_utils import (
+    default_fast_framework_and_device,
+)
 
 
 class TransformersPresetLoader(PresetLoader):
@@ -135,9 +138,25 @@ class TransformersPresetLoader(PresetLoader):
         backbone = cls(**{**keras_config, **kwargs})
         if load_weights:
             jax_memory_cleanup(backbone)
-            with SafetensorLoader(self.preset) as loader:
+            with self._safetensor_loader() as loader:
                 self.converter.convert_weights(backbone, loader, self.config)
         return backbone
+
+    def _safetensor_loader(self, **kwargs):
+        """Build a `SafetensorLoader`, honoring a converter's fast-load opt-in.
+
+        A converter module can set `fast_safetensor_loading = True` to load its
+        weights through the backend-native `safetensors` framework instead of
+        numpy. This is opt-in per converter so its weight hooks (which must
+        stay backend-agnostic, e.g. use `keras.ops.cast` rather than
+        `.astype`) can be validated before enabling it.
+        """
+        if getattr(self.converter, "fast_safetensor_loading", False):
+            framework, device = default_fast_framework_and_device()
+            if framework is not None:
+                kwargs.setdefault("framework", framework)
+                kwargs.setdefault("device", device)
+        return SafetensorLoader(self.preset, **kwargs)
 
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         architecture = self.config["architectures"][0]
@@ -166,7 +185,7 @@ class TransformersPresetLoader(PresetLoader):
             kwargs["num_classes"] = len(self.config["id2label"])
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
         if load_task_weights:
-            with SafetensorLoader(self.preset, prefix="") as loader:
+            with self._safetensor_loader(prefix="") as loader:
                 self.converter.convert_head(task, loader, self.config)
         return task
 
