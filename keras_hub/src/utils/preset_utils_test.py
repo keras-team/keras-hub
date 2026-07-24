@@ -211,14 +211,19 @@ class PresetUtilsTest(TestCase):
 
     def test_kaggle_error_translation(self):
         preset = "kaggle://keras/bert/keras/bert_base_en"
-        # Kaggle serves a missing file as a 404 and a gated file as a 403;
-        # both translate to FileNotFoundError (check_file_exists relies on
-        # this to probe optional preset files).
-        for status in ("404 Client Error.", "403 Client Error: Forbidden"):
-            error = KaggleApiHTTPError(status)
-            with mock.patch("kagglehub.model_download", side_effect=error):
-                with self.assertRaises(FileNotFoundError):
-                    get_file(preset, "missing.json")
+        # A 404 is a plain missing file.
+        error = KaggleApiHTTPError("404 Client Error.")
+        with mock.patch("kagglehub.model_download", side_effect=error):
+            with self.assertRaisesRegex(FileNotFoundError, "doesn't exist"):
+                get_file(preset, "missing.json")
+        # A 403 is still FileNotFoundError (check_file_exists relies on
+        # it), but the message points at gated-model consent.
+        error = KaggleApiHTTPError("403 Client Error: Forbidden")
+        with mock.patch("kagglehub.model_download", side_effect=error):
+            with self.assertRaisesRegex(
+                FileNotFoundError, "accept its terms"
+            ):
+                get_file(preset, "missing.json")
         # Any other Kaggle API error should surface as-is, not as a
         # missing file.
         error = KaggleApiHTTPError("1994")

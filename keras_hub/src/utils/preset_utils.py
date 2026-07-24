@@ -163,12 +163,20 @@ def get_file(preset, path):
             return kagglehub.model_download(kaggle_handle, path)
         except KaggleApiHTTPError as e:
             message = str(e)
-            # Kaggle serves a missing file as a 404 and a file that needs
-            # consent as a 403; both mean the preset has no usable file at
-            # `path`. Anything else is a real API error and surfaces as-is.
-            if "404 Client Error" in message or "403 Client Error" in message:
+            # Kaggle serves a missing file as a 404 and a gated file as a
+            # 403. Both raise FileNotFoundError so `check_file_exists` can
+            # probe optional preset files, but the 403 message points at
+            # the real fix. Anything else is an API error and surfaces
+            # as-is.
+            if "404 Client Error" in message:
                 raise FileNotFoundError(
                     f"`{path}` doesn't exist in preset directory `{preset}`."
+                )
+            elif "403 Client Error" in message:
+                raise FileNotFoundError(
+                    f"`{path}` is not accessible in preset directory "
+                    f"`{preset}`. If this model is gated, accept its "
+                    "terms on kaggle.com and retry."
                 )
             else:
                 raise ValueError(message)
