@@ -279,8 +279,10 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         """The `function_gemma_instruct_270m` preset loads as a plain
         `Gemma3CausalLM` but, when exported with
         `llm_model_type="function_gemma"`, must map to the `function_gemma`
-        `LlmModelType` (not `gemma3`) with its function-calling metadata
-        populated -- closing the preset mismapping (I-3b). Uses a tiny dummy
+        `LlmModelType` (not `gemma3`). An explicit override yields the bare
+        oneof without model-specific fields (mirroring litert-torch); the
+        populated function-calling block is exercised separately via
+        tokenizer auto-detection in model_specs_test.py. Uses a tiny dummy
         text-only model; the real 270M preset is never loaded."""
         if keras.config.backend() != "torch":
             self.skipTest("LiteRT-LM export requires the PyTorch backend.")
@@ -291,19 +293,6 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
             self.skipTest("LiteRT-LM export requires `litert-torch`.")
         if importlib.util.find_spec("litert_lm_builder") is None:
             self.skipTest("LiteRT-LM export requires `litert-lm-builder`.")
-
-        from keras_hub.src.utils.litertlm.model_specs import (
-            _FUNCTION_GEMMA_CODE_FENCE_END,
-        )
-        from keras_hub.src.utils.litertlm.model_specs import (
-            _FUNCTION_GEMMA_CODE_FENCE_START,
-        )
-        from keras_hub.src.utils.litertlm.model_specs import (
-            _FUNCTION_GEMMA_ESCAPE_TOKEN,
-        )
-        from keras_hub.src.utils.litertlm.model_specs import (
-            _FUNCTION_GEMMA_FUNCTION_RESPONSE_START,
-        )
 
         model = Gemma3CausalLM(**self.text_init_kwargs)
         path = os.path.join(self.get_temp_dir(), "function_gemma.litertlm")
@@ -323,18 +312,16 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         self.assertEqual(
             meta.llm_model_type.WhichOneof("model_type"), "function_gemma"
         )
+        # An explicit `llm_model_type` override yields the BARE oneof with no
+        # model-specific fields populated, mirroring litert-torch, which skips
+        # its model-specific metadata builder whenever
+        # `litert_lm_model_type_override` is set. The populated
+        # function-calling block is produced only by tokenizer auto-detection
+        # (covered in model_specs_test.py).
         fg = meta.llm_model_type.function_gemma
-        # Tool-call fields populated (not empty/default).
-        self.assertEqual(fg.code_fence_start, _FUNCTION_GEMMA_CODE_FENCE_START)
-        self.assertEqual(fg.code_fence_end, _FUNCTION_GEMMA_CODE_FENCE_END)
-        self.assertEqual(fg.open_quote, _FUNCTION_GEMMA_ESCAPE_TOKEN)
-        self.assertEqual(fg.close_quote, _FUNCTION_GEMMA_ESCAPE_TOKEN)
-        self.assertEqual(
-            fg.function_response_start,
-            _FUNCTION_GEMMA_FUNCTION_RESPONSE_START,
-        )
-        self.assertTrue(fg.use_template_for_fc_format)
-        self.assertNotEqual(fg.code_fence_start, "")
+        self.assertEqual(fg.code_fence_start, "")
+        self.assertEqual(fg.code_fence_end, "")
+        self.assertEqual(fg.function_response_start, "")
 
     @pytest.mark.large
     def test_litert_export_multimodal(self):
