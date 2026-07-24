@@ -245,13 +245,23 @@ class KerasHubTokenizer:
         (``add_start_token=True``), so served prompts tokenize exactly as
         `model.generate()` would see them.
         """
+        if not isinstance(text, str):
+            raise TypeError(
+                "KerasHubTokenizer.encode expects a single string, got "
+                f"{type(text).__name__}. Batch encoding is not supported."
+            )
         token_ids = ops.convert_to_numpy(self.tokenizer(text)).tolist()
         bos = self.bos_token_id
         if add_special_tokens and bos is not None:
             if not token_ids or token_ids[0] != bos:
                 token_ids = [int(bos)] + token_ids
         if truncation and max_length is not None:
-            token_ids = token_ids[:max_length]
+            # Honor `truncation_side`: vLLM's renderer assigns it to keep
+            # the end of over-long prompts (left truncation).
+            if self.truncation_side == "left":
+                token_ids = token_ids[-max_length:]
+            else:
+                token_ids = token_ids[:max_length]
         return token_ids
 
     def __call__(

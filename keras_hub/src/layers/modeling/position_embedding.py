@@ -147,6 +147,16 @@ def _vllm_serving_positions():
     layout the serving model feeds in.
     """
     ctx = get_vllm_context()
-    if ctx is None or ctx.positions is None:
+    if ctx is None:
+        return None
+    if ctx.positions is None:
+        # A kernel with no positions would silently misplace every learned
+        # embedding; fail loudly instead of falling back to 0..seq_len.
+        if ctx.paged_attention_func is not None:
+            raise ValueError(
+                "vLLM serving context is active but carries no per-token "
+                "positions; learned position embeddings cannot be "
+                "computed."
+            )
         return None
     return ops.reshape(ctx.positions, (-1, 1))

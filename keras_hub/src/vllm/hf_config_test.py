@@ -23,9 +23,19 @@ class HFConfigTest(TestCase):
         self.assertEqual(KERAS_HUB_ARCHITECTURE, "KerasHubForCausalLM")
 
     def test_register_is_idempotent(self):
-        # Safe to call from setup_vllm_model and again from each worker import.
-        register_hf_config()
-        register_hf_config()
+        cls_first = register_hf_config()
+        cls_second = register_hf_config()
+        # The class is built once and cached, so both calls return the same
+        # object and re-registration is a true no-op.
+        self.assertIsNotNone(cls_first)
+        self.assertIs(cls_first, cls_second)
+        # And the registration is observable: a minimal config with our
+        # model_type resolves to the registered class.
+        tmp = tempfile.mkdtemp()
+        with open(os.path.join(tmp, "config.json"), "w") as f:
+            json.dump({"model_type": KERAS_HUB_MODEL_TYPE}, f)
+        config = AutoConfig.from_pretrained(tmp)
+        self.assertIs(type(config), cls_first)
 
     def test_autoconfig_round_trip_carries_dims(self):
         register_hf_config()

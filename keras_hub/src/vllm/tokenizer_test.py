@@ -111,6 +111,20 @@ class KerasHubTokenizerTest(TestCase):
             self.adapter.convert_ids_to_tokens(tensor_ids), ["b", "c"]
         )
 
+    def test_truncation_side_honored(self):
+        # bos(1) + [3, 4]; right truncation keeps the start, left keeps
+        # the end (what vLLM's renderer sets truncation_side for).
+        right = self.adapter.encode("xx", truncation=True, max_length=2)
+        self.assertEqual(right, [1, 3])
+        self.adapter.truncation_side = "left"
+        left = self.adapter.encode("xx", truncation=True, max_length=2)
+        self.assertEqual(left, [3, 4])
+        self.adapter.truncation_side = "right"
+
+    def test_encode_rejects_batches(self):
+        with self.assertRaisesRegex(TypeError, "single string"):
+            self.adapter.encode(["a", "b"])
+
     def test_special_ids_drop_missing_token(self):
         # pad is absent, so only bos/eos ids appear (no defaulted id).
         self.assertEqual(self.adapter.all_special_ids, [1, 2])

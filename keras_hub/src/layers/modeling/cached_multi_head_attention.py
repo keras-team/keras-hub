@@ -93,7 +93,16 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
                     "`return_attention_scores=True` is not supported while "
                     "serving through vLLM paged attention."
                 )
-            return self._compute_vllm_attention(query, value, key, cache)
+            # Self-attention passes the same tensor for query and value;
+            # cross-attention (e.g. TransformerDecoder's second attention
+            # block) must not push encoder K/V into the paged cache.
+            if value is not query:
+                raise ValueError(
+                    "Cross-attention is not supported under vLLM serving; "
+                    "only decoder self-attention can use the paged KV "
+                    "cache."
+                )
+            return self._compute_vllm_attention(query, key, value, cache)
 
         query = self._query_dense(query)
 
@@ -146,7 +155,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         else:
             return attention_output
 
-    def _compute_vllm_attention(self, query, value, key, cache):
+    def _compute_vllm_attention(self, query, key, value, cache):
         """vLLM paged-attention route (serving on TPU only).
 
         Projects Q/K/V and hands them to the shared paged-attention bridge.

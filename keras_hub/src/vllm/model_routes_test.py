@@ -36,6 +36,25 @@ class ModelRoutesTest(TestCase):
         with self.assertRaisesRegex(ValueError, "return_attention_scores"):
             layer(x, x, return_attention_scores=True)
 
+    def test_mha_rejects_cross_attention_while_serving(self):
+        layer = CachedMultiHeadAttention(num_heads=2, key_dim=4)
+        x = ops.ones((2, 3, 8))
+        y = ops.zeros((2, 3, 8))
+        layer.build(ops.shape(x), ops.shape(x))
+        activate_serving(RecordingKernel(), kv_caches=["C0"])
+        with self.assertRaisesRegex(ValueError, "Cross-attention"):
+            layer(x, y)
+
+    def test_position_embedding_requires_positions_while_serving(self):
+        # Kernel injected but no positions: learned embeddings must fail
+        # loudly rather than fall back to a contiguous 0..seq_len slice.
+        layer = PositionEmbedding(sequence_length=16)
+        x = ops.ones((3, 1, 8))
+        layer.build(ops.shape(x))
+        activate_serving(RecordingKernel(), kv_caches=["C0"])
+        with self.assertRaisesRegex(ValueError, "no per-token"):
+            layer(x)
+
     def test_gpt2_mha_routes_only_while_serving(self):
         layer = CachedMultiHeadAttention(num_heads=2, key_dim=4)
         x = ops.ones((3, 1, 8))

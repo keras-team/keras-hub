@@ -57,5 +57,11 @@ class SamplerDefaultsTest(TestCase):
         kwargs = sampler_to_sampling_kwargs(RandomSampler(temperature=1.3))
         self.assertEqual(kwargs, {"temperature": 1.3})
 
+    def test_seed_maps_when_set(self):
+        kwargs = sampler_to_sampling_kwargs(TopKSampler(k=3, seed=7))
+        self.assertEqual(kwargs["seed"], 7)
+        # No seed set -> no seed key.
+        self.assertNotIn("seed", sampler_to_sampling_kwargs(TopKSampler()))
+
     def test_unsupported_sampler_returns_none(self):
         self.assertIsNone(sampler_to_sampling_kwargs(BeamSampler()))

@@ -17,36 +17,33 @@ class VllmContextTest(TestCase):
 
     def test_set_get_roundtrip(self):
         vllm_context.set_vllm_context(
-            block_tables="BT",
-            slot_mapping="SM",
-            attention_metadata="META",
             paged_attention_func="FUNC",
-            mesh="MESH",
+            positions="POS",
+            kv_caches=["C0"],
         )
         ctx = vllm_context.get_vllm_context()
         self.assertIsNotNone(ctx)
-        self.assertEqual(ctx.block_tables, "BT")
-        self.assertEqual(ctx.slot_mapping, "SM")
-        self.assertEqual(ctx.attention_metadata, "META")
         self.assertEqual(ctx.paged_attention_func, "FUNC")
-        self.assertEqual(ctx.mesh, "MESH")
+        self.assertEqual(ctx.positions, "POS")
+        self.assertEqual(ctx.kv_caches, ["C0"])
         self.assertTrue(ctx.active)
 
     def test_clear_resets_everything(self):
-        vllm_context.set_vllm_context("BT", "SM", "META", "FUNC", "MESH")
+        vllm_context.set_vllm_context(
+            paged_attention_func="FUNC", positions="POS", kv_caches=["C0"]
+        )
         vllm_context.clear_vllm_context()
         self.assertIsNone(vllm_context.get_vllm_context())
-        # The singleton's fields are reset too.
-        self.assertIsNone(vllm_context._vllm_context.mesh)
-        self.assertIsNone(vllm_context._vllm_context.paged_attention_func)
-        self.assertIsNone(vllm_context._vllm_context.kv_caches)
-        self.assertEqual(vllm_context._vllm_context.layer_index, 0)
+        # Every field named in _INACTIVE_STATE is back at its inactive
+        # value, so nothing can survive a "clear".
+        for name, value in vllm_context._INACTIVE_STATE.items():
+            self.assertEqual(
+                getattr(vllm_context._vllm_context, name), value, name
+            )
 
     def test_kv_caches_copied_and_lifecycle_fields_initialized(self):
         caches = ["C0", "C1"]
-        vllm_context.set_vllm_context(
-            None, None, kv_caches=caches, positions="POS"
-        )
+        vllm_context.set_vllm_context(kv_caches=caches, positions="POS")
         ctx = vllm_context.get_vllm_context()
         # Layer counter starts fresh; updated caches seed from the input.
         self.assertEqual(ctx.layer_index, 0)
@@ -62,24 +59,44 @@ class VllmContextTest(TestCase):
     def test_reset_on_new_forward_step(self):
         # A second forward step must reset the per-step layer counter, even if
         # the previous step was never explicitly cleared.
-        vllm_context.set_vllm_context(None, None, kv_caches=["C0"])
+        vllm_context.set_vllm_context(kv_caches=["C0"])
         vllm_context.get_vllm_context().layer_index = 5
-        vllm_context.set_vllm_context(None, None, kv_caches=["C0"])
+        vllm_context.set_vllm_context(kv_caches=["C0"])
         self.assertEqual(vllm_context.get_vllm_context().layer_index, 0)
+
+    def test_scope_clears_on_normal_exit(self):
+        with vllm_context.vllm_context_scope(paged_attention_func="KERNEL"):
+            self.assertIsNotNone(vllm_context.get_vllm_context())
+        self.assertIsNone(vllm_context.get_vllm_context())
 
     def test_scope_clears_on_exception(self):
         with self.assertRaisesRegex(RuntimeError, "boom"):
-            with vllm_context.vllm_context_scope(
-                None, None, paged_attention_func="KERNEL"
-            ):
+            with vllm_context.vllm_context_scope(paged_attention_func="KERNEL"):
                 self.assertIsNotNone(vllm_context.get_vllm_context())
                 raise RuntimeError("boom")
+        self.assertIsNone(vllm_context.get_vllm_context())
+
+    def test_nested_scopes_restore_outer(self):
+        # The inner scope's exit must hand back the outer scope's state, not
+        # wipe it — otherwise the rest of the outer forward would silently
+        # fall back to the dense path.
+        with vllm_context.vllm_context_scope(
+            paged_attention_func="OUTER", kv_caches=["O0"]
+        ):
+            with vllm_context.vllm_context_scope(paged_attention_func="INNER"):
+                ctx = vllm_context.get_vllm_context()
+                self.assertEqual(ctx.paged_attention_func, "INNER")
+                self.assertIsNone(ctx.kv_caches)
+            ctx = vllm_context.get_vllm_context()
+            self.assertIsNotNone(ctx)
+            self.assertEqual(ctx.paged_attention_func, "OUTER")
+            self.assertEqual(ctx.kv_caches, ["O0"])
         self.assertIsNone(vllm_context.get_vllm_context())
 
     def test_context_is_thread_local(self):
         # A context set on the main thread must be invisible to another thread,
         # so concurrent requests can never see each other's serving state.
-        vllm_context.set_vllm_context("BT", "SM", "META", "FUNC", "MESH")
+        vllm_context.set_vllm_context(paged_attention_func="FUNC")
         seen = {}
 
         def worker():

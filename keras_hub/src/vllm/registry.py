@@ -13,9 +13,30 @@ import tempfile
 
 import keras
 
+# vLLM is an optional dependency of KerasHub, and `import keras_hub` imports
+# this module (via the generated `keras_hub.vllm` API) — so it must import
+# cleanly without vLLM. The serving class is defined only when vLLM (with its
+# tokenizer registry) is present; otherwise a stub raises with install
+# instructions on use. Same optional-import pattern as the tensorflow and
+# kagglehub guards in `tensor_utils.py` / `preset_utils.py`.
+try:
+    from vllm import LLM as _BaseLLM
+    from vllm import SamplingParams
+    from vllm.renderers.registry import RENDERER_REGISTRY
+    from vllm.tokenizers.registry import TokenizerRegistry
+except ImportError:  # vllm not installed, or too old to serve KerasHub
+    _BaseLLM = None
+    SamplingParams = None
+    RENDERER_REGISTRY = None
+    TokenizerRegistry = None
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.samplers.greedy_sampler import GreedySampler
+from keras_hub.src.samplers.random_sampler import RandomSampler
 from keras_hub.src.samplers.serialization import get as get_sampler
+from keras_hub.src.samplers.top_k_sampler import TopKSampler
+from keras_hub.src.samplers.top_p_sampler import TopPSampler
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.preset_utils import load_json
 from keras_hub.src.vllm.hf_config import KERAS_HUB_ARCHITECTURE
@@ -48,7 +69,7 @@ def _normalize_dtype(dtype):
     return dtype
 
 
-def setup_vllm_model(preset, dtype="bfloat16"):
+def setup_vllm_model(preset, dtype="bfloat16", max_model_len=None):
     """Creates a configuration directory for vLLM to load a Keras Hub preset.
 
     Writes a ``config.json`` with the ``KerasHubForCausalLM`` architecture
@@ -61,6 +82,10 @@ def setup_vllm_model(preset, dtype="bfloat16"):
     Args:
         preset: The Keras Hub preset name (e.g., "gemma_2b_en").
         dtype: The torch dtype to run inference with.
+        max_model_len: Optional context-length ceiling to write as
+            `max_position_embeddings`. RoPE presets don't serialize their
+            limit, so they default to 8192; pass this to serve longer
+            contexts.
 
     Returns:
         A ``tempfile.TemporaryDirectory`` whose ``name`` is the directory to
@@ -121,6 +146,8 @@ def setup_vllm_model(preset, dtype="bfloat16"):
     # the backbone's embedding vocab (they differ when a model pads its
     # embedding table), which is what vLLM's logits layer must match.
     config_dict.update(arch_config)
+    if max_model_len is not None:
+        config_dict["max_position_embeddings"] = int(max_model_len)
 
     with open(
         os.path.join(temp_dir.name, "config.json"), "w", encoding="utf-8"
@@ -164,13 +191,13 @@ def _derive_arch_config(preset):
         arch["hidden_size"] = int(hidden)
     if cfg.get("intermediate_dim"):
         arch["intermediate_size"] = int(cfg["intermediate_dim"])
-    if cfg.get("sliding_window_size"):
-        arch["sliding_window"] = int(cfg["sliding_window_size"])
     if cfg.get("vocabulary_size"):
         arch["vocab_size"] = int(cfg["vocabulary_size"])
-    # vLLM caps max_model_len at max_position_embeddings. KerasHubConfig
-    # defaults it to 8192; write the model's real limit so a sequence can't
-    # index past a learned position table (e.g. GPT-2's 1024).
+    # vLLM caps max_model_len at max_position_embeddings. Learned-position
+    # presets (GPT-2) serialize max_sequence_length; write it so a sequence
+    # can't index past the position table. RoPE presets don't serialize it
+    # and fall to KerasHubConfig's 8192 default — pass `max_model_len` to
+    # `KerasHubLLM` to raise that ceiling.
     if cfg.get("max_sequence_length"):
         arch["max_position_embeddings"] = int(cfg["max_sequence_length"])
     # Fail here with the real cause: without these, vLLM would die later
@@ -202,25 +229,30 @@ def sampler_to_sampling_kwargs(sampler):
     """
     if sampler is None:
         return None
-    name = type(sampler).__name__.lower()
+    # Matched by isinstance, so user subclasses map by behavior regardless
+    # of their class names.
     temperature = float(getattr(sampler, "temperature", 1.0))
-    if "greedy" in name:
-        return {"temperature": 0.0}
-    if "topk" in name:
-        return {"temperature": temperature, "top_k": int(sampler.k)}
-    if "topp" in name:
+    if isinstance(sampler, GreedySampler):
+        kwargs = {"temperature": 0.0}
+    elif isinstance(sampler, TopKSampler):
+        kwargs = {"temperature": temperature, "top_k": int(sampler.k)}
+    elif isinstance(sampler, TopPSampler):
         kwargs = {"temperature": temperature, "top_p": float(sampler.p)}
         if getattr(sampler, "k", None):
             kwargs["top_k"] = int(sampler.k)
-        return kwargs
-    if "random" in name:
-        return {"temperature": temperature}
-    logging.warning(
-        "KerasHub sampler %s has no vLLM equivalent; "
-        "falling back to vLLM's default sampling.",
-        type(sampler).__name__,
-    )
-    return None
+    elif isinstance(sampler, RandomSampler):
+        kwargs = {"temperature": temperature}
+    else:
+        logging.warning(
+            "KerasHub sampler %s has no vLLM equivalent; "
+            "falling back to vLLM's default sampling.",
+            type(sampler).__name__,
+        )
+        return None
+    seed = getattr(sampler, "seed", None)
+    if seed is not None:
+        kwargs["seed"] = int(seed)
+    return kwargs
 
 
 def _default_sampling_kwargs():
@@ -243,24 +275,6 @@ def _default_sampling_kwargs():
             e,
         )
         return None
-
-
-# vLLM is an optional dependency of KerasHub, and `import keras_hub` imports
-# this module (via the generated `keras_hub.vllm` API) — so it must import
-# cleanly without vLLM. The serving class is defined only when vLLM (with its
-# tokenizer registry) is present; otherwise a stub raises with install
-# instructions on use. Same optional-import pattern as the tensorflow and
-# kagglehub guards in `tensor_utils.py` / `preset_utils.py`.
-try:
-    from vllm import LLM as _BaseLLM
-    from vllm import SamplingParams
-    from vllm.renderers.registry import RENDERER_REGISTRY
-    from vllm.tokenizers.registry import TokenizerRegistry
-except ImportError:  # vllm not installed, or too old to serve KerasHub
-    _BaseLLM = None
-    SamplingParams = None
-    RENDERER_REGISTRY = None
-    TokenizerRegistry = None
 
 
 if _BaseLLM is not None:
@@ -310,7 +324,11 @@ if _BaseLLM is not None:
                 # there is no narrower place to set it.
                 os.environ.pop("MODEL_IMPL_TYPE", None)
                 self._default_sampling_kwargs = _default_sampling_kwargs()
-                self._keras_hub_dir = setup_vllm_model(preset, dtype=dtype)
+                self._keras_hub_dir = setup_vllm_model(
+                    preset,
+                    dtype=dtype,
+                    max_model_len=kwargs.get("max_model_len"),
+                )
                 model = self._keras_hub_dir.name
                 kwargs.setdefault("tokenizer", model)
                 # Serve the preset's own KerasHub tokenizer through vLLM's
@@ -354,6 +372,7 @@ else:
 
         def __init__(self, *args, **kwargs):
             raise ImportError(
-                "KerasHubLLM requires vLLM with tokenizer-registry support. "
-                "Install or upgrade vllm (or vllm-tpu) first."
+                "KerasHubLLM requires vLLM with tokenizer-registry "
+                "support. For TPU serving install version 0.24.0 or "
+                "newer: `pip install 'vllm-tpu>=0.24.0'`."
             )

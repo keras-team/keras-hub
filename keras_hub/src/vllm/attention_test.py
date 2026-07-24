@@ -56,11 +56,7 @@ class RecordingKernel:
 def activate_serving(kernel, kv_caches=None, positions=None):
     """Publishes a serving context wired to `kernel` for a test."""
     vllm_context.set_vllm_context(
-        block_tables=None,
-        slot_mapping=None,
-        attention_metadata="META",
         paged_attention_func=kernel,
-        mesh="MESH",
         positions=positions,
         kv_caches=kv_caches,
     )
@@ -70,6 +66,23 @@ class VllmPagedAttentionTest(TestCase):
     def tearDown(self):
         vllm_context.clear_vllm_context()
         super().tearDown()
+
+    def test_returns_none_when_no_kernel_injected(self):
+        # Context active, but no paged-attention function published: the
+        # second half of the entry guard.
+        activate_serving(None, kv_caches=["C0"])
+        z = ops.zeros((1, 2, 4, 8))
+        self.assertIsNone(vllm_paged_attention(z, z, z, 0.125))
+
+    def test_raises_when_layers_exceed_caches(self):
+        # More attention layers than allocated caches is the layer-count
+        # mismatch a wrong config produces; it must fail loudly.
+        kernel = RecordingKernel()
+        activate_serving(kernel, kv_caches=["C0"])
+        z = ops.zeros((1, 2, 4, 8))
+        vllm_paged_attention(z, z, z, 0.125)
+        with self.assertRaisesRegex(ValueError, "caches"):
+            vllm_paged_attention(z, z, z, 0.125)
 
     def test_returns_none_when_context_inactive(self):
         vllm_context.clear_vllm_context()

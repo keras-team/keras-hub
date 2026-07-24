@@ -235,18 +235,8 @@ class KerasHubForCausalLM(nnx.Module):
                 soft_cap=soft_cap,
             )
 
-        block_tables = getattr(attention_metadata, "block_tables", None)
-        slot_mapping = getattr(
-            attention_metadata,
-            "slot_mapping_tensor",
-            getattr(attention_metadata, "slot_mapping", None),
-        )
         return vllm_context_scope(
-            block_tables,
-            slot_mapping,
-            attention_metadata,
-            paged_attention,
-            self.mesh,
+            paged_attention_func=paged_attention,
             positions=positions,
             kv_caches=kv_caches,
         )

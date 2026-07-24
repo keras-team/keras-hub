@@ -19,12 +19,21 @@ KERAS_HUB_ARCHITECTURE = "KerasHubForCausalLM"
 KERAS_HUB_MODEL_TYPE = "keras_hub"
 
 
+_config_class = None
+
+
 def _build_config_class():
-    """Defines ``KerasHubConfig`` lazily so importing this module is cheap.
+    """Defines ``KerasHubConfig`` once, lazily, and caches it.
 
     Kept out of import time because it pulls in transformers; callers reach it
-    through ``register_hf_config``.
+    through ``register_hf_config``. Cached so every call (the driver, then
+    tpu-inference's plugin hook in each worker) returns the same class object
+    and re-registration is a true no-op.
     """
+    global _config_class
+    if _config_class is not None:
+        return _config_class
+
     from transformers import PretrainedConfig
 
     class KerasHubConfig(PretrainedConfig):
@@ -69,6 +78,7 @@ def _build_config_class():
             self.sliding_window = sliding_window
             super().__init__(**kwargs)
 
+    _config_class = KerasHubConfig
     return KerasHubConfig
 
 
@@ -79,6 +89,10 @@ def register_hf_config():
     process that writes the config) and again from tpu-inference's import in
     each serving worker, so ``AutoConfig.from_pretrained`` resolves
     ``model_type = "keras_hub"`` wherever the config is loaded.
+
+    Returns:
+        The registered ``KerasHubConfig`` class, or ``None`` when
+        transformers is unavailable.
     """
     try:
         from transformers import AutoConfig
@@ -88,11 +102,13 @@ def register_hf_config():
             KERAS_HUB_MODEL_TYPE,
             e,
         )
-        return
+        return None
 
     config_cls = _build_config_class()
     try:
         AutoConfig.register(KERAS_HUB_MODEL_TYPE, config_cls)
     except ValueError:
-        # Already registered (e.g. a second worker, or a re-import) — fine.
+        # Registered under a different class object (e.g. two copies of
+        # keras-hub in one process) — the cached class makes this rare.
         pass
+    return config_cls
