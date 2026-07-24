@@ -328,12 +328,16 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "Multimodal parity fails at vision/audio merged positions: with "
-            "real placement indices (WS C1 fix), prefill-KV mismatches are "
-            "concentrated at exactly the merged token positions (max abs "
-            "diff ~1.33 at position 1, ~0.68 at position 5), while text "
-            "positions match. The TFLite export computes different merged "
-            "embeddings than Keras eager. Under diagnosis."
+            "Not an export bug: the exported TFLite graph is semantically "
+            "correct (torch.export vs Keras eager is bit-exact at every "
+            "position). The no-delegate builtin TFLite interpreter used by "
+            "this harness mis-executes the Gemma4 vision encoder's "
+            "unflatten RESHAPE region under its default memory planner — "
+            "XNNPACK matches eager to 9.1e-06, the builtin interpreter "
+            "diverges to ~2.75 at exactly the merged vision/audio token "
+            "positions, and builtin+preserve_all_tensors is clean again "
+            "(2.4e-07). Upstream ai_edge_litert memory-planning issue; "
+            "re-enable when fixed or when the harness can opt into XNNPACK."
         ),
     )
     def test_litertlm_export(self):
