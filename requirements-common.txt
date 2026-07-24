@@ -13,6 +13,7 @@ packaging
 ruff
 pytest
 pytest-cov
+pytest-xdist
 build
 namex
 # Optional deps.

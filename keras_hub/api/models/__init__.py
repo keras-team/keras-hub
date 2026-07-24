@@ -512,6 +512,9 @@ from keras_hub.src.models.mistral.mistral_causal_lm_preprocessor import (
     MistralCausalLMPreprocessor as MistralCausalLMPreprocessor,
 )
 from keras_hub.src.models.mistral.mistral_tokenizer import (
+    MistralTekkenTokenizer as MistralTekkenTokenizer,
+)
+from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
 from keras_hub.src.models.mit.mit_backbone import MiTBackbone as MiTBackbone

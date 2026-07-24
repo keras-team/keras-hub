@@ -72,6 +72,9 @@ from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (
     MetaCLIP2Tokenizer as MetaCLIP2Tokenizer,
 )
 from keras_hub.src.models.mistral.mistral_tokenizer import (
+    MistralTekkenTokenizer as MistralTekkenTokenizer,
+)
+from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
 from keras_hub.src.models.mixtral.mixtral_tokenizer import (
