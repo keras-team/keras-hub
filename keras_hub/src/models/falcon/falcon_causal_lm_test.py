@@ -148,6 +148,40 @@ class FalconCausalLMTest(TestCase):
             # We should immediately abort and output the prompt.
             self.assertEqual(prompt, output)
 
+    def test_cached_decoding_logits_match_full_forward(self):
+        # Cached prefill followed by single-token decode steps must produce
+        # the same logits as a full forward pass without a cache.
+        causal_lm = FalconCausalLM(**self.init_kwargs)
+        batch_size, seq_length, kv_length = 2, 8, 16
+        prefill_length = 4
+        token_ids = ops.zeros((batch_size, seq_length), dtype="int32")
+        # Full-forward pass without a cache.
+        full_logits = causal_lm(
+            {
+                "token_ids": token_ids,
+                "padding_mask": ops.ones_like(token_ids),
+            }
+        )
+        # Cached pass: prefill, then decode one token at a time.
+        num_layers = self.backbone.num_layers
+        num_heads = self.backbone.num_attention_heads
+        head_dim = self.backbone.hidden_dim // num_heads
+        cache = ops.zeros(
+            (batch_size, num_layers, 2, kv_length, num_heads, head_dim),
+            dtype="float32",
+        )
+        logits, _, cache = causal_lm.call_with_cache(
+            token_ids[:, :prefill_length], cache, 0
+        )
+        cached_logits = [logits]
+        for i in range(prefill_length, seq_length):
+            logits, _, cache = causal_lm.call_with_cache(
+                token_ids[:, i : i + 1], cache, i
+            )
+            cached_logits.append(logits)
+        cached_logits = ops.concatenate(cached_logits, axis=1)
+        self.assertAllClose(cached_logits, full_logits, atol=1e-5, rtol=1e-5)
+
     def test_generate_compilation(self):
         causal_lm = FalconCausalLM(**self.init_kwargs)
         # Assert we do not recompile with successive calls.
