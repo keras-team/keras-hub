@@ -901,21 +901,35 @@ class TestLiteRTLmExport(TestCase):
         vision_encoder_runner = vision_encoder_interpreter.get_signature_runner(
             "vision_encoder"
         )
-        tflite_features = vision_encoder_runner(images=images_np)["features"]
-        # The Gemma3 vision encoder is not a single-image encoder, so its
-        # output is already (batch, num_images, tokens_per_image, dim);
-        # collapse the leading two dims to match the vision_adapter's
-        # expected (batch * num_images, ...) input, mirroring
-        # KerasHubVisionEncoderAdapter's contract.
-        tflite_features_flat = tflite_features.reshape(
-            -1, tflite_features.shape[-2], tflite_features.shape[-1]
+        # The vision encoder signature is traced single-image [B, H, W, 3]
+        # (the LiteRT-LM runtime contract: one image per call, 3/4-D input),
+        # so drive it per image and restack along the image axis.
+        tflite_features = np.concatenate(
+            [
+                vision_encoder_runner(
+                    images=images_np[:, i : i + 1].squeeze(axis=1)
+                )["features"]
+                for i in range(images_np.shape[1])
+            ],
+            axis=0,
         )
+        # The runtime chains encoder -> adapter per image, and the adapter is
+        # traced single-image [B, tokens, dim]; drive it per image and
+        # restack along the image axis.
         vision_adapter_runner = vision_adapter_interpreter.get_signature_runner(
             "vision_adapter"
         )
-        tflite_mm_embedding = vision_adapter_runner(
-            features=tflite_features_flat
-        )["mm_embedding"]
+        tflite_mm_embedding = np.concatenate(
+            [
+                vision_adapter_runner(
+                    features=tflite_features[i : i + 1].reshape(
+                        1, *tflite_features.shape[-2:]
+                    )
+                )["mm_embedding"]
+                for i in range(tflite_features.shape[0])
+            ],
+            axis=0,
+        )
 
         # Vision-tower parity: the TFLite vision encoder's raw features
         # should match Keras's, before any language-model computation

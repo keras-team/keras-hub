@@ -565,11 +565,14 @@ def _build_vision_encoder_sample_inputs(
                 device=device,
             ),
         }
+    # The LiteRT-LM runtime rejects encoder inputs that are not 3- or 4-D
+    # (it feeds one image per call), so the signature is traced with a
+    # single-image [B, H, W, 3] input — no max_images axis. The adapter
+    # reintroduces the N=1 axis before calling the KerasHub encoder.
     return {
         "images": torch.zeros(
             (
                 batch_size,
-                max_images,
                 image_size,
                 image_size,
                 3,
@@ -587,11 +590,18 @@ def _build_vision_adapter_sample_inputs(
     vision_output_dim,
     dtype,
 ):
-    """Create concrete sample inputs for a separate vision-adapter signature."""
+    """Create concrete sample inputs for a separate vision-adapter signature.
+
+    The LiteRT-LM runtime chains encoder -> adapter per image, so the adapter
+    consumes a single image's features [B, tokens_per_image, dim] — no
+    max_images axis. (Tracing it with batch_size * max_images mismatches the
+    single-image encoder output the runtime feeds it at inference time.)
+    """
+    del max_images
     return {
         "features": torch.zeros(
             (
-                batch_size * max_images,
+                batch_size,
                 tokens_per_image,
                 vision_output_dim,
             ),

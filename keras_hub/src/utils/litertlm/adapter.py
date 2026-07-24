@@ -511,6 +511,18 @@ class KerasHubVisionEncoderAdapter(nn.Module):
                         got_pixel_position_ids=pixel_position_ids is not None,
                     )
                 )
+            # The LiteRT-LM runtime drives the separate vision encoder with a
+            # single image per call and requires the encoder input tensor to
+            # be 3- or 4-D (it rejects 5-D at conversation creation). KerasHub
+            # vision encoders take [B, N, H, W, 3], so accept the runtime's
+            # [B, H, W, 3] and reintroduce the N=1 axis here. `reshape` is
+            # used instead of `unsqueeze`: litert-torch's converter folds an
+            # unsqueeze->reshape chain back to a 5-D conv input, which TFLite
+            # rejects at AllocateTensors time.
+            if images.dim() == 4:
+                images = images.reshape(
+                    images.shape[0], 1, *images.shape[1:]
+                )
             out = _run_vision_encoder(
                 self.vision_encoder, images, self.flatten_image_batch
             )
