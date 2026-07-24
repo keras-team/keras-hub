@@ -220,9 +220,7 @@ class PresetUtilsTest(TestCase):
         # it), but the message points at gated-model consent.
         error = KaggleApiHTTPError("403 Client Error: Forbidden")
         with mock.patch("kagglehub.model_download", side_effect=error):
-            with self.assertRaisesRegex(
-                FileNotFoundError, "accept its terms"
-            ):
+            with self.assertRaisesRegex(FileNotFoundError, "accept its terms"):
                 get_file(preset, "missing.json")
         # Any other Kaggle API error should surface as-is, not as a
         # missing file.
