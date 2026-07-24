@@ -3,21 +3,28 @@
 `KerasHubForCausalLM` lives here in keras-hub and is registered with
 tpu-inference's model registry (and vLLM's) by tpu-inference's plugin hook,
 so the native `flax_nnx` loader resolves it by architecture name like any
-other model. It is only ever imported on the serving path, where flax and
-tpu-inference are installed.
+other model. It is only ever instantiated on the serving path, where flax
+and tpu-inference are installed; importing it works anywhere (api-gen walks
+every module), with the nnx base class swapped in only when flax exists.
 """
 
 import jax
-from flax import nnx
 from jax.sharding import Mesh
 from keras import ops
+
+try:
+    from flax import nnx
+
+    _NnxModule = nnx.Module
+except ImportError:  # flax is only present on the serving path
+    _NnxModule = object
 
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.vllm.context import get_vllm_context
 from keras_hub.src.vllm.context import vllm_context_scope
 
 
-class KerasHubForCausalLM(nnx.Module):
+class KerasHubForCausalLM(_NnxModule):
     """Serves a KerasHub `CausalLM` on tpu-inference's native JAX path.
 
     An adapter, not a conversion: it implements the model interface the
