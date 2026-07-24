@@ -178,10 +178,12 @@ class FalconCausalLMTest(TestCase):
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "torch.export tracing failure: "
-            "torch.fx._ModuleNotInstalledAsSubmoduleError in FalconAttention "
-            "(module not registered as a submodule during tracing); "
-            "under diagnosis"
+            "Falcon model bug (keras-hub#2861): ALiBi is built over the "
+            "query length in FalconTransformerDecoder.call, but attention "
+            "scores span the KV-cache length, so call_with_cache fails "
+            "whenever cache length > query length (cached prefill). Needs a "
+            "model-side fix (cache-aware ALiBi, e.g. keras_hub.layers."
+            "AlibiBias as in BLOOM); deferred from this PR."
         ),
     )
     def test_litertlm_export(self):
