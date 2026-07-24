@@ -386,6 +386,9 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
         ``True``. See ``Gemma4Spec.populate_audio_metadata`` in
         model_specs.py for the citation establishing the boolean direction.
         """
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
         self._attach_sentencepiece_tokenizer_asset(
             self.tokenizer,
             os.path.join(self.get_test_data_dir(), "gemma4_test_vocab.spm"),

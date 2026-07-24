@@ -1272,6 +1272,18 @@ def export_to_litertlm(
         with _preserve_jax_x64_state(), _preserve_jax_platforms_state():
             import litert_torch
 
+            # The import above enables ``jax_enable_x64`` only on its first
+            # import; when the module is already cached, the ambient value
+            # (possibly False, restored by an earlier export) applies. The
+            # JAX bridge requires x64 for consistent int64 dtypes, so pin it
+            # explicitly for the conversion.
+            try:
+                import jax
+
+                jax.config.update("jax_enable_x64", True)
+            except ImportError:
+                pass
+
             _validate_quant_config(quant_config)
             edge_model, vision_encoder_edge, vision_adapter_edge, eoi_edge = (
                 _trace_and_convert(

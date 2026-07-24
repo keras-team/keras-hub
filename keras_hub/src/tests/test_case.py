@@ -698,7 +698,25 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     )
 
                 # Step 1: Export model and get Keras output
-                model.export(export_path, format="litert", **export_kwargs)
+                # ``litert_torch``'s conversion runs through its JAX bridge
+                # and only produces consistent integer dtypes when
+                # ``jax_enable_x64`` is True (otherwise the bridge silently
+                # downcasts some int64 constants to int32 and MLIR
+                # verification fails with i32/i64 'func.call' operand
+                # mismatches). The flag is process-wide and other tests may
+                # have restored it to False, so pin it for the export.
+                try:
+                    import jax
+
+                    _prev_x64 = jax.config.jax_enable_x64
+                    jax.config.update("jax_enable_x64", True)
+                except ImportError:
+                    _prev_x64 = None
+                try:
+                    model.export(export_path, format="litert", **export_kwargs)
+                finally:
+                    if _prev_x64 is not None:
+                        jax.config.update("jax_enable_x64", _prev_x64)
                 self.assertTrue(os.path.exists(export_path))
                 self.assertGreater(os.path.getsize(export_path), 0)
 
@@ -1254,7 +1272,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # `_build_prefill_inputs` returns zeros for index/mask tensors; the
         # data-bearing tensors are randomized below, but leaving indices/masks
         # zero makes the entire vision/audio merge path an identity (slot 0 is
-        # restored to the text embedding by Gemma3/Gemma4's `interleave_embeddings`).
+        # restored to the text embedding by Gemma3/Gemma4's
+        # `interleave_embeddings`).
         # We therefore synthesize real placement indices and masks so the parity
         # check actually exercises the vision/audio towers. We also keep a copy
         # of the zero-index structure for a sensitivity check.
@@ -1274,14 +1293,17 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 vision_out = vision_encoder(
                     {
                         "pixel_values": prefill_inputs["pixel_values"],
-                        "pixel_position_ids": prefill_inputs["pixel_position_ids"],
+                        "pixel_position_ids": prefill_inputs[
+                            "pixel_position_ids"
+                        ],
                     }
                 )
                 # vision_out shape is (batch, max_images, tokens_per_image, dim)
                 actual_vision_tokens = vision_out.shape[1] * vision_out.shape[2]
             if has_audio and "audio_mel" in prefill_inputs:
                 audio_out = model.backbone.audio_encoder(
-                    prefill_inputs["audio_mel"], prefill_inputs["audio_mel_mask"]
+                    prefill_inputs["audio_mel"],
+                    prefill_inputs["audio_mel_mask"],
                 )
                 # audio_out shape is (batch, max_clips, tokens_per_clip, dim)
                 actual_audio_tokens = audio_out.shape[1] * audio_out.shape[2]
@@ -1295,7 +1317,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         if "vision_indices" in prefill_inputs:
             num_vision_tokens = min(
                 prefill_inputs["vision_indices"].shape[1],
-                actual_vision_tokens or prefill_inputs["vision_indices"].shape[1],
+                actual_vision_tokens
+                or prefill_inputs["vision_indices"].shape[1],
                 max_places,
             )
             vision_start = cursor
@@ -1310,7 +1333,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 ).unsqueeze(0)
             )
             vision_mask = torch.zeros_like(prefill_inputs["vision_mask"])
-            vision_mask[:, vision_start:vision_start + num_vision_tokens] = 1
+            vision_mask[:, vision_start : vision_start + num_vision_tokens] = 1
             prefill_inputs["vision_mask"] = vision_mask
             cursor += num_vision_tokens
             max_places -= num_vision_tokens
@@ -1332,7 +1355,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 ).unsqueeze(0)
             )
             audio_mask = torch.zeros_like(prefill_inputs["audio_mask"])
-            audio_mask[:, audio_start:audio_start + num_audio_tokens] = 1
+            audio_mask[:, audio_start : audio_start + num_audio_tokens] = 1
             prefill_inputs["audio_mask"] = audio_mask
             cursor += num_audio_tokens
             max_places -= num_audio_tokens
@@ -1377,12 +1400,16 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 prefill_inputs[name] = torch.from_numpy(
                     rng.integers(1, vocab_size, size=shape).astype("int32")
                 )
-                zero_structure_prefill_inputs[name] = prefill_inputs[name].clone()
+                zero_structure_prefill_inputs[name] = prefill_inputs[
+                    name
+                ].clone()
             elif name in ("images", "pixel_values", "audio_mel"):
                 prefill_inputs[name] = torch.from_numpy(
                     rng.standard_normal(shape).astype("float32")
                 )
-                zero_structure_prefill_inputs[name] = prefill_inputs[name].clone()
+                zero_structure_prefill_inputs[name] = prefill_inputs[
+                    name
+                ].clone()
 
         # Auto-detect the verification level unless overridden.
         if verification_level is None:
@@ -1654,7 +1681,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 to ``False`` for multimodal models or preset models with
                 random weights.
             verify_multimodal_numerics: Whether to run the multimodal Keras-
-                vs-TFLite parity check (``_verify_litertlm_multimodal_numerics``)
+                vs-TFLite parity check
+                (``_verify_litertlm_multimodal_numerics``)
                 against the exported bundle. Mutually exclusive in practice
                 with text-only ``verify_numerics`` (a model is either
                 text-only or multimodal). When ``True``, ``prefill_seq_len``

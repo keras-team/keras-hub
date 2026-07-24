@@ -520,9 +520,7 @@ class KerasHubVisionEncoderAdapter(nn.Module):
             # unsqueeze->reshape chain back to a 5-D conv input, which TFLite
             # rejects at AllocateTensors time.
             if images.dim() == 4:
-                images = images.reshape(
-                    images.shape[0], 1, *images.shape[1:]
-                )
+                images = images.reshape(images.shape[0], 1, *images.shape[1:])
             out = _run_vision_encoder(
                 self.vision_encoder, images, self.flatten_image_batch
             )

@@ -462,7 +462,9 @@ class TraceableOpsParityTest(TestCase):
                     original = torch_backend_numpy.amax(
                         x, axis=axis, keepdims=keepdims
                     )
-                    self.assertEqual(tuple(original.shape), tuple(patched.shape))
+                    self.assertEqual(
+                        tuple(original.shape), tuple(patched.shape)
+                    )
                     # The reformulation is the identical reduction; values must
                     # be bit-identical, not merely close (a silent numeric
                     # drift here would corrupt attention-sink softmax

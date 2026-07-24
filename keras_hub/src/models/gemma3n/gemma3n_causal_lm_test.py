@@ -434,13 +434,15 @@ class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
         )
 
     @pytest.mark.xfail(
-        strict=True,
+        strict=False,
         reason=(
             "Gemma3n LiteRT-LM export fails in litert-torch conversion: "
             "aten.view shape/stride mismatch ([3,8,8,16] strides "
             "(1024,8,1,64) -> [192,16]) during forward_prefill decomposition. "
             "Pre-existing export bug, not a numeric-parity gap; blocks "
-            "multimodal numeric wiring (WS3.3). Under diagnosis."
+            "multimodal numeric wiring (WS3.3). Version-dependent: fails "
+            "with litert-torch 0.10.0 (local), passes with PyPI 0.9.1 "
+            "(CI), so this xfail is non-strict."
         ),
     )
     def test_litertlm_export(self):
