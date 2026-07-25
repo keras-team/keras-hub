@@ -16,19 +16,23 @@ concurrency:
 
 jobs:
   run_tests:
-    name: Test the code
+    name: Test the code (${{ matrix.backend }}, ${{ matrix.version }}, shard ${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
         backend: [tensorflow, jax, torch]
         version: [keras-stable]
+        shard: [0, 1, 2, 3]
         include:
           - backend: jax
             version: keras-3.15
+            shard: 0
           - backend: jax
             version: keras-nightly
+            shard: 0
           - backend: openvino
             version: keras-nightly
+            shard: 0
 
     container:
       image: python:3.11-slim
@@ -65,13 +69,14 @@ jobs:
         pip install keras-nightly --no-cache-dir --progress-bar off
     - name: Test with pytest
       run: |
-        pytest keras_hub/ -n auto --dist loadfile --durations=50
+        pytest keras_hub/ -n auto --dist loadfile --durations=50 --shard-id=${{ matrix.shard }} --num-shards=4
     - name: Run integration tests
+      if: ${{ matrix.shard == 0 }}
       run: |
         python pip_build.py --install
         cd integration_tests && pytest . -k "not NoTensorflow"
     - name: Run no tensorflow integration test
-      if: ${{ matrix.backend != 'tensorflow'}}
+      if: ${{ matrix.backend != 'tensorflow' && matrix.shard == 0 }}
       run: |
         pip uninstall -y tensorflow-text tensorflow
         cd integration_tests && pytest . -k "NoTensorflow"
