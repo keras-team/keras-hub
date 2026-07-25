@@ -26,8 +26,6 @@ class EntropyBoundSampler(Sampler):
         stability_threshold: int. Number of consecutive steps for which the
             argmax assignment must be unchanged before stopping is allowed.
             Defaults to `1`.
-        vocabulary_size: int. Vocabulary size used for uniform re-noising.
-            Required.
         seed: int or `None`. Random seed for the re-noising step.
             Defaults to `None`.
 
@@ -39,10 +37,11 @@ class EntropyBoundSampler(Sampler):
         step: int scalar. Current denoising step index (0-based).
 
     Returns:
-        A tuple `(new_canvas, stop)` where `new_canvas` is an int tensor
-        of shape `(B, canvas_length)` and `stop` is a bool tensor of shape
-        `(B,)` indicating per-row whether the adaptive stopping criterion
-        is met.
+        A tuple `(new_canvas, stop, argmax_canvas)` where `new_canvas` is an
+        int tensor of shape `(B, canvas_length)`, `stop` is a bool tensor of
+        shape `(B,)` indicating per-row whether the adaptive stopping criterion
+        is met, and `argmax_canvas` is an int tensor of shape
+        `(B, canvas_length)` with the greedy argmax token at each position.
 
     Examples:
     ```python
@@ -52,7 +51,6 @@ class EntropyBoundSampler(Sampler):
 
     # Pass by object.
     sampler = keras_hub.samplers.EntropyBoundSampler(
-        vocabulary_size=256000,
         entropy_bound=0.1,
     )
     diffusion_lm.compile(sampler=sampler)
@@ -65,19 +63,13 @@ class EntropyBoundSampler(Sampler):
         entropy_bound=0.1,
         confidence_threshold=0.005,
         stability_threshold=1,
-        vocabulary_size=None,
         seed=None,
         **kwargs,
     ):
-        if vocabulary_size is None:
-            raise ValueError(
-                "`vocabulary_size` is required for `EntropyBoundSampler`."
-            )
         super().__init__(**kwargs)
         self.entropy_bound = entropy_bound
         self.confidence_threshold = confidence_threshold
         self.stability_threshold = stability_threshold
-        self.vocabulary_size = vocabulary_size
         self.seed = seed
         self.seed_generator = random.SeedGenerator(seed)
         # Both are set lazily on first call to _ensure_prev_argmax.
@@ -97,6 +89,11 @@ class EntropyBoundSampler(Sampler):
             self._stable_steps = [0] * batch_size
 
     def __call__(self, canvas, logits, step):
+        vocabulary_size = logits.shape[-1]
+        if vocabulary_size is None:
+            raise ValueError(
+                "The logits vocabulary dimension must be statically known."
+            )
         logits = ops.cast(logits, "float32")
 
         # Per-token entropy: H[i] = -sum(softmax(l) * log_softmax(l))
@@ -115,7 +112,8 @@ class EntropyBoundSampler(Sampler):
         unsort_idx = ops.argsort(sort_idx, axis=-1)
         accept_mask = ops.take_along_axis(accept_sorted, unsort_idx, axis=-1)
 
-        # Commit: accepted positions get a multinomial sample from the logits.
+        # Commit: accepted positions get a multinomial sample from the logits,
+        # rejected positions get a uniform random token.
         canvas_shape = ops.shape(canvas)
         flat_logits = ops.reshape(logits, [-1, ops.shape(logits)[-1]])
         sampled_tokens = keras.random.categorical(
@@ -131,7 +129,7 @@ class EntropyBoundSampler(Sampler):
         random_canvas = keras.random.randint(
             shape=ops.shape(canvas),
             minval=0,
-            maxval=self.vocabulary_size,
+            maxval=vocabulary_size,
             seed=self.seed_generator,
             dtype=canvas.dtype,
         )
@@ -168,7 +166,7 @@ class EntropyBoundSampler(Sampler):
         stop = confidence_met & stability_met
 
         self._prev_argmax.assign(cur_argmax)
-        return new_canvas, stop
+        return new_canvas, stop, cur_argmax
 
     def reset(self):
         """Reset per-call state between independent generate() calls."""
@@ -182,7 +180,6 @@ class EntropyBoundSampler(Sampler):
                 "entropy_bound": self.entropy_bound,
                 "confidence_threshold": self.confidence_threshold,
                 "stability_threshold": self.stability_threshold,
-                "vocabulary_size": self.vocabulary_size,
                 "seed": self.seed,
             }
         )

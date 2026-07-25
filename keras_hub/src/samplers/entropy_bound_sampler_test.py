@@ -16,7 +16,6 @@ class EntropyBoundSamplerTest(TestCase):
             entropy_bound=0.1,
             confidence_threshold=0.005,
             stability_threshold=1,
-            vocabulary_size=self.vocab_size,
             seed=42,
         )
 
@@ -34,9 +33,15 @@ class EntropyBoundSamplerTest(TestCase):
             dtype="float32",
         )
 
-    def test_requires_vocabulary_size(self):
-        with self.assertRaises(ValueError):
-            EntropyBoundSampler(vocabulary_size=None)
+    def test_infers_vocabulary_size_from_logits(self):
+        sampler = EntropyBoundSampler(seed=42)
+        canvas = ops.zeros((self.batch_size, self.canvas_length), dtype="int32")
+        logits = self._make_uniform_logits()
+
+        new_canvas, stop, _ = sampler(canvas, logits, step=0)
+
+        self.assertEqual(new_canvas.shape, canvas.shape)
+        self.assertEqual(stop.shape, (self.batch_size,))
 
     def test_confident_tokens_are_committed(self):
         token_ids = np.ones(
@@ -45,7 +50,7 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.array(token_ids)
         logits = self._make_peaked_logits(token_ids)
 
-        new_canvas, _ = self.sampler(canvas, logits, step=0)
+        new_canvas, _, _ = self.sampler(canvas, logits, step=0)
 
         expected = ops.argmax(logits, axis=-1)
         self.assertAllEqual(new_canvas, expected)
@@ -54,7 +59,7 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.zeros((self.batch_size, self.canvas_length), dtype="int32")
         logits = self._make_uniform_logits()
 
-        new_canvas, stop = self.sampler(canvas, logits, step=0)
+        new_canvas, stop, _ = self.sampler(canvas, logits, step=0)
 
         self.assertEqual(
             new_canvas.shape, (self.batch_size, self.canvas_length)
@@ -65,13 +70,12 @@ class EntropyBoundSamplerTest(TestCase):
     def test_uncommitted_positions_are_renoised(self):
         sampler = EntropyBoundSampler(
             entropy_bound=0.0,
-            vocabulary_size=self.vocab_size,
             seed=0,
         )
         canvas = ops.zeros((self.batch_size, self.canvas_length), dtype="int32")
         logits = self._make_uniform_logits()
 
-        new_canvas, _ = sampler(canvas, logits, step=0)
+        new_canvas, _, _ = sampler(canvas, logits, step=0)
         new_canvas_np = ops.convert_to_numpy(new_canvas)
 
         # All tokens must be within [0, vocab_size).
@@ -85,7 +89,7 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.array(token_ids)
         logits = self._make_peaked_logits(token_ids)
 
-        _, stop = self.sampler(canvas, logits, step=0)
+        _, stop, _ = self.sampler(canvas, logits, step=0)
 
         self.assertFalse(ops.convert_to_numpy(ops.any(stop)))
 
@@ -94,7 +98,6 @@ class EntropyBoundSamplerTest(TestCase):
             entropy_bound=1.0,
             confidence_threshold=1.0,
             stability_threshold=1,
-            vocabulary_size=self.vocab_size,
             seed=0,
         )
         token_ids = np.zeros(
@@ -103,8 +106,8 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.array(token_ids)
         logits = self._make_peaked_logits(token_ids)
 
-        _, stop0 = sampler(canvas, logits, step=0)
-        _, stop1 = sampler(canvas, logits, step=1)
+        _, stop0, _ = sampler(canvas, logits, step=0)
+        _, stop1, _ = sampler(canvas, logits, step=1)
 
         self.assertFalse(ops.convert_to_numpy(ops.any(stop0)))
         self.assertTrue(ops.convert_to_numpy(ops.all(stop1)))
@@ -114,7 +117,6 @@ class EntropyBoundSamplerTest(TestCase):
             entropy_bound=1.0,
             confidence_threshold=1.0,
             stability_threshold=1,
-            vocabulary_size=self.vocab_size,
             seed=0,
         )
         token_ids_a = np.zeros(
@@ -128,7 +130,7 @@ class EntropyBoundSamplerTest(TestCase):
         logits_b = self._make_peaked_logits(token_ids_b)
 
         sampler(canvas, logits_a, step=0)
-        _, stop = sampler(canvas, logits_b, step=1)
+        _, stop, _ = sampler(canvas, logits_b, step=1)
 
         self.assertFalse(ops.convert_to_numpy(ops.any(stop)))
 
@@ -140,7 +142,6 @@ class EntropyBoundSamplerTest(TestCase):
             entropy_bound=1.0,
             confidence_threshold=1.0,
             stability_threshold=1,
-            vocabulary_size=self.vocab_size,
             seed=0,
         )
         # Use token 1 so that cur_argmax (all 1s) != _prev_argmax (all 0s
@@ -153,7 +154,7 @@ class EntropyBoundSamplerTest(TestCase):
 
         sampler(canvas, logits, step=0)
         sampler.reset()
-        _, stop = sampler(canvas, logits, step=1)
+        _, stop, _ = sampler(canvas, logits, step=1)
 
         self.assertFalse(ops.convert_to_numpy(ops.any(stop)))
 
@@ -163,7 +164,6 @@ class EntropyBoundSamplerTest(TestCase):
         self.assertEqual(config["entropy_bound"], 0.1)
         self.assertEqual(config["confidence_threshold"], 0.005)
         self.assertEqual(config["stability_threshold"], 1)
-        self.assertEqual(config["vocabulary_size"], self.vocab_size)
         self.assertEqual(config["seed"], 42)
 
     def test_from_config(self):
@@ -177,7 +177,6 @@ class EntropyBoundSamplerTest(TestCase):
         self.assertEqual(
             restored.stability_threshold, self.sampler.stability_threshold
         )
-        self.assertEqual(restored.vocabulary_size, self.sampler.vocabulary_size)
         self.assertEqual(restored.seed, self.sampler.seed)
 
     def test_stability_threshold_respected(self):
@@ -187,7 +186,6 @@ class EntropyBoundSamplerTest(TestCase):
             entropy_bound=1.0,
             confidence_threshold=1.0,
             stability_threshold=2,
-            vocabulary_size=self.vocab_size,
             seed=0,
         )
         token_ids = np.zeros(
@@ -196,9 +194,9 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.array(token_ids)
         logits = self._make_peaked_logits(token_ids)
 
-        _, stop0 = sampler(canvas, logits, step=0)
-        _, stop1 = sampler(canvas, logits, step=1)  # 1st stable step
-        _, stop2 = sampler(canvas, logits, step=2)  # 2nd stable step
+        _, stop0, _ = sampler(canvas, logits, step=0)
+        _, stop1, _ = sampler(canvas, logits, step=1)  # 1st stable step
+        _, stop2, _ = sampler(canvas, logits, step=2)  # 2nd stable step
 
         self.assertFalse(ops.convert_to_numpy(ops.any(stop0)))
         self.assertFalse(
@@ -210,19 +208,17 @@ class EntropyBoundSamplerTest(TestCase):
         # Two samplers with the same seed must produce identical outputs.
         sampler_a = EntropyBoundSampler(
             entropy_bound=0.5,
-            vocabulary_size=self.vocab_size,
             seed=7,
         )
         sampler_b = EntropyBoundSampler(
             entropy_bound=0.5,
-            vocabulary_size=self.vocab_size,
             seed=7,
         )
         canvas = ops.zeros((self.batch_size, self.canvas_length), dtype="int32")
         logits = self._make_uniform_logits()
 
-        canvas_a, _ = sampler_a(canvas, logits, step=0)
-        canvas_b, _ = sampler_b(canvas, logits, step=0)
+        canvas_a, _, _ = sampler_a(canvas, logits, step=0)
+        canvas_b, _, _ = sampler_b(canvas, logits, step=0)
 
         self.assertAllEqual(canvas_a, canvas_b)
 
@@ -233,7 +229,6 @@ class EntropyBoundSamplerTest(TestCase):
             entropy_bound=1.0,
             confidence_threshold=1.0,
             stability_threshold=1,
-            vocabulary_size=self.vocab_size,
             seed=0,
         )
         # Step 0: both rows peaked at token 0.
@@ -248,7 +243,7 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.zeros((self.batch_size, self.canvas_length), dtype="int32")
 
         sampler(canvas, self._make_peaked_logits(token_ids_step0), step=0)
-        _, stop = sampler(
+        _, stop, _ = sampler(
             canvas, self._make_peaked_logits(token_ids_step1), step=1
         )
 

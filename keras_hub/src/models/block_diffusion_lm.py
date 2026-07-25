@@ -1,4 +1,5 @@
 import itertools
+from functools import partial
 
 import keras
 from keras import ops
@@ -47,11 +48,11 @@ class BlockDiffusionLM(Task):
 
     def __init__(
         self,
+        *args,
         canvas_length=256,
         max_denoising_steps=48,
         t_min=0.4,
         t_max=0.8,
-        *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -69,15 +70,15 @@ class BlockDiffusionLM(Task):
         sampler="entropy_bound",
         **kwargs,
     ):
-        """Configures the `DiffusionLM` task for training and generation.
+        """Configures the `BlockDiffusionLM` task for training and generation.
 
-        The `DiffusionLM` task extends the default compilation signature of
+        The `BlockDiffusionLM` task extends the default compilation signature of
         `keras.Model.compile` with defaults for `optimizer`, `loss`, and
         `weighted_metrics`. To override these defaults, pass any value to
         these arguments during compilation.
 
-        The `DiffusionLM` task adds a `sampler` argument to `compile`, which
-        controls token commitment and re-noising during `generate()`.
+        The `BlockDiffusionLM` task adds a `sampler` argument to `compile`,
+        which controls token commitment and re-noising during `generate()`.
 
         Args:
             optimizer: `"auto"`, an optimizer name, or a `keras.Optimizer`
@@ -102,14 +103,6 @@ class BlockDiffusionLM(Task):
             weighted_metrics=weighted_metrics,
             **kwargs,
         )
-        if sampler == "entropy_bound":
-            from keras_hub.src.samplers.entropy_bound_sampler import (
-                EntropyBoundSampler,
-            )
-
-            sampler = EntropyBoundSampler(
-                vocabulary_size=self.backbone.vocabulary_size
-            )
         self.sampler = get_sampler(sampler)
         self.generate_function = None
 
@@ -123,6 +116,15 @@ class BlockDiffusionLM(Task):
         """
         if self.generate_function is not None:
             return self.generate_function
+
+        if keras.config.backend() == "openvino":
+            from keras_hub.src.utils.openvino_utils import ov_infer
+
+            def wrapped_generate_function(inputs):
+                inputs = tree.map_structure(ops.convert_to_numpy, inputs)
+                return ov_infer(self, inputs, None, self.generate_step)
+
+            self.generate_function = wrapped_generate_function
 
         if keras.config.backend() == "torch":
             import torch
@@ -149,7 +151,7 @@ class BlockDiffusionLM(Task):
                     self.t_max
                     - (self.t_max - self.t_min)
                     * step
-                    / max(self.max_denoising_steps - 1, 1),
+                    / self.max_denoising_steps,
                     dtype=tf.float32,
                 )
                 for step in range(self.max_denoising_steps)
@@ -157,6 +159,7 @@ class BlockDiffusionLM(Task):
 
             def wrapped_generate_function(inputs):
                 encoder_cache, prompt_length = _encode_fn(inputs)
+                prompt_padding_mask = inputs.get("padding_mask", None)
                 batch_size = ops.shape(inputs["token_ids"])[0]
                 canvas = self._init_canvas(batch_size)
                 prev_logits = None
@@ -167,12 +170,15 @@ class BlockDiffusionLM(Task):
                         prompt_length,
                         prev_logits,
                         _temperatures[step],
+                        prompt_padding_mask,
                     )
                     prev_logits = logits
-                    canvas, stop = self.sampler(canvas, logits, step)
+                    canvas, stop, argmax_canvas = self.sampler(
+                        canvas, logits, step
+                    )
                     if bool(ops.convert_to_numpy(ops.all(stop))):
                         break
-                return ops.cast(ops.argmax(prev_logits, axis=-1), "int32")
+                return ops.cast(argmax_canvas, "int32")
 
             self.generate_function = wrapped_generate_function
 
@@ -185,59 +191,91 @@ class BlockDiffusionLM(Task):
             # prev_logits=None, and subsequent steps use a second function that
             # accepts prev_logits as a concrete tensor argument.
 
-            def _make_scope_mapping(self, state):
-                trainable_vars, non_trainable_vars = state
-                return list(
-                    itertools.chain(
-                        zip(self.trainable_variables, trainable_vars),
-                        zip(self.non_trainable_variables, non_trainable_vars),
-                    )
+            def _make_scope_mapping(state):
+                sampler_vars, trainable_vars, non_trainable_vars = state
+                return itertools.chain(
+                    zip(self.sampler.variables, sampler_vars),
+                    zip(self.trainable_variables, trainable_vars),
+                    zip(self.non_trainable_variables, non_trainable_vars),
                 )
 
             @jax.jit
             def jit_encode(inputs, state):
                 with keras.StatelessScope(
-                    state_mapping=_make_scope_mapping(self, state)
+                    state_mapping=_make_scope_mapping(state)
                 ):
                     return self._encode_prompt(inputs)
 
-            @jax.jit
+            @partial(jax.jit, static_argnums=(2,))
             def jit_step_no_sc(
-                canvas, enc_cache, prompt_len, temperature, state
+                canvas,
+                enc_cache,
+                prompt_len,
+                temperature,
+                prompt_padding_mask,
+                state,
             ):
                 with keras.StatelessScope(
-                    state_mapping=_make_scope_mapping(self, state)
+                    state_mapping=_make_scope_mapping(state)
                 ):
                     return self._forward_step(
-                        canvas, enc_cache, prompt_len, None, temperature
+                        canvas,
+                        enc_cache,
+                        prompt_len,
+                        None,
+                        temperature,
+                        prompt_padding_mask=prompt_padding_mask,
                     )
 
-            @jax.jit
+            @partial(jax.jit, static_argnums=(2,))
             def jit_step(
-                canvas, enc_cache, prompt_len, prev_logits, temperature, state
+                canvas,
+                enc_cache,
+                prompt_len,
+                prev_logits,
+                temperature,
+                prompt_padding_mask,
+                state,
             ):
                 with keras.StatelessScope(
-                    state_mapping=_make_scope_mapping(self, state)
+                    state_mapping=_make_scope_mapping(state)
                 ):
                     return self._forward_step(
-                        canvas, enc_cache, prompt_len, prev_logits, temperature
+                        canvas,
+                        enc_cache,
+                        prompt_len,
+                        prev_logits,
+                        temperature,
+                        prompt_padding_mask=prompt_padding_mask,
                     )
 
             def wrapped_generate_function(inputs):
                 state = (
+                    [v.value for v in self.sampler.variables],
                     [v.value for v in self.trainable_variables],
                     [v.value for v in self.non_trainable_variables],
                 )
                 inputs = tree.map_structure(ops.convert_to_tensor, inputs)
                 encoder_cache, prompt_length = jit_encode(inputs, state)
+                # Convert to a Python int so it can be used as a static
+                # argument in jit_step_no_sc/jit_step, avoiding
+                # TracerBoolConversionError in _decode_canvas_step.
+                prompt_length = int(ops.convert_to_numpy(prompt_length))
                 batch_size = ops.shape(inputs["token_ids"])[0]
                 canvas = self._init_canvas(batch_size)
 
+                prompt_padding_mask = inputs.get("padding_mask", None)
+
                 # Step 0: no self-conditioning.
                 logits = jit_step_no_sc(
-                    canvas, encoder_cache, prompt_length, self.t_max, state
+                    canvas,
+                    encoder_cache,
+                    prompt_length,
+                    self.t_max,
+                    prompt_padding_mask,
+                    state,
                 )
-                canvas, stop = self.sampler(canvas, logits, 0)
+                canvas, stop, argmax_canvas = self.sampler(canvas, logits, 0)
                 prev_logits = logits
 
                 for step in range(1, self.max_denoising_steps):
@@ -246,7 +284,7 @@ class BlockDiffusionLM(Task):
                     temperature = self.t_max - (
                         (self.t_max - self.t_min)
                         * step
-                        / max(self.max_denoising_steps - 1, 1)
+                        / self.max_denoising_steps
                     )
                     logits = jit_step(
                         canvas,
@@ -254,12 +292,15 @@ class BlockDiffusionLM(Task):
                         prompt_length,
                         prev_logits,
                         temperature,
+                        prompt_padding_mask,
                         state,
                     )
-                    canvas, stop = self.sampler(canvas, logits, step)
+                    canvas, stop, argmax_canvas = self.sampler(
+                        canvas, logits, step
+                    )
                     prev_logits = logits
 
-                return ops.cast(ops.argmax(prev_logits, axis=-1), "int32")
+                return ops.cast(argmax_canvas, "int32")
 
             self.generate_function = wrapped_generate_function
 
@@ -269,11 +310,7 @@ class BlockDiffusionLM(Task):
         return self.generate_function
 
     def _init_canvas(self, batch_size):
-        """Create the initial random-token canvas of shape (B, canvas_length).
-
-        Tokens are sampled uniformly from the vocabulary.  The vocabulary size
-        is obtained from the backbone's `vocabulary_size` attribute.
-        """
+        """Create the initial random-token canvas `(B, canvas_length)`."""
         vocab_size = self.backbone.vocabulary_size
         canvas = keras.random.randint(
             shape=(batch_size, self.canvas_length),
@@ -285,7 +322,13 @@ class BlockDiffusionLM(Task):
         return canvas
 
     def _forward_step(
-        self, canvas, encoder_cache, prompt_length, prev_logits, temperature
+        self,
+        canvas,
+        encoder_cache,
+        prompt_length,
+        prev_logits,
+        temperature,
+        prompt_padding_mask=None,
     ):
         """Single denoising forward pass — JIT-compilable.
 
@@ -299,13 +342,19 @@ class BlockDiffusionLM(Task):
             prev_logits: float tensor `(B, canvas_length, vocab_size)` from the
                 previous step, or `None` on the first step.
             temperature: float scalar for logit scaling.
+            prompt_padding_mask: bool tensor `(B, prompt_length)` indicating
+                which prompt positions are real (True) vs padding (False).
+                Used to prevent canvas queries from attending to padding keys.
 
         Returns:
             Float tensor of shape `(B, canvas_length, vocab_size)`.
         """
         canvas_embeds = self._prepare_canvas_embeds(canvas, prev_logits)
         hidden = self._decode_canvas_step(
-            canvas_embeds, encoder_cache, prompt_length
+            canvas_embeds,
+            encoder_cache,
+            prompt_length,
+            prompt_padding_mask=prompt_padding_mask,
         )
         logits = self._canvas_logits(hidden)
         return ops.cast(logits, "float32") / temperature
@@ -321,6 +370,7 @@ class BlockDiffusionLM(Task):
             A `(B, canvas_length)` int tensor of the final denoised tokens.
         """
         encoder_cache, prompt_length = self._encode_prompt(inputs)
+        prompt_padding_mask = inputs.get("padding_mask", None)
 
         batch_size = ops.shape(inputs["token_ids"])[0]
         canvas = self._init_canvas(batch_size)
@@ -328,19 +378,76 @@ class BlockDiffusionLM(Task):
 
         for step in range(self.max_denoising_steps):
             temperature = self.t_max - (
-                (self.t_max - self.t_min)
-                * step
-                / max(self.max_denoising_steps - 1, 1)
+                (self.t_max - self.t_min) * step / self.max_denoising_steps
             )
             logits = self._forward_step(
-                canvas, encoder_cache, prompt_length, prev_logits, temperature
+                canvas,
+                encoder_cache,
+                prompt_length,
+                prev_logits,
+                temperature,
+                prompt_padding_mask=prompt_padding_mask,
             )
             prev_logits = logits
-            canvas, stop = self.sampler(canvas, logits, step)
+            canvas, stop, argmax_canvas = self.sampler(canvas, logits, step)
             if bool(ops.convert_to_numpy(ops.all(stop))):
                 break
 
-        return ops.cast(ops.argmax(prev_logits, axis=-1), "int32")
+        return ops.cast(argmax_canvas, "int32")
+
+    def _normalize_generate_inputs(self, inputs):
+        """Normalize user input to the generate function.
+
+        This function converts all inputs to tensors, adds a batch dimension if
+        necessary, and returns a iterable "dataset like" object (either an
+        actual `tf.data.Dataset` or a list with a single batch element).
+        """
+        if tf and isinstance(inputs, tf.data.Dataset):
+            return inputs.as_numpy_iterator(), False
+
+        if self.preprocessor is None:
+            return [inputs], False
+
+        def normalize(x):
+            if isinstance(x, str):
+                return [x], True
+            if tf and isinstance(x, tf.Tensor) and x.shape.rank == 0:
+                return x[tf.newaxis], True
+            return x, False
+
+        if isinstance(inputs, dict):
+            for key in inputs:
+                inputs[key], input_is_scalar = normalize(inputs[key])
+        else:
+            inputs, input_is_scalar = normalize(inputs)
+
+        return [inputs], input_is_scalar
+
+    def _normalize_generate_outputs(self, outputs, input_is_scalar):
+        """Normalize user output from the generate function.
+
+        Converts all output to numpy (for integer output) or Python strings
+        (for string output). Removes the batch dimension added by
+        `_normalize_generate_inputs` when the original input was scalar.
+        """
+
+        def normalize(x):
+            if isinstance(x[0], list):
+                result = []
+                for batch in x:
+                    for e in batch:
+                        result.append(e)
+                return result[0] if input_is_scalar else result
+            result = ops.concatenate(x, axis=0)
+            result = ops.squeeze(result, 0) if input_is_scalar else result
+            return ops.convert_to_numpy(result)
+
+        if isinstance(outputs[0], dict):
+            normalized = {}
+            for key in outputs[0]:
+                normalized[key] = normalize([x[key] for x in outputs])
+            return normalized
+        return normalize(outputs)
 
     def generate(self, inputs, max_length=None):
         """Generate a denoised canvas given prompt inputs.
@@ -364,125 +471,44 @@ class BlockDiffusionLM(Task):
 
         generate_function = self.make_generate_function()
 
-        def normalize(x):
-            if isinstance(x, str):
-                return [x], True
-            if tf and isinstance(x, tf.Tensor) and x.shape.rank == 0:
-                return x[tf.newaxis], True
-            return x, False
-
-        if tf and isinstance(inputs, tf.data.Dataset):
-            batches = list(inputs.as_numpy_iterator())
-            input_is_scalar = False
-        elif self.preprocessor is None:
-            batches = [inputs]
-            input_is_scalar = False
-        elif isinstance(inputs, dict):
-            inputs["prompts"], input_is_scalar = normalize(inputs["prompts"])
-            batches = [inputs]
-        else:
-            inputs, input_is_scalar = normalize(inputs)
-            batches = [inputs]
+        inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
 
         if self.preprocessor is not None:
-            batches = [
+            inputs = [
                 self.preprocessor.generate_preprocess(
                     x, sequence_length=max_length
                 )
-                for x in batches
+                for x in inputs
             ]
 
-        outputs = [generate_function(x) for x in batches]
+        outputs = [generate_function(x) for x in inputs]
 
         if self.preprocessor is not None:
             outputs = [
                 self.preprocessor.generate_postprocess(x) for x in outputs
             ]
 
-        def _normalize_outputs(outs):
-            if isinstance(outs[0], list):
-                # generate_postprocess returns a Python list of strings
-                # (convert_preprocessing_outputs converts tf.string tensors
-                # to lists via tensor_to_list).
-                result = [e for batch in outs for e in batch]
-                return result[0] if input_is_scalar else result
-            result = ops.concatenate(outs, axis=0)
-            if input_is_scalar:
-                result = ops.squeeze(result, axis=0)
-            return ops.convert_to_numpy(result)
-
-        return _normalize_outputs(outputs)
+        return self._normalize_generate_outputs(outputs, input_is_scalar)
 
     def _encode_prompt(self, inputs):
-        """Encode the prompt and return (encoder_cache, prompt_length).
-
-        Subclasses must implement this method.
-
-        Args:
-            inputs: dict of pre-processed inputs.
-
-        Returns:
-            A tuple `(encoder_cache, prompt_length)` where `encoder_cache` is
-            a backend tensor or structure holding the frozen KV cache for all
-            transformer layers, and `prompt_length` is an int scalar giving the
-            number of real (non-padded) prompt tokens.
-        """
-        raise NotImplementedError(
-            f"`{self.__class__.__name__}` must implement `_encode_prompt()`."
-        )
+        """Encode the prompt."""
+        raise NotImplementedError
 
     def _prepare_canvas_embeds(self, canvas, prev_logits):
-        """Embed the current canvas tokens, applying self-conditioning.
-
-        Subclasses must implement this method.
-
-        Args:
-            canvas: int tensor of shape `(B, canvas_length)`.
-            prev_logits: float tensor of shape `(B, canvas_length, vocab_size)`
-                from the previous denoising step, or `None` on the first step.
-
-        Returns:
-            Float tensor of shape `(B, canvas_length, hidden_dim)`.
-        """
-        raise NotImplementedError(
-            f"`{self.__class__.__name__}` must implement "
-            "`_prepare_canvas_embeds()`."
-        )
+        """Embed the current canvas tokens, applying self-conditioning."""
+        raise NotImplementedError
 
     def _decode_canvas_step(self, canvas_embeds, encoder_cache, prompt_length):
-        """Run one decoder forward pass over the canvas.
-
-        Subclasses must implement this method.
-
-        Args:
-            canvas_embeds:
-            float tensor of shape `(B, canvas_length, hidden_dim)`.
-            encoder_cache: encoder KV cache from `_encode_prompt`.
-            prompt_length: int scalar, number of real prompt tokens.
-
-        Returns:
-            Float tensor of hidden states with shape
-            `(B, canvas_length, hidden_dim)`.
-        """
-        raise NotImplementedError(
-            f"`{self.__class__.__name__}` must implement "
-            "`_decode_canvas_step()`."
-        )
+        """Run one decoder forward pass over the canvas."""
+        raise NotImplementedError
 
     def _canvas_logits(self, hidden):
-        """Project decoder hidden states to vocabulary logits.
+        """Project hidden states to logits."""
+        raise NotImplementedError
 
-        Subclasses must implement this method.
-
-        Args:
-            hidden: float tensor of shape `(B, canvas_length, hidden_dim)`.
-
-        Returns:
-            Float tensor of shape `(B, canvas_length, vocab_size)`.
-        """
-        raise NotImplementedError(
-            f"`{self.__class__.__name__}` must implement `_canvas_logits()`."
-        )
+    def _post_quantize(self, mode, **kwargs):
+        super()._post_quantize(mode, **kwargs)
+        self.generate_function = None
 
     def get_config(self):
         config = super().get_config()
@@ -495,7 +521,3 @@ class BlockDiffusionLM(Task):
             }
         )
         return config
-
-    @classmethod
-    def from_config(cls, config):
-        return super().from_config(config)
