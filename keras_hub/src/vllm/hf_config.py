@@ -7,7 +7,7 @@ we define our own: ``model_type = "keras_hub"`` / architecture
 ``"KerasHubForCausalLM"``.
 
 This config is never used to build a model. tpu-inference's native loader routes
-any config carrying ``keras_hub_preset`` to its ``KerasHubForCausalLM`` model
+any config carrying ``keras_hub_preset`` to its ``KerasHubVllmModel`` model
 class (the real KerasHub backbone on the flax/nnx path); this object only
 carries the dims vLLM reads for KV-cache profiling, which
 ``setup_vllm_model`` fills from each preset's own config.

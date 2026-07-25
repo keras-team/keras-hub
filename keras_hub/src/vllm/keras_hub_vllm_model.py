@@ -1,6 +1,6 @@
 """The serving model that runs a KerasHub `CausalLM` on vLLM's TPU backend.
 
-`KerasHubForCausalLM` lives here in keras-hub and is registered with
+`KerasHubVllmModel` lives here in keras-hub and is registered with
 tpu-inference's model registry (and vLLM's) by tpu-inference's plugin hook,
 so the native `flax_nnx` loader resolves it by architecture name like any
 other model. It is only ever instantiated on the serving path, where flax
@@ -24,12 +24,16 @@ from keras_hub.src.vllm.context import get_vllm_context
 from keras_hub.src.vllm.context import vllm_context_scope
 
 
-class KerasHubForCausalLM(_NnxModule):
+class KerasHubVllmModel(_NnxModule):
     """Serves a KerasHub `CausalLM` on tpu-inference's native JAX path.
 
+    Registered under the ``"KerasHubForCausalLM"`` architecture string
+    (``KERAS_HUB_ARCHITECTURE``), which follows the HF naming convention
+    configs use on the wire; the class itself carries the keras-hub-style
+    name.
+
     An adapter, not a conversion: it implements the model interface the
-    native `flax_nnx` runner drives (resolved by the `KerasHubForCausalLM`
-    architecture name through the standard model registry), reusing the
+    native `flax_nnx` runner drives, reusing the
     preset's existing backbone and weights. Keras's NNX mode
     (`KERAS_NNX_ENABLED=true`) makes the backbone's variables nnx state, so
     the runner's `nnx.split`/`nnx.merge` machinery carries the weights with

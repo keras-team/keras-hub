@@ -2,7 +2,7 @@
 Registry module for Keras Hub to vLLM Integration.
 
 Materializes a model directory for `LLM(model="keras_hub:preset_name")` so that
-tpu-inference's native flax/nnx path serves it via `KerasHubForCausalLM`.
+tpu-inference's native flax/nnx path serves it via `KerasHubVllmModel`.
 """
 
 import inspect
@@ -48,7 +48,7 @@ from keras_hub.src.vllm.hf_config import register_hf_config
 # teaches transformers the `model_type`, and tpu-inference registers the
 # architecture with vLLM. Both only carry KV dims for cache profiling; the real
 # model is selected by `keras_hub_preset` and served by tpu-inference's
-# `KerasHubForCausalLM` model class.
+# `KerasHubVllmModel` model class.
 
 
 def _normalize_dtype(dtype):

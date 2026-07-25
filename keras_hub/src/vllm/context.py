@@ -1,6 +1,6 @@
 """Thread-local context for passing vLLM metadata to Keras layers.
 
-The serving model (``KerasHubForCausalLM`` in this package, registered
+The serving model (``KerasHubVllmModel`` in this package, registered
 with vLLM by tpu-inference's plugin hook) publishes this
 context around each forward step with ``vllm_context_scope``, which restores
 the prior state on exit even when the forward raises, all on one thread.
