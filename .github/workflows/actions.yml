@@ -22,17 +22,17 @@ jobs:
       matrix:
         backend: [tensorflow, jax, torch]
         version: [keras-stable]
-        shard: [0, 1, 2, 3]
+        shard: [1, 2, 3, 4]
         include:
           - backend: jax
             version: keras-3.15
-            shard: 0
+            shard: 1
           - backend: jax
             version: keras-nightly
-            shard: 0
+            shard: 1
           - backend: openvino
             version: keras-nightly
-            shard: 0
+            shard: 1
 
     container:
       image: python:3.11-slim
@@ -69,14 +69,14 @@ jobs:
         pip install keras-nightly --no-cache-dir --progress-bar off
     - name: Test with pytest
       run: |
-        pytest keras_hub/ -n auto --dist loadfile --durations=50 --shard-id=${{ matrix.shard }} --num-shards=4
+        pytest keras_hub/ -n auto --dist loadfile --durations=50 --splits 4 --group ${{ matrix.shard }} --splitting-algorithm least_duration
     - name: Run integration tests
-      if: ${{ matrix.shard == 0 }}
+      if: ${{ matrix.shard == 1 }}
       run: |
         python pip_build.py --install
         cd integration_tests && pytest . -k "not NoTensorflow"
     - name: Run no tensorflow integration test
-      if: ${{ matrix.backend != 'tensorflow' && matrix.shard == 0 }}
+      if: ${{ matrix.backend != 'tensorflow' && matrix.shard == 1 }}
       run: |
         pip uninstall -y tensorflow-text tensorflow
         cd integration_tests && pytest . -k "NoTensorflow"

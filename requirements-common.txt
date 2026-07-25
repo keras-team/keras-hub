@@ -14,7 +14,7 @@ ruff
 pytest
 pytest-cov
 pytest-xdist
-pytest-shard
+pytest-split
 build
 namex
 # Optional deps.
