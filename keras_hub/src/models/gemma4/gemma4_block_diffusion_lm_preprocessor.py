@@ -1,4 +1,3 @@
-import math
 import re
 
 import keras
@@ -19,29 +18,6 @@ from keras_hub.src.models.gemma4.gemma4_image_converter import (
 from keras_hub.src.models.gemma4.gemma4_tokenizer import Gemma4Tokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
-
-
-def _get_num_vision_tokens(
-    h, w, patch_size, max_soft_tokens, pooling_kernel_size
-):
-    total_px = h * w
-    max_patches = max_soft_tokens * (pooling_kernel_size**2)
-    target_px = max_patches * (patch_size**2)
-    factor = math.sqrt(target_px / total_px)
-    ideal_h = factor * h
-    ideal_w = factor * w
-    side_mult = pooling_kernel_size * patch_size
-
-    target_h = int(math.floor(ideal_h / side_mult)) * side_mult
-    target_w = int(math.floor(ideal_w / side_mult)) * side_mult
-
-    target_h = max(target_h, side_mult)
-    target_w = max(target_w, side_mult)
-
-    n_h = target_h // patch_size
-    n_w = target_w // patch_size
-
-    return (n_h * n_w) // (pooling_kernel_size**2)
 
 
 @keras_hub_export("keras_hub.models.Gemma4BlockDiffusionLMPreprocessor")
@@ -67,9 +43,10 @@ class Gemma4BlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
     - ``"images"`` (optional): image tensor(s) matching ``<|image|>``
       occurrences in the prompts.
 
-    During generation (``generate_preprocess()``), the packed prompt tokens are
-    followed by ``canvas_length`` mask tokens.  The model denoises these
-    positions iteratively.
+    During generation (``generate_preprocess()``), only the packed prompt
+    tokens are returned.  The canvas is initialised inside ``generate_step``
+    via ``_init_canvas`` so that ``_encode_prompt`` always receives the prompt
+    alone, matching the HuggingFace encoder/decoder split.
 
     Args:
         tokenizer: A `keras_hub.models.Gemma4Tokenizer` instance.
@@ -147,6 +124,7 @@ class Gemma4BlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             pad_value=self.tokenizer.pad_token_id,
             sep_value=[],
             sequence_length=self.sequence_length,
+            padding_side="left",
         )
         self.built = True
 
@@ -346,6 +324,7 @@ class Gemma4BlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
 
         Returns:
             token_ids_ragged
+            token_ids_ragged
         """
         if self.image_converter is not None:
             num_tokens = self.num_vision_tokens_per_image
@@ -521,15 +500,18 @@ class Gemma4BlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
     def generate_preprocess(self, x, sequence_length=None):
         """Convert prompt inputs to model-ready tensors for generation.
 
-        Expands image placeholders, tokenizes, packs to ``sequence_length``,
-        then appends ``canvas_length`` mask tokens for the denoising loop.
+        Expands image placeholders, tokenizes, and packs to
+        ``sequence_length``.  The canvas is initialised separately inside
+        `generate_step` via `_init_canvas`, so no canvas tokens are appended
+        here.
 
         Args:
             x: A string, batch of strings, or a dict with key ``"prompts"``
                 and optionally ``"images"``, ``"pixel_values"``,
                 ``"pixel_position_ids"``.
-            sequence_length: Optional int. Prompt sequence length. Defaults to
-                ``self.sequence_length``.
+            sequence_length: Optional int. Maximum prompt sequence length.
+                Defaults to ``self.sequence_length``. Output is left-padded to
+                this length.
 
         Returns:
             A dict with ``"token_ids"``, ``"padding_mask"``, and multimodal
@@ -576,19 +558,12 @@ class Gemma4BlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
         )
         padding_mask = token_ids != self.tokenizer.pad_token_id
 
-        # Text-only: append canvas and emit position_ids alongside the
-        # standard token / mask fields so the LM's functional graph can
-        # consume the dict directly.
+        # Text-only: emit position_ids alongside the standard token / mask
+        # fields so the LM's functional graph can consume the dict directly.
+        # Canvas tokens are NOT appended — the canvas is initialised inside
+        # generate_step via _init_canvas.
         if self.text_only_model:
             batch_size = tf.shape(token_ids)[0]
-            mask_id = self.tokenizer.pad_token_id
-            canvas_tokens = tf.fill([batch_size, self.canvas_length], mask_id)
-            canvas_tokens = tf.cast(canvas_tokens, token_ids.dtype)
-            canvas_mask = tf.zeros(
-                [batch_size, self.canvas_length], dtype=padding_mask.dtype
-            )
-            token_ids = tf.concat([token_ids, canvas_tokens], axis=1)
-            padding_mask = tf.concat([padding_mask, canvas_mask], axis=1)
             seq_len = tf.shape(token_ids)[1]
             position_ids = tf.range(seq_len, dtype=tf.int32)
             position_ids = tf.expand_dims(position_ids, axis=0)
@@ -614,15 +589,7 @@ class Gemma4BlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             batched,
         )
 
-        # Canvas tokens (mask/pad token_id) are appended in
-        # _build_multimodal_output.
-        mask_id = self.tokenizer.pad_token_id
-        canvas_tokens = tf.fill([batch_size, self.canvas_length], mask_id)
-        canvas_tokens = tf.cast(canvas_tokens, token_ids.dtype)
-        canvas_mask = tf.zeros(
-            [batch_size, self.canvas_length], dtype=padding_mask.dtype
-        )
-
+        # Canvas tokens are initialised inside generate_step via _init_canvas.
         return self._build_multimodal_output(
             token_ids=token_ids,
             padding_mask=padding_mask,
@@ -630,8 +597,6 @@ class Gemma4BlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             pixel_values=pixel_values,
             pixel_position_ids=pixel_position_ids,
             batched=batched,
-            canvas_tokens=canvas_tokens,
-            canvas_mask=canvas_mask,
         )
 
     @preprocessing_function
@@ -656,9 +621,9 @@ class Gemma4BlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             padding_mask = keras.ops.convert_to_numpy(x["padding_mask"])
         else:
             token_ids = keras.ops.convert_to_numpy(x).astype("int32")
-            padding_mask = (token_ids != self.tokenizer.pad_token_id).astype(
-                bool
-            )
+            # The canvas is a fixed-length denoised output buffer — every
+            # position is a valid generated token, there is no padding.
+            padding_mask = np.ones(token_ids.shape, dtype=bool)
 
         ids_to_strip = list(getattr(self.tokenizer, "special_token_ids", []))
 

@@ -5,21 +5,23 @@ from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import strip_to_ragged
+from keras_hub.src.utils.tensor_utils import strip_to_ragged_python
 
 
 @keras_hub_export("keras_hub.models.BlockDiffusionLMPreprocessor")
 class BlockDiffusionLMPreprocessor(Preprocessor):
     """Base class for diffusion language model preprocessing layers.
 
-    `DiffusionLMPreprocessor` tasks wrap a `keras_hub.tokenizer.Tokenizer` to
-    create a preprocessing layer for discrete block-diffusion generation tasks.
-    It is intended to be paired with a `DiffusionLM` task.
+    `BlockDiffusionLMPreprocessor` tasks wrap a `keras_hub.tokenizer.Tokenizer`
+    to create a preprocessing layer for discrete block-diffusion generation
+    tasks. It is intended to be paired with a `DiffusionLM` task.
 
-    All `DiffusionLMPreprocessor` layers take a single string or batch of
+    All `BlockDiffusionLMPreprocessor` layers take a single string or batch of
     strings as input.  The prompt tokens are packed with start/end tokens and
-    padded to `sequence_length`.  A canvas suffix of `canvas_length` mask
-    tokens is appended after the packed prompt to form the full input for the
-    model's generation API.
+    padded to `sequence_length`.  The canvas is initialised separately inside
+    `generate_step` via `_init_canvas` so that `_encode_prompt` always
+    receives only the real prompt tokens.
 
     Subclasses should override `generate_preprocess` and `generate_postprocess`
     to handle model-specific details (e.g. multimodal inputs, special canvas
@@ -69,7 +71,7 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
         )
         self.built = True
 
-    def _call(self, x, y=None, sample_weight=None, sequence_length=None):
+    def _call_python(self, x, y=None, sample_weight=None, sequence_length=None):
         sequence_length = sequence_length or self.sequence_length
         x = self.tokenizer(x)
         token_ids, padding_mask = self.packer(
@@ -87,7 +89,7 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
 
     @preprocessing_function
     def _call_tf(self, x, y=None, sample_weight=None, sequence_length=None):
-        return self._call(
+        return self._call_python(
             x,
             y=y,
             sample_weight=sample_weight,
@@ -95,21 +97,22 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
         )
 
     def call(self, x, y=None, sample_weight=None, sequence_length=None):
-        if in_tf_function():
+        if not self._allow_python_workflow or in_tf_function():
             return self._call_tf(
                 x,
                 y=y,
                 sample_weight=sample_weight,
                 sequence_length=sequence_length,
             )
-        return self._call(
-            x,
-            y=y,
-            sample_weight=sample_weight,
-            sequence_length=sequence_length,
-        )
+        else:
+            return self._call_python(
+                x,
+                y=y,
+                sample_weight=sample_weight,
+                sequence_length=sequence_length,
+            )
 
-    def _generate_preprocess(self, x, sequence_length=None):
+    def _generate_preprocess_python(self, x, sequence_length=None):
         if not self.built:
             self.build(None)
 
@@ -121,28 +124,6 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
             add_end_value=False,
         )
 
-        # Append canvas_length mask tokens (pad_token_id) after the prompt.
-        # These placeholder positions will be filled by the denoising loop.
-        mask_token_id = self.tokenizer.pad_token_id
-        if len(token_ids.shape) == 1:
-            canvas_shape = (self.canvas_length,)
-            concat_axis = 0
-        else:
-            batch_size = keras.ops.shape(token_ids)[0]
-            canvas_shape = (batch_size, self.canvas_length)
-            concat_axis = 1
-        canvas_tokens = keras.ops.full(
-            canvas_shape,
-            fill_value=mask_token_id,
-            dtype=token_ids.dtype,
-        )
-        canvas_mask = keras.ops.zeros(canvas_shape, dtype=padding_mask.dtype)
-        token_ids = keras.ops.concatenate(
-            [token_ids, canvas_tokens], axis=concat_axis
-        )
-        padding_mask = keras.ops.concatenate(
-            [padding_mask, canvas_mask], axis=concat_axis
-        )
         return {
             "token_ids": token_ids,
             "padding_mask": padding_mask,
@@ -150,13 +131,15 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
 
     @preprocessing_function
     def _generate_preprocess_tf(self, x, sequence_length=None):
-        return self._generate_preprocess(x, sequence_length=sequence_length)
+        return self._generate_preprocess_python(
+            x, sequence_length=sequence_length
+        )
 
     def generate_preprocess(self, x, sequence_length=None):
         """Convert strings to integer token input for generation.
 
-        Tokenizes and packs the prompt, then appends `canvas_length` mask
-        tokens as placeholder canvas positions for the denoising loop.
+        Tokenizes and packs the prompt.  The canvas is initialised inside
+        `generate_step` via `_init_canvas`; no canvas tokens are appended.
 
         Args:
             x: string or batch of strings.
@@ -166,37 +149,36 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
         Returns:
             A dict with keys `"token_ids"` and `"padding_mask"`.
         """
-        if in_tf_function():
+        if not self._allow_python_workflow or in_tf_function():
             return self._generate_preprocess_tf(
                 x, sequence_length=sequence_length
             )
-        return self._generate_preprocess(x, sequence_length=sequence_length)
+        else:
+            return self._generate_preprocess_python(
+                x, sequence_length=sequence_length
+            )
 
-    def _generate_postprocess(self, x):
+    def _generate_postprocess_python(self, x):
         if not self.built:
             self.build(None)
-
-        # x contains the denoised canvas token ids, shape (B, canvas_length).
-        # Strip padding / special tokens and detokenize to strings.
-        token_ids = keras.ops.convert_to_numpy(x).astype("int32")
         ids_to_strip = getattr(self.tokenizer, "special_token_ids", [])
-
-        def _strip_and_detokenize(ids):
-            mask = [True] * len(ids)
-            for sid in ids_to_strip:
-                mask = [m and (t != sid) for m, t in zip(mask, ids)]
-            filtered = [t for t, m in zip(ids, mask) if m]
-            return filtered
-
-        if token_ids.ndim == 1:
-            token_ids = _strip_and_detokenize(token_ids.tolist())
+        was_1d = keras.ops.ndim(x) == 1
+        # All canvas positions are valid (no padding); mask=all-True strips
+        # only special tokens.
+        mask = keras.ops.ones_like(x, dtype="bool")
+        token_ids = strip_to_ragged_python(x, mask, ids_to_strip)
+        if was_1d:
             return self.tokenizer.detokenize([token_ids])[0]
-        result = [_strip_and_detokenize(row.tolist()) for row in token_ids]
-        return self.tokenizer.detokenize(result)
+        return self.tokenizer.detokenize(token_ids)
 
     @preprocessing_function
     def _generate_postprocess_tf(self, x):
-        return self._generate_postprocess(x)
+        if not self.built:
+            self.build(None)
+        ids_to_strip = self.tokenizer.special_token_ids
+        mask = keras.ops.ones_like(x, dtype="bool")
+        token_ids = strip_to_ragged(x, mask, ids_to_strip)
+        return self.tokenizer.detokenize(token_ids)
 
     def generate_postprocess(self, x):
         """Convert denoised integer tokens back to strings.
@@ -208,9 +190,10 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
         Returns:
             String or list of strings.
         """
-        if in_tf_function():
+        if not self._allow_python_workflow or in_tf_function():
             return self._generate_postprocess_tf(x)
-        return self._generate_postprocess(x)
+        else:
+            return self._generate_postprocess_python(x)
 
     @property
     def sequence_length(self):
@@ -234,11 +217,3 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
             }
         )
         return config
-
-    @classmethod
-    def from_config(cls, config):
-        if "tokenizer" in config and isinstance(config["tokenizer"], dict):
-            config["tokenizer"] = keras.saving.deserialize_keras_object(
-                config["tokenizer"]
-            )
-        return cls(**config)

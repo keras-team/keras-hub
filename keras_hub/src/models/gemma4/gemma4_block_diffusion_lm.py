@@ -12,6 +12,7 @@ from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.models.gemma4.gemma4_block_diffusion_lm_preprocessor import (
     Gemma4BlockDiffusionLMPreprocessor,
 )
+from keras_hub.src.samplers.serialization import get as get_sampler
 
 
 @keras_hub_export("keras_hub.models.Gemma4BlockDiffusionLM")
@@ -40,6 +41,8 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
             denoising step. Defaults to `0.4`.
         t_max: float. Maximum sampling temperature applied at the first
             denoising step. Defaults to `0.8`.
+        sampler: `"entropy_bound"` or a compatible diffusion sampler.
+            Defaults to `"entropy_bound"`.
         **kwargs: Additional keyword arguments passed to the parent class.
 
     Examples:
@@ -71,6 +74,7 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         self,
         preprocessor,
         backbone,
+        sampler="entropy_bound",
         **kwargs,
     ):
         # === Layers ===
@@ -87,6 +91,8 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
             outputs=outputs,
             **kwargs,
         )
+        self.sampler = get_sampler(sampler)
+        self.generate_function = None
 
     def _normalize_generate_inputs(self, inputs):
         """Overrides the base class to handle unbatched multimodal inputs."""
@@ -123,7 +129,13 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
 
     def get_config(self):
         config = super().get_config()
+        config["sampler"] = self._serialize_sampler()
         return config
+
+    def _serialize_sampler(self):
+        from keras_hub.src.samplers.serialization import serialize
+
+        return serialize(self.sampler)
 
     def _encode_prompt(self, inputs):
         token_ids = inputs["token_ids"]
@@ -133,21 +145,6 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         pixel_position_ids = inputs.get("pixel_position_ids", None)
         vision_indices = inputs.get("vision_indices", None)
         vision_mask = inputs.get("vision_mask", None)
-
-        # `generate_preprocess` appends `canvas_length` mask tokens to
-        # `token_ids` for the generation loop.  Strip them here so the encoder
-        # computes KV cache over prompt tokens only.
-        if (
-            hasattr(self, "canvas_length")
-            and self.canvas_length
-            and ops.shape(token_ids)[1] > self.canvas_length
-        ):
-            canvas_len = self.canvas_length
-            token_ids = token_ids[:, :-canvas_len]
-            if padding_mask is not None:
-                padding_mask = padding_mask[:, :-canvas_len]
-            if vision_mask is not None:
-                vision_mask = vision_mask[:, :-canvas_len]
 
         # Text embeddings are unscaled until after vision interleaving.
         x = self.backbone.token_embedding(token_ids)
@@ -334,7 +331,11 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         return ops.pad(encoder_cache, paddings)
 
     def _decode_canvas_step(
-        self, canvas_embeds, encoder_kv_cache, prompt_length
+        self,
+        canvas_embeds,
+        encoder_kv_cache,
+        prompt_length,
+        prompt_padding_mask=None,
     ):
         x = canvas_embeds
         batch_size = ops.shape(x)[0]
@@ -359,6 +360,22 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         # canvas_mask marks every canvas position as bidirectional.
         canvas_mask = ops.ones((batch_size, canvas_length), dtype="bool")
 
+        # Build a combined key-side padding mask so canvas queries do not
+        # attend to padding positions in the encoder KV cache.  Without this,
+        # a prompt padded to sequence_length exposes mostly garbage K/V and
+        # the model ignores the real prompt context.
+        if prompt_padding_mask is not None:
+            canvas_real = ops.ones((batch_size, canvas_length), dtype="bool")
+            combined_padding_mask = ops.concatenate(
+                [
+                    ops.cast(prompt_padding_mask, "bool"),
+                    canvas_real,
+                ],
+                axis=1,
+            )
+        else:
+            combined_padding_mask = None
+
         caches = []
         for i, layer in enumerate(self.backbone.transformer_layers):
             current_cache = combined_cache[:, i, ...]
@@ -378,6 +395,7 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
                 cache=current_cache,
                 cache_update_index=prompt_length,
                 canvas_mask=canvas_mask,
+                padding_mask=combined_padding_mask,
                 shared_kv=shared_kv,
             )
             caches.append(next_cache)

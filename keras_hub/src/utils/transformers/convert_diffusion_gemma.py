@@ -326,16 +326,7 @@ def load_task_config(preset, transformers_config):
 
 def load_preprocessor_config(preset, transformers_config):
     """Return extra Gemma4BlockDiffusionLMPreprocessor kwargs."""
-    kwargs = {
+    return {
         "add_start_token": False,
         "add_end_token": False,
     }
-    if not check_file_exists(preset, "processor_config.json"):
-        return kwargs
-    processor_config = load_json(preset, "processor_config.json")
-    if "image_processor" in processor_config:
-        image_proc = processor_config["image_processor"]
-        kwargs["num_vision_tokens_per_image"] = image_proc.get(
-            "max_soft_tokens", 280
-        )
-    return kwargs

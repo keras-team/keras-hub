@@ -67,34 +67,20 @@ class TestBlockDiffusionLMPreprocessor(TestCase):
         expected_token_ids = [9, 14, 10, 12, 0, 0, 0, 0]
         self.assertAllEqual(x["token_ids"][0], expected_token_ids)
 
-    def test_generate_preprocess_appends_canvas(self):
+    def test_generate_preprocess_prompt_only(self):
+        # Canvas is initialised in generate_step — token_ids should be
+        # sequence_length, not sequence_length + canvas_length.
         output = self.preprocessor.generate_preprocess("the quick brown fox")
-        expected_length = self.sequence_length + self.canvas_length
-        self.assertAllEqual(output["token_ids"].shape[-1], expected_length)
-        self.assertAllEqual(output["padding_mask"].shape[-1], expected_length)
-
-    def test_generate_preprocess_prompt_token_values(self):
-        output = self.preprocessor.generate_preprocess("the quick brown fox")
-        token_ids = np.array(output["token_ids"])
-        # BOS + tokens, padded to sequence_length, then canvas zeros.
-        # Prompt slice: [1, 9, 14, 10, 12, 0, 0, 0]
-        expected_prompt = [1, 9, 14, 10, 12, 0, 0, 0]
+        self.assertAllEqual(output["token_ids"].shape[-1], self.sequence_length)
         self.assertAllEqual(
-            token_ids[..., : self.sequence_length], expected_prompt
+            output["padding_mask"].shape[-1], self.sequence_length
         )
 
-    def test_generate_preprocess_canvas_all_zeros(self):
+    def test_generate_preprocess_token_values(self):
         output = self.preprocessor.generate_preprocess("the quick brown fox")
         token_ids = np.array(output["token_ids"])
-        canvas_slice = token_ids[..., self.sequence_length :]
-        pad_id = self.tokenizer.pad_token_id
-        self.assertAllEqual(canvas_slice, np.full_like(canvas_slice, pad_id))
-
-    def test_generate_preprocess_canvas_mask_all_false(self):
-        output = self.preprocessor.generate_preprocess("the quick brown fox")
-        padding_mask = np.array(output["padding_mask"])
-        canvas_mask = padding_mask[..., self.sequence_length :]
-        self.assertAllEqual(canvas_mask, np.zeros_like(canvas_mask))
+        expected = [1, 9, 14, 10, 12, 0, 0, 0]
+        self.assertAllEqual(token_ids, expected)
 
     def test_generate_postprocess_single(self):
         # 9=the, 14=quick, 10=brown, 12=fox, 0=<pad> (stripped)
@@ -133,9 +119,8 @@ class TestBlockDiffusionLMPreprocessor(TestCase):
         output = self.preprocessor.generate_preprocess(
             ["the quick brown fox", "the quick brown fox"]
         )
-        expected_length = self.sequence_length + self.canvas_length
         self.assertEqual(output["token_ids"].shape[0], 2)
-        self.assertEqual(output["token_ids"].shape[1], expected_length)
+        self.assertEqual(output["token_ids"].shape[1], self.sequence_length)
 
     def test_call_truncates_long_input(self):
         # Input that tokenizes to more tokens than sequence_length must be

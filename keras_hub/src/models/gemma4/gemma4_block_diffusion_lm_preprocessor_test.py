@@ -37,12 +37,12 @@ class Gemma4BlockDiffusionLMPreprocessorTest(TestCase):
         self.assertEqual(sw.shape[-1], 8)
         # Verify token values for the first sample.
         # Vocab: 1=<bos>, 9=the, 14=quick, 10=brown, 12=fox, 2=<eos>, 0=<pad>
-        self.assertAllEqual(x["token_ids"][0], [1, 9, 14, 10, 12, 2, 0, 0])
-        self.assertAllEqual(x["padding_mask"][0], [1, 1, 1, 1, 1, 1, 0, 0])
+        self.assertAllEqual(x["token_ids"][0], [0, 0, 0, 1, 9, 14, 10, 12])
+        self.assertAllEqual(x["padding_mask"][0], [0, 0, 0, 1, 1, 1, 1, 1])
         # y is token_ids shifted left by one.
-        self.assertAllEqual(y[0], [9, 14, 10, 12, 2, 0, 0, 0])
+        self.assertAllEqual(y[0], [0, 0, 1, 9, 14, 10, 12, 2])
         # sw is 1 for non-pad label positions.
-        self.assertAllEqual(sw[0], [1, 1, 1, 1, 1, 0, 0, 0])
+        self.assertAllEqual(sw[0], [0, 0, 1, 1, 1, 1, 1, 1])
 
     def test_no_start_end_token(self):
         preprocessor = Gemma4BlockDiffusionLMPreprocessor(
@@ -52,33 +52,28 @@ class Gemma4BlockDiffusionLMPreprocessorTest(TestCase):
         )
         input_data = ["the quick brown fox"] * 2
         x, y, sw = preprocessor(input_data)
-        # Without BOS the first token should be "the" (id=9).
-        self.assertAllEqual(x["token_ids"][0, 0], 9)
+        # Without BOS the first non-padding token should be "the" (id=9).
+        self.assertAllEqual(x["token_ids"][0, -3], 9)
 
-    def test_generate_preprocess_appends_canvas(self):
+    def test_generate_preprocess_prompt_only(self):
+        # Canvas is initialised in generate_step, not here — token_ids should
+        # contain only the packed prompt, not the canvas.
         output = self.preprocessor.generate_preprocess("the quick brown fox")
-        prompt_plus_canvas = 8 + 4  # sequence_length + canvas_length
-        self.assertAllEqual(output["token_ids"].shape[-1], prompt_plus_canvas)
-        self.assertAllEqual(
-            output["padding_mask"].shape[-1], prompt_plus_canvas
-        )
-
-    def test_generate_preprocess_canvas_mask_is_zero(self):
-        output = self.preprocessor.generate_preprocess("the quick brown fox")
-        padding_mask = np.array(output["padding_mask"])
-        # Canvas positions (last canvas_length entries) must all be 0.
-        canvas_mask = padding_mask[..., -self.preprocessor.canvas_length :]
-        self.assertAllEqual(canvas_mask, np.zeros_like(canvas_mask))
+        self.assertAllEqual(output["token_ids"], [0, 0, 0, 1, 9, 14, 10, 12])
+        self.assertAllEqual(output["padding_mask"], [0, 0, 0, 1, 1, 1, 1, 1])
 
     def test_generate_preprocess_batched(self):
         output = self.preprocessor.generate_preprocess(
-            {"prompts": ["the quick brown fox", "the quick brown fox"]}
+            {"prompts": ["the", "the quick brown fox"]}
         )
-        expected_length = (
-            self.preprocessor.sequence_length + self.preprocessor.canvas_length
+        self.assertAllEqual(
+            output["token_ids"],
+            [[0, 0, 0, 0, 0, 0, 1, 9], [0, 0, 0, 1, 9, 14, 10, 12]],
         )
-        self.assertEqual(output["token_ids"].shape[0], 2)
-        self.assertEqual(output["token_ids"].shape[1], expected_length)
+        self.assertAllEqual(
+            output["padding_mask"],
+            [[0, 0, 0, 0, 0, 0, 1, 1], [0, 0, 0, 1, 1, 1, 1, 1]],
+        )
 
     def test_generate_postprocess(self):
         # canvas_length=4; vocab: 9=the, 14=quick, 10=brown, 12=fox

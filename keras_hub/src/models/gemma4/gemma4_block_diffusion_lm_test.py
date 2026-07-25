@@ -49,7 +49,7 @@ class Gemma4BlockDiffusionLMTest(TestCase, parameterized.TestCase):
             "backbone": self.backbone,
             "preprocessor": self.preprocessor,
         }
-        self.sampler = EntropyBoundSampler(vocabulary_size=vocab_size)
+        self.sampler = EntropyBoundSampler()
 
         self.train_data = (
             {
@@ -121,9 +121,47 @@ class Gemma4BlockDiffusionLMTest(TestCase, parameterized.TestCase):
         model.compile(sampler=self.sampler)
         self.assertIsNone(model.generate_function)
 
+    def test_default_sampler_resolves_by_name(self):
+        model = Gemma4BlockDiffusionLM(
+            **self.init_kwargs,
+            canvas_length=4,
+        )
+        model.compile()
+
+        canvas = ops.zeros((1, 4), dtype="int32")
+        logits = ops.zeros(
+            (1, 4, self.tokenizer.vocabulary_size()), dtype="float32"
+        )
+        sampled_canvas, _, _ = model.sampler(canvas, logits, step=0)
+
+        self.assertEqual(sampled_canvas.shape, canvas.shape)
+
+    def test_constructor_sampler(self):
+        sampler = EntropyBoundSampler(
+            entropy_bound=0.2,
+            confidence_threshold=0.01,
+            stability_threshold=2,
+        )
+
+        model = Gemma4BlockDiffusionLM(
+            **self.init_kwargs,
+            sampler=sampler,
+        )
+
+        self.assertIs(model.sampler, sampler)
+
     @parameterized.named_parameters(
-        ("default_canvas", {}),
-        ("custom_canvas_length", {"canvas_length": 8}),
+        ("default_generation_config", {}),
+        (
+            "custom_generation_config",
+            {
+                "canvas_length": 8,
+                "max_denoising_steps": 2,
+                "t_min": 0.2,
+                "t_max": 0.7,
+                "sampler": EntropyBoundSampler(entropy_bound=0.2),
+            },
+        ),
     )
     def test_serialization(self, extra_kwargs):
         model = Gemma4BlockDiffusionLM(**self.init_kwargs, **extra_kwargs)
