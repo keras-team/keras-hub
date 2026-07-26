@@ -212,13 +212,35 @@ def export_backbone(backbone, path, include_lm_head=False):
                 f.write(b)
 
     elif backend == "tensorflow":
-        from safetensors.tensorflow import save_file
+        import numpy as np
+        from safetensors.numpy import save_file
 
-        save_file(weights_dict, weights_path, metadata={"format": "pt"})
+        np_weights = {}
+        for k, v in weights_dict.items():
+            tensor = v.value if hasattr(v, "value") else v
+            if hasattr(tensor, "numpy"):
+                arr = np.array(tensor.numpy())
+            else:
+                arr = np.array(tensor)
+            if arr.ndim == 0:
+                arr = arr.reshape(1)
+            np_weights[k] = arr
+        save_file(np_weights, weights_path, metadata={"format": "pt"})
     elif backend == "jax":
-        from safetensors.flax import save_file
+        import numpy as np
+        from safetensors.numpy import save_file
 
-        save_file(weights_dict, weights_path, metadata={"format": "pt"})
+        np_weights = {}
+        for k, v in weights_dict.items():
+            tensor = v.value if hasattr(v, "value") else v
+            if hasattr(tensor, "numpy"):
+                arr = np.array(tensor.numpy())
+            else:
+                arr = np.array(tensor)
+            if arr.ndim == 0:
+                arr = arr.reshape(1)
+            np_weights[k] = arr
+        save_file(np_weights, weights_path, metadata={"format": "pt"})
     else:
         raise ValueError(f"Unsupported backend: {backend}")
 
