@@ -222,8 +222,6 @@ def export_backbone(backbone, path, include_lm_head=False):
                 arr = np.array(tensor.numpy())
             else:
                 arr = np.array(tensor)
-            if arr.ndim == 0:
-                arr = arr.reshape(1)
             np_weights[k] = arr
         save_file(np_weights, weights_path, metadata={"format": "pt"})
     elif backend == "jax":
@@ -237,8 +235,6 @@ def export_backbone(backbone, path, include_lm_head=False):
                 arr = np.array(tensor.numpy())
             else:
                 arr = np.array(tensor)
-            if arr.ndim == 0:
-                arr = arr.reshape(1)
             np_weights[k] = arr
         save_file(np_weights, weights_path, metadata={"format": "pt"})
     else:
