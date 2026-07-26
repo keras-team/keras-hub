@@ -97,7 +97,7 @@ def vllm_paged_attention(
     value = ops.reshape(value, (-1, kv_heads * head_dim))
 
     # `paged_attention_func` comes from the serving model
-    # (keras_hub_vllm_model.py).
+    # (keras_hub_vllm_wrapper.py).
     # It takes only what an attention layer knows; engine details (the
     # attention metadata, the mesh) are already bound inside it. It returns
     # `(new_kv_cache, output)`.
