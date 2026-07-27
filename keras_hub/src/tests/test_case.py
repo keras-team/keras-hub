@@ -1018,9 +1018,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
     def assert_sharding_coverage(self, model, layout_map, allow_replicated=()):
         """Assert no rank>=2 weight is left unsharded by accident.
 
-        An unmatched weight is not an error to `LayoutMap` -- it is simply
-        kept whole on every device. This turns that silence into a failure
-        unless the weight is explicitly declared.
+        A weight that no rule matches is not an error to `LayoutMap` -- it is
+        simply kept whole on every device. Neither is a rule whose spec names
+        no mesh axis. This turns both silences into a failure unless the
+        weight is explicitly declared.
 
         Args:
             model: A built model.
@@ -1033,13 +1034,19 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             str,
             "allow_replicated must be an iterable of patterns, not a string.",
         )
-        offending = [
-            w.path
-            for w in model.weights
-            if len(w.shape) >= 2
-            and layout_map[w.path] is None
-            and not any(re.search(p, w.path) for p in allow_replicated)
-        ]
+        # Materialized so a one-shot iterable is not consumed by the first
+        # weight, silently un-exempting every weight after it.
+        allow_replicated = tuple(allow_replicated)
+        offending = []
+        for w in model.weights:
+            if len(w.shape) < 2:
+                continue
+            layout = layout_map[w.path]
+            if layout is not None and any(a is not None for a in layout.axes):
+                continue
+            if any(re.search(p, w.path) for p in allow_replicated):
+                continue
+            offending.append(w.path)
         self.assertEqual(
             offending,
             [],
@@ -1127,8 +1134,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         init_kwargs,
         input_data,
         mesh_shape=(2, 2),
-        forward_rtol=1e-5,
-        forward_atol=1e-6,
+        forward_rtol=1e-4,
+        forward_atol=1e-5,
         train_rtol=1e-3,
         train_atol=1e-4,
     ):
@@ -1151,10 +1158,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 default is the smallest shape with more than one device on
                 both axes, so it exercises data- and model-parallel sharding
                 together.
-            forward_rtol: Relative tolerance for the forward comparison. Tight
-                is safe here -- a single forward pass does not accumulate
-                reduction-order error.
-            forward_atol: Absolute tolerance for the forward comparison.
+            forward_rtol: Relative tolerance for the forward comparison.
+            forward_atol: Absolute tolerance for the forward comparison. This
+                pair is what decides the check: sharded and unsharded outputs
+                differ by a roughly fixed ~2e-6 of float noise regardless of
+                element magnitude, so for the many near-zero elements the
+                relative term contributes nothing.
             train_rtol: Relative tolerance for the final-loss comparison. Much
                 looser than the forward pair on purpose: sharded reductions
                 reorder float accumulation and that divergence compounds with

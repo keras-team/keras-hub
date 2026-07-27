@@ -6,9 +6,9 @@ from keras import ops
 from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
 from keras_hub.src.tests.test_case import TestCase
 
-# Scaled ~16x down from the width class every Mistral preset shares
-# (vocab 32000, hidden 4096, intermediate 14336, 32 query / 8 kv heads).
-# The 4:1 query:kv ratio is kept, since divisibility depends on it.
+# Scaled ~16x down from the 7B presets (hidden 4096, intermediate 14336,
+# 32 query / 8 kv heads). The 4:1 query:kv ratio is kept, since that is what
+# divisibility depends on; the magistral presets are a different width class.
 MISTRAL_7B_DIMS = {
     "name": "mistral_7b",
     "vocabulary_size": 2000,
