@@ -244,18 +244,9 @@ class MistralBackbone(Backbone):
             data_dim,
             model_dim,
         )
-        # Query/key/value kernels have shape
-        # `(hidden_dim, num_heads, head_dim)`, so the contracting `hidden`
-        # dim is sharded on the data-parallel axis and the `num_heads` axis
-        # is sharded on the model-parallel axis (Megatron-style column
-        # parallelism), matching `attention_output`'s `(model, None, data)`
-        # row-parallel layout below. Key/value kernels use
-        # num_key_value_heads (GQA), which is independent of and typically
-        # much smaller than num_query_heads -- sharding that small axis on
-        # the model-parallel dim would raise an IndivisibleError whenever
-        # the model mesh dimension doesn't divide it, so key/value heads
-        # are left fully replicated on that axis while their hidden dim
-        # still shards on data for memory savings.
+        # Kernels are `(hidden_dim, num_heads, head_dim)`: `hidden` contracts
+        # so it shards on the data axis, `num_heads` on the model axis. Key
+        # and value heads are too few to divide the model axis, so stay whole.
         layout_map["transformer_layer.*self_attention.*query.kernel"] = (
             data_dim,
             model_dim,
