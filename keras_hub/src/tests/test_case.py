@@ -1101,7 +1101,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
             output = model(input_data)
             for leaf in tree.flatten(output):
-                if leaf is None or not is_float_dtype(leaf.dtype):
+                if leaf is None or not is_float_dtype(
+                    getattr(leaf, "dtype", None)
+                ):
                     continue
                 self.assertTrue(
                     np.isfinite(ops.convert_to_numpy(leaf)).all(),
@@ -1145,9 +1147,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             cls: The backbone class to build.
             init_kwargs: See `run_distribution_test`.
             input_data: A dict of input arrays, batch dimension first.
-            mesh_shape: The mesh to shard the twin on. The default is the
-                smallest shape with more than one device on both axes, so it
-                exercises data- and model-parallel sharding together.
+            mesh_shape: A `("batch", "model")` mesh to shard the twin on. The
+                default is the smallest shape with more than one device on
+                both axes, so it exercises data- and model-parallel sharding
+                together.
             forward_rtol: Relative tolerance for the forward comparison. Tight
                 is safe here -- a single forward pass does not accumulate
                 reduction-order error.
@@ -1160,10 +1163,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         """
         num_devices = int(np.prod(mesh_shape))
         devices = self._skip_unless_distribution(num_devices)[:num_devices]
-        # DeviceMesh requires exactly one axis name per mesh dimension.
-        axis_names = {1: ("batch",), 2: ("batch", "model")}.get(
-            len(mesh_shape), ("batch", "seq", "model")
-        )
 
         seed = 42
         keras.utils.set_random_seed(seed)
@@ -1171,7 +1170,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         undistributed_output = undistributed(input_data)
 
         device_mesh = keras.distribution.DeviceMesh(
-            shape=mesh_shape, axis_names=axis_names, devices=devices
+            shape=mesh_shape, axis_names=("batch", "model"), devices=devices
         )
         distribution = keras.distribution.ModelParallel(
             layout_map=cls.get_layout_map(device_mesh)
