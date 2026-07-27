@@ -1153,7 +1153,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         Args:
             cls: The backbone class to build.
             init_kwargs: See `run_distribution_test`.
-            input_data: A dict of input arrays, batch dimension first.
+            input_data: A dict of input arrays, batch dimension first. The
+                batch size must be divisible by `mesh_shape[0]`, or Jax raises
+                an indivisibility error when sharding the input.
             mesh_shape: A `("batch", "model")` mesh to shard the twin on. The
                 default is the smallest shape with more than one device on
                 both axes, so it exercises data- and model-parallel sharding
