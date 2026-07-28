@@ -216,6 +216,8 @@
     "kaggle://keras/llama3/keras/llama3_8b_en_int8/2",
     "kaggle://keras/llama3/keras/llama3_instruct_8b_en/5",
     "kaggle://keras/llama3/keras/llama3_instruct_8b_en_int8/2",
+    "kaggle://keras/magistral/keras/magistral_small_2506_en/1",
+    "kaggle://keras/magistral/keras/magistral_small_2507_en/1",
     "kaggle://keras/medgemma/keras/medgemma_1.5_instruct_4b/1",
     "kaggle://keras/medgemma/keras/medgemma_4b/1",
     "kaggle://keras/medgemma/keras/medgemma_instruct_27b/1",
