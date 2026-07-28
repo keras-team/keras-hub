@@ -1,4 +1,6 @@
 import os
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import tensorflow as tf
 from keras.src.saving import serialization_lib
@@ -171,6 +173,47 @@ class SentencePieceTokenizerTest(TestCase):
                 r"model archive.*Proto file: .*model\.spm",
             ):
                 tokenizer.set_proto(proto_path)
+
+    def test_init_with_swig_wrapper(self):
+        with patch(
+            "keras_hub.src.tokenizers.sentence_piece_tokenizer.spm"
+        ) as mock_spm:
+            # SWIG wrapper (sentencepiece <= 0.1.99)
+            processor = MagicMock()
+            processor.vocab_size.return_value = 7
+            processor.IdToPiece.return_value = ["a", "b", "c"]
+            processor.unk_id.return_value = 0
+            mock_spm.SentencePieceProcessor.return_value = processor
+
+            SentencePieceTokenizer(proto=self.proto)
+            processor.Init.assert_called_once()
+            mock_spm.SentencePieceProcessor.assert_called_with()
+
+    def test_init_with_pybind11_wrapper(self):
+        with patch(
+            "keras_hub.src.tokenizers.sentence_piece_tokenizer.spm"
+        ) as mock_spm:
+            # pybind11 wrapper (sentencepiece >= 0.2.0)
+            processor = MagicMock(
+                spec=["vocab_size", "IdToPiece", "unk_id", "Decode", "Encode"]
+            )
+            processor.vocab_size.return_value = 7
+            processor.IdToPiece.return_value = ["a", "b", "c"]
+            processor.unk_id.return_value = 0
+            mock_spm.SentencePieceProcessor.return_value = processor
+
+            SentencePieceTokenizer(proto=self.proto)
+
+            with open(self.proto, "rb") as f:
+                expected_proto = f.read()
+
+            mock_spm.SentencePieceProcessor.assert_called_with(
+                model_proto=expected_proto,
+                out_type=int,
+                add_bos=False,
+                add_eos=False,
+                alpha=1.0,
+            )
 
 
 class SentencePieceTokenizerTFTest(SentencePieceTokenizerTest):
