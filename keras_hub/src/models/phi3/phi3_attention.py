@@ -236,24 +236,19 @@ class Phi3Attention(keras.layers.Layer):
         hands the (unexpanded) K/V to the shared paged-attention bridge. The
         kernel handles grouped-query attention via ``num_kv_heads``.
 
-        Su-scaled presets get their rotary embedding built here rather than
-        by `Phi3SuScaledRotaryEmbedding`: that layer indexes positions as a
-        contiguous range and picks its short/long frequency factor from the
-        length of the current input, which under paged decode is one token
-        however far into the sequence it sits.
+        Su-scaled presets work the same way: their rotary layer reads the
+        absolute positions and picks its frequency factors from them, so a
+        token decoded past the pretraining length still gets long-context
+        frequencies.
         """
         positions = ops.reshape(vllm_context.positions, (-1, 1))
-        query = self.query_dense(hidden_states)
-        key = self.key_dense(hidden_states)
+        query = self.rotary_embedding_layer(
+            self.query_dense(hidden_states), positions=positions
+        )
+        key = self.rotary_embedding_layer(
+            self.key_dense(hidden_states), positions=positions
+        )
         value = self.value_dense(hidden_states)
-
-        if self.rope_scaling_type is None:
-            query = self.rotary_embedding_layer(query, positions=positions)
-            key = self.rotary_embedding_layer(key, positions=positions)
-        else:
-            cos, sin = self._compute_vllm_su_embedding(query, positions)
-            query = query * cos + self._rotate_half(query) * sin
-            key = key * cos + self._rotate_half(key) * sin
 
         attention_output = vllm_paged_attention(
             query,
@@ -266,50 +261,6 @@ class Phi3Attention(keras.layers.Layer):
         if cache is not None:
             return attention_output, cache
         return attention_output
-
-    def _compute_vllm_su_embedding(self, query, positions):
-        """Builds su-scaled cos/sin at vLLM's absolute token positions.
-
-        Mirrors `Phi3SuScaledRotaryEmbedding`, except the long-context
-        factor is chosen by how far into the sequence the positions sit
-        rather than by how many tokens this step carries.
-        """
-        rotary = self.rotary_embedding_layer
-        rotary_dim = ops.shape(query)[-1]
-        inverse_freq = rotary._get_inverse_freq(rotary_dim)
-        # Cast first: the context supplies integer positions, and mixing
-        # them with floats is an error on some backends.
-        positions = ops.cast(positions, "float32")
-        sequence_length = ops.max(positions) + 1.0
-        inverse_freq = ops.where(
-            sequence_length > rotary.pretraining_sequence_length,
-            ops.divide(
-                inverse_freq,
-                ops.convert_to_tensor(rotary.inverese_freq_long_factor),
-            ),
-            ops.divide(
-                inverse_freq,
-                ops.convert_to_tensor(rotary.inverese_freq_short_factor),
-            ),
-        )
-
-        freq = ops.einsum("bi,j->bij", positions, inverse_freq)
-        embedding = ops.stack((freq, freq), axis=-2)
-        embedding = ops.reshape(
-            embedding, (*ops.shape(freq)[:-1], ops.shape(freq)[-1] * 2)
-        )
-        # (tokens, seq, rotary_dim) -> broadcast over the head axis.
-        embedding = ops.expand_dims(embedding, axis=2)
-        scale = rotary.embedding_scaling_factor
-        cos = ops.cast(ops.cos(embedding) * scale, query.dtype)
-        sin = ops.cast(ops.sin(embedding) * scale, query.dtype)
-        return cos, sin
-
-    def _rotate_half(self, tensor):
-        """Rotates the halves of the last axis, as RoPE requires."""
-        x1, x2 = ops.split(tensor, 2, axis=-1)
-        half = ops.stack((-x2, x1), axis=-2)
-        return ops.reshape(half, ops.shape(tensor))
 
     def _compute_attention(self, query, key, value, attention_mask=None):
         if fused_attention_op_available():
