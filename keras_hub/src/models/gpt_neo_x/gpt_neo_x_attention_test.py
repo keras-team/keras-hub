@@ -23,9 +23,7 @@ class GPTNeoXAttentionTest(TestCase):
             mask = np.zeros((1, 1, length), dtype=bool)
             # The token being decoded sees the cache filled so far.
             mask[0, 0, : index + 1] = True
-            token = ops.convert_to_tensor(
-                np.array(inputs)[:, index : index + 1]
-            )
+            token = inputs[:, index : index + 1]
             output, cache = layer(
                 token,
                 attention_mask=ops.convert_to_tensor(mask),
