@@ -22,6 +22,8 @@ from absl import app
 from absl import flags
 from keras import ops
 from PIL import Image
+from transformers import AutoProcessor
+from transformers import DiffusionGemmaForBlockDiffusion
 
 import keras_hub
 
@@ -60,27 +62,28 @@ flags.DEFINE_bool(
 )
 
 
-def _gather_hf_data(hf_repo_id):
+def _precompute_hf_outputs(hf_repo_id):
     """Load HF model, run all HF-side computations, return a data dict."""
-    from transformers import AutoProcessor
-    from transformers import DiffusionGemmaForBlockDiffusion
 
-    print(f"-> Loading HF model from {hf_repo_id} …")
+    print(f"-> Loading HF model from {hf_repo_id} (this may take a while) ...")
     hf_model = DiffusionGemmaForBlockDiffusion.from_pretrained(
         hf_repo_id,
         device_map="cpu",
         torch_dtype=torch.float32,
     )
     hf_model.eval()
+    print("-> HF model loaded. Loading processor ...")
     processor = AutoProcessor.from_pretrained(hf_repo_id)
-    print("-> HF model loaded.")
+    print("-> HF processor loaded.")
 
     is_multimodal = (
         hasattr(hf_model.config, "vision_config")
         and hf_model.config.vision_config is not None
     )
 
-    # param_count = _count_hf_params(hf_model)
+    print("-> Counting HF model parameters ...", flush=True)
+    param_count = _count_hf_params(hf_model)
+    print(f"-> HF parameter count: {param_count:,}", flush=True)
 
     # Fixed all-zero canvas for deterministic verification.
     # Both text and image tests use the same canvas so HF and KH are compared
@@ -88,13 +91,16 @@ def _gather_hf_data(hf_repo_id):
     canvas_length = getattr(hf_model.config, "canvas_length", 256)
     fixed_canvas = torch.zeros(1, canvas_length, dtype=torch.long)
 
+    print("-> Running HF text verification ...", flush=True)
     text_fwd = _hf_forward(
         hf_model, processor, PROMPT_TEXT, decoder_input_ids=fixed_canvas
     )
+    print("-> HF text verification complete.", flush=True)
 
     image_data = None
     if is_multimodal:
         try:
+            print("-> Running HF image verification ...", flush=True)
             raw_image = _load_test_image()
             img_fwd = _hf_forward(
                 hf_model,
@@ -112,15 +118,17 @@ def _gather_hf_data(hf_repo_id):
                 "generated_text": img_fwd["generated_text"],
                 "raw_image": raw_image,
             }
+            print("-> HF image verification complete.", flush=True)
         except Exception as e:
             print(f"⚠️  Image HF forward skipped: {e}")
 
+    print("-> Releasing HF model memory ...", flush=True)
     del hf_model, processor
     gc.collect()
     print("-> HF model freed.")
 
     return {
-        # "param_count": param_count,
+        "param_count": param_count,
         "canvas_token_ids": np.zeros((1, canvas_length), dtype=np.int32),
         "text_logits": text_fwd["logits"],
         "text_input_ids": text_fwd["input_ids"],
@@ -131,9 +139,12 @@ def _gather_hf_data(hf_repo_id):
 
 
 def _load_test_image():
+    print(f"   Downloading verification image from {IMAGE_URL} ...", flush=True)
     response = requests.get(IMAGE_URL, timeout=30)
     response.raise_for_status()
-    return Image.open(BytesIO(response.content)).convert("RGB")
+    image = Image.open(BytesIO(response.content)).convert("RGB")
+    print("   Verification image downloaded.", flush=True)
+    return image
 
 
 @contextlib.contextmanager
@@ -162,6 +173,8 @@ def _hf_forward(
     ``hf_inputs`` — matching the DiffusionGemma model-card usage — and returns
     the decoded output text alongside the logits.
     """
+    modality = "image" if raw_image is not None else "text"
+    print(f"   Preprocessing HF {modality} inputs ...", flush=True)
     proc_kwargs = {"text": prompt, "return_tensors": "pt"}
     if raw_image is not None:
         proc_kwargs["images"] = raw_image
@@ -171,8 +184,10 @@ def _hf_forward(
     if decoder_input_ids is not None:
         forward_inputs["decoder_input_ids"] = decoder_input_ids.cpu()
 
+    print(f"   Running HF {modality} forward pass ...", flush=True)
     with _no_grad():
         hf_out = hf_model(**forward_inputs, output_hidden_states=False)
+    print(f"   HF {modality} forward pass complete.", flush=True)
 
     logits = hf_out.logits.detach().cpu().float().numpy()
     input_ids = hf_inputs["input_ids"].numpy()
@@ -197,11 +212,16 @@ def _hf_forward(
         generated_text = "(skipped)"
     else:
         try:
+            print(
+                f"   Running HF {modality} generation (up to 512 tokens) ...",
+                flush=True,
+            )
             with _no_grad():
                 output = hf_model.generate(**hf_inputs, max_new_tokens=512)
             generated_text = processor.decode(
                 output[0], skip_special_tokens=True
             )
+            print(f"   HF {modality} generation complete.", flush=True)
         except Exception as e:
             print(f"⚠️  HF .generate() failed ({e}).")
 
@@ -261,10 +281,12 @@ def _kh_forward(
 
     with torch.no_grad():
         # Step 1: encoder — builds KV cache over the prompt.
+        print("   Building KerasHub encoder KV cache ...", flush=True)
         encoder_kv_cache, prompt_length = diffusion_lm._encode_prompt(inputs)
         encoder_kv_cache = diffusion_lm._prepare_encoder_cache_for_decoding(
             encoder_kv_cache
         )
+        print("   KerasHub encoder pass complete.", flush=True)
 
         # Step 2: canvas embeddings (first step → self-conditioning is no-op).
         canvas_embeds = diffusion_lm._prepare_canvas_embeds(
@@ -272,6 +294,7 @@ def _kh_forward(
         )
 
         # Step 3: decoder — one bidirectional denoising step.
+        print("   Running KerasHub canvas decoder step ...", flush=True)
         prompt_padding_mask = inputs.get("padding_mask", None)
         hidden = diffusion_lm._decode_canvas_step(
             canvas_embeds,
@@ -282,6 +305,7 @@ def _kh_forward(
 
         # Step 4: project to vocabulary logits with soft-cap.
         logits = diffusion_lm._canvas_logits(hidden)
+        print("   KerasHub decoder step complete.", flush=True)
 
     return ops.convert_to_numpy(logits).astype(np.float32)
 
@@ -340,12 +364,6 @@ def _test_generate(
     generate_kwargs = {}
     if max_length is not None:
         generate_kwargs["max_length"] = max_length
-
-    # if hasattr(diffusion_lm, "sampler") and hasattr(
-    #     diffusion_lm.sampler, "reset"
-    # ):
-    #     diffusion_lm.sampler.reset()
-
     try:
         if media_kwargs:
             kh_inputs = {
@@ -357,34 +375,19 @@ def _test_generate(
             }
         else:
             kh_inputs = prompt
+        print(f"-> Running KerasHub {label} generation ...", flush=True)
         kh_output = diffusion_lm.generate(
             kh_inputs,
             **generate_kwargs,
         )
+        print(f"-> KerasHub {label} generation complete.", flush=True)
     except Exception as e:
         print(f"⚠️  [{label}] KH .generate() failed: {e}")
         return
-    print("KH Output \n", kh_output)
-    kh_text = _clean_text(kh_output)
-    # hf_text = _clean_text(hf_generated_text)
+    kh_text = kh_output[0] if isinstance(kh_output, list) else kh_output
 
-    # print(f"\n[{label}] HF generate output:\n  {hf_text}")
+    print(f"\n[{label}] HF generate output:\n  {hf_generated_text}")
     print(f"[{label}] KH generate output:\n  {kh_text}")
-
-
-def _clean_text(text):
-    """Safely unwrap numpy/tensor arrays/bytes to a plain Python string."""
-    if text is None:
-        return ""
-    if isinstance(text, (list, tuple, np.ndarray)) and len(text) > 0:
-        text = text[0]
-    if hasattr(text, "item"):
-        text = text.item()
-    if isinstance(text, bytes):
-        text = text.decode("utf-8", errors="replace")
-    if not isinstance(text, str):
-        text = str(text)
-    return text
 
 
 def _build_image_kh_inputs(img_data, image_placeholder_id):
@@ -454,20 +457,20 @@ def _test_token_ids(label, preprocessor, prompt, hf_token_ids, **media_kwargs):
     print(f"✓ [{label}] Token IDs match.")
 
 
-def _verify(diffusion_lm, hf_data, hf_preset):
+def _verify(diffusion_lm, hf_data):
     """Compare KerasHub model against pre-computed HF outputs."""
     backbone = diffusion_lm.backbone
 
     # --- Parameter count ---
     print("\n--- Parameter Count ---")
-    hf_params = hf_data.get("param_count")
-    if hf_params is not None:
-        unique_weights = {id(w): w for w in backbone.trainable_weights}.values()
-        kh_params = sum(w.numpy().size for w in unique_weights)
-        print(f"   HF params: {hf_params:,}")
-        print(f"   KH params: {kh_params:,}")
-        np.testing.assert_equal(kh_params, hf_params)
-        print(f"✅ Parameter counts match: {kh_params:,}")
+    hf_params = hf_data["param_count"]
+    print("   Counting KerasHub backbone parameters ...", flush=True)
+    unique_weights = {id(w): w for w in backbone.trainable_weights}.values()
+    kh_params = sum(int(np.prod(weight.shape)) for weight in unique_weights)
+    print(f"   HF params: {hf_params:,}")
+    print(f"   KH params: {kh_params:,}")
+    np.testing.assert_equal(kh_params, hf_params)
+    print(f"✅ Parameter counts match: {kh_params:,}")
 
     canvas_token_ids = hf_data["canvas_token_ids"]
 
@@ -560,19 +563,9 @@ def _verify(diffusion_lm, hf_data, hf_preset):
                     img["logits"],
                 )
             else:
-                # Fallback when pixel values or placeholder ID are unavailable.
-                token_ids = img["input_ids"].astype(np.int32)
-                padding_mask = img["attention_mask"].astype(np.int32)
-                kh_logits = _kh_forward(
-                    diffusion_lm,
-                    token_ids,
-                    padding_mask,
-                    canvas_token_ids=canvas_token_ids,
-                )
-                _test_numerics(
-                    "image (text-only encoder)",
-                    kh_logits,
-                    img["logits"],
+                print(
+                    "⚠️  Image numerics check skipped: pixel values or image "
+                    "placeholder ID unavailable."
                 )
         except Exception as e:
             print(f"⚠️  Image numerics check skipped: {e}")
@@ -582,8 +575,6 @@ def _verify(diffusion_lm, hf_data, hf_preset):
         print("\n--- Generation Comparison: SKIPPED (--skip_generate) ---")
     else:
         print("\n--- Generation Comparison ---")
-        # `.generate()` requires a sampler, which is installed by `.compile()`.
-        # The default `entropy_bound` sampler matches training-time behaviour.
         if getattr(diffusion_lm, "sampler", None) is None:
             diffusion_lm.compile(sampler="entropy_bound")
 
@@ -610,7 +601,7 @@ def _verify(diffusion_lm, hf_data, hf_preset):
 
 
 def _count_hf_params(hf_model):
-    return sum(p.numel() for p in hf_model.parameters())
+    return sum(parameter.numel() for parameter in hf_model.parameters())
 
 
 def _save_preset(hf_preset, preset_name, save_dtype, diffusion_lm=None):
@@ -619,11 +610,18 @@ def _save_preset(hf_preset, preset_name, save_dtype, diffusion_lm=None):
     print(f"\n-> Saving model in {save_dtype} to {save_path} …")
 
     if save_dtype == "bfloat16":
+        print(
+            "-> Reloading KerasHub model in bfloat16 "
+            "(this may take a while) ...",
+            flush=True,
+        )
         diffusion_lm_bf16 = keras_hub.models.Gemma4BlockDiffusionLM.from_preset(
             hf_preset, dtype="bfloat16"
         )
+        print("-> bfloat16 model loaded. Writing preset files ...", flush=True)
         diffusion_lm_bf16.save_to_preset(save_path)
     else:
+        print("-> Writing preset files ...", flush=True)
         diffusion_lm.save_to_preset(save_path)
 
     print(f"-> Preset saved to {save_path}")
@@ -640,14 +638,19 @@ def main(_):
     hf_repo_id = PRESET_MAP[preset_name]
     hf_preset = f"hf://{hf_repo_id}"
 
-    hf_data = _gather_hf_data(hf_repo_id)
-    print(f"-> Loading Gemma4BlockDiffusionLM from {hf_preset} …")
+    hf_data = _precompute_hf_outputs(hf_repo_id)
+    print(
+        f"-> Loading Gemma4BlockDiffusionLM from {hf_preset} "
+        "(this may take a while) ...",
+        flush=True,
+    )
     diffusion_lm = keras_hub.models.Gemma4BlockDiffusionLM.from_preset(
         hf_preset, dtype="float32"
     )
     print("✓ All weights loaded")
-    _verify(diffusion_lm, hf_data, hf_preset)
+    _verify(diffusion_lm, hf_data)
 
+    print("-> Releasing verification data ...", flush=True)
     del hf_data
     gc.collect()
 

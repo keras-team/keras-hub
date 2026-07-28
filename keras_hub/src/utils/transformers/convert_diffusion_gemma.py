@@ -4,6 +4,7 @@ from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.models.gemma4.gemma4_vision_encoder import (
     Gemma4VisionEncoder,
 )
+from keras_hub.src.samplers.entropy_bound_sampler import EntropyBoundSampler
 from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import load_json
 from keras_hub.src.utils.transformers.convert_gemma4 import (
@@ -315,12 +316,31 @@ def load_task_config(preset, transformers_config):
     gen_cfg = load_json(preset, "generation_config.json")
     kwargs = {}
 
+    sampler_config = gen_cfg.get("sampler_config", {})
+    sampler_keys = {
+        "confidence_threshold",
+        "sampler_config",
+        "stability_threshold",
+    }
+    if sampler_keys.intersection(gen_cfg):
+        kwargs["sampler"] = EntropyBoundSampler(
+            entropy_bound=sampler_config.get("entropy_bound", 0.1),
+            confidence_threshold=gen_cfg.get("confidence_threshold", 0.005),
+            stability_threshold=gen_cfg.get("stability_threshold", 1),
+        )
     if "max_denoising_steps" in gen_cfg:
         kwargs["max_denoising_steps"] = gen_cfg["max_denoising_steps"]
     if "t_min" in gen_cfg:
         kwargs["t_min"] = gen_cfg["t_min"]
     if "t_max" in gen_cfg:
         kwargs["t_max"] = gen_cfg["t_max"]
+    if "eos_token_id" in gen_cfg:
+        stop_token_ids = gen_cfg["eos_token_id"]
+        if not isinstance(stop_token_ids, list):
+            stop_token_ids = [stop_token_ids]
+        kwargs["stop_token_ids"] = tuple(stop_token_ids)
+    if "pad_token_id" in gen_cfg:
+        kwargs["pad_token_id"] = gen_cfg["pad_token_id"]
     return kwargs
 
 
