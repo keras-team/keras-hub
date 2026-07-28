@@ -1,15 +1,10 @@
 """
 Convert HuggingFace mixedbread-ai mxbai-embed checkpoints to KerasHub format.
 
-Supports four presets across two architectures:
-
-**BERT-based** (BertTextEmbedder):
+Supports three BERT-based presets (BertTextEmbedder):
 - mxbai-embed-large-v1   (CLS pooling, no normalization)
 - mxbai-embed-2d-large-v1 (CLS pooling, no normalization)
 - mxbai-embed-xsmall-v1  (mean pooling, no normalization)
-
-**XLM-RoBERTa-based** (XLMRobertaTextEmbedder):
-- deepset-mxbai-embed-de-large-v1 (mean pooling, L2 normalization)
 
 Setup:
 ```shell
@@ -37,9 +32,6 @@ from keras import ops
 from sentence_transformers import SentenceTransformer
 
 from keras_hub.src.models.bert.bert_text_embedder import BertTextEmbedder
-from keras_hub.src.models.xlm_roberta.xlm_roberta_text_embedder import (
-    XLMRobertaTextEmbedder,
-)
 
 FLAGS = flags.FLAGS
 
@@ -50,24 +42,14 @@ flags.DEFINE_string(
 )
 
 # BERT-based presets.
-BERT_PRESET_MAP = {
+PRESET_MAP = {
     "mxbai_embed_large_v1_en": "mixedbread-ai/mxbai-embed-large-v1",
     "mxbai_embed_2d_large_v1_en": "mixedbread-ai/mxbai-embed-2d-large-v1",
     "mxbai_embed_xsmall_v1_en": "mixedbread-ai/mxbai-embed-xsmall-v1",
 }
 
-# XLM-RoBERTa-based presets.
-XLM_ROBERTA_PRESET_MAP = {
-    "deepset_mxbai_embed_de_large_v1": (
-        "mixedbread-ai/deepset-mxbai-embed-de-large-v1"
-    ),
-}
 
-# Combined map for --preset lookup.
-PRESET_MAP = {**BERT_PRESET_MAP, **XLM_ROBERTA_PRESET_MAP}
-
-
-def validate_output(keras_model, hf_model_id, is_xlm_roberta=False):
+def validate_output(keras_model, hf_model_id):
     """Print embedding diagnostics for manual review.
 
     Prints parameter count, embedding statistics (mean logits),
@@ -77,7 +59,6 @@ def validate_output(keras_model, hf_model_id, is_xlm_roberta=False):
     Args:
         keras_model: The converted KerasHub text embedder.
         hf_model_id: The HuggingFace model ID to compare against.
-        is_xlm_roberta: Whether this is an XLM-RoBERTa model.
     """
     print("\n" + "=" * 60)
     print("NUMERICAL VERIFICATION")
@@ -95,20 +76,7 @@ def validate_output(keras_model, hf_model_id, is_xlm_roberta=False):
     keras_params = keras_model.count_params()
     hf_modules = list(hf_model._modules.values())
     hf_transformer = hf_modules[0]
-    if is_xlm_roberta:
-        hf_params = sum(
-            p.numel()
-            for name, p in hf_transformer.auto_model.named_parameters()
-            if not name.startswith("pooler.")
-            and name != "embeddings.token_type_embeddings.weight"
-        )
-        # Subtract the 2 reserved XLM-R position embedding padding rows.
-        pos_emb = hf_transformer.auto_model.embeddings.position_embeddings
-        hf_params -= 2 * pos_emb.weight.shape[1]
-    else:
-        hf_params = sum(
-            p.numel() for p in hf_transformer.auto_model.parameters()
-        )
+    hf_params = sum(p.numel() for p in hf_transformer.auto_model.parameters())
 
     print(f"KerasHub params:    {keras_params:,}")
     print(f"HuggingFace params: {hf_params:,}")
@@ -228,26 +196,21 @@ def main(_):
         )
 
     hf_model_id = PRESET_MAP[preset]
-    is_xlm_roberta = preset in XLM_ROBERTA_PRESET_MAP
 
     print(f"\n{'=' * 60}")
     print(f"Converting: {hf_model_id} -> {preset}")
-    arch = "XLM-RoBERTa" if is_xlm_roberta else "BERT"
-    print(f"Architecture: {arch}")
+    print("Architecture: BERT")
     print(f"{'=' * 60}\n")
 
     # Load and convert using the existing KerasHub HF converters.
     hf_uri = f"hf://{hf_model_id}"
     print(f"Loading from preset: {hf_uri}")
-    if is_xlm_roberta:
-        embedder = XLMRobertaTextEmbedder.from_preset(hf_uri)
-    else:
-        embedder = BertTextEmbedder.from_preset(hf_uri)
+    embedder = BertTextEmbedder.from_preset(hf_uri)
 
     print(f"Backbone parameters: {embedder.backbone.count_params():,}")
 
     # Validate embeddings for manual review.
-    validate_output(embedder, hf_model_id, is_xlm_roberta)
+    validate_output(embedder, hf_model_id)
 
     # Always save the preset.
     print(f"\nSaving to preset: ./{preset}")
