@@ -266,7 +266,16 @@ class GPTNeoXAttention(keras.layers.Layer):
             key[..., self.rotary_dim :],
         )
 
-        query_rot = self.rotary_embedding_layer(query_rot)
+        # The query holds only the tokens being decoded now, so it has to
+        # be rotated at their absolute positions. The cache stores keys
+        # unrotated and `key_rot` spans it from the start, so keys keep
+        # rotating from position 0.
+        start_index = (
+            cache_update_index if cache_update_index is not None else 0
+        )
+        query_rot = self.rotary_embedding_layer(
+            query_rot, start_index=start_index
+        )
         key_rot = self.rotary_embedding_layer(key_rot)
 
         query = ops.concatenate((query_rot, query_pass), axis=-1)
