@@ -1,5 +1,7 @@
 import os
+from unittest.mock import patch
 
+import keras
 import numpy as np
 import pytest
 from absl.testing import parameterized
@@ -8,6 +10,9 @@ from keras import ops
 from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.models.gemma4.gemma4_block_diffusion_lm import (
     Gemma4BlockDiffusionLM,
+)
+from keras_hub.src.models.gemma4.gemma4_block_diffusion_lm_layers import (
+    Gemma4BlockDiffusionSelfConditioning,
 )
 from keras_hub.src.models.gemma4.gemma4_block_diffusion_lm_preprocessor import (
     Gemma4BlockDiffusionLMPreprocessor,
@@ -100,10 +105,136 @@ class Gemma4BlockDiffusionLMTest(TestCase, parameterized.TestCase):
             "token_ids": ops.expand_dims(processed["token_ids"], axis=0),
             "padding_mask": ops.expand_dims(processed["padding_mask"], axis=0),
         }
-        output = model.generate(inputs)
+        output = model.generate(inputs, stop_token_ids=None)
         canvas = np.array(output)
         # Shape: (1, canvas_length) or (canvas_length,) after scalar squeeze.
         self.assertEqual(canvas.shape[-1], self.preprocessor.canvas_length)
+
+    @parameterized.parameters(2, 4, 6, 8)
+    def test_generate_respects_max_length(self, max_length):
+        model = Gemma4BlockDiffusionLM(
+            backbone=self.backbone,
+            preprocessor=None,
+            canvas_length=self.preprocessor.canvas_length,
+        )
+        model.compile(sampler=self.sampler, run_eagerly=True)
+        processed = self.preprocessor.generate_preprocess("the quick brown fox")
+        inputs = {
+            "token_ids": ops.expand_dims(processed["token_ids"], axis=0),
+            "padding_mask": ops.expand_dims(processed["padding_mask"], axis=0),
+        }
+
+        output = model.generate(
+            inputs, max_length=max_length, stop_token_ids=None
+        )
+
+        self.assertEqual(np.array(output).shape, (1, max_length))
+
+    def test_generate_rejects_non_positive_max_length(self):
+        model = Gemma4BlockDiffusionLM(**self.init_kwargs)
+        model.compile(sampler=self.sampler)
+
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            model.generate("the quick brown fox", max_length=0)
+
+    def test_generate_step_stops_and_pads_each_sequence(self):
+        model = Gemma4BlockDiffusionLM(
+            backbone=self.backbone,
+            preprocessor=None,
+            canvas_length=4,
+            stop_token_ids=(1, 6),
+            pad_token_id=0,
+        )
+        inputs = {
+            "token_ids": ops.ones((2, 4), dtype="int32"),
+            "padding_mask": ops.ones((2, 4), dtype="bool"),
+        }
+        canvases = [
+            ops.array([[4, 6, 7, 8], [4, 5, 7, 8]], dtype="int32"),
+            ops.array([[9, 10, 11, 12], [9, 1, 11, 12]], dtype="int32"),
+        ]
+
+        with (
+            patch.object(model, "_encode_prompt", return_value=(None, 4)),
+            patch.object(model, "_encode_canvas_as_context", return_value=None),
+            patch.object(EntropyBoundSampler, "__call__", side_effect=canvases),
+        ):
+            output = model.generate_step(
+                inputs,
+                max_length=8,
+                stop_token_ids=model.stop_token_ids,
+            )
+
+        self.assertAllEqual(
+            output["token_ids"],
+            [[4, 6, 0, 0, 0, 0, 0, 0], [4, 5, 7, 8, 9, 1, 0, 0]],
+        )
+        self.assertAllEqual(
+            output["padding_mask"],
+            [
+                [True, True, False, False, False, False, False, False],
+                [True, True, True, True, True, True, False, False],
+            ],
+        )
+
+    def test_self_conditioning_matmul_uses_embedding_dtype(self):
+        layer = Gemma4BlockDiffusionSelfConditioning(
+            hidden_dim=4,
+            intermediate_dim=8,
+            dtype="float16",
+        )
+        canvas_embeds = ops.ones((1, 2, 4), dtype="float16")
+        prev_logits = ops.array(
+            [
+                [
+                    [0.10001, 0.20002, 0.30003, 0.40004, 0.50005, 0.60006],
+                    [0.70007, 0.80008, 0.90009, 1.0001, 1.1001, 1.2001],
+                ]
+            ],
+            dtype="float32",
+        )
+        embedding_weights = ops.ones((6, 4), dtype="float16")
+        embed_scale = ops.array(2.0, dtype="float16")
+        operand_dtypes = []
+        softmax_inputs = []
+        original_matmul = ops.matmul
+        original_softmax = ops.softmax
+
+        def record_matmul(x, y):
+            operand_dtypes.append(
+                (
+                    keras.backend.standardize_dtype(x.dtype),
+                    keras.backend.standardize_dtype(y.dtype),
+                )
+            )
+            return original_matmul(x, y)
+
+        def record_softmax(x, axis=-1):
+            softmax_inputs.append(ops.convert_to_numpy(x))
+            return original_softmax(x, axis=axis)
+
+        with (
+            patch(
+                "keras_hub.src.models.gemma4."
+                "gemma4_block_diffusion_lm_layers.ops.matmul",
+                side_effect=record_matmul,
+            ),
+            patch(
+                "keras_hub.src.models.gemma4."
+                "gemma4_block_diffusion_lm_layers.ops.softmax",
+                side_effect=record_softmax,
+            ),
+        ):
+            layer(
+                canvas_embeds,
+                prev_logits,
+                embedding_weights,
+                embed_scale,
+            )
+
+        self.assertEqual(operand_dtypes, [("float16", "float16")])
+        expected_logits = ops.cast(ops.cast(prev_logits, "float16"), "float32")
+        self.assertAllEqual(softmax_inputs[0], expected_logits)
 
     def test_generate_compilation_is_cached(self):
         model = Gemma4BlockDiffusionLM(**self.init_kwargs)
@@ -132,7 +263,12 @@ class Gemma4BlockDiffusionLMTest(TestCase, parameterized.TestCase):
         logits = ops.zeros(
             (1, 4, self.tokenizer.vocabulary_size()), dtype="float32"
         )
-        sampled_canvas, _, _ = model.sampler(canvas, logits, step=0)
+        sampled_canvas = model.sampler(
+            next=lambda canvas, prev_logits, step: logits,
+            canvas=canvas,
+            max_steps=1,
+            model=model,
+        )
 
         self.assertEqual(sampled_canvas.shape, canvas.shape)
 

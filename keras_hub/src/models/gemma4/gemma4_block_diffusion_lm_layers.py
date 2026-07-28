@@ -113,11 +113,12 @@ class Gemma4BlockDiffusionSelfConditioning(keras.layers.Layer):
             return self.post_norm(canvas_embeds)
 
         # Soft token embeddings: weighted combination of embedding rows.
+        prev_logits = ops.cast(prev_logits, embed_tokens_weight.dtype)
         probs = ops.softmax(ops.cast(prev_logits, "float32"), axis=-1)
-        embed_w = ops.cast(embed_tokens_weight, "float32")
+        probs = ops.cast(probs, embed_tokens_weight.dtype)
         # (B, canvas_length, vocab_size) x (vocab_size, hidden_dim)
-        soft_embeds = ops.matmul(probs, embed_w)
-        soft_embeds = soft_embeds * ops.cast(embed_scale, "float32")
+        soft_embeds = ops.matmul(probs, embed_tokens_weight)
+        soft_embeds = soft_embeds * ops.cast(embed_scale, soft_embeds.dtype)
         soft_embeds = ops.cast(soft_embeds, self.compute_dtype)
 
         x = self.pre_norm(soft_embeds)

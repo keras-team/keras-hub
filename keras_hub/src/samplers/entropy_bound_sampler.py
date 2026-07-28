@@ -30,18 +30,16 @@ class EntropyBoundSampler(Sampler):
             Defaults to `None`.
 
     Call arguments:
-        canvas: int tensor of shape `(B, canvas_length)`. Current canvas
-            token assignments (may contain noise from the previous step).
-        logits: float tensor of shape `(B, canvas_length, vocab_size)`.
-            Raw (temperature-scaled) logits from the decoder.
-        step: int scalar. Current denoising step index (0-based).
+        next: Callable accepting `(canvas, prev_logits, step)` and returning
+            logits for the current denoising step.
+        canvas: int tensor of shape `(B, canvas_length)` containing the initial
+            random token assignments.
+        max_steps: int. Maximum number of denoising steps.
+        model: Optional Keras model used by JAX stateless scopes.
 
     Returns:
-        A tuple `(new_canvas, stop, argmax_canvas)` where `new_canvas` is an
-        int tensor of shape `(B, canvas_length)`, `stop` is a bool tensor of
-        shape `(B,)` indicating per-row whether the adaptive stopping criterion
-        is met, and `argmax_canvas` is an int tensor of shape
-        `(B, canvas_length)` with the greedy argmax token at each position.
+        An int tensor of shape `(B, canvas_length)` containing the final greedy
+        token assignment.
 
     Examples:
     ```python
@@ -72,23 +70,16 @@ class EntropyBoundSampler(Sampler):
         self.stability_threshold = stability_threshold
         self.seed = seed
         self.seed_generator = random.SeedGenerator(seed)
-        # Both are set lazily on first call to _ensure_prev_argmax.
-        self._prev_argmax = None
-        self._stable_steps = None  # list of B ints, one counter per row
+        self._state = None
 
-    def _ensure_prev_argmax(self, shape, batch_size):
-        """Lazily initialise prev_argmax and per-row stable counters."""
-        if self._prev_argmax is None:
-            self._prev_argmax = keras.Variable(
-                initializer=ops.zeros(shape, dtype="int32"),
-                shape=shape,
-                dtype="int32",
-                trainable=False,
-                name="prev_argmax",
-            )
-            self._stable_steps = [0] * batch_size
+    def initialize_state(self, canvas):
+        """Create tensor state for adaptive stopping."""
+        previous_argmax = ops.zeros_like(canvas, dtype="int32")
+        stable_steps = ops.zeros_like(canvas[..., 0], dtype="int32")
+        has_previous = ops.convert_to_tensor(False, dtype="bool")
+        return previous_argmax, stable_steps, has_previous
 
-    def __call__(self, canvas, logits, step):
+    def _sample_step(self, canvas, logits, step, state):
         vocabulary_size = logits.shape[-1]
         if vocabulary_size is None:
             raise ValueError(
@@ -141,37 +132,119 @@ class EntropyBoundSampler(Sampler):
         mean_H = ops.mean(H, axis=-1)
         confidence_met = mean_H < self.confidence_threshold
 
-        batch_size_int = int(ops.convert_to_numpy(ops.shape(canvas)[0]))
-        self._ensure_prev_argmax(ops.shape(cur_argmax), batch_size_int)
-
-        # Stability: per-row argmax must be unchanged for `stability_threshold`
-        # consecutive steps.  On step 0 there is no prior state; reset counters.
-        if step > 0:
-            row_unchanged = ops.convert_to_numpy(
-                ops.all(ops.equal(cur_argmax, self._prev_argmax), axis=-1)
-            )  # numpy (B,) bool
-            self._stable_steps = [
-                (sc + 1 if bool(u) else 0)
-                for sc, u in zip(self._stable_steps, row_unchanged)
-            ]
-            stability_met = ops.convert_to_tensor(
-                [sc >= self.stability_threshold for sc in self._stable_steps],
-                dtype="bool",
-            )
-        else:
-            self._stable_steps = [0] * batch_size_int
-            stability_met = ops.zeros((batch_size_int,), dtype="bool")
+        previous_argmax, stable_steps, has_previous = state
+        has_previous = ops.logical_and(has_previous, ops.not_equal(step, 0))
+        row_unchanged = ops.all(ops.equal(cur_argmax, previous_argmax), axis=-1)
+        stable_steps = ops.where(
+            ops.logical_and(has_previous, row_unchanged),
+            stable_steps + 1,
+            ops.zeros_like(stable_steps),
+        )
+        stability_met = ops.logical_and(
+            has_previous, stable_steps >= self.stability_threshold
+        )
 
         # Per-row stop: shape (B,) bool
         stop = confidence_met & stability_met
 
-        self._prev_argmax.assign(cur_argmax)
-        return new_canvas, stop, cur_argmax
+        state = (
+            cur_argmax,
+            stable_steps,
+            ops.convert_to_tensor(True, dtype="bool"),
+        )
+        return new_canvas, stop, cur_argmax, state
+
+    def __call__(self, next, canvas, max_steps, model=None):
+        state = self.initialize_state(canvas)
+        logits = next(canvas, None, ops.convert_to_tensor(0, dtype="int32"))
+        canvas, stop, argmax_canvas, state = self._sample_step(
+            canvas, logits, 0, state
+        )
+
+        def cond(
+            step,
+            canvas,
+            prev_logits,
+            stop,
+            argmax_canvas,
+            previous_argmax,
+            stable_steps,
+            has_previous,
+        ):
+            return ops.logical_and(
+                step < max_steps,
+                ops.logical_not(ops.all(stop)),
+            )
+
+        def body(
+            step,
+            canvas,
+            prev_logits,
+            stop,
+            argmax_canvas,
+            previous_argmax,
+            stable_steps,
+            has_previous,
+        ):
+            finished_denoising = stop
+            logits = next(canvas, prev_logits, step)
+            state = previous_argmax, stable_steps, has_previous
+            next_canvas, next_stop, next_argmax_canvas, next_state = (
+                self._sample_step(canvas, logits, step, state)
+            )
+            finished_rows = ops.expand_dims(finished_denoising, axis=-1)
+            canvas = ops.where(finished_rows, canvas, next_canvas)
+            argmax_canvas = ops.where(
+                finished_rows, argmax_canvas, next_argmax_canvas
+            )
+            logits = ops.where(
+                ops.expand_dims(finished_rows, axis=-1),
+                prev_logits,
+                logits,
+            )
+
+            next_previous_argmax, next_stable_steps, next_has_previous = (
+                next_state
+            )
+            previous_argmax = ops.where(
+                finished_rows, previous_argmax, next_previous_argmax
+            )
+            stable_steps = ops.where(
+                finished_denoising, stable_steps, next_stable_steps
+            )
+            has_previous = ops.logical_or(has_previous, next_has_previous)
+            stop = ops.logical_or(finished_denoising, next_stop)
+            return (
+                step + 1,
+                canvas,
+                logits,
+                stop,
+                argmax_canvas,
+                previous_argmax,
+                stable_steps,
+                has_previous,
+            )
+
+        loop_vars = (
+            ops.convert_to_tensor(1, dtype="int32"),
+            canvas,
+            logits,
+            stop,
+            argmax_canvas,
+            *state,
+        )
+        _, _, _, _, argmax_canvas, _, _, _ = self.run_loop(
+            cond=cond,
+            body=body,
+            loop_vars=loop_vars,
+            maximum_iterations=max_steps - 1,
+            model=model,
+        )
+        return argmax_canvas
 
     def reset(self):
         """Reset per-call state between independent generate() calls."""
-        self._prev_argmax = None
-        self._stable_steps = None
+        self._state = None
 
     def get_config(self):
         config = super().get_config()

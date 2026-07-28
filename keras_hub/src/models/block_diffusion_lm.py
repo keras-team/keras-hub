@@ -1,5 +1,4 @@
 import itertools
-from functools import partial
 
 import keras
 from keras import ops
@@ -17,49 +16,36 @@ except ImportError:
 
 @keras_hub_export("keras_hub.models.BlockDiffusionLM")
 class BlockDiffusionLM(Task):
-    """Abstract base class for discrete block-diffusion language models.
+    """Base class for discrete block-diffusion language modeling tasks.
 
-    `DiffusionLM` tasks wrap a backbone and preprocessor to implement the full
-    outer denoising loop used in discrete block-diffusion generation.  Rather
-    than predicting one token at a time, the model iteratively denoises an
-    entire canvas of tokens in parallel.
+    `BlockDiffusionLM` tasks wrap a `keras_hub.models.Backbone` and a
+    `keras_hub.models.Preprocessor` to create a model that can be used for
+    block-diffusion generation and generative fine-tuning.
 
-    Subclasses must implement four hook methods:
-    - `_encode_prompt`: encode prompt tokens, return (encoder_cache, N).
-    - `_prepare_canvas_embeds`: embed current canvas tokens, optionally
-      applying self-conditioning from previous step logits.
-    - `_decode_canvas_step`: run one decoder forward pass over the canvas.
-    - `_canvas_logits`: project decoder hidden states to vocabulary logits.
+    `BlockDiffusionLM` tasks provide an additional, high-level `generate()`
+    function which iteratively denoises blocks of tokens in parallel. The
+    `compile()` method of all `BlockDiffusionLM` classes contains an additional
+    `sampler` argument, which can be used to pass a
+    `keras_hub.samplers.Sampler` to control token commitment and re-noising
+    during generation.
 
-    The generation loop lives in `generate_step`, which is JIT-compiled via
-    `make_generate_function` following the same backend-dispatch pattern used
-    by `CausalLM`.
+    When calling `fit()`, tokenized inputs are trained with shifted token
+    labels. A task preprocessor may use sample weights to restrict the loss to
+    response tokens for supervised fine-tuning.
 
-    Args:
-        canvas_length: int. Number of tokens in the denoising canvas.
-            Defaults to `256`.
-        max_denoising_steps: int. Maximum number of denoising iterations per
-            canvas block. Defaults to `48`.
-        t_min: float. Minimum temperature (applied at the last step).
-            Defaults to `0.4`.
-        t_max: float. Maximum temperature (applied at the first step).
-            Defaults to `0.8`.
+    All `BlockDiffusionLM` tasks include a `from_preset()` constructor which
+    can be used to load a pre-trained config and weights.
+
+    Example:
+    ```python
+    # Load a DiffusionGemma model with pre-trained weights.
+    diffusion_lm = keras_hub.models.BlockDiffusionLM.from_preset(
+        "diffusion_gemma_26b_a4b_it",
+    )
+    diffusion_lm.compile(sampler="entropy_bound")
+    diffusion_lm.generate("Keras is a")
+    ```
     """
-
-    def __init__(
-        self,
-        *args,
-        canvas_length=256,
-        max_denoising_steps=48,
-        t_min=0.4,
-        t_max=0.8,
-        **kwargs,
-    ):
-        super().__init__(*args, **kwargs)
-        self.canvas_length = canvas_length
-        self.max_denoising_steps = max_denoising_steps
-        self.t_min = t_min
-        self.t_max = t_max
 
     def compile(
         self,
@@ -107,293 +93,128 @@ class BlockDiffusionLM(Task):
         self.generate_function = None
 
     def make_generate_function(self):
-        """Create or return the compiled generation function.
-
-        The transformer-heavy `_encode_prompt` and `_forward_step` are
-        JIT-compiled for each backend.  The outer denoising loop and the
-        sampler stay in eager Python so that `EntropyBoundSampler`'s adaptive
-        stopping (which converts tensors to Python bools) works correctly.
-        """
+        """Create or return the compiled generation function."""
         if self.generate_function is not None:
             return self.generate_function
 
+        self.generate_function = self.generate_step
         if keras.config.backend() == "openvino":
             from keras_hub.src.utils.openvino_utils import ov_infer
 
-            def wrapped_generate_function(inputs):
+            def wrapped_generate_function(
+                inputs,
+                max_length=None,
+                stop_token_ids=None,
+            ):
                 inputs = tree.map_structure(ops.convert_to_numpy, inputs)
-                return ov_infer(self, inputs, None, self.generate_step)
+                return ov_infer(
+                    self,
+                    inputs,
+                    stop_token_ids,
+                    lambda x, stops: self.generate_step(
+                        x,
+                        max_length=max_length,
+                        stop_token_ids=stops,
+                    ),
+                )
 
             self.generate_function = wrapped_generate_function
 
         if keras.config.backend() == "torch":
             import torch
 
-            def wrapped_generate_function(inputs):
+            def wrapped_generate_function(
+                inputs,
+                max_length=None,
+                stop_token_ids=None,
+            ):
                 with torch.no_grad():
-                    return self.generate_step(inputs)
+                    return self.generate_step(
+                        inputs,
+                        max_length=max_length,
+                        stop_token_ids=stop_token_ids,
+                    )
 
             self.generate_function = wrapped_generate_function
 
         elif keras.config.backend() == "tensorflow" and not self.run_eagerly:
             jit_compile = getattr(self, "jit_compile", True)
-            _encode_fn = tf.function(
-                self._encode_prompt, jit_compile=jit_compile
+            self.generate_function = tf.function(
+                self.generate_step, jit_compile=jit_compile
             )
-            # tf.function creates separate traces for prev_logits=None (step 0)
-            # and prev_logits=tensor (steps 1+), which is standard TF behaviour.
-            _step_fn = tf.function(self._forward_step, jit_compile=jit_compile)
-
-            # Precompute temperatures as tf.constant tensors to prevent
-            # tf.function from retracing for each unique Python float value.
-            _temperatures = [
-                tf.constant(
-                    self.t_max
-                    - (self.t_max - self.t_min)
-                    * step
-                    / self.max_denoising_steps,
-                    dtype=tf.float32,
-                )
-                for step in range(self.max_denoising_steps)
-            ]
-
-            def wrapped_generate_function(inputs):
-                encoder_cache, prompt_length = _encode_fn(inputs)
-                prompt_padding_mask = inputs.get("padding_mask", None)
-                batch_size = ops.shape(inputs["token_ids"])[0]
-                canvas = self._init_canvas(batch_size)
-                prev_logits = None
-                for step in range(self.max_denoising_steps):
-                    logits = _step_fn(
-                        canvas,
-                        encoder_cache,
-                        prompt_length,
-                        prev_logits,
-                        _temperatures[step],
-                        prompt_padding_mask,
-                    )
-                    prev_logits = logits
-                    canvas, stop, argmax_canvas = self.sampler(
-                        canvas, logits, step
-                    )
-                    if bool(ops.convert_to_numpy(ops.all(stop))):
-                        break
-                return ops.cast(argmax_canvas, "int32")
-
-            self.generate_function = wrapped_generate_function
 
         elif keras.config.backend() == "jax" and not self.run_eagerly:
             import jax
 
-            # Two JIT functions handle the prev_logits=None vs tensor split:
-            # JAX cannot trace None as an abstract array, so the first step
-            # (no self-conditioning) uses a dedicated function that hardcodes
-            # prev_logits=None, and subsequent steps use a second function that
-            # accepts prev_logits as a concrete tensor argument.
-
-            def _make_scope_mapping(state):
-                sampler_vars, trainable_vars, non_trainable_vars = state
-                return itertools.chain(
-                    zip(self.sampler.variables, sampler_vars),
-                    zip(self.trainable_variables, trainable_vars),
-                    zip(self.non_trainable_variables, non_trainable_vars),
+            def compiled_generate_function(
+                inputs, state, max_length, stop_token_ids
+            ):
+                (
+                    sampler_variables,
+                    trainable_variables,
+                    non_trainable_variables,
+                ) = state
+                mapping = itertools.chain(
+                    zip(self.sampler.variables, sampler_variables),
+                    zip(self.trainable_variables, trainable_variables),
+                    zip(self.non_trainable_variables, non_trainable_variables),
                 )
 
-            @jax.jit
-            def jit_encode(inputs, state):
-                with keras.StatelessScope(
-                    state_mapping=_make_scope_mapping(state)
-                ):
-                    return self._encode_prompt(inputs)
-
-            @partial(jax.jit, static_argnums=(2,))
-            def jit_step_no_sc(
-                canvas,
-                enc_cache,
-                prompt_len,
-                temperature,
-                prompt_padding_mask,
-                state,
-            ):
-                with keras.StatelessScope(
-                    state_mapping=_make_scope_mapping(state)
-                ):
-                    return self._forward_step(
-                        canvas,
-                        enc_cache,
-                        prompt_len,
-                        None,
-                        temperature,
-                        prompt_padding_mask=prompt_padding_mask,
+                with keras.StatelessScope(state_mapping=mapping) as scope:
+                    outputs = self.generate_step(
+                        inputs,
+                        max_length=max_length,
+                        stop_token_ids=stop_token_ids,
                     )
 
-            @partial(jax.jit, static_argnums=(2,))
-            def jit_step(
-                canvas,
-                enc_cache,
-                prompt_len,
-                prev_logits,
-                temperature,
-                prompt_padding_mask,
-                state,
-            ):
-                with keras.StatelessScope(
-                    state_mapping=_make_scope_mapping(state)
-                ):
-                    return self._forward_step(
-                        canvas,
-                        enc_cache,
-                        prompt_len,
-                        prev_logits,
-                        temperature,
-                        prompt_padding_mask=prompt_padding_mask,
+                sampler_variables = []
+                for variable in self.sampler.variables:
+                    new_value = scope.get_current_value(variable)
+                    sampler_variables.append(
+                        new_value if new_value is not None else variable
                     )
+                return outputs, sampler_variables
 
-            def wrapped_generate_function(inputs):
+            compiled_generate_function = jax.jit(
+                compiled_generate_function,
+                static_argnames=(
+                    "max_length",
+                    "stop_token_ids",
+                ),
+            )
+
+            def wrapped_generate_function(
+                inputs,
+                max_length=None,
+                stop_token_ids=None,
+            ):
+                if isinstance(stop_token_ids, list):
+                    stop_token_ids = tuple(stop_token_ids)
                 state = (
                     [v.value for v in self.sampler.variables],
                     [v.value for v in self.trainable_variables],
                     [v.value for v in self.non_trainable_variables],
                 )
                 inputs = tree.map_structure(ops.convert_to_tensor, inputs)
-                encoder_cache, prompt_length = jit_encode(inputs, state)
-                # Convert to a Python int so it can be used as a static
-                # argument in jit_step_no_sc/jit_step, avoiding
-                # TracerBoolConversionError in _decode_canvas_step.
-                prompt_length = int(ops.convert_to_numpy(prompt_length))
-                batch_size = ops.shape(inputs["token_ids"])[0]
-                canvas = self._init_canvas(batch_size)
-
-                prompt_padding_mask = inputs.get("padding_mask", None)
-
-                # Step 0: no self-conditioning.
-                logits = jit_step_no_sc(
-                    canvas,
-                    encoder_cache,
-                    prompt_length,
-                    self.t_max,
-                    prompt_padding_mask,
+                outputs, sampler_variables = compiled_generate_function(
+                    inputs,
                     state,
+                    max_length,
+                    stop_token_ids,
                 )
-                canvas, stop, argmax_canvas = self.sampler(canvas, logits, 0)
-                prev_logits = logits
-
-                for step in range(1, self.max_denoising_steps):
-                    if bool(ops.convert_to_numpy(ops.all(stop))):
-                        break
-                    temperature = self.t_max - (
-                        (self.t_max - self.t_min)
-                        * step
-                        / self.max_denoising_steps
-                    )
-                    logits = jit_step(
-                        canvas,
-                        encoder_cache,
-                        prompt_length,
-                        prev_logits,
-                        temperature,
-                        prompt_padding_mask,
-                        state,
-                    )
-                    canvas, stop, argmax_canvas = self.sampler(
-                        canvas, logits, step
-                    )
-                    prev_logits = logits
-
-                return ops.cast(argmax_canvas, "int32")
+                for reference, variable in zip(
+                    self.sampler.variables, sampler_variables
+                ):
+                    reference.assign(variable)
+                return outputs
 
             self.generate_function = wrapped_generate_function
 
-        else:
-            self.generate_function = self.generate_step
-
         return self.generate_function
 
-    def _init_canvas(self, batch_size):
-        """Create the initial random-token canvas `(B, canvas_length)`."""
-        vocab_size = self.backbone.vocabulary_size
-        canvas = keras.random.randint(
-            shape=(batch_size, self.canvas_length),
-            minval=0,
-            maxval=vocab_size,
-            seed=self.sampler.seed_generator,
-            dtype="int32",
-        )
-        return canvas
-
-    def _forward_step(
-        self,
-        canvas,
-        encoder_cache,
-        prompt_length,
-        prev_logits,
-        temperature,
-        prompt_padding_mask=None,
-    ):
-        """Single denoising forward pass — JIT-compilable.
-
-        Does not call the sampler or perform any Python bool conversion, so it
-        is safe to wrap with `tf.function` / `jax.jit`.
-
-        Args:
-            canvas: int tensor of shape `(B, canvas_length)`.
-            encoder_cache: encoder KV cache from `_encode_prompt`.
-            prompt_length: int scalar, number of real prompt tokens.
-            prev_logits: float tensor `(B, canvas_length, vocab_size)` from the
-                previous step, or `None` on the first step.
-            temperature: float scalar for logit scaling.
-            prompt_padding_mask: bool tensor `(B, prompt_length)` indicating
-                which prompt positions are real (True) vs padding (False).
-                Used to prevent canvas queries from attending to padding keys.
-
-        Returns:
-            Float tensor of shape `(B, canvas_length, vocab_size)`.
-        """
-        canvas_embeds = self._prepare_canvas_embeds(canvas, prev_logits)
-        hidden = self._decode_canvas_step(
-            canvas_embeds,
-            encoder_cache,
-            prompt_length,
-            prompt_padding_mask=prompt_padding_mask,
-        )
-        logits = self._canvas_logits(hidden)
-        return ops.cast(logits, "float32") / temperature
-
-    def generate_step(self, inputs):
-        """Run one full denoising sequence for a single batch.
-
-        Args:
-            inputs: dict. Pre-processed inputs containing at minimum
-                `"token_ids"` and `"padding_mask"`.
-
-        Returns:
-            A `(B, canvas_length)` int tensor of the final denoised tokens.
-        """
-        encoder_cache, prompt_length = self._encode_prompt(inputs)
-        prompt_padding_mask = inputs.get("padding_mask", None)
-
-        batch_size = ops.shape(inputs["token_ids"])[0]
-        canvas = self._init_canvas(batch_size)
-        prev_logits = None
-
-        for step in range(self.max_denoising_steps):
-            temperature = self.t_max - (
-                (self.t_max - self.t_min) * step / self.max_denoising_steps
-            )
-            logits = self._forward_step(
-                canvas,
-                encoder_cache,
-                prompt_length,
-                prev_logits,
-                temperature,
-                prompt_padding_mask=prompt_padding_mask,
-            )
-            prev_logits = logits
-            canvas, stop, argmax_canvas = self.sampler(canvas, logits, step)
-            if bool(ops.convert_to_numpy(ops.all(stop))):
-                break
-
-        return ops.cast(argmax_canvas, "int32")
+    def generate_step(self):
+        """Run generation on a single batch of input."""
+        raise NotImplementedError
 
     def _normalize_generate_inputs(self, inputs):
         """Normalize user input to the generate function.
@@ -449,7 +270,7 @@ class BlockDiffusionLM(Task):
             return normalized
         return normalize(outputs)
 
-    def generate(self, inputs, max_length=None):
+    def generate(self, inputs, max_length=None, stop_token_ids="auto"):
         """Generate a denoised canvas given prompt inputs.
 
         Args:
@@ -458,9 +279,12 @@ class BlockDiffusionLM(Task):
                 the structure expected by the `preprocessor` layer. If a
                 `preprocessor` is not attached, `inputs` should match the
                 structure expected by the `backbone` model.
-            max_length: Optional. Not used for diffusion models (canvas length
-                is fixed at compile time via `canvas_length`).  Accepted for
-                API compatibility with `CausalLM.generate`.
+            max_length: Optional int. Maximum length of the generated sequence.
+                Defaults to the concrete model's configured canvas length.
+            stop_token_ids: Optional. `None`, `"auto"`, or tuple of token IDs.
+                Defaults to `"auto"`, which uses stop IDs configured on the
+                model or the preprocessor tokenizer's end token. `None`
+                generates until `max_length`.
 
         Returns:
             Decoded string(s) or integer token arrays, depending on whether
@@ -469,19 +293,38 @@ class BlockDiffusionLM(Task):
         if hasattr(self, "sampler") and hasattr(self.sampler, "reset"):
             self.sampler.reset()
 
+        if max_length is not None and max_length <= 0:
+            raise ValueError(
+                "`max_length` must be a positive integer. "
+                f"Received: max_length={max_length}."
+            )
+
+        if stop_token_ids == "auto":
+            stop_token_ids = getattr(self, "stop_token_ids", None)
+            if stop_token_ids is None:
+                if self.preprocessor is None:
+                    raise ValueError(
+                        "A `preprocessor` or configured stop tokens are "
+                        'required if `stop_token_ids="auto"`. Pass '
+                        "`stop_token_ids=None` to generate until `max_length`."
+                    )
+                stop_token_ids = (self.preprocessor.tokenizer.end_token_id,)
+
         generate_function = self.make_generate_function()
 
         inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
 
         if self.preprocessor is not None:
-            inputs = [
-                self.preprocessor.generate_preprocess(
-                    x, sequence_length=max_length
-                )
-                for x in inputs
-            ]
+            inputs = [self.preprocessor.generate_preprocess(x) for x in inputs]
 
-        outputs = [generate_function(x) for x in inputs]
+        outputs = [
+            generate_function(
+                x,
+                max_length=max_length,
+                stop_token_ids=stop_token_ids,
+            )
+            for x in inputs
+        ]
 
         if self.preprocessor is not None:
             outputs = [
@@ -490,34 +333,6 @@ class BlockDiffusionLM(Task):
 
         return self._normalize_generate_outputs(outputs, input_is_scalar)
 
-    def _encode_prompt(self, inputs):
-        """Encode the prompt."""
-        raise NotImplementedError
-
-    def _prepare_canvas_embeds(self, canvas, prev_logits):
-        """Embed the current canvas tokens, applying self-conditioning."""
-        raise NotImplementedError
-
-    def _decode_canvas_step(self, canvas_embeds, encoder_cache, prompt_length):
-        """Run one decoder forward pass over the canvas."""
-        raise NotImplementedError
-
-    def _canvas_logits(self, hidden):
-        """Project hidden states to logits."""
-        raise NotImplementedError
-
     def _post_quantize(self, mode, **kwargs):
         super()._post_quantize(mode, **kwargs)
         self.generate_function = None
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "canvas_length": self.canvas_length,
-                "max_denoising_steps": self.max_denoising_steps,
-                "t_min": self.t_min,
-                "t_max": self.t_max,
-            }
-        )
-        return config

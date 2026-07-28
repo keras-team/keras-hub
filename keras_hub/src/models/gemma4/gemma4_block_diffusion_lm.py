@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 from keras import ops
 
@@ -43,6 +44,10 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
             denoising step. Defaults to `0.8`.
         sampler: `"entropy_bound"` or a compatible diffusion sampler.
             Defaults to `"entropy_bound"`.
+        stop_token_ids: Optional tuple of token IDs that finish generation.
+            Defaults to `None`.
+        pad_token_id: Optional int token ID used after the first stop token.
+            Defaults to `None`.
         **kwargs: Additional keyword arguments passed to the parent class.
 
     Examples:
@@ -74,7 +79,13 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         self,
         preprocessor,
         backbone,
+        canvas_length=256,
+        max_denoising_steps=48,
+        t_min=0.4,
+        t_max=0.8,
         sampler="entropy_bound",
+        stop_token_ids=None,
+        pad_token_id=None,
         **kwargs,
     ):
         # === Layers ===
@@ -91,6 +102,16 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
             outputs=outputs,
             **kwargs,
         )
+        self.canvas_length = canvas_length
+        self.max_denoising_steps = max_denoising_steps
+        self.t_min = t_min
+        self.t_max = t_max
+        self.stop_token_ids = (
+            tuple(stop_token_ids) if stop_token_ids is not None else None
+        )
+        if pad_token_id is None and preprocessor is not None:
+            pad_token_id = preprocessor.tokenizer.pad_token_id
+        self.pad_token_id = pad_token_id
         self.sampler = get_sampler(sampler)
         self.generate_function = None
 
@@ -129,13 +150,189 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
 
     def get_config(self):
         config = super().get_config()
-        config["sampler"] = self._serialize_sampler()
+        config.update(
+            {
+                "canvas_length": self.canvas_length,
+                "max_denoising_steps": self.max_denoising_steps,
+                "t_min": self.t_min,
+                "t_max": self.t_max,
+                "sampler": self._serialize_sampler(),
+                "stop_token_ids": self.stop_token_ids,
+                "pad_token_id": self.pad_token_id,
+            }
+        )
         return config
 
     def _serialize_sampler(self):
         from keras_hub.src.samplers.serialization import serialize
 
         return serialize(self.sampler)
+
+    def _init_canvas(self, batch_size):
+        """Create the initial random-token canvas `(B, canvas_length)`."""
+        vocab_size = self.backbone.vocabulary_size
+        return keras.random.randint(
+            shape=(batch_size, self.canvas_length),
+            minval=0,
+            maxval=vocab_size,
+            seed=self.sampler.seed_generator,
+            dtype="int32",
+        )
+
+    def _forward_step(
+        self,
+        canvas,
+        encoder_cache,
+        prompt_length,
+        prev_logits,
+        temperature,
+        prompt_padding_mask=None,
+    ):
+        """Run a single denoising forward pass."""
+        canvas_embeds = self._prepare_canvas_embeds(canvas, prev_logits)
+        hidden = self._decode_canvas_step(
+            canvas_embeds,
+            encoder_cache,
+            prompt_length,
+            prompt_padding_mask=prompt_padding_mask,
+        )
+        logits = self._canvas_logits(hidden)
+        return ops.cast(logits, "float32") / temperature
+
+    def generate_step(
+        self,
+        inputs,
+        max_length=None,
+        stop_token_ids=None,
+    ):
+        """Generate one or more denoised canvases for a single batch.
+
+        Args:
+            inputs: dict. Pre-processed inputs containing at minimum
+                `"token_ids"` and `"padding_mask"`.
+
+        Returns:
+            A `(B, max_length)` int tensor of final denoised tokens. If
+            `max_length` is `None`, returns one canvas.
+        """
+        output_length = self.canvas_length if max_length is None else max_length
+        num_canvases = (
+            output_length + self.canvas_length - 1
+        ) // self.canvas_length
+
+        encoder_cache, prompt_length = self._encode_prompt(inputs)
+        prompt_padding_mask = inputs.get("padding_mask", None)
+        if stop_token_ids is not None and prompt_padding_mask is None:
+            prompt_padding_mask = ops.ones_like(
+                inputs["token_ids"], dtype="bool"
+            )
+
+        batch_size = ops.shape(inputs["token_ids"])[0]
+        generated_canvases = []
+        generated_masks = []
+        finished_sequences = ops.zeros((batch_size,), dtype="bool")
+
+        for canvas_index in range(num_canvases):
+            canvas = self._init_canvas(batch_size)
+
+            def next(canvas, prev_logits, step):
+                step_float = ops.cast(step, "float32")
+                temperature = self.t_max - (
+                    (self.t_max - self.t_min)
+                    * step_float
+                    / self.max_denoising_steps
+                )
+                return self._forward_step(
+                    canvas,
+                    encoder_cache,
+                    prompt_length,
+                    prev_logits,
+                    temperature,
+                    prompt_padding_mask=prompt_padding_mask,
+                )
+
+            argmax_canvas = self.sampler(
+                next=next,
+                canvas=canvas,
+                max_steps=self.max_denoising_steps,
+                model=self,
+            )
+            argmax_canvas = ops.cast(argmax_canvas, "int32")
+
+            if stop_token_ids is not None:
+                stop_token_ids_tensor = ops.convert_to_tensor(
+                    stop_token_ids, dtype="int32"
+                )
+                stop_locations = ops.any(
+                    ops.equal(
+                        ops.expand_dims(argmax_canvas, axis=-1),
+                        stop_token_ids_tensor,
+                    ),
+                    axis=-1,
+                )
+                stop_locations = ops.logical_and(
+                    stop_locations,
+                    ops.logical_not(
+                        ops.expand_dims(finished_sequences, axis=-1)
+                    ),
+                )
+                stop_count = ops.cumsum(
+                    ops.cast(stop_locations, "int32"), axis=-1
+                )
+                after_first_stop = ops.greater(
+                    stop_count - ops.cast(stop_locations, "int32"), 0
+                )
+                canvas_padding_mask = ops.logical_not(after_first_stop)
+                canvas_padding_mask = ops.logical_and(
+                    canvas_padding_mask,
+                    ops.logical_not(
+                        ops.expand_dims(finished_sequences, axis=-1)
+                    ),
+                )
+                if self.pad_token_id is not None:
+                    argmax_canvas = ops.where(
+                        canvas_padding_mask,
+                        argmax_canvas,
+                        ops.cast(self.pad_token_id, "int32"),
+                    )
+                finished_sequences = ops.logical_or(
+                    finished_sequences,
+                    ops.any(stop_locations, axis=-1),
+                )
+            else:
+                canvas_padding_mask = ops.ones(
+                    (batch_size, self.canvas_length), dtype="bool"
+                )
+
+            generated_canvases.append(argmax_canvas)
+            generated_masks.append(canvas_padding_mask)
+
+            if canvas_index < num_canvases - 1:
+                if prompt_padding_mask is not None:
+                    prompt_padding_mask = ops.concatenate(
+                        [
+                            ops.cast(prompt_padding_mask, "bool"),
+                            canvas_padding_mask,
+                        ],
+                        axis=1,
+                    )
+                encoder_cache = self._encode_canvas_as_context(
+                    argmax_canvas,
+                    encoder_cache,
+                    prompt_length,
+                    padding_mask=prompt_padding_mask,
+                )
+                prompt_length += self.canvas_length
+
+        generated = ops.concatenate(generated_canvases, axis=1)
+        generated = generated[:, :output_length]
+        if stop_token_ids is None:
+            return generated
+        padding_mask = ops.concatenate(generated_masks, axis=1)
+        return {
+            "token_ids": generated,
+            "padding_mask": padding_mask[:, :output_length],
+        }
 
     def _encode_prompt(self, inputs):
         token_ids = inputs["token_ids"]
@@ -234,7 +431,11 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         return encoder_kv_cache, prompt_length
 
     def _encode_canvas_as_context(
-        self, canvas_token_ids, encoder_kv_cache, context_length
+        self,
+        canvas_token_ids,
+        encoder_kv_cache,
+        context_length,
+        padding_mask=None,
     ):
         """Incrementally extend the encoder KV cache with canvas tokens.
 
@@ -253,6 +454,8 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
             encoder_kv_cache: float tensor of shape
                 `(B, num_layers, 2, context_length, num_heads, head_dim)`.
             context_length: int scalar; number of tokens already encoded.
+            padding_mask: Optional bool tensor covering the existing context
+                and the appended canvas.
 
         Returns:
             Extended KV cache of shape
@@ -295,6 +498,7 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
                 x,
                 cache=current_cache,
                 cache_update_index=context_length,
+                padding_mask=padding_mask,
                 shared_kv=shared_kv,
                 use_encoder_scalar=True,
             )

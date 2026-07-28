@@ -33,12 +33,19 @@ class EntropyBoundSamplerTest(TestCase):
             dtype="float32",
         )
 
+    def _sample_step(self, sampler, canvas, logits, step, state=None):
+        if state is None:
+            state = sampler.initialize_state(canvas)
+        return sampler._sample_step(canvas, logits, step, state)
+
     def test_infers_vocabulary_size_from_logits(self):
         sampler = EntropyBoundSampler(seed=42)
         canvas = ops.zeros((self.batch_size, self.canvas_length), dtype="int32")
         logits = self._make_uniform_logits()
 
-        new_canvas, stop, _ = sampler(canvas, logits, step=0)
+        new_canvas, stop, _, _ = self._sample_step(
+            sampler, canvas, logits, step=0
+        )
 
         self.assertEqual(new_canvas.shape, canvas.shape)
         self.assertEqual(stop.shape, (self.batch_size,))
@@ -50,7 +57,9 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.array(token_ids)
         logits = self._make_peaked_logits(token_ids)
 
-        new_canvas, _, _ = self.sampler(canvas, logits, step=0)
+        new_canvas, _, _, _ = self._sample_step(
+            self.sampler, canvas, logits, step=0
+        )
 
         expected = ops.argmax(logits, axis=-1)
         self.assertAllEqual(new_canvas, expected)
@@ -59,7 +68,9 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.zeros((self.batch_size, self.canvas_length), dtype="int32")
         logits = self._make_uniform_logits()
 
-        new_canvas, stop, _ = self.sampler(canvas, logits, step=0)
+        new_canvas, stop, _, _ = self._sample_step(
+            self.sampler, canvas, logits, step=0
+        )
 
         self.assertEqual(
             new_canvas.shape, (self.batch_size, self.canvas_length)
@@ -75,7 +86,7 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.zeros((self.batch_size, self.canvas_length), dtype="int32")
         logits = self._make_uniform_logits()
 
-        new_canvas, _, _ = sampler(canvas, logits, step=0)
+        new_canvas, _, _, _ = self._sample_step(sampler, canvas, logits, step=0)
         new_canvas_np = ops.convert_to_numpy(new_canvas)
 
         # All tokens must be within [0, vocab_size).
@@ -89,7 +100,7 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.array(token_ids)
         logits = self._make_peaked_logits(token_ids)
 
-        _, stop, _ = self.sampler(canvas, logits, step=0)
+        _, stop, _, _ = self._sample_step(self.sampler, canvas, logits, step=0)
 
         self.assertFalse(ops.convert_to_numpy(ops.any(stop)))
 
@@ -106,11 +117,38 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.array(token_ids)
         logits = self._make_peaked_logits(token_ids)
 
-        _, stop0, _ = sampler(canvas, logits, step=0)
-        _, stop1, _ = sampler(canvas, logits, step=1)
+        _, stop0, _, state = self._sample_step(sampler, canvas, logits, step=0)
+        _, stop1, _, _ = self._sample_step(
+            sampler, canvas, logits, step=1, state=state
+        )
 
         self.assertFalse(ops.convert_to_numpy(ops.any(stop0)))
         self.assertTrue(ops.convert_to_numpy(ops.all(stop1)))
+
+    def test_explicit_tensor_state(self):
+        sampler = EntropyBoundSampler(
+            entropy_bound=1.0,
+            confidence_threshold=1.0,
+            stability_threshold=1,
+            seed=0,
+        )
+        token_ids = np.zeros(
+            (self.batch_size, self.canvas_length), dtype="int32"
+        )
+        canvas = ops.array(token_ids)
+        logits = self._make_peaked_logits(token_ids)
+        state = sampler.initialize_state(canvas)
+
+        _, stop0, _, state = self._sample_step(
+            sampler, canvas, logits, step=0, state=state
+        )
+        _, stop1, _, _ = self._sample_step(
+            sampler, canvas, logits, step=1, state=state
+        )
+
+        self.assertFalse(ops.convert_to_numpy(ops.any(stop0)))
+        self.assertTrue(ops.convert_to_numpy(ops.all(stop1)))
+        self.assertIsNone(sampler._state)
 
     def test_no_stop_when_argmax_changes(self):
         sampler = EntropyBoundSampler(
@@ -129,8 +167,10 @@ class EntropyBoundSamplerTest(TestCase):
         logits_a = self._make_peaked_logits(token_ids_a)
         logits_b = self._make_peaked_logits(token_ids_b)
 
-        sampler(canvas, logits_a, step=0)
-        _, stop, _ = sampler(canvas, logits_b, step=1)
+        _, _, _, state = self._sample_step(sampler, canvas, logits_a, step=0)
+        _, stop, _, _ = self._sample_step(
+            sampler, canvas, logits_b, step=1, state=state
+        )
 
         self.assertFalse(ops.convert_to_numpy(ops.any(stop)))
 
@@ -152,9 +192,9 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.array(token_ids)
         logits = self._make_peaked_logits(token_ids)
 
-        sampler(canvas, logits, step=0)
+        self._sample_step(sampler, canvas, logits, step=0)
         sampler.reset()
-        _, stop, _ = sampler(canvas, logits, step=1)
+        _, stop, _, _ = self._sample_step(sampler, canvas, logits, step=1)
 
         self.assertFalse(ops.convert_to_numpy(ops.any(stop)))
 
@@ -194,9 +234,13 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.array(token_ids)
         logits = self._make_peaked_logits(token_ids)
 
-        _, stop0, _ = sampler(canvas, logits, step=0)
-        _, stop1, _ = sampler(canvas, logits, step=1)  # 1st stable step
-        _, stop2, _ = sampler(canvas, logits, step=2)  # 2nd stable step
+        _, stop0, _, state = self._sample_step(sampler, canvas, logits, step=0)
+        _, stop1, _, state = self._sample_step(
+            sampler, canvas, logits, step=1, state=state
+        )
+        _, stop2, _, _ = self._sample_step(
+            sampler, canvas, logits, step=2, state=state
+        )
 
         self.assertFalse(ops.convert_to_numpy(ops.any(stop0)))
         self.assertFalse(
@@ -217,8 +261,8 @@ class EntropyBoundSamplerTest(TestCase):
         canvas = ops.zeros((self.batch_size, self.canvas_length), dtype="int32")
         logits = self._make_uniform_logits()
 
-        canvas_a, _, _ = sampler_a(canvas, logits, step=0)
-        canvas_b, _, _ = sampler_b(canvas, logits, step=0)
+        canvas_a, _, _, _ = self._sample_step(sampler_a, canvas, logits, step=0)
+        canvas_b, _, _, _ = self._sample_step(sampler_b, canvas, logits, step=0)
 
         self.assertAllEqual(canvas_a, canvas_b)
 
@@ -242,11 +286,41 @@ class EntropyBoundSamplerTest(TestCase):
         )
         canvas = ops.zeros((self.batch_size, self.canvas_length), dtype="int32")
 
-        sampler(canvas, self._make_peaked_logits(token_ids_step0), step=0)
-        _, stop, _ = sampler(
-            canvas, self._make_peaked_logits(token_ids_step1), step=1
+        _, _, _, state = self._sample_step(
+            sampler,
+            canvas,
+            self._make_peaked_logits(token_ids_step0),
+            step=0,
+        )
+        _, stop, _, _ = self._sample_step(
+            sampler,
+            canvas,
+            self._make_peaked_logits(token_ids_step1),
+            step=1,
+            state=state,
         )
 
         stop_np = ops.convert_to_numpy(stop)
         self.assertTrue(stop_np[0])  # row 0: argmax stable → stops
         self.assertFalse(stop_np[1])  # row 1: argmax changed → does not stop
+
+    def test_finished_rows_are_frozen_while_other_rows_continue(self):
+        class ScriptedSampler(EntropyBoundSampler):
+            def _sample_step(self, canvas, logits, step, state):
+                next_canvas = canvas + 1
+                next_argmax = canvas
+                next_stop = ops.stack([step >= 1, step >= 3])
+                return next_canvas, next_stop, next_argmax, state
+
+        sampler = ScriptedSampler(seed=0)
+        canvas = ops.zeros((2, 3), dtype="int32")
+
+        def next(canvas, prev_logits, step):
+            if prev_logits is None:
+                return ops.zeros((2, 3, 2), dtype="float32")
+            return prev_logits + 1
+
+        output = sampler(next=next, canvas=canvas, max_steps=5)
+
+        self.assertAllEqual(output[0], [1, 1, 1])
+        self.assertAllEqual(output[1], [3, 3, 3])
