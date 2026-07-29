@@ -35,14 +35,6 @@ class ModernBertBackboneTest(TestCase):
         }
 
     def test_backbone_basics(self):
-        """Validate the forward pass.
-
-        This test checks:
-        - Correct output shape from a forward pass.
-        - Configuration serialization via `get_config`/`from_config`.
-        - Weight and architecture preservation using the `.keras` format.
-        - Backend-agnostic compatibility across frameworks.
-        """
         self.run_backbone_test(
             cls=ModernBertBackbone,
             init_kwargs=self.init_kwargs,
@@ -51,14 +43,6 @@ class ModernBertBackboneTest(TestCase):
         )
 
     def test_variable_sequence_length(self):
-        """Validate backbone behavior when
-        executing over variable sequence lengths.
-
-        This test checks:
-        - Ability to accept inputs shorter than the maximum window sizes.
-        - Proper dynamic output shape generation matching input batch shapes.
-        - Stability of positional calculations under changing sequence domains.
-        """
         model = ModernBertBackbone(**self.init_kwargs)
 
         short_input = {
@@ -80,37 +64,27 @@ class ModernBertBackboneTest(TestCase):
         )
 
     def test_alternating_attention_logic(self):
-        """Validate structural routing
-        configurations of alternating attention.
-
-        This test checks:
-        - Proper assignment of local sliding window limits on local layers.
-        - Correct nullification of attention window inputs on global layers.
-        - Layer-by-layer compliance with the specified interleaving frequency.
-        """
+        """Validate alternating global/local attention routing."""
         model = ModernBertBackbone(**self.init_kwargs)
-
-        local_layer = model.get_layer("transformer_layer_0")
-
-        global_layer = model.get_layer("transformer_layer_1")
-
-        self.assertEqual(
-            local_layer.local_attention_window,
-            128,
-        )
+        global_layer = model.get_layer("transformer_layer_0")
+        local_layer = model.get_layer("transformer_layer_1")
 
         self.assertIsNone(global_layer.local_attention_window)
+        self.assertEqual(local_layer.local_attention_window, 128)
+
+        # local_layer = model.get_layer("transformer_layer_0")
+
+        # global_layer = model.get_layer("transformer_layer_1")
+
+        # self.assertEqual(
+        #     local_layer.local_attention_window,
+        #     128,
+        # )
+
+        # self.assertIsNone(global_layer.local_attention_window)
 
     @pytest.mark.large
     def test_saved_model(self):
-        """Validate heavy model serialization
-        routines and weight persistence.
-
-        This test checks:
-        - Export integrity under standard Keras saving utilities.
-        - Restoration accuracy of graph connections and layer naming schemas.
-        - Parity of inference outputs between original and reloaded states.
-        """
         self.run_model_saving_test(
             cls=ModernBertBackbone,
             init_kwargs=self.init_kwargs,
@@ -119,14 +93,6 @@ class ModernBertBackboneTest(TestCase):
 
     @pytest.mark.large
     def test_mixed_precision(self):
-        """Validate layer execution stability under
-        mixed precision configurations.
-
-        This test checks:
-        - Down-casting behavior of input embeddings to computational precision.
-        - Stability of attention scores and normalizations at lower resolutions.
-        - Alignment of terminal shapes when standard precision policies change.
-        """
         self.run_precision_test(
             cls=ModernBertBackbone,
             init_kwargs=self.init_kwargs,

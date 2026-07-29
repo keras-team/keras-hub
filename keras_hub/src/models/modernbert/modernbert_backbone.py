@@ -17,7 +17,7 @@ class ModernBertBackbone(Backbone):
     """ModernBERT backbone model.
 
     ModernBERT features Rotary Positional Embeddings (RoPE), GeGLU activations,
-    RMSNorm, and Alternating Attention (interleaving local and global layers).
+    Layer Normalization, and alternating local and global attention layers.
 
     The backbone accepts a dictionary of token IDs and padding masks, and
     outputs the raw hidden sequence representations.
@@ -36,8 +36,8 @@ class ModernBertBackbone(Backbone):
             Defaults to `0.0`.
         rotary_max_wavelength: int. Max wavelength for RoPE.
             Defaults to `160000`.
-        layer_norm_epsilon: float. Epsilon for RMSNorm.
-            Defaults to `1e-5`.
+        layer_norm_epsilon: float. Epsilon used by the Layer
+        Normalization layers.Defaults to `1e-5`.
         dtype: string or `keras.DTypePolicy`. The dtype of the layers.
             Defaults to `None`.
 
@@ -63,6 +63,7 @@ class ModernBertBackbone(Backbone):
 
     # Extract hidden states
     outputs = backbone(input_data)
+    ```
     """
 
     def __init__(
@@ -107,9 +108,10 @@ class ModernBertBackbone(Backbone):
             dtype=layer_dtype_policy,
             name="token_embedding",
         )
-
-        self.embedding_norm = keras.layers.RMSNormalization(
+        self.embedding_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
+            center=False,
+            scale=True,
             dtype=layer_dtype_policy,
             name="embedding_norm",
         )
@@ -122,13 +124,14 @@ class ModernBertBackbone(Backbone):
 
         self.transformer_layers = []
         for i in range(num_layers):
-            is_global = (i + 1) % global_attn_every_n_layers == 0
+            is_global = (i % global_attn_every_n_layers) == 0
             attn_window = None if is_global else local_attention_window
 
             layer = ModernBertEncoderLayer(
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
                 num_heads=num_heads,
+                layer_idx=i,
                 rotary_embedding=self.rotary_embedding,
                 local_attention_window=attn_window,
                 dropout=dropout,
@@ -138,9 +141,11 @@ class ModernBertBackbone(Backbone):
             )
             self.transformer_layers.append(layer)
 
-        self.final_norm = keras.layers.RMSNormalization(
+        self.final_norm = keras.layers.LayerNormalization(
             axis=-1,
             epsilon=layer_norm_epsilon,
+            center=False,
+            scale=True,
             dtype=layer_dtype_policy,
             name="final_norm",
         )

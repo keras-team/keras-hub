@@ -54,34 +54,24 @@ class ModernBertTokenizer(BytePairTokenizer):
         merges=None,
         **kwargs,
     ):
-        self.pad_token = "<|padding|>"
-        self.mask_token = "[MASK]"
-        self.start_token = "<|endoftext|>"
-        self.end_token = "<|endoftext|>"
+        pad_token = "<|padding|>"
+        mask_token = "[MASK]"
+        start_token = "<|endoftext|>"
+        end_token = "<|endoftext|>"
 
-        unsplittable_tokens = kwargs.pop(
-            "unsplittable_tokens",
-            [],
-        )
+        unsplittable_tokens = list(kwargs.pop("unsplittable_tokens", []))
 
-        unsplittable_tokens = list(unsplittable_tokens)
-
-        special_tokens = [
-            self.pad_token,
-            self.mask_token,
-            self.start_token,
-            self.end_token,
-        ]
-        for token in special_tokens:
+        for token in {
+            pad_token,
+            mask_token,
+            start_token,
+            end_token,
+        }:
             if token not in unsplittable_tokens:
                 unsplittable_tokens.append(token)
 
         kwargs["unsplittable_tokens"] = unsplittable_tokens
-
-        kwargs["add_prefix_space"] = kwargs.get(
-            "add_prefix_space",
-            False,
-        )
+        kwargs.setdefault("add_prefix_space", False)
 
         super().__init__(
             vocabulary=vocabulary,
@@ -89,34 +79,11 @@ class ModernBertTokenizer(BytePairTokenizer):
             **kwargs,
         )
 
-        self.cls_token = self.start_token
-        self.sep_token = self.end_token
+        self._add_special_token("pad_token", pad_token)
+        self._add_special_token("mask_token", mask_token)
+        self._add_special_token("start_token", start_token)
+        self._add_special_token("end_token", end_token)
 
-    @property
-    def pad_token_id(self):
-        return self._safe_token_id(self.pad_token)
-
-    @property
-    def mask_token_id(self):
-        return self._safe_token_id(self.mask_token)
-
-    @property
-    def start_token_id(self):
-        return self._safe_token_id(self.start_token)
-
-    @property
-    def end_token_id(self):
-        return self._safe_token_id(self.end_token)
-
-    def _safe_token_id(self, token):
-        if self.vocabulary is None:
-            return 0
-
-        return self.token_to_id(token)
-
-    @property
-    def vocabulary_size(self):
-        if self.vocabulary is None:
-            return 0
-
-        return len(self.vocabulary)
+        # ModernBERT uses the same token for CLS/SEP.
+        self._add_special_token("cls_token", start_token)
+        self._add_special_token("sep_token", end_token)

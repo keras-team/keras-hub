@@ -27,11 +27,11 @@ class ModernBertMaskedLM(MaskedLM):
     Args:
         backbone: A `keras_hub.models.ModernBertBackbone` instance.
         preprocessor: A `keras_hub.models.ModernBertMaskedLMPreprocessor`
-        instance or `None`. If `None`, this model will not handle input
-        preprocessing automatically during `fit()`, `predict()`, or
-        `evaluate()`.
+            instance or `None`. If `None`, this model will not handle input
+            preprocessing automatically during `fit()`, `predict()`, or
+            `evaluate()`.
         dtype: string or `keras.DTypePolicy`. The precision policy used
-        for the model's computations and weights.
+            for the model's computations and weights.
 
     Examples:
     ```python
@@ -76,6 +76,10 @@ class ModernBertMaskedLM(MaskedLM):
         preprocessor=None,
         **kwargs,
     ):
+        self.mlm_head_norm = layers.RMSNormalization(
+            epsilon=backbone.layer_norm_epsilon,
+            name="mlm_head_norm",
+        )
         # === Inputs ===
         inputs = backbone.input
 
@@ -93,10 +97,6 @@ class ModernBertMaskedLM(MaskedLM):
             axis=1,
         )
 
-        self.mlm_head_norm = layers.RMSNormalization(
-            epsilon=backbone.layer_norm_epsilon,
-            name="mlm_head_norm",
-        )
         masked_sequence_output = self.mlm_head_norm(masked_sequence_output)
 
         logits = backbone.token_embedding(
@@ -105,12 +105,14 @@ class ModernBertMaskedLM(MaskedLM):
         )
 
         super().__init__(
-            backbone=backbone,
-            preprocessor=preprocessor,
             inputs={
                 **inputs,
-                "mask_positions": (mask_positions),
+                "mask_positions": mask_positions,
             },
             outputs=logits,
+            backbone=backbone,
+            preprocessor=preprocessor,
             **kwargs,
         )
+
+        self.backbone = backbone

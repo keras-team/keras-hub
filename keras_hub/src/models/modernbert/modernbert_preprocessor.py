@@ -7,6 +7,12 @@ from keras_hub.src.layers.preprocessing.masked_lm_mask_generator import (
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
+from keras_hub.src.models.modernbert.modernbert_backbone import (
+    ModernBertBackbone,
+)
+from keras_hub.src.models.modernbert.modernbert_tokenizer import (
+    ModernBertTokenizer,
+)
 from keras_hub.src.models.preprocessor import Preprocessor
 
 
@@ -56,6 +62,9 @@ class ModernBertMaskedLMPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = ModernBertBackbone
+    tokenizer_cls = ModernBertTokenizer
+
     def __init__(
         self,
         tokenizer,
@@ -66,7 +75,6 @@ class ModernBertMaskedLMPreprocessor(Preprocessor):
         random_token_rate=0.1,
         **kwargs,
     ):
-        self.seed = kwargs.pop("seed", None)
         super().__init__(**kwargs)
 
         self.tokenizer = tokenizer
@@ -108,16 +116,12 @@ class ModernBertMaskedLMPreprocessor(Preprocessor):
 
         packed = self.packer(token_ids)
 
-        if isinstance(packed, dict):
-            token_ids = packed["token_ids"]
-            segment_ids = packed["segment_ids"]
-            padding_mask = packed["padding_mask"]
-        else:
-            token_ids, segment_ids = packed
-            padding_mask = ops.cast(
-                token_ids != self.tokenizer.pad_token_id,
-                "int32",
-            )
+        token_ids, _ = packed
+
+        padding_mask = ops.cast(
+            token_ids != self.tokenizer.pad_token_id,
+            "int32",
+        )
 
         mask_data = self.masker(token_ids)
 
@@ -146,7 +150,6 @@ class ModernBertMaskedLMPreprocessor(Preprocessor):
                 "mask_selection_length": self.mask_selection_length,
                 "mask_token_rate": self.mask_token_rate,
                 "random_token_rate": self.random_token_rate,
-                "seed": self.seed,
             }
         )
         return config
