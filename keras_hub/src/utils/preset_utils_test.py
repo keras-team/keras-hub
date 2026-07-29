@@ -5,7 +5,6 @@ from unittest import mock
 import keras
 import pytest
 from absl.testing import parameterized
-from kagglehub.exceptions import KaggleApiHTTPError
 
 from keras_hub.src.models.albert.albert_text_classifier import (
     AlbertTextClassifier,
@@ -18,6 +17,11 @@ from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import upload_preset
+
+try:
+    from kagglehub.exceptions import KaggleApiHTTPError
+except ImportError:
+    KaggleApiHTTPError = None
 
 try:
     from huggingface_hub.utils import EntryNotFoundError
@@ -209,6 +213,9 @@ class PresetUtilsTest(TestCase):
         with self.assertRaises(FileNotFoundError):
             get_file(local_dir, fake_path)
 
+    @pytest.mark.skipif(
+        KaggleApiHTTPError is None, reason="kagglehub is not installed"
+    )
     def test_kaggle_error_translation(self):
         preset = "kaggle://keras/bert/keras/bert_base_en"
         # A 404 is a plain missing file.
