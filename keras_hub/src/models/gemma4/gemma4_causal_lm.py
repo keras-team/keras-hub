@@ -140,6 +140,11 @@ class Gemma4CausalLM(CausalLM):
             **kwargs,
         )
 
+    def build(self, input_shape=None):
+        if self.preprocessor is not None and not self.preprocessor.built:
+            self.preprocessor.build(input_shape)
+        self.built = True
+
     def _normalize_generate_inputs(
         self,
         inputs,
