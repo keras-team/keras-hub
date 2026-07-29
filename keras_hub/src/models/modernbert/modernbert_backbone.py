@@ -1,5 +1,4 @@
 import keras
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.reversible_embedding import (
@@ -92,8 +91,10 @@ class ModernBertBackbone(Backbone):
         self.rotary_max_wavelength = rotary_max_wavelength
         self.layer_norm_epsilon = layer_norm_epsilon
 
+        if isinstance(dtype, dict):
+            dtype = keras.saving.deserialize_keras_object(dtype)
         if dtype is None:
-            layer_dtype_policy = keras.config.dtype_policy()
+            layer_dtype_policy = None
         elif isinstance(dtype, keras.DTypePolicy):
             layer_dtype_policy = dtype
         else:
@@ -105,20 +106,20 @@ class ModernBertBackbone(Backbone):
             embeddings_initializer=keras.initializers.TruncatedNormal(
                 stddev=0.02
             ),
-            dtype=layer_dtype_policy,
+            dtype=dtype,
             name="token_embedding",
         )
         self.embedding_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
             center=False,
             scale=True,
-            dtype=layer_dtype_policy,
+            dtype=dtype,
             name="embedding_norm",
         )
 
         self.rotary_embedding = RotaryEmbedding(
             max_wavelength=rotary_max_wavelength,
-            dtype=layer_dtype_policy,
+            dtype=dtype,
             name="rotary_embedding",
         )
 
@@ -146,7 +147,7 @@ class ModernBertBackbone(Backbone):
             epsilon=layer_norm_epsilon,
             center=False,
             scale=True,
-            dtype=layer_dtype_policy,
+            dtype=dtype,
             name="final_norm",
         )
 
@@ -162,7 +163,6 @@ class ModernBertBackbone(Backbone):
             x = layer(x, padding_mask=padding_mask)
 
         x = self.final_norm(x)
-        x = ops.cast(x, layer_dtype_policy.compute_dtype)
 
         super().__init__(
             inputs={
@@ -170,7 +170,8 @@ class ModernBertBackbone(Backbone):
                 "padding_mask": padding_mask,
             },
             outputs=x,
-            dtype=layer_dtype_policy,
+            dtype=dtype,
+            # dtype=layer_dtype_policy,
             **kwargs,
         )
 
@@ -188,6 +189,7 @@ class ModernBertBackbone(Backbone):
                 "dropout": self.dropout,
                 "rotary_max_wavelength": self.rotary_max_wavelength,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
+                "dtype": keras.saving.serialize_keras_object(self.dtype_policy),
             }
         )
         return config

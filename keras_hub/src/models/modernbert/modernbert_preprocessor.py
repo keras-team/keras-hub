@@ -1,3 +1,4 @@
+import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -85,22 +86,21 @@ class ModernBertMaskedLMPreprocessor(Preprocessor):
         self.random_token_rate = random_token_rate
 
         self.packer = MultiSegmentPacker(
-            start_value=tokenizer.start_token_id,
-            end_value=tokenizer.end_token_id,
+            start_value=tokenizer.cls_token_id,
+            end_value=tokenizer.sep_token_id,
             pad_value=tokenizer.pad_token_id,
             sequence_length=sequence_length,
         )
-
         self.masker = MaskedLMMaskGenerator(
             mask_selection_rate=mask_selection_rate,
             mask_selection_length=mask_selection_length,
             mask_token_rate=mask_token_rate,
             random_token_rate=random_token_rate,
-            vocabulary_size=tokenizer.vocabulary_size,
+            vocabulary_size=tokenizer.vocabulary_size(),
             mask_token_id=tokenizer.mask_token_id,
             unselectable_token_ids=[
-                tokenizer.start_token_id,
-                tokenizer.end_token_id,
+                tokenizer.cls_token_id,
+                tokenizer.sep_token_id,
                 tokenizer.pad_token_id,
             ],
         )
@@ -145,6 +145,9 @@ class ModernBertMaskedLMPreprocessor(Preprocessor):
         config = super().get_config()
         config.update(
             {
+                "tokenizer": keras.saving.serialize_keras_object(
+                    self.tokenizer
+                ),
                 "sequence_length": self.sequence_length,
                 "mask_selection_rate": self.mask_selection_rate,
                 "mask_selection_length": self.mask_selection_length,

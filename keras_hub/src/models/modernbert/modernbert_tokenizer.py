@@ -56,22 +56,25 @@ class ModernBertTokenizer(BytePairTokenizer):
     ):
         pad_token = "<|padding|>"
         mask_token = "[MASK]"
-        start_token = "<|endoftext|>"
-        end_token = "<|endoftext|>"
+        cls_token = "<|endoftext|>"
+        sep_token = "<|endoftext|>"
 
         unsplittable_tokens = list(kwargs.pop("unsplittable_tokens", []))
 
-        for token in {
+        for token in (
             pad_token,
             mask_token,
-            start_token,
-            end_token,
-        }:
+            cls_token,
+            sep_token,
+        ):
             if token not in unsplittable_tokens:
                 unsplittable_tokens.append(token)
 
         kwargs["unsplittable_tokens"] = unsplittable_tokens
-        kwargs.setdefault("add_prefix_space", False)
+        kwargs.setdefault(
+            "add_prefix_space",
+            False,
+        )
 
         super().__init__(
             vocabulary=vocabulary,
@@ -79,11 +82,24 @@ class ModernBertTokenizer(BytePairTokenizer):
             **kwargs,
         )
 
-        self._add_special_token("pad_token", pad_token)
-        self._add_special_token("mask_token", mask_token)
-        self._add_special_token("start_token", start_token)
-        self._add_special_token("end_token", end_token)
+        # Register special tokens using KerasHub pattern.
+        self._add_special_token(
+            pad_token,
+            "pad_token",
+        )
 
-        # ModernBERT uses the same token for CLS/SEP.
-        self._add_special_token("cls_token", start_token)
-        self._add_special_token("sep_token", end_token)
+        self._add_special_token(
+            mask_token,
+            "mask_token",
+        )
+
+        # ModernBERT uses EOS token for CLS and SEP.
+        self._add_special_token(
+            cls_token,
+            "cls_token",
+        )
+
+        self._add_special_token(
+            sep_token,
+            "sep_token",
+        )

@@ -16,10 +16,10 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class ModernBertMaskedLMTest(TestCase):
-    """Tests for verifying the `ModernBertMaskedLM` task model."""
+    """Tests for verifying the ModernBERT MaskedLM task model."""
 
     def setUp(self):
-        self.vocab = [
+        vocab = [
             "<|endoftext|>",
             "<|padding|>",
             "[MASK]",
@@ -54,9 +54,9 @@ class ModernBertMaskedLMTest(TestCase):
             "Ġair",
         ]
 
-        self.vocab = {t: i for i, t in enumerate(self.vocab)}
+        vocab = {token: index for index, token in enumerate(vocab)}
 
-        self.merges = [
+        merges = [
             "Ġ a",
             "Ġ t",
             "a i",
@@ -72,8 +72,8 @@ class ModernBertMaskedLMTest(TestCase):
         ]
 
         self.tokenizer = ModernBertTokenizer(
-            vocabulary=self.vocab,
-            merges=self.merges,
+            vocabulary=vocab,
+            merges=merges,
         )
 
         self.preprocessor = ModernBertMaskedLMPreprocessor(
@@ -82,9 +82,8 @@ class ModernBertMaskedLMTest(TestCase):
             mask_selection_rate=0.2,
             mask_selection_length=2,
         )
-
         self.backbone = ModernBertBackbone(
-            vocabulary_size=self.tokenizer.vocabulary_size,
+            vocabulary_size=self.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
             hidden_dim=16,
@@ -92,37 +91,47 @@ class ModernBertMaskedLMTest(TestCase):
             local_attention_window=128,
         )
 
-        self.model = ModernBertMaskedLM(
-            backbone=self.backbone,
-            preprocessor=self.preprocessor,
-        )
-
         self.init_kwargs = {
             "backbone": self.backbone,
             "preprocessor": self.preprocessor,
         }
 
-        self.input_data = ["airplane airport", "airplane"]
+        self.input_data = [
+            "airplane airport",
+            "airplane",
+        ]
+
+        self.model = ModernBertMaskedLM(
+            **self.init_kwargs,
+        )
+
+    def test_task(self):
+        """Validate task model with KerasHub standard task runner."""
+
+        self.run_task_test(
+            cls=ModernBertMaskedLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
 
     @pytest.mark.extra_large
     def test_fit(self):
-        """
-        Validate model execution and compilation
-        using standard training APIs.
-        """
-        input_data = ["airplane airport", "airplane"]
+        """Validate training execution."""
+
         self.model.compile(
-            optimizer="adam", loss="sparse_categorical_crossentropy"
+            optimizer="adam",
+            loss="sparse_categorical_crossentropy",
         )
 
-        self.model.fit(input_data, epochs=1)
+        self.model.fit(
+            self.input_data,
+            epochs=1,
+        )
 
     @pytest.mark.large
     def test_saved_model(self):
-        """
-        Validate serialization lifecycle routines and
-        graph re-instantiation.
-        """
+        """Validate serialization lifecycle."""
+
         self.run_model_saving_test(
             cls=ModernBertMaskedLM,
             init_kwargs=self.init_kwargs,

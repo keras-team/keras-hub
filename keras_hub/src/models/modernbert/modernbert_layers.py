@@ -39,21 +39,62 @@ class ModernBertMLP(layers.Layer):
         dtype=None,
         **kwargs,
     ):
+        # super().__init__(dtype=dtype, **kwargs)
+        if dtype is None:
+            dtype = keras.config.dtype_policy()
+
         super().__init__(dtype=dtype, **kwargs)
 
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.activation = keras.activations.get(activation)
-
         self.wi_0 = layers.Dense(
-            intermediate_dim, use_bias=False, dtype=dtype, name="wi_0"
+            intermediate_dim,
+            use_bias=False,
+            dtype=dtype,
+            # dtype=self.dtype_policy,
+            name="wi_0",
         )
+
         self.wi_1 = layers.Dense(
-            intermediate_dim, use_bias=False, dtype=dtype, name="wi_1"
+            intermediate_dim,
+            use_bias=False,
+            dtype=dtype,
+            # dtype=self.dtype_policy,
+            name="wi_1",
         )
+
         self.wo = layers.Dense(
-            hidden_dim, use_bias=False, dtype=dtype, name="wo"
+            hidden_dim,
+            use_bias=False,
+            dtype=dtype,
+            # dtype=self.dtype_policy,
+            name="wo",
         )
+
+    # def __init__(
+    #     self,
+    #     hidden_dim,
+    #     intermediate_dim,
+    #     activation=gelu_approximate,
+    #     dtype=None,
+    #     **kwargs,
+    # ):
+    #     super().__init__(dtype=dtype, **kwargs)
+
+    #     self.hidden_dim = hidden_dim
+    #     self.intermediate_dim = intermediate_dim
+    #     self.activation = keras.activations.get(activation)
+
+    #     self.wi_0 = layers.Dense(
+    #         intermediate_dim, use_bias=False, dtype=dtype, name="wi_0"
+    #     )
+    #     self.wi_1 = layers.Dense(
+    #         intermediate_dim, use_bias=False, dtype=dtype, name="wi_1"
+    #     )
+    #     self.wo = layers.Dense(
+    #         hidden_dim, use_bias=False, dtype=dtype, name="wo"
+    #     )
 
     def build(self, input_shape):
         self.wi_0.build(input_shape)
@@ -124,6 +165,10 @@ class ModernBertAttention(layers.Layer):
         dtype=None,
         **kwargs,
     ):
+        # super().__init__(dtype=dtype, **kwargs)
+        if dtype is None:
+            dtype = keras.config.dtype_policy()
+
         super().__init__(dtype=dtype, **kwargs)
 
         if hidden_dim % num_heads != 0:
@@ -140,12 +185,58 @@ class ModernBertAttention(layers.Layer):
         self.dropout = dropout
 
         self.qkv = layers.Dense(
-            3 * hidden_dim, use_bias=False, dtype=dtype, name="qkv"
+            3 * hidden_dim,
+            use_bias=False,
+            dtype=dtype,
+            # dtype=self.dtype_policy,
+            name="qkv",
         )
+
         self.output_dense = layers.Dense(
-            hidden_dim, use_bias=False, dtype=dtype, name="output_dense"
+            hidden_dim,
+            use_bias=False,
+            dtype=dtype,
+            # dtype=self.dtype_policy,
+            name="output_dense",
         )
-        self.attn_dropout = layers.Dropout(dropout, dtype=dtype)
+
+        self.attn_dropout = layers.Dropout(
+            dropout,
+            dtype=dtype,
+        )
+
+    # def __init__(
+    #     self,
+    #     hidden_dim,
+    #     num_heads,
+    #     rotary_embedding=None,
+    #     local_attention_window=None,
+    #     dropout=0.0,
+    #     dtype=None,
+    #     **kwargs,
+    # ):
+    #     super().__init__(dtype=dtype, **kwargs)
+
+    #     if hidden_dim % num_heads != 0:
+    #         raise ValueError(
+    #             f"`hidden_dim` ({hidden_dim}) must be perfectly divisible "
+    #             f"by `num_heads` ({num_heads})."
+    #         )
+
+    #     self.hidden_dim = hidden_dim
+    #     self.num_heads = num_heads
+    #     self.head_dim = hidden_dim // num_heads
+    #     self.rotary_embedding = rotary_embedding
+    #     self.local_attention_window = local_attention_window
+    #     self.dropout = dropout
+
+    #     self.qkv = layers.Dense(
+    #         3 * hidden_dim, use_bias=False, dtype=dtype, name="qkv"
+    #     )
+    #     self.output_dense = layers.Dense(
+    #         hidden_dim, use_bias=False, dtype=dtype, name="output_dense"
+    #     )
+    #     self.attn_dropout = layers.Dropout(dropout, dtype=dtype)
 
     def build(self, input_shape):
         self.qkv.build(input_shape)
@@ -284,6 +375,10 @@ class ModernBertEncoderLayer(layers.Layer):
         dtype=None,
         **kwargs,
     ):
+        # super().__init__(dtype=dtype, **kwargs)
+        if dtype is None:
+            dtype = keras.config.dtype_policy()
+
         super().__init__(dtype=dtype, **kwargs)
 
         self.hidden_dim = hidden_dim
@@ -296,13 +391,17 @@ class ModernBertEncoderLayer(layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
 
         if layer_idx == 0:
-            self.attn_norm = layers.Identity(name="attention_norm")
+            self.attn_norm = layers.Identity(
+                name="attention_norm",
+                dtype=self.dtype_policy,
+            )
         else:
             self.attn_norm = layers.LayerNormalization(
                 epsilon=layer_norm_epsilon,
                 center=False,
                 scale=True,
                 dtype=dtype,
+                # dtype=self.dtype_policy,
                 name="attention_norm",
             )
 
@@ -313,13 +412,16 @@ class ModernBertEncoderLayer(layers.Layer):
             local_attention_window=local_attention_window,
             dropout=dropout,
             dtype=dtype,
+            # dtype=self.dtype_policy,
             name="attention",
         )
+
         self.mlp_norm = layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
             center=False,
             scale=True,
             dtype=dtype,
+            # dtype=self.dtype_policy,
             name="mlp_norm",
         )
 
@@ -327,11 +429,84 @@ class ModernBertEncoderLayer(layers.Layer):
             hidden_dim=hidden_dim,
             intermediate_dim=intermediate_dim,
             dtype=dtype,
+            # dtype=self.dtype_policy,
             name="mlp",
         )
 
-        self.attn_dropout = layers.Dropout(dropout, dtype=dtype)
-        self.mlp_dropout = layers.Dropout(dropout, dtype=dtype)
+        self.attn_dropout = layers.Dropout(
+            dropout,
+            dtype=dtype,
+        )  # dtype=self.dtype_policy,)
+
+        self.mlp_dropout = layers.Dropout(
+            dropout,
+            dtype=dtype,
+        )  # dtype=self.dtype_policy,)
+
+    # def __init__(
+    #     self,
+    #     hidden_dim,
+    #     intermediate_dim,
+    #     num_heads,
+    #     layer_idx,
+    #     rotary_embedding=None,
+    #     local_attention_window=None,
+    #     dropout=0.0,
+    #     layer_norm_epsilon=1e-5,
+    #     dtype=None,
+    #     **kwargs,
+    # ):
+    #     super().__init__(dtype=dtype, **kwargs)
+
+    #     self.hidden_dim = hidden_dim
+    #     self.intermediate_dim = intermediate_dim
+    #     self.num_heads = num_heads
+    #     self.layer_idx = layer_idx
+    #     self.rotary_embedding = rotary_embedding
+    #     self.local_attention_window = local_attention_window
+    #     self.dropout = dropout
+    #     self.layer_norm_epsilon = layer_norm_epsilon
+
+    #     if layer_idx == 0:
+    #         self.attn_norm = layers.Identity(
+    #             dtype=dtype,
+    #             name="attention_norm",
+    #         )
+    #     else:
+    #         self.attn_norm = layers.LayerNormalization(
+    #             epsilon=layer_norm_epsilon,
+    #             center=False,
+    #             scale=True,
+    #             dtype=dtype,
+    #             name="attention_norm",
+    #         )
+
+    #     self.attn = ModernBertAttention(
+    #         hidden_dim=hidden_dim,
+    #         num_heads=num_heads,
+    #         rotary_embedding=rotary_embedding,
+    #         local_attention_window=local_attention_window,
+    #         dropout=dropout,
+    #         dtype=dtype,
+    #         name="attention",
+    #     )
+    #     self.mlp_norm = layers.LayerNormalization(
+    #         epsilon=layer_norm_epsilon,
+    #         center=False,
+    #         scale=True,
+    #         dtype=dtype,
+    #         name="mlp_norm",
+    #     )
+
+    #     self.mlp = ModernBertMLP(
+    #         hidden_dim=hidden_dim,
+    #         intermediate_dim=intermediate_dim,
+    #         dtype=dtype,
+    #         name="mlp",
+    #     )
+
+    #     self.attn_dropout = layers.Dropout(dropout, dtype=dtype)
+    #     self.mlp_dropout = layers.Dropout(dropout, dtype=dtype)
 
     def build(self, input_shape):
         self.attn_norm.build(input_shape)

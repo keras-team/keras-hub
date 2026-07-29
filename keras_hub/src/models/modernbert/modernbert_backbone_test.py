@@ -66,24 +66,17 @@ class ModernBertBackboneTest(TestCase):
     def test_alternating_attention_logic(self):
         """Validate alternating global/local attention routing."""
         model = ModernBertBackbone(**self.init_kwargs)
+
         global_layer = model.get_layer("transformer_layer_0")
         local_layer = model.get_layer("transformer_layer_1")
 
         self.assertIsNone(global_layer.local_attention_window)
-        self.assertEqual(local_layer.local_attention_window, 128)
+        self.assertEqual(
+            local_layer.local_attention_window,
+            128,
+        )
 
-        # local_layer = model.get_layer("transformer_layer_0")
-
-        # global_layer = model.get_layer("transformer_layer_1")
-
-        # self.assertEqual(
-        #     local_layer.local_attention_window,
-        #     128,
-        # )
-
-        # self.assertIsNone(global_layer.local_attention_window)
-
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=ModernBertBackbone,
@@ -91,11 +84,24 @@ class ModernBertBackboneTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_mixed_precision(self):
         self.run_precision_test(
             cls=ModernBertBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 5, 8),
+        )
+
+    @pytest.mark.extra_large
+    def test_smallest_preset(self):
+        self.run_backbone_test(
+            cls=ModernBertBackbone,
+            preset="modernbert_base_en",
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        self.run_all_presets_test(
+            cls=ModernBertBackbone,
         )
