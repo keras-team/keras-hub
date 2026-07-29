@@ -5,19 +5,52 @@ import pytest
 
 # OpenVINO supported test paths
 OPENVINO_SUPPORTED_PATHS = [
-    "keras-hub/integration_tests",
+    "integration_tests",
+    "keras_hub/src/tokenizers",
+    "keras_hub/src/models/albert",
+    "keras_hub/src/models/basnet",
+    "keras_hub/src/models/bert",
+    "keras_hub/src/models/bloom",
+    "keras_hub/src/models/cspnet",
+    "keras_hub/src/models/deberta_v3",
+    "keras_hub/src/models/deeplab_v3",
+    "keras_hub/src/models/densenet",
+    "keras_hub/src/models/distil_bert",
+    "keras_hub/src/models/efficientnet",
+    "keras_hub/src/models/electra",
+    "keras_hub/src/models/f_net",
+    "keras_hub/src/models/falcon",
+    "keras_hub/src/models/flux",
     "keras_hub/src/models/gemma",
     "keras_hub/src/models/gpt2",
+    "keras_hub/src/models/gpt_oss",
+    "keras_hub/src/models/hgnetv2",
+    "keras_hub/src/models/llama",
+    "keras_hub/src/models/llama3",
     "keras_hub/src/models/mistral",
-    "keras_hub/src/tokenizers",
+    "keras_hub/src/models/mit",
+    "keras_hub/src/models/mixtral",
+    "keras_hub/src/models/mobilenet",
+    "keras_hub/src/models/mobilenetv5",
+    "keras_hub/src/models/opt",
+    "keras_hub/src/models/parseq",
+    "keras_hub/src/models/phi3",
+    "keras_hub/src/models/qwen",
+    "keras_hub/src/models/qwen3",
+    "keras_hub/src/models/qwen3_moe",
+    "keras_hub/src/models/qwen_moe",
+    "keras_hub/src/models/roberta",
+    "keras_hub/src/models/rqvae",
+    "keras_hub/src/models/smollm3",
+    "keras_hub/src/models/swin_transformer",
+    "keras_hub/src/models/t5gemma2",
+    "keras_hub/src/models/vae",
+    "keras_hub/src/models/vgg",
+    "keras_hub/src/models/vit_det",
+    "keras_hub/src/models/whisper",
+    "keras_hub/src/models/xception",
+    "keras_hub/src/models/xlnet",
 ]
-
-# OpenVINO specific test skips
-OPENVINO_SPECIFIC_SKIPPING_TESTS = {
-    "test_backbone_basics": "bfloat16 dtype not supported",
-    "test_score_loss": "Non-implemented roll operation",
-    "test_causal_lm_basics": "Missing ops and requires trainable backend",
-}
 
 
 def pytest_addoption(parser):
@@ -137,18 +170,6 @@ def pytest_collection_modifyitems(config, items):
 
         # OpenVINO-specific test skipping
         if keras.config.backend() == "openvino":
-            test_name = item.name.split("[")[0]
-
-            if test_name in OPENVINO_SPECIFIC_SKIPPING_TESTS:
-                item.add_marker(
-                    pytest.mark.skipif(
-                        True,
-                        reason="OpenVINO: "
-                        f"{OPENVINO_SPECIFIC_SKIPPING_TESTS[test_name]}",
-                    )
-                )
-                continue
-
             is_whitelisted = any(
                 item.nodeid.startswith(supported_path + "/")
                 or item.nodeid.startswith(supported_path + "::")
