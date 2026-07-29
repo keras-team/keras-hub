@@ -178,11 +178,13 @@ class SentencePieceTokenizerTest(TestCase):
         with patch(
             "keras_hub.src.tokenizers.sentence_piece_tokenizer.spm"
         ) as mock_spm:
-            # SWIG wrapper (sentencepiece <= 0.1.99)
+            # SWIG wrapper (sentencepiece < 0.2.2)
             processor = MagicMock()
             processor.vocab_size.return_value = 7
             processor.IdToPiece.return_value = ["a", "b", "c"]
             processor.unk_id.return_value = 0
+
+            self.assertTrue(hasattr(processor, "Init"))
             mock_spm.SentencePieceProcessor.return_value = processor
 
             SentencePieceTokenizer(proto=self.proto)
@@ -193,13 +195,16 @@ class SentencePieceTokenizerTest(TestCase):
         with patch(
             "keras_hub.src.tokenizers.sentence_piece_tokenizer.spm"
         ) as mock_spm:
-            # pybind11 wrapper (sentencepiece >= 0.2.0)
-            processor = MagicMock(
-                spec=["vocab_size", "IdToPiece", "unk_id", "Decode", "Encode"]
-            )
+            # pybind11 wrapper (sentencepiece >= 0.2.2)
+            processor = MagicMock()
             processor.vocab_size.return_value = 7
             processor.IdToPiece.return_value = ["a", "b", "c"]
             processor.unk_id.return_value = 0
+
+            del mock_spm.SentencePieceProcessor.Init
+            del processor.Init
+            self.assertFalse(hasattr(mock_spm.SentencePieceProcessor, "Init"))
+            self.assertFalse(hasattr(processor, "Init"))
             mock_spm.SentencePieceProcessor.return_value = processor
 
             SentencePieceTokenizer(proto=self.proto)

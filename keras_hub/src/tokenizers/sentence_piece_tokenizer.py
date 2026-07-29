@@ -150,8 +150,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     def _set_proto_spm(self, proto):
         out_type = str if is_string_dtype(self.compute_dtype) else int
 
-        if hasattr(spm.SentencePieceProcessor(), "Init"):
-            # Old SWIG wrapper (sentencepiece <=0.1.99)
+        if hasattr(spm.SentencePieceProcessor, "Init"):
+            # Old SWIG wrapper (sentencepiece < 0.2.2)
             self._sentence_piece_spm = spm.SentencePieceProcessor()
             self._sentence_piece_spm.Init(
                 model_proto=proto,
@@ -161,7 +161,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 alpha=1.0,
             )
         else:
-            # New pybind11 wrapper (sentencepiece >=0.2.0)
+            # New pybind11 wrapper (sentencepiece >= 0.2.2)
             self._sentence_piece_spm = spm.SentencePieceProcessor(
                 model_proto=proto,
                 out_type=out_type,
