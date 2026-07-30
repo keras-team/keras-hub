@@ -1,4 +1,5 @@
 import gc
+import io
 import json
 import os
 import pathlib
@@ -816,6 +817,93 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             if model is not None and cls is not None:
                 del model
             gc.collect()
+
+    def _create_tflite_interpreter(self, tflite_path):
+        """Create a TFLite interpreter for verifying LiteRT-LM bundles.
+
+        We avoid XNNPACK because `litert_torch` bundles may contain ops/shapes
+        that the XNNPACK delegate cannot reshape at prepare time. We use the
+        built-in op resolver without default delegates so all LiteRT-LM ops
+        (including CUMSUM for multimodal models) remain available.
+        """
+        try:
+            from ai_edge_litert.interpreter import Interpreter
+            from ai_edge_litert.interpreter import OpResolverType
+
+            return Interpreter(
+                model_path=tflite_path,
+                experimental_op_resolver_type=OpResolverType.BUILTIN_WITHOUT_DEFAULT_DELEGATES,
+            )
+        except Exception:
+            pass
+        try:
+            return tf.lite.Interpreter(
+                model_path=tflite_path,
+                experimental_op_resolver_type=tf.lite.experimental.OpResolverType.BUILTIN_WITHOUT_DEFAULT_DELEGATES,
+            )
+        except Exception:
+            pass
+        return tf.lite.Interpreter(model_path=tflite_path)
+
+    def _parse_litertlm_bundle(self, litertlm_path):
+        """Read a `.litertlm` bundle and return its raw data + metadata table.
+
+        Returns:
+            A tuple of ``(data, metadata)`` where ``data`` is the bundle bytes
+            and ``metadata`` is the parsed ``LiteRTLMMetaData`` flatbuffer.
+        """
+        from litert_lm_builder import litertlm_peek
+
+        with open(litertlm_path, "rb") as f:
+            data = f.read()
+        metadata = litertlm_peek.read_litertlm_header(
+            litertlm_path, io.StringIO()
+        )
+        return data, metadata
+
+    def _extract_litertlm_tflite_interpreters(self, litertlm_path):
+        """Extract every TFLite model from a `.litertlm` bundle."""
+        from litert_lm_builder import litertlm_core as core
+
+        data, metadata = self._parse_litertlm_bundle(litertlm_path)
+
+        interpreters = []
+        for i in range(metadata.SectionMetadata().ObjectsLength()):
+            obj = metadata.SectionMetadata().Objects(i)
+            if (
+                core.any_section_data_type_to_string(obj.DataType())
+                != "TFLiteModel"
+            ):
+                continue
+            tflite_data = data[obj.BeginOffset() : obj.EndOffset()]
+            tflite_path = os.path.join(
+                self.get_temp_dir(),
+                f"litertlm_model_{len(interpreters)}.tflite",
+            )
+            with open(tflite_path, "wb") as f:
+                f.write(tflite_data)
+            interpreters.append(self._create_tflite_interpreter(tflite_path))
+        return interpreters
+
+    def _parse_litertlm_llm_metadata(self, litertlm_path):
+        """Parse the ``LlmMetadata`` protobuf from a `.litertlm` bundle."""
+        from litert_lm_builder import litertlm_core as core
+        from litert_lm_builder.runtime.proto import llm_metadata_pb2
+
+        data, metadata = self._parse_litertlm_bundle(litertlm_path)
+
+        for i in range(metadata.SectionMetadata().ObjectsLength()):
+            obj = metadata.SectionMetadata().Objects(i)
+            if (
+                core.any_section_data_type_to_string(obj.DataType())
+                != "LlmMetadataProto"
+            ):
+                continue
+            llm_meta_buf = data[obj.BeginOffset() : obj.EndOffset()]
+            meta = llm_metadata_pb2.LlmMetadata()
+            meta.ParseFromString(llm_meta_buf)
+            return meta
+        return None
 
     def _compare_outputs(
         self,
