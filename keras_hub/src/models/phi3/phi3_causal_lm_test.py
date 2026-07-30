@@ -156,3 +156,13 @@ class Phi3CausalLMTest(TestCase):
         )
 
         self.assertIsNone(causal_lm.get_quantization_layer_structure("int8"))
+
+    def test_litertlm_export(self):
+        self.run_litertlm_export_test(
+            cls=Phi3CausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            prefill_seq_len=12,
+            verify_model_type="generic_model",
+            verify_numerics=True,
+        )

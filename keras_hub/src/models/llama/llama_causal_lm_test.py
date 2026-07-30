@@ -206,3 +206,13 @@ class LlamaCausalLMTest(TestCase):
         # Assert shapes for info exfiltrated into the parent context.
         self.assertEqual(ops.shape(embedded_prompts), expected_embedded_shape)
         self.assertEqual(ops.shape(scores), expected_score_shape)
+
+    def test_litertlm_export(self):
+        self.run_litertlm_export_test(
+            cls=LlamaCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            prefill_seq_len=8,
+            verify_model_type="generic_model",
+            verify_numerics=True,
+        )

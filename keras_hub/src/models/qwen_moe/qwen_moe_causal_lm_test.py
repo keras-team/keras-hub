@@ -162,3 +162,12 @@ class QwenMoeCausalLMTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+    def test_litertlm_export(self):
+        self.run_litertlm_export_test(
+            cls=QwenMoeCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            verify_model_type="qwen2p5",
+            verify_numerics=True,
+        )

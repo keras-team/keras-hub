@@ -152,3 +152,31 @@ class Llama3CausalLMTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+    def test_litertlm_export(self):
+        """Test LiteRT-LM export for Llama3CausalLM with small test model."""
+        preprocessor = Llama3CausalLMPreprocessor(
+            Llama3Tokenizer(vocabulary=self.vocab, merges=self.merges),
+            sequence_length=8,
+        )
+        backbone = Llama3Backbone(
+            vocabulary_size=preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+        )
+        init_kwargs = {
+            "preprocessor": preprocessor,
+            "backbone": backbone,
+        }
+        input_data = preprocessor(*self.train_data)[0]
+        self.run_litertlm_export_test(
+            cls=Llama3CausalLM,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+            prefill_seq_len=8,
+            verify_model_type="generic_model",
+            verify_numerics=True,
+        )
