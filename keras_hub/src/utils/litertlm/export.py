@@ -198,10 +198,10 @@ class ExportPlan:
     """Immutable bundle of per-export-run settings for a single export call.
 
     ``export_to_litertlm`` computes all of these values once, early in the
-    pipeline (resolving the model-family spec and cache config), then passes
-    a single ``ExportPlan`` to the later pipeline phases (building sample
-    inputs, tracing/converting, assembling the bundle) instead of a long,
-    order-sensitive positional-argument list.
+    pipeline (resolving the model-family spec, cache config, and vision
+    config), then passes a single ``ExportPlan`` to the later pipeline
+    phases (building sample inputs, tracing/converting, assembling the
+    bundle) instead of a long, order-sensitive positional-argument list.
     """
 
     spec: object
@@ -211,6 +211,9 @@ class ExportPlan:
     head_dim: int
     prefill_seq_lens: list
     dtype: object
+    has_vision: bool
+    vision_cfg: dict | None
+    vision_input_style: str | None
     sampler_config: object | None
     model_type_overridden: bool
 
@@ -219,7 +222,7 @@ def _build_prefill_inputs(plan):
     """Build a ``{seq_len: sample_inputs}`` map for every prefill bucket."""
     prefill_inputs_map = {}
     for seq_len in plan.prefill_seq_lens:
-        prefill_inputs_map[seq_len] = _build_sample_inputs(
+        base = _build_sample_inputs(
             batch_size=1,
             seq_len=seq_len,
             num_layers=plan.num_layers,
@@ -229,6 +232,37 @@ def _build_prefill_inputs(plan):
             dtype=plan.dtype,
             spec=plan.spec,
         )
+        if plan.has_vision:
+            vision_cfg = plan.vision_cfg
+            max_images = vision_cfg["max_images_per_prompt"]
+            num_vision_tokens = vision_cfg["num_vision_tokens"]
+            if plan.vision_input_style == "patch_values":
+                base.update(
+                    _build_gemma4_vision_sample_inputs(
+                        batch_size=1,
+                        max_images=max_images,
+                        patch_size=vision_cfg["patch_size"],
+                        image_size=vision_cfg["image_size"],
+                        num_vision_tokens=num_vision_tokens,
+                        seq_len=seq_len,
+                        dtype=plan.dtype,
+                    )
+                )
+            else:
+                # "raw_images"/"embedded_pixel_values" both take a raw
+                # `[B, N, H, W, 3]` sample tensor here; they only diverge
+                # in how the adapter runs the encoder at trace time.
+                base.update(
+                    _build_vision_sample_inputs(
+                        batch_size=1,
+                        max_images=max_images,
+                        image_size=vision_cfg["image_size"],
+                        num_vision_tokens=num_vision_tokens,
+                        seq_len=seq_len,
+                        dtype=plan.dtype,
+                    )
+                )
+        prefill_inputs_map[seq_len] = base
     return prefill_inputs_map
 
 
@@ -308,6 +342,7 @@ def _assemble_bundle(
         tokenizer,
         plan.cache_length,
         meta_path,
+        vision_cfg=plan.vision_cfg,
         sampler_config=plan.sampler_config,
         model_type_overridden=plan.model_type_overridden,
     )
@@ -372,12 +407,21 @@ def export_to_litertlm(
     required by the LiteRT-LM executor, bundles the SentencePiece tokenizer,
     and writes an ``LlmMetadata`` protobuf into the ``.litertlm`` artifact.
 
+    **Multimodal:** When the model has a ``vision_encoder`` (e.g. Gemma3),
+    the vision encoder is baked into the prefill signature so that image
+    inputs are processed alongside text tokens. The decode signature
+    remains text-only because image KV-caches are already seeded after
+    prefill.
+
     **Bucketing:** ``prefill_seq_len`` accepts either a single ``int`` or a
     ``list[int]``. When a list is provided (e.g.
     ``[32, 64, 128, 256, 512, 1024]``), the exporter traces one prefill
     signature per bucket. At runtime the LiteRT-LM executor dispatches to
     the smallest bucket that fits the actual prompt, avoiding wasted
-    computation on padding.
+    computation on padding. For vision-capable models (Gemma3, Gemma3n,
+    Gemma4, PaliGemma), bucketing is currently disabled family-wide (every
+    prefill bucket must equal ``cache_length``) as a conservative default,
+    governed by the ``allows_vision_bucketing`` export spec flag.
 
     Args:
         model: ``CausalLM``. The KerasHub model to export, with an attached
@@ -427,7 +471,8 @@ def export_to_litertlm(
         ValueError: If the backend is not ``"torch"``, if ``path`` does not
             end with ``.litertlm``, if the model lacks ``call_with_cache``,
             if ``backend_constraint`` is invalid, if any
-            ``prefill_seq_len`` exceeds ``cache_length``, if
+            ``prefill_seq_len`` exceeds ``cache_length``, if a multimodal
+            model is exported with mismatched ``prefill_seq_len`` values, if
             ``sampler_config`` is not a ``SamplerConfig`` instance, if
             ``llm_model_type`` is not a recognized override, or if the model
             is a non-exportable MTP draft model (``Gemma4AssistantCausalLM``).
@@ -503,6 +548,25 @@ def export_to_litertlm(
                 f"cache_length ({cache_length})."
             )
 
+    # Detect multimodal capabilities.
+    vision_cfg = spec.get_vision_config(model)
+    has_vision = vision_cfg is not None
+    vision_input_style = spec.vision_input_style if has_vision else None
+
+    if (
+        has_vision
+        and not spec.allows_vision_bucketing
+        and any(seq_len != cache_length for seq_len in prefill_seq_lens)
+    ):
+        raise ValueError(
+            "Multimodal LiteRT-LM export currently requires all "
+            f"`prefill_seq_len` values ({prefill_seq_lens}) to match the "
+            f"cache_length ({cache_length}). This restriction is enforced "
+            "for all vision-capable families (Gemma3, Gemma3n, Gemma4, "
+            "PaliGemma) pending a per-family assessment. Pass a single "
+            "`prefill_seq_len` equal to `cache_length`."
+        )
+
     dtype = _torch_dtype_from_model(model)
 
     # Bundle all resolved per-export-run settings into one immutable plan.
@@ -514,6 +578,9 @@ def export_to_litertlm(
         head_dim=head_dim,
         prefill_seq_lens=prefill_seq_lens,
         dtype=dtype,
+        has_vision=has_vision,
+        vision_cfg=vision_cfg,
+        vision_input_style=vision_input_style,
         sampler_config=sampler_config,
         model_type_overridden=llm_model_type is not None,
     )
@@ -627,6 +694,84 @@ def _build_sample_inputs(
     return sample
 
 
+def _build_indices_and_mask(batch_size, num_tokens, seq_len):
+    """Create the zeroed int32 ``(indices, mask)`` sample-tensor pair."""
+    indices = torch.zeros(
+        (batch_size, num_tokens), dtype=torch.int32, device="cpu"
+    )
+    mask = torch.zeros((batch_size, seq_len), dtype=torch.int32, device="cpu")
+    return indices, mask
+
+
+def _gemma4_patch_dims(image_size, patch_size):
+    """Return ``(num_patches, patch_dim)`` for Gemma4's flattened patches."""
+    num_patches = (image_size // patch_size) ** 2
+    patch_dim = patch_size**2 * 3
+    return num_patches, patch_dim
+
+
+def _build_vision_sample_inputs(
+    batch_size,
+    max_images,
+    image_size,
+    num_vision_tokens,
+    seq_len,
+    dtype,
+):
+    """Create concrete vision sample tensors for a prefill signature."""
+    device = "cpu"
+    images = torch.zeros(
+        (batch_size, max_images, image_size, image_size, 3),
+        dtype=dtype,
+        device=device,
+    )
+    vision_indices, vision_mask = _build_indices_and_mask(
+        batch_size, num_vision_tokens, seq_len
+    )
+    return {
+        "images": images,
+        "vision_indices": vision_indices,
+        "vision_mask": vision_mask,
+    }
+
+
+def _build_gemma4_vision_sample_inputs(
+    batch_size,
+    max_images,
+    patch_size,
+    image_size,
+    num_vision_tokens,
+    seq_len,
+    dtype,
+):
+    """Create concrete Gemma4 vision sample tensors for a prefill signature.
+
+    Gemma4's vision encoder expects pre-processed patches
+    (``pixel_values`` + ``pixel_position_ids``) rather than raw RGB images.
+    """
+    device = "cpu"
+    num_patches, patch_dim = _gemma4_patch_dims(image_size, patch_size)
+    pixel_values = torch.zeros(
+        (batch_size, max_images, num_patches, patch_dim),
+        dtype=dtype,
+        device=device,
+    )
+    pixel_position_ids = torch.zeros(
+        (batch_size, max_images, num_patches, 2),
+        dtype=torch.int32,
+        device=device,
+    )
+    vision_indices, vision_mask = _build_indices_and_mask(
+        batch_size, num_vision_tokens, seq_len
+    )
+    return {
+        "pixel_values": pixel_values,
+        "pixel_position_ids": pixel_position_ids,
+        "vision_indices": vision_indices,
+        "vision_mask": vision_mask,
+    }
+
+
 def _get_tokenizer(model):
     preprocessor = getattr(model, "preprocessor", None)
     if preprocessor is None:
@@ -670,6 +815,7 @@ def _build_llm_metadata(
     tokenizer,
     max_num_tokens,
     path,
+    vision_cfg=None,
     sampler_config=None,
     model_type_overridden=False,
 ):
@@ -712,6 +858,10 @@ def _build_llm_metadata(
     meta.max_num_tokens = int(max_num_tokens)
 
     getattr(meta.llm_model_type, spec.model_type).SetInParent()
+
+    # Populate vision fields for supported model types.
+    if vision_cfg is not None:
+        spec.populate_vision_metadata(meta, vision_cfg)
 
     # Populate function-calling fields (only `FunctionGemmaSpec` overrides
     # the base no-op). Skipped on an explicit `llm_model_type` override:

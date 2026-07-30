@@ -1276,3 +1276,449 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             path, target_size=target_size, keep_aspect_ratio=True
         )
         return np.array(img)
+
+    def _litertlm_multimodal_keras_prefill(
+        self, model, spec, inputs, num_layers, cache_length
+    ):
+        """Prefill ``model`` eagerly with the encoders run outside the adapter.
+
+        The TFLite graph under test is traced from
+        ``KerasHubLiteRTAdapter.forward_prefill``, so building the Keras
+        reference by calling that same module would apply any adapter defect
+        to both sides of a comparison and cancel it out. This runs the
+        vision encoder here and then goes straight to
+        ``model.call_with_cache``, the way ``_verify_litertlm_numerics``
+        already does for text.
+
+        Args:
+            model: The built multimodal ``CausalLM``.
+            spec: The ``LiteRTLMExportSpec`` resolved for ``model``.
+            inputs: The prefill sample-input dict, also fed to TFLite.
+            num_layers: Number of decoder layers in the KV cache.
+            cache_length: The cache length the bundle was traced with.
+
+        Returns:
+            The updated KV cache, stacked as ``[batch, num_layers, 2, ...]``.
+        """
+        import inspect
+
+        import torch
+
+        from keras_hub.src.utils.litertlm.model_specs import _get_vision_encoder
+
+        call_kwargs = {
+            "vision_mask": inputs.get("vision_mask"),
+            "vision_indices": inputs.get("vision_indices"),
+        }
+        tokens = inputs["tokens"]
+        with torch.no_grad():
+            if "images" in inputs or "pixel_values" in inputs:
+                vision_encoder = _get_vision_encoder(model.backbone)
+                if spec.vision_input_style == "embedded_pixel_values":
+                    # This style keeps the vision encoder inside the backbone,
+                    # so there is nothing to run outside it.
+                    call_kwargs["pixel_values"] = inputs["images"]
+                elif spec.vision_input_style == "patch_values":
+                    call_kwargs["img_embeddings"] = vision_encoder(
+                        {
+                            "pixel_values": inputs["pixel_values"],
+                            "pixel_position_ids": inputs["pixel_position_ids"],
+                        }
+                    )
+                else:
+                    images = inputs["images"]
+                    if spec.flatten_image_batch:
+                        images = images.reshape(-1, *images.shape[2:])
+                    call_kwargs["img_embeddings"] = vision_encoder(images)
+            params = inspect.signature(model.call_with_cache).parameters
+            call_kwargs = {k: v for k, v in call_kwargs.items() if k in params}
+            call_kwargs.update(
+                spec.get_forced_call_with_cache_kwargs(tokens, cache_length)
+            )
+            k_stack = torch.stack(
+                [inputs[f"kv_cache_k_{i}"] for i in range(num_layers)], dim=1
+            )
+            v_stack = torch.stack(
+                [inputs[f"kv_cache_v_{i}"] for i in range(num_layers)], dim=1
+            )
+            _, _, updated_cache = model.call_with_cache(
+                tokens,
+                torch.stack([k_stack, v_stack], dim=2),
+                int(inputs["input_pos"][0]),
+                **call_kwargs,
+            )
+        return updated_cache
+
+    def _verify_litertlm_multimodal_numerics(
+        self,
+        model,
+        interpreter,
+        prefill_seq_len,
+        atol=1e-4,
+        rtol=1e-4,
+        seed=0,
+        verification_level=None,
+    ):
+        """Compare Keras eager and TFLite outputs for a multimodal bundle.
+
+        Multimodal sibling of ``_verify_litertlm_numerics``. Prefill compares
+        KV-cache tensors only: the multimodal prefill signature emits no
+        logits by design (see ``adapter.py`` ``forward_prefill``, which calls
+        ``_call_with_cache(..., return_logits=False)``; the runtime extracts
+        last-token logits via a dedicated decode step). The first decode step
+        consumes the last prompt token and compares logits between the TFLite
+        bundle and the Keras model, mirroring the text helper's structure.
+
+        Both the TFLite prefill signature and the Keras reference are fed the
+        identical sample-input dict produced by
+        ``export._build_prefill_inputs`` -- the exact dict the export pipeline
+        feeds the prefill signature at trace time -- so the two sides differ
+        only in how those inputs are consumed, and the helper stays in
+        lockstep with the export pipeline across refactors (the multimodal
+        prefill signature's input names/shapes deliberately do NOT match the
+        preprocessor output dict, so feeding the preprocessor dict to both
+        sides would be wrong). The Keras side consumes them through
+        ``_litertlm_multimodal_keras_prefill``, which runs the vision
+        encoder itself instead of through the traced adapter, so the two
+        sides are independent computations of the same quantity.
+
+        The builder returns zeros; zeros make parity pass trivially (both
+        sides compute on zeros). Only the data-bearing tensors (``tokens`` and
+        the raw image feature tensors) are replaced with seeded random
+        values; index/mask/``input_pos``/kv-cache-seed tensors are left as the
+        builder set them, because they encode the traced structure.
+
+        Tolerance policy: defaults to Gemma3's proven ``1e-4``. Do NOT relax
+        silently. If a future family needs a looser tolerance, the CALLER
+        passes it AND carries a one-line code comment at the call site
+        justifying it -- this helper never widens tolerances on its own.
+
+        Args:
+            model: The built KerasHub multimodal ``CausalLM`` -- the same
+                instance passed to ``model.export``.
+            interpreter: The main TFLite interpreter from the bundle (the one
+                carrying both a ``prefill*`` and a ``decode`` signature).
+            prefill_seq_len: The int the bundle was exported with. Multimodal
+                is single-bucket, so ``cache_length == prefill_seq_len``.
+            atol: Absolute tolerance (default ``1e-4``, Gemma3's proven value).
+            rtol: Relative tolerance (default ``1e-4``).
+            seed: Seed for the random data-bearing inputs.
+            verification_level: Optional override of the auto-detected level
+                string; ``None`` auto-detects from vision presence.
+
+        Returns:
+            A dict describing what was actually verified, so callers/reports
+            can record the achieved level rather than over-claiming:
+            ``verification_level`` (str), ``prefill_kv_max_abs_err`` (float),
+            ``decode_logits_max_abs_err`` (float), ``decode_kv_max_abs_err``
+            (float), and ``has_vision`` (bool).
+        """
+        import torch
+
+        # Local imports mirror the lazy-import convention of the text helper
+        # above and of `export.py`/`model_specs.py`: this low-level,
+        # widely-imported test module must not carry a module-level dependency
+        # on the optional/heavy litertlm export package.
+        from keras_hub.src.utils.litertlm import export as _export
+        from keras_hub.src.utils.litertlm.model_specs import resolve_export_spec
+
+        # Reconstruct the exact ExportPlan the export pipeline built, so the
+        # sample inputs we feed match the traced signature by construction.
+        spec = resolve_export_spec(model)
+        cache_length = prefill_seq_len  # multimodal invariant
+        cache_cfg = spec.get_cache_config(model, cache_length=cache_length)
+        num_layers = cache_cfg["num_layers"]
+        num_kv_heads = cache_cfg["num_kv_heads"]
+        head_dim = cache_cfg["head_dim"]
+
+        vision_cfg = spec.get_vision_config(model)
+        has_vision = vision_cfg is not None
+        if not has_vision:
+            self.fail(
+                "_verify_litertlm_multimodal_numerics called on a text-only "
+                "model; use _verify_litertlm_numerics instead."
+            )
+
+        vision_input_style = spec.vision_input_style
+        dtype = _export._torch_dtype_from_model(model)
+
+        plan = _export.ExportPlan(
+            spec=spec,
+            num_layers=num_layers,
+            cache_length=cache_length,
+            num_kv_heads=num_kv_heads,
+            head_dim=head_dim,
+            prefill_seq_lens=[prefill_seq_len],
+            dtype=dtype,
+            has_vision=has_vision,
+            vision_cfg=vision_cfg,
+            vision_input_style=vision_input_style,
+            # This harness always mirrors an unconfigured `model.export(...)`
+            # call (no `sampler_config`), matching what the family tests
+            # under verification actually export.
+            sampler_config=None,
+            # The harness never passes an `llm_model_type` override.
+            model_type_overridden=False,
+        )
+        prefill_inputs = _export._build_prefill_inputs(plan)[prefill_seq_len]
+
+        # `_build_prefill_inputs` returns zeros for index/mask tensors; the
+        # data-bearing tensors are randomized below, but leaving indices/masks
+        # zero makes the entire vision merge path an identity (slot 0 is
+        # restored to the text embedding by Gemma3/Gemma4's
+        # `interleave_embeddings`).
+        # We therefore synthesize real placement indices and masks so the parity
+        # check actually exercises the vision tower. We also keep a copy
+        # of the zero-index structure for a sensitivity check.
+        rng = np.random.default_rng(seed)
+        vocab_size = model.backbone.vocabulary_size
+
+        # Compute the actual number of tokens each encoder produces, because
+        # some configs declare a theoretical maximum that exceeds the actual
+        # encoder output for the trace-time input shape.
+        actual_vision_tokens = None
+        with torch.no_grad():
+            if "pixel_values" in prefill_inputs:
+                from keras_hub.src.utils.litertlm.model_specs import (
+                    _get_vision_encoder,
+                )
+
+                vision_encoder = _get_vision_encoder(model.backbone)
+                vision_out = vision_encoder(
+                    {
+                        "pixel_values": prefill_inputs["pixel_values"],
+                        "pixel_position_ids": prefill_inputs[
+                            "pixel_position_ids"
+                        ],
+                    }
+                )
+                # vision_out shape is (batch, max_images, tokens_per_image, dim)
+                actual_vision_tokens = vision_out.shape[1] * vision_out.shape[2]
+
+        # Real placement: start after the BOS slot to avoid the restore-to-text
+        # behavior at index 0. Cap the number of placed tokens to what fits in
+        # the sequence and to the actual encoder output count.
+        seq_len = prefill_inputs["tokens"].shape[1]
+        max_places = seq_len - 1
+        cursor = 1
+        if "vision_indices" in prefill_inputs:
+            num_vision_tokens = min(
+                prefill_inputs["vision_indices"].shape[1],
+                actual_vision_tokens
+                or prefill_inputs["vision_indices"].shape[1],
+                max_places,
+            )
+            vision_start = cursor
+            prefill_inputs["vision_indices"] = torch.zeros_like(
+                prefill_inputs["vision_indices"]
+            )
+            prefill_inputs["vision_indices"][:, :num_vision_tokens] = (
+                torch.arange(
+                    vision_start,
+                    vision_start + num_vision_tokens,
+                    dtype=torch.int32,
+                ).unsqueeze(0)
+            )
+            vision_mask = torch.zeros_like(prefill_inputs["vision_mask"])
+            vision_mask[:, vision_start : vision_start + num_vision_tokens] = 1
+            prefill_inputs["vision_mask"] = vision_mask
+            cursor += num_vision_tokens
+            max_places -= num_vision_tokens
+        if "pixel_position_ids" in prefill_inputs:
+            # Gemma4's test preprocessor produces all-1s 2D patch positions.
+            # Mirror that rather than a synthetic grid so the vision-encoder
+            # positional embedding path is exercised with the same values the
+            # export was traced against.
+            prefill_inputs["pixel_position_ids"] = torch.ones_like(
+                prefill_inputs["pixel_position_ids"]
+            )
+
+        zero_structure_prefill_inputs = {
+            k: v.clone() if isinstance(v, torch.Tensor) else v
+            for k, v in prefill_inputs.items()
+        }
+        if "vision_indices" in zero_structure_prefill_inputs:
+            zero_structure_prefill_inputs["vision_indices"] = torch.zeros_like(
+                zero_structure_prefill_inputs["vision_indices"]
+            )
+            zero_structure_prefill_inputs["vision_mask"] = torch.zeros_like(
+                zero_structure_prefill_inputs["vision_mask"]
+            )
+
+        for name, t in list(prefill_inputs.items()):
+            shape = tuple(t.shape)
+            if name == "tokens":
+                prefill_inputs[name] = torch.from_numpy(
+                    rng.integers(1, vocab_size, size=shape).astype("int32")
+                )
+                zero_structure_prefill_inputs[name] = prefill_inputs[
+                    name
+                ].clone()
+            elif name in ("images", "pixel_values"):
+                prefill_inputs[name] = torch.from_numpy(
+                    rng.standard_normal(shape).astype("float32")
+                )
+                zero_structure_prefill_inputs[name] = prefill_inputs[
+                    name
+                ].clone()
+
+        # Auto-detect the verification level unless overridden.
+        if verification_level is None:
+            verification_level = "end_to_end_vision"
+
+        # -- TFLite prefill (mirror the text helper's signature selection) --
+        sig_list = list(interpreter._get_full_signature_list().keys())
+        if "prefill" in sig_list:
+            prefill_sig = "prefill"
+        else:
+            matching = sorted(
+                s
+                for s in sig_list
+                if s.startswith("prefill_")
+                and int(s.split("_")[1]) >= prefill_seq_len
+            )
+            prefill_sig = matching[0] if matching else None
+        if prefill_sig is None:
+            self.fail(
+                "No usable prefill signature found for multimodal parity."
+            )
+
+        tflite_prefill_feed = {
+            name: t.detach().cpu().numpy() for name, t in prefill_inputs.items()
+        }
+        tflite_prefill_out = interpreter.get_signature_runner(prefill_sig)(
+            **tflite_prefill_feed
+        )
+
+        # -- Keras prefill, fed the identical inputs --
+        keras_cache = self._litertlm_multimodal_keras_prefill(
+            model, spec, prefill_inputs, num_layers, cache_length
+        )
+        keras_cache_np = keras_cache.detach().cpu().numpy()
+
+        # Real placement indices/masks must move the reference KV cache away
+        # from the all-zero placement the sample builder produces, or the
+        # towers feed nothing and the comparison below is vacuous.
+        zero_structure_cache = self._litertlm_multimodal_keras_prefill(
+            model, spec, zero_structure_prefill_inputs, num_layers, cache_length
+        )
+        sensitivity_diff = float(
+            np.max(
+                np.abs(
+                    keras_cache_np - zero_structure_cache.detach().cpu().numpy()
+                )
+            )
+        )
+        self.assertGreater(
+            sensitivity_diff,
+            1e-6,
+            f"Vision tower is not wired into the reference: "
+            f"sensitivity diff {sensitivity_diff} <= 1e-6. "
+            f"The multimodal parity check is vacuous.",
+        )
+
+        # -- Compare prefill KV caches (prefill emits no logits) --
+        prefill_kv_max_abs_err = 0.0
+        for i in range(num_layers):
+            for j, kv in enumerate(("k", "v")):
+                key = f"kv_cache_{kv}_{i}"
+                keras_kv = keras_cache_np[:, i, j, ...]
+                tflite_kv = tflite_prefill_out[key]
+                prefill_kv_max_abs_err = max(
+                    prefill_kv_max_abs_err,
+                    float(np.max(np.abs(keras_kv - tflite_kv))),
+                )
+                self.assertAllClose(
+                    keras_kv,
+                    tflite_kv,
+                    atol=atol,
+                    rtol=rtol,
+                    msg=f"Multimodal prefill KV mismatch at {key}",
+                )
+
+        # -- First decode step (last prompt token), compare logits --
+        # Multimodal export enforces `cache_length == prefill_seq_len`, so
+        # there is no decode headroom past the prompt: `decode_pos` is the
+        # last prefilled slot. (This differs from the text helper, which bumps
+        # cache_length to leave a headroom slot.)
+        decode_pos = min(prefill_seq_len, cache_length - 1)
+        tokens_np = prefill_inputs["tokens"].detach().cpu().numpy()
+        # The decode token's identity does not matter for numeric parity (both
+        # backends run the identical op on it); reuse the prompt's last token.
+        decode_token = tokens_np[:, -1:].copy()
+
+        # Keras decode continues from the Keras prefill cache, applying the
+        # same family-forced `call_with_cache` kwargs the exported decode graph
+        # baked in (only Gemma3n has any).
+        decode_tokens = torch.from_numpy(decode_token)
+        with torch.no_grad():
+            keras_logits, _, keras_cache_dec = model.call_with_cache(
+                decode_tokens,
+                keras_cache,
+                decode_pos,
+                **spec.get_forced_call_with_cache_kwargs(
+                    decode_tokens, cache_length
+                ),
+            )
+        keras_logits = keras_logits.detach().cpu().numpy()
+        keras_cache_dec = keras_cache_dec.detach().cpu().numpy()
+
+        # TFLite decode: feed the TFLite prefill KV out.
+        decode_feed = {
+            "tokens": decode_token,
+            "input_pos": np.array([decode_pos], dtype=np.int32),
+        }
+        for i in range(num_layers):
+            for kv in ("k", "v"):
+                key = f"kv_cache_{kv}_{i}"
+                decode_feed[key] = tflite_prefill_out[key]
+        tflite_decode_out = interpreter.get_signature_runner("decode")(
+            **decode_feed
+        )
+        tflite_logits = tflite_decode_out["logits"]
+
+        decode_logits_max_abs_err = float(
+            np.max(np.abs(keras_logits - tflite_logits))
+        )
+        self.assertEqual(
+            keras_logits.shape,
+            tflite_logits.shape,
+            f"Multimodal decode logits shape mismatch: "
+            f"Keras {keras_logits.shape} vs TFLite {tflite_logits.shape}",
+        )
+        self.assertAllClose(
+            keras_logits,
+            tflite_logits,
+            atol=atol,
+            rtol=rtol,
+            msg="Multimodal first-decode logits mismatch",
+        )
+
+        # Compare decode-step KV caches as well, matching the text helper.
+        decode_kv_max_abs_err = 0.0
+        for i in range(num_layers):
+            for j, kv in enumerate(("k", "v")):
+                key = f"kv_cache_{kv}_{i}"
+                if key not in tflite_decode_out:
+                    continue
+                keras_kv = keras_cache_dec[:, i, j, ...]
+                tflite_kv = tflite_decode_out[key]
+                decode_kv_max_abs_err = max(
+                    decode_kv_max_abs_err,
+                    float(np.max(np.abs(keras_kv - tflite_kv))),
+                )
+                self.assertAllClose(
+                    keras_kv,
+                    tflite_kv,
+                    atol=atol,
+                    rtol=rtol,
+                    msg=f"Multimodal decode KV mismatch at {key}",
+                )
+
+        return {
+            "verification_level": verification_level,
+            "prefill_kv_max_abs_err": prefill_kv_max_abs_err,
+            "decode_logits_max_abs_err": decode_logits_max_abs_err,
+            "decode_kv_max_abs_err": decode_kv_max_abs_err,
+            "has_vision": has_vision,
+        }

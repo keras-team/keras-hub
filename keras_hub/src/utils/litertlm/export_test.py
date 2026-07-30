@@ -14,9 +14,22 @@ from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
     GemmaCausalLMPreprocessor,
 )
 from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
+from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
+from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
+from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
+    Gemma3CausalLMPreprocessor,
+)
+from keras_hub.src.models.gemma3.gemma3_image_converter import (
+    Gemma3ImageConverter,
+)
+from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
+    Gemma3VisionEncoder,
+)
+from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import MockGemma3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.litertlm import export
 from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
+from keras_hub.src.utils.litertlm.adapter import _run_vision_encoder_for_style
 from keras_hub.src.utils.litertlm.model_specs import GREEDY_SAMPLER_CONFIG
 from keras_hub.src.utils.litertlm.model_specs import SamplerConfig
 
@@ -367,6 +380,101 @@ class TestLiteRTLmExport(TestCase):
                 sampler_config={"top_k": 1},  # dict, not a SamplerConfig
             )
 
+    def _build_tiny_gemma3_multimodal_model(
+        self, num_layers=1, max_images=1, random_weights=False
+    ):
+        """Build a minimal Gemma3 vision-capable model.
+
+        The defaults serve the bucketing-ban tests, which only need the
+        rejection to fire, not any particular model content; the
+        structural/numeric multimodal tests pass `num_layers=2,
+        max_images=2, random_weights=True`. The mock tokenizer gets a
+        SentencePiece asset because the export raises without one.
+        """
+        tokenizer = MockGemma3Tokenizer()
+        self._attach_sentencepiece_tokenizer_asset(
+            tokenizer,
+            os.path.join(self.get_test_data_dir(), "gemma_test_vocab.spm"),
+        )
+
+        image_converter = Gemma3ImageConverter(image_size=(16, 16))
+        preprocessor = Gemma3CausalLMPreprocessor(
+            image_converter=image_converter,
+            tokenizer=tokenizer,
+            sequence_length=20,
+            max_images_per_prompt=max_images,
+            num_vision_tokens_per_image=4,
+        )
+        vision_encoder = Gemma3VisionEncoder(
+            image_size=16,
+            patch_size=4,
+            pool_size=2,
+            num_layers=num_layers,
+            num_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            output_dim=8,
+        )
+        backbone = Gemma3Backbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            image_size=16,
+            num_layers=num_layers,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            vision_encoder=vision_encoder,
+        )
+        model = Gemma3CausalLM(preprocessor=preprocessor, backbone=backbone)
+        if random_weights:
+            self._set_random_weights(model)
+        return model
+
+    def test_export_multimodal_bucketing_raises(self):
+        """Verify multimodal export rejects mismatched prefill_seq_len."""
+        model = self._build_tiny_gemma3_multimodal_model()
+
+        path = os.path.join(
+            self.get_temp_dir(), "test_multimodal_buckets.litertlm"
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Multimodal LiteRT-LM export currently requires",
+        ):
+            model.export(path, format="litertlm", prefill_seq_len=[8, 20])
+
+    def test_export_multimodal_bucketing_error_is_family_wide(self):
+        """The bucketing-rejection error must describe the restriction as
+        enforced for all vision-capable families pending a per-family
+        assessment -- not as a Gemma3-specific attention-mask limitation.
+
+        The restriction itself is unchanged (see
+        `test_export_multimodal_bucketing_raises`); only its stated
+        justification was corrected. Guards against the message regressing to
+        the old "This is a limitation of the Gemma3 attention mask
+        computation" wording that over-attributed a family-wide default to
+        one family.
+        """
+        model = self._build_tiny_gemma3_multimodal_model()
+        path = os.path.join(
+            self.get_temp_dir(), "test_multimodal_buckets_msg.litertlm"
+        )
+        with self.assertRaises(ValueError) as ctx:
+            model.export(path, format="litertlm", prefill_seq_len=[8, 20])
+        message = str(ctx.exception)
+        # Stable prefix (also asserted by the sibling rejection test).
+        self.assertIn("Multimodal LiteRT-LM export currently requires", message)
+        # Accuracy: scoped to all vision families, not just Gemma3.
+        self.assertIn("all vision-capable families", message)
+        for family in ("Gemma3", "Gemma3n", "Gemma4", "PaliGemma"):
+            self.assertIn(family, message)
+        # Must NOT re-assert the old Gemma3-only attribution.
+        self.assertNotIn(
+            "This is a limitation of the Gemma3 attention mask",
+            message,
+        )
+
     def test_text_only_model_has_no_vision_inputs(self):
         """Verify text-only models do not expose vision inputs in signatures."""
         path = os.path.join(self.get_temp_dir(), "test_text_only.litertlm")
@@ -379,6 +487,70 @@ class TestLiteRTLmExport(TestCase):
         self.assertNotIn("images", prefill_inputs)
         self.assertNotIn("vision_indices", prefill_inputs)
         self.assertNotIn("vision_mask", prefill_inputs)
+
+    def test_export_multimodal_tiny_gemma3(self):
+        """Export a tiny Gemma3 vision+text model and verify structure."""
+        model = self._build_tiny_gemma3_multimodal_model(
+            num_layers=2, max_images=2, random_weights=True
+        )
+
+        path = os.path.join(self.get_temp_dir(), "test_multimodal.litertlm")
+        model.export(path, format="litertlm", prefill_seq_len=20)
+
+        self.assertTrue(os.path.exists(path))
+        self.assertGreater(os.path.getsize(path), 0)
+
+        # Extract TFLite and verify signatures contain vision inputs.
+        interpreter = self._extract_litertlm_tflite_interpreters(path)[0]
+        signatures = list(interpreter._get_full_signature_list().keys())
+
+        self.assertIn("prefill", signatures)
+        self.assertIn("decode", signatures)
+
+        prefill_sig = interpreter._get_full_signature_list()["prefill"]
+        prefill_inputs = set(prefill_sig["inputs"])
+        self.assertIn("images", prefill_inputs)
+        self.assertIn("vision_indices", prefill_inputs)
+        self.assertIn("vision_mask", prefill_inputs)
+
+    def test_multimodal_numeric_parity_gemma3(self):
+        """Host-side multimodal (baked-in vision) numeric parity.
+
+        Gemma3 is the reference family for the baked-in (encoder inside the
+        PREFILL_DECODE graph) vision path; the tolerance is 1e-4, not relaxed.
+        """
+        # Random (not default) weights so the parity check is meaningful --
+        # otherwise both backends would compute on identical default values.
+        model = self._build_tiny_gemma3_multimodal_model(
+            num_layers=2, max_images=2, random_weights=True
+        )
+
+        prefill_seq_len = 20
+        path = os.path.join(self.get_temp_dir(), "test_mm_parity.litertlm")
+        model.export(path, format="litertlm", prefill_seq_len=prefill_seq_len)
+
+        interpreters = self._extract_litertlm_tflite_interpreters(path)
+        main = None
+        for it in interpreters:
+            sigs = it._get_full_signature_list()
+            if any(s.startswith("prefill") for s in sigs) and "decode" in sigs:
+                main = it
+                break
+        main = main or interpreters[0]
+
+        result = self._verify_litertlm_multimodal_numerics(
+            model,
+            main,
+            prefill_seq_len=prefill_seq_len,
+            atol=1e-4,
+            rtol=1e-4,
+        )
+
+        # Prove it verified something real, at the level it claims.
+        self.assertTrue(result["has_vision"])
+        self.assertEqual(result["verification_level"], "end_to_end_vision")
+        self.assertLess(result["prefill_kv_max_abs_err"], 1e-4)
+        self.assertLess(result["decode_logits_max_abs_err"], 1e-4)
 
 
 @unittest.skipUnless(
@@ -463,3 +635,52 @@ class TestTorchDtypeFromModel(TestCase):
         ) as cm:
             export._torch_dtype_from_model(model)
         self.assertIsInstance(cm.exception.__cause__, ValueError)
+
+
+@unittest.skipUnless(
+    keras.config.backend() == "torch",
+    "LiteRT-LM export is only supported with the PyTorch backend.",
+)
+class TestVisionEncoderOutputContract(TestCase):
+    def test_tensor_output_reaches_the_caller(self):
+        """A tensor-returning encoder output is passed through unchanged."""
+        features = torch.zeros((1, 4, 8))
+        out = _run_vision_encoder_for_style(
+            lambda images: features,
+            "raw_images",
+            False,
+            images=torch.zeros((1, 1, 4, 4, 3)),
+            pixel_values=None,
+            pixel_position_ids=None,
+        )
+        self.assertIs(out, features)
+
+    def test_raw_images_rejects_non_tensor_output(self):
+        """A dict-returning raw_images encoder fails instead of leaking it."""
+        features = torch.zeros((1, 4, 8))
+        with self.assertRaisesRegex(
+            ValueError, "return a single feature tensor"
+        ):
+            _run_vision_encoder_for_style(
+                lambda images: {"features": features, "extra": features},
+                "raw_images",
+                False,
+                images=torch.zeros((1, 1, 4, 4, 3)),
+                pixel_values=None,
+                pixel_position_ids=None,
+            )
+
+    def test_patch_values_rejects_non_tensor_output(self):
+        """A tuple-returning patch_values encoder fails the same way."""
+        features = torch.zeros((1, 4, 8))
+        with self.assertRaisesRegex(
+            ValueError, "return a single feature tensor"
+        ):
+            _run_vision_encoder_for_style(
+                lambda inputs: (features,),
+                "patch_values",
+                False,
+                images=None,
+                pixel_values=features,
+                pixel_position_ids=features,
+            )
