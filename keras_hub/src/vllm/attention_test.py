@@ -184,3 +184,33 @@ class VllmPagedAttentionTest(TestCase):
         call = kernel.calls[0]
         self.assertEqual(call["soft_cap"], 50.0)
         self.assertEqual(call["sliding_window"], 64)
+
+    def test_query_promoted_to_float32_for_softmax(self):
+        # The kernel picks its softmax accumulator from the query dtype, so a
+        # bfloat16 layer must still dispatch a float32 query to normalize in
+        # float32 the way the dense path does. K/V keep the layer's dtype so
+        # the paged cache is unaffected, and the layer gets its dtype back.
+        kernel = RecordingKernel()
+        activate_serving(kernel)
+        q = ops.cast(ops.ones((1, 1, 2, 4)), "bfloat16")
+        k = ops.cast(ops.ones((1, 1, 2, 4)), "bfloat16")
+        v = ops.cast(ops.ones((1, 1, 2, 4)), "bfloat16")
+
+        out = vllm_paged_attention(q, k, v, 0.5)
+
+        call = kernel.calls[0]
+        self.assertDTypeEqual(call["q"], "float32")
+        self.assertDTypeEqual(call["k"], "bfloat16")
+        self.assertDTypeEqual(call["v"], "bfloat16")
+        self.assertDTypeEqual(out, "bfloat16")
+
+    def test_float32_query_dispatched_unchanged(self):
+        # Already float32: nothing to promote, and no cast on the way out.
+        kernel = RecordingKernel()
+        activate_serving(kernel)
+        q = ops.ones((1, 1, 2, 4))
+
+        out = vllm_paged_attention(q, q, q, 0.5)
+
+        self.assertDTypeEqual(kernel.calls[0]["q"], "float32")
+        self.assertDTypeEqual(out, "float32")

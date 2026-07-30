@@ -1,3 +1,4 @@
+from keras import backend
 from keras import ops
 
 from keras_hub.src.vllm.context import get_vllm_context
@@ -96,6 +97,14 @@ def vllm_paged_attention(
     key = ops.reshape(key, (-1, kv_heads * head_dim))
     value = ops.reshape(value, (-1, kv_heads * head_dim))
 
+    # Normalize the softmax in float32, as KerasHub's dense attention does
+    # (`Softmax(dtype="float32")`). The query dtype is what selects it in the
+    # kernel, so promote only the query; K/V and the paged cache keep the
+    # layer's dtype, leaving cache memory unchanged.
+    query_dtype = backend.standardize_dtype(query.dtype)
+    if query_dtype != "float32":
+        query = ops.cast(query, "float32")
+
     # `paged_attention_func` comes from the serving model
     # (keras_hub_vllm_wrapper.py).
     # It takes only what an attention layer knows; engine details (the
@@ -121,4 +130,8 @@ def vllm_paged_attention(
     attention_output = ops.reshape(
         attention_output, (*lead_shape, num_heads, head_dim)
     )
+    # Hand the layer back its own dtype, as the dense path does after its
+    # float32 softmax.
+    if query_dtype != "float32":
+        attention_output = ops.cast(attention_output, query_dtype)
     return attention_output
