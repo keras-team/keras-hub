@@ -1,5 +1,6 @@
 # Library deps.
 dm-tree
+grain
 regex
 rich
 kagglehub!=1.0.1

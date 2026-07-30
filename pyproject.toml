@@ -40,6 +40,11 @@ dependencies = [
     "tensorflow-text;platform_system != 'Windows'",
 ]
 
+[project.optional-dependencies]
+# Optional, since grain has no sdist and no wheel for some platforms.
+# Preprocessing falls back to `tf.data` when it is missing.
+grain = ["grain"]
+
 [project.urls]
 Home = "https://keras.io/keras_hub/"
 Repository = "https://github.com/keras-team/keras/keras_hub"
