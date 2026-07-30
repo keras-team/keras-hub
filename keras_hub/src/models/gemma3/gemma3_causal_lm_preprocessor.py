@@ -11,6 +11,7 @@ from keras_hub.src.models.gemma3.gemma3_image_converter import (
     Gemma3ImageConverter,
 )
 from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
@@ -255,6 +256,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         num_vision_tokens_per_image=256,
         **kwargs,
     ):
+        assert_tf_installed("Gemma3CausalLMPreprocessor")
         super().__init__(
             tokenizer=tokenizer,
             sequence_length=sequence_length,

@@ -14,6 +14,7 @@ from keras_hub.src.models.gemma3n.gemma3n_image_converter import (
     Gemma3nImageConverter,
 )
 from keras_hub.src.models.gemma3n.gemma3n_tokenizer import Gemma3nTokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
@@ -242,6 +243,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         num_audio_tokens_per_audio=188,
         **kwargs,
     ):
+        assert_tf_installed("Gemma3nCausalLMPreprocessor")
         super().__init__(
             tokenizer=tokenizer,
             sequence_length=sequence_length,

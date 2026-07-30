@@ -20,6 +20,7 @@ from keras_hub.src.models.gemma4.gemma4_tokenizer import Gemma4Tokenizer
 from keras_hub.src.models.gemma4.gemma4_video_converter import (
     Gemma4VideoConverter,
 )
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
@@ -175,6 +176,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         video_fps=24.0,
         **kwargs,
     ):
+        assert_tf_installed("Gemma4CausalLMPreprocessor")
         super().__init__(
             tokenizer=tokenizer,
             sequence_length=sequence_length,

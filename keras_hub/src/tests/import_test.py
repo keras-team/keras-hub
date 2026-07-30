@@ -28,7 +28,8 @@ class ImportTest(TestCase):
                 continue
             if "tests" in path.relative_to(SRC_ROOT).parts:
                 continue
-            for node in ast.parse(path.read_text()).body:
+            source = path.read_text(encoding="utf-8")
+            for node in ast.parse(source).body:
                 packages = _imported_packages(node)
                 if any(p in OPTIONAL_PACKAGES for p in packages):
                     relative = path.relative_to(SRC_ROOT.parent)
