@@ -18,8 +18,27 @@ MERGE_PATH = keras.utils.get_file(
 class BytePairTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
+        self._allow_python_workflow = True
         self.tokenizer = BytePairTokenizer(
             vocabulary=VOCAB_PATH, merges=MERGE_PATH
+        )
+
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=BytePairTokenizer,
+            init_kwargs={
+                "vocabulary": VOCAB_PATH,
+                "merges": MERGE_PATH,
+                "_allow_python_workflow": self._allow_python_workflow,
+            },
+            input_data=[
+                "I am just a test string",
+                "I am also a test string",
+            ],
+            expected_output=[
+                [100, 524, 95, 10, 1296, 6755],
+                [100, 524, 67, 10, 1296, 6755],
+            ],
         )
 
     def test_tokenize_list_input(self):
@@ -143,25 +162,6 @@ class BytePairTokenizerTest(TestCase):
         encoded = self.tokenizer(input_data)
         self.assertAllEqual(encoded, expected)
 
-    def test_tokenize_with_tf_data(self):
-        data = [
-            "I am just a test string",
-            "I am also a test string",
-            "I am still a test string",
-            "me too",
-            "I am not a test string (joking)",
-            "You guys should add punctuation!",
-            "Period matters!",
-        ]
-        ds = tf.data.Dataset.from_tensor_slices(data)
-        ds = ds.batch(2).map(self.tokenizer)
-        encoded = next(iter(ds))
-        expected = [
-            [100, 524, 95, 10, 1296, 6755],
-            [100, 524, 67, 10, 1296, 6755],
-        ]
-        self.assertAllEqual(encoded, expected)
-
     def test_config(self):
         input_data = ["the quick brown whale."]
         cloned_tokenizer = BytePairTokenizer.from_config(
@@ -202,6 +202,7 @@ class BytePairTokenizerTFTest(BytePairTokenizerTest):
 
     def setUp(self):
         super().setUp()
+        self._allow_python_workflow = False
         self.tokenizer = BytePairTokenizer(
             vocabulary=VOCAB_PATH,
             merges=MERGE_PATH,

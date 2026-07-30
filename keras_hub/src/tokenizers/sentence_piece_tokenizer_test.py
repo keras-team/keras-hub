@@ -1,6 +1,5 @@
 import os
 
-import tensorflow as tf
 from keras.src.saving import serialization_lib
 
 from keras_hub.src.tests.test_case import TestCase
@@ -12,10 +11,32 @@ from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
 class SentencePieceTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
+        self._allow_python_workflow = True
         self.proto = os.path.join(
             self.get_test_data_dir(), "tokenizer_test_vocab.spm"
         )
         self.tokenizer = SentencePieceTokenizer(proto=self.proto)
+
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=SentencePieceTokenizer,
+            init_kwargs={
+                "proto": self.proto,
+                "_allow_python_workflow": self._allow_python_workflow,
+            },
+            input_data=[
+                "the quick brown fox.",
+                "the quick",
+                "the",
+                "quick brown fox.",
+            ],
+            expected_output=[
+                [6, 5, 3, 4],
+                [6, 5],
+                [6],
+                [5, 3, 4],
+            ],
+        )
 
     def test_tokenize(self):
         input_data = ["the quick brown fox."]
@@ -109,40 +130,6 @@ class SentencePieceTokenizerTest(TestCase):
         output_data = tokenizer(["the quick brown fox."])
         self.assertAllEqual(output_data, [[6, 5, 3, 4]])
 
-    def test_tokenize_then_batch(self):
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox.", "the quick", "the", "quick brown fox."]
-        )
-        ds = ds.map(self.tokenizer).apply(
-            tf.data.experimental.dense_to_ragged_batch(4)
-        )
-        output_data = ds.take(1).get_single_element()
-
-        expected = [
-            [6, 5, 3, 4],
-            [6, 5],
-            [6],
-            [5, 3, 4],
-        ]
-        for i in range(4):
-            self.assertAllEqual(output_data[i], expected[i])
-
-    def test_batch_then_tokenize(self):
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox.", "the quick", "the", "quick brown fox."]
-        )
-        ds = ds.batch(4).map(self.tokenizer)
-        output_data = ds.take(1).get_single_element()
-
-        expected = [
-            [6, 5, 3, 4],
-            [6, 5],
-            [6],
-            [5, 3, 4],
-        ]
-        for i in range(4):
-            self.assertAllEqual(output_data[i], expected[i])
-
     def test_config(self):
         input_data = ["the quick brown whale."]
         original_tokenizer = SentencePieceTokenizer(
@@ -178,6 +165,7 @@ class SentencePieceTokenizerTFTest(SentencePieceTokenizerTest):
 
     def setUp(self):
         super().setUp()
+        self._allow_python_workflow = False
         self.tokenizer = SentencePieceTokenizer(
             proto=self.proto,
             _allow_python_workflow=False,

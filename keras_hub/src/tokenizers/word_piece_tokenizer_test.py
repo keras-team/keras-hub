@@ -8,14 +8,25 @@ from keras_hub.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
 class WordPieceTokenizerTest(TestCase):
-    def test_tokenize(self):
-        input_data = ["the quick brown fox."]
-        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
-        call_output = tokenizer(input_data)
-        tokenize_output = tokenizer.tokenize(input_data)
-        self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6, 7]])
-        self.assertAllEqual(tokenize_output, [[1, 2, 3, 4, 5, 6, 7]])
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=WordPieceTokenizer,
+            init_kwargs={
+                "vocabulary": [
+                    "[UNK]",
+                    "the",
+                    "qu",
+                    "##ick",
+                    "br",
+                    "##own",
+                    "fox",
+                    ".",
+                ]
+            },
+            input_data=["the quick brown fox."],
+            expected_output=[[1, 2, 3, 4, 5, 6, 7]],
+            expected_detokenize_output=["the quick brown fox ."],
+        )
 
     def test_dense_output(self):
         input_data = ["the quick brown fox."]
@@ -172,18 +183,6 @@ class WordPieceTokenizerTest(TestCase):
         )
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [1, 2, 3, 4, 5, 6])
-
-    def test_batching_ragged_tensors(self):
-        tokenizer = WordPieceTokenizer(
-            vocabulary=["[UNK]", "a", "b", "c", "d", "e", "f"]
-        )
-        dataset = tf.data.Dataset.from_tensor_slices(["a b c", "d e", "a f e"])
-        dataset = dataset.map(tokenizer)
-        dataset = dataset.apply(
-            tf.data.experimental.dense_to_ragged_batch(batch_size=1)
-        )
-        element = dataset.take(1).get_single_element().numpy()
-        self.assertAllEqual(element, [[1, 2, 3]])
 
     def test_from_file(self):
         vocab_path = os.path.join(self.get_temp_dir(), "vocab.txt")
