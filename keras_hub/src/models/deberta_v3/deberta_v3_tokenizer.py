@@ -5,6 +5,7 @@ from keras_hub.src.models.deberta_v3.deberta_v3_backbone import (
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -140,6 +141,20 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
             return self.mask_token_id
         return super().token_to_id(token)
 
-    def detokenize(self, ids):
-        ids = tf.ragged.boolean_mask(ids, tf.not_equal(ids, self.mask_token_id))
-        return super().detokenize(ids)
+    @preprocessing_function
+    def _detokenize_tf(self, inputs):
+        inputs = tf.ragged.boolean_mask(
+            inputs, tf.not_equal(inputs, self.mask_token_id)
+        )
+        return super()._detokenize_tf(inputs)
+
+    def _detokenize_spm(self, inputs):
+        self._maybe_initialized_spm()
+        inputs, batched = self._canonicalize_detokenize_spm_inputs(inputs)
+        inputs = [
+            [id for id in seqs if id != self.mask_token_id] for seqs in inputs
+        ]
+        outputs = self._sentence_piece_spm.Decode(inputs)
+        if not batched:
+            outputs = outputs[0]
+        return outputs

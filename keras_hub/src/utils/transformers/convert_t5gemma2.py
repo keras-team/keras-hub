@@ -1,7 +1,6 @@
 import re
 
 import numpy as np
-from sentencepiece import sentencepiece_model_pb2 as sp_pb2
 
 from keras_hub.src.models.t5gemma2.t5gemma2_backbone import T5Gemma2Backbone
 from keras_hub.src.utils.preset_utils import check_file_exists
@@ -67,6 +66,44 @@ def convert_backbone_config(transformers_config):
             layer_norm_epsilon=vision_config["layer_norm_eps"],
         )
 
+    # rope_theta extraction for decoder
+    rope_theta = (
+        decoder_config.get("rope_parameters", {})
+        .get("sliding_attention", {})
+        .get("rope_theta")
+    )
+    if rope_theta is None:
+        rope_theta = decoder_config["rope_theta"]
+
+    # rope_scaling_factor extraction for decoder
+    rope_scaling_factor = (
+        decoder_config.get("rope_parameters", {})
+        .get("full_attention", {})
+        .get("factor")
+    )
+    if rope_scaling_factor is None:
+        rope_scaling_factor = decoder_config.get("rope_scaling", {}).get(
+            "factor"
+        )
+
+    # rope_theta extraction for encoder
+    enc_rope_theta = (
+        enc_text.get("rope_parameters", {})
+        .get("sliding_attention", {})
+        .get("rope_theta")
+    )
+    if enc_rope_theta is None:
+        enc_rope_theta = enc_text["rope_theta"]
+
+    # rope_scaling_factor extraction for encoder
+    enc_rope_scaling_factor = (
+        enc_text.get("rope_parameters", {})
+        .get("full_attention", {})
+        .get("factor")
+    )
+    if enc_rope_scaling_factor is None:
+        enc_rope_scaling_factor = enc_text.get("rope_scaling", {}).get("factor")
+
     backbone_config = {
         "vocabulary_size": decoder_config["vocab_size"],
         "encoder_hidden_dim": enc_text["hidden_size"],
@@ -95,18 +132,10 @@ def convert_backbone_config(transformers_config):
         "cross_attention_hidden_size": enc_text["hidden_size"],
         "attn_logit_softcapping": decoder_config["attn_logit_softcapping"],
         "final_logit_softcapping": decoder_config["final_logit_softcapping"],
-        "rope_max_wavelength": (
-            decoder_config["rope_parameters"]["sliding_attention"]["rope_theta"]
-        ),
-        "global_rope_scaling_factor": (
-            decoder_config["rope_parameters"]["full_attention"]["factor"]
-        ),
-        "encoder_rope_max_wavelength": (
-            enc_text["rope_parameters"]["sliding_attention"]["rope_theta"]
-        ),
-        "encoder_global_rope_scaling_factor": (
-            enc_text["rope_parameters"]["full_attention"]["factor"]
-        ),
+        "rope_max_wavelength": rope_theta,
+        "global_rope_scaling_factor": rope_scaling_factor,
+        "encoder_rope_max_wavelength": enc_rope_theta,
+        "encoder_global_rope_scaling_factor": enc_rope_scaling_factor,
         # use_qk_norm may not be in config JSON; default True.
         "use_query_key_norm": enc_text.get("use_qk_norm", True),
         "vision_encoder": vision_encoder,
@@ -422,6 +451,8 @@ def _build_sentencepiece_proto(tokenizer_config):
     SentencePiece model that is byte-for-byte compatible with the
     Gemma-family tokenizer.
     """
+    from sentencepiece import sentencepiece_model_pb2 as sp_pb2
+
     vocab = dict(tokenizer_config["model"]["vocab"])
     merges = list(tokenizer_config["model"]["merges"])
 

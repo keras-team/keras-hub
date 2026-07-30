@@ -13,6 +13,12 @@ from keras_hub.src.models.bart.bart_tokenizer import (
 from keras_hub.src.models.bert.bert_tokenizer import (
     BertTokenizer as BertTokenizer,
 )
+from keras_hub.src.models.blip2.blip2_flan_t5_tokenizer import (
+    BLIP2FlanT5Tokenizer as BLIP2FlanT5Tokenizer,
+)
+from keras_hub.src.models.blip2.blip2_opt_tokenizer import (
+    BLIP2OPTTokenizer as BLIP2OPTTokenizer,
+)
 from keras_hub.src.models.bloom.bloom_tokenizer import (
     BloomTokenizer as BloomTokenizer,
 )
@@ -66,6 +72,9 @@ from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (
     MetaCLIP2Tokenizer as MetaCLIP2Tokenizer,
 )
 from keras_hub.src.models.mistral.mistral_tokenizer import (
+    MistralTekkenTokenizer as MistralTekkenTokenizer,
+)
+from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
 from keras_hub.src.models.mixtral.mixtral_tokenizer import (
@@ -95,6 +104,9 @@ from keras_hub.src.models.qwen3.qwen3_tokenizer import (
 )
 from keras_hub.src.models.qwen3_5.qwen3_5_tokenizer import (
     Qwen3_5Tokenizer as Qwen3_5Tokenizer,
+)
+from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_tokenizer import (
+    Qwen3_5MoeTokenizer as Qwen3_5MoeTokenizer,
 )
 from keras_hub.src.models.qwen3_moe.qwen3_moe_tokenizer import (
     Qwen3MoeTokenizer as Qwen3MoeTokenizer,
@@ -161,4 +173,3 @@ from keras_hub.src.tokenizers.word_piece_tokenizer import (
 from keras_hub.src.tokenizers.word_piece_tokenizer_trainer import (
     compute_word_piece_vocabulary as compute_word_piece_vocabulary,
 )
-from keras_hub.tokenizers import v2 as v2

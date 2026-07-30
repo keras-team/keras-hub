@@ -4,6 +4,7 @@ from functools import partial
 import keras
 from keras import ops
 from keras import tree
+from keras.src.distribution import distribution_lib
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
@@ -354,6 +355,26 @@ class CausalLM(Task):
                 x, sequence_length=max_length
             )
 
+        def distribute(x):
+            """Distribute tensors according to the distribution library."""
+            distribution = distribution_lib.distribution()
+            if distribution is None:
+                return x
+
+            def _distribute_tensor(value):
+                if value is None:
+                    return None
+                if not ops.is_tensor(value):
+                    value = ops.convert_to_tensor(value)
+                layout = distribution.get_data_layout(value.shape)
+                return (
+                    distribution_lib.distribute_tensor(value, layout)
+                    if layout
+                    else value
+                )
+
+            return tree.map_structure(_distribute_tensor, x)
+
         def generate(x):
             return generate_function(x, stop_token_ids=stop_token_ids)
 
@@ -393,6 +414,8 @@ class CausalLM(Task):
 
         if self.preprocessor is not None:
             inputs = [preprocess(x) for x in inputs]
+
+        inputs = [distribute(x) for x in inputs]
 
         if strip_prompt:
             outputs = [strip_prompt_function(generate(x), x) for x in inputs]

@@ -130,7 +130,10 @@ class ESMMaskedPLMPreprocessor(MaskedLMPreprocessor):
         )
 
     @preprocessing_function
-    def call(self, x, y=None, sample_weight=None):
+    def _call_tf(self, x, y=None, sample_weight=None):
+        return self._call_python(x, y=y, sample_weight=sample_weight)
+
+    def _call_python(self, x, y=None, sample_weight=None):
         x = self.tokenizer(x)
         token_ids = self.packer(x)
         masker_outputs = self.masker(token_ids)

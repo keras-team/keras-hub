@@ -966,7 +966,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
 
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
-        batch_size = tf.shape(prompts)[0]
+        batch_size = tf.shape(token_ids)[0]
 
         # === Vision & Audio processing ===
         if images is not None and self.image_converter is not None:
@@ -1149,7 +1149,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
                 ),
             }
 
-        batch_size = tf.shape(prompts)[0]
+        batch_size = tf.shape(token_ids)[0]
 
         # === Vision & Audio processing ===
         if images is not None and self.image_converter is not None:

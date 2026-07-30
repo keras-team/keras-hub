@@ -197,7 +197,9 @@ class BytePairTokenizerTest(TestCase):
                 tokenizer.set_vocabulary_and_merges(vocab_path, merges_path)
 
 
-class BytePairTokenizerDisallowPythonWorkflowTest(BytePairTokenizerTest):
+class BytePairTokenizerTFTest(BytePairTokenizerTest):
+    """Set `_allow_python_workflow=False` to test TF execution."""
+
     def setUp(self):
         super().setUp()
         self.tokenizer = BytePairTokenizer(
@@ -205,3 +207,53 @@ class BytePairTokenizerDisallowPythonWorkflowTest(BytePairTokenizerTest):
             merges=MERGE_PATH,
             _allow_python_workflow=False,
         )
+
+    def test_tokenize_string_output(self):
+        input_data = ["quick brown fox.", "slow black bear."]
+        tokenizer = BytePairTokenizer(
+            vocabulary=VOCAB_PATH,
+            merges=MERGE_PATH,
+            dtype="string",
+            _allow_python_workflow=False,
+        )
+        call_output = tokenizer(input_data)
+        expected = [
+            ["quick", "Ġbrown", "Ġfox", "."],
+            ["slow", "Ġblack", "Ġbear", "."],
+        ]
+        self.assertAllEqual(call_output, expected)
+
+    def test_tokenize_with_special_tokens(self):
+        vocab = {"sp": 0, "s": 1, "p": 2}
+        merges = ["s p"]
+        tokenizer = BytePairTokenizer(
+            vocabulary=vocab,
+            merges=merges,
+            unsplittable_tokens=["s", "p"],
+            _allow_python_workflow=False,
+        )
+        output = tokenizer("sp")
+        self.assertAllEqual(output, [1, 2])
+
+        # If not setting special tokens, "sp" is one token.
+        tokenizer = BytePairTokenizer(
+            vocabulary=vocab,
+            merges=merges,
+            _allow_python_workflow=False,
+        )
+        output = tokenizer("sp")
+        self.assertAllEqual(output, [0])
+
+    def test_tokenize_prefix_space(self):
+        input_data = ["brown.", "black."]
+        tokenizer = BytePairTokenizer(
+            vocabulary=VOCAB_PATH,
+            merges=MERGE_PATH,
+            dtype="string",
+            add_prefix_space=True,
+            _allow_python_workflow=False,
+        )
+        call_output = tokenizer(input_data)
+
+        expected = [["Ġbrown", "."], ["Ġblack", "."]]
+        self.assertAllEqual(call_output, expected)

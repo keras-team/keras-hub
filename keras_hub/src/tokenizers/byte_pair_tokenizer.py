@@ -850,6 +850,13 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         self._maybe_initialized_tokenizers()
 
         def _canonicalize_detokenize_inputs(inputs):
+            if tf is not None and isinstance(
+                inputs, (tf.Tensor, tf.RaggedTensor)
+            ):
+                if isinstance(inputs, tf.RaggedTensor):
+                    inputs = inputs.to_list()
+                else:
+                    inputs = np.array(inputs)
             is_batched = True
             if isinstance(inputs, int):
                 inputs = [[inputs]]

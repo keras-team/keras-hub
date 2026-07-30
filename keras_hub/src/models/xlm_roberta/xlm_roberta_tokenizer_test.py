@@ -43,3 +43,16 @@ class XLMRobertaTokenizerTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+
+class XLMRobertaTokenizerTFTest(XLMRobertaTokenizerTest):
+    """Set `_allow_python_workflow=False` to test TF execution."""
+
+    def setUp(self):
+        super().setUp()
+        self.init_kwargs = {
+            "proto": os.path.join(
+                self.get_test_data_dir(), "xlm_roberta_test_vocab.spm"
+            ),
+            "_allow_python_workflow": False,
+        }
