@@ -6,6 +6,12 @@ import tensorflow as tf
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.pipeline_model import PipelineModel
+from keras_hub.src.utils.pipeline_model import _convert_inputs_to_dataset
+
+try:
+    import grain
+except ImportError:
+    grain = None
 
 
 class NoopPipeline(PipelineModel):
@@ -398,6 +404,115 @@ class TestFitArguments(TestCase):
             model.fit(ds, y=y)
         with self.assertRaises(ValueError):
             model.fit(ds, sample_weight=sw)
+
+
+class NumpyPipeline(PipelineModel):
+    """This model preprocesses with numpy only, never TensorFlow."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dense = keras.layers.Dense(1)
+        self.preprocess_count = 0
+
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        self.preprocess_count += 1
+        x = np.asarray(x, dtype="float32") / 255.0
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def call(self, inputs):
+        return self.dense(inputs)
+
+
+class TestGrainPipeline(TestCase):
+    def setUp(self):
+        super().setUp()
+        if grain is None:
+            self.skipTest("Grain is not installed.")
+
+    def test_builds_a_grain_dataset(self):
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        ds = _convert_inputs_to_dataset(x, y, None, batch_size=4)
+        self.assertIsInstance(ds, grain.MapDataset)
+        self.assertLen(ds, 2)
+
+    def test_passes_through_a_grain_dataset(self):
+        x = np.random.uniform(size=(8, 5))
+        ds = _convert_inputs_to_dataset(x, None, None, batch_size=4)
+        self.assertIs(_convert_inputs_to_dataset(ds), ds)
+
+    def test_error_grain_dataset_and_invalid_arguments(self):
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        ds = _convert_inputs_to_dataset(x, None, None, batch_size=4)
+        model = FeaturePipeline()
+        model.compile(loss="mse")
+        with self.assertRaises(ValueError):
+            model.fit(ds, y=y)
+        with self.assertRaises(ValueError):
+            model.fit(ds, sample_weight=y)
+        with self.assertRaises(ValueError):
+            model.fit(ds, batch_size=4)
+
+    def test_python_string_list_input(self):
+        # A `list` enumerates the samples of a single string input.
+        x = [[str(v) for v in row] for row in np.random.uniform(size=(8, 5))]
+        y = np.random.uniform(size=(8, 1))
+        model = FeaturePipeline()
+        model.compile(loss="mse")
+        model.fit(x=x, y=y, batch_size=4)
+        model.evaluate(x=x, y=y, batch_size=4)
+        model.predict(x=x, batch_size=4)
+
+    def test_numpy_only_preprocessing(self):
+        x = np.random.uniform(0, 255, size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        model = NumpyPipeline()
+        model.compile(loss="mse")
+        model.fit(x=x, y=y, batch_size=4)
+        model.evaluate(x=x, y=y, batch_size=4)
+        model.predict(x=x, batch_size=4)
+
+    def test_fit_with_validation_data(self):
+        # `fit()` preprocesses `validation_data` and `evaluate()` reuses the
+        # iterator Keras caches from it.
+        x = np.random.uniform(0, 255, size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        model = NumpyPipeline()
+        model.compile(loss="mse")
+        history = model.fit(
+            x=x, y=y, validation_data=(x, y), batch_size=4, epochs=3, verbose=0
+        )
+        self.assertLen(history.history["val_loss"], 3)
+        self.assertAllClose(
+            history.history["val_loss"][-1],
+            model.evaluate(x=x, y=y, batch_size=4, verbose=0),
+        )
+
+    def test_dict_input(self):
+        x = {
+            "a": np.random.uniform(size=(8, 5)),
+            "b": np.random.uniform(size=(8, 5)),
+        }
+        ds = _convert_inputs_to_dataset(x, None, None, batch_size=4)
+        batch = ds[0]
+        self.assertEqual(set(batch.keys()), {"a", "b"})
+        self.assertEqual(batch["a"].shape, (4, 5))
+
+    def test_mismatched_batch_dimension_raises(self):
+        model = FeaturePipeline()
+        model.compile(loss="mse")
+        with self.assertRaisesRegex(ValueError, "same batch dimension"):
+            model.fit(
+                x=np.random.uniform(size=(8, 5)),
+                y=np.random.uniform(size=(4, 1)),
+                batch_size=4,
+            )
+
+    def test_ragged_input_falls_back_to_tf_data(self):
+        x = tf.ragged.constant([[1, 2, 3], [4, 5]])
+        ds = _convert_inputs_to_dataset(x, None, None, batch_size=2)
+        self.assertIsInstance(ds, tf.data.Dataset)
 
 
 class TestInputErrors(TestCase):
