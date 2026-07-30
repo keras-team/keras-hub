@@ -1,8 +1,10 @@
 import copy
+import os
 from unittest.mock import patch
 
 import keras
 import numpy as np
+import pytest
 from absl.testing import parameterized
 from keras import ops
 
@@ -430,3 +432,144 @@ class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
                 preprocessor.tokenizer.vocabulary_size(),
             ),
         )
+
+    @pytest.mark.xfail(
+        strict=False,
+        reason=(
+            "Gemma3n LiteRT-LM export fails in litert-torch conversion: "
+            "aten.view shape/stride mismatch ([3,8,8,16] strides "
+            "(1024,8,1,64) -> [192,16]) during forward_prefill decomposition. "
+            "Pre-existing export bug, not a numeric-parity gap; blocks "
+            "multimodal numeric wiring. Version-dependent: fails "
+            "with litert-torch 0.10.0 (local), passes with PyPI 0.9.1 "
+            "(CI), so this xfail is non-strict."
+        ),
+    )
+    def test_litertlm_export(self):
+        """Test LiteRT-LM export for Gemma3nCausalLM with small test model."""
+        from keras_hub.src.models.gemma3n.gemma3n_tokenizer import (
+            Gemma3nTokenizer,
+        )
+
+        tokenizer = Gemma3nTokenizer(
+            proto=os.path.join(
+                self.get_test_data_dir(), "gemma3n_test_vocab.spm"
+            )
+        )
+        preprocessor = Gemma3nCausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=self.image_converter,
+            audio_converter=self.audio_converter,
+            sequence_length=30,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=4,
+            max_audios_per_prompt=2,
+            num_audio_tokens_per_audio=3,
+        )
+        init_kwargs = {
+            "preprocessor": preprocessor,
+            "backbone": self.multimodal_backbone,
+        }
+
+        self.run_litertlm_export_test(
+            cls=Gemma3nCausalLM,
+            init_kwargs=init_kwargs,
+            input_data=self.multimodal_input_data,
+            prefill_seq_len=30,
+            verify_model_type="gemma3n",
+            verify_numerics=False,
+        )
+
+    def test_litertlm_export_rejects_separate_vision(self):
+        """Test that Gemma3n rejects `separate_vision_encoder=True`.
+
+        Gemma3n runs its vision encoder inside the backbone
+        (`supports_separate_vision=False`), so the request is rejected before
+        any tracing.
+        """
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        import importlib.util
+
+        if importlib.util.find_spec("litert_torch") is None:
+            self.skipTest(
+                "LiteRT-LM export requires `litert-torch`. "
+                "Install it with: pip install litert-torch"
+            )
+
+        if importlib.util.find_spec("litert_lm_builder") is None:
+            self.skipTest(
+                "LiteRT-LM export requires `litert-lm-builder`. "
+                "Install it with: pip install litert-lm-builder"
+            )
+
+        from keras_hub.src.models.gemma3n.gemma3n_tokenizer import (
+            Gemma3nTokenizer,
+        )
+
+        tokenizer = Gemma3nTokenizer(
+            proto=os.path.join(
+                self.get_test_data_dir(), "gemma3n_test_vocab.spm"
+            )
+        )
+        preprocessor = Gemma3nCausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=self.image_converter,
+            audio_converter=self.audio_converter,
+            sequence_length=30,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=4,
+            max_audios_per_prompt=2,
+            num_audio_tokens_per_audio=3,
+        )
+        model = Gemma3nCausalLM(
+            preprocessor=preprocessor,
+            backbone=self.multimodal_backbone,
+        )
+        # Gemma3n's MobileNetV5-based vision encoder has neither an
+        # `output_dim` nor a `num_classes` attribute (it is not designed to
+        # be called standalone), so it would otherwise trip the earlier,
+        # unrelated "vision_encoder.output_dim required" check
+        # (export.py:1070-1074, out of scope for this test) before reaching
+        # the `supports_separate_vision` rejection under test. Stub the
+        # attribute so that earlier, orthogonal check passes through and the
+        # `supports_separate_vision=False` rejection is the one that fires.
+        model.backbone.vision_encoder.output_dim = 8
+
+        path = os.path.join(
+            self.get_temp_dir(), "test_separate_vision_rejected.litertlm"
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "separate_vision_encoder=True.*is not supported",
+        ):
+            model.export(
+                path,
+                format="litertlm",
+                prefill_seq_len=30,
+                separate_vision_encoder=True,
+            )
+
+    def test_litertlm_vision_config_without_patch_size(self):
+        """Gemma3n's vision metadata must resolve without a `patch_size`.
+
+        `MobileNetV5Backbone` declares no `patch_size`, and Gemma3n never
+        needs one: it feeds `embedded_pixel_values`, so nothing on its export
+        path derives a patch geometry. Only the `patch_values` families
+        (Gemma4) require it. Needs no backend or litertlm dependency --
+        `get_vision_config` just reads model attributes.
+        """
+        from keras_hub.src.utils.litertlm.model_specs import Gemma3nSpec
+
+        model = Gemma3nCausalLM(
+            preprocessor=self.vision_preprocessor,
+            backbone=self.vision_backbone,
+        )
+        self.assertFalse(hasattr(model.backbone.vision_encoder, "patch_size"))
+        vision_cfg = Gemma3nSpec().get_vision_config(model)
+        self.assertIsNone(vision_cfg["patch_size"])
+        self.assertEqual(vision_cfg["image_size"], 16)
+        self.assertEqual(vision_cfg["max_images_per_prompt"], 2)
+        self.assertEqual(vision_cfg["num_vision_tokens_per_image"], 4)
+        self.assertEqual(vision_cfg["num_vision_tokens"], 8)

@@ -28,10 +28,14 @@ from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
 from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import MockGemma3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.litertlm import export
+from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
+from keras_hub.src.utils.litertlm.adapter import KerasHubVisionEncoderAdapter
 from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
 from keras_hub.src.utils.litertlm.adapter import _run_vision_encoder_for_style
 from keras_hub.src.utils.litertlm.model_specs import GREEDY_SAMPLER_CONFIG
+from keras_hub.src.utils.litertlm.model_specs import Gemma3Spec
 from keras_hub.src.utils.litertlm.model_specs import SamplerConfig
+from keras_hub.src.utils.litertlm.model_specs import resolve_export_spec
 
 _LITERT_TORCH_AVAILABLE = importlib.util.find_spec("litert_torch") is not None
 _LITERT_LM_BUILDER_AVAILABLE = (
@@ -552,11 +556,278 @@ class TestLiteRTLmExport(TestCase):
         self.assertLess(result["prefill_kv_max_abs_err"], 1e-4)
         self.assertLess(result["decode_logits_max_abs_err"], 1e-4)
 
+    def test_export_separate_vision_encoder_gemma3(self):
+        """Export Gemma3 with separate vision encoder/adapter models."""
+        model = self._build_tiny_gemma3_multimodal_model(
+            num_layers=2, max_images=2, random_weights=True
+        )
+        backbone = model.backbone
+        tokenizer = model.preprocessor.tokenizer
 
-@unittest.skipUnless(
-    keras.config.backend() == "torch",
-    "LiteRT-LM export is only supported with the PyTorch backend.",
-)
+        path = os.path.join(
+            self.get_temp_dir(), "test_separate_vision.litertlm"
+        )
+        model.export(
+            path,
+            format="litertlm",
+            prefill_seq_len=20,
+            separate_vision_encoder=True,
+        )
+
+        self.assertTrue(os.path.exists(path))
+        self.assertGreater(os.path.getsize(path), 0)
+
+        # Extract all TFLite models from the bundle.
+        interpreters = self._extract_litertlm_tflite_interpreters(path)
+        all_signatures = {}
+        for interpreter in interpreters:
+            all_signatures.update(interpreter._get_full_signature_list())
+
+        signature_names = set(all_signatures.keys())
+        self.assertIn("prefill", signature_names)
+        self.assertIn("decode", signature_names)
+        self.assertIn("vision_encoder", signature_names)
+        self.assertIn("vision_adapter", signature_names)
+
+        prefill_inputs = set(all_signatures["prefill"]["inputs"])
+        self.assertNotIn("images", prefill_inputs)
+        self.assertNotIn("pixel_values", prefill_inputs)
+        self.assertNotIn("pixel_position_ids", prefill_inputs)
+        self.assertIn("mm_embedding", prefill_inputs)
+
+        vision_encoder_inputs = set(all_signatures["vision_encoder"]["inputs"])
+        self.assertIn("images", vision_encoder_inputs)
+
+        # Numeric parity: chain the separate vision_encoder -> vision_adapter
+        # -> prefill/decode TFLite signatures and compare against the Keras
+        # eager reference (which runs the vision encoder inline and feeds
+        # img_embeddings directly), the same comparison
+        # test_multimodal_numeric_parity_gemma3 does for the combined
+        # (non-separate) vision-encoder path.
+        interpreters_by_sig = {}
+        for interpreter in interpreters:
+            for sig_name in interpreter._get_full_signature_list():
+                interpreters_by_sig[sig_name] = interpreter
+        vision_encoder_interpreter = interpreters_by_sig["vision_encoder"]
+        vision_adapter_interpreter = interpreters_by_sig["vision_adapter"]
+        prefill_decode_interpreter = interpreters_by_sig["prefill"]
+
+        B, T, L = 1, 20, 2
+        H = backbone.num_key_value_heads
+        D = backbone.head_dim
+        tokens_np = (
+            np.arange(1, 1 + T, dtype=np.int32).reshape(B, T)
+            % tokenizer.vocabulary_size()
+        )
+        cache_keras = np.zeros((B, L, 2, T, H, D), dtype=np.float32)
+        images_np = np.ones((B, 2, 16, 16, 3), dtype=np.float32)
+        vision_indices_np = np.array([[0, 1, 2, 3, 4, 5, 6, 7]], dtype=np.int32)
+        vision_mask_np = np.zeros((B, T), dtype=np.int32)
+        vision_mask_np[0, :8] = 1
+
+        # Keras reference: run the vision encoder inline, exactly as the
+        # combined (non-separate) path does.
+        with torch.no_grad():
+            img_embeddings = backbone.vision_encoder(
+                torch.from_numpy(images_np)
+            )
+        keras_img_embeddings = img_embeddings.detach().cpu().numpy()
+        _, keras_cache = self._call_with_cache_no_grad(
+            model,
+            tokens_np,
+            cache_keras,
+            0,
+            img_embeddings=img_embeddings,
+            vision_mask=torch.from_numpy(vision_mask_np),
+            padding_mask=None,
+            vision_indices=torch.from_numpy(vision_indices_np),
+            cache_update_mask=None,
+        )
+
+        # TFLite: chain vision_encoder -> vision_adapter -> prefill.
+        vision_encoder_runner = vision_encoder_interpreter.get_signature_runner(
+            "vision_encoder"
+        )
+        # The vision encoder signature is traced single-image [B, H, W, 3]
+        # (the LiteRT-LM runtime contract: one image per call, 3/4-D input),
+        # so drive it per image and restack along the image axis.
+        tflite_features = np.concatenate(
+            [
+                vision_encoder_runner(
+                    images=images_np[:, i : i + 1].squeeze(axis=1)
+                )["features"]
+                for i in range(images_np.shape[1])
+            ],
+            axis=0,
+        )
+        # The runtime chains encoder -> adapter per image, and the adapter is
+        # traced single-image [B, tokens, dim]; drive it per image and
+        # restack along the image axis.
+        vision_adapter_runner = vision_adapter_interpreter.get_signature_runner(
+            "vision_adapter"
+        )
+        tflite_mm_embedding = np.concatenate(
+            [
+                vision_adapter_runner(
+                    features=tflite_features[i : i + 1].reshape(
+                        1, *tflite_features.shape[-2:]
+                    )
+                )["mm_embedding"]
+                for i in range(tflite_features.shape[0])
+            ],
+            axis=0,
+        )
+
+        # Vision-tower parity: the TFLite vision encoder's raw features
+        # should match Keras's, before any language-model computation
+        # amplifies (or hides) a divergence.
+        self.assertAllClose(
+            keras_img_embeddings.reshape(tflite_features.shape),
+            tflite_features,
+            atol=1e-4,
+            rtol=1e-4,
+        )
+
+        prefill_runner = prefill_decode_interpreter.get_signature_runner(
+            "prefill"
+        )
+        prefill_inputs = {
+            "tokens": tokens_np,
+            "input_pos": np.arange(T, dtype=np.int32),
+            # The prefill signature's mm_embedding input is
+            # (max_images, tokens_per_image, dim), matching
+            # tflite_mm_embedding's shape directly -- no reshape needed.
+            "mm_embedding": tflite_mm_embedding,
+            "vision_indices": vision_indices_np,
+            "vision_mask": vision_mask_np,
+        }
+        for i in range(L):
+            prefill_inputs[f"kv_cache_k_{i}"] = cache_keras[:, i, 0, ...]
+            prefill_inputs[f"kv_cache_v_{i}"] = cache_keras[:, i, 1, ...]
+        tflite_prefill_out = prefill_runner(**prefill_inputs)
+
+        # End-to-end parity: KV caches after prefilling through the full
+        # separate vision_encoder -> vision_adapter -> prefill chain should
+        # match the Keras eager reference.
+        self._assert_kv_cache_close(
+            keras_cache, tflite_prefill_out, atol=1e-3, rtol=1e-3, num_layers=L
+        )
+
+    def _litertlm_section_model_types(self, path):
+        """Return the ``model_type`` string of every section in a bundle.
+
+        Reads the same ``LiteRTLMMetaData`` flatbuffer
+        ``_extract_litertlm_tflite_interpreters`` parses, but instead of
+        materializing each TFLite payload, decodes every section object's
+        ``Items()`` key/value pairs and returns the ``model_type`` value
+        (e.g. ``"tf_lite_prefill_decode"``, ``"tf_lite_end_of_vision"`` --
+        the ``TfLiteModelType.value`` strings ``add_tflite_model`` writes,
+        not the bare enum names) for every section that has one. This is a
+        section-*existence* assertion that does not depend on TFLite
+        signature names, which matters here since an end-of-image model's
+        signature name is fixed by this exporter (``"end_of_vision"``) but
+        a signature-name check alone would not distinguish "the model got
+        bundled" from "the model got bundled as the right section type".
+        """
+        from litert_lm_builder import (
+            litertlm_header_schema_py_generated as schema_mod,
+        )
+
+        _, metadata = self._parse_litertlm_bundle(path)
+        section_metadata = metadata.SectionMetadata()
+        model_types = []
+        for i in range(section_metadata.ObjectsLength()):
+            obj = section_metadata.Objects(i)
+            for j in range(obj.ItemsLength()):
+                kv = obj.Items(j)
+                key = kv.Key()
+                key_str = key.decode() if isinstance(key, bytes) else key
+                if key_str != "model_type":
+                    continue
+                if kv.ValueType() != schema_mod.VData.StringValue:
+                    continue
+                value_table = kv.Value()
+                string_value = schema_mod.StringValue()
+                string_value.Init(value_table.Bytes, value_table.Pos)
+                value = string_value.Value()
+                model_types.append(
+                    value.decode() if isinstance(value, bytes) else value
+                )
+        return model_types
+
+    def test_export_separate_vision_encoder_has_end_of_vision_section(self):
+        """A separate-vision Gemma3 export gains an END_OF_VISION section.
+
+        This test builds the same bundle as
+        ``test_export_separate_vision_encoder_gemma3`` above and asserts the
+        ``tf_lite_end_of_vision`` section is present alongside the three
+        standard ones, mirroring litert-torch's
+        `export_hf` module packing an optional ``eoi.tflite`` model (see
+        `KerasHubEndOfImageAdapter` in ``adapter.py``).
+        """
+        model = self._build_tiny_gemma3_multimodal_model(
+            num_layers=2, max_images=2, random_weights=True
+        )
+        backbone = model.backbone
+        tokenizer = model.preprocessor.tokenizer
+
+        path = os.path.join(
+            self.get_temp_dir(), "test_separate_vision_eoi.litertlm"
+        )
+        model.export(
+            path,
+            format="litertlm",
+            prefill_seq_len=20,
+            separate_vision_encoder=True,
+        )
+
+        section_model_types = self._litertlm_section_model_types(path)
+        self.assertIn("tf_lite_end_of_vision", section_model_types)
+        # The ordinary sections are still present unchanged -- adding
+        # END_OF_VISION does not remove or replace any of them.
+        self.assertIn("tf_lite_prefill_decode", section_model_types)
+        self.assertIn("tf_lite_vision_encoder", section_model_types)
+        self.assertIn("tf_lite_vision_adapter", section_model_types)
+
+        # The END_OF_VISION model itself: an input-less "end_of_vision"
+        # signature producing a single "eoi_embedding" output, matching
+        # `KerasHubEndOfImageAdapter.forward`.
+        interpreters = self._extract_litertlm_tflite_interpreters(path)
+        all_signatures = {}
+        for interpreter in interpreters:
+            all_signatures.update(interpreter._get_full_signature_list())
+        self.assertIn("end_of_vision", all_signatures)
+        eoi_signature = all_signatures["end_of_vision"]
+        self.assertEqual(eoi_signature["inputs"], {})
+        self.assertIn("eoi_embedding", eoi_signature["outputs"])
+
+        interpreters_by_sig = {}
+        for interpreter in interpreters:
+            for sig_name in interpreter._get_full_signature_list():
+                interpreters_by_sig[sig_name] = interpreter
+        eoi_runner = interpreters_by_sig["end_of_vision"].get_signature_runner(
+            "end_of_vision"
+        )
+        eoi_out = eoi_runner()["eoi_embedding"]
+
+        # Numeric parity: the bundled embedding should be exactly the
+        # Keras reference's `token_embedding` lookup for Gemma3's
+        # end-of-image token id, the same value
+        # `KerasHubEndOfImageAdapter.forward` computes at trace time.
+        eoi_token_ids = Gemma3Spec().get_end_of_vision_token_ids(tokenizer)
+        self.assertIsNotNone(eoi_token_ids)
+        with torch.no_grad():
+            keras_eoi_embedding = backbone.token_embedding(
+                torch.tensor([eoi_token_ids], dtype=torch.int32)
+            )
+        self.assertAllClose(
+            keras_eoi_embedding.detach().cpu().numpy(),
+            eoi_out,
+            atol=1e-5,
+            rtol=1e-5,
+        )
+
+
 class TestLiteRTLmAdapterHelpers(TestCase):
     def test_cpu_default_device_scope_restores_device(self):
         """_cpu_default_device_scope restores the original default device."""
@@ -565,11 +836,102 @@ class TestLiteRTLmAdapterHelpers(TestCase):
             self.assertEqual(torch.get_default_device(), torch.device("cpu"))
         self.assertEqual(torch.get_default_device(), original)
 
+    def test_prepare_image_embeddings_raw_images_rejects_pixel_values(self):
+        """A raw_images spec fed pixel_values raises the typed mismatch error.
 
-@unittest.skipUnless(
-    keras.config.backend() != "torch",
-    "This test only runs on non-PyTorch backends.",
-)
+        The adapter dispatches on spec.vision_input_style; a style/args
+        disagreement is a hard error.
+        """
+        vision_encoder = Gemma3VisionEncoder(
+            image_size=16,
+            patch_size=4,
+            pool_size=2,
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            output_dim=8,
+        )
+        backbone = Gemma3Backbone(
+            vocabulary_size=32,
+            image_size=16,
+            num_layers=2,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            vision_encoder=vision_encoder,
+        )
+        model = Gemma3CausalLM(preprocessor=None, backbone=backbone)
+        spec = resolve_export_spec(model)
+        self.assertEqual(spec.vision_input_style, "raw_images")
+
+        num_layers, cache_length = 2, 20
+        adapter = KerasHubLiteRTAdapter(
+            model, num_layers, cache_length, export_spec=spec, has_audio=False
+        )
+        tokens = torch.zeros((1, 4), dtype=torch.int32)
+        pixel_values = torch.zeros((1, 1, 4, 48), dtype=torch.float32)
+
+        with self.assertRaisesRegex(
+            ValueError, "vision_input_style='raw_images' requires"
+        ):
+            adapter._prepare_image_embeddings(
+                tokens=tokens,
+                images=None,
+                pixel_values=pixel_values,
+                pixel_position_ids=None,
+                mm_embedding=None,
+            )
+
+    def test_vision_encoder_adapter_dispatches_on_spec_style(self):
+        """KerasHubVisionEncoderAdapter.forward is keyed on the spec style,
+        not on which argument is supplied: feeding the wrong tensor for the
+        declared style raises the typed mismatch error before the encoder is
+        ever called.
+
+        Uses a stub backbone whose vision_encoder is a sentinel that would
+        raise if invoked -- proving the dispatch rejects the call up front,
+        without needing a real (expensive) Functional encoder.
+        """
+
+        def _never_call(*args, **kwargs):
+            raise AssertionError(
+                "vision_encoder must not be called on a style/args mismatch"
+            )
+
+        backbone = types.SimpleNamespace(vision_encoder=_never_call)
+        keras_model = types.SimpleNamespace(backbone=backbone)
+
+        # raw_images adapter fed pixel_values (wrong) -> raises.
+        raw_adapter = KerasHubVisionEncoderAdapter(
+            keras_model,
+            vision_input_style="raw_images",
+            flatten_image_batch=False,
+        )
+        with self.assertRaisesRegex(
+            ValueError, "vision_input_style='raw_images' requires"
+        ):
+            raw_adapter.forward(
+                pixel_values=torch.zeros((1, 1, 4, 48), dtype=torch.float32),
+                pixel_position_ids=torch.zeros((1, 1, 4), dtype=torch.int32),
+            )
+
+        # patch_values adapter fed images (wrong) -> raises.
+        patch_adapter = KerasHubVisionEncoderAdapter(
+            keras_model,
+            vision_input_style="patch_values",
+            flatten_image_batch=False,
+        )
+        with self.assertRaisesRegex(
+            ValueError, "vision_input_style='patch_values' requires"
+        ):
+            patch_adapter.forward(
+                images=torch.zeros((1, 1, 16, 16, 3), dtype=torch.float32),
+            )
+
+
 class TestLiteRTLmExportBackendChecks(TestCase):
     def test_export_rejects_non_torch_backend(self):
         """The exporter raises a clear error on non-PyTorch backends."""

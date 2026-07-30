@@ -18,6 +18,7 @@ from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
 from keras_hub.src.utils.litertlm.model_specs import SamplerConfig
+from keras_hub.src.utils.litertlm.model_specs import _get_vision_encoder
 from keras_hub.src.utils.litertlm.model_specs import resolve_export_spec
 from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 
@@ -198,10 +199,10 @@ class ExportPlan:
     """Immutable bundle of per-export-run settings for a single export call.
 
     ``export_to_litertlm`` computes all of these values once, early in the
-    pipeline (resolving the model-family spec, cache config, and vision
-    config), then passes a single ``ExportPlan`` to the later pipeline
-    phases (building sample inputs, tracing/converting, assembling the
-    bundle) instead of a long, order-sensitive positional-argument list.
+    pipeline (resolving the model-family spec, cache config, and
+    vision/audio config), then passes a single ``ExportPlan`` to the later
+    pipeline phases (building sample inputs, tracing/converting, assembling
+    the bundle) instead of a long, order-sensitive positional-argument list.
     """
 
     spec: object
@@ -212,8 +213,14 @@ class ExportPlan:
     prefill_seq_lens: list
     dtype: object
     has_vision: bool
+    has_audio: bool
     vision_cfg: dict | None
+    audio_cfg: dict | None
     vision_input_style: str | None
+    vision_output_dim: int | None
+    max_images: int | None
+    tokens_per_image: int | None
+    separate_vision_encoder: bool
     sampler_config: object | None
     model_type_overridden: bool
 
@@ -236,7 +243,26 @@ def _build_prefill_inputs(plan):
             vision_cfg = plan.vision_cfg
             max_images = vision_cfg["max_images_per_prompt"]
             num_vision_tokens = vision_cfg["num_vision_tokens"]
-            if plan.vision_input_style == "patch_values":
+            if plan.separate_vision_encoder:
+                vision_indices, vision_mask = _build_indices_and_mask(
+                    1, num_vision_tokens, seq_len
+                )
+                base.update(
+                    {
+                        "mm_embedding": torch.zeros(
+                            (
+                                max_images,
+                                plan.tokens_per_image,
+                                plan.vision_output_dim,
+                            ),
+                            dtype=plan.dtype,
+                            device="cpu",
+                        ),
+                        "vision_indices": vision_indices,
+                        "vision_mask": vision_mask,
+                    }
+                )
+            elif plan.vision_input_style == "patch_values":
                 base.update(
                     _build_gemma4_vision_sample_inputs(
                         batch_size=1,
@@ -262,8 +288,99 @@ def _build_prefill_inputs(plan):
                         dtype=plan.dtype,
                     )
                 )
+        if plan.has_audio:
+            audio_cfg = plan.audio_cfg
+            base.update(
+                _build_audio_sample_inputs(
+                    batch_size=1,
+                    max_clips=audio_cfg["max_clips_per_prompt"],
+                    num_frames=audio_cfg["num_frames"],
+                    num_audio_tokens=audio_cfg["num_audio_tokens"],
+                    seq_len=seq_len,
+                    audio_input_feat_size=audio_cfg["audio_input_feat_size"],
+                    dtype=plan.dtype,
+                )
+            )
         prefill_inputs_map[seq_len] = base
     return prefill_inputs_map
+
+
+def _build_vision_encoder_sample_inputs(
+    batch_size,
+    max_images,
+    image_size,
+    patch_size,
+    dtype,
+    vision_input_style,
+):
+    """Create concrete sample inputs for a separate vision-encoder signature."""
+    device = "cpu"
+    if vision_input_style == "patch_values":
+        num_patches, patch_dim = _gemma4_patch_dims(image_size, patch_size)
+        return {
+            "pixel_values": torch.zeros(
+                (
+                    batch_size,
+                    max_images,
+                    num_patches,
+                    patch_dim,
+                ),
+                dtype=dtype,
+                device=device,
+            ),
+            "pixel_position_ids": torch.zeros(
+                (
+                    batch_size,
+                    max_images,
+                    num_patches,
+                    2,
+                ),
+                dtype=torch.int32,
+                device=device,
+            ),
+        }
+    # The LiteRT-LM runtime rejects encoder inputs that are not 3- or 4-D
+    # (it feeds one image per call), so the signature is traced with a
+    # single-image [B, H, W, 3] input -- no max_images axis. The adapter
+    # reintroduces the N=1 axis before calling the KerasHub encoder.
+    return {
+        "images": torch.zeros(
+            (
+                batch_size,
+                image_size,
+                image_size,
+                3,
+            ),
+            dtype=dtype,
+            device=device,
+        )
+    }
+
+
+def _build_vision_adapter_sample_inputs(
+    batch_size,
+    tokens_per_image,
+    vision_output_dim,
+    dtype,
+):
+    """Create concrete sample inputs for a separate vision-adapter signature.
+
+    The LiteRT-LM runtime chains encoder -> adapter per image, so the adapter
+    consumes a single image's features [B, tokens_per_image, dim] -- no
+    max_images axis. (Tracing it with batch_size * max_images mismatches the
+    single-image encoder output the runtime feeds it at inference time.)
+    """
+    return {
+        "features": torch.zeros(
+            (
+                batch_size,
+                tokens_per_image,
+                vision_output_dim,
+            ),
+            dtype=dtype,
+            device="cpu",
+        )
+    }
 
 
 def _chain_signatures(litert_torch, signatures, **kwargs):
@@ -289,6 +406,8 @@ def _chain_signatures(litert_torch, signatures, **kwargs):
 
 def _trace_and_convert(
     litert_torch,
+    model,
+    tokenizer,
     prefill_adapter,
     decode_adapter,
     prefill_inputs_map,
@@ -296,12 +415,85 @@ def _trace_and_convert(
     plan,
     **kwargs,
 ):
-    """Trace the prefill/decode signatures and convert them to LiteRT."""
-    # Defer torch-specific imports until the backend has been verified as
-    # torch, so that non-torch callers get the friendly backend error.
+    """Trace prefill/decode (and optional vision) signatures and convert."""
+    # Defer torch-specific adapter imports until the backend has been verified
+    # as torch, so that non-torch callers get the friendly backend error.
+    from keras_hub.src.utils.litertlm.adapter import KerasHubEndOfImageAdapter
+    from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
+    from keras_hub.src.utils.litertlm.adapter import (
+        KerasHubVisionEncoderAdapter,
+    )
     from keras_hub.src.utils.litertlm.traceable_ops import traceable_ops_scope
 
     with traceable_ops_scope():
+        vision_encoder_edge = None
+        vision_adapter_edge = None
+        eoi_edge = None
+
+        # Optionally export the vision encoder and adapter as separate models.
+        if plan.separate_vision_encoder and plan.has_vision:
+            vision_cfg = plan.vision_cfg
+            patch_size = vision_cfg["patch_size"]
+            vision_encoder_inputs = _build_vision_encoder_sample_inputs(
+                batch_size=1,
+                max_images=plan.max_images,
+                image_size=vision_cfg["image_size"],
+                patch_size=patch_size,
+                dtype=plan.dtype,
+                vision_input_style=plan.vision_input_style,
+            )
+            vision_adapter_inputs = _build_vision_adapter_sample_inputs(
+                batch_size=1,
+                tokens_per_image=plan.tokens_per_image,
+                vision_output_dim=plan.vision_output_dim,
+                dtype=plan.dtype,
+            )
+            vision_encoder_adapter = KerasHubVisionEncoderAdapter(
+                model,
+                vision_input_style=plan.vision_input_style,
+                flatten_image_batch=plan.spec.flatten_image_batch,
+            ).eval()
+            vision_adapter = KerasHubVisionAdapter().eval()
+
+            vision_encoder_edge = litert_torch.signature(
+                "vision_encoder",
+                vision_encoder_adapter,
+                sample_kwargs=vision_encoder_inputs,
+                **kwargs,
+            ).convert(lightweight_conversion=True)
+            vision_adapter_edge = litert_torch.signature(
+                "vision_adapter",
+                vision_adapter,
+                sample_kwargs=vision_adapter_inputs,
+                **kwargs,
+            ).convert(lightweight_conversion=True)
+
+            # An END_OF_VISION model is exported only when the family
+            # declares an EOI token and the tokenizer resolves it.
+            eoi_token_ids = plan.spec.get_end_of_vision_token_ids(tokenizer)
+            if eoi_token_ids is not None:
+                eoi_adapter = KerasHubEndOfImageAdapter(
+                    model, eoi_token_ids
+                ).eval()
+                eoi_edge = litert_torch.signature(
+                    "end_of_vision",
+                    eoi_adapter,
+                    sample_kwargs={},
+                    **kwargs,
+                ).convert(lightweight_conversion=True)
+            elif plan.spec.end_of_vision_token is not None:
+                # The declared EOI token did not resolve to a real id in
+                # this tokenizer's vocab: skip the section rather than
+                # bundle an embedding for the wrong (unknown) token.
+                warnings.warn(
+                    "Could not resolve end-of-image token "
+                    f"{plan.spec.end_of_vision_token!r} to a token id for "
+                    f"{type(model).__name__}'s tokenizer; skipping the "
+                    "END_OF_VISION bundle section.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
         # Chain one signature per prefill bucket plus the decode signature.
         signatures = []
         for seq_len in plan.prefill_seq_lens:
@@ -318,7 +510,7 @@ def _trace_and_convert(
         converter = _chain_signatures(litert_torch, signatures, **kwargs)
         edge_model = converter.convert(lightweight_conversion=False)
 
-    return edge_model
+    return edge_model, vision_encoder_edge, vision_adapter_edge, eoi_edge
 
 
 def _assemble_bundle(
@@ -328,11 +520,30 @@ def _assemble_bundle(
     tokenizer,
     backend_constraint,
     edge_model,
+    vision_encoder_edge,
+    vision_adapter_edge,
+    eoi_edge,
     plan,
 ):
     """Write TFLite files, bundle the tokenizer, and assemble ``.litertlm``."""
-    prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
-    edge_model.export(prefill_tflite_path)
+    eoi_tflite_path = None
+    if plan.separate_vision_encoder and plan.has_vision:
+        prefill_tflite_path = os.path.join(temp_dir, "prefill_decode.tflite")
+        edge_model.export(prefill_tflite_path)
+        vision_encoder_tflite_path = os.path.join(
+            temp_dir, "vision_encoder.tflite"
+        )
+        vision_encoder_edge.export(vision_encoder_tflite_path)
+        vision_adapter_tflite_path = os.path.join(
+            temp_dir, "vision_adapter.tflite"
+        )
+        vision_adapter_edge.export(vision_adapter_tflite_path)
+        if eoi_edge is not None:
+            eoi_tflite_path = os.path.join(temp_dir, "end_of_vision.tflite")
+            eoi_edge.export(eoi_tflite_path)
+    else:
+        prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
+        edge_model.export(prefill_tflite_path)
 
     tokenizer_path = _materialize_sentencepiece_tokenizer(tokenizer, temp_dir)
 
@@ -343,6 +554,7 @@ def _assemble_bundle(
         plan.cache_length,
         meta_path,
         vision_cfg=plan.vision_cfg,
+        audio_cfg=plan.audio_cfg,
         sampler_config=plan.sampler_config,
         model_type_overridden=plan.model_type_overridden,
     )
@@ -361,6 +573,25 @@ def _assemble_bundle(
         litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
         backend_constraint=backend_constraint,
     )
+    if plan.separate_vision_encoder and plan.has_vision:
+        builder.add_tflite_model(
+            vision_encoder_tflite_path,
+            litert_lm_builder.TfLiteModelType.VISION_ENCODER,
+            backend_constraint=backend_constraint,
+        )
+        builder.add_tflite_model(
+            vision_adapter_tflite_path,
+            litert_lm_builder.TfLiteModelType.VISION_ADAPTER,
+            backend_constraint=backend_constraint,
+        )
+        if eoi_tflite_path is not None:
+            # Ordered after VISION_ADAPTER, matching litert-torch's section
+            # order (PREFILL_DECODE -> ... -> END_OF_VISION).
+            builder.add_tflite_model(
+                eoi_tflite_path,
+                litert_lm_builder.TfLiteModelType.END_OF_VISION,
+                backend_constraint=backend_constraint,
+            )
     builder.add_sentencepiece_tokenizer(tokenizer_path)
     builder.add_llm_metadata(meta_path)
 
@@ -397,6 +628,7 @@ def export_to_litertlm(
     backend_constraint=None,
     prefill_seq_len=None,
     cache_length=None,
+    separate_vision_encoder=False,
     sampler_config=None,
     llm_model_type=None,
     **kwargs,
@@ -412,6 +644,18 @@ def export_to_litertlm(
     inputs are processed alongside text tokens. The decode signature
     remains text-only because image KV-caches are already seeded after
     prefill.
+
+    When ``separate_vision_encoder=True`` and the model has a vision
+    encoder, the vision processing is split into three TFLite models:
+    ``VISION_ENCODER`` (raw images/patches -> features),
+    ``VISION_ADAPTER`` (features -> ``mm_embedding``), and
+    ``PREFILL_DECODE`` (text + ``mm_embedding`` -> KV caches/logits). This
+    matches the LiteRT-LM multimodal runtime contract. Families
+    that declare an end-of-image token (``LiteRTLMExportSpec.
+    end_of_vision_token``, e.g. Gemma3/Gemma4) additionally get a fourth,
+    input-less ``END_OF_VISION`` model whose only output is that token's
+    embedding; families with no declared end-of-image token (e.g.
+    PaliGemma) emit no such section.
 
     **Bucketing:** ``prefill_seq_len`` accepts either a single ``int`` or a
     ``list[int]``. When a list is provided (e.g.
@@ -443,6 +687,15 @@ def export_to_litertlm(
             context length. Pass this explicitly to avoid the warning and to
             get a cache length independent of the preprocessor. Defaults to
             ``None``.
+        separate_vision_encoder: bool. If ``True`` and the model has a vision
+            encoder, export the vision encoder and a no-op vision adapter as
+            separate ``VISION_ENCODER`` and ``VISION_ADAPTER`` TFLite models,
+            and have ``PREFILL_DECODE`` consume pre-computed ``mm_embedding``
+            tensors instead of raw images. Defaults to ``False``. Either way
+            the exported bundle is a complete multimodal model --
+            ``PREFILL_DECODE`` always consumes text tokens; this flag only
+            controls whether vision is baked into that trace or factored
+            into reusable models, never producing a vision-only export.
         sampler_config: Optional
             ``keras_hub.src.utils.litertlm.model_specs.SamplerConfig``
             instance. When given, the bundle's ``LlmMetadata.sampler_params``
@@ -550,8 +803,40 @@ def export_to_litertlm(
 
     # Detect multimodal capabilities.
     vision_cfg = spec.get_vision_config(model)
+    audio_cfg = spec.get_audio_config(model)
     has_vision = vision_cfg is not None
-    vision_input_style = spec.vision_input_style if has_vision else None
+    has_audio = audio_cfg is not None
+
+    vision_input_style = None
+    vision_output_dim = None
+    if has_vision:
+        vision_encoder = _get_vision_encoder(model.backbone)
+        vision_input_style = spec.vision_input_style
+        vision_output_dim = spec.get_vision_output_dim(vision_encoder)
+        if separate_vision_encoder and vision_output_dim is None:
+            raise ValueError(
+                "LiteRT-LM separate vision encoder export requires "
+                "`vision_encoder.output_dim` or `vision_encoder.num_classes`."
+            )
+    elif separate_vision_encoder:
+        raise ValueError(
+            "`separate_vision_encoder=True` requires a model with a vision "
+            "encoder."
+        )
+
+    if (
+        separate_vision_encoder
+        and has_vision
+        and not spec.supports_separate_vision
+    ):
+        raise ValueError(
+            "`separate_vision_encoder=True` is not supported for "
+            f"`{type(model).__name__}`: its vision encoder runs inside the "
+            "backbone (it expects raw `pixel_values`, e.g. Gemma3n), so "
+            "there is no standalone vision encoder to export as a separate "
+            "bundle section. Export it with `separate_vision_encoder=False` "
+            "(the default)."
+        )
 
     if (
         has_vision
@@ -567,6 +852,15 @@ def export_to_litertlm(
             "`prefill_seq_len` equal to `cache_length`."
         )
 
+    # Hoist vision shape values used both in prefill-input building and in
+    # separate vision encoder/adapter export.
+    max_images = None
+    tokens_per_image = None
+    if has_vision:
+        max_images = vision_cfg["max_images_per_prompt"]
+        num_vision_tokens = vision_cfg["num_vision_tokens"]
+        tokens_per_image = num_vision_tokens // max_images if max_images else 1
+
     dtype = _torch_dtype_from_model(model)
 
     # Bundle all resolved per-export-run settings into one immutable plan.
@@ -579,8 +873,14 @@ def export_to_litertlm(
         prefill_seq_lens=prefill_seq_lens,
         dtype=dtype,
         has_vision=has_vision,
+        has_audio=has_audio,
         vision_cfg=vision_cfg,
+        audio_cfg=audio_cfg,
         vision_input_style=vision_input_style,
+        vision_output_dim=vision_output_dim,
+        max_images=max_images,
+        tokens_per_image=tokens_per_image,
+        separate_vision_encoder=separate_vision_encoder,
         sampler_config=sampler_config,
         model_type_overridden=llm_model_type is not None,
     )
@@ -604,6 +904,10 @@ def export_to_litertlm(
             plan.num_layers,
             plan.cache_length,
             export_spec=spec,
+            has_audio=plan.has_audio,
+            separate_vision_encoder=(
+                plan.separate_vision_encoder and plan.has_vision
+            ),
         )
         adapter.eval()
 
@@ -628,14 +932,18 @@ def export_to_litertlm(
             except ImportError:
                 pass
 
-            edge_model = _trace_and_convert(
-                litert_torch,
-                prefill_adapter,
-                decode_adapter,
-                prefill_inputs_map,
-                decode_inputs,
-                plan,
-                **kwargs,
+            edge_model, vision_encoder_edge, vision_adapter_edge, eoi_edge = (
+                _trace_and_convert(
+                    litert_torch,
+                    model,
+                    tokenizer,
+                    prefill_adapter,
+                    decode_adapter,
+                    prefill_inputs_map,
+                    decode_inputs,
+                    plan,
+                    **kwargs,
+                )
             )
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -645,6 +953,9 @@ def export_to_litertlm(
             tokenizer=tokenizer,
             backend_constraint=backend_constraint,
             edge_model=edge_model,
+            vision_encoder_edge=vision_encoder_edge,
+            vision_adapter_edge=vision_adapter_edge,
+            eoi_edge=eoi_edge,
             plan=plan,
         )
 
@@ -772,6 +1083,36 @@ def _build_gemma4_vision_sample_inputs(
     }
 
 
+def _build_audio_sample_inputs(
+    batch_size,
+    max_clips,
+    num_frames,
+    num_audio_tokens,
+    seq_len,
+    dtype,
+    audio_input_feat_size,
+):
+    """Create concrete audio sample tensors for a prefill signature."""
+    device = "cpu"
+    audio_mel = torch.zeros(
+        (batch_size, max_clips, num_frames, audio_input_feat_size),
+        dtype=dtype,
+        device=device,
+    )
+    audio_mel_mask = torch.zeros(
+        (batch_size, max_clips, num_frames), dtype=torch.int32, device=device
+    )
+    audio_indices, audio_mask = _build_indices_and_mask(
+        batch_size, num_audio_tokens, seq_len
+    )
+    return {
+        "audio_mel": audio_mel,
+        "audio_mel_mask": audio_mel_mask,
+        "audio_indices": audio_indices,
+        "audio_mask": audio_mask,
+    }
+
+
 def _get_tokenizer(model):
     preprocessor = getattr(model, "preprocessor", None)
     if preprocessor is None:
@@ -816,6 +1157,7 @@ def _build_llm_metadata(
     max_num_tokens,
     path,
     vision_cfg=None,
+    audio_cfg=None,
     sampler_config=None,
     model_type_overridden=False,
 ):
@@ -862,6 +1204,10 @@ def _build_llm_metadata(
     # Populate vision fields for supported model types.
     if vision_cfg is not None:
         spec.populate_vision_metadata(meta, vision_cfg)
+
+    # Populate audio fields for supported model types.
+    if audio_cfg is not None:
+        spec.populate_audio_metadata(meta, audio_cfg)
 
     # Populate function-calling fields (only `FunctionGemmaSpec` overrides
     # the base no-op). Skipped on an explicit `llm_model_type` override:

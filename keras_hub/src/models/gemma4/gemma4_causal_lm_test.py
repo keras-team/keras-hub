@@ -9,6 +9,9 @@ import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 
+from keras_hub.src.models.gemma4.gemma4_assistant_causal_lm import (
+    Gemma4AssistantCausalLM,
+)
 from keras_hub.src.models.gemma4.gemma4_audio_converter import (
     Gemma4AudioConverter,
 )
@@ -321,6 +324,90 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
             comparison_mode="statistical",
             output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
         )
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "Not an export bug: the exported TFLite graph is semantically "
+            "correct (torch.export vs Keras eager is bit-exact at every "
+            "position). The no-delegate builtin TFLite interpreter used by "
+            "this harness mis-executes the Gemma4 vision encoder's "
+            "unflatten RESHAPE region under its default memory planner — "
+            "XNNPACK matches eager to 9.1e-06, the builtin interpreter "
+            "diverges to ~2.75 at exactly the merged vision/audio token "
+            "positions, and builtin+preserve_all_tensors is clean again "
+            "(2.4e-07). Upstream ai_edge_litert memory-planning issue; "
+            "re-enable when fixed or when the harness can opt into XNNPACK."
+        ),
+    )
+    def test_litertlm_export(self):
+        """Test LiteRT-LM export for multimodal Gemma4CausalLM."""
+        # LiteRT-LM export requires a SentencePiece tokenizer asset. Patch
+        # the mock tokenizer used by this test so it can be bundled.
+        self._attach_sentencepiece_tokenizer_asset(
+            self.tokenizer,
+            os.path.join(self.get_test_data_dir(), "gemma4_test_vocab.spm"),
+        )
+
+        result = self.run_litertlm_export_test(
+            cls=Gemma4CausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            prefill_seq_len=20,
+            verify_model_type="gemma4",
+            verify_multimodal_numerics=True,
+        )
+        # Gemma4 passes pixel + audio-mel inputs; its audio encoder is a
+        # standalone in-trace stage, so end-to-end multimodal parity is
+        # achievable and audio is isolable. Harness default 1e-4 (not
+        # relaxed); non-zero measured errors confirm a real, non-vacuous
+        # comparison.
+        self.assertTrue(result["has_vision"])
+        self.assertTrue(result["has_audio"])
+        self.assertTrue(result["audio_isolable"])
+        self.assertEqual(result["verification_level"], "end_to_end_multimodal")
+        self.assertGreater(result["prefill_kv_max_abs_err"], 0.0)
+        self.assertGreater(result["decode_logits_max_abs_err"], 0.0)
+        self.assertLess(result["prefill_kv_max_abs_err"], 1e-4)
+        self.assertLess(result["decode_logits_max_abs_err"], 1e-4)
+
+    def test_litertlm_export_unsupported_assistant_model(self):
+        """MTP draft models are not standalone-exportable.
+
+        `Gemma4AssistantCausalLM` is a multi-token-prediction draft model for
+        speculative decoding and cannot be exported on its own; the exporter
+        must reject it with a clear, typed error rather than crashing deep in
+        tracing (it subclasses `CausalLM`, not `Gemma4CausalLM`, so it would
+        otherwise fall through to the generic export spec).
+        """
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        assistant_backbone = Gemma4Backbone(
+            vocabulary_size=256,
+            image_size=16,
+            num_layers=4,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            num_kv_shared_layers=4,
+            vision_encoder=None,
+        )
+        assistant = Gemma4AssistantCausalLM(
+            backbone=assistant_backbone,
+            backbone_hidden_size=8,
+            num_centroids=16,
+            centroid_intermediate_top_k=4,
+            use_ordered_embeddings=True,
+        )
+        path = os.path.join(self.get_temp_dir(), "assistant.litertlm")
+        with self.assertRaisesRegex(
+            ValueError,
+            "multi-token-prediction",
+        ):
+            assistant.export(path, format="litertlm", prefill_seq_len=8)
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large

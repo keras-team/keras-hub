@@ -93,11 +93,15 @@ def _run_vision_encoder_for_style(
     images,
     pixel_values,
     pixel_position_ids,
+    reintroduce_n_axis=False,
 ):
     """Validate vision inputs against the declared style and run the encoder.
 
-    Callers must only pass the two encoder-run styles
-    (``"patch_values"`` / ``"raw_images"``).
+    Shared by ``KerasHubLiteRTAdapter._prepare_image_embeddings`` and
+    ``KerasHubVisionEncoderAdapter.forward``; callers must only pass the
+    two standalone-encoder styles (``"patch_values"`` / ``"raw_images"``).
+    ``reintroduce_n_axis`` is set only by the separate vision-encoder
+    adapter, whose runtime contract may deliver a single 4-D image.
     """
     if vision_input_style == "patch_values":
         if pixel_values is None or pixel_position_ids is None:
@@ -128,6 +132,12 @@ def _run_vision_encoder_for_style(
                 supplied_pixel_position_ids=pixel_position_ids is not None,
             )
         )
+    if reintroduce_n_axis and images.dim() == 4:
+        # The runtime feeds the separate vision encoder one 4-D image per
+        # call; KerasHub encoders take [B, N, H, W, 3], so reintroduce the
+        # N=1 axis. `reshape`, not `unsqueeze`: the converter folds an
+        # unsqueeze->reshape chain back to a 5-D conv input TFLite rejects.
+        images = images.reshape(images.shape[0], 1, *images.shape[1:])
     return _checked_vision_features(
         _run_vision_encoder(vision_encoder, images, flatten_image_batch)
     )
@@ -144,12 +154,17 @@ class KerasHubLiteRTAdapter(nn.Module):
         input_pos:    int32 [seq_len]   (position indices)
         kv_cache_k_0, kv_cache_v_0, ...: per-layer KV caches
 
-    Multimodal prefill inputs (when the model has a vision encoder):
+    Multimodal prefill inputs (when model has a vision/audio encoder):
         images:       float32 [batch, num_images, H, W, 3]
         pixel_values: float32 [batch, num_images, num_patches, patch_dim]
         pixel_position_ids: int32 [batch, num_images, num_patches]
+        mm_embedding: float32 [batch, num_vision_tokens, hidden_dim]
         vision_indices: int32 [batch, num_vision_tokens]
         vision_mask:  int32 [batch, seq_len] or bool
+        audio_mel:    float32 [batch, num_clips, num_frames, 128]
+        audio_mel_mask: int32 [batch, num_clips, num_frames]
+        audio_indices: int32 [batch, num_audio_tokens]
+        audio_mask:   int32 [batch, seq_len] or bool
         (plus text inputs above)
 
     Outputs (prefill):
@@ -171,11 +186,15 @@ class KerasHubLiteRTAdapter(nn.Module):
         num_layers,
         cache_length,
         export_spec,
+        *,
+        has_audio,
+        separate_vision_encoder=False,
     ):
         super().__init__()
         self.keras_model = keras_model
         self.num_layers = num_layers
         self.cache_length = cache_length
+        self.separate_vision_encoder = separate_vision_encoder
         self.export_spec = export_spec
 
         vision_encoder = _get_vision_encoder(keras_model.backbone)
@@ -190,7 +209,22 @@ class KerasHubLiteRTAdapter(nn.Module):
         self.flatten_image_batch = (
             export_spec.flatten_image_batch if self.has_vision else False
         )
-        self.vision_encoder = vision_encoder
+        # When exporting a separate vision encoder, keep the vision tower out of
+        # the PREFILL_DECODE graph so its weights are not duplicated in the main
+        # model. The cached `vision_input_style` still guides reshape logic.
+        self.vision_encoder = (
+            None if separate_vision_encoder else vision_encoder
+        )
+
+        # Caller-resolved fact (export.py's plan: `audio_cfg is not None`) --
+        # a text-only Gemma4/Gemma3n spec declares `audio_input_style` even
+        # with `audio_encoder=None`, so the spec is not a presence signal.
+        self.has_audio = has_audio
+        # The family's declared `audio_input_style`, or `None` when the
+        # model has no audio encoder.
+        self.audio_input_style = (
+            export_spec.audio_input_style if self.has_audio else None
+        )
 
         # Cache the call_with_cache signature so we don't re-inspect it on every
         # forward pass during export tracing.
@@ -208,6 +242,11 @@ class KerasHubLiteRTAdapter(nn.Module):
         vision_mask=None,
         pixel_values=None,
         pixel_position_ids=None,
+        audio_mel=None,
+        audio_mel_mask=None,
+        audio_indices=None,
+        audio_mask=None,
+        mm_embedding=None,
         **kv_cache,
     ):
         """Prefill step: process the full prompt at the given cache position.
@@ -226,16 +265,31 @@ class KerasHubLiteRTAdapter(nn.Module):
         cache_update_index = input_pos[0]
 
         img_embeddings, pixel_values_out = self._prepare_image_embeddings(
+            tokens=tokens,
             images=images,
             pixel_values=pixel_values,
             pixel_position_ids=pixel_position_ids,
+            mm_embedding=mm_embedding,
+        )
+        (
+            audio_embeddings,
+            input_features_out,
+            input_features_mask_out,
+        ) = self._prepare_audio_embeddings(
+            audio_mel=audio_mel,
+            audio_mel_mask=audio_mel_mask,
         )
 
         call_kwargs = self._build_call_with_cache_kwargs(
             img_embeddings=img_embeddings,
             vision_mask=vision_mask,
             vision_indices=vision_indices,
+            audio_embeddings=audio_embeddings,
+            audio_mask=audio_mask,
+            audio_indices=audio_indices,
             pixel_values=pixel_values_out,
+            input_features=input_features_out,
+            input_features_mask=input_features_mask_out,
         )
         return self._call_with_cache(
             tokens, cache, cache_update_index, call_kwargs, return_logits=False
@@ -243,9 +297,11 @@ class KerasHubLiteRTAdapter(nn.Module):
 
     def _prepare_image_embeddings(
         self,
+        tokens,
         images,
         pixel_values,
         pixel_position_ids,
+        mm_embedding,
     ):
         """Return ``(img_embeddings, pixel_values_out)`` for prefill.
 
@@ -254,6 +310,8 @@ class KerasHubLiteRTAdapter(nn.Module):
 
         - Gemma3n (``vision_input_style="embedded_pixel_values"``) expects
           raw ``pixel_values`` (returned as the second tuple item).
+        - Separate-vision-encoder exports consume pre-computed
+          ``mm_embedding``.
         - Gemma4 (``vision_input_style="patch_values"``) accepts
           preprocessed patch tensors.
         - Other vision encoders (``vision_input_style="raw_images"``, e.g.
@@ -266,6 +324,16 @@ class KerasHubLiteRTAdapter(nn.Module):
             # Gemma3n runs the vision encoder inside the backbone; pass the
             # raw preprocessed images through.
             return None, images
+
+        if self.separate_vision_encoder:
+            # Only Gemma4 needs a reshape here (see
+            # ``Gemma4Spec.reshape_separate_vision_embeddings``); every other
+            # family returns ``mm_embedding`` unchanged.
+            reshape_fn = self.export_spec.reshape_separate_vision_embeddings
+            img_embeddings = reshape_fn(
+                mm_embedding, tokens, self.keras_model.preprocessor
+            )
+            return img_embeddings, None
 
         if self.vision_input_style in ("patch_values", "raw_images"):
             return (
@@ -290,6 +358,28 @@ class KerasHubLiteRTAdapter(nn.Module):
             "'embedded_pixel_values'."
         )
 
+    def _prepare_audio_embeddings(self, audio_mel, audio_mel_mask):
+        """Return audio embeddings and optional input feature tensors.
+
+        Audio is always baked into the PREFILL_DECODE trace; there is no
+        separate-audio-encoder export path because the LiteRT-LM runtime
+        publishes no reference contract for audio bundle sections (unlike
+        ``VISION_ENCODER``/``VISION_ADAPTER``).
+        """
+        if not self.has_audio or audio_mel is None:
+            return None, None, None
+
+        if self.audio_input_style == "embedded_mel":
+            # Gemma3n runs the audio encoder inside the backbone; pass the
+            # pre-extracted mel (input_features) + mask through.
+            return None, audio_mel, audio_mel_mask
+
+        # standalone_mel (Gemma4): audio encoder is a standalone in-trace stage.
+        audio_embeddings = self.keras_model.backbone.audio_encoder(
+            audio_mel, audio_mel_mask
+        )
+        return audio_embeddings, None, None
+
     def forward_decode(self, tokens, input_pos, **kv_cache):
         """Decode step: process a single token at ``input_pos``.
 
@@ -304,6 +394,9 @@ class KerasHubLiteRTAdapter(nn.Module):
             img_embeddings=None,
             vision_mask=None,
             vision_indices=None,
+            audio_embeddings=None,
+            audio_mask=None,
+            audio_indices=None,
         )
         return self._call_with_cache(
             tokens, cache, cache_update_index, call_kwargs, return_logits=True
@@ -342,7 +435,12 @@ class KerasHubLiteRTAdapter(nn.Module):
         img_embeddings=None,
         vision_mask=None,
         vision_indices=None,
+        audio_embeddings=None,
+        audio_mask=None,
+        audio_indices=None,
         pixel_values=None,
+        input_features=None,
+        input_features_mask=None,
     ):
         """Build kwargs dict for ``call_with_cache`` based on its signature."""
         params = self._call_with_cache_params
@@ -353,5 +451,87 @@ class KerasHubLiteRTAdapter(nn.Module):
             "padding_mask": None,
             "vision_indices": vision_indices,
             "cache_update_mask": None,
+            "audio_embeddings": audio_embeddings,
+            "input_features": input_features,
+            "input_features_mask": input_features_mask,
+            "audio_mask": audio_mask,
+            "audio_indices": audio_indices,
         }
         return {k: v for k, v in values.items() if k in params}
+
+
+class KerasHubVisionEncoderAdapter(nn.Module):
+    """Adapter that wraps a KerasHub vision encoder for separate export.
+
+    Gemma3 accepts raw ``images`` [B, N, H, W, 3]; Gemma4 accepts
+    preprocessed patches. The call is dispatched on the family's declared
+    ``spec.vision_input_style`` (passed in at construction), not inferred
+    from which argument the caller supplied. The output is always returned
+    as a dict named ``features`` to match litert-torch's tensor names.
+    """
+
+    def __init__(self, keras_model, vision_input_style, flatten_image_batch):
+        super().__init__()
+        self.vision_encoder = _get_vision_encoder(keras_model.backbone)
+        self.vision_input_style = vision_input_style
+        self.flatten_image_batch = flatten_image_batch
+
+    def forward(self, images=None, pixel_values=None, pixel_position_ids=None):
+        if self.vision_input_style not in ("patch_values", "raw_images"):
+            raise ValueError(
+                "Separate vision-encoder export does not support "
+                f"vision_input_style={self.vision_input_style!r}. Separate "
+                "export is only defined for 'raw_images' and 'patch_values' "
+                "(embedded_pixel_values families run the encoder inside the "
+                "backbone and reject separate export in export_to_litertlm)."
+            )
+        out = _run_vision_encoder_for_style(
+            self.vision_encoder,
+            self.vision_input_style,
+            self.flatten_image_batch,
+            images=images,
+            pixel_values=pixel_values,
+            pixel_position_ids=pixel_position_ids,
+            reintroduce_n_axis=True,
+        )
+        return {"features": out}
+
+
+class KerasHubVisionAdapter(nn.Module):
+    """No-op vision adapter exported as a separate LiteRT-LM model.
+
+    KerasHub already projects vision features inside the vision encoder, so
+    this adapter simply renames ``features`` to ``mm_embedding``. It is a
+    separate model because the LiteRT-LM bundle format defines
+    ``VISION_ENCODER`` and ``VISION_ADAPTER`` as two distinct slots.
+    """
+
+    def forward(self, features):
+        return {"mm_embedding": features}
+
+
+class KerasHubEndOfImageAdapter(nn.Module):
+    """End-of-image (EOI) embedding, exported as a separate LiteRT-LM model.
+
+    Mirrors litert-torch's ``END_OF_VISION`` bundle section: litert-torch
+    packs an ``eoi.tflite`` whose only output is the end-of-image token
+    embedding. KerasHub's vision adapter is a plain rename and does not fold
+    an EOI embedding into ``mm_embedding`` the way litert-torch's
+    gemma3/gemma3n adapters do, so the embedding ships as its own section
+    for separate-vision exports of families declaring an
+    ``end_of_vision_token``.
+
+    Takes no runtime inputs -- the end-of-image token id(s) are fixed at
+    export time, so the embedding lookup constant-folds during tracing.
+    """
+
+    def __init__(self, keras_model, eoi_token_ids):
+        super().__init__()
+        self.token_embedding = keras_model.backbone.token_embedding
+        # A plain Python list (not a registered buffer): the ids are
+        # export-time constants, matching litert-torch's input-less form.
+        self._eoi_token_ids = list(eoi_token_ids)
+
+    def forward(self):
+        eoi_ids = torch.tensor([self._eoi_token_ids], dtype=torch.int32)
+        return {"eoi_embedding": self.token_embedding(eoi_ids)}
