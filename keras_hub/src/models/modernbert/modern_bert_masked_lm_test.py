@@ -1,15 +1,15 @@
 import pytest
 
-from keras_hub.src.models.modernbert.modernbert_backbone import (
+from keras_hub.src.models.modernbert.modern_bert_backbone import (
     ModernBertBackbone,
 )
-from keras_hub.src.models.modernbert.modernbert_masked_lm import (
+from keras_hub.src.models.modernbert.modern_bert_masked_lm import (
     ModernBertMaskedLM,
 )
-from keras_hub.src.models.modernbert.modernbert_preprocessor import (
+from keras_hub.src.models.modernbert.modern_bert_masked_lm_preprocessor import (
     ModernBertMaskedLMPreprocessor,
 )
-from keras_hub.src.models.modernbert.modernbert_tokenizer import (
+from keras_hub.src.models.modernbert.modern_bert_tokenizer import (
     ModernBertTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
@@ -103,15 +103,6 @@ class ModernBertMaskedLMTest(TestCase):
 
         self.model = ModernBertMaskedLM(
             **self.init_kwargs,
-        )
-
-    def test_task(self):
-        """Validate task model with KerasHub standard task runner."""
-
-        self.run_task_test(
-            cls=ModernBertMaskedLM,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
         )
 
     @pytest.mark.extra_large

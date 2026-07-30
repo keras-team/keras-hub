@@ -39,7 +39,6 @@ class ModernBertMLP(layers.Layer):
         dtype=None,
         **kwargs,
     ):
-        # super().__init__(dtype=dtype, **kwargs)
         if dtype is None:
             dtype = keras.config.dtype_policy()
 

@@ -1,7 +1,7 @@
-from keras_hub.src.models.modernbert.modernbert_preprocessor import (
+from keras_hub.src.models.modernbert.modern_bert_masked_lm_preprocessor import (
     ModernBertMaskedLMPreprocessor,
 )
-from keras_hub.src.models.modernbert.modernbert_tokenizer import (
+from keras_hub.src.models.modernbert.modern_bert_tokenizer import (
     ModernBertTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase

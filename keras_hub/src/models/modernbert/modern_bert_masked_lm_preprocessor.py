@@ -8,10 +8,10 @@ from keras_hub.src.layers.preprocessing.masked_lm_mask_generator import (
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
-from keras_hub.src.models.modernbert.modernbert_backbone import (
+from keras_hub.src.models.modernbert.modern_bert_backbone import (
     ModernBertBackbone,
 )
-from keras_hub.src.models.modernbert.modernbert_tokenizer import (
+from keras_hub.src.models.modernbert.modern_bert_tokenizer import (
     ModernBertTokenizer,
 )
 from keras_hub.src.models.preprocessor import Preprocessor
@@ -74,6 +74,7 @@ class ModernBertMaskedLMPreprocessor(Preprocessor):
         mask_selection_length=96,
         mask_token_rate=0.8,
         random_token_rate=0.1,
+        seed=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -156,3 +157,10 @@ class ModernBertMaskedLMPreprocessor(Preprocessor):
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        config["tokenizer"] = keras.saving.deserialize_keras_object(
+            config["tokenizer"]
+        )
+        return cls(**config)

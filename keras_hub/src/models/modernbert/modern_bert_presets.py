@@ -10,10 +10,10 @@ backbone_presets = {
                 "and GeGLU feedforward layers."
             ),
             "params": 149014272,
-            "path": "modernbert",
+            "path": "modern_bert",
         },
         "kaggle_handle": (
-            "kaggle://keras/modernbert/keras/modernbert_base_en/1"
+            "kaggle://keras/modern_bert/keras/modern_bert_base_en/1"
         ),
     },
     "modernbert_large_en": {
@@ -25,10 +25,10 @@ backbone_presets = {
                 "and GeGLU feedforward layers."
             ),
             "params": 394781696,
-            "path": "modernbert",
+            "path": "modern_bert",
         },
         "kaggle_handle": (
-            "kaggle://keras/modernbert/keras/modernbert_large_en/1"
+            "kaggle://keras/modern_bert/keras/modern_bert_large_en/1"
         ),
     },
 }

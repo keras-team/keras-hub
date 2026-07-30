@@ -6,7 +6,7 @@ from keras_hub.src.layers.modeling.reversible_embedding import (
 )
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.modernbert.modernbert_layers import (
+from keras_hub.src.models.modernbert.modern_bert_layers import (
     ModernBertEncoderLayer,
 )
 

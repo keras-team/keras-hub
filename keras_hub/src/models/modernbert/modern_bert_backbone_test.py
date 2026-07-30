@@ -1,7 +1,7 @@
 import pytest
 from keras import ops
 
-from keras_hub.src.models.modernbert.modernbert_backbone import (
+from keras_hub.src.models.modernbert.modern_bert_backbone import (
     ModernBertBackbone,
 )
 from keras_hub.src.tests.test_case import TestCase

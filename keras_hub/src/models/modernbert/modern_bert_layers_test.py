@@ -3,13 +3,13 @@ import numpy as np
 from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
-from keras_hub.src.models.modernbert.modernbert_layers import (
+from keras_hub.src.models.modernbert.modern_bert_layers import (
     ModernBertAttention,
 )
-from keras_hub.src.models.modernbert.modernbert_layers import (
+from keras_hub.src.models.modernbert.modern_bert_layers import (
     ModernBertEncoderLayer,
 )
-from keras_hub.src.models.modernbert.modernbert_layers import ModernBertMLP
+from keras_hub.src.models.modernbert.modern_bert_layers import ModernBertMLP
 from keras_hub.src.tests.test_case import TestCase
 
 
