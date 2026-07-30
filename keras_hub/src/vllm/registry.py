@@ -313,9 +313,15 @@ if _BaseLLM is not None:
             )
             if is_keras_hub:
                 preset = model.split("keras_hub:", 1)[1]
-                # dtype defaults to bf16 (TPU paged KV cache); used here, not
-                # forwarded — the written config.json carries torch_dtype.
+                # dtype defaults to bf16 (TPU paged KV cache). It is written
+                # into config.json as torch_dtype *and* forwarded to vLLM.
+                # Forwarding matters: left unset, vLLM resolves dtype="auto"
+                # and downcasts a float32 config to bfloat16, while the
+                # backbone would still build in float32 from torch_dtype --
+                # the model would then hand float32 q/k/v to a bfloat16 paged
+                # cache, which the attention kernel rejects.
                 dtype = kwargs.pop("dtype", "bfloat16")
+                kwargs.setdefault("dtype", dtype)
                 # Use tpu-inference's native flax/nnx path, where the
                 # KerasHubForCausalLM architecture is registered. This
                 # change is process-wide on purpose: MODEL_IMPL_TYPE is an

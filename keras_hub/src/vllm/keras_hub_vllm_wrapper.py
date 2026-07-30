@@ -73,15 +73,20 @@ class KerasHubVllmModel(_NnxModule):
         self.vllm_config = vllm_config
         self.mesh = mesh
         self.preset_name = vllm_config.model_config.hf_config.keras_hub_preset
-        # Serving dtype comes from the config vLLM resolved (written as
-        # torch_dtype by setup_vllm_model), not a hardcoded value.
-        self._dtype = str(
-            getattr(
-                vllm_config.model_config.hf_config,
-                "torch_dtype",
-                "bfloat16",
+        # Serving dtype is the one vLLM resolved, not the one requested.
+        # `model_config.dtype` is authoritative: vLLM may override the
+        # `torch_dtype` written into config.json (notably downcasting float32
+        # under dtype="auto"), and the KV cache it allocates follows the
+        # resolved dtype. Building the backbone from the requested value
+        # instead would feed the paged kernel q/k/v in a dtype its cache does
+        # not match. Falls back to `torch_dtype` if vLLM exposes no dtype.
+        resolved_dtype = getattr(vllm_config.model_config, "dtype", None)
+        if resolved_dtype is None:
+            resolved_dtype = getattr(
+                vllm_config.model_config.hf_config, "torch_dtype", "bfloat16"
             )
-        )
+        # `str(torch.bfloat16)` is "torch.bfloat16"; Keras wants "bfloat16".
+        self._dtype = str(resolved_dtype).removeprefix("torch.")
 
     def load_weights(self, *args, **kwargs) -> None:
         """Builds the KerasHub model and loads the preset weights.
