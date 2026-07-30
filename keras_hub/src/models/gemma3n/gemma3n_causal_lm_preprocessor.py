@@ -656,7 +656,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
         # === Multimodal processing ===
-        batch_size = tf.shape(prompts)[0]
+        batch_size = tf.shape(token_ids)[0]
         desired_height = (
             self.image_converter.image_size[0] if self.image_converter else 0
         )
@@ -846,7 +846,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             }
 
         # === Multimodal processing ===
-        batch_size = tf.shape(prompts)[0]
+        batch_size = tf.shape(token_ids)[0]
         desired_height = (
             self.image_converter.image_size[0] if self.image_converter else 0
         )

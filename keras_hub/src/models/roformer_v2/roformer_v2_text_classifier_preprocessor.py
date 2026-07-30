@@ -117,7 +117,10 @@ class RoformerV2TextClassifierPreprocessor(BertTextClassifierPreprocessor):
     tokenizer_cls = RoformerV2Tokenizer
 
     @preprocessing_function
-    def call(self, x, y=None, sample_weight=None):
+    def _call_tf(self, x, y=None, sample_weight=None):
+        return self._call_python(x, y=y, sample_weight=sample_weight)
+
+    def _call_python(self, x, y=None, sample_weight=None):
         x = x if isinstance(x, tuple) else (x,)
         x = tuple(self.tokenizer(segment) for segment in x)
         token_ids, segment_ids = self.packer(x)

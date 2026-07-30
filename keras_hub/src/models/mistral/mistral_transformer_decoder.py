@@ -31,6 +31,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         sliding_window=512,
         dropout=0,
+        head_dim=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -44,6 +45,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
         self.dropout = dropout
 
         self.sliding_window = sliding_window
+        self.head_dim = head_dim
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
@@ -61,6 +63,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
             rope_max_wavelength=self.rope_max_wavelength,
             rope_scaling_factor=self.rope_scaling_factor,
             sliding_window=self.sliding_window,
+            head_dim=self.head_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
             dtype=self.dtype_policy,
@@ -242,6 +245,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "num_key_value_heads": self.num_key_value_heads,
                 "sliding_window": self.sliding_window,
+                "head_dim": self.head_dim,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "kernel_initializer": keras.initializers.serialize(

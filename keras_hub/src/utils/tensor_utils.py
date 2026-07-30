@@ -307,6 +307,64 @@ def convert_to_ragged_batch(inputs):
     return inputs, unbatched, rectangular
 
 
+def canonicalize_python_inputs(inputs):
+    if isinstance(inputs, (tuple, list)):
+        # Fast path for common cases:
+        # If the inputs are just normal python types (or lists of
+        # python types), it immediately returns.
+        if not inputs:
+            return [list(inputs)], False
+        first = inputs[0]
+        if isinstance(first, (int, str, float, bool, np.integer, np.floating)):
+            return [list(inputs)], False
+        if isinstance(first, (tuple, list)) and (
+            not first
+            or isinstance(
+                first[0],
+                (int, str, float, bool, np.integer, np.floating),
+            )
+        ):
+            return [list(x) for x in inputs], True
+
+        # `keras.tree.map_structure` is expensive.
+        inputs = keras.tree.map_structure(convert_to_list, inputs)
+        if inputs and isinstance(inputs[0], (tuple, list)):
+            return inputs, True
+        else:
+            return [inputs], False
+    elif tf is not None and isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+        unbatched = inputs.shape.rank == 1
+        if unbatched:
+            inputs = tf.expand_dims(inputs, 0)
+        if isinstance(inputs, tf.Tensor):
+            inputs = inputs.numpy().tolist()
+        else:
+            inputs = inputs.to_list()
+        return inputs, not unbatched
+    elif keras.ops.is_tensor(inputs):
+        inputs = convert_to_list(inputs)
+        if inputs and isinstance(inputs[0], (tuple, list)):
+            return inputs, True
+        else:
+            return [inputs], False
+    else:
+        raise ValueError(
+            f"Input should be a list or a list of lists. Received: {inputs}"
+        )
+
+
+def compute_padding_mask(token_ids, pad_token_id):
+    if isinstance(token_ids, (list, tuple)):
+        if token_ids and isinstance(token_ids[0], (list, tuple)):
+            return [
+                [token != pad_token_id for token in seq] for seq in token_ids
+            ]
+        else:
+            return [token != pad_token_id for token in token_ids]
+    else:
+        return token_ids != pad_token_id
+
+
 def truncate_at_token(inputs, token, mask):
     """Truncate at first instance of `token`, ignoring `mask`."""
     assert_tf_installed("truncate_at_token")
@@ -323,6 +381,29 @@ def strip_to_ragged(token_ids, mask, ids_to_strip):
     for id in ids_to_strip:
         mask = mask & (token_ids != id)
     return tf.ragged.boolean_mask(token_ids, mask)
+
+
+def strip_to_ragged_python(token_ids, mask, ids_to_strip):
+    """Remove masked and special tokens using numpy and Python."""
+    if keras.ops.is_tensor(token_ids):
+        token_ids = keras.ops.convert_to_numpy(token_ids).astype("int32")
+    if keras.ops.is_tensor(mask):
+        mask = keras.ops.convert_to_numpy(mask).astype("bool")
+    if not isinstance(token_ids, np.ndarray):
+        token_ids = np.array(token_ids, dtype="int32")
+    if not isinstance(mask, np.ndarray):
+        mask = np.array(mask, dtype="bool")
+
+    for id in ids_to_strip:
+        mask = mask & (token_ids != id)
+    if token_ids.ndim == 1:
+        token_ids = token_ids[mask].tolist()
+    else:
+        ragged_ids = []
+        for i in range(token_ids.shape[0]):
+            ragged_ids.append(token_ids[i][mask[i]].tolist())
+        token_ids = ragged_ids
+    return token_ids
 
 
 def assert_tf_installed(symbol_name):
