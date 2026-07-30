@@ -2,7 +2,6 @@ import re
 
 import keras
 import numpy as np
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -17,6 +16,11 @@ from keras_hub.src.models.qwen3_5.qwen3_5_video_converter import (
 )
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 @keras_hub_export("keras_hub.models.Qwen3_5CausalLMPreprocessor")
