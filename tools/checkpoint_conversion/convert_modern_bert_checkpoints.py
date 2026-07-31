@@ -21,7 +21,8 @@ huggingface-cli login
 Run the conversion:
 ```
 python tools/checkpoint_conversion/convert_modern_bert_checkpoints.py \
-    --preset modernbert_base_en
+    --preset modernbert_base_en \
+    --output_dir ./converted_presets
 ```
 
 - The original ModernBERT paper describes RMSNorm.
@@ -38,14 +39,6 @@ python tools/checkpoint_conversion/convert_modern_bert_checkpoints.py \
 
 import argparse
 import os
-import sys
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
-
-if REPO_ROOT in sys.path:
-    sys.path.remove(REPO_ROOT)
-sys.path.insert(0, REPO_ROOT)
 
 import keras
 import numpy as np

@@ -16,7 +16,8 @@ def convert_backbone_config(transformers_config):
     rope_theta = transformers_config.get("rope_theta")
     if rope_theta is None:
         rope_config = transformers_config.get("rope_config", {})
-        rope_theta = rope_config.get("rope_theta", 10000.0)
+        rope_theta = rope_config.get("rope_theta", 160000.0)
+        # rope_theta = rope_config.get("rope_theta", 10000.0)
 
     return {
         "vocabulary_size": transformers_config.get("vocab_size", 50368),
@@ -42,39 +43,15 @@ def convert_backbone_config(transformers_config):
 
 
 def _port_wqkv(hf_tensor, keras_shape, num_heads):
-    """
-    HF Shape: (3 * H, H). Logically arranged as (3, num_heads, head_dim, H).
-    Interleaves features by head dimension to match Keras shape (num_heads, 3, head_dim, H).
-    """
-    H = hf_tensor.shape[1]
-    head_dim = H // num_heads
+    del keras_shape, num_heads
 
-    # Reshape into (3, num_heads, head_dim, H)
-    x = hf_tensor.reshape((3, num_heads, head_dim, H))
-
-    # Swap to interleave by head: (num_heads, 3, head_dim, H)
-    x = np.transpose(x, (1, 0, 2, 3))
-
-    # Flatten back to (3 * H, H)
-    x = x.reshape((3 * H, H))
-
-    # Transpose for Keras Dense layer: (H, 3 * H)
-    return np.transpose(x, (1, 0))
+    return hf_tensor.T
 
 
 def _port_wqkv_bias(hf_tensor, keras_shape, num_heads):
-    """
-    HF Shape: (3 * H,). Logically arranged as (3, num_heads, head_dim).
-    Interleaves bias values by head dimension to match kernel layout: (num_heads, 3, head_dim).
-    """
-    H = hf_tensor.shape[0] // 3
-    head_dim = H // num_heads
+    del keras_shape, num_heads
 
-    # Reshape and swap to match kernel layout
-    x = hf_tensor.reshape((3, num_heads, head_dim))
-    x = np.transpose(x, (1, 0, 2))
-
-    return x.reshape((3 * H,))
+    return hf_tensor
 
 
 def _split_wi(hf_tensor, keras_shape, index):
@@ -82,13 +59,16 @@ def _split_wi(hf_tensor, keras_shape, index):
     Split HF GeGLU input projection into gate and input components.
     HF ModernBERT layout: Chunk 0 = wi_0 (gate), Chunk 1 = wi_1 (input).
     """
-    chunks = np.split(hf_tensor, 2, axis=0)
-    weight = chunks[index]
+    del keras_shape
 
-    if len(weight.shape) == 2:
-        weight = np.transpose(weight)
+    assert hf_tensor.ndim == 2
+    assert hf_tensor.shape[0] % 2 == 0
 
-    return weight
+    gate, value = np.split(hf_tensor, 2, axis=0)
+
+    weight = gate if index == 0 else value
+
+    return weight.T
 
 
 def _split_bias(hf_tensor, keras_shape, index):
@@ -110,7 +90,7 @@ def _get_norm_variable(norm_layer):
     return None
 
 
-def convert_weights(backbone, loader, transformers_config):
+def convert_weights(backbone, loader, _):
     """Port HuggingFace ModernBERT weights into KerasHub backbone."""
 
     # Token Embeddings
