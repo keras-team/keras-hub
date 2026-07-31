@@ -162,9 +162,10 @@ def _derive_arch_config(preset):
 
     Reads the preset's serialized ``config.json`` directly (no model build, no
     TPU allocation) and translates its backbone args to the fields vLLM uses
-    for KV-cache allocation. Handles both naming conventions generically:
+    for KV-cache allocation. Handles the naming conventions generically:
     multi-head configs expose ``num_heads``; grouped/multi-query configs
-    expose ``num_query_heads`` / ``num_key_value_heads`` / ``head_dim``.
+    expose ``num_query_heads`` / ``num_key_value_heads`` / ``head_dim``; and
+    some (SmolLM3) use HF's ``num_attention_heads``.
 
     A missing config would make vLLM guess dims from ``model_type`` and
     mis-size the KV cache, so a config that fails to load raises here.
@@ -172,7 +173,11 @@ def _derive_arch_config(preset):
     cfg = load_json(preset).get("config", {})
 
     hidden = cfg.get("hidden_dim")
-    n_heads = cfg.get("num_query_heads") or cfg.get("num_heads")
+    n_heads = (
+        cfg.get("num_query_heads")
+        or cfg.get("num_heads")
+        or cfg.get("num_attention_heads")
+    )
     n_kv = cfg.get("num_key_value_heads") or n_heads
     head_dim = cfg.get("head_dim")
     if head_dim is None and hidden and n_heads:
