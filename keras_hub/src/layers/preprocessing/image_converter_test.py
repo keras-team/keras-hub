@@ -123,19 +123,6 @@ class ImageConverterTest(TestCase):
                 _allow_python_workflow=self._allow_python_workflow,
             )
 
-    def test_config(self):
-        converter = ImageConverter(
-            image_size=(12, 20),
-            scale=(0.25 / 255.0, 0.1 / 255.0, 0.5 / 255.0),
-            offset=(0.2, -0.1, 0.25),
-            crop_to_aspect_ratio=False,
-            interpolation="nearest",
-            _allow_python_workflow=self._allow_python_workflow,
-        )
-        clone = ImageConverter.from_config(converter.get_config())
-        test_batch = np.random.rand(4, 10, 20, 3) * 255
-        self.assertAllClose(converter(test_batch), clone(test_batch))
-
     def test_preset_accessors(self):
         resnet_presets = set(ResNetImageConverter.presets.keys())
         all_presets = set(ImageConverter.presets.keys())

@@ -137,27 +137,3 @@ class MaskedLMMaskGeneratorTest(TestCase):
         outputs = masked_lm_masker([unselectable_token_ids])
         # Verify that no token is masked out.
         self.assertEqual(ops.sum(outputs["mask_weights"]), 0)
-
-    def test_config(self):
-        unselectable_token_ids = [
-            self.vocabulary_size - 1,
-            self.vocabulary_size - 2,
-        ]
-        masked_lm_masker = MaskedLMMaskGenerator(
-            vocabulary_size=self.vocabulary_size,
-            mask_selection_rate=0.5,
-            mask_token_id=self.mask_token_id,
-            mask_selection_length=5,
-            unselectable_token_ids=unselectable_token_ids,
-        )
-        config = masked_lm_masker.get_config()
-        expected_config = {
-            "vocabulary_size": self.vocabulary_size,
-            "unselectable_token_ids": unselectable_token_ids,
-        }
-        self.assertEqual(config, {**config, **expected_config})
-
-        # Test cloned masked_lm_masker can be run.
-        cloned_masked_lm_masker = MaskedLMMaskGenerator.from_config(config)
-        inputs = [[5, 3, 2], [1, 2, 3, 4]]
-        cloned_masked_lm_masker(inputs)

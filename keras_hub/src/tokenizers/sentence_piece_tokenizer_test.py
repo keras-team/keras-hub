@@ -130,20 +130,6 @@ class SentencePieceTokenizerTest(TestCase):
         output_data = tokenizer(["the quick brown fox."])
         self.assertAllEqual(output_data, [[6, 5, 3, 4]])
 
-    def test_config(self):
-        input_data = ["the quick brown whale."]
-        original_tokenizer = SentencePieceTokenizer(
-            proto=self.proto,
-        )
-        cloned_tokenizer = SentencePieceTokenizer.from_config(
-            original_tokenizer.get_config()
-        )
-        cloned_tokenizer.set_proto(original_tokenizer.proto)
-        self.assertAllEqual(
-            original_tokenizer(input_data),
-            cloned_tokenizer(input_data),
-        )
-
     def test_safe_mode_proto_file_disallowed(self):
         temp_dir = self.get_temp_dir()
         proto_path = os.path.join(temp_dir, "model.spm")

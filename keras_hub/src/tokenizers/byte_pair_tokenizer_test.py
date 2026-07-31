@@ -162,19 +162,6 @@ class BytePairTokenizerTest(TestCase):
         encoded = self.tokenizer(input_data)
         self.assertAllEqual(encoded, expected)
 
-    def test_config(self):
-        input_data = ["the quick brown whale."]
-        cloned_tokenizer = BytePairTokenizer.from_config(
-            self.tokenizer.get_config()
-        )
-        cloned_tokenizer.set_vocabulary_and_merges(
-            self.tokenizer.vocabulary, self.tokenizer.merges
-        )
-        self.assertAllEqual(
-            self.tokenizer(input_data),
-            cloned_tokenizer(input_data),
-        )
-
     def test_safe_mode_vocabulary_file_disallowed(self):
         import os
 

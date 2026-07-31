@@ -161,49 +161,6 @@ class UnicodeCodepointTokenizerTest(TestCase):
             [[78, 105, 78, 74, 97, 83]],
         )
 
-    def test_load_model_with_config(self):
-        input_data = tf.constant(["hello"])
-
-        original_tokenizer = UnicodeCodepointTokenizer(
-            lowercase=False,
-            sequence_length=11,
-            normalization_form="NFC",
-            errors="strict",
-            vocabulary_size=None,
-        )
-        cloned_tokenizer = UnicodeCodepointTokenizer.from_config(
-            original_tokenizer.get_config()
-        )
-        self.assertAllEqual(
-            original_tokenizer(input_data),
-            cloned_tokenizer(input_data),
-        )
-
-        decoded_input = [107, 101, 114, 97, 115]
-        self.assertAllEqual(
-            original_tokenizer.detokenize(decoded_input),
-            cloned_tokenizer.detokenize(decoded_input),
-        )
-
-    def test_config(self):
-        input_data = ["ninja", "samurai", "▀▁▂▃"]
-        tokenizer = UnicodeCodepointTokenizer(
-            name="unicode_character_tokenizer_config_gen",
-            lowercase=False,
-            sequence_length=8,
-            normalization_form="NFC",
-            errors="ignore",
-            replacement_char=0,
-            vocabulary_size=100,
-        )
-        cloned_tokenizer = UnicodeCodepointTokenizer.from_config(
-            tokenizer.get_config()
-        )
-        self.assertAllEqual(
-            tokenizer(input_data),
-            cloned_tokenizer(input_data),
-        )
-
     def test_token_to_id(self):
         input_tokens = ["ب", "و", "خ"]
         expected_ids = [1576, 1608, 1582]

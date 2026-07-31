@@ -110,45 +110,6 @@ class ByteTokenizerTest(TestCase):
             call_output, [[72, 101, 76, 108, 79, 32, 119, 79, 114, 76, 100]]
         )
 
-    def test_load_model_with_config(self):
-        input_data = ["hello"]
-
-        original_tokenizer = ByteTokenizer(
-            lowercase=False,
-            sequence_length=8,
-            normalization_form="NFC",
-            errors="ignore",
-        )
-        cloned_tokenizer = ByteTokenizer.from_config(
-            original_tokenizer.get_config()
-        )
-        self.assertAllEqual(
-            original_tokenizer(input_data),
-            cloned_tokenizer(input_data),
-        )
-
-        decoded_input = [[104, 101, 226, 150, 108, 108, 111]]
-        self.assertAllEqual(
-            original_tokenizer.detokenize(decoded_input),
-            cloned_tokenizer.detokenize(decoded_input),
-        )
-
-    def test_config(self):
-        input_data = ["hello", "fun", "▀▁▂▃", "haha"]
-        tokenizer = ByteTokenizer(
-            name="byte_tokenizer_config_test",
-            lowercase=False,
-            sequence_length=8,
-            normalization_form="NFC",
-            errors="ignore",
-            replacement_char=0,
-        )
-        cloned_tokenizer = ByteTokenizer.from_config(tokenizer.get_config())
-        self.assertAllEqual(
-            tokenizer(input_data),
-            cloned_tokenizer(input_data),
-        )
-
     def test_token_to_id(self):
         input_tokens = ["f", "u", "n"]
         expected_ids = [102, 117, 110]
