@@ -108,7 +108,6 @@ class ModernBertMaskedLMTest(TestCase):
     @pytest.mark.extra_large
     def test_fit(self):
         """Validate training execution."""
-
         self.model.compile(
             optimizer="adam",
             loss="sparse_categorical_crossentropy",
@@ -122,7 +121,6 @@ class ModernBertMaskedLMTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         """Validate serialization lifecycle."""
-
         self.run_model_saving_test(
             cls=ModernBertMaskedLM,
             init_kwargs=self.init_kwargs,

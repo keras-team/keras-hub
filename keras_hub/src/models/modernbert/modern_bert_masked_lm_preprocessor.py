@@ -74,7 +74,6 @@ class ModernBertMaskedLMPreprocessor(Preprocessor):
         mask_selection_length=96,
         mask_token_rate=0.8,
         random_token_rate=0.1,
-        seed=None,
         **kwargs,
     ):
         super().__init__(**kwargs)

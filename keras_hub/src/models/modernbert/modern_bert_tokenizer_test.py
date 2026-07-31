@@ -1,3 +1,5 @@
+import pytest
+
 from keras_hub.src.models.modernbert.modern_bert_tokenizer import (
     ModernBertTokenizer,
 )
@@ -11,40 +13,89 @@ class ModernBertTokenizerTest(TestCase):
     """
 
     def setUp(self):
-        self.vocab = [
+        self.merges = [
+            "Ġ a",
+            "Ġ t",
+            "Ġ i",
+            "Ġ b",
+            "a i",
+            "p l",
+            "n e",
+        ]
+        self.merges += [
+            "Ġa t",
+            "p o",
+            "r t",
+            "Ġt h",
+            "ai r",
+            "pl a",
+            "po rt",
+        ]
+        self.merges += [
+            "Ġai r",
+            "Ġa i",
+            "pla ne",
+        ]
+
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+
+        self.vocab = sorted(set(self.vocab))
+        self.vocab += [
             "<|endoftext|>",
             "<|padding|>",
-            "<mask>",
-            "air",
-            "Ġair",
-            "plane",
-            "Ġat",
+            "[MASK]",
+            "[UNK]",
         ]
-        self.vocab += ["port", "[UNK]"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
-        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
-        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
-        self.merges += ["Ġai r", "Ġa i", "pla ne"]
-        self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
+        self.vocab = {token: i for i, token in enumerate(self.vocab)}
+
+        self.init_kwargs = {
+            "vocabulary": self.vocab,
+            "merges": self.merges,
+        }
+
         self.input_data = [
-            "[CLS] airplane at airport[SEP][PAD]",
+            "<|endoftext|> airplane at airport",
             " airplane airport",
         ]
 
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=ModernBertTokenizer,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=[
+                [29, 23, 14, 24, 23, 16],
+                [23, 14, 23, 16],
+            ],
+            expected_detokenize_output=[
+                "<|endoftext|> airplane at airport",
+                " airplane airport",
+            ],
+        )
+
     def test_errors_missing_special_tokens(self):
-        """
-        Verify that initialization fails gracefully
-        when special tokens are missing.
-        """
-        vocabulary = {
-            "a": 0,
-            "b": 1,
-            "ab": 2,
-        }
-        merges = ["a b"]
         with self.assertRaises(ValueError):
             ModernBertTokenizer(
-                vocabulary=vocabulary,
-                merges=merges,
-                pad_token="[MISSING_TOKEN_NOT_IN_VOCAB]",
+                vocabulary=["a", "b", "c"],
+                merges=[],
+            )
+
+    @pytest.mark.extra_large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=ModernBertTokenizer,
+            preset="modernbert_base_en",
+            input_data=["The quick brown fox."],
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in ModernBertTokenizer.presets:
+            self.run_preset_test(
+                cls=ModernBertTokenizer,
+                preset=preset,
+                input_data=self.input_data,
             )

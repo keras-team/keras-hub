@@ -67,7 +67,6 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
             "tokenizer": self.tokenizer,
             "sequence_length": 12,
             "mask_selection_length": 4,
-            "seed": 42,
         }
 
         self.input_data = ["the quick brown fox"]
@@ -101,7 +100,6 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
             mask_selection_rate=0.0,
             mask_selection_length=4,
             sequence_length=12,
-            seed=42,
         )
 
         _, _, sw = no_mask_preprocessor(self.input_data)
