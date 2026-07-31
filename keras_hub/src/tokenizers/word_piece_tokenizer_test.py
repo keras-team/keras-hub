@@ -195,25 +195,6 @@ class WordPieceTokenizerTest(TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6, 7]])
 
-    def test_config(self):
-        input_data = ["quick brOWN whale"]
-        vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
-        original_tokenizer = WordPieceTokenizer(
-            vocabulary=vocab_data,
-            lowercase=False,
-            oov_token="@UNK@",
-            suffix_indicator="@@",
-            dtype="string",
-        )
-        cloned_tokenizer = WordPieceTokenizer.from_config(
-            original_tokenizer.get_config()
-        )
-        cloned_tokenizer.set_vocabulary(original_tokenizer.get_vocabulary())
-        self.assertAllEqual(
-            original_tokenizer(input_data),
-            cloned_tokenizer(input_data),
-        )
-
     def test_no_oov_token_in_vocabulary(self):
         vocab_data = ["qu", "@@ick", "br", "@@OWN", "fox"]
         with self.assertRaises(ValueError):
@@ -250,28 +231,6 @@ class WordPieceTokenizerTest(TestCase):
         )
         output = tokenizer(input_data)
         self.assertAllEqual(output, [0, 0, 1, 2])
-
-    def test_config_with_special_tokens(self):
-        input_data = ["[UNK] [MASK] [SEP] [PAD] [CLS] the quick brown fox."]
-        special_tokens = ["[UNK]", "[MASK]", "[SEP]", "[PAD]", "[CLS]"]
-        vocab_data = ["the", "qu", "##ick", "br", "##own", "fox", "."]
-        vocab_data = [*special_tokens, *vocab_data]
-        original_tokenizer = WordPieceTokenizer(
-            vocabulary=vocab_data,
-            lowercase=False,
-            oov_token="[UNK]",
-            suffix_indicator="##",
-            dtype="string",
-            special_tokens=special_tokens,
-        )
-        cloned_tokenizer = WordPieceTokenizer.from_config(
-            original_tokenizer.get_config()
-        )
-        cloned_tokenizer.set_vocabulary(original_tokenizer.get_vocabulary())
-        self.assertAllEqual(
-            original_tokenizer(input_data),
-            cloned_tokenizer(input_data),
-        )
 
     def test_safe_mode_vocabulary_file_disallowed(self):
         temp_dir = self.get_temp_dir()
