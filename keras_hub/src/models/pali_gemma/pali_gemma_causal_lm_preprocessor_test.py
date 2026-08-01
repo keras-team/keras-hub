@@ -17,6 +17,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 class PaliGemmaCausalLMPreprocessorTest(TestCase):
     def setUp(self):
+        self._allow_python_workflow = True
         # TODO make a pali gemma test vocab that inclues normal prompts?
         self.tokenizer = PaliGemmaTokenizer(
             proto=os.path.join(
@@ -28,6 +29,7 @@ class PaliGemmaCausalLMPreprocessorTest(TestCase):
             "tokenizer": self.tokenizer,
             "image_converter": self.image_converter,
             "sequence_length": 8,
+            "_allow_python_workflow": self._allow_python_workflow,
         }
         self.input_data = {
             "prompts": ["the quick"],
@@ -100,3 +102,17 @@ class PaliGemmaCausalLMPreprocessorTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+
+class PaliGemmaCausalLMPreprocessorTFTest(PaliGemmaCausalLMPreprocessorTest):
+    """Set `_allow_python_workflow=False` to test TF execution."""
+
+    def setUp(self):
+        super().setUp()
+        self._allow_python_workflow = False
+        self.init_kwargs = {
+            "tokenizer": self.tokenizer,
+            "image_converter": self.image_converter,
+            "sequence_length": 8,
+            "_allow_python_workflow": self._allow_python_workflow,
+        }

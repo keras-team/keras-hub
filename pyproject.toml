@@ -27,7 +27,7 @@ classifiers = [
 ]
 dependencies = [
 
-    "keras>=3.13",
+    "keras>=3.15",
     "absl-py",
     "numpy",
     "packaging",
@@ -35,7 +35,7 @@ dependencies = [
     "rich",
     "kagglehub!=1.0.1",
     "kagglesdk==0.1.28",
-    "sentencepiece",
+    "sentencepiece<0.2.2",
     "tokenizers",
     "tensorflow-text;platform_system != 'Windows'",
 ]

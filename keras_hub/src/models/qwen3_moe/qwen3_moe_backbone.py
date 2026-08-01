@@ -111,7 +111,6 @@ class Qwen3MoeBackbone(Backbone):
         sliding_window_size=32768,
         router_aux_loss_coefficient=0.001,
         mlp_only_layers=None,
-        training=None,
         **kwargs,
     ):
         # === Layers ===
@@ -171,9 +170,7 @@ class Qwen3MoeBackbone(Backbone):
         )
         x = self.token_embedding(token_id_input)
         for transformer_layer in self.transformer_layers:
-            x = transformer_layer(
-                x, decoder_padding_mask=padding_mask_input, training=training
-            )
+            x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
         sequence_output = self.layer_norm(x)
         super().__init__(
             inputs={

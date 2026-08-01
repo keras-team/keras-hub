@@ -16,9 +16,11 @@ jobs:
     needs: [run-test-for-nightly]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
       - name: Get pip cache dir
@@ -27,7 +29,8 @@ jobs:
           python -m pip install --upgrade pip setuptools
           echo "::set-output name=dir::$(pip cache dir)"
       - name: pip cache
-        uses: actions/cache@v6
+        # zizmor: ignore[cache-poisoning]
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.pip-cache.outputs.dir }}
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements-common.txt') }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('pyproject.toml') }}
@@ -40,12 +43,12 @@ jobs:
         run: |
           python pip_build.py --nightly
       - name: Publish KerasHub Nightly to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1 # zizmor: ignore[use-trusted-publishing]
         with:
           password: ${{ secrets.PYPI_NIGHTLY_API_TOKEN_HUB }}
           verbose: true
       - name: Publish KerasNLP Nightly to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1 # zizmor: ignore[use-trusted-publishing]
         with:
           packages-dir: keras_nlp/dist/
           password: ${{ secrets.PYPI_NIGHTLY_API_TOKEN }}

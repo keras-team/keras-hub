@@ -1,7 +1,6 @@
 import re
 
 import numpy as np
-from sentencepiece import sentencepiece_model_pb2 as sp_pb2
 
 from keras_hub.src.models.t5gemma2.t5gemma2_backbone import T5Gemma2Backbone
 from keras_hub.src.utils.preset_utils import check_file_exists
@@ -452,6 +451,8 @@ def _build_sentencepiece_proto(tokenizer_config):
     SentencePiece model that is byte-for-byte compatible with the
     Gemma-family tokenizer.
     """
+    from sentencepiece import sentencepiece_model_pb2 as sp_pb2
+
     vocab = dict(tokenizer_config["model"]["vocab"])
     merges = list(tokenizer_config["model"]["merges"])
 
