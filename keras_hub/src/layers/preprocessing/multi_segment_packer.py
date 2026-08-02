@@ -474,6 +474,9 @@ class MultiSegmentPacker(PreprocessingLayer):
         add_start_value=True,
         add_end_value=True,
     ):
+        if sequence_length is not None:
+            sequence_length = int(sequence_length)
+
         def _get_type(inputs):
             if self.start_value:
                 return type(self.start_value[0])
