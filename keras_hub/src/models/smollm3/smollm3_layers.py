@@ -137,6 +137,11 @@ class SmolLM3Attention(layers.Layer):
         self.q_proj.build(hidden_states_shape)
         self.k_proj.build(hidden_states_shape)
         self.v_proj.build(hidden_states_shape)
+        # Build the rotary embedding here too. Left unbuilt, it builds on its
+        # first call instead, which under a serving engine happens inside a
+        # traced function -- and marking a layer built is a mutation the trace
+        # rejects.
+        self.rotary_embedding.build(hidden_states_shape)
         super().build(input_shape)
 
     def call(
