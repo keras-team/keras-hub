@@ -227,6 +227,112 @@ class TraceableOpsParityTest(TestCase):
                 inputs, indices, updates, reduction="bogus"
             )
 
+    def _reference_attention_inputs(self, num_query_heads, num_kv_heads):
+        rng = np.random.default_rng(0)
+        batch, q_len, kv_len, head_dim = 2, 3, 4, 8
+        query = torch.tensor(
+            rng.standard_normal((batch, q_len, num_query_heads, head_dim)),
+            dtype=torch.float32,
+        )
+        key = torch.tensor(
+            rng.standard_normal((batch, kv_len, num_kv_heads, head_dim)),
+            dtype=torch.float32,
+        )
+        value = torch.tensor(
+            rng.standard_normal((batch, kv_len, num_kv_heads, head_dim)),
+            dtype=torch.float32,
+        )
+        return query, key, value
+
+    def test_dot_product_attention_matches_original_mha(self):
+        """Standard multi-head attention (num_query_heads == num_kv_heads)."""
+        query, key, value = self._reference_attention_inputs(4, 4)
+        original = torch_backend_nn.dot_product_attention(
+            query, key, value, is_causal=True
+        )
+        patched = traceable_ops._traceable_dot_product_attention(
+            query, key, value, is_causal=True
+        )
+        self.assertAllClose(
+            _to_np(original), _to_np(patched), atol=1e-5, rtol=1e-5
+        )
+
+    def test_dot_product_attention_gqa_matches_original(self):
+        """Grouped-query attention (num_query_heads > num_kv_heads).
+
+        Runs four query heads against one key/value head. The original
+        Keras torch-backend op internally repeats the key/value heads to
+        match the query heads; the traceable replacement does a plain
+        batched matmul with no explicit GQA broadcast and relies on its
+        caller to repeat first, so the two are compared with that repeat
+        applied.
+        """
+        query, key, value = self._reference_attention_inputs(4, 1)
+        original = torch_backend_nn.dot_product_attention(
+            query, key, value, is_causal=True
+        )
+
+        # `_traceable_dot_product_attention` does not itself broadcast
+        # mismatched head counts (unlike the original), so repeat key/value
+        # to the query head count first, as its callers do.
+        groups = query.shape[2] // key.shape[2]
+        key_r = key.repeat_interleave(groups, dim=2)
+        value_r = value.repeat_interleave(groups, dim=2)
+        patched = traceable_ops._traceable_dot_product_attention(
+            query, key_r, value_r, is_causal=True
+        )
+        self.assertAllClose(
+            _to_np(original), _to_np(patched), atol=1e-5, rtol=1e-5
+        )
+
+    def test_dot_product_attention_with_mask_matches_original(self):
+        query, key, value = self._reference_attention_inputs(2, 2)
+        batch, q_len, _, _ = query.shape
+        kv_len = key.shape[1]
+        mask = torch.ones((batch, q_len, kv_len), dtype=torch.bool)
+        mask[:, :, -1] = False  # mask out the last key position
+
+        original = torch_backend_nn.dot_product_attention(
+            query, key, value, mask=mask
+        )
+        patched = traceable_ops._traceable_dot_product_attention(
+            query, key, value, mask=mask
+        )
+        self.assertAllClose(
+            _to_np(original), _to_np(patched), atol=1e-5, rtol=1e-5
+        )
+
+    def test_dot_product_attention_soft_cap_matches_manual_reference(self):
+        """Attention-logit soft-capping (used by Gemma-family models).
+
+        Keras's torch-backend ``dot_product_attention`` accepts an
+        ``attn_logits_soft_cap`` parameter but never applies it (it is
+        always routed through ``torch.nn.functional.
+        scaled_dot_product_attention``, which has no soft-cap support), so
+        there is no meaningful "original" to compare against here. Instead,
+        verify the patched implementation directly against a manual
+        matmul/softmax/matmul reference with the soft-cap formula applied by
+        hand.
+        """
+        query, key, value = self._reference_attention_inputs(2, 2)
+        cap = 5.0
+
+        scale = float(query.shape[-1]) ** -0.5
+        q = query.transpose(1, 2)
+        k = key.transpose(1, 2)
+        v = value.transpose(1, 2)
+        scores = torch.matmul(q, k.transpose(-2, -1)) * scale
+        scores = torch.tanh(scores / cap) * cap
+        attn = torch.softmax(scores, dim=-1)
+        expected = torch.matmul(attn, v).transpose(1, 2)
+
+        patched = traceable_ops._traceable_dot_product_attention(
+            query, key, value, attn_logits_soft_cap=cap
+        )
+        self.assertAllClose(
+            _to_np(expected), _to_np(patched), atol=1e-5, rtol=1e-5
+        )
+
     def test_amax_matches_original(self):
         cases = [
             (torch.randn(2, 3, 4, 5), -1, True),  # 4-D last axis, keepdims
@@ -284,7 +390,6 @@ class TraceableOpsParityTest(TestCase):
 # Every module/attribute/replacement triple is resolved lazily, when a
 # scope is entered, so nothing above this point would notice a patch aimed
 # at the wrong module or a misspelled attribute name.
-
 @unittest.skipUnless(
     keras.config.backend() == "torch",
     "The litertlm traceable-op patches only exist for the PyTorch backend.",
@@ -292,6 +397,11 @@ class TraceableOpsParityTest(TestCase):
 class TraceableOpsScopeTest(TestCase):
     PATCHES = [
         (torch_core, "slice", "_patched_slice"),
+        (
+            torch_backend_nn,
+            "dot_product_attention",
+            "_traceable_dot_product_attention",
+        ),
         (torch_backend_nn, "one_hot", "_patched_one_hot"),
         (torch_backend_numpy, "repeat", "_traceable_repeat"),
         (torch_backend_numpy, "take", "_patched_take"),

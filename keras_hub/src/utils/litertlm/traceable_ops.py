@@ -122,6 +122,120 @@ def _patched_slice(inputs, start_indices, shape):
 _traceable_slice_scope = _make_scope(torch_core, "slice", _patched_slice)
 
 
+def _traceable_dot_product_attention(
+    query,
+    key,
+    value,
+    bias=None,
+    mask=None,
+    scale=None,
+    is_causal=False,
+    flash_attention=None,
+    attn_logits_soft_cap=None,
+):
+    """Traceable replacement for Keras torch-backend ``dot_product_attention``.
+
+    ``torch.nn.functional.scaled_dot_product_attention`` lowers to the
+    composite ``aten.scaled_dot_product_attention`` op (torch 2.12 under
+    ``torch.export``), which ``litert_torch`` cannot translate to TFLite.
+    This implementation expands
+    attention to a plain ``matmul`` + ``softmax`` + ``matmul`` sequence that
+    ``litert_torch`` handles well.
+
+    The function mirrors Keras's ``dot_product_attention`` signature and shape
+    convention: inputs are ``[batch, seq_len, num_heads, head_dim]`` and the
+    output is returned in the same layout.
+
+    Unlike the original Keras torch-backend op, this implementation does
+    **not** internally broadcast mismatched query/key-value head counts for
+    grouped-query attention; the caller repeats the key/value heads up to
+    the query head count first. KerasHub's grouped-query attention layers
+    do that before calling ``dot_product_attention``, except for
+    ``CachedGemmaAttention`` and ``CachedGemma3Attention``, which forward
+    ``num_key_value_heads`` keys and values unchanged from a branch gated
+    on ``_use_fused_attention_op()`` -- and that gate returns ``False`` off
+    GPU and TPU, so the branch is not taken on CPU.
+
+    A caller that did rely on the implicit broadcast is not corrupted
+    silently either way: with ``num_key_value_heads == 1`` the singleton
+    head axis broadcasts to the correct multi-query result, and with
+    ``1 < num_key_value_heads < num_query_heads`` ``torch.matmul`` raises a
+    shape error.
+
+    Two further divergences from the original op: ``bias`` and ``mask`` are
+    applied additively instead of raising when both are passed, and input
+    ranks are not validated. No exported family passes ``bias``, so neither
+    path is exercised during export.
+    """
+    del flash_attention  # Fused flash attention is not exportable.
+
+    query = torch_core.convert_to_tensor(query)
+    key = torch_core.convert_to_tensor(key)
+    value = torch_core.convert_to_tensor(value)
+
+    compute_dtype = backend.result_type(query.dtype, key.dtype, value.dtype)
+    query = torch_core.cast(query, compute_dtype)
+    key = torch_core.cast(key, compute_dtype)
+    value = torch_core.cast(value, compute_dtype)
+
+    if scale is None:
+        scale = float(query.shape[-1]) ** -0.5
+    scale = torch_core.convert_to_tensor(scale, dtype=compute_dtype)
+
+    if mask is not None:
+        mask = torch_core.convert_to_tensor(mask, dtype="bool")
+        if is_causal:
+            q_len, kv_len = query.shape[1], key.shape[1]
+            causal_mask = torch.tril(
+                torch.ones(
+                    (q_len, kv_len), dtype=torch.bool, device=mask.device
+                )
+            )
+            mask = torch.logical_and(mask, causal_mask)
+        is_causal = False
+    elif is_causal:
+        q_len, kv_len = query.shape[1], key.shape[1]
+        mask = torch.tril(
+            torch.ones((q_len, kv_len), dtype=torch.bool, device=query.device)
+        )
+
+    # Move heads to the batch dimension to match SDPA's score layout
+    # [batch, num_heads, seq_len, head_dim].
+    query = query.transpose(1, 2)
+    key = key.transpose(1, 2)
+    value = value.transpose(1, 2)
+
+    scores = torch.matmul(query, key.transpose(-2, -1)) * scale
+
+    if bias is not None:
+        scores = scores + torch_core.convert_to_tensor(
+            bias, dtype=compute_dtype
+        )
+
+    if mask is not None:
+        large_neg = torch.tensor(
+            torch.finfo(scores.dtype).min,
+            dtype=scores.dtype,
+            device=scores.device,
+        )
+        scores = torch.where(mask, scores, large_neg)
+
+    if attn_logits_soft_cap is not None:
+        cap = torch_core.convert_to_tensor(
+            attn_logits_soft_cap, dtype=compute_dtype
+        )
+        scores = torch.tanh(scores / cap) * cap
+
+    attn = torch.softmax(scores, dim=-1)
+    output = torch.matmul(attn, value)
+    return output.transpose(1, 2)
+
+
+_traceable_dot_product_attention_scope = _make_scope(
+    torch_backend_nn, "dot_product_attention", _traceable_dot_product_attention
+)
+
+
 def _patched_one_hot(x, num_classes, axis=-1, dtype=None, sparse=False):
     """Traceable replacement for Keras torch-backend ``one_hot``.
 
@@ -347,28 +461,20 @@ _traceable_amax_scope = _make_scope(torch_backend_numpy, "amax", _patched_amax)
 
 
 @contextlib.contextmanager
-
 def traceable_ops_scope():
-    """Enter a context where Keras PyTorch backend ops are replaced with export-traceable shims."""
-    return _TraceableOpsScope(
-        _traceable_slice_scope,
-        _traceable_one_hot_scope,
-        _traceable_take_scope,
-        _traceable_scatter_update_scope,
-        _traceable_repeat_scope,
-        _traceable_amax_scope,
-    )
+    """Enter every traceable-op patch scope at once.
 
-class _TraceableOpsScope:
-    def __init__(self, *scopes):
-        self.scopes = scopes
-        self._entered = []
-    def __enter__(self):
-        for s in self.scopes:
-            s.__enter__()
-            self._entered.append(s)
-        return self
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        while self._entered:
-            s = self._entered.pop()
-            s.__exit__(exc_type, exc_val, exc_tb)
+    Combines the seven individual patch scopes (slice, dot_product_attention,
+    one_hot, repeat, take, scatter_update, amax) into a single context
+    manager via ``contextlib.ExitStack``, so callers open one scope instead of
+    nesting seven ``with`` statements.
+    """
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(_traceable_slice_scope())
+        stack.enter_context(_traceable_dot_product_attention_scope())
+        stack.enter_context(_traceable_one_hot_scope())
+        stack.enter_context(_traceable_repeat_scope())
+        stack.enter_context(_traceable_take_scope())
+        stack.enter_context(_traceable_scatter_update_scope())
+        stack.enter_context(_traceable_amax_scope())
+        yield
