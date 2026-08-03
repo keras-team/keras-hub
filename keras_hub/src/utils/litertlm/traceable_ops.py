@@ -36,6 +36,92 @@ def _make_scope(module, attr, replacement):
     return _scope
 
 
+def _normalize_start_indices(start_indices):
+    """Convert ``start_indices`` to a list preserving tensor elements."""
+    if isinstance(start_indices, (list, tuple)):
+        return list(start_indices)
+    start_indices = torch_core.convert_to_tensor(start_indices, dtype="int64")
+    if start_indices.ndim != 1:
+        raise ValueError(
+            "`start_indices` must be a 1-D tensor or a list/tuple of ints. "
+            f"Received shape: {tuple(start_indices.shape)}."
+        )
+    return list(start_indices.reshape(-1).unbind())
+
+
+def _patched_slice(inputs, start_indices, shape):
+    """Traceable replacement for Keras torch-backend ``slice``."""
+    inputs = torch_core.convert_to_tensor(inputs)
+
+    starts = _normalize_start_indices(start_indices)
+
+    if isinstance(shape, (list, tuple)):
+        lengths = list(shape)
+    else:
+        shape = torch_core.convert_to_tensor(shape, dtype="int64")
+        lengths = list(shape.reshape(-1).unbind())
+
+    def _is_dynamic(value):
+        # ``torch.SymInt`` values are not plain Python ints and require
+        # tensor-based slicing to avoid data-dependent guards.
+        return isinstance(value, torch.Tensor) or isinstance(
+            value, torch.SymInt
+        )
+
+    # Dimensions whose start or length is dynamic.
+    dynamic_dims = [
+        dim
+        for dim, (start, length) in enumerate(zip(starts, lengths))
+        if _is_dynamic(start) or _is_dynamic(length)
+    ]
+
+    # No dynamic values -> use Python slice objects directly.
+    if len(dynamic_dims) == 0:
+        slices = tuple(
+            slice(start, start + length)
+            for start, length in zip(starts, lengths)
+        )
+        return inputs[slices]
+
+    # Single dynamic dimension -> build indices with ``torch.arange`` and
+    # use ``index_select``. This keeps the output shape symbolic and avoids
+    # unbacked symbols that ``torch.export`` cannot resolve.
+    if len(dynamic_dims) == 1:
+        dim = dynamic_dims[0]
+        start = starts[dim]
+        if not isinstance(start, torch.Tensor):
+            start = torch_core.convert_to_tensor(
+                start, dtype="int32", device=inputs.device
+            )
+        start = start.reshape(())
+        length = lengths[dim]
+
+        indices = torch.arange(length, dtype=torch.int32, device=inputs.device)
+        indices = indices + start
+        result = torch.index_select(inputs, dim, indices)
+
+        # Apply static slicing for the remaining dimensions.
+        for d, (s, l) in enumerate(zip(starts, lengths)):
+            if d != dim and (s != 0 or l != result.shape[d]):
+                result = torch.narrow(result, d, s, l)
+        return result
+
+    # Multiple dynamic dimensions are not supported for LiteRT-LM export
+    # because ``torch.export`` cannot resolve the resulting unbacked
+    # symbols. Fail fast with an actionable message instead of falling
+    # back to the original implementation and producing a cryptic export
+    # error.
+    raise NotImplementedError(
+        "Slicing with multiple dynamic dimensions is not supported for "
+        "LiteRT-LM export. Received dynamic dims "
+        f"{dynamic_dims}. Consider materializing start/length values as "
+        "static ints or simplifying the slice operation."
+    )
+
+
+_traceable_slice_scope = _make_scope(torch_core, "slice", _patched_slice)
+
+
 def _patched_one_hot(x, num_classes, axis=-1, dtype=None, sparse=False):
     """Traceable replacement for Keras torch-backend ``one_hot``.
 
@@ -86,6 +172,90 @@ def _patched_one_hot(x, num_classes, axis=-1, dtype=None, sparse=False):
 
 _traceable_one_hot_scope = _make_scope(
     torch_backend_nn, "one_hot", _patched_one_hot
+)
+
+
+def _patched_take(x, indices, axis=None):
+    """Patch Keras torch-backend ``take`` to keep embedding indices as int32.
+
+    The default implementation casts integer indices to int64 before calling
+    ``torch.nn.functional.embedding``. ``litert_torch``'s TFLite embedding
+    lowering expects int32 indices consistent with the traced function
+    signature, so we keep indices in int32 for the embedding-lookup case.
+
+    ``axis=None`` means "take from the flattened input" (matching
+    ``numpy``/``jax`` semantics), so the input must be flattened *before*
+    negative indices are wrapped -- wrapping against
+    ``x.shape[0]`` (the first, unflattened dimension) is only correct when
+    ``x`` is already 1-D. Flattening first and then computing ``x_dim`` as
+    the flattened length keeps this correct for multi-dimensional ``x``
+    (e.g. ``take(x_3x4, -1, axis=None)`` must resolve to the last of the 12
+    flattened elements, not wrap against the first dimension's size of 3).
+    """
+    x = torch_core.convert_to_tensor(x)
+    indices = torch_core.convert_to_tensor(indices, dtype=torch.int32)
+    if axis is None:
+        x = torch.reshape(x, (-1,))
+        axis = 0
+    x_dim = x.shape[axis]
+    indices = torch.where(
+        indices < 0,
+        indices + x_dim,
+        indices,
+    )
+    if x.ndim == 2 and axis == 0:
+        # ``F.embedding`` documents a float ``weight`` (embedding table),
+        # but empirically accepts int32/int64/bool ``x`` as a plain gather,
+        # both eagerly and under ``torch.export`` -- no dtype guard needed.
+        return torch.nn.functional.embedding(indices, x)
+    axis = torch_backend_numpy.canonicalize_axis(axis, x.ndim)
+    shape = x.shape[:axis] + indices.shape + x.shape[axis + 1 :]
+    indices = indices.ravel()
+    out = torch.index_select(x, dim=axis, index=indices).squeeze(axis)
+    return out.reshape(shape)
+
+
+_traceable_take_scope = _make_scope(torch_backend_numpy, "take", _patched_take)
+
+
+_SCATTER_UPDATE_REDUCTION_OPS = {
+    "max": torch.maximum,
+    "min": torch.minimum,
+    "mul": lambda a, b: a * b,
+}
+
+
+def _patched_scatter_update(inputs, indices, updates, reduction=None):
+    """Patch Keras torch-backend ``scatter_update`` to keep indices int32.
+
+    The default implementation casts indices to int64. ``litert_torch``'s
+    TFLite scatter lowering expects int32 indices, so we keep them in int32
+    during export.
+    """
+    inputs = torch_core.convert_to_tensor(inputs)
+    indices = torch_core.convert_to_tensor(indices, dtype=torch.int32)
+    updates = torch_core.convert_to_tensor(updates, dtype=inputs.dtype)
+    indices = torch.transpose(indices, 0, 1)
+    idx = tuple(indices)
+
+    outputs = torch.clone(inputs)
+    if reduction is None:
+        outputs[idx] = updates
+    elif reduction == "add":
+        outputs.index_put_(idx, updates, accumulate=True)
+    elif reduction in _SCATTER_UPDATE_REDUCTION_OPS:
+        op_fn = _SCATTER_UPDATE_REDUCTION_OPS[reduction]
+        indices_t = indices.T
+        for i in range(indices_t.shape[0]):
+            idx_i = tuple(indices_t[i])
+            outputs[idx_i] = op_fn(outputs[idx_i], updates[i])
+    else:
+        raise ValueError(f"Unsupported reduction: {reduction}")
+    return outputs
+
+
+_traceable_scatter_update_scope = _make_scope(
+    torch_core, "scatter_update", _patched_scatter_update
 )
 
 
@@ -181,7 +351,10 @@ _traceable_amax_scope = _make_scope(torch_backend_numpy, "amax", _patched_amax)
 def traceable_ops_scope():
     """Enter a context where Keras PyTorch backend ops are replaced with export-traceable shims."""
     return _TraceableOpsScope(
+        _traceable_slice_scope,
         _traceable_one_hot_scope,
+        _traceable_take_scope,
+        _traceable_scatter_update_scope,
         _traceable_repeat_scope,
         _traceable_amax_scope,
     )

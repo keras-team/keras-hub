@@ -101,6 +101,132 @@ class TraceableOpsParityTest(TestCase):
             with self.assertRaises(ValueError):
                 torch_backend_numpy.repeat(x, [1, 2], axis=0)
 
+    def test_slice_static_matches_original(self):
+        x = torch.arange(60, dtype=torch.float32).reshape(3, 4, 5)
+        patched_slice = traceable_ops._patched_slice
+        original = torch_core.slice(x, [1, 1, 0], [2, 2, 5])
+        patched = patched_slice(x, [1, 1, 0], [2, 2, 5])
+        self.assertAllClose(_to_np(original), _to_np(patched))
+
+    def test_slice_single_dynamic_dim_matches_original(self):
+        x = torch.arange(60, dtype=torch.float32).reshape(3, 4, 5)
+        patched_slice = traceable_ops._patched_slice
+        for start in range(0, 3):
+            with self.subTest(start=start):
+                start_t = torch.tensor(start)
+                original = torch_core.slice(x, [start, 0, 0], [1, 4, 5])
+                patched = patched_slice(x, [start_t, 0, 0], [1, 4, 5])
+                self.assertAllClose(_to_np(original), _to_np(patched))
+
+    def test_slice_dynamic_middle_dim_matches_original(self):
+        # Regression check for the KV-cache read pattern: slicing along a
+        # non-leading axis with a dynamic start while the surrounding axes
+        # are fully covered.
+        x = torch.arange(2 * 4 * 5, dtype=torch.float32).reshape(2, 4, 5)
+        patched_slice = traceable_ops._patched_slice
+        for start in range(0, 3):
+            with self.subTest(start=start):
+                start_t = torch.tensor(start)
+                original = torch_core.slice(x, [0, start, 0], [2, 1, 5])
+                patched = patched_slice(x, [0, start_t, 0], [2, 1, 5])
+                self.assertAllClose(_to_np(original), _to_np(patched))
+
+    def test_slice_multiple_dynamic_dims_raises(self):
+        x = torch.arange(60, dtype=torch.float32).reshape(3, 4, 5)
+        patched_slice = traceable_ops._patched_slice
+        with self.assertRaises(NotImplementedError):
+            patched_slice(x, [torch.tensor(0), torch.tensor(1), 0], [1, 1, 5])
+
+    def test_take_embedding_lookup_matches_original(self):
+        table = torch.arange(20, dtype=torch.float32).reshape(5, 4)
+        indices = torch.tensor([0, 2, 4, 1])
+        original = torch_backend_numpy.take(table, indices, axis=0)
+        patched = traceable_ops._patched_take(table, indices, axis=0)
+        self.assertAllClose(_to_np(original), _to_np(patched))
+
+    def test_take_matches_original_various_axes(self):
+        x = torch.arange(60, dtype=torch.float32).reshape(3, 4, 5)
+        cases = [
+            (torch.tensor([0, 2]), 0),
+            (torch.tensor([0, 3, 1]), 1),
+            (torch.tensor([4, 0]), 2),
+            (torch.tensor([-1, -2]), 2),  # negative indices
+        ]
+        for indices, axis in cases:
+            with self.subTest(axis=axis, indices=indices.tolist()):
+                original = torch_backend_numpy.take(x, indices, axis=axis)
+                patched = traceable_ops._patched_take(x, indices, axis=axis)
+                self.assertAllClose(_to_np(original), _to_np(patched))
+
+    def test_take_no_axis_matches_original(self):
+        x = torch.arange(12, dtype=torch.float32).reshape(3, 4)
+        indices = torch.tensor([0, 5, 11])
+        original = torch_backend_numpy.take(x, indices, axis=None)
+        patched = traceable_ops._patched_take(x, indices, axis=None)
+        self.assertAllClose(_to_np(original), _to_np(patched))
+
+    def test_take_no_axis_negative_index_matches_flattened_semantics(self):
+        """Regression test: ``axis=None`` + negative indices on a
+        multi-dim input must wrap against the *flattened* length, not the
+        first (unflattened) dimension's size.
+
+        Note this deliberately does **not** compare against
+        ``keras.src.backend.torch.numpy.take`` (the pattern every other
+        ``test_take_*`` case in this file uses): that Keras
+        function has the exact same bug (it computes
+        ``x_dim = x.shape[0]`` before flattening for ``axis=None``), so it
+        is not a valid reference here. Ground truth is real numpy's
+        ``np.take(..., axis=None)``, which flattens first -- e.g. for a
+        ``3x4`` input (12 elements), index ``-1`` must resolve to the last
+        flattened element (value ``11``), not wrap as if against a
+        first-dimension size of 3 (which would incorrectly give ``2``).
+        """
+        x = torch.arange(12, dtype=torch.float32).reshape(3, 4)
+        indices = torch.tensor([-1, -2])
+
+        expected = np.take(_to_np(x), _to_np(indices), axis=None)
+        patched = traceable_ops._patched_take(x, indices, axis=None)
+        self.assertAllClose(expected, _to_np(patched))
+
+    def test_scatter_update_matches_original(self):
+        inputs = torch.zeros((4, 4), dtype=torch.float32)
+        indices = torch.tensor([[0, 0], [1, 1], [2, 2]])
+        updates = torch.tensor([10.0, 20.0, 30.0])
+        for reduction in (None, "add", "max", "min", "mul"):
+            with self.subTest(reduction=reduction):
+                original = torch_core.scatter_update(
+                    inputs, indices, updates, reduction=reduction
+                )
+                patched = traceable_ops._patched_scatter_update(
+                    inputs, indices, updates, reduction=reduction
+                )
+                self.assertAllClose(_to_np(original), _to_np(patched))
+
+    def test_scatter_update_overlapping_indices_matches_original(self):
+        # Duplicate indices exercise the accumulation/reduction semantics
+        # more thoroughly than the diagonal case above.
+        inputs = torch.full((3, 3), 2.0, dtype=torch.float32)
+        indices = torch.tensor([[0, 0], [0, 0], [1, 1]])
+        updates = torch.tensor([3.0, 5.0, 7.0])
+        for reduction in (None, "add", "max", "min", "mul"):
+            with self.subTest(reduction=reduction):
+                original = torch_core.scatter_update(
+                    inputs, indices, updates, reduction=reduction
+                )
+                patched = traceable_ops._patched_scatter_update(
+                    inputs, indices, updates, reduction=reduction
+                )
+                self.assertAllClose(_to_np(original), _to_np(patched))
+
+    def test_scatter_update_rejects_unsupported_reduction(self):
+        inputs = torch.zeros((2, 2), dtype=torch.float32)
+        indices = torch.tensor([[0, 0]])
+        updates = torch.tensor([1.0])
+        with self.assertRaises(ValueError):
+            traceable_ops._patched_scatter_update(
+                inputs, indices, updates, reduction="bogus"
+            )
+
     def test_amax_matches_original(self):
         cases = [
             (torch.randn(2, 3, 4, 5), -1, True),  # 4-D last axis, keepdims
@@ -165,8 +291,11 @@ class TraceableOpsParityTest(TestCase):
 )
 class TraceableOpsScopeTest(TestCase):
     PATCHES = [
+        (torch_core, "slice", "_patched_slice"),
         (torch_backend_nn, "one_hot", "_patched_one_hot"),
         (torch_backend_numpy, "repeat", "_traceable_repeat"),
+        (torch_backend_numpy, "take", "_patched_take"),
+        (torch_core, "scatter_update", "_patched_scatter_update"),
         (torch_backend_numpy, "amax", "_patched_amax"),
     ]
 
