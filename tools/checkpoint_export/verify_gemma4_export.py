@@ -59,10 +59,9 @@ import tempfile
 
 os.environ.setdefault("KERAS_BACKEND", "torch")
 
+import keras
 import numpy as np
 import torch
-
-import keras
 
 print(f"Keras backend: {keras.config.backend()}")
 print(f"Keras version: {keras.__version__}")
@@ -131,7 +130,8 @@ def export_keras_model(preset, export_path):
 
 def precompute_original_outputs(hf_model_id, skip_generation):
     """Load the canonical HF model and record its logits (+ optionally text)."""
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForCausalLM
+    from transformers import AutoTokenizer
 
     print(f"\n[3/6] Loading ORIGINAL HF model: {hf_model_id}…")
     hf_model = AutoModelForCausalLM.from_pretrained(
@@ -155,9 +155,11 @@ def precompute_original_outputs(hf_model_id, skip_generation):
 
     if not skip_generation:
         with torch.no_grad():
-            gen = hf_model.generate(**hf_inputs, max_new_tokens=30, do_sample=False)
+            gen = hf_model.generate(
+                **hf_inputs, max_new_tokens=30, do_sample=False
+            )
         results["text_generated"] = hf_tokenizer.decode(
-            gen[0][hf_inputs["input_ids"].shape[1]:],
+            gen[0][hf_inputs["input_ids"].shape[1] :],
             skip_special_tokens=True,
         )
         print(f'    Generated text: "{results["text_generated"][:80]}"')
@@ -238,7 +240,9 @@ def validate_token_ids(exp_cfg, orig_cfg):
 # ---------------------------------------------------------------------------
 
 
-def validate_numerics(exp_model, exp_tokenizer, original_results, skip_generation):
+def validate_numerics(
+    exp_model, exp_tokenizer, original_results, skip_generation
+):
     """Compare logits (and optionally generation) against original model."""
     results = {}
 
@@ -275,9 +279,12 @@ def validate_numerics(exp_model, exp_tokenizer, original_results, skip_generatio
         print(f'    Original: "{orig_gen_text[:80]}"')
         print(f'    Exported: "{exp_gen_text[:80]}"')
         results["text_gen_match"] = orig_gen_text == exp_gen_text
-        print(
-            f"    {'✓ IDENTICAL' if results['text_gen_match'] else '⚠ differs (expected with bf16→f32)'}"
+        gen_status = (
+            "✓ IDENTICAL"
+            if results["text_gen_match"]
+            else "⚠ differs (expected with bf16→f32)"
         )
+        print(f"    {gen_status}")
 
     return results
 
@@ -288,10 +295,16 @@ def validate_numerics(exp_model, exp_tokenizer, original_results, skip_generatio
 
 
 def validate_exported_model(
-    export_path, hf_model_id, original_results, skip_generation, skip_logit_comparison
+    export_path,
+    hf_model_id,
+    original_results,
+    skip_generation,
+    skip_logit_comparison,
 ):
     """Load the exported HF model and run all validation checks."""
-    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoConfig
+    from transformers import AutoModelForCausalLM
+    from transformers import AutoTokenizer
 
     print(f"\n[4/6] Loading EXPORTED model from {export_path}…")
     exp_model = AutoModelForCausalLM.from_pretrained(
@@ -327,9 +340,7 @@ def validate_exported_model(
     else:
         print("\n[6/6] Validating numerics…")
         exp_tokenizer = (
-            AutoTokenizer.from_pretrained(hf_model_id)
-            if hf_model_id
-            else None
+            AutoTokenizer.from_pretrained(hf_model_id) if hf_model_id else None
         )
         numeric_results = validate_numerics(
             exp_model, exp_tokenizer, original_results, skip_generation
@@ -365,10 +376,17 @@ def print_summary(results):
     all_pass = all(checks)
 
     print("\n" + "=" * 70)
-    print(f"  {'✅ ALL CHECKS PASSED' if all_pass else '❌ SOME CHECKS FAILED — review output above'}")
+    print(
+        "  ✅ ALL CHECKS PASSED"
+        if all_pass
+        else "  ❌ SOME CHECKS FAILED — review output above"
+    )
     print(f"     - Config fields match:  {'✓' if config_pass else '✗'}")
     print(f"     - Token IDs match:      {'✓' if token_pass else '✗'}")
-    print(f"     - Parameter count:      {'match ✓' if param_match else 'differ ✗'}")
+    print(
+        f"     - Parameter count:      "
+        f"{'match ✓' if param_match else 'differ ✗'}"
+    )
     if text_pass is not None:
         print(
             f"     - Text logit parity:   "
@@ -392,13 +410,14 @@ def run_structural_smoke_test(export_dir):
     """Export a tiny random text-only backbone and check the file structure."""
     import json
 
+    from transformers import AutoModelForCausalLM
+
     from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
     from keras_hub.src.models.gemma4.gemma4_causal_lm import Gemma4CausalLM
     from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
         Gemma4CausalLMPreprocessor,
     )
     from keras_hub.src.models.gemma4.gemma4_tokenizer import Gemma4Tokenizer
-    from transformers import AutoConfig, AutoModelForCausalLM
 
     print("\n[SMOKE TEST] Tiny random text-only backbone…")
     # Use the test vocab shipped with the repository (located in
@@ -408,7 +427,11 @@ def run_structural_smoke_test(export_dir):
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
     vocab_path = os.path.join(
-        repo_root, "keras_hub", "src", "tests", "test_data",
+        repo_root,
+        "keras_hub",
+        "src",
+        "tests",
+        "test_data",
         "gemma4_test_vocab.spm",
     )
     if not os.path.exists(vocab_path):
@@ -456,7 +479,10 @@ def run_structural_smoke_test(export_dir):
     with open(cfg_path) as f:
         cfg = json.load(f)
     model_type_ok = cfg.get("model_type") == "gemma4_text"
-    print(f"  {'✓' if model_type_ok else '✗'} config.json model_type = gemma4_text")
+    print(
+        f"  {'✓' if model_type_ok else '✗'} "
+        f"config.json model_type = gemma4_text"
+    )
     all_ok = all_ok and model_type_ok
 
     # Validate the exported safetensors keys + shapes.
@@ -466,6 +492,7 @@ def run_structural_smoke_test(export_dir):
     st_path = os.path.join(export_path, "model.safetensors")
     try:
         from safetensors import safe_open
+
         st_total = 0
         with safe_open(st_path, framework="pt") as f:
             st_keys = sorted(f.keys())
@@ -484,14 +511,16 @@ def run_structural_smoke_test(export_dir):
 
     try:
         hf_model = AutoModelForCausalLM.from_pretrained(export_path)
-        print(f"  ✓ HF model loaded successfully (architecture recognized)")
+        print("  ✓ HF model loaded successfully (architecture recognized)")
         # Spot-check: verify all exported keys were loaded (no unexpected keys).
         hf_sd_keys = set(hf_model.state_dict().keys())
         # Exported keys use the "model." prefix; HF CausalLM wraps them
         # under "model." too. Check that all safetensors keys appear in HF.
         missing_from_hf = [k for k in st_keys if k not in hf_sd_keys]
         if missing_from_hf:
-            print(f"  ✗ Keys exported but not in HF model: {missing_from_hf[:5]}")
+            print(
+                f"  ✗ Keys exported but not in HF model: {missing_from_hf[:5]}"
+            )
             all_ok = False
         else:
             print(f"  ✓ All {len(st_keys)} exported keys present in HF model")
@@ -571,7 +600,10 @@ def main():
     print("  Gemma4 Export Verification")
     print("=" * 70)
     print(f"  KerasHub preset:    {args.preset}")
-    print(f"  HF model ID:        {hf_model_id or '(none — structural check only)'}")
+    print(
+        f"  HF model ID:        "
+        f"{hf_model_id or '(none — structural check only)'}"
+    )
     print(f"  Export path:        {export_path}")
     print(f"  Skip generation:    {args.skip_generation}")
     print(f"  Skip logit check:   {args.skip_logit_comparison}")

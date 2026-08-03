@@ -15,7 +15,6 @@ Multimodal (vision + audio) models are fully supported.  Text-only models
 
 import keras.ops as ops
 
-
 # ---------------------------------------------------------------------------
 # Config helpers
 # ---------------------------------------------------------------------------
@@ -99,7 +98,7 @@ def _build_vision_config(vision_encoder):
         "head_dim": vision_encoder.head_dim,
         "patch_size": vision_encoder.patch_size,
         "pooling_kernel_size": vision_encoder.pool_size,
-        "position_embedding_size": image_encoder.patch_embedder.position_embedding_table.shape[1],
+        "position_embedding_size": vision_encoder.position_embedding_size,
         "rms_norm_eps": vision_encoder.layer_norm_epsilon,
         "use_clipped_linears": vision_encoder.use_clipped_linears,
         "standardize": vision_encoder.standardize,
@@ -153,11 +152,7 @@ def get_gemma4_config(backbone, include_lm_head=False):
 
     if is_text_only:
         # Flat text-only config.
-        arch = (
-            "Gemma4TextForCausalLM"
-            if include_lm_head
-            else "Gemma4TextModel"
-        )
+        arch = "Gemma4TextForCausalLM" if include_lm_head else "Gemma4TextModel"
         hf_config = dict(text_cfg)
         hf_config["architectures"] = [arch]
         hf_config["torch_dtype"] = backbone.dtype_policy.compute_dtype
@@ -165,9 +160,7 @@ def get_gemma4_config(backbone, include_lm_head=False):
 
     # Multimodal config — text goes under "text_config".
     arch = (
-        "Gemma4ForConditionalGeneration"
-        if include_lm_head
-        else "Gemma4Model"
+        "Gemma4ForConditionalGeneration" if include_lm_head else "Gemma4Model"
     )
     hf_config = {
         "architectures": [arch],
@@ -185,9 +178,7 @@ def get_gemma4_config(backbone, include_lm_head=False):
         )
 
     if has_audio:
-        hf_config["audio_config"] = _build_audio_config(
-            backbone.audio_encoder
-        )
+        hf_config["audio_config"] = _build_audio_config(backbone.audio_encoder)
 
     return hf_config
 
@@ -267,8 +258,8 @@ def _add_text_decoder_block(weights_dict, block, layer_idx, prefix):
         # V proj absent when attention_k_eq_v=True (global layers in MoE
         # models like 26B-A4B and 31B that reuse K for V).
         if attn.value_dense is not None:
-            weights_dict[f"{lp}.self_attn.v_proj.weight"] = (
-                _convert_qkv_kernel(attn.value_dense.kernel, hidden_dim)
+            weights_dict[f"{lp}.self_attn.v_proj.weight"] = _convert_qkv_kernel(
+                attn.value_dense.kernel, hidden_dim
             )
         # v_norm (Gemma4VNorm) has no learnable scale — skip.
 
@@ -383,25 +374,19 @@ def _add_vision_block(weights_dict, block, layer_prefix):
 
     # Attention — Gemma4VisionAttention uses ClippableEinsumDense.
     attn = block.attention
-    q_kernel = _convert_qkv_kernel(
-        attn.query_dense.dense.kernel, hidden_dim
-    )
+    q_kernel = _convert_qkv_kernel(attn.query_dense.dense.kernel, hidden_dim)
     weights_dict[f"{lp}.self_attn.q_proj.linear.weight"] = q_kernel
     _add_clip_weights(attn.query_dense, f"{lp}.self_attn.q_proj")
 
     weights_dict[f"{lp}.self_attn.q_norm.weight"] = attn.query_norm.scale
 
-    k_kernel = _convert_qkv_kernel(
-        attn.key_dense.dense.kernel, hidden_dim
-    )
+    k_kernel = _convert_qkv_kernel(attn.key_dense.dense.kernel, hidden_dim)
     weights_dict[f"{lp}.self_attn.k_proj.linear.weight"] = k_kernel
     _add_clip_weights(attn.key_dense, f"{lp}.self_attn.k_proj")
 
     weights_dict[f"{lp}.self_attn.k_norm.weight"] = attn.key_norm.scale
 
-    v_kernel = _convert_qkv_kernel(
-        attn.value_dense.dense.kernel, hidden_dim
-    )
+    v_kernel = _convert_qkv_kernel(attn.value_dense.dense.kernel, hidden_dim)
     weights_dict[f"{lp}.self_attn.v_proj.linear.weight"] = v_kernel
     _add_clip_weights(attn.value_dense, f"{lp}.self_attn.v_proj")
     # v_norm (Gemma4VNorm) is parameter-free — skip.
@@ -437,9 +422,9 @@ def _add_vision_encoder_weights(weights_dict, vision_encoder):
     weights_dict[f"{vis_prefix}.patch_embedder.input_proj.weight"] = (
         ops.transpose(patch_embedder.input_proj.kernel)
     )
-    weights_dict[
-        f"{vis_prefix}.patch_embedder.position_embedding_table"
-    ] = patch_embedder.position_embedding_table
+    weights_dict[f"{vis_prefix}.patch_embedder.position_embedding_table"] = (
+        patch_embedder.position_embedding_table
+    )
 
     # Transformer blocks.
     for i, block in enumerate(image_encoder.encoder_blocks):
@@ -497,24 +482,20 @@ def _add_audio_encoder_weights(weights_dict, audio_encoder):
             ("feed_forward2", block.ffw_end),
         ]:
             hf_ffw_pfx = f"{hf_blk}.{hf_ffw_name}"
-            weights_dict[
-                f"{hf_ffw_pfx}.ffw_layer_1.linear.weight"
-            ] = ops.transpose(keras_ffw.ffw_1.dense.kernel)
-            _add_clip_weights(
-                keras_ffw.ffw_1, f"{hf_ffw_pfx}.ffw_layer_1"
+            weights_dict[f"{hf_ffw_pfx}.ffw_layer_1.linear.weight"] = (
+                ops.transpose(keras_ffw.ffw_1.dense.kernel)
             )
-            weights_dict[
-                f"{hf_ffw_pfx}.ffw_layer_2.linear.weight"
-            ] = ops.transpose(keras_ffw.ffw_2.dense.kernel)
-            _add_clip_weights(
-                keras_ffw.ffw_2, f"{hf_ffw_pfx}.ffw_layer_2"
+            _add_clip_weights(keras_ffw.ffw_1, f"{hf_ffw_pfx}.ffw_layer_1")
+            weights_dict[f"{hf_ffw_pfx}.ffw_layer_2.linear.weight"] = (
+                ops.transpose(keras_ffw.ffw_2.dense.kernel)
             )
-            weights_dict[
-                f"{hf_ffw_pfx}.pre_layer_norm.weight"
-            ] = keras_ffw.pre_norm.scale
-            weights_dict[
-                f"{hf_ffw_pfx}.post_layer_norm.weight"
-            ] = keras_ffw.post_norm.scale
+            _add_clip_weights(keras_ffw.ffw_2, f"{hf_ffw_pfx}.ffw_layer_2")
+            weights_dict[f"{hf_ffw_pfx}.pre_layer_norm.weight"] = (
+                keras_ffw.pre_norm.scale
+            )
+            weights_dict[f"{hf_ffw_pfx}.post_layer_norm.weight"] = (
+                keras_ffw.post_norm.scale
+            )
 
         # Attention sub-block.
         attn = block.attention.attn
@@ -524,9 +505,9 @@ def _add_audio_encoder_weights(weights_dict, audio_encoder):
             ("k_proj", attn.k_proj),
             ("v_proj", attn.v_proj),
         ]:
-            weights_dict[
-                f"{hf_attn}.{proj_name}.linear.weight"
-            ] = ops.transpose(keras_dense.dense.kernel)
+            weights_dict[f"{hf_attn}.{proj_name}.linear.weight"] = (
+                ops.transpose(keras_dense.dense.kernel)
+            )
             _add_clip_weights(keras_dense, f"{hf_attn}.{proj_name}")
 
         weights_dict[f"{hf_attn}.per_dim_scale"] = attn.per_dim_scale
@@ -535,19 +516,17 @@ def _add_audio_encoder_weights(weights_dict, audio_encoder):
             attn.rpe.pos_proj
         )
         # Output projection.
-        weights_dict[
-            f"{hf_blk}.self_attn.post.linear.weight"
-        ] = ops.transpose(block.attention.out_proj.dense.kernel)
-        _add_clip_weights(
-            block.attention.out_proj, f"{hf_blk}.self_attn.post"
+        weights_dict[f"{hf_blk}.self_attn.post.linear.weight"] = ops.transpose(
+            block.attention.out_proj.dense.kernel
         )
+        _add_clip_weights(block.attention.out_proj, f"{hf_blk}.self_attn.post")
 
         # LightConv1D sub-block.
         lconv = block.lconv
         hf_lconv = f"{hf_blk}.lconv1d"
-        weights_dict[
-            f"{hf_lconv}.linear_start.linear.weight"
-        ] = ops.transpose(lconv.linear_start.dense.kernel)
+        weights_dict[f"{hf_lconv}.linear_start.linear.weight"] = ops.transpose(
+            lconv.linear_start.dense.kernel
+        )
         _add_clip_weights(lconv.linear_start, f"{hf_lconv}.linear_start")
 
         # Keras DepthwiseConv1D (channels_last): (ksize, C_in, depth_mult=1)
@@ -556,21 +535,19 @@ def _add_audio_encoder_weights(weights_dict, audio_encoder):
             lconv.depthwise_conv.kernel, axes=(1, 2, 0)
         )
 
-        weights_dict[
-            f"{hf_lconv}.linear_end.linear.weight"
-        ] = ops.transpose(lconv.linear_end.dense.kernel)
+        weights_dict[f"{hf_lconv}.linear_end.linear.weight"] = ops.transpose(
+            lconv.linear_end.dense.kernel
+        )
         _add_clip_weights(lconv.linear_end, f"{hf_lconv}.linear_end")
 
         # Norms.
-        weights_dict[
-            f"{hf_blk}.norm_pre_attn.weight"
-        ] = block.attention.pre_attn_norm.scale
-        weights_dict[
-            f"{hf_blk}.norm_post_attn.weight"
-        ] = block.attention.post_norm.scale
-        weights_dict[
-            f"{hf_lconv}.pre_layer_norm.weight"
-        ] = lconv.pre_norm.scale
+        weights_dict[f"{hf_blk}.norm_pre_attn.weight"] = (
+            block.attention.pre_attn_norm.scale
+        )
+        weights_dict[f"{hf_blk}.norm_post_attn.weight"] = (
+            block.attention.post_norm.scale
+        )
+        weights_dict[f"{hf_lconv}.pre_layer_norm.weight"] = lconv.pre_norm.scale
         weights_dict[f"{hf_lconv}.conv_norm.weight"] = lconv.conv_norm.scale
         weights_dict[f"{hf_blk}.norm_out.weight"] = block.norm.scale
 
@@ -579,9 +556,9 @@ def _add_audio_encoder_weights(weights_dict, audio_encoder):
         weights_dict[f"{aud_prefix}.output_proj.weight"] = ops.transpose(
             audio_encoder.output_proj.kernel
         )
-        weights_dict[
-            f"{aud_prefix}.output_proj.bias"
-        ] = audio_encoder.output_proj.bias
+        weights_dict[f"{aud_prefix}.output_proj.bias"] = (
+            audio_encoder.output_proj.bias
+        )
 
     # --- Audio-to-text projection ---
     weights_dict["model.embed_audio.embedding_projection.weight"] = (
@@ -653,9 +630,9 @@ def get_gemma4_weights_map(backbone, include_lm_head=False):
         _add_text_decoder_block(weights_dict, block, i, text_prefix)
 
     # --- Final layer norm ---
-    weights_dict[f"{text_prefix}norm.weight"] = (
-        backbone.get_layer("final_normalization").scale
-    )
+    weights_dict[f"{text_prefix}norm.weight"] = backbone.get_layer(
+        "final_normalization"
+    ).scale
 
     # --- LM head (optional, only when weights are not tied) ---
     if include_lm_head and not token_embedding_layer.tie_weights:

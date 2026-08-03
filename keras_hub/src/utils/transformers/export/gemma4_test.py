@@ -13,12 +13,8 @@ import os
 
 import keras.ops as ops
 import numpy as np
-import pytest
 import torch
-from transformers import AutoConfig
-from transformers import AutoModel
 from transformers import AutoModelForCausalLM
-from transformers import AutoTokenizer
 
 from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.models.gemma4.gemma4_causal_lm import Gemma4CausalLM
@@ -26,18 +22,17 @@ from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
     Gemma4CausalLMPreprocessor,
 )
 from keras_hub.src.models.gemma4.gemma4_tokenizer import Gemma4Tokenizer
-from keras_hub.src.models.gemma4.gemma4_vision_encoder import Gemma4VisionEncoder
-from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.transformers.export.gemma4 import (
-    get_gemma4_config,
+from keras_hub.src.models.gemma4.gemma4_vision_encoder import (
+    Gemma4VisionEncoder,
 )
+from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.transformers.export.gemma4 import get_gemma4_config
 from keras_hub.src.utils.transformers.export.gemma4 import (
     get_gemma4_tokenizer_config,
 )
 from keras_hub.src.utils.transformers.export.gemma4 import (
     get_gemma4_weights_map,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -259,16 +254,10 @@ class TestGemma4WeightsMap(TestCase):
             weights[f"{lp}.self_attn.o_proj.weight"].shape, (d, n * h)
         )
         # Gate / up: (f, d)
-        self.assertEqual(
-            weights[f"{lp}.mlp.gate_proj.weight"].shape, (f, d)
-        )
-        self.assertEqual(
-            weights[f"{lp}.mlp.up_proj.weight"].shape, (f, d)
-        )
+        self.assertEqual(weights[f"{lp}.mlp.gate_proj.weight"].shape, (f, d))
+        self.assertEqual(weights[f"{lp}.mlp.up_proj.weight"].shape, (f, d))
         # Down: (d, f)
-        self.assertEqual(
-            weights[f"{lp}.mlp.down_proj.weight"].shape, (d, f)
-        )
+        self.assertEqual(weights[f"{lp}.mlp.down_proj.weight"].shape, (d, f))
         # Layer scalar: (1,)
         self.assertEqual(weights[f"{lp}.layer_scalar"].shape, (1,))
 
@@ -281,8 +270,12 @@ class TestGemma4WeightsMap(TestCase):
             "token_ids": np.ones((1, 8), dtype="int32"),
             "padding_mask": np.ones((1, 8), dtype="int32"),
             "position_ids": np.arange(8, dtype="int32")[None],
-            "pixel_values": np.ones((1, 1, num_patches, patch_dim), dtype="float32"),
-            "pixel_position_ids": np.zeros((1, 1, num_patches, 2), dtype="int32"),
+            "pixel_values": np.ones(
+                (1, 1, num_patches, patch_dim), dtype="float32"
+            ),
+            "pixel_position_ids": np.zeros(
+                (1, 1, num_patches, 2), dtype="int32"
+            ),
             "vision_indices": np.zeros((1, 8), dtype="int32"),
             "vision_mask": np.zeros((1, 8), dtype="int32"),
         }
@@ -301,9 +294,7 @@ class TestGemma4WeightsMap(TestCase):
             "model.vision_tower.patch_embedder.position_embedding_table",
             weights,
         )
-        self.assertIn(
-            "model.embed_vision.embedding_projection.weight", weights
-        )
+        self.assertIn("model.embed_vision.embedding_projection.weight", weights)
 
         # Vision encoder transformer block keys.
         ve = backbone.vision_encoder
@@ -322,9 +313,7 @@ class TestGemma4WeightsMap(TestCase):
 class TestGemma4Export(TestCase):
     def test_text_only_export_to_hf(self):
         """Export a text-only Gemma4 backbone and verify HF model loads."""
-        proto = os.path.join(
-            self.get_test_data_dir(), "gemma4_test_vocab.spm"
-        )
+        proto = os.path.join(self.get_test_data_dir(), "gemma4_test_vocab.spm")
         tokenizer = Gemma4Tokenizer(
             proto=proto,
             has_vision_tokens=False,
@@ -383,9 +372,7 @@ class TestGemma4Export(TestCase):
 
     def test_multimodal_export_to_hf(self):
         """Export a multimodal Gemma4 backbone and verify HF model loads."""
-        proto = os.path.join(
-            self.get_test_data_dir(), "gemma4_test_vocab.spm"
-        )
+        proto = os.path.join(self.get_test_data_dir(), "gemma4_test_vocab.spm")
         tokenizer = Gemma4Tokenizer(proto=proto)
 
         vision_encoder = Gemma4VisionEncoder(
@@ -442,9 +429,7 @@ class TestGemma4Export(TestCase):
 
         self.assertEqual(text_cfg.vocab_size, backbone.vocabulary_size)
         self.assertEqual(text_cfg.num_hidden_layers, backbone.num_layers)
-        self.assertEqual(
-            text_cfg.num_attention_heads, backbone.num_query_heads
-        )
+        self.assertEqual(text_cfg.num_attention_heads, backbone.num_query_heads)
         self.assertEqual(text_cfg.hidden_size, backbone.hidden_dim)
 
         # Verify vision config is present.
@@ -454,9 +439,7 @@ class TestGemma4Export(TestCase):
 
     def test_logit_parity_text_only(self):
         """Exported text-only model should produce identical logits."""
-        proto = os.path.join(
-            self.get_test_data_dir(), "gemma4_test_vocab.spm"
-        )
+        proto = os.path.join(self.get_test_data_dir(), "gemma4_test_vocab.spm")
         tokenizer = Gemma4Tokenizer(
             proto=proto,
             has_vision_tokens=False,
@@ -488,9 +471,7 @@ class TestGemma4Export(TestCase):
         )
         _randomize_weights(keras_model)
 
-        export_path = os.path.join(
-            self.get_temp_dir(), "export_logit_parity"
-        )
+        export_path = os.path.join(self.get_temp_dir(), "export_logit_parity")
         keras_model.export_to_transformers(export_path)
 
         hf_model = AutoModelForCausalLM.from_pretrained(
@@ -509,16 +490,13 @@ class TestGemma4Export(TestCase):
         # Keras forward pass.
         keras_input_dict = {
             "token_ids": ops.convert_to_numpy(keras_inputs)[None],
-            "padding_mask": np.ones(
-                (1, len(keras_inputs)), dtype="int32"
-            ),
-            "position_ids": np.arange(
-                len(keras_inputs), dtype="int32"
-            )[None],
+            "padding_mask": np.ones((1, len(keras_inputs)), dtype="int32"),
+            "position_ids": np.arange(len(keras_inputs), dtype="int32")[None],
         }
+        hidden = keras_model.backbone(keras_input_dict)
         keras_logits = np.array(
             ops.convert_to_numpy(
-                keras_model.backbone(keras_input_dict)
+                keras_model.backbone.token_embedding(hidden, reverse=True)
             )
         )
 
@@ -545,9 +523,7 @@ class TestGemma4Export(TestCase):
 
 class TestGemma4TokenizerConfig(TestCase):
     def test_tokenizer_config_fields(self):
-        proto = os.path.join(
-            self.get_test_data_dir(), "gemma4_test_vocab.spm"
-        )
+        proto = os.path.join(self.get_test_data_dir(), "gemma4_test_vocab.spm")
         tokenizer = Gemma4Tokenizer(proto=proto)
         cfg = get_gemma4_tokenizer_config(tokenizer)
 
@@ -558,17 +534,11 @@ class TestGemma4TokenizerConfig(TestCase):
         self.assertIn("added_tokens_decoder", cfg)
 
     def test_tokenizer_config_export(self):
-        proto = os.path.join(
-            self.get_test_data_dir(), "gemma4_test_vocab.spm"
-        )
+        proto = os.path.join(self.get_test_data_dir(), "gemma4_test_vocab.spm")
         tokenizer = Gemma4Tokenizer(proto=proto)
-        export_path = os.path.join(
-            self.get_temp_dir(), "export_tokenizer"
-        )
+        export_path = os.path.join(self.get_temp_dir(), "export_tokenizer")
         tokenizer.export_to_transformers(export_path)
 
         self.assertTrue(
-            os.path.exists(
-                os.path.join(export_path, "tokenizer_config.json")
-            )
+            os.path.exists(os.path.join(export_path, "tokenizer_config.json"))
         )
