@@ -809,6 +809,25 @@ class Gemma4AssistantSpec(LiteRTLMExportSpec):
         )
 
 
+class PaliGemmaSpec(GemmaSpec):
+    """PaliGemma has no dedicated ``LlmModelType`` vision subtype today.
+
+    Registered explicitly (rather than relying on the ``LiteRTLMExportSpec``
+    fallback) purely for discoverability, so its lack of special-cased
+    behavior is a documented decision rather than an omission. Subclasses
+    ``GemmaSpec`` (not ``LiteRTLMExportSpec`` directly) since PaliGemma uses
+    a Gemma tokenizer and shares the same ``<end_of_turn>`` convention.
+    """
+
+    #: PaliGemma's ViT accepts one image at a time (4-D input).
+    flatten_image_batch = True
+
+    # `end_of_vision_token` stays `None`: PaliGemma defines no end-of-image
+    # special token, so separate-vision emits no `END_OF_VISION` section.
+    # `populate_vision_metadata` stays the base no-op for the same reason as
+    # the missing subtype: there are no proto fields to populate.
+
+
 class Llama3Spec(LiteRTLMExportSpec):
     """Llama3's chat template ends a turn with ``<|eot_id|>``.
 
@@ -912,16 +931,97 @@ def _populate_gemma3_family_vision_metadata(meta, model_type, vision_cfg):
 # (module_path, class_name, spec_factory), imported lazily inside
 # ``resolve_export_spec`` to avoid heavy top-level dependencies.
 _EXPORT_SPEC_REGISTRY = (
-    ("keras_hub.src.models.gemma4.gemma4_causal_lm", "Gemma4CausalLM", Gemma4Spec),
-    ("keras_hub.src.models.gemma3n.gemma3n_causal_lm", "Gemma3nCausalLM", Gemma3nSpec),
-    ("keras_hub.src.models.gemma3.gemma3_causal_lm", "Gemma3CausalLM", Gemma3Spec),
-    ("keras_hub.src.models.gemma.gemma_causal_lm", "GemmaCausalLM", GemmaSpec),
-    ("keras_hub.src.models.qwen3_5.qwen3_5_causal_lm", "Qwen3_5CausalLM", Qwen3_5Spec),
-    ("keras_hub.src.models.qwen3.qwen3_causal_lm", "Qwen3CausalLM", Qwen3FamilySpec),
-    ("keras_hub.src.models.qwen2_5.qwen2_5_causal_lm", "Qwen2_5CausalLM", Qwen2p5FamilySpec),
-    ("keras_hub.src.models.llama3.llama3_causal_lm", "Llama3CausalLM", Llama3Spec),
-    ("keras_hub.src.models.phi3.phi3_causal_lm", "Phi3CausalLM", Phi3Spec),
+    (
+        "keras_hub.src.models.gemma4.gemma4_causal_lm",
+        "Gemma4CausalLM",
+        Gemma4Spec,
+    ),
+    # MTP draft model, not standalone-exportable: registered so
+    # `check_exportable` fails fast instead of tracing the generic path.
+    (
+        "keras_hub.src.models.gemma4.gemma4_assistant_causal_lm",
+        "Gemma4AssistantCausalLM",
+        Gemma4AssistantSpec,
+    ),
+    (
+        "keras_hub.src.models.gemma3n.gemma3n_causal_lm",
+        "Gemma3nCausalLM",
+        Gemma3nSpec,
+    ),
+    (
+        "keras_hub.src.models.gemma3.gemma3_causal_lm",
+        "Gemma3CausalLM",
+        Gemma3Spec,
+    ),
+    (
+        "keras_hub.src.models.pali_gemma.pali_gemma_causal_lm",
+        "PaliGemmaCausalLM",
+        PaliGemmaSpec,
+    ),
+    # Registered (despite no dedicated ``LlmModelType`` subtype) so base
+    # Gemma gets the shared Gemma-family ``<end_of_turn>`` behavior.
+    (
+        "keras_hub.src.models.gemma.gemma_causal_lm",
+        "GemmaCausalLM",
+        GemmaSpec,
+    ),
+    (
+        "keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm",
+        "Qwen3MoeCausalLM",
+        Qwen3FamilySpec,
+    ),
+    (
+        "keras_hub.src.models.qwen3.qwen3_causal_lm",
+        "Qwen3CausalLM",
+        Qwen3FamilySpec,
+    ),
+    # NOTE: no dedicated "qwen3_5" LlmModelType field; maps to "qwen3". Own
+    # spec class because its hybrid cache is not yet supported.
+    (
+        "keras_hub.src.models.qwen3_5.qwen3_5_causal_lm",
+        "Qwen3_5CausalLM",
+        Qwen3_5Spec,
+    ),
+    (
+        "keras_hub.src.models.qwen_moe.qwen_moe_causal_lm",
+        "QwenMoeCausalLM",
+        Qwen2p5FamilySpec,
+    ),
+    (
+        "keras_hub.src.models.qwen.qwen_causal_lm",
+        "QwenCausalLM",
+        Qwen2p5FamilySpec,
+    ),
+    # Llama3CausalLM subclasses LlamaCausalLM, so its entry must come first
+    # (first match wins) to get ``Llama3Spec``'s ``<|eot_id|>`` override.
+    (
+        "keras_hub.src.models.llama3.llama3_causal_lm",
+        "Llama3CausalLM",
+        Llama3Spec,
+    ),
+    # NOTE: no dedicated "llama" LlmModelType field; map to generic_model
+    # (the default -- explicit for greppability). No chat-stop token needed.
+    (
+        "keras_hub.src.models.llama.llama_causal_lm",
+        "LlamaCausalLM",
+        LiteRTLMExportSpec,
+    ),
+    (
+        "keras_hub.src.models.phi3.phi3_causal_lm",
+        "Phi3CausalLM",
+        Phi3Spec,
+    ),
 )
+
+# Deferred chat-stop-token cases, all left EOS-only: SmolLM3 (keras-hub's
+# tokenizer does not register `<|im_end|>`), GPT-OSS (harmony stop-token
+# semantics not encoded in keras-hub), Falcon (`falcon_causal_lm_test.py`
+# xfail).
+
+
+# Explicit model-type overrides for presets architecturally identical to
+# another family (see ``FunctionGemmaSpec``), keyed by ``llm_model_type``.
+# NOT in ``_EXPORT_SPEC_REGISTRY``: an entry would shadow the look-alike.
 _MODEL_TYPE_OVERRIDE_SPECS = {
     "function_gemma": FunctionGemmaSpec,
 }

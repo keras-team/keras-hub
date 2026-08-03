@@ -448,3 +448,290 @@ class ExportSpecRegistryIntegrityTest(TestCase):
 
         class _CustomHybridSpec(LiteRTLMExportSpec):
             cache_structure = "custom_hybrid"
+
+        message = _CustomHybridSpec().describe_unsupported_cache_structure()
+        self.assertIn("custom_hybrid", message)
+        self.assertIn("single_stacked", message)
+        self.assertNotIn("Qwen3.5", message)
+        self.assertNotIn("Qwen", message)
+
+    def test_qwen3_5_spec_describes_hybrid_cache_specifically(self):
+        message = Qwen3_5Spec().describe_unsupported_cache_structure()
+        self.assertIn("hybrid full_attention/linear_attention", message)
+
+    # Every audio-capable family must declare an `audio_input_style`
+    # matching how its encoder consumes input.
+
+    def test_audio_capable_specs_declare_audio_input_style(self):
+        """Gemma3n and Gemma4 are the only audio-capable families; each must
+        declare a concrete `audio_input_style` matching how its audio encoder
+        consumes input (embedded-in-backbone vs standalone in-trace)."""
+        self.assertEqual(Gemma3nSpec().audio_input_style, "embedded_mel")
+        self.assertEqual(Gemma4Spec().audio_input_style, "standalone_mel")
+
+    def test_non_audio_specs_have_no_audio_input_style(self):
+        """The base spec and non-audio families default to `None`, so the
+        registry test's audio-capability signal stays a clean non-None
+        check."""
+        self.assertIsNone(LiteRTLMExportSpec().audio_input_style)
+        self.assertIsNone(GemmaSpec().audio_input_style)
+        self.assertIsNone(Gemma3Spec().audio_input_style)
+        self.assertIsNone(PaliGemmaSpec().audio_input_style)
+
+    def test_gemma3n_audio_metadata_pins_gemma4_token_strings(self):
+        """Gemma3n's audio metadata deliberately uses Gemma4's token strings
+        (golden reference bundles); regression-guard against deriving them
+        from Gemma3n's own `<start_of_audio>`/`<end_of_audio>` tokens."""
+        meta = types.SimpleNamespace(
+            llm_model_type=types.SimpleNamespace(
+                gemma3n=types.SimpleNamespace(
+                    start_of_audio_token=types.SimpleNamespace(token_str=""),
+                    end_of_audio_token=types.SimpleNamespace(token_str=""),
+                )
+            )
+        )
+        Gemma3nSpec().populate_audio_metadata(meta, None)
+        self.assertEqual(
+            meta.llm_model_type.gemma3n.start_of_audio_token.token_str,
+            "<|audio>",
+        )
+        self.assertEqual(
+            meta.llm_model_type.gemma3n.end_of_audio_token.token_str,
+            "<audio|>",
+        )
+
+    # The gemma3-family image-token population belongs to the subtypes that
+    # actually have those proto fields; every other Gemma-family spec must
+    # leave `LlmMetadata` untouched.
+
+    def _fake_vision_meta(self, subtype_name=None):
+        llm_model_type = types.SimpleNamespace()
+        subtype = None
+        if subtype_name is not None:
+            subtype = types.SimpleNamespace(
+                start_of_image_token=types.SimpleNamespace(token_str=""),
+                end_of_image_token=types.SimpleNamespace(token_str=""),
+                image_tensor_height=0,
+                image_tensor_width=0,
+            )
+            setattr(llm_model_type, subtype_name, subtype)
+        return types.SimpleNamespace(llm_model_type=llm_model_type), subtype
+
+    def test_gemma3_family_populates_image_token_metadata(self):
+        for spec_cls, subtype_name in (
+            (Gemma3Spec, "gemma3"),
+            (Gemma3nSpec, "gemma3n"),
+        ):
+            with self.subTest(subtype=subtype_name):
+                meta, subtype = self._fake_vision_meta(subtype_name)
+                spec_cls().populate_vision_metadata(meta, {"image_size": 48})
+                self.assertEqual(
+                    subtype.start_of_image_token.token_str, "<start_of_image>"
+                )
+                self.assertEqual(
+                    subtype.end_of_image_token.token_str, "<end_of_image>"
+                )
+                self.assertEqual(subtype.image_tensor_height, 48)
+                self.assertEqual(subtype.image_tensor_width, 48)
+
+    def test_specs_without_image_proto_fields_populate_nothing(self):
+        """These families map to a `LlmModelType` subtype with no image fields
+        (`generic_model`, `function_gemma`), or have no dedicated vision
+        subtype at all (PaliGemma), so populating gemma3-family image metadata
+        would be an `AttributeError` on the real protobuf. Their
+        `populate_vision_metadata` must be a strict no-op, touching nothing on
+        `meta`."""
+        for spec_cls in (
+            LiteRTLMExportSpec,
+            GemmaSpec,
+            FunctionGemmaSpec,
+            PaliGemmaSpec,
+        ):
+            with self.subTest(spec=spec_cls.__name__):
+                meta, _ = self._fake_vision_meta()
+                self.assertIsNone(
+                    spec_cls().populate_vision_metadata(
+                        meta, {"image_size": 48}
+                    )
+                )
+                self.assertEqual(vars(meta.llm_model_type), {})
+
+    def test_single_image_family_declares_flatten_image_batch(self):
+        """PaliGemma's ViT is 4-D-only; its spec must declare
+        flatten_image_batch=True so the adapter flattens the batched images
+        stack before calling it."""
+        self.assertTrue(PaliGemmaSpec().flatten_image_batch)
+
+    def test_multi_image_families_do_not_flatten(self):
+        """Every other vision family accepts the batched stack (or does not
+        run the encoder standalone), so flatten_image_batch stays False."""
+        self.assertFalse(LiteRTLMExportSpec().flatten_image_batch)
+        self.assertFalse(Gemma3Spec().flatten_image_batch)
+        self.assertFalse(Gemma3nSpec().flatten_image_batch)
+        self.assertFalse(Gemma4Spec().flatten_image_batch)
+
+    def test_max_images_reads_preprocessor_attribute(self):
+        pre = types.SimpleNamespace(max_images_per_prompt=4)
+        self.assertEqual(Gemma4Spec().get_max_images_per_prompt(pre), 4)
+
+    def test_max_images_single_image_family_defaults_to_one(self):
+        """PaliGemma's preprocessor has no max_images_per_prompt; because it
+        declares flatten_image_batch=True, resolving to 1 is legitimate."""
+        pre = types.SimpleNamespace()  # no max_images_per_prompt attribute
+        self.assertEqual(PaliGemmaSpec().get_max_images_per_prompt(pre), 1)
+
+    def test_max_images_missing_on_multi_image_family_raises(self):
+        """A multi-image (flatten_image_batch=False) family with no
+        max_images_per_prompt is a misconfiguration -- must raise, not
+        silently default to 1."""
+        pre = types.SimpleNamespace()  # no max_images_per_prompt attribute
+        with self.assertRaisesRegex(ValueError, "flatten_image_batch=False"):
+            Gemma4Spec().get_max_images_per_prompt(pre)
+
+    # `get_vision_config` / `get_audio_config` only read plain attributes, so
+    # these guard tests drive them with small fakes instead of real backbones.
+
+    def _fake_vision_model(self, **encoder_attrs):
+        vision_encoder = types.SimpleNamespace(**encoder_attrs)
+        backbone = types.SimpleNamespace(
+            vision_encoder=vision_encoder,
+            image_size=32,
+            num_vision_tokens_per_image=4,
+        )
+        return types.SimpleNamespace(
+            backbone=backbone,
+            preprocessor=types.SimpleNamespace(max_images_per_prompt=2),
+        )
+
+    def _fake_audio_model(self, **preprocessor_attrs):
+        return types.SimpleNamespace(
+            backbone=types.SimpleNamespace(audio_encoder=object()),
+            preprocessor=types.SimpleNamespace(**preprocessor_attrs),
+        )
+
+    def test_patch_values_family_requires_patch_size(self):
+        """Gemma4 derives its exported `patch_values` signature and
+        `max_num_patches` from `patch_size`, so a vision encoder that does not
+        declare one is a misconfiguration -- it must raise rather than fall
+        back to an invented default patch geometry."""
+        model = self._fake_vision_model()  # no patch_size attribute
+        with self.assertRaisesRegex(ValueError, "patch_size=None"):
+            Gemma4Spec().get_vision_config(model)
+
+    def test_non_patch_values_family_tolerates_missing_patch_size(self):
+        """Only `patch_values` families consume `patch_size`. Gemma3n feeds
+        `embedded_pixel_values` and no keras-hub Gemma3n preset can supply a
+        `patch_size`, so a missing one must resolve to None, not raise."""
+        model = self._fake_vision_model()  # no patch_size attribute
+        vision_cfg = Gemma3nSpec().get_vision_config(model)
+        self.assertIsNone(vision_cfg["patch_size"])
+        self.assertEqual(vision_cfg["num_vision_tokens"], 8)
+
+    def test_patch_size_is_read_from_the_vision_encoder(self):
+        model = self._fake_vision_model(patch_size=8, pool_size=2)
+        vision_cfg = Gemma4Spec().get_vision_config(model)
+        self.assertEqual(vision_cfg["patch_size"], 8)
+        self.assertEqual(vision_cfg["pool_size"], 2)
+
+    def test_gemma4_vision_metadata_rejects_missing_patch_size(self):
+        """`Gemma4Spec.populate_vision_metadata` computes `max_num_patches`
+        from `patch_size`; a None must produce the same actionable error as
+        `get_vision_config`, not a `TypeError` from the arithmetic."""
+        meta = types.SimpleNamespace(llm_model_type=types.SimpleNamespace())
+        with self.assertRaisesRegex(ValueError, "patch_size=None"):
+            Gemma4Spec().populate_vision_metadata(
+                meta, {"image_size": 32, "patch_size": None}
+            )
+
+    def test_missing_max_clips_per_prompt_raises(self):
+        model = self._fake_audio_model(
+            num_audio_tokens_per_audio=3, audio_input_feat_size=16
+        )
+        with self.assertRaisesRegex(
+            ValueError, "Could not determine `max_clips_per_prompt`"
+        ):
+            Gemma3nSpec().get_audio_config(model)
+
+    def test_missing_num_audio_tokens_per_clip_raises(self):
+        model = self._fake_audio_model(
+            max_audios_per_prompt=2, audio_input_feat_size=16
+        )
+        with self.assertRaisesRegex(
+            ValueError, "Could not determine `num_audio_tokens_per_clip`"
+        ):
+            Gemma3nSpec().get_audio_config(model)
+
+    def test_missing_audio_input_feat_size_raises(self):
+        model = self._fake_audio_model(
+            max_audios_per_prompt=2, num_audio_tokens_per_audio=3
+        )
+        with self.assertRaisesRegex(
+            ValueError, "Could not determine `audio_input_feat_size`"
+        ):
+            Gemma3nSpec().get_audio_config(model)
+
+    def test_audio_config_resolves_from_preprocessor_attributes(self):
+        """The happy path for the three guards above: with every attribute
+        present the config resolves, so each guard test is failing on the one
+        attribute it drops rather than on an incomplete fake."""
+        model = self._fake_audio_model(
+            max_audios_per_prompt=2,
+            num_audio_tokens_per_audio=3,
+            audio_input_feat_size=16,
+        )
+        audio_cfg = Gemma3nSpec().get_audio_config(model)
+        self.assertEqual(audio_cfg["max_clips_per_prompt"], 2)
+        self.assertEqual(audio_cfg["num_audio_tokens"], 6)
+        self.assertEqual(audio_cfg["audio_input_feat_size"], 16)
+
+    # These tests lock the family-wide default (False) so a per-family
+    # relaxation is a deliberate, visible one-line override.
+
+    def test_all_vision_families_disallow_bucketing_by_default(self):
+        """Every vision-capable family inherits allows_vision_bucketing=False,
+        so the family-wide bucketing ban stays in force until a family is
+        explicitly, deliberately relaxed with a numerics-gated override."""
+        self.assertFalse(Gemma3Spec().allows_vision_bucketing)
+        self.assertFalse(Gemma3nSpec().allows_vision_bucketing)
+        self.assertFalse(Gemma4Spec().allows_vision_bucketing)
+        self.assertFalse(PaliGemmaSpec().allows_vision_bucketing)
+
+    def test_base_and_text_specs_default_disallow_vision_bucketing(self):
+        """The base spec and text-only families also default to False. The
+        flag is only consulted when `get_vision_config` returns non-None (see
+        `export.py`'s `has_vision` guard), so text-only families keep full
+        bucketing support regardless of this value; the default is asserted
+        here for completeness and to document the base-class contract."""
+        self.assertFalse(LiteRTLMExportSpec().allows_vision_bucketing)
+        self.assertFalse(GemmaSpec().allows_vision_bucketing)
+
+    # These tests lock the {baked, separate} support matrix so a change is
+    # deliberate.
+
+    def test_vision_families_declare_supports_separate_vision(self):
+        """Every vision-capable family declares supports_separate_vision
+        explicitly, and its value matches the current support matrix: Gemma3,
+        Gemma4 and PaliGemma support the separate path; Gemma3n (encoder
+        inside the backbone) does not."""
+        self.assertTrue(Gemma3Spec().supports_separate_vision)
+        self.assertTrue(Gemma4Spec().supports_separate_vision)
+        self.assertTrue(PaliGemmaSpec().supports_separate_vision)
+        self.assertFalse(Gemma3nSpec().supports_separate_vision)
+
+    def test_embedded_vision_family_disallows_separate_vision(self):
+        """The `supports_separate_vision=False` families are exactly the
+        `embedded_pixel_values` ones (encoder runs in-backbone). Lock the two
+        facts together so the flag can't drift away from the input style it
+        summarizes."""
+        for spec in (Gemma3nSpec(),):
+            self.assertEqual(spec.vision_input_style, "embedded_pixel_values")
+            self.assertFalse(spec.supports_separate_vision)
+
+    def test_base_and_text_specs_default_support_separate_vision(self):
+        """The base spec and text-only families inherit the permissive
+        default (True). The flag is only consulted when `get_vision_config`
+        returns non-None (see export.py's `has_vision` guard), so its value on
+        text-only families is inert; asserted here for the base-class
+        contract, matching the allows_vision_bucketing default test above."""
+        self.assertTrue(LiteRTLMExportSpec().supports_separate_vision)
+        self.assertTrue(GemmaSpec().supports_separate_vision)
