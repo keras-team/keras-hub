@@ -208,7 +208,8 @@ def export_backbone(backbone, path, include_lm_head=False):
                 if hasattr(t, "contiguous"):
                     t = t.contiguous()
 
-                b = t.view(torch.uint8).numpy().tobytes()
+                # reshape handles 0-D scalars; view(uint8) gets raw bytes
+                b = t.reshape(-1).view(torch.uint8).numpy().tobytes()
                 f.write(b)
 
     elif backend == "tensorflow":
