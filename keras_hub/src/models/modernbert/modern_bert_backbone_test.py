@@ -97,23 +97,6 @@ class ModernBertBackboneTest(TestCase):
             expected_output_shape=(2, 5, 8),
         )
 
-    # @pytest.mark.extra_large
-    # def test_smallest_preset(self):
-    #     self.run_preset_test(
-    #         cls=ModernBertBackbone,
-    #         preset="modernbert_base_en",
-    #         input_data=self.input_data,
-    #     )
-
-    # @pytest.mark.extra_large
-    # def test_all_presets(self):
-    #     for preset in ModernBertBackbone.presets:
-    #         self.run_preset_test(
-    #             cls=ModernBertBackbone,
-    #             preset=preset,
-    #             input_data=self.input_data,
-    #         )
-
     @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
