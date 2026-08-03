@@ -476,8 +476,11 @@ class CausalLM(Task):
                   ``"cpu"`` or ``"gpu"``.
                 - ``prefill_seq_len``: ``int`` or ``list[int]``. Sequence
                   length(s) for prefill signature tracing. A list enables
-                  bucketing (e.g. ``[32, 64, 128, 256]``). Defaults to
-                  ``cache_length``.
+                  bucketing (e.g. ``[32, 64, 128, 256]``). For multimodal
+                  models (e.g. Gemma3), ``prefill_seq_len`` must equal
+                  ``cache_length``; bucketing is not supported for
+                  multimodal models due to attention mask shape constraints.
+                  Defaults to ``cache_length``.
                 - ``cache_length``: Optional ``int``. The KV-cache length
                   (the model's maximum context window) to export with. If
                   not given, this is inferred from
@@ -489,10 +492,12 @@ class CausalLM(Task):
                   necessarily the model's true maximum context length. Pass
                   this explicitly to get a cache length independent of the
                   preprocessor.
-                - ``hf_tokenizer_path``: Optional ``str``. Path to a
-                  user-provided HuggingFace ``tokenizer.json`` file. When
-                  provided, it is bundled directly and native tokenizer
-                  validation is skipped. Defaults to ``None``.
+                - ``separate_vision_encoder``: ``bool``. If ``True`` and the
+                  model has a vision encoder, export separate
+                  ``VISION_ENCODER`` and ``VISION_ADAPTER`` TFLite models so
+                  the main ``PREFILL_DECODE`` graph consumes pre-computed
+                  ``mm_embedding`` tensors instead of raw images. Defaults to
+                  ``False``.
                 - ``sampler_config``: Optional
                   ``keras_hub.src.utils.litertlm.model_specs.SamplerConfig``.
                   When given, populates the bundle's
@@ -524,7 +529,9 @@ class CausalLM(Task):
                 backend_constraint=kwargs.pop("backend_constraint", None),
                 prefill_seq_len=kwargs.pop("prefill_seq_len", None),
                 cache_length=kwargs.pop("cache_length", None),
-                hf_tokenizer_path=kwargs.pop("hf_tokenizer_path", None),
+                separate_vision_encoder=kwargs.pop(
+                    "separate_vision_encoder", False
+                ),
                 sampler_config=kwargs.pop("sampler_config", None),
                 llm_model_type=kwargs.pop("llm_model_type", None),
                 **kwargs,
