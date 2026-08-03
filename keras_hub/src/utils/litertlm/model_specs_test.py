@@ -148,6 +148,36 @@ class ExportSpecRegistryIntegrityTest(TestCase):
         backbone = Gemma4Backbone(
             vocabulary_size=256,
             num_layers=4,
+            num_query_heads=4,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            global_head_dim=8,
+            image_size=16,
+            layer_types=[
+                "sliding_attention",
+                "sliding_attention",
+                "sliding_attention",
+                "full_attention",
+            ],
+        )
+        return Gemma4AssistantCausalLM(
+            preprocessor=None,
+            backbone=backbone,
+            backbone_hidden_size=16,
+            num_centroids=4,
+            centroid_intermediate_top_k=2,
+            use_ordered_embeddings=True,
+        )
+
+    def _tiny_qwen(self):
+        backbone = QwenBackbone(
+            vocabulary_size=10,
+            num_layers=1,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
             intermediate_dim=16,
         )
         return QwenCausalLM(backbone=backbone)
@@ -248,3 +278,73 @@ class ExportSpecRegistryIntegrityTest(TestCase):
         spec = resolve_export_spec(model, llm_model_type="function_gemma")
         self.assertIsInstance(spec, FunctionGemmaSpec)
         self.assertEqual(spec.model_type, "function_gemma")
+
+    def test_function_gemma_spec_not_in_isinstance_registry(self):
+        """`FunctionGemmaSpec` must NOT be in `_EXPORT_SPEC_REGISTRY`: an
+        `isinstance` entry would shadow `Gemma3Spec` for every Gemma3 model."""
+        self.assertNotIn(
+            FunctionGemmaSpec, [f for _, _, f in _EXPORT_SPEC_REGISTRY]
+        )
+
+    def test_function_gemma_auto_detected_by_tokenizer_tokens(self):
+        """A `Gemma3CausalLM` whose tokenizer exposes function-calling special
+        tokens (`<start_function_call>`) auto-resolves to `FunctionGemmaSpec`
+        even without an explicit `llm_model_type` override."""
+
+        class MockTokenizer:
+            def token_to_id(self, token):
+                if token == "<start_function_call>":
+                    return 48
+                return -1
+
+            def id_to_token(self, token_id):
+                if token_id == 48:
+                    return "<start_function_call>"
+                return "<unk>"
+
+        class MockPreprocessor:
+            tokenizer = MockTokenizer()
+
+        model = self._tiny_gemma3()
+        model.preprocessor = MockPreprocessor()
+        spec = resolve_export_spec(model)
+        self.assertIsInstance(spec, FunctionGemmaSpec)
+        self.assertEqual(spec.model_type, "function_gemma")
+
+    def test_unknown_llm_model_type_override_raises(self):
+        """An unrecognized `llm_model_type` override is a hard error, not a
+        silent fall-through to isinstance resolution."""
+        model = self._tiny_gemma3()
+        with self.assertRaisesRegex(ValueError, "Unknown `llm_model_type`"):
+            resolve_export_spec(model, llm_model_type="not_a_real_type")
+
+    def test_llama3_resolves_to_llama3_spec(self):
+        """`Llama3CausalLM` is a subclass of `LlamaCausalLM`; it must resolve
+        to `Llama3Spec` (registered earlier in `_EXPORT_SPEC_REGISTRY`), not
+        fall through to the plain `LlamaCausalLM` entry."""
+        spec = resolve_export_spec(self._tiny_llama3())
+        self.assertIsInstance(spec, Llama3Spec)
+        self.assertEqual(spec.model_type, "generic_model")
+
+    def test_phi3_causal_lm_resolves_to_phi3_spec(self):
+        """`Phi3CausalLM` must resolve to `Phi3Spec` (not fall through to
+        the plain `LiteRTLMExportSpec` default), so its `<|end|>`
+        chat-stop-token override actually fires."""
+        spec = resolve_export_spec(self._tiny_phi3())
+        self.assertIsInstance(spec, Phi3Spec)
+        self.assertEqual(spec.model_type, "generic_model")
+
+    def test_gemma4_assistant_check_exportable_raises(self):
+        """`Gemma4AssistantCausalLM` resolves to `Gemma4AssistantSpec`, whose
+        `check_exportable` fails fast with the MTP-draft explanation instead
+        of letting the model fall through to the generic spec and crash in
+        tracing. The base-class gate is a no-op for ordinary models."""
+        model = self._tiny_gemma4_assistant()
+        spec = resolve_export_spec(model)
+        self.assertIs(type(spec), Gemma4AssistantSpec)
+        with self.assertRaisesRegex(
+            ValueError,
+            "does not support `Gemma4AssistantCausalLM`.*"
+            "multi-token-prediction",
+        ):
+            spec.check_exportable(model)

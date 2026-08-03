@@ -581,6 +581,108 @@ class LiteRTLMExportSpec:
         return [token_id] if token_id is not None else None
 
 
+def _lookup_token_id(tokenizer, token_str):
+    """Return the id for *token_str* in *tokenizer*'s vocab, or ``None``.
+
+    Only looks up when the tokenizer exposes ``token_to_id``, and swallows
+    the specific lookup-failure exceptions so a missing special token does
+    not abort export. Also treats a lookup that resolves to the tokenizer's
+    unk id as "not present", since some tokenizers map unknown lookups to
+    the unk id instead of raising.
+    """
+    if not hasattr(tokenizer, "token_to_id"):
+        return None
+    try:
+        token_id = tokenizer.token_to_id(token_str)
+    except (KeyError, ValueError):
+        return None
+    if token_id is None:
+        return None
+    unk_id = getattr(tokenizer, "_unk_token_id", None)
+    if token_id == unk_id:
+        return None
+    return token_id
+
+
+def _gemma_family_chat_stop_token_ids(tokenizer):
+    """Return ``[<end_of_turn> id]`` if present in *tokenizer*'s vocab.
+
+    ``<end_of_turn>`` is an optional chat-turn-stop token shared by the
+    Gemma family of SentencePiece tokenizers (Gemma, Gemma3, Gemma3n,
+    Gemma4, PaliGemma), distinct from ``tokenizer.end_token_id``.
+    """
+    token_id = _lookup_token_id(tokenizer, "<end_of_turn>")
+    return [token_id] if token_id is not None else []
+
+
+class GemmaSpec(LiteRTLMExportSpec):
+    """Base Gemma (Gemma/Gemma2) family.
+
+    There is no dedicated ``LlmModelType`` subtype for base Gemma, so
+    ``model_type`` stays ``"generic_model"``. Provides the Gemma-family
+    ``<end_of_turn>`` chat-stop-token convention shared by every Gemma*
+    spec below (all subclass this instead of ``LiteRTLMExportSpec``).
+    """
+
+    def get_chat_stop_token_ids(self, tokenizer):
+        return _gemma_family_chat_stop_token_ids(tokenizer)
+
+
+class Gemma3Spec(GemmaSpec):
+    model_type = "gemma3"
+    #: Same string as ``LlmModelType.gemma3.end_of_image_token``.
+    end_of_vision_token = _GEMMA3_END_OF_IMAGE_TOKEN
+
+    def populate_vision_metadata(self, meta, vision_cfg):
+        _populate_gemma3_family_vision_metadata(
+            meta, self.model_type, vision_cfg
+        )
+
+
+class FunctionGemmaSpec(Gemma3Spec):
+    """The ``function_gemma_instruct_270m`` preset.
+
+    Architecturally identical to Gemma3 -- it loads as a plain
+    ``Gemma3CausalLM`` -- so it cannot be distinguished by ``isinstance``
+    or config. It is reached via the explicit
+    ``llm_model_type="function_gemma"`` override (mirroring litert-torch's
+    ``litert_lm_model_type_override``) or by tokenizer auto-detection
+    (``_is_function_gemma``). ``model_type = "function_gemma"`` maps it to
+    the ``FunctionGemma`` proto instead of ``gemma3``, preserving the
+    function-calling metadata a plain Gemma3 export would silently drop.
+
+    Deliberately NOT registered in ``_EXPORT_SPEC_REGISTRY``: an
+    ``isinstance`` entry would shadow ``Gemma3Spec`` for *every* Gemma3
+    model.
+    """
+
+    model_type = "function_gemma"
+
+    def populate_vision_metadata(self, meta, vision_cfg):
+        # The ``FunctionGemma`` proto has no image fields, so the gemma3-
+        # family vision population inherited from ``Gemma3Spec`` must not run.
+        del meta, vision_cfg
+
+    def populate_function_gemma_metadata(self, meta):
+        """Populate the ``FunctionGemma`` function-calling proto fields.
+
+        Mirrors litert-torch's Gemma4 metadata builder
+        (``export_hf/model_ext/gemma4/metadata_builder.py``), whose
+        function-calling field block ``FunctionGemma`` shares (proto fields
+        5-14). ``constraint_mode`` is left at its proto default, as
+        litert-torch leaves it.
+        """
+        subtype = meta.llm_model_type.function_gemma
+        subtype.code_fence_start = _FUNCTION_GEMMA_CODE_FENCE_START
+        subtype.code_fence_end = _FUNCTION_GEMMA_CODE_FENCE_END
+        subtype.open_quote = _FUNCTION_GEMMA_ESCAPE_TOKEN
+        subtype.close_quote = _FUNCTION_GEMMA_ESCAPE_TOKEN
+        subtype.function_response_start = (
+            _FUNCTION_GEMMA_FUNCTION_RESPONSE_START
+        )
+        subtype.use_template_for_fc_format = True
+
+
 class Llama3Spec(LiteRTLMExportSpec):
     """Llama3's chat template ends a turn with ``<|eot_id|>``.
 
@@ -684,6 +786,8 @@ def _populate_gemma3_family_vision_metadata(meta, model_type, vision_cfg):
 # (module_path, class_name, spec_factory), imported lazily inside
 # ``resolve_export_spec`` to avoid heavy top-level dependencies.
 _EXPORT_SPEC_REGISTRY = (
+    ("keras_hub.src.models.gemma3.gemma3_causal_lm", "Gemma3CausalLM", Gemma3Spec),
+    ("keras_hub.src.models.gemma.gemma_causal_lm", "GemmaCausalLM", GemmaSpec),
     ("keras_hub.src.models.qwen3_5.qwen3_5_causal_lm", "Qwen3_5CausalLM", Qwen3_5Spec),
     ("keras_hub.src.models.qwen3.qwen3_causal_lm", "Qwen3CausalLM", Qwen3FamilySpec),
     ("keras_hub.src.models.qwen2_5.qwen2_5_causal_lm", "Qwen2_5CausalLM", Qwen2p5FamilySpec),
