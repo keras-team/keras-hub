@@ -87,7 +87,6 @@ def _build_text_config(backbone):
 
 def _build_vision_config(vision_encoder):
     """Build the ``vision_config`` dict from a Gemma4VisionEncoder."""
-    image_encoder = vision_encoder.get_layer("image_encoder")
     return {
         "model_type": "gemma4_vision_model",
         "num_hidden_layers": vision_encoder.num_layers,
