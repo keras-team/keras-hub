@@ -348,3 +348,103 @@ class ExportSpecRegistryIntegrityTest(TestCase):
             "multi-token-prediction",
         ):
             spec.check_exportable(model)
+        self.assertIsNone(
+            LiteRTLMExportSpec().check_exportable(self._tiny_llama())
+        )
+
+    def test_llm_model_type_override_cannot_bypass_check_exportable(self):
+        """`llm_model_type` selects exported metadata, never exportability.
+
+        The override resolves a spec by name instead of by class, so it must
+        not be usable to route a non-exportable model (an MTP draft model) to
+        an exportable family's spec and slip past `check_exportable`."""
+        model = self._tiny_gemma4_assistant()
+        with self.assertRaisesRegex(
+            ValueError,
+            "does not support `Gemma4AssistantCausalLM`.*"
+            "multi-token-prediction",
+        ):
+            resolve_export_spec(model, llm_model_type="function_gemma")
+
+    # Dependency-free checks of `get_chat_stop_token_ids` against small fake
+    # tokenizer objects -- no real KerasHub tokenizer or torch/litert
+    # dependency needed, since the method only calls `token_to_id`/reads
+    # plain attributes.
+
+    def test_gemma_spec_chat_stop_token_ids_looks_up_end_of_turn(self):
+        vocab = {"<end_of_turn>": 7}
+        tokenizer = types.SimpleNamespace(
+            token_to_id=vocab.__getitem__, _unk_token_id=0
+        )
+        self.assertEqual(GemmaSpec().get_chat_stop_token_ids(tokenizer), [7])
+
+    def test_gemma_spec_chat_stop_token_ids_absent_returns_empty(self):
+        tokenizer = types.SimpleNamespace(
+            token_to_id=lambda token: (_ for _ in ()).throw(KeyError(token))
+        )
+        self.assertEqual(GemmaSpec().get_chat_stop_token_ids(tokenizer), [])
+
+    def test_llama3_spec_chat_stop_token_ids_uses_end_token2_id(self):
+        """`Llama3Tokenizer` stores `<|eot_id|>` as `end_token2_id` (see the
+        "Hack" comment in `llama3_tokenizer.py`), not via `token_to_id`
+        lookup -- `Llama3Spec` must read that attribute directly."""
+        tokenizer = types.SimpleNamespace(end_token2_id=5)
+        self.assertEqual(Llama3Spec().get_chat_stop_token_ids(tokenizer), [5])
+
+    def test_llama3_spec_chat_stop_token_ids_absent_returns_empty(self):
+        """Base Llama (no `end_token2` hack) has no `end_token2_id`
+        attribute at all."""
+        tokenizer = types.SimpleNamespace()
+        self.assertEqual(Llama3Spec().get_chat_stop_token_ids(tokenizer), [])
+
+    def test_qwen3_family_spec_chat_stop_token_ids_looks_up_im_end(self):
+        """Qwen3's `<|im_end|>` is already `tokenizer.end_token_id`; this
+        override documents that intentionally rather than leaving it as an
+        accident of `end_token_id`'s value (`_build_llm_metadata`
+        deduplicates the two)."""
+        vocab = {"<|im_end|>": 3}
+        tokenizer = types.SimpleNamespace(
+            token_to_id=vocab.__getitem__, _unk_token_id=0
+        )
+        self.assertEqual(
+            Qwen3FamilySpec().get_chat_stop_token_ids(tokenizer), [3]
+        )
+
+    def test_qwen2p5_family_spec_chat_stop_token_ids_absent_by_default(self):
+        """Base Qwen (2.5) tokenizers use `<|endoftext|>`, not `<|im_end|>`;
+        the override must not invent a token that isn't in vocab."""
+        tokenizer = types.SimpleNamespace(
+            token_to_id=lambda token: (_ for _ in ()).throw(KeyError(token))
+        )
+        self.assertEqual(
+            Qwen2p5FamilySpec().get_chat_stop_token_ids(tokenizer), []
+        )
+
+    def test_phi3_spec_chat_stop_token_ids_looks_up_end(self):
+        """Phi-3's chat template ends each turn with `<|end|>` (distinct
+        from the `<|endoftext|>` EOS); the override must surface it.
+        `<|end|>` is an ordinary special token looked up by string, not a
+        named tokenizer attribute."""
+        vocab = {"<|end|>": 18}
+        tokenizer = types.SimpleNamespace(
+            token_to_id=vocab.__getitem__, _unk_token_id=0
+        )
+        self.assertEqual(Phi3Spec().get_chat_stop_token_ids(tokenizer), [18])
+
+    def test_phi3_spec_chat_stop_token_ids_absent_returns_empty(self):
+        """Base/non-instruct Phi-3 vocabularies without `<|end|>` get no
+        chat-stop token; the override must not invent one."""
+        tokenizer = types.SimpleNamespace(
+            token_to_id=lambda token: (_ for _ in ()).throw(KeyError(token))
+        )
+        self.assertEqual(Phi3Spec().get_chat_stop_token_ids(tokenizer), [])
+
+    def test_base_spec_describes_unsupported_cache_structure_generically(self):
+        """The default `describe_unsupported_cache_structure` must name the
+        actual mismatched `cache_structure` value generically, without any
+        family-specific (e.g. Qwen3.5) text -- that lives on the family's
+        own spec (see `Qwen3_5Spec`'s override) instead of leaking into the
+        shared/generic path."""
+
+        class _CustomHybridSpec(LiteRTLMExportSpec):
+            cache_structure = "custom_hybrid"

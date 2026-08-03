@@ -683,6 +683,132 @@ class FunctionGemmaSpec(Gemma3Spec):
         subtype.use_template_for_fc_format = True
 
 
+class Gemma3nSpec(GemmaSpec):
+    model_type = "gemma3n"
+    cache_layout = "gemma3n"
+    vision_input_style = "embedded_pixel_values"
+    audio_input_style = "embedded_mel"
+    #: The encoder runs inside the backbone; no standalone encoder to pack.
+    supports_separate_vision = False
+
+    def get_kv_cache_sample_shape(
+        self, batch_size, cache_length, num_kv_heads, head_dim
+    ):
+        """Return Gemma3n's per-layer KV-cache sample shape.
+
+        Gemma3n's ``cache_layout`` transposes the standard shape to
+        ``[batch, num_kv_heads, cache_length, head_dim]``.
+        """
+        return (batch_size, num_kv_heads, cache_length, head_dim)
+
+    def populate_vision_metadata(self, meta, vision_cfg):
+        # The gemma3n subtype carries the same image-token fields as gemma3.
+        _populate_gemma3_family_vision_metadata(
+            meta, self.model_type, vision_cfg
+        )
+
+    def populate_audio_metadata(self, meta, audio_cfg):
+        del audio_cfg
+        # Deliberately Gemma4's audio token strings: that is what the
+        # verified golden gemma3n bundles contain. Do NOT "fix" these to
+        # Gemma3n's own `<start_of_audio>`/`<end_of_audio>` tokenizer tokens.
+        subtype = meta.llm_model_type.gemma3n
+        subtype.start_of_audio_token.token_str = _AUDIO_START_TOKEN
+        subtype.end_of_audio_token.token_str = _AUDIO_END_TOKEN
+
+    def get_forced_call_with_cache_kwargs(self, tokens, cache_length):
+        # Gemma3n's attention-mask computation requires a full-cache-length
+        # padding mask (a shorter one mis-broadcasts against the causal
+        # mask); export passes full-length valid tokens, so ones is correct.
+        import torch
+
+        return {
+            "padding_mask": torch.ones(
+                (tokens.shape[0], cache_length),
+                dtype=torch.bool,
+                device=tokens.device,
+            )
+        }
+
+
+class Gemma4Spec(GemmaSpec):
+    model_type = "gemma4"
+    vision_input_style = "patch_values"
+    audio_input_style = "standalone_mel"
+    #: Same string as ``LlmModelType.gemma4.end_of_image_token``.
+    end_of_vision_token = _GEMMA4_END_OF_IMAGE_TOKEN
+
+    def populate_vision_metadata(self, meta, vision_cfg):
+        image_size = vision_cfg["image_size"]
+        patch_size = _require_patch_size(
+            vision_cfg["patch_size"], "`vision_cfg['patch_size']`"
+        )
+        pool_size = vision_cfg.get("pool_size")
+        subtype = meta.llm_model_type.gemma4
+        subtype.start_of_image_token.token_str = _GEMMA4_START_OF_IMAGE_TOKEN
+        subtype.end_of_image_token.token_str = _GEMMA4_END_OF_IMAGE_TOKEN
+        subtype.patch_width = patch_size
+        subtype.patch_height = patch_size
+        subtype.max_num_patches = (image_size // patch_size) ** 2
+        if pool_size is not None:
+            subtype.pooling_kernel_size = pool_size
+
+    def populate_audio_metadata(self, meta, audio_cfg):
+        # The gemma4 subtype has no proto fields for the derived `audio_cfg`
+        # values; they only size the audio trace inputs, so not forwarded.
+        del audio_cfg
+        subtype = meta.llm_model_type.gemma4
+        subtype.start_of_audio_token.token_str = _AUDIO_START_TOKEN
+        subtype.end_of_audio_token.token_str = _AUDIO_END_TOKEN
+        # `skip_mel_spectrogram_extraction=False` makes the runtime perform
+        # mel extraction (`True` feeds raw PCM): the trace consumes log-mel
+        # `audio_mel`. Also the proto3 default -- an explicit regression guard.
+        subtype.skip_mel_spectrogram_extraction = False
+
+    def reshape_separate_vision_embeddings(
+        self, img_embeddings, tokens, preprocessor
+    ):
+        if img_embeddings is None:
+            return None
+        # The separate vision encoder/adapter flattens Gemma4's interleaved
+        # (batch, num_images, tokens_per_image, hidden_dim) embeddings to
+        # (batch*num_images, ...); reshape back before the language model.
+        max_images = self.get_max_images_per_prompt(preprocessor)
+        batch_size = tokens.shape[0]
+        return img_embeddings.reshape(
+            batch_size,
+            max_images,
+            img_embeddings.shape[1],
+            img_embeddings.shape[2],
+        )
+
+
+class Gemma4AssistantSpec(LiteRTLMExportSpec):
+    """The Gemma4 MTP draft (assistant) model: not standalone-exportable.
+
+    ``Gemma4AssistantCausalLM`` is a multi-token-prediction (MTP) draft
+    model for speculative decoding: its ``call_with_cache()`` requires a
+    target model's hidden state, last-token embedding, and borrowed KV
+    cache, so it has no self-contained prefill/decode graph to export. It
+    subclasses ``CausalLM`` directly (not ``Gemma4CausalLM``), so without
+    its own registry entry it would fall through to the generic spec and
+    crash deep in tracing. See the ``Gemma4AssistantCausalLM`` docstring
+    ("This model must NOT be used standalone").
+    """
+
+    def check_exportable(self, model):
+        raise ValueError(
+            f"LiteRT-LM export does not support `{type(model).__name__}`: it "
+            "is a multi-token-prediction (MTP) draft model for speculative "
+            "decoding, not a standalone model. Its `call_with_cache()` "
+            "depends on a target model's hidden state, last-token embedding, "
+            "and borrowed KV cache, so it cannot be exported on its own. "
+            "Export the target `Gemma4CausalLM` instead; the runtime uses "
+            "the draft model via `target_model.generate(..., "
+            "assistant_model=...)`."
+        )
+
+
 class Llama3Spec(LiteRTLMExportSpec):
     """Llama3's chat template ends a turn with ``<|eot_id|>``.
 
@@ -786,6 +912,8 @@ def _populate_gemma3_family_vision_metadata(meta, model_type, vision_cfg):
 # (module_path, class_name, spec_factory), imported lazily inside
 # ``resolve_export_spec`` to avoid heavy top-level dependencies.
 _EXPORT_SPEC_REGISTRY = (
+    ("keras_hub.src.models.gemma4.gemma4_causal_lm", "Gemma4CausalLM", Gemma4Spec),
+    ("keras_hub.src.models.gemma3n.gemma3n_causal_lm", "Gemma3nCausalLM", Gemma3nSpec),
     ("keras_hub.src.models.gemma3.gemma3_causal_lm", "Gemma3CausalLM", Gemma3Spec),
     ("keras_hub.src.models.gemma.gemma_causal_lm", "GemmaCausalLM", GemmaSpec),
     ("keras_hub.src.models.qwen3_5.qwen3_5_causal_lm", "Qwen3_5CausalLM", Qwen3_5Spec),
