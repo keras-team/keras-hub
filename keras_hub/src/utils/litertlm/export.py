@@ -148,6 +148,176 @@ def _validate_export_args(
     if not _LITERT_TORCH_AVAILABLE:
         raise ImportError(
             "LiteRT-LM export requires `litert-torch`. "
+            "Install it with: pip install litert-torch"
+        )
+
+    # Validate `backend_constraint` against the builder's enum only after the
+    # availability checks above, so under-supported environments get the
+    # friendly torch/backend/dependency errors first. Allowed values track
+    # `litert_lm_builder.Backend`. The builder also accepts comma-separated
+    # lists; KerasHub deliberately accepts a single backend only.
+    if backend_constraint is not None:
+        litert_lm_builder = _import_litert_lm_builder()
+        valid_backends = {b.value for b in litert_lm_builder.Backend}
+        if backend_constraint not in valid_backends:
+            raise ValueError(
+                f"Invalid backend_constraint: {backend_constraint!r}. "
+                f"Must be one of {sorted(valid_backends)}."
+            )
+
+    # Normalise prefill_seq_len to a sorted list. Cache-length checks are left
+    # to the orchestrator because ``cache_length`` is not known until after
+    # ``spec.get_cache_config`` runs.
+    if prefill_seq_len is None:
+        prefill_seq_lens = None
+    elif isinstance(prefill_seq_len, int):
+        prefill_seq_lens = [prefill_seq_len]
+    elif isinstance(prefill_seq_len, (list, tuple)):
+        if not prefill_seq_len:
+            raise ValueError("`prefill_seq_len` cannot be an empty list.")
+        prefill_seq_lens = sorted(set(prefill_seq_len))
+    else:
+        raise ValueError(
+            "`prefill_seq_len` must be an int or a list of ints. "
+            f"Received: {prefill_seq_len!r}"
+        )
+
+    if prefill_seq_lens is not None:
+        for seq_len in prefill_seq_lens:
+            if not isinstance(seq_len, int) or seq_len <= 0:
+                raise ValueError(
+                    "`prefill_seq_len` values must be positive integers. "
+                    f"Received: {seq_len!r}"
+                )
+
+    return prefill_seq_lens, backend_constraint
+
+
+@dataclasses.dataclass(frozen=True)
+class ExportPlan:
+    """Immutable bundle of per-export-run settings for a single export call.
+
+    ``export_to_litertlm`` computes all of these values once, early in the
+    pipeline (resolving the model-family spec and cache config), then passes
+    a single ``ExportPlan`` to the later pipeline phases (building sample
+    inputs, tracing/converting, assembling the bundle) instead of a long,
+    order-sensitive positional-argument list.
+    """
+
+    spec: object
+    num_layers: int
+    cache_length: int
+    num_kv_heads: int
+    head_dim: int
+    prefill_seq_lens: list
+    dtype: object
+    sampler_config: object | None
+    model_type_overridden: bool
+
+
+def _build_prefill_inputs(plan):
+    """Build a ``{seq_len: sample_inputs}`` map for every prefill bucket."""
+    prefill_inputs_map = {}
+    for seq_len in plan.prefill_seq_lens:
+        prefill_inputs_map[seq_len] = _build_sample_inputs(
+            batch_size=1,
+            seq_len=seq_len,
+            num_layers=plan.num_layers,
+            cache_length=plan.cache_length,
+            num_kv_heads=plan.num_kv_heads,
+            head_dim=plan.head_dim,
+            dtype=plan.dtype,
+            spec=plan.spec,
+        )
+    return prefill_inputs_map
+
+
+def _chain_signatures(litert_torch, signatures, **kwargs):
+    """Chain multiple litert_torch signatures, hiding first/rest asymmetry."""
+    converter = None
+    for sig_name, adapter, sample_kwargs in signatures:
+        if converter is None:
+            converter = litert_torch.signature(
+                sig_name,
+                adapter,
+                sample_kwargs=sample_kwargs,
+                **kwargs,
+            )
+        else:
+            converter = converter.signature(
+                sig_name,
+                adapter,
+                sample_kwargs=sample_kwargs,
+                **kwargs,
+            )
+    return converter
+
+
+def _trace_and_convert(
+    litert_torch,
+    prefill_adapter,
+    decode_adapter,
+    prefill_inputs_map,
+    decode_inputs,
+    plan,
+    **kwargs,
+):
+    """Trace the prefill/decode signatures and convert them to LiteRT."""
+    # Defer torch-specific imports until the backend has been verified as
+    # torch, so that non-torch callers get the friendly backend error.
+    from keras_hub.src.utils.litertlm.traceable_ops import traceable_ops_scope
+
+    with traceable_ops_scope():
+        # Chain one signature per prefill bucket plus the decode signature.
+        signatures = []
+        for seq_len in plan.prefill_seq_lens:
+            sig_name = (
+                "prefill"
+                if len(plan.prefill_seq_lens) == 1
+                else f"prefill_{seq_len}"
+            )
+            signatures.append(
+                (sig_name, prefill_adapter, prefill_inputs_map[seq_len])
+            plan=plan,
+        )
+
+    return path
+
+
+def _build_sample_inputs(
+    batch_size,
+    seq_len,
+    num_layers,
+    cache_length,
+    num_kv_heads,
+    head_dim,
+    dtype,
+    spec,
+):
+    """Create concrete sample tensors for one signature.
+
+    The per-layer KV-cache sample shape is owned by the model family's
+    spec (``spec.get_kv_cache_sample_shape``; see ``cache_layout`` on
+    ``LiteRTLMExportSpec``).
+    """
+    device = "cpu"
+    tokens = torch.zeros(
+        (batch_size, seq_len), dtype=torch.int32, device=device
+    )
+    input_pos = torch.arange(seq_len, dtype=torch.int32, device=device)
+    if seq_len == 1:
+        input_pos = torch.zeros((1,), dtype=torch.int32, device=device)
+    kv_cache = {}
+    shape = spec.get_kv_cache_sample_shape(
+        batch_size, cache_length, num_kv_heads, head_dim
+    )
+    for i in range(num_layers):
+        kv_cache[f"kv_cache_k_{i}"] = torch.zeros(
+            shape, dtype=dtype, device=device
+        )
+        kv_cache[f"kv_cache_v_{i}"] = torch.zeros(
+            shape, dtype=dtype, device=device
+        )
             sp.p = sampler_config.top_p
         if sampler_config.temperature is not None:
             sp.temperature = sampler_config.temperature
