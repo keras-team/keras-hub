@@ -118,3 +118,12 @@ class GPTNeoXCausalLMTest(TestCase):
             input_data=self.input_data,
             output_thresholds={"*": {"max": 1e-3, "mean": 1e-4}},
         )
+
+    def test_litertlm_export(self):
+        self.run_litertlm_export_test(
+            cls=GPTNeoXCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            verify_model_type="generic_model",
+            verify_numerics=True,
+        )
