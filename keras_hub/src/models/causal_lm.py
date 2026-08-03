@@ -489,6 +489,10 @@ class CausalLM(Task):
                   necessarily the model's true maximum context length. Pass
                   this explicitly to get a cache length independent of the
                   preprocessor.
+                - ``hf_tokenizer_path``: Optional ``str``. Path to a
+                  user-provided HuggingFace ``tokenizer.json`` file. When
+                  provided, it is bundled directly and native tokenizer
+                  validation is skipped. Defaults to ``None``.
                 - ``sampler_config``: Optional
                   ``keras_hub.src.utils.litertlm.model_specs.SamplerConfig``.
                   When given, populates the bundle's
@@ -520,6 +524,7 @@ class CausalLM(Task):
                 backend_constraint=kwargs.pop("backend_constraint", None),
                 prefill_seq_len=kwargs.pop("prefill_seq_len", None),
                 cache_length=kwargs.pop("cache_length", None),
+                hf_tokenizer_path=kwargs.pop("hf_tokenizer_path", None),
                 sampler_config=kwargs.pop("sampler_config", None),
                 llm_model_type=kwargs.pop("llm_model_type", None),
                 **kwargs,
