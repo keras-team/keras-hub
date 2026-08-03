@@ -50,8 +50,8 @@ class TransformerEncoder(keras.layers.Layer):
             The bias regularizer for the dense and multiheaded
             attention layers. Defaults to `None`.
         activity_regularizer: string or `keras.regularizers` regularizer.
-            The output regularizer for the dense and multiheaded
-            attention layers. Defaults to `None`.
+            The output regularizer applied to the output of this
+            `TransformerEncoder` layer. Defaults to `None`.
         normalize_first: bool. If True, the inputs to the
             attention layer and the intermediate dense layer  are normalized
             (similar to GPT-2). If set to False, outputs of attention layer and
@@ -96,7 +96,12 @@ class TransformerEncoder(keras.layers.Layer):
         normalize_first=False,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        # `activity_regularizer` is handled by the base `keras.layers.Layer`
+        # class, which applies it to this layer's own output. It is
+        # intentionally not passed down to internal sub-layers below, since
+        # doing so would apply the penalty multiple times (once per
+        # sub-layer output) instead of once for the encoder as a whole.
+        super().__init__(activity_regularizer=activity_regularizer, **kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.dropout = dropout
@@ -106,9 +111,6 @@ class TransformerEncoder(keras.layers.Layer):
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.kernel_regularizer = keras.regularizers.get(kernel_regularizer)
         self.bias_regularizer = keras.regularizers.get(bias_regularizer)
-        self.activity_regularizer = keras.regularizers.get(
-            activity_regularizer
-        )
         self.normalize_first = normalize_first
         self.supports_masking = True
 
@@ -133,7 +135,6 @@ class TransformerEncoder(keras.layers.Layer):
             bias_initializer=clone_initializer(self.bias_initializer),
             kernel_regularizer=self.kernel_regularizer,
             bias_regularizer=self.bias_regularizer,
-            activity_regularizer=self.activity_regularizer,
             dtype=self.dtype_policy,
             name="self_attention_layer",
         )
@@ -173,7 +174,6 @@ class TransformerEncoder(keras.layers.Layer):
             bias_initializer=clone_initializer(self.bias_initializer),
             kernel_regularizer=self.kernel_regularizer,
             bias_regularizer=self.bias_regularizer,
-            activity_regularizer=self.activity_regularizer,
             dtype=self.dtype_policy,
             name="feedforward_intermediate_dense",
         )
@@ -184,7 +184,6 @@ class TransformerEncoder(keras.layers.Layer):
             bias_initializer=clone_initializer(self.bias_initializer),
             kernel_regularizer=self.kernel_regularizer,
             bias_regularizer=self.bias_regularizer,
-            activity_regularizer=self.activity_regularizer,
             dtype=self.dtype_policy,
             name="feedforward_output_dense",
         )
