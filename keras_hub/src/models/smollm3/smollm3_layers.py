@@ -173,7 +173,6 @@ class SmolLM3Attention(layers.Layer):
                 vllm_context,
             )
 
-        self.training = training
         self_attention_cache = kwargs.get("self_attention_cache", None)
         self_attention_cache_update_index = kwargs.get(
             "self_attention_cache_update_index", None
