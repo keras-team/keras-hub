@@ -3,6 +3,7 @@
 import contextlib
 import dataclasses
 import importlib.util
+import json
 import os
 import tempfile
 import warnings
@@ -14,8 +15,12 @@ try:
 except ImportError:
     torch = None
 
+from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
+)
+from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
+    materialize_hf_tokenizer_json,
 )
 from keras_hub.src.utils.litertlm.model_specs import SamplerConfig
 from keras_hub.src.utils.litertlm.model_specs import resolve_export_spec
@@ -80,11 +85,108 @@ class _DecodeAdapter(_AdapterBase):
         return self.base.forward_decode(*args, **kwargs)
 
 
+# A cheap sanity check on `hf_tokenizer_path` compatibility, not exact
+# validation: only a large absolute difference AND a >=5x ratio together
+# flag a tokenizer from an entirely different model/family.
+_HF_TOKENIZER_VOCAB_MISMATCH_ABS_THRESHOLD = 300
+_HF_TOKENIZER_VOCAB_MISMATCH_RATIO_THRESHOLD = 5.0
+
+
+def _model_embedding_vocab_size(model):
+    """Return the model's embedding vocabulary size, or ``None`` if unknown.
+
+    Prefers ``backbone.vocabulary_size`` (the constructor argument most
+    backbones store directly, e.g. ``GemmaBackbone``/``LlamaBackbone``/
+    ``GPT2Backbone``); falls back to ``backbone.token_embedding.input_dim``
+    (the actual embedding table size) for backbones that do not expose
+    ``vocabulary_size`` directly.
+    """
+    backbone = getattr(model, "backbone", None)
+    vocab_size = getattr(backbone, "vocabulary_size", None)
+    if vocab_size is not None:
+        return int(vocab_size)
+    token_embedding = getattr(backbone, "token_embedding", None)
+    input_dim = getattr(token_embedding, "input_dim", None)
+    if input_dim is not None:
+        return int(input_dim)
+    return None
+
+
+def _hf_tokenizer_vocab_size(hf_tokenizer_path):
+    """Return the vocab size implied by a HuggingFace ``tokenizer.json``.
+
+    Reads the file directly as JSON (``tokenizer.json`` is plain JSON; this
+    avoids a hard dependency on the ``tokenizers`` library just to sanity
+    check a vocab size) and returns ``max_token_id + 1`` across both the
+    base ``model.vocab`` mapping and any ``added_tokens`` entries (special
+    tokens are often listed separately from the base vocab) -- matching how
+    large the embedding table must be to cover every id the tokenizer can
+    produce. Returns ``None`` if the file cannot be parsed as the expected
+    ``tokenizer.json`` structure.
+    """
+    try:
+        with open(hf_tokenizer_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    model_vocab = (data.get("model") or {}).get("vocab") or {}
+    try:
+        max_id = max(model_vocab.values(), default=-1)
+    except (TypeError, ValueError):
+        return None
+    for token in data.get("added_tokens") or []:
+        token_id = token.get("id")
+        if isinstance(token_id, int):
+            max_id = max(max_id, token_id)
+    if max_id < 0:
+        return None
+    return max_id + 1
+
+
+def _check_hf_tokenizer_vocab_compatible(hf_tokenizer_path, model):
+    """Raise ``ValueError`` if the HF tokenizer's vocab looks incompatible.
+
+    This is a cheap sanity check (see the module-level threshold constants
+    above), not exact validation -- it exists to catch the case of bundling
+    a tokenizer from an entirely different model/family, not to enforce
+    that the tokenizer and model agree token-for-token.
+    """
+    hf_vocab_size = _hf_tokenizer_vocab_size(hf_tokenizer_path)
+    model_vocab_size = _model_embedding_vocab_size(model)
+    if hf_vocab_size is None or not model_vocab_size:
+        # Could not determine one of the two sizes; skip rather than risk a
+        # false positive from an unusual tokenizer.json structure or backbone.
+        return
+    diff = abs(hf_vocab_size - model_vocab_size)
+    ratio = hf_vocab_size / model_vocab_size
+    is_grossly_mismatched = (
+        diff > _HF_TOKENIZER_VOCAB_MISMATCH_ABS_THRESHOLD
+        and (
+            ratio >= _HF_TOKENIZER_VOCAB_MISMATCH_RATIO_THRESHOLD
+            or ratio <= 1 / _HF_TOKENIZER_VOCAB_MISMATCH_RATIO_THRESHOLD
+        )
+    )
+    if is_grossly_mismatched:
+        raise ValueError(
+            "`hf_tokenizer_path` appears incompatible with the model: the "
+            f"tokenizer implies a vocabulary of {hf_vocab_size} tokens "
+            f"(highest token id + 1 across `model.vocab` and "
+            f"`added_tokens` in {hf_tokenizer_path!r}), but the model's "
+            f"embedding table is sized for {model_vocab_size} tokens "
+            f"(`{type(model.backbone).__name__}`). This looks like a "
+            "tokenizer from a different model/family rather than a small "
+            "reserved-token discrepancy -- pass the tokenizer that matches "
+            "this model, or omit `hf_tokenizer_path` to use the model's own "
+            "tokenizer."
+        )
+
+
 def _validate_export_args(
     model,
     path,
     tokenizer,
     backend_constraint,
+    hf_tokenizer_path,
     prefill_seq_len,
 ):
     """Fail fast on invalid export arguments.
@@ -121,388 +223,31 @@ def _validate_export_args(
             )
         backend_constraint = backend_constraint.lower()
 
-    if not _is_sentencepiece_tokenizer(tokenizer):
+    if hf_tokenizer_path is not None:
+        hf_tokenizer_path = os.fspath(hf_tokenizer_path)
+        if not os.path.isfile(hf_tokenizer_path):
+            raise ValueError(
+                "`hf_tokenizer_path` must point to an existing file. "
+                f"Received: {hf_tokenizer_path!r}"
+            )
+        if not hf_tokenizer_path.endswith(".json"):
+            raise ValueError(
+                "`hf_tokenizer_path` must point to a `tokenizer.json` file. "
+                f"Received: {hf_tokenizer_path!r}"
+            )
+        _check_hf_tokenizer_vocab_compatible(hf_tokenizer_path, model)
+    # Any BytePairTokenizer subclass can be converted to HF tokenizer.json.
+    elif not _is_sentencepiece_tokenizer(tokenizer) and not isinstance(
+        tokenizer, BytePairTokenizer
+    ):
         raise ValueError(
-            "LiteRT-LM export supports SentencePiece tokenizers. Received: "
+            "LiteRT-LM export supports SentencePiece tokenizers and any "
+            "BytePairTokenizer subclass. Received: "
             f"{type(tokenizer).__module__}.{type(tokenizer).__name__}."
         )
 
     # PyTorch is required for tracing and for building sample inputs. Surface
     # this before the backend check so a JAX/TF caller without torch installed
-    # gets a clear message instead of a raw ``ModuleNotFoundError``.
-    if torch is None:
-        raise ImportError(
-            "LiteRT-LM export requires PyTorch. "
-            "Install it with: pip install torch"
-        )
-
-    # litert_torch only supports the PyTorch Keras backend.
-    if keras.config.backend() != "torch":
-        raise ValueError(
-            "LiteRT-LM export is only supported with the PyTorch backend. "
-            f"Current backend: {keras.config.backend()}."
-        )
-
-    # Now that tokenizer and backend checks are done, require the optional
-    # litert-torch/litert-lm-builder packages for the actual export.
-    if not _LITERT_TORCH_AVAILABLE:
-        raise ImportError(
-            "LiteRT-LM export requires `litert-torch`. "
-            "Install it with: pip install litert-torch"
-        )
-
-    # Validate `backend_constraint` against the builder's enum only after the
-    # availability checks above, so under-supported environments get the
-    # friendly torch/backend/dependency errors first. Allowed values track
-    # `litert_lm_builder.Backend`. The builder also accepts comma-separated
-    # lists; KerasHub deliberately accepts a single backend only.
-    if backend_constraint is not None:
-        litert_lm_builder = _import_litert_lm_builder()
-        valid_backends = {b.value for b in litert_lm_builder.Backend}
-        if backend_constraint not in valid_backends:
-            raise ValueError(
-                f"Invalid backend_constraint: {backend_constraint!r}. "
-                f"Must be one of {sorted(valid_backends)}."
-            )
-
-    # Normalise prefill_seq_len to a sorted list. Cache-length checks are left
-    # to the orchestrator because ``cache_length`` is not known until after
-    # ``spec.get_cache_config`` runs.
-    if prefill_seq_len is None:
-        prefill_seq_lens = None
-    elif isinstance(prefill_seq_len, int):
-        prefill_seq_lens = [prefill_seq_len]
-    elif isinstance(prefill_seq_len, (list, tuple)):
-        if not prefill_seq_len:
-            raise ValueError("`prefill_seq_len` cannot be an empty list.")
-        prefill_seq_lens = sorted(set(prefill_seq_len))
-    else:
-        raise ValueError(
-            "`prefill_seq_len` must be an int or a list of ints. "
-            f"Received: {prefill_seq_len!r}"
-        )
-
-    if prefill_seq_lens is not None:
-        for seq_len in prefill_seq_lens:
-            if not isinstance(seq_len, int) or seq_len <= 0:
-                raise ValueError(
-                    "`prefill_seq_len` values must be positive integers. "
-                    f"Received: {seq_len!r}"
-                )
-
-    return prefill_seq_lens, backend_constraint
-
-
-@dataclasses.dataclass(frozen=True)
-class ExportPlan:
-    """Immutable bundle of per-export-run settings for a single export call.
-
-    ``export_to_litertlm`` computes all of these values once, early in the
-    pipeline (resolving the model-family spec and cache config), then passes
-    a single ``ExportPlan`` to the later pipeline phases (building sample
-    inputs, tracing/converting, assembling the bundle) instead of a long,
-    order-sensitive positional-argument list.
-    """
-
-    spec: object
-    num_layers: int
-    cache_length: int
-    num_kv_heads: int
-    head_dim: int
-    prefill_seq_lens: list
-    dtype: object
-    sampler_config: object | None
-    model_type_overridden: bool
-
-
-def _build_prefill_inputs(plan):
-    """Build a ``{seq_len: sample_inputs}`` map for every prefill bucket."""
-    prefill_inputs_map = {}
-    for seq_len in plan.prefill_seq_lens:
-        prefill_inputs_map[seq_len] = _build_sample_inputs(
-            batch_size=1,
-            seq_len=seq_len,
-            num_layers=plan.num_layers,
-            cache_length=plan.cache_length,
-            num_kv_heads=plan.num_kv_heads,
-            head_dim=plan.head_dim,
-            dtype=plan.dtype,
-            spec=plan.spec,
-        )
-    return prefill_inputs_map
-
-
-def _chain_signatures(litert_torch, signatures, **kwargs):
-    """Chain multiple litert_torch signatures, hiding first/rest asymmetry."""
-    converter = None
-    for sig_name, adapter, sample_kwargs in signatures:
-        if converter is None:
-            converter = litert_torch.signature(
-                sig_name,
-                adapter,
-                sample_kwargs=sample_kwargs,
-                **kwargs,
-            )
-        else:
-            converter = converter.signature(
-                sig_name,
-                adapter,
-                sample_kwargs=sample_kwargs,
-                **kwargs,
-            )
-    return converter
-
-
-def _trace_and_convert(
-    litert_torch,
-    prefill_adapter,
-    decode_adapter,
-    prefill_inputs_map,
-    decode_inputs,
-    plan,
-    **kwargs,
-):
-    """Trace the prefill/decode signatures and convert them to LiteRT."""
-    # Defer torch-specific imports until the backend has been verified as
-    # torch, so that non-torch callers get the friendly backend error.
-    from keras_hub.src.utils.litertlm.traceable_ops import traceable_ops_scope
-
-    with traceable_ops_scope():
-        # Chain one signature per prefill bucket plus the decode signature.
-        signatures = []
-        for seq_len in plan.prefill_seq_lens:
-            sig_name = (
-                "prefill"
-                if len(plan.prefill_seq_lens) == 1
-                else f"prefill_{seq_len}"
-            )
-            signatures.append(
-                (sig_name, prefill_adapter, prefill_inputs_map[seq_len])
-            )
-        signatures.append(("decode", decode_adapter, decode_inputs))
-
-        converter = _chain_signatures(litert_torch, signatures, **kwargs)
-        edge_model = converter.convert(lightweight_conversion=False)
-
-    return edge_model
-
-
-def _assemble_bundle(
-    *,
-    path,
-    temp_dir,
-    tokenizer,
-    backend_constraint,
-    edge_model,
-    plan,
-):
-    """Write TFLite files, bundle the tokenizer, and assemble ``.litertlm``."""
-    prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
-    edge_model.export(prefill_tflite_path)
-
-    tokenizer_path = _materialize_sentencepiece_tokenizer(tokenizer, temp_dir)
-
-    meta_path = os.path.join(temp_dir, "llm_metadata.pb")
-    _build_llm_metadata(
-        plan.spec,
-        tokenizer,
-        plan.cache_length,
-        meta_path,
-        sampler_config=plan.sampler_config,
-        model_type_overridden=plan.model_type_overridden,
-    )
-
-    litert_lm_builder = _import_litert_lm_builder()
-    builder = litert_lm_builder.LitertLmFileBuilder()
-    builder.add_system_metadata(
-        litert_lm_builder.Metadata(
-            key="Authors",
-            value="KerasHub",
-            dtype=litert_lm_builder.DType.STRING,
-        )
-    )
-    builder.add_tflite_model(
-        prefill_tflite_path,
-        litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
-        backend_constraint=backend_constraint,
-    )
-    builder.add_sentencepiece_tokenizer(tokenizer_path)
-    builder.add_llm_metadata(meta_path)
-
-    # Write to a temp file in the same directory as `path` and atomically
-    # rename it into place on success, so a crash mid-build (the bundle can be
-    # large) never leaves a truncated `.litertlm` file at the destination.
-    output_dir = os.path.dirname(os.path.abspath(path)) or "."
-    tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=output_dir,
-        prefix=f".{os.path.basename(path)}.",
-        suffix=".tmp",
-    )
-    try:
-        # `mkstemp` always creates the file 0600. Match the permissions a
-        # plain `open(path, "wb")` would have produced (0666 minus umask) so
-        # switching to an atomic write doesn't silently make bundles
-        # unreadable by other users/services that consumed them before.
-        umask = os.umask(0)
-        os.umask(umask)
-        os.fchmod(tmp_fd, 0o666 & ~umask)
-        with os.fdopen(tmp_fd, "wb") as output_file:
-            builder.build(output_file)
-    except BaseException:
-        os.remove(tmp_path)
-        raise
-    os.replace(tmp_path, path)
-
-    return path
-
-
-def export_to_litertlm(
-    model,
-    path,
-    backend_constraint=None,
-    prefill_seq_len=None,
-    cache_length=None,
-    sampler_config=None,
-    llm_model_type=None,
-    **kwargs,
-):
-    """Export a KerasHub CausalLM model to a LiteRT-LM bundle.
-
-    This exports the model with ``prefill`` and ``decode`` signatures
-    required by the LiteRT-LM executor, bundles the SentencePiece tokenizer,
-    and writes an ``LlmMetadata`` protobuf into the ``.litertlm`` artifact.
-
-    **Bucketing:** ``prefill_seq_len`` accepts either a single ``int`` or a
-    ``list[int]``. When a list is provided (e.g.
-    ``[32, 64, 128, 256, 512, 1024]``), the exporter traces one prefill
-    signature per bucket. At runtime the LiteRT-LM executor dispatches to
-    the smallest bucket that fits the actual prompt, avoiding wasted
-    computation on padding.
-
-    Args:
-        model: ``CausalLM``. The KerasHub model to export, with an attached
-            preprocessor and tokenizer.
-        path: str. Path to save the ``.litertlm`` file.
-        backend_constraint: Optional str. LiteRT-LM backend constraint, such
-            as ``"cpu"`` or ``"gpu"``. Defaults to ``None``.
-        prefill_seq_len: int or list[int]. Sequence length(s) used when
-            tracing the prefill signature(s). Each value must not exceed
-            ``cache_length``. Defaults to ``cache_length`` itself.
-        cache_length: Optional int. The KV-cache length (the model's maximum
-            context window) to trace the export with. If ``None``, this is
-            inferred from ``backbone.max_sequence_length`` when the backbone
-            defines it; most backbones (e.g. Gemma, Llama, Mistral, Qwen) do
-            not, in which case the exporter falls back to
-            ``preprocessor.sequence_length`` and emits a ``UserWarning``,
-            since that value is a tokenization default chosen for training or
-            preprocessing and is not necessarily the model's true maximum
-            context length. Pass this explicitly to avoid the warning and to
-            get a cache length independent of the preprocessor. Defaults to
-            ``None``.
-        sampler_config: Optional
-            ``keras_hub.src.utils.litertlm.model_specs.SamplerConfig``
-            instance. When given, the bundle's ``LlmMetadata.sampler_params``
-            field is populated from it (mirroring litert-torch export_hf's
-            conditional sampler semantics). The only named preset keras-hub
-            ships is ``GREEDY_SAMPLER_CONFIG`` (``top_k=1``), for forcing
-            deterministic greedy generation on-device. Defaults to ``None``,
-            which leaves ``sampler_params`` entirely unset so the runtime
-            chooses its own sampling policy.
-        llm_model_type: Optional str. Explicit ``LlmMetadata.llm_model_type``
-            override for presets that are architecturally identical to another
-            family and so cannot be auto-detected by class, config, or
-            tokenizer -- currently ``"function_gemma"`` (the
-            ``function_gemma_instruct_270m`` preset, which loads as a plain
-            ``Gemma3CausalLM`` but must export as the ``function_gemma`` model
-            type with its function-calling metadata, not as ``gemma3``).
-            Mirrors litert-torch's ``litert_lm_model_type_override``. Defaults
-            to ``None`` (auto-detect the family by class).
-        **kwargs: Additional kwargs forwarded to ``litert_torch`` signature
-            tracing.
-
-    Returns:
-        The output ``path``.
-
-    Raises:
-        ValueError: If the backend is not ``"torch"``, if ``path`` does not
-            end with ``.litertlm``, if the model lacks ``call_with_cache``,
-            if ``backend_constraint`` is invalid, if any
-            ``prefill_seq_len`` exceeds ``cache_length``, if
-            ``sampler_config`` is not a ``SamplerConfig`` instance, if
-            ``llm_model_type`` is not a recognized override, or if the model
-            is a non-exportable MTP draft model (``Gemma4AssistantCausalLM``).
-        ImportError: If ``litert-torch`` or ``litert-lm-builder`` are not
-            installed.
-    """
-    path = os.fspath(path)
-    # Resolve the model-family spec once, up front, and thread it through
-    # the pipeline; `llm_model_type` is an explicit override for presets
-    # indistinguishable by class. Non-exportable models fail fast here.
-    spec = resolve_export_spec(model, llm_model_type=llm_model_type)
-    spec.check_exportable(model)
-    if sampler_config is not None and not isinstance(
-        sampler_config, SamplerConfig
-    ):
-        raise ValueError(
-            "`sampler_config` must be a "
-            "`keras_hub.src.utils.litertlm.model_specs.SamplerConfig` "
-            "instance (e.g. `GREEDY_SAMPLER_CONFIG`). "
-            f"Received: sampler_config={sampler_config!r}."
-        )
-    tokenizer = _get_tokenizer(model)
-    # Use the normalized (lowercased) `backend_constraint` returned by
-    # `_validate_export_args`, not the original argument.
-    prefill_seq_lens, backend_constraint = _validate_export_args(
-        model,
-        path,
-        tokenizer,
-        backend_constraint,
-        prefill_seq_len,
-    )
-
-    # Defer torch-specific adapter imports until after the backend check so
-    # that a JAX/TF caller without torch gets the friendly backend error.
-    from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
-    from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
-
-    # Fail fast on cache structures the adapter cannot build, before any
-    # cache-config derivation or tracing; the spec names the mismatch
-    # (`describe_unsupported_cache_structure`).
-    if spec.cache_structure != "single_stacked":
-        raise ValueError(
-            f"LiteRT-LM export does not support `{type(model).__name__}`: "
-            f"`{type(model.backbone).__name__}` "
-            f"{spec.describe_unsupported_cache_structure()}"
-        )
-
-    cache_cfg = spec.get_cache_config(model, cache_length=cache_length)
-    num_layers = cache_cfg["num_layers"]
-    cache_length = cache_cfg["cache_length"]
-    num_kv_heads = cache_cfg["num_kv_heads"]
-    head_dim = cache_cfg["head_dim"]
-    if cache_cfg["used_preprocessor_fallback"]:
-        warnings.warn(
-            "`cache_length` was not specified and "
-            f"`{type(model.backbone).__name__}` does not define "
-            "`max_sequence_length`. Falling back to "
-            f"`preprocessor.sequence_length` ({cache_length}) as the "
-            "KV-cache length. This is a tokenization default, not "
-            "necessarily the model's true maximum context length. Pass "
-            "`cache_length` explicitly to `export_to_litertlm` / "
-            '`model.export(..., format="litertlm")` to set it directly.',
-            stacklevel=2,
-        )
-
-    # Prefill seq_len values must be validated against the real cache length.
-    if prefill_seq_lens is None:
-        prefill_seq_lens = [cache_length]
-    for seq_len in prefill_seq_lens:
-        if seq_len > cache_length:
-            raise ValueError(
-                f"prefill_seq_len ({seq_len}) cannot exceed "
-                f"cache_length ({cache_length})."
-            )
-
     dtype = _torch_dtype_from_model(model)
 
     # Bundle all resolved per-export-run settings into one immutable plan.
@@ -579,6 +324,7 @@ def export_to_litertlm(
             backend_constraint=backend_constraint,
             edge_model=edge_model,
             plan=plan,
+            hf_tokenizer_path=hf_tokenizer_path,
         )
 
     return path
