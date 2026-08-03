@@ -3,7 +3,6 @@
 import contextlib
 import dataclasses
 import importlib.util
-import json
 import os
 import tempfile
 import warnings
@@ -15,12 +14,8 @@ try:
 except ImportError:
     torch = None
 
-from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
-)
-from keras_hub.src.utils.litertlm.hf_tokenizer_converter import (
-    materialize_hf_tokenizer_json,
 )
 from keras_hub.src.utils.litertlm.model_specs import SamplerConfig
 from keras_hub.src.utils.litertlm.model_specs import resolve_export_spec
@@ -85,108 +80,11 @@ class _DecodeAdapter(_AdapterBase):
         return self.base.forward_decode(*args, **kwargs)
 
 
-# A cheap sanity check on `hf_tokenizer_path` compatibility, not exact
-# validation: only a large absolute difference AND a >=5x ratio together
-# flag a tokenizer from an entirely different model/family.
-_HF_TOKENIZER_VOCAB_MISMATCH_ABS_THRESHOLD = 300
-_HF_TOKENIZER_VOCAB_MISMATCH_RATIO_THRESHOLD = 5.0
-
-
-def _model_embedding_vocab_size(model):
-    """Return the model's embedding vocabulary size, or ``None`` if unknown.
-
-    Prefers ``backbone.vocabulary_size`` (the constructor argument most
-    backbones store directly, e.g. ``GemmaBackbone``/``LlamaBackbone``/
-    ``GPT2Backbone``); falls back to ``backbone.token_embedding.input_dim``
-    (the actual embedding table size) for backbones that do not expose
-    ``vocabulary_size`` directly.
-    """
-    backbone = getattr(model, "backbone", None)
-    vocab_size = getattr(backbone, "vocabulary_size", None)
-    if vocab_size is not None:
-        return int(vocab_size)
-    token_embedding = getattr(backbone, "token_embedding", None)
-    input_dim = getattr(token_embedding, "input_dim", None)
-    if input_dim is not None:
-        return int(input_dim)
-    return None
-
-
-def _hf_tokenizer_vocab_size(hf_tokenizer_path):
-    """Return the vocab size implied by a HuggingFace ``tokenizer.json``.
-
-    Reads the file directly as JSON (``tokenizer.json`` is plain JSON; this
-    avoids a hard dependency on the ``tokenizers`` library just to sanity
-    check a vocab size) and returns ``max_token_id + 1`` across both the
-    base ``model.vocab`` mapping and any ``added_tokens`` entries (special
-    tokens are often listed separately from the base vocab) -- matching how
-    large the embedding table must be to cover every id the tokenizer can
-    produce. Returns ``None`` if the file cannot be parsed as the expected
-    ``tokenizer.json`` structure.
-    """
-    try:
-        with open(hf_tokenizer_path, encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        return None
-    model_vocab = (data.get("model") or {}).get("vocab") or {}
-    try:
-        max_id = max(model_vocab.values(), default=-1)
-    except (TypeError, ValueError):
-        return None
-    for token in data.get("added_tokens") or []:
-        token_id = token.get("id")
-        if isinstance(token_id, int):
-            max_id = max(max_id, token_id)
-    if max_id < 0:
-        return None
-    return max_id + 1
-
-
-def _check_hf_tokenizer_vocab_compatible(hf_tokenizer_path, model):
-    """Raise ``ValueError`` if the HF tokenizer's vocab looks incompatible.
-
-    This is a cheap sanity check (see the module-level threshold constants
-    above), not exact validation -- it exists to catch the case of bundling
-    a tokenizer from an entirely different model/family, not to enforce
-    that the tokenizer and model agree token-for-token.
-    """
-    hf_vocab_size = _hf_tokenizer_vocab_size(hf_tokenizer_path)
-    model_vocab_size = _model_embedding_vocab_size(model)
-    if hf_vocab_size is None or not model_vocab_size:
-        # Could not determine one of the two sizes; skip rather than risk a
-        # false positive from an unusual tokenizer.json structure or backbone.
-        return
-    diff = abs(hf_vocab_size - model_vocab_size)
-    ratio = hf_vocab_size / model_vocab_size
-    is_grossly_mismatched = (
-        diff > _HF_TOKENIZER_VOCAB_MISMATCH_ABS_THRESHOLD
-        and (
-            ratio >= _HF_TOKENIZER_VOCAB_MISMATCH_RATIO_THRESHOLD
-            or ratio <= 1 / _HF_TOKENIZER_VOCAB_MISMATCH_RATIO_THRESHOLD
-        )
-    )
-    if is_grossly_mismatched:
-        raise ValueError(
-            "`hf_tokenizer_path` appears incompatible with the model: the "
-            f"tokenizer implies a vocabulary of {hf_vocab_size} tokens "
-            f"(highest token id + 1 across `model.vocab` and "
-            f"`added_tokens` in {hf_tokenizer_path!r}), but the model's "
-            f"embedding table is sized for {model_vocab_size} tokens "
-            f"(`{type(model.backbone).__name__}`). This looks like a "
-            "tokenizer from a different model/family rather than a small "
-            "reserved-token discrepancy -- pass the tokenizer that matches "
-            "this model, or omit `hf_tokenizer_path` to use the model's own "
-            "tokenizer."
-        )
-
-
 def _validate_export_args(
     model,
     path,
     tokenizer,
     backend_constraint,
-    hf_tokenizer_path,
     prefill_seq_len,
 ):
     """Fail fast on invalid export arguments.
@@ -223,26 +121,9 @@ def _validate_export_args(
             )
         backend_constraint = backend_constraint.lower()
 
-    if hf_tokenizer_path is not None:
-        hf_tokenizer_path = os.fspath(hf_tokenizer_path)
-        if not os.path.isfile(hf_tokenizer_path):
-            raise ValueError(
-                "`hf_tokenizer_path` must point to an existing file. "
-                f"Received: {hf_tokenizer_path!r}"
-            )
-        if not hf_tokenizer_path.endswith(".json"):
-            raise ValueError(
-                "`hf_tokenizer_path` must point to a `tokenizer.json` file. "
-                f"Received: {hf_tokenizer_path!r}"
-            )
-        _check_hf_tokenizer_vocab_compatible(hf_tokenizer_path, model)
-    # Any BytePairTokenizer subclass can be converted to HF tokenizer.json.
-    elif not _is_sentencepiece_tokenizer(tokenizer) and not isinstance(
-        tokenizer, BytePairTokenizer
-    ):
+    if not _is_sentencepiece_tokenizer(tokenizer):
         raise ValueError(
-            "LiteRT-LM export supports SentencePiece tokenizers and any "
-            "BytePairTokenizer subclass. Received: "
+            "LiteRT-LM export supports SentencePiece tokenizers. Received: "
             f"{type(tokenizer).__module__}.{type(tokenizer).__name__}."
         )
 
@@ -317,10 +198,10 @@ class ExportPlan:
     """Immutable bundle of per-export-run settings for a single export call.
 
     ``export_to_litertlm`` computes all of these values once, early in the
-    pipeline (resolving the model-family spec and cache config), then passes
-    a single ``ExportPlan`` to the later pipeline phases (building sample
-    inputs, tracing/converting, assembling the bundle) instead of a long,
-    order-sensitive positional-argument list.
+    pipeline (resolving the model-family spec, cache config, and vision
+    config), then passes a single ``ExportPlan`` to the later pipeline
+    phases (building sample inputs, tracing/converting, assembling the
+    bundle) instead of a long, order-sensitive positional-argument list.
     """
 
     spec: object
@@ -330,6 +211,9 @@ class ExportPlan:
     head_dim: int
     prefill_seq_lens: list
     dtype: object
+    has_vision: bool
+    vision_cfg: dict | None
+    vision_input_style: str | None
     sampler_config: object | None
     model_type_overridden: bool
 
@@ -338,7 +222,7 @@ def _build_prefill_inputs(plan):
     """Build a ``{seq_len: sample_inputs}`` map for every prefill bucket."""
     prefill_inputs_map = {}
     for seq_len in plan.prefill_seq_lens:
-        prefill_inputs_map[seq_len] = _build_sample_inputs(
+        base = _build_sample_inputs(
             batch_size=1,
             seq_len=seq_len,
             num_layers=plan.num_layers,
@@ -348,6 +232,37 @@ def _build_prefill_inputs(plan):
             dtype=plan.dtype,
             spec=plan.spec,
         )
+        if plan.has_vision:
+            vision_cfg = plan.vision_cfg
+            max_images = vision_cfg["max_images_per_prompt"]
+            num_vision_tokens = vision_cfg["num_vision_tokens"]
+            if plan.vision_input_style == "patch_values":
+                base.update(
+                    _build_gemma4_vision_sample_inputs(
+                        batch_size=1,
+                        max_images=max_images,
+                        patch_size=vision_cfg["patch_size"],
+                        image_size=vision_cfg["image_size"],
+                        num_vision_tokens=num_vision_tokens,
+                        seq_len=seq_len,
+                        dtype=plan.dtype,
+                    )
+                )
+            else:
+                # "raw_images"/"embedded_pixel_values" both take a raw
+                # `[B, N, H, W, 3]` sample tensor here; they only diverge
+                # in how the adapter runs the encoder at trace time.
+                base.update(
+                    _build_vision_sample_inputs(
+                        batch_size=1,
+                        max_images=max_images,
+                        image_size=vision_cfg["image_size"],
+                        num_vision_tokens=num_vision_tokens,
+                        seq_len=seq_len,
+                        dtype=plan.dtype,
+                    )
+                )
+        prefill_inputs_map[seq_len] = base
     return prefill_inputs_map
 
 
@@ -414,23 +329,12 @@ def _assemble_bundle(
     backend_constraint,
     edge_model,
     plan,
-    hf_tokenizer_path,
 ):
     """Write TFLite files, bundle the tokenizer, and assemble ``.litertlm``."""
     prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
     edge_model.export(prefill_tflite_path)
 
-    if hf_tokenizer_path is not None:
-        tokenizer_path = hf_tokenizer_path
-        use_hf_tokenizer = True
-    elif _is_sentencepiece_tokenizer(tokenizer):
-        tokenizer_path = _materialize_sentencepiece_tokenizer(
-            tokenizer, temp_dir
-        )
-        use_hf_tokenizer = False
-    else:
-        tokenizer_path = materialize_hf_tokenizer_json(tokenizer, temp_dir)
-        use_hf_tokenizer = True
+    tokenizer_path = _materialize_sentencepiece_tokenizer(tokenizer, temp_dir)
 
     meta_path = os.path.join(temp_dir, "llm_metadata.pb")
     _build_llm_metadata(
@@ -438,6 +342,7 @@ def _assemble_bundle(
         tokenizer,
         plan.cache_length,
         meta_path,
+        vision_cfg=plan.vision_cfg,
         sampler_config=plan.sampler_config,
         model_type_overridden=plan.model_type_overridden,
     )
@@ -456,10 +361,7 @@ def _assemble_bundle(
         litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
         backend_constraint=backend_constraint,
     )
-    if use_hf_tokenizer:
-        builder.add_hf_tokenizer(tokenizer_path)
-    else:
-        builder.add_sentencepiece_tokenizer(tokenizer_path)
+    builder.add_sentencepiece_tokenizer(tokenizer_path)
     builder.add_llm_metadata(meta_path)
 
     # Write to a temp file in the same directory as `path` and atomically
@@ -495,7 +397,6 @@ def export_to_litertlm(
     backend_constraint=None,
     prefill_seq_len=None,
     cache_length=None,
-    hf_tokenizer_path=None,
     sampler_config=None,
     llm_model_type=None,
     **kwargs,
@@ -503,17 +404,24 @@ def export_to_litertlm(
     """Export a KerasHub CausalLM model to a LiteRT-LM bundle.
 
     This exports the model with ``prefill`` and ``decode`` signatures
-    required by the LiteRT-LM executor, bundles the tokenizer (SentencePiece
-    ``.spm`` for SentencePiece models, or a HuggingFace ``tokenizer.json``
-    produced by auto-converting any ``BytePairTokenizer`` subclass), and
-    writes an ``LlmMetadata`` protobuf into the ``.litertlm`` artifact.
+    required by the LiteRT-LM executor, bundles the SentencePiece tokenizer,
+    and writes an ``LlmMetadata`` protobuf into the ``.litertlm`` artifact.
+
+    **Multimodal:** When the model has a ``vision_encoder`` (e.g. Gemma3),
+    the vision encoder is baked into the prefill signature so that image
+    inputs are processed alongside text tokens. The decode signature
+    remains text-only because image KV-caches are already seeded after
+    prefill.
 
     **Bucketing:** ``prefill_seq_len`` accepts either a single ``int`` or a
     ``list[int]``. When a list is provided (e.g.
     ``[32, 64, 128, 256, 512, 1024]``), the exporter traces one prefill
     signature per bucket. At runtime the LiteRT-LM executor dispatches to
     the smallest bucket that fits the actual prompt, avoiding wasted
-    computation on padding.
+    computation on padding. For vision-capable models (Gemma3, Gemma3n,
+    Gemma4, PaliGemma), bucketing is currently disabled family-wide (every
+    prefill bucket must equal ``cache_length``) as a conservative default,
+    governed by the ``allows_vision_bucketing`` export spec flag.
 
     Args:
         model: ``CausalLM``. The KerasHub model to export, with an attached
@@ -535,14 +443,6 @@ def export_to_litertlm(
             context length. Pass this explicitly to avoid the warning and to
             get a cache length independent of the preprocessor. Defaults to
             ``None``.
-        hf_tokenizer_path: Optional str. Path to a HuggingFace
-            ``tokenizer.json`` file to bundle instead of the model's native
-            tokenizer. Use this for BytePair / HuggingFace tokenizers that
-            cannot be materialized as a SentencePiece ``.spm`` file. When
-            provided, the native tokenizer validation is skipped. If ``None``,
-            SentencePiece tokenizers are bundled as ``.spm`` and any
-            ``BytePairTokenizer`` subclass is automatically converted to
-            ``tokenizer.json``. Defaults to ``None``.
         sampler_config: Optional
             ``keras_hub.src.utils.litertlm.model_specs.SamplerConfig``
             instance. When given, the bundle's ``LlmMetadata.sampler_params``
@@ -571,7 +471,8 @@ def export_to_litertlm(
         ValueError: If the backend is not ``"torch"``, if ``path`` does not
             end with ``.litertlm``, if the model lacks ``call_with_cache``,
             if ``backend_constraint`` is invalid, if any
-            ``prefill_seq_len`` exceeds ``cache_length``, if
+            ``prefill_seq_len`` exceeds ``cache_length``, if a multimodal
+            model is exported with mismatched ``prefill_seq_len`` values, if
             ``sampler_config`` is not a ``SamplerConfig`` instance, if
             ``llm_model_type`` is not a recognized override, or if the model
             is a non-exportable MTP draft model (``Gemma4AssistantCausalLM``).
@@ -601,7 +502,6 @@ def export_to_litertlm(
         path,
         tokenizer,
         backend_constraint,
-        hf_tokenizer_path,
         prefill_seq_len,
     )
 
@@ -648,6 +548,25 @@ def export_to_litertlm(
                 f"cache_length ({cache_length})."
             )
 
+    # Detect multimodal capabilities.
+    vision_cfg = spec.get_vision_config(model)
+    has_vision = vision_cfg is not None
+    vision_input_style = spec.vision_input_style if has_vision else None
+
+    if (
+        has_vision
+        and not spec.allows_vision_bucketing
+        and any(seq_len != cache_length for seq_len in prefill_seq_lens)
+    ):
+        raise ValueError(
+            "Multimodal LiteRT-LM export currently requires all "
+            f"`prefill_seq_len` values ({prefill_seq_lens}) to match the "
+            f"cache_length ({cache_length}). This restriction is enforced "
+            "for all vision-capable families (Gemma3, Gemma3n, Gemma4, "
+            "PaliGemma) pending a per-family assessment. Pass a single "
+            "`prefill_seq_len` equal to `cache_length`."
+        )
+
     dtype = _torch_dtype_from_model(model)
 
     # Bundle all resolved per-export-run settings into one immutable plan.
@@ -659,6 +578,9 @@ def export_to_litertlm(
         head_dim=head_dim,
         prefill_seq_lens=prefill_seq_lens,
         dtype=dtype,
+        has_vision=has_vision,
+        vision_cfg=vision_cfg,
+        vision_input_style=vision_input_style,
         sampler_config=sampler_config,
         model_type_overridden=llm_model_type is not None,
     )
@@ -724,7 +646,6 @@ def export_to_litertlm(
             backend_constraint=backend_constraint,
             edge_model=edge_model,
             plan=plan,
-            hf_tokenizer_path=hf_tokenizer_path,
         )
 
     return path
@@ -773,6 +694,84 @@ def _build_sample_inputs(
     return sample
 
 
+def _build_indices_and_mask(batch_size, num_tokens, seq_len):
+    """Create the zeroed int32 ``(indices, mask)`` sample-tensor pair."""
+    indices = torch.zeros(
+        (batch_size, num_tokens), dtype=torch.int32, device="cpu"
+    )
+    mask = torch.zeros((batch_size, seq_len), dtype=torch.int32, device="cpu")
+    return indices, mask
+
+
+def _gemma4_patch_dims(image_size, patch_size):
+    """Return ``(num_patches, patch_dim)`` for Gemma4's flattened patches."""
+    num_patches = (image_size // patch_size) ** 2
+    patch_dim = patch_size**2 * 3
+    return num_patches, patch_dim
+
+
+def _build_vision_sample_inputs(
+    batch_size,
+    max_images,
+    image_size,
+    num_vision_tokens,
+    seq_len,
+    dtype,
+):
+    """Create concrete vision sample tensors for a prefill signature."""
+    device = "cpu"
+    images = torch.zeros(
+        (batch_size, max_images, image_size, image_size, 3),
+        dtype=dtype,
+        device=device,
+    )
+    vision_indices, vision_mask = _build_indices_and_mask(
+        batch_size, num_vision_tokens, seq_len
+    )
+    return {
+        "images": images,
+        "vision_indices": vision_indices,
+        "vision_mask": vision_mask,
+    }
+
+
+def _build_gemma4_vision_sample_inputs(
+    batch_size,
+    max_images,
+    patch_size,
+    image_size,
+    num_vision_tokens,
+    seq_len,
+    dtype,
+):
+    """Create concrete Gemma4 vision sample tensors for a prefill signature.
+
+    Gemma4's vision encoder expects pre-processed patches
+    (``pixel_values`` + ``pixel_position_ids``) rather than raw RGB images.
+    """
+    device = "cpu"
+    num_patches, patch_dim = _gemma4_patch_dims(image_size, patch_size)
+    pixel_values = torch.zeros(
+        (batch_size, max_images, num_patches, patch_dim),
+        dtype=dtype,
+        device=device,
+    )
+    pixel_position_ids = torch.zeros(
+        (batch_size, max_images, num_patches, 2),
+        dtype=torch.int32,
+        device=device,
+    )
+    vision_indices, vision_mask = _build_indices_and_mask(
+        batch_size, num_vision_tokens, seq_len
+    )
+    return {
+        "pixel_values": pixel_values,
+        "pixel_position_ids": pixel_position_ids,
+        "vision_indices": vision_indices,
+        "vision_mask": vision_mask,
+    }
+
+
 def _get_tokenizer(model):
     preprocessor = getattr(model, "preprocessor", None)
     if preprocessor is None:
@@ -816,6 +815,7 @@ def _build_llm_metadata(
     tokenizer,
     max_num_tokens,
     path,
+    vision_cfg=None,
     sampler_config=None,
     model_type_overridden=False,
 ):
@@ -858,6 +858,10 @@ def _build_llm_metadata(
     meta.max_num_tokens = int(max_num_tokens)
 
     getattr(meta.llm_model_type, spec.model_type).SetInParent()
+
+    # Populate vision fields for supported model types.
+    if vision_cfg is not None:
+        spec.populate_vision_metadata(meta, vision_cfg)
 
     # Populate function-calling fields (only `FunctionGemmaSpec` overrides
     # the base no-op). Skipped on an explicit `llm_model_type` override:
