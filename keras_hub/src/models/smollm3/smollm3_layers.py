@@ -142,6 +142,8 @@ class SmolLM3Attention(layers.Layer):
         hidden_states,
         training=False,
         attention_mask=None,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
         **kwargs,
     ):
         """Forward pass for SmolLM3Attention.
@@ -152,12 +154,12 @@ class SmolLM3Attention(layers.Layer):
             position_embeddings: Tuple of (cos, sin) tensors for RoPE.
             attention_mask: Attention mask tensor.
             training: Whether the layer is in training mode.
+            self_attention_cache: Cached key and value projections from
+                previous decoding steps.
+            self_attention_cache_update_index: Index in the cache at which
+                the current projections are written.
         """
         self.training = training
-        self_attention_cache = kwargs.get("self_attention_cache", None)
-        self_attention_cache_update_index = kwargs.get(
-            "self_attention_cache_update_index", None
-        )
         start_index = (
             self_attention_cache_update_index
             if self_attention_cache_update_index is not None
@@ -547,6 +549,8 @@ class SmolLM3DecoderLayer(layers.Layer):
         training=False,
         decoder_padding_mask=None,
         decoder_attention_mask=None,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
         **kwargs,
     ):
         """
@@ -558,12 +562,11 @@ class SmolLM3DecoderLayer(layers.Layer):
             position_embeddings: Optional tuple of (cos, sin)
                 tensors for RoPE.
             training: Whether the layer is in training mode.
+            self_attention_cache: Cached key and value projections from
+                previous decoding steps.
+            self_attention_cache_update_index: Index in the cache at which
+                the current projections are written.
         """
-        self_attention_cache = kwargs.get("self_attention_cache", None)
-        self_attention_cache_update_index = kwargs.get(
-            "self_attention_cache_update_index", None
-        )
-
         self_attention_mask = self._compute_self_attention_mask(
             decoder_sequence=hidden_states,
             decoder_padding_mask=decoder_padding_mask,
@@ -580,7 +583,8 @@ class SmolLM3DecoderLayer(layers.Layer):
             hidden_states=hidden_states,
             training=training,
             attention_mask=self_attention_mask,
-            **kwargs,
+            self_attention_cache=self_attention_cache,
+            self_attention_cache_update_index=self_attention_cache_update_index,
         )
 
         if isinstance(x, tuple):
