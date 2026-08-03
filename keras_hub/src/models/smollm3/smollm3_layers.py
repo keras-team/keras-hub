@@ -151,7 +151,6 @@ class SmolLM3Attention(layers.Layer):
         Args:
             hidden_states: Input tensor of shape (batch_size, seq_len,
                 hidden_size).
-            position_embeddings: Tuple of (cos, sin) tensors for RoPE.
             attention_mask: Attention mask tensor.
             training: Whether the layer is in training mode.
             self_attention_cache: Cached key and value projections from
@@ -559,8 +558,6 @@ class SmolLM3DecoderLayer(layers.Layer):
         Args:
             hidden_states: Input tensor of shape (batch_size,
                 seq_len, hidden_size).
-            position_embeddings: Optional tuple of (cos, sin)
-                tensors for RoPE.
             training: Whether the layer is in training mode.
             self_attention_cache: Cached key and value projections from
                 previous decoding steps.
