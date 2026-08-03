@@ -109,26 +109,22 @@ def _build_vision_config(vision_encoder):
 
 def _build_audio_config(audio_encoder):
     """Build the ``audio_config`` dict from a Gemma4AudioEncoder."""
-    # Retrieve parameters from the first conformer block.
-    block0 = audio_encoder.conformer_blocks[0]
-    attn = block0.attention.attn
-    sscp = audio_encoder.subsample_conv_projection
     return {
         "model_type": "gemma4_audio_model",
         "hidden_size": audio_encoder.hidden_size,
         "num_attention_heads": audio_encoder.num_heads,
         "num_hidden_layers": audio_encoder.num_layers,
-        "attention_chunk_size": attn.chunk_size,
-        "attention_context_left": attn.max_past_horizon + 1,
-        "attention_context_right": attn.max_future_horizon,
-        "attention_logit_cap": attn.logit_cap,
-        "attention_invalid_logits_value": attn.invalid_logit_value,
-        "conv_kernel_size": block0.lconv.kernel_size,
-        "residual_weight": block0.ffw_start.residual_weight,
-        "gradient_clipping": block0.attention.gradient_clipping,
-        "subsampling_conv_channels": list(sscp.conv_channels),
+        "attention_chunk_size": audio_encoder.chunk_size,
+        "attention_context_left": audio_encoder.context_left,
+        "attention_context_right": audio_encoder.context_right,
+        "attention_logit_cap": audio_encoder.logit_cap,
+        "attention_invalid_logits_value": audio_encoder.invalid_logit_value,
+        "conv_kernel_size": audio_encoder.conv_kernel_size,
+        "residual_weight": audio_encoder.residual_weight,
+        "gradient_clipping": audio_encoder.gradient_clipping,
+        "subsampling_conv_channels": list(audio_encoder.sscp_conv_channels),
         "output_proj_dims": audio_encoder.output_proj_dims,
-        "rms_norm_eps": block0.norm.epsilon,
+        "rms_norm_eps": audio_encoder.norm_eps,
     }
 
 

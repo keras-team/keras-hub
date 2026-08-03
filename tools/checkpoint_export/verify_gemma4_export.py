@@ -490,6 +490,7 @@ def run_structural_smoke_test(export_dir):
     # then compare param count against the safetensors file (which avoids
     # counting HF's computed non-checkpoint buffers like RoPE frequencies).
     st_path = os.path.join(export_path, "model.safetensors")
+    st_keys = []
     try:
         from safetensors import safe_open
 
