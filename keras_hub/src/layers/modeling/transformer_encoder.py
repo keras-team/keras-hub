@@ -43,6 +43,15 @@ class TransformerEncoder(keras.layers.Layer):
         bias_initializer: string or `keras.initializers` initializer.
             The bias initializer for the dense and multiheaded
             attention layers. Defaults to `"zeros"`.
+        kernel_regularizer: string or `keras.regularizers` regularizer.
+            The kernel regularizer for the dense and multiheaded
+            attention layers. Defaults to `None`.
+        bias_regularizer: string or `keras.regularizers` regularizer.
+            The bias regularizer for the dense and multiheaded
+            attention layers. Defaults to `None`.
+        activity_regularizer: string or `keras.regularizers` regularizer.
+            The output regularizer for the dense and multiheaded
+            attention layers. Defaults to `None`.
         normalize_first: bool. If True, the inputs to the
             attention layer and the intermediate dense layer  are normalized
             (similar to GPT-2). If set to False, outputs of attention layer and
@@ -81,6 +90,9 @@ class TransformerEncoder(keras.layers.Layer):
         layer_norm_epsilon=1e-05,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
+        kernel_regularizer=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
         normalize_first=False,
         **kwargs,
     ):
@@ -92,6 +104,11 @@ class TransformerEncoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.kernel_regularizer = keras.regularizers.get(kernel_regularizer)
+        self.bias_regularizer = keras.regularizers.get(bias_regularizer)
+        self.activity_regularizer = keras.regularizers.get(
+            activity_regularizer
+        )
         self.normalize_first = normalize_first
         self.supports_masking = True
 
@@ -114,6 +131,9 @@ class TransformerEncoder(keras.layers.Layer):
             dropout=self.dropout,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            kernel_regularizer=self.kernel_regularizer,
+            bias_regularizer=self.bias_regularizer,
+            activity_regularizer=self.activity_regularizer,
             dtype=self.dtype_policy,
             name="self_attention_layer",
         )
@@ -151,6 +171,9 @@ class TransformerEncoder(keras.layers.Layer):
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            kernel_regularizer=self.kernel_regularizer,
+            bias_regularizer=self.bias_regularizer,
+            activity_regularizer=self.activity_regularizer,
             dtype=self.dtype_policy,
             name="feedforward_intermediate_dense",
         )
@@ -159,6 +182,9 @@ class TransformerEncoder(keras.layers.Layer):
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            kernel_regularizer=self.kernel_regularizer,
+            bias_regularizer=self.bias_regularizer,
+            activity_regularizer=self.activity_regularizer,
             dtype=self.dtype_policy,
             name="feedforward_output_dense",
         )
@@ -263,6 +289,15 @@ class TransformerEncoder(keras.layers.Layer):
                 ),
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
+                ),
+                "kernel_regularizer": keras.regularizers.serialize(
+                    self.kernel_regularizer
+                ),
+                "bias_regularizer": keras.regularizers.serialize(
+                    self.bias_regularizer
+                ),
+                "activity_regularizer": keras.regularizers.serialize(
+                    self.activity_regularizer
                 ),
                 "normalize_first": self.normalize_first,
             }
