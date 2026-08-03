@@ -175,6 +175,26 @@ class FalconCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "Falcon model bug (keras-hub#2861): ALiBi is built over the "
+            "query length in FalconTransformerDecoder.call, but attention "
+            "scores span the KV-cache length, so call_with_cache fails "
+            "whenever cache length > query length (cached prefill). Needs a "
+            "model-side fix (cache-aware ALiBi, e.g. keras_hub.layers."
+            "AlibiBias as in BLOOM); deferred from this PR."
+        ),
+    )
+    def test_litertlm_export(self):
+        self.run_litertlm_export_test(
+            cls=FalconCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            verify_model_type="generic_model",
+            verify_numerics=True,
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in FalconCausalLM.presets:

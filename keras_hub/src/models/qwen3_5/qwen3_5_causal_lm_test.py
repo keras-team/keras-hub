@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch
 
 import pytest
@@ -126,6 +127,70 @@ class Qwen3_5CausalLMTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    def test_litertlm_model_type_detection(self):
+        """Verify Qwen3.5 is tagged as the "qwen3" LlmModelType.
+
+        This checks the model-type mapping directly (independent of the full
+        export pipeline below, which currently fails for an unrelated
+        reason) so the mapping fix has real, always-on regression coverage.
+        """
+        import keras
+
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        from keras_hub.src.utils.litertlm.model_specs import resolve_export_spec
+
+        causal_lm = Qwen3_5CausalLM(**self.init_kwargs)
+        self.assertEqual(resolve_export_spec(causal_lm).model_type, "qwen3")
+
+    def test_litertlm_export(self):
+        """Verify hybrid-cache export fails fast with a clear, typed error.
+
+        Qwen3.5's hybrid full_attention/linear_attention layers use a dual
+        cache structure (Qwen3_5CausalLM.call_with_cache expects a
+        `(kv_cache, conv_cache, recurrent_cache)` tuple for the
+        linear-attention conv/recurrent state) that the LiteRT-LM adapter
+        does not yet support: the adapter always stacks per-layer KV tensors
+        into a single `[batch, num_layers, 2, cache_length, num_kv_heads,
+        head_dim]` tensor and passes only that as `cache`. `export_to_litertlm`
+        now fails fast on this (see `LiteRTLMExportSpec.cache_structure` in
+        model_specs.py) with a documented `ValueError`, instead of letting
+        the mismatched cache reach `_stack_kv_cache` and crash with a
+        cryptic `IndexError: index 1 is out of bounds for dimension 0 with
+        size 1`. This is independent of tokenizer support and of the
+        model-type mapping (see test_litertlm_model_type_detection above).
+        Since the failure is now deliberate, typed, and documented rather
+        than an incidental crash, this is a direct assertion rather than an
+        `xfail`. Update this test (rather than deleting it) once the
+        adapter supports hybrid attention+conv cache layouts.
+        """
+        import keras
+
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        import importlib.util
+
+        if importlib.util.find_spec("litert_torch") is None:
+            self.skipTest(
+                "LiteRT-LM export requires `litert-torch`. "
+                "Install it with: pip install litert-torch"
+            )
+        if importlib.util.find_spec("litert_lm_builder") is None:
+            self.skipTest(
+                "LiteRT-LM export requires `litert-lm-builder`. "
+                "Install it with: pip install litert-lm-builder"
+            )
+
+        causal_lm = Qwen3_5CausalLM(**self.init_kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.litertlm")
+        with self.assertRaisesRegex(
+            ValueError,
+            "hybrid full_attention/linear_attention",
+        ):
+            causal_lm.export(path, format="litertlm")
 
     @pytest.mark.extra_large
     def test_all_presets(self):
