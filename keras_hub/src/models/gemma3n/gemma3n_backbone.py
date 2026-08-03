@@ -356,7 +356,7 @@ class Gemma3nMultimodalEmbeddingProcessor(keras.layers.Layer):
                     - 1
                 )
                 padding_toks = ops.convert_to_tensor(
-                    [[last_audio_token_id]], dtype="int64"
+                    [[last_audio_token_id]], dtype="int32"
                 )
                 padding_embs = self.embed_audio(padding_toks)
                 padding_token = ops.squeeze(padding_embs, axis=[0])

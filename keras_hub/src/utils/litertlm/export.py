@@ -398,6 +398,406 @@ def _chain_signatures(litert_torch, signatures, **kwargs):
             converter = converter.signature(
                 sig_name,
                 adapter,
+                sample_kwargs=sample_kwargs,
+                **kwargs,
+            )
+    return converter
+
+
+def _trace_and_convert(
+    litert_torch,
+    model,
+    tokenizer,
+    prefill_adapter,
+    decode_adapter,
+    prefill_inputs_map,
+    decode_inputs,
+    plan,
+    **kwargs,
+):
+    """Trace prefill/decode (and optional vision) signatures and convert."""
+    # Defer torch-specific adapter imports until the backend has been verified
+    # as torch, so that non-torch callers get the friendly backend error.
+    from keras_hub.src.utils.litertlm.adapter import KerasHubEndOfImageAdapter
+    from keras_hub.src.utils.litertlm.adapter import KerasHubVisionAdapter
+    from keras_hub.src.utils.litertlm.adapter import (
+        KerasHubVisionEncoderAdapter,
+    )
+    from keras_hub.src.utils.litertlm.traceable_ops import traceable_ops_scope
+
+    with traceable_ops_scope():
+        vision_encoder_edge = None
+        vision_adapter_edge = None
+        eoi_edge = None
+
+        # Optionally export the vision encoder and adapter as separate models.
+        if plan.separate_vision_encoder and plan.has_vision:
+            vision_cfg = plan.vision_cfg
+            patch_size = vision_cfg["patch_size"]
+            vision_encoder_inputs = _build_vision_encoder_sample_inputs(
+                batch_size=1,
+                max_images=plan.max_images,
+                image_size=vision_cfg["image_size"],
+                patch_size=patch_size,
+                dtype=plan.dtype,
+                vision_input_style=plan.vision_input_style,
+            )
+            vision_adapter_inputs = _build_vision_adapter_sample_inputs(
+                batch_size=1,
+                tokens_per_image=plan.tokens_per_image,
+                vision_output_dim=plan.vision_output_dim,
+                dtype=plan.dtype,
+            )
+            vision_encoder_adapter = KerasHubVisionEncoderAdapter(
+                model,
+                vision_input_style=plan.vision_input_style,
+                flatten_image_batch=plan.spec.flatten_image_batch,
+            ).eval()
+            vision_adapter = KerasHubVisionAdapter().eval()
+
+            vision_encoder_edge = litert_torch.signature(
+                "vision_encoder",
+                vision_encoder_adapter,
+                sample_kwargs=vision_encoder_inputs,
+                **kwargs,
+            ).convert(lightweight_conversion=True)
+            vision_adapter_edge = litert_torch.signature(
+                "vision_adapter",
+                vision_adapter,
+                sample_kwargs=vision_adapter_inputs,
+                **kwargs,
+            ).convert(lightweight_conversion=True)
+
+            # An END_OF_VISION model is exported only when the family
+            # declares an EOI token and the tokenizer resolves it.
+            eoi_token_ids = plan.spec.get_end_of_vision_token_ids(tokenizer)
+            if eoi_token_ids is not None:
+                eoi_adapter = KerasHubEndOfImageAdapter(
+                    model, eoi_token_ids
+                ).eval()
+                eoi_edge = litert_torch.signature(
+                    "end_of_vision",
+                    eoi_adapter,
+                    sample_kwargs={},
+                    **kwargs,
+                ).convert(lightweight_conversion=True)
+            elif plan.spec.end_of_vision_token is not None:
+                # The declared EOI token did not resolve to a real id in
+                # this tokenizer's vocab: skip the section rather than
+                # bundle an embedding for the wrong (unknown) token.
+                warnings.warn(
+                    "Could not resolve end-of-image token "
+                    f"{plan.spec.end_of_vision_token!r} to a token id for "
+                    f"{type(model).__name__}'s tokenizer; skipping the "
+                    "END_OF_VISION bundle section.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        # Chain one signature per prefill bucket plus the decode signature.
+        signatures = []
+        for seq_len in plan.prefill_seq_lens:
+            sig_name = (
+                "prefill"
+                if len(plan.prefill_seq_lens) == 1
+                else f"prefill_{seq_len}"
+            )
+            signatures.append(
+                (sig_name, prefill_adapter, prefill_inputs_map[seq_len])
+            )
+        signatures.append(("decode", decode_adapter, decode_inputs))
+
+        converter = _chain_signatures(litert_torch, signatures, **kwargs)
+        edge_model = converter.convert(lightweight_conversion=False)
+
+    return edge_model, vision_encoder_edge, vision_adapter_edge, eoi_edge
+
+
+def _assemble_bundle(
+    *,
+    path,
+    temp_dir,
+    tokenizer,
+    backend_constraint,
+    edge_model,
+    vision_encoder_edge,
+    vision_adapter_edge,
+    eoi_edge,
+    plan,
+):
+    """Write TFLite files, bundle the tokenizer, and assemble ``.litertlm``."""
+    eoi_tflite_path = None
+    if plan.separate_vision_encoder and plan.has_vision:
+        prefill_tflite_path = os.path.join(temp_dir, "prefill_decode.tflite")
+        edge_model.export(prefill_tflite_path)
+        vision_encoder_tflite_path = os.path.join(
+            temp_dir, "vision_encoder.tflite"
+        )
+        vision_encoder_edge.export(vision_encoder_tflite_path)
+        vision_adapter_tflite_path = os.path.join(
+            temp_dir, "vision_adapter.tflite"
+        )
+        vision_adapter_edge.export(vision_adapter_tflite_path)
+        if eoi_edge is not None:
+            eoi_tflite_path = os.path.join(temp_dir, "end_of_vision.tflite")
+            eoi_edge.export(eoi_tflite_path)
+    else:
+        prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
+        edge_model.export(prefill_tflite_path)
+
+    tokenizer_path = _materialize_sentencepiece_tokenizer(tokenizer, temp_dir)
+
+    meta_path = os.path.join(temp_dir, "llm_metadata.pb")
+    _build_llm_metadata(
+        plan.spec,
+        tokenizer,
+        plan.cache_length,
+        meta_path,
+        vision_cfg=plan.vision_cfg,
+        audio_cfg=plan.audio_cfg,
+        sampler_config=plan.sampler_config,
+        model_type_overridden=plan.model_type_overridden,
+    )
+
+    litert_lm_builder = _import_litert_lm_builder()
+    builder = litert_lm_builder.LitertLmFileBuilder()
+    builder.add_system_metadata(
+        litert_lm_builder.Metadata(
+            key="Authors",
+            value="KerasHub",
+            dtype=litert_lm_builder.DType.STRING,
+        )
+    )
+    builder.add_tflite_model(
+        prefill_tflite_path,
+        litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
+        backend_constraint=backend_constraint,
+    )
+    if plan.separate_vision_encoder and plan.has_vision:
+        builder.add_tflite_model(
+            vision_encoder_tflite_path,
+            litert_lm_builder.TfLiteModelType.VISION_ENCODER,
+            backend_constraint=backend_constraint,
+        )
+        builder.add_tflite_model(
+            vision_adapter_tflite_path,
+            litert_lm_builder.TfLiteModelType.VISION_ADAPTER,
+            backend_constraint=backend_constraint,
+        )
+        if eoi_tflite_path is not None:
+            # Ordered after VISION_ADAPTER, matching litert-torch's section
+            # order (PREFILL_DECODE -> ... -> END_OF_VISION).
+            builder.add_tflite_model(
+                eoi_tflite_path,
+                litert_lm_builder.TfLiteModelType.END_OF_VISION,
+                backend_constraint=backend_constraint,
+            )
+    builder.add_sentencepiece_tokenizer(tokenizer_path)
+    builder.add_llm_metadata(meta_path)
+
+    # Write to a temp file in the same directory as `path` and atomically
+    # rename it into place on success, so a crash mid-build (the bundle can be
+    # large) never leaves a truncated `.litertlm` file at the destination.
+    output_dir = os.path.dirname(os.path.abspath(path)) or "."
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        dir=output_dir,
+        prefix=f".{os.path.basename(path)}.",
+        suffix=".tmp",
+    )
+    try:
+        # `mkstemp` always creates the file 0600. Match the permissions a
+        # plain `open(path, "wb")` would have produced (0666 minus umask) so
+        # switching to an atomic write doesn't silently make bundles
+        # unreadable by other users/services that consumed them before.
+        umask = os.umask(0)
+        os.umask(umask)
+        os.fchmod(tmp_fd, 0o666 & ~umask)
+        with os.fdopen(tmp_fd, "wb") as output_file:
+            builder.build(output_file)
+    except BaseException:
+        os.remove(tmp_path)
+        raise
+    os.replace(tmp_path, path)
+
+    return path
+
+
+def export_to_litertlm(
+    model,
+    path,
+    backend_constraint=None,
+    prefill_seq_len=None,
+    cache_length=None,
+    separate_vision_encoder=False,
+    sampler_config=None,
+    llm_model_type=None,
+    **kwargs,
+):
+    """Export a KerasHub CausalLM model to a LiteRT-LM bundle.
+
+    This exports the model with ``prefill`` and ``decode`` signatures
+    required by the LiteRT-LM executor, bundles the SentencePiece tokenizer,
+    and writes an ``LlmMetadata`` protobuf into the ``.litertlm`` artifact.
+
+    **Multimodal:** When the model has a ``vision_encoder`` (e.g. Gemma3),
+    the vision encoder is baked into the prefill signature so that image
+    inputs are processed alongside text tokens. The decode signature
+    remains text-only because image KV-caches are already seeded after
+    prefill.
+
+    When ``separate_vision_encoder=True`` and the model has a vision
+    encoder, the vision processing is split into three TFLite models:
+    ``VISION_ENCODER`` (raw images/patches -> features),
+    ``VISION_ADAPTER`` (features -> ``mm_embedding``), and
+    ``PREFILL_DECODE`` (text + ``mm_embedding`` -> KV caches/logits). This
+    matches the LiteRT-LM multimodal runtime contract. Families
+    that declare an end-of-image token (``LiteRTLMExportSpec.
+    end_of_vision_token``, e.g. Gemma3/Gemma4) additionally get a fourth,
+    input-less ``END_OF_VISION`` model whose only output is that token's
+    embedding; families with no declared end-of-image token (e.g.
+    PaliGemma) emit no such section.
+
+    **Bucketing:** ``prefill_seq_len`` accepts either a single ``int`` or a
+    ``list[int]``. When a list is provided (e.g.
+    ``[32, 64, 128, 256, 512, 1024]``), the exporter traces one prefill
+    signature per bucket. At runtime the LiteRT-LM executor dispatches to
+    the smallest bucket that fits the actual prompt, avoiding wasted
+    computation on padding. For vision-capable models (Gemma3, Gemma3n,
+    Gemma4, PaliGemma), bucketing is currently disabled family-wide (every
+    prefill bucket must equal ``cache_length``) as a conservative default,
+    governed by the ``allows_vision_bucketing`` export spec flag.
+
+    Args:
+        model: ``CausalLM``. The KerasHub model to export, with an attached
+            preprocessor and tokenizer.
+        path: str. Path to save the ``.litertlm`` file.
+        backend_constraint: Optional str. LiteRT-LM backend constraint, such
+            as ``"cpu"`` or ``"gpu"``. Defaults to ``None``.
+        prefill_seq_len: int or list[int]. Sequence length(s) used when
+            tracing the prefill signature(s). Each value must not exceed
+            ``cache_length``. Defaults to ``cache_length`` itself.
+        cache_length: Optional int. The KV-cache length (the model's maximum
+            context window) to trace the export with. If ``None``, this is
+            inferred from ``backbone.max_sequence_length`` when the backbone
+            defines it; most backbones (e.g. Gemma, Llama, Mistral, Qwen) do
+            not, in which case the exporter falls back to
+            ``preprocessor.sequence_length`` and emits a ``UserWarning``,
+            since that value is a tokenization default chosen for training or
+            preprocessing and is not necessarily the model's true maximum
+            context length. Pass this explicitly to avoid the warning and to
+            get a cache length independent of the preprocessor. Defaults to
+            ``None``.
+        separate_vision_encoder: bool. If ``True`` and the model has a vision
+            encoder, export the vision encoder and a no-op vision adapter as
+            separate ``VISION_ENCODER`` and ``VISION_ADAPTER`` TFLite models,
+            and have ``PREFILL_DECODE`` consume pre-computed ``mm_embedding``
+            tensors instead of raw images. Defaults to ``False``. Either way
+            the exported bundle is a complete multimodal model --
+            ``PREFILL_DECODE`` always consumes text tokens; this flag only
+            controls whether vision is baked into that trace or factored
+            into reusable models, never producing a vision-only export.
+        sampler_config: Optional
+            ``keras_hub.src.utils.litertlm.model_specs.SamplerConfig``
+            instance. When given, the bundle's ``LlmMetadata.sampler_params``
+            field is populated from it (mirroring litert-torch export_hf's
+            conditional sampler semantics). The only named preset keras-hub
+            ships is ``GREEDY_SAMPLER_CONFIG`` (``top_k=1``), for forcing
+            deterministic greedy generation on-device. Defaults to ``None``,
+            which leaves ``sampler_params`` entirely unset so the runtime
+            chooses its own sampling policy.
+        llm_model_type: Optional str. Explicit ``LlmMetadata.llm_model_type``
+            override for presets that are architecturally identical to another
+            family and so cannot be auto-detected by class, config, or
+            tokenizer -- currently ``"function_gemma"`` (the
+            ``function_gemma_instruct_270m`` preset, which loads as a plain
+            ``Gemma3CausalLM`` but must export as the ``function_gemma`` model
+            type with its function-calling metadata, not as ``gemma3``).
+            Mirrors litert-torch's ``litert_lm_model_type_override``. Defaults
+            to ``None`` (auto-detect the family by class).
+        **kwargs: Additional kwargs forwarded to ``litert_torch`` signature
+            tracing.
+
+    Returns:
+        The output ``path``.
+
+    Raises:
+        ValueError: If the backend is not ``"torch"``, if ``path`` does not
+            end with ``.litertlm``, if the model lacks ``call_with_cache``,
+            if ``backend_constraint`` is invalid, if any
+            ``prefill_seq_len`` exceeds ``cache_length``, if a multimodal
+            model is exported with mismatched ``prefill_seq_len`` values, if
+            ``sampler_config`` is not a ``SamplerConfig`` instance, if
+            ``llm_model_type`` is not a recognized override, or if the model
+            is a non-exportable MTP draft model (``Gemma4AssistantCausalLM``).
+        ImportError: If ``litert-torch`` or ``litert-lm-builder`` are not
+            installed.
+    """
+    path = os.fspath(path)
+    # Resolve the model-family spec once, up front, and thread it through
+    # the pipeline; `llm_model_type` is an explicit override for presets
+    # indistinguishable by class. Non-exportable models fail fast here.
+    spec = resolve_export_spec(model, llm_model_type=llm_model_type)
+    spec.check_exportable(model)
+    if sampler_config is not None and not isinstance(
+        sampler_config, SamplerConfig
+    ):
+        raise ValueError(
+            "`sampler_config` must be a "
+            "`keras_hub.src.utils.litertlm.model_specs.SamplerConfig` "
+            "instance (e.g. `GREEDY_SAMPLER_CONFIG`). "
+            f"Received: sampler_config={sampler_config!r}."
+        )
+    tokenizer = _get_tokenizer(model)
+    # Use the normalized (lowercased) `backend_constraint` returned by
+    # `_validate_export_args`, not the original argument.
+    prefill_seq_lens, backend_constraint = _validate_export_args(
+        model,
+        path,
+        tokenizer,
+        backend_constraint,
+        prefill_seq_len,
+    )
+
+    # Defer torch-specific adapter imports until after the backend check so
+    # that a JAX/TF caller without torch gets the friendly backend error.
+    from keras_hub.src.utils.litertlm.adapter import KerasHubLiteRTAdapter
+    from keras_hub.src.utils.litertlm.adapter import _cpu_default_device_scope
+
+    # Fail fast on cache structures the adapter cannot build, before any
+    # cache-config derivation or tracing; the spec names the mismatch
+    # (`describe_unsupported_cache_structure`).
+    if spec.cache_structure != "single_stacked":
+        raise ValueError(
+            f"LiteRT-LM export does not support `{type(model).__name__}`: "
+            f"`{type(model.backbone).__name__}` "
+            f"{spec.describe_unsupported_cache_structure()}"
+        )
+
+    cache_cfg = spec.get_cache_config(model, cache_length=cache_length)
+    num_layers = cache_cfg["num_layers"]
+    cache_length = cache_cfg["cache_length"]
+    num_kv_heads = cache_cfg["num_kv_heads"]
+    head_dim = cache_cfg["head_dim"]
+    if cache_cfg["used_preprocessor_fallback"]:
+        warnings.warn(
+            "`cache_length` was not specified and "
+            f"`{type(model.backbone).__name__}` does not define "
+            "`max_sequence_length`. Falling back to "
+            f"`preprocessor.sequence_length` ({cache_length}) as the "
+            "KV-cache length. This is a tokenization default, not "
+            "necessarily the model's true maximum context length. Pass "
+            "`cache_length` explicitly to `export_to_litertlm` / "
+            '`model.export(..., format="litertlm")` to set it directly.',
+            stacklevel=2,
+        )
+
+    # Prefill seq_len values must be validated against the real cache length.
+    if prefill_seq_lens is None:
+        prefill_seq_lens = [cache_length]
+    for seq_len in prefill_seq_lens:
+        if seq_len > cache_length:
+            raise ValueError(
+                f"prefill_seq_len ({seq_len}) cannot exceed "
                 f"cache_length ({cache_length})."
             )
 
