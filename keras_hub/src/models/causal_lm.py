@@ -448,6 +448,90 @@ class CausalLM(Task):
 
         export_to_safetensors(self, path)
 
+    def export(
+        self,
+        filepath,
+        format="tf_saved_model",
+        verbose=None,
+        input_signature=None,
+        **kwargs,
+    ):
+        """Export the model as an artifact for inference.
+
+        This overrides the base ``Task.export`` to intercept
+        ``format="litertlm"`` and delegate to the LiteRT-LM exporter.
+
+        Args:
+            filepath: `str` or `pathlib.Path`. The path to save the artifact.
+            format: `str`. The export format. For LiteRT-LM, use
+                ``"litertlm"``. All other formats are forwarded to the
+                superclass.
+            verbose: `bool`. Whether to print a message during export.
+            input_signature: Optional input signature specification.
+                Not used for ``format="litertlm"``.
+            **kwargs: Additional keyword arguments.
+                For ``format="litertlm"``, supported kwargs are:
+
+                - ``backend_constraint``: Optional backend constraint such as
+                  ``"cpu"`` or ``"gpu"``.
+                - ``prefill_seq_len``: ``int`` or ``list[int]``. Sequence
+                  length(s) for prefill signature tracing. A list enables
+                  bucketing (e.g. ``[32, 64, 128, 256]``). Defaults to
+                  ``cache_length``.
+                - ``cache_length``: Optional ``int``. The KV-cache length
+                  (the model's maximum context window) to export with. If
+                  not given, this is inferred from
+                  ``backbone.max_sequence_length`` when the backbone defines
+                  it; most backbones (e.g. Gemma, Llama, Mistral, Qwen) do
+                  not, in which case it falls back to
+                  ``preprocessor.sequence_length`` and a ``UserWarning`` is
+                  raised, since that value is a tokenization default and not
+                  necessarily the model's true maximum context length. Pass
+                  this explicitly to get a cache length independent of the
+                  preprocessor.
+                - ``sampler_config``: Optional
+                  ``keras_hub.src.utils.litertlm.model_specs.SamplerConfig``.
+                  When given, populates the bundle's
+                  ``LlmMetadata.sampler_params``. The only named preset is
+                  ``GREEDY_SAMPLER_CONFIG`` (``top_k=1``, for deterministic
+                  generation). Defaults to ``None``, which leaves
+                  ``sampler_params`` unset (the runtime picks its own
+                  default sampling policy).
+                - ``llm_model_type``: Optional ``str``. Explicit model-type
+                  override for presets indistinguishable from another family
+                  by class/config/tokenizer -- currently ``"function_gemma"``
+                  (the ``function_gemma_instruct_270m`` preset). Exports as
+                  the ``function_gemma`` model type with function-calling
+                  metadata instead of ``gemma3``. Defaults to ``None``
+                  (auto-detect).
+                - ``**kwargs``: Any remaining keyword arguments are forwarded
+                  to ``litert_torch.signature(...)`` for advanced signature
+                  customization.
+
+        Returns:
+            The exported artifact path.
+        """
+        if format == "litertlm":
+            from keras_hub.src.utils.litertlm.export import export_to_litertlm
+
+            return export_to_litertlm(
+                self,
+                filepath,
+                backend_constraint=kwargs.pop("backend_constraint", None),
+                prefill_seq_len=kwargs.pop("prefill_seq_len", None),
+                cache_length=kwargs.pop("cache_length", None),
+                sampler_config=kwargs.pop("sampler_config", None),
+                llm_model_type=kwargs.pop("llm_model_type", None),
+                **kwargs,
+            )
+        return super().export(
+            filepath,
+            format=format,
+            verbose=verbose,
+            input_signature=input_signature,
+            **kwargs,
+        )
+
     def _post_quantize(self, mode, **kwargs):
         super()._post_quantize(mode, **kwargs)
         # Reset the compiled generate function.
