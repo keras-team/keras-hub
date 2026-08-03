@@ -78,6 +78,76 @@ class ExportSpecRegistryIntegrityTest(TestCase):
     # Tiny, randomly-initialized instances, matching the pattern every
     # `*_causal_lm_test.py` in this repo already uses for cheap model
     # construction. `resolve_export_spec` only performs `isinstance` checks,
+    # so no preprocessor or real weights are needed.
+
+    def _tiny_llama(self):
+        backbone = LlamaBackbone(
+            vocabulary_size=10,
+            num_layers=1,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+        )
+        return LlamaCausalLM(backbone=backbone)
+
+    def _tiny_llama3(self):
+        backbone = Llama3Backbone(
+            vocabulary_size=10,
+            num_layers=1,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+        )
+        return Llama3CausalLM(backbone=backbone)
+
+    def _tiny_phi3(self):
+        backbone = Phi3Backbone(
+            vocabulary_size=10,
+            num_layers=1,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=16,
+        )
+        return Phi3CausalLM(backbone=backbone)
+
+    def _tiny_gemma(self):
+        backbone = GemmaBackbone(
+            vocabulary_size=10,
+            num_layers=1,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            head_dim=4,
+            intermediate_dim=16,
+        )
+        return GemmaCausalLM(backbone=backbone)
+
+    def _tiny_gemma3(self):
+        # Text-only Gemma3 (`vision_encoder=None`); `resolve_export_spec` only
+        # does `isinstance`, so no preprocessor or real weights are needed.
+        backbone = Gemma3Backbone(
+            vocabulary_size=10,
+            image_size=16,
+            num_layers=1,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            head_dim=4,
+            intermediate_dim=16,
+            vision_encoder=None,
+        )
+        # `Gemma3CausalLM` requires `preprocessor`, but `resolve_export_spec`
+        # only does an `isinstance` check, so a null preprocessor is fine.
+        return Gemma3CausalLM(preprocessor=None, backbone=backbone)
+
+    def _tiny_gemma4_assistant(self):
+        # Mirrors the tiny config in `gemma4_assistant_causal_lm_test.py`.
+        backbone = Gemma4Backbone(
+            vocabulary_size=256,
+            num_layers=4,
             intermediate_dim=16,
         )
         return QwenCausalLM(backbone=backbone)
@@ -138,3 +208,43 @@ class ExportSpecRegistryIntegrityTest(TestCase):
         resolve to its own `Qwen3_5Spec` (not the shared `Qwen3FamilySpec`
         every other Qwen3-family model uses), so `export_to_litertlm`'s
         `cache_structure` fail-fast check actually fires for it.
+
+        This is deliberately not a duplicate of
+        `test_litertlm_model_type_detection` in `qwen3_5_causal_lm_test.py`:
+        that test only checks `model_type` and requires the torch backend;
+        this one also checks spec class identity and `cache_structure`, and
+        needs neither torch nor any litertlm dependency.
+        """
+        spec = resolve_export_spec(self._tiny_qwen3_5())
+        self.assertIsInstance(spec, Qwen3_5Spec)
+        self.assertEqual(spec.model_type, "qwen3")
+        self.assertEqual(spec.cache_structure, "hybrid")
+
+    def test_gemma_resolves_to_gemma_spec(self):
+        """Base Gemma has no dedicated `LlmModelType` subtype, but must still
+        resolve to `GemmaSpec` (not the plain `LiteRTLMExportSpec` fallback)
+        to get the shared Gemma-family `<end_of_turn>` chat-stop-token
+        behavior."""
+        spec = resolve_export_spec(self._tiny_gemma())
+        self.assertIsInstance(spec, GemmaSpec)
+        self.assertEqual(spec.model_type, "generic_model")
+
+    def test_gemma3_resolves_to_gemma3_spec_by_default(self):
+        """A plain Gemma3 (no override) resolves to `Gemma3Spec` -- the
+        regression guard that the `function_gemma` override never leaks into
+        ordinary Gemma3 exports."""
+        spec = resolve_export_spec(self._tiny_gemma3())
+        self.assertIsInstance(spec, Gemma3Spec)
+        self.assertNotIsInstance(spec, FunctionGemmaSpec)
+        self.assertEqual(spec.model_type, "gemma3")
+
+    def test_function_gemma_override_resolves_to_function_gemma_spec(self):
+        """The explicit `llm_model_type="function_gemma"` override selects
+        `FunctionGemmaSpec` (`model_type="function_gemma"`), even though the
+        model is a plain `Gemma3CausalLM` that would otherwise resolve to
+        `Gemma3Spec`."""
+        model = self._tiny_gemma3()
+        self.assertEqual(resolve_export_spec(model).model_type, "gemma3")
+        spec = resolve_export_spec(model, llm_model_type="function_gemma")
+        self.assertIsInstance(spec, FunctionGemmaSpec)
+        self.assertEqual(spec.model_type, "function_gemma")

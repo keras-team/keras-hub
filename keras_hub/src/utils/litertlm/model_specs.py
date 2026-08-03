@@ -616,6 +616,61 @@ class Phi3Spec(LiteRTLMExportSpec):
 # and OPT are base LMs with no second chat-turn token in their tokenizers.
 
 
+def _qwen_family_chat_stop_token_ids(tokenizer):
+    """Return ``[<|im_end|> id]`` if present in *tokenizer*'s vocab.
+
+    ``<|im_end|>`` is the ChatML chat-turn-stop token shared by the Qwen
+    families (Qwen3 and pre-Qwen3 Qwen/Qwen-MoE alike).
+    """
+    token_id = _lookup_token_id(tokenizer, "<|im_end|>")
+    return [token_id] if token_id is not None else []
+
+
+class Qwen3FamilySpec(LiteRTLMExportSpec):
+    """Qwen3, Qwen3-MoE, and Qwen3.5 all map to the "qwen3" oneof."""
+
+    model_type = "qwen3"
+
+    def get_chat_stop_token_ids(self, tokenizer):
+        # Qwen3's `<|im_end|>` is already `tokenizer.end_token_id`; surfaced
+        # explicitly (`_build_llm_metadata` de-duplicates).
+        return _qwen_family_chat_stop_token_ids(tokenizer)
+
+
+class Qwen3_5Spec(Qwen3FamilySpec):
+    """Qwen3.5 spec: maps to "qwen3" but its hybrid cache is unsupported.
+
+    Qwen3.5's hybrid full-attention/linear-attention decoder layers need a
+    dual cache (``Qwen3_5CausalLM.call_with_cache`` expects a ``(kv_cache,
+    conv_cache, recurrent_cache)`` tuple) that the LiteRT-LM adapter's
+    single stacked-KV-tensor cache format cannot represent yet.
+    """
+
+    cache_structure = "hybrid"
+
+    def describe_unsupported_cache_structure(self):
+        return (
+            "requires a 'hybrid' cache structure: Qwen3.5's hybrid "
+            "full_attention/linear_attention layers use a dual cache "
+            "structure (`call_with_cache` expects a `(kv_cache, conv_cache, "
+            "recurrent_cache)` tuple, since linear-attention layers need a "
+            "convolutional/recurrent state that a stacked KV tensor cannot "
+            f"represent), {_single_stacked_support_description()} "
+            "Support for hybrid cache structures is not yet implemented."
+        )
+
+
+class Qwen2p5FamilySpec(LiteRTLMExportSpec):
+    """Qwen and Qwen-MoE (pre-Qwen3 architecture) map to "qwen2p5"."""
+
+    model_type = "qwen2p5"
+
+    def get_chat_stop_token_ids(self, tokenizer):
+        # Qwen 2.5 registers `<|endoftext|>` as `end_token`, but ChatML
+        # checkpoints may still carry `<|im_end|>`; add it when present.
+        return _qwen_family_chat_stop_token_ids(tokenizer)
+
+
 def _populate_gemma3_family_vision_metadata(meta, model_type, vision_cfg):
     """Shared image-token metadata population for gemma3 and gemma3n."""
     image_size = vision_cfg["image_size"]
@@ -629,6 +684,9 @@ def _populate_gemma3_family_vision_metadata(meta, model_type, vision_cfg):
 # (module_path, class_name, spec_factory), imported lazily inside
 # ``resolve_export_spec`` to avoid heavy top-level dependencies.
 _EXPORT_SPEC_REGISTRY = (
+    ("keras_hub.src.models.qwen3_5.qwen3_5_causal_lm", "Qwen3_5CausalLM", Qwen3_5Spec),
+    ("keras_hub.src.models.qwen3.qwen3_causal_lm", "Qwen3CausalLM", Qwen3FamilySpec),
+    ("keras_hub.src.models.qwen2_5.qwen2_5_causal_lm", "Qwen2_5CausalLM", Qwen2p5FamilySpec),
     ("keras_hub.src.models.llama3.llama3_causal_lm", "Llama3CausalLM", Llama3Spec),
     ("keras_hub.src.models.phi3.phi3_causal_lm", "Phi3CausalLM", Phi3Spec),
 )
