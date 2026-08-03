@@ -38,6 +38,15 @@ def convert_to_comparible_type(x):
     return x
 
 
+# Extra KV-cache slots (beyond the prompt length) to trace a LiteRT-LM bundle
+# with, when `run_litertlm_export_test` auto-derives `cache_length` for
+# text-only numeric-parity verification. This gives `_verify_litertlm_numerics`
+# room to decode one step past the prefilled prompt, so the decode step
+# genuinely attends across a populated cache instead of writing into the same
+# lone slot it just read from.
+_LITERTLM_DECODE_CACHE_HEADROOM = 4
+
+
 class TestCase(tf.test.TestCase, parameterized.TestCase):
     """Base test case class for KerasHub."""
 
@@ -904,6 +913,391 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             meta.ParseFromString(llm_meta_buf)
             return meta
         return None
+
+    def _attach_sentencepiece_tokenizer_asset(
+        self, tokenizer, proto_path, asset_name="vocabulary.spm"
+    ):
+        """Attach a test SentencePiece proto asset to a tokenizer.
+
+        LiteRT-LM export needs the tokenizer to declare its file assets and
+        know how to copy them into a preset directory. Test mock tokenizers do
+        not have a real preset asset, so this helper wires a single proto file
+        into ``tokenizer.save_to_preset`` for export-time bundling.
+        """
+        import shutil
+
+        from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
+
+        tokenizer.file_assets = [asset_name]
+
+        def _save_to_preset(preset_dir):
+            asset_dir = os.path.join(preset_dir, TOKENIZER_ASSET_DIR)
+            os.makedirs(asset_dir, exist_ok=True)
+            shutil.copy(proto_path, os.path.join(asset_dir, asset_name))
+
+        tokenizer.save_to_preset = _save_to_preset
+
+    def _verify_litertlm_numerics(
+        self,
+        model,
+        interpreter,
+        input_data,
+        atol,
+        rtol,
+        cache_length=None,
+    ):
+        """Compare Keras eager and TFLite prefill/decode outputs.
+
+        Args:
+            model: The KerasHub ``CausalLM`` producing the eager reference.
+            interpreter: The TFLite interpreter built from the exported
+                bundle's PREFILL_DECODE section.
+            input_data: A 2-D int token array ``[batch, seq_len]``.
+            atol: Absolute tolerance for the logits comparison.
+            rtol: Relative tolerance for the logits comparison.
+            cache_length: The exact cache length the bundle under test was
+                traced with (see `run_litertlm_export_test`). Threading it
+                through explicitly, rather than re-deriving it independently,
+                keeps this helper from silently drifting out of sync with
+                the cache length `export_to_litertlm` actually used. When
+                omitted, it is derived the same way `export_to_litertlm`
+                derives it by default.
+        """
+        import torch
+
+        # Local import to avoid a module-level dependency from this
+        # low-level, widely-imported test helper module onto the litertlm
+        # package -- matches the lazy-import convention `export.py` and
+        # `model_specs.py` already use for optional/heavy dependencies.
+        from keras_hub.src.utils.litertlm.model_specs import resolve_export_spec
+
+        tokens_np = ops.convert_to_numpy(input_data)
+        if tokens_np.ndim != 2:
+            raise ValueError(
+                "`input_data` for LiteRT-LM numeric parity must be a 2-D "
+                f"token tensor. Received: input_data.shape={tokens_np.shape}."
+            )
+
+        B, T = tokens_np.shape
+
+        # Derive cache dimensions/layout the same way the real export
+        # pipeline does, instead of a separate, drift-prone getattr chain.
+        spec = resolve_export_spec(model)
+        cache_cfg = spec.get_cache_config(model, cache_length=cache_length)
+        L = cache_cfg["num_layers"]
+        H = cache_cfg["num_kv_heads"]
+        D = cache_cfg["head_dim"]
+        cache_length = cache_cfg["cache_length"]
+        cache_layout = cache_cfg["cache_layout"]
+
+        if cache_layout == "gemma3n":
+            keras_cache_shape = (B, L, 2, H, cache_length, D)
+        else:
+            keras_cache_shape = (B, L, 2, cache_length, H, D)
+        per_layer_shape = spec.get_kv_cache_sample_shape(B, cache_length, H, D)
+
+        # Find the best prefill signature (bucketed or single).
+        sig_list = list(interpreter._get_full_signature_list().keys())
+        prefill_sig = None
+        if "prefill" in sig_list:
+            prefill_sig = "prefill"
+        else:
+            matching = sorted(
+                [
+                    s
+                    for s in sig_list
+                    if s.startswith("prefill_") and int(s.split("_")[1]) >= T
+                ]
+            )
+            if matching:
+                prefill_sig = matching[0]
+        if prefill_sig is None:
+            self.fail("No usable prefill signature found for numeric parity.")
+
+        cache_keras = np.zeros(keras_cache_shape, dtype=np.float32)
+        prefill_inputs = {
+            "tokens": tokens_np,
+            "input_pos": np.arange(T, dtype=np.int32),
+        }
+        for i in range(L):
+            prefill_inputs[f"kv_cache_k_{i}"] = np.zeros(
+                per_layer_shape, dtype=np.float32
+            )
+            prefill_inputs[f"kv_cache_v_{i}"] = np.zeros(
+                per_layer_shape, dtype=np.float32
+            )
+
+        prefill_runner = interpreter.get_signature_runner(prefill_sig)
+        tflite_prefill_out = prefill_runner(**prefill_inputs)
+
+        # Keras prefill.
+        with torch.no_grad():
+            _, _, keras_cache = model.call_with_cache(
+                torch.from_numpy(tokens_np),
+                torch.from_numpy(cache_keras),
+                0,
+            )
+        keras_cache = keras_cache.numpy()
+
+        # Compare prefill KV caches.
+        for i in range(L):
+            self.assertAllClose(
+                keras_cache[:, i, 0, ...],
+                tflite_prefill_out[f"kv_cache_k_{i}"],
+                atol=atol,
+                rtol=rtol,
+            )
+            self.assertAllClose(
+                keras_cache[:, i, 1, ...],
+                tflite_prefill_out[f"kv_cache_v_{i}"],
+                atol=atol,
+                rtol=rtol,
+            )
+
+        # Single decode step one position past the prefilled prompt, so
+        # decode genuinely attends across a populated cache instead of
+        # writing into the same lone slot it just read from (with causal
+        # masking, decoding at position 0 can only attend to itself). Falls
+        # back to the last valid cache slot if the caller didn't leave any
+        # headroom beyond the prompt (`cache_length == T`).
+        decode_pos = min(T, cache_length - 1)
+        # The decode token's identity does not matter for numeric parity
+        # (both backends run the identical op on it); reuse the prompt's
+        # last token rather than indexing at `decode_pos`, which may be past
+        # the end of the actual prompt tokens.
+        decode_token = tokens_np[:, -1:].copy()
+        with torch.no_grad():
+            keras_logits_dec, _, keras_cache_dec = model.call_with_cache(
+                torch.from_numpy(decode_token),
+                torch.from_numpy(keras_cache),
+                decode_pos,
+            )
+        keras_logits_dec = keras_logits_dec.numpy()
+        keras_cache_dec = keras_cache_dec.numpy()
+
+        decode_inputs = {
+            "tokens": decode_token,
+            "input_pos": np.array([decode_pos], dtype=np.int32),
+        }
+        for i in range(L):
+            decode_inputs[f"kv_cache_k_{i}"] = tflite_prefill_out[
+                f"kv_cache_k_{i}"
+            ]
+            decode_inputs[f"kv_cache_v_{i}"] = tflite_prefill_out[
+                f"kv_cache_v_{i}"
+            ]
+        decode_runner = interpreter.get_signature_runner("decode")
+        tflite_dec_out = decode_runner(**decode_inputs)
+
+        self.assertAllClose(
+            keras_logits_dec,
+            tflite_dec_out["logits"],
+            atol=atol,
+            rtol=rtol,
+        )
+        for i in range(L):
+            self.assertAllClose(
+                keras_cache_dec[:, i, 0, ...],
+                tflite_dec_out[f"kv_cache_k_{i}"],
+                atol=atol,
+                rtol=rtol,
+            )
+            self.assertAllClose(
+                keras_cache_dec[:, i, 1, ...],
+                tflite_dec_out[f"kv_cache_v_{i}"],
+                atol=atol,
+                rtol=rtol,
+            )
+
+    def run_litertlm_export_test(
+        self,
+        cls=None,
+        init_kwargs=None,
+        model=None,
+        input_data=None,
+        prefill_seq_len=None,
+        verify_numerics=True,
+        verify_model_type=None,
+        atol=1e-4,
+        rtol=1e-4,
+        **export_kwargs,
+    ):
+        """Export a KerasHub model to LiteRT-LM and verify the bundle.
+
+        Args:
+            cls: Model class to instantiate if ``model`` is not provided.
+            init_kwargs: Initialization arguments for ``cls``.
+            model: Pre-built model instance. If provided, ``cls`` and
+                ``init_kwargs`` are ignored.
+            input_data: Token ids tensor for text-only numeric parity, or
+                ``None`` to skip numeric verification.
+            prefill_seq_len: Sequence length passed to ``model.export``. May be
+                an ``int`` or a list of bucket sizes.
+            verify_numerics: Whether to run Keras vs TFLite numeric parity. Set
+                to ``False`` for preset models with random weights.
+            verify_model_type: Expected ``LlmMetadata`` oneof name, e.g.
+                ``"gemma3"`` or ``"generic_model"``.
+            atol: Absolute tolerance for numeric parity.
+            rtol: Relative tolerance for numeric parity.
+            **export_kwargs: Additional arguments forwarded to
+                ``model.export(..., format="litertlm", ...)``.
+        """
+
+        if keras.config.backend() != "torch":
+            self.skipTest("LiteRT-LM export requires the PyTorch backend.")
+
+        import importlib.util
+
+        if importlib.util.find_spec("litert_torch") is None:
+            self.skipTest(
+                "LiteRT-LM export requires `litert-torch`. "
+                "Install it with: pip install litert-torch"
+            )
+
+        if importlib.util.find_spec("litert_lm_builder") is None:
+            self.skipTest(
+                "LiteRT-LM export requires `litert-lm-builder`. "
+                "Install it with: pip install litert-lm-builder"
+            )
+
+        if model is None:
+            if cls is None or init_kwargs is None:
+                raise ValueError(
+                    "Either `model` or both `cls` and `init_kwargs` must be "
+                    "provided."
+                )
+            model = cls(**init_kwargs)
+
+        if isinstance(input_data, dict) and "padding_mask" in input_data:
+            input_data = dict(input_data)
+            input_data["padding_mask"] = ops.convert_to_numpy(
+                ops.cast(input_data["padding_mask"], "int32")
+            )
+
+        # Determine up front whether this call will exercise text-only
+        # numeric parity, so the cache-length bump below can be applied
+        # before tracing -- the bundle's cache length is fixed at trace
+        # time, so any adjustment must happen before `model.export`.
+        numeric_input = None
+        if verify_numerics and input_data is not None:
+            candidate_input = input_data
+            if isinstance(input_data, dict):
+                candidate_input = input_data.get("token_ids")
+            if candidate_input is not None:
+                # Skip numeric parity for inputs carrying anything beyond
+                # text tokens; the helper only validates text token
+                # prefill/decode KV-cache parity.
+                text_only_keys = {"token_ids", "padding_mask"}
+                is_text_only = not isinstance(
+                    input_data, dict
+                ) or text_only_keys.issuperset(input_data.keys())
+                if is_text_only:
+                    # The exported TFLite prefill signature is traced with
+                    # batch_size=1, so numeric parity must use a single
+                    # sample.
+                    numeric_input = ops.convert_to_numpy(candidate_input)
+                    if numeric_input.ndim >= 2 and numeric_input.shape[0] > 1:
+                        numeric_input = numeric_input[:1]
+
+        path = os.path.join(self.get_temp_dir(), "model.litertlm")
+        if prefill_seq_len is not None:
+            export_kwargs.setdefault("prefill_seq_len", prefill_seq_len)
+
+        if numeric_input is not None and "cache_length" not in export_kwargs:
+            # Trace with a few unused cache slots beyond the prompt so
+            # `_verify_litertlm_numerics` can decode one step past the
+            # prefilled prompt, genuinely exercising attention over a
+            # populated cache instead of decoding into the same lone slot
+            # the prompt just filled. Absolute (non-RoPE) position-embedding
+            # families (e.g. GPT2, OPT) size a fixed position-embedding
+            # table to `backbone.max_sequence_length`; requesting a cache
+            # beyond it produces invalid position ids during tracing. When
+            # the backbone defines that attribute, treat it as a hard cap on
+            # how much headroom can safely be added -- this is the same
+            # attribute `LiteRTLMExportSpec.get_cache_config` already treats
+            # as authoritative over the prompt length, so this isn't a new
+            # family-specific heuristic, just reusing that existing signal.
+            prompt_len = numeric_input.shape[-1]
+            # A caller-supplied `prefill_seq_len` is a lower bound on the
+            # cache length regardless of the prompt length -- otherwise the
+            # headroom bump below could compute a `cache_length` smaller
+            # than an already-requested `prefill_seq_len` and trip
+            # `export_to_litertlm`'s own "prefill_seq_len cannot exceed
+            # cache_length" validation.
+            min_required_len = max(
+                prompt_len, export_kwargs.get("prefill_seq_len", 0)
+            )
+            target_cache_length = (
+                min_required_len + _LITERTLM_DECODE_CACHE_HEADROOM
+            )
+            max_supported = getattr(model.backbone, "max_sequence_length", None)
+            if max_supported is not None:
+                target_cache_length = min(target_cache_length, max_supported)
+            if target_cache_length > prompt_len:
+                export_kwargs["cache_length"] = target_cache_length
+                export_kwargs.setdefault("prefill_seq_len", prompt_len)
+        verify_cache_length = export_kwargs.get("cache_length")
+
+        model.export(path, format="litertlm", **export_kwargs)
+
+        self.assertTrue(os.path.exists(path))
+        self.assertGreater(os.path.getsize(path), 0)
+
+        interpreters = self._extract_litertlm_tflite_interpreters(path)
+        self.assertTrue(
+            interpreters,
+            "No TFLite model found in the .litertlm bundle.",
+        )
+
+        all_signatures = {}
+        for interpreter in interpreters:
+            all_signatures.update(interpreter._get_full_signature_list())
+        prefill_sigs = [
+            name for name in all_signatures if name.startswith("prefill")
+        ]
+        self.assertTrue(
+            prefill_sigs,
+            f"No prefill signature found. Signatures: {list(all_signatures)}",
+        )
+        self.assertIn(
+            "decode",
+            all_signatures,
+            f"No decode signature found. Signatures: {list(all_signatures)}",
+        )
+
+        main_interpreter = None
+        for interpreter in interpreters:
+            sigs = interpreter._get_full_signature_list()
+            if any(s.startswith("prefill") for s in sigs) and "decode" in sigs:
+                main_interpreter = interpreter
+                break
+        if main_interpreter is None:
+            main_interpreter = interpreters[0]
+
+        if verify_model_type is not None:
+            llm_metadata = self._parse_litertlm_llm_metadata(path)
+            self.assertIsNotNone(
+                llm_metadata,
+                "LlmMetadata section not found in .litertlm bundle.",
+            )
+            model_type_msg = llm_metadata.llm_model_type
+            actual_type = model_type_msg.WhichOneof("model_type")
+            self.assertEqual(
+                actual_type,
+                verify_model_type,
+                f"Expected LlmModelType '{verify_model_type}', "
+                f"got '{actual_type}'.",
+            )
+
+        if numeric_input is not None:
+            self._verify_litertlm_numerics(
+                model,
+                main_interpreter,
+                numeric_input,
+                atol=atol,
+                rtol=rtol,
+                cache_length=verify_cache_length,
+            )
 
     def _compare_outputs(
         self,
