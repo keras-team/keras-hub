@@ -582,6 +582,7 @@ class SmolLM3DecoderLayer(layers.Layer):
             attention_mask=self_attention_mask,
             self_attention_cache=self_attention_cache,
             self_attention_cache_update_index=self_attention_cache_update_index,
+            **kwargs,
         )
 
         if isinstance(x, tuple):
