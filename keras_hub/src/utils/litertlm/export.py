@@ -278,6 +278,76 @@ def _trace_and_convert(
             )
             signatures.append(
                 (sig_name, prefill_adapter, prefill_inputs_map[seq_len])
+            )
+        signatures.append(("decode", decode_adapter, decode_inputs))
+
+        converter = _chain_signatures(litert_torch, signatures, **kwargs)
+        edge_model = converter.convert(lightweight_conversion=False)
+
+    return edge_model
+
+
+def _assemble_bundle(
+    *,
+    path,
+    temp_dir,
+    tokenizer,
+    backend_constraint,
+    edge_model,
+    plan,
+):
+    """Write TFLite files, bundle the tokenizer, and assemble ``.litertlm``."""
+    prefill_tflite_path = os.path.join(temp_dir, "model.tflite")
+    edge_model.export(prefill_tflite_path)
+
+    tokenizer_path = _materialize_sentencepiece_tokenizer(tokenizer, temp_dir)
+
+    meta_path = os.path.join(temp_dir, "llm_metadata.pb")
+    _build_llm_metadata(
+        plan.spec,
+        tokenizer,
+        plan.cache_length,
+        meta_path,
+        sampler_config=plan.sampler_config,
+        model_type_overridden=plan.model_type_overridden,
+    )
+
+    litert_lm_builder = _import_litert_lm_builder()
+    builder = litert_lm_builder.LitertLmFileBuilder()
+    builder.add_system_metadata(
+        litert_lm_builder.Metadata(
+            key="Authors",
+            value="KerasHub",
+            dtype=litert_lm_builder.DType.STRING,
+        )
+    )
+    builder.add_tflite_model(
+        prefill_tflite_path,
+        litert_lm_builder.TfLiteModelType.PREFILL_DECODE,
+        backend_constraint=backend_constraint,
+    )
+    builder.add_sentencepiece_tokenizer(tokenizer_path)
+    builder.add_llm_metadata(meta_path)
+
+    # Write to a temp file in the same directory as `path` and atomically
+    # rename it into place on success, so a crash mid-build (the bundle can be
+    # large) never leaves a truncated `.litertlm` file at the destination.
+    output_dir = os.path.dirname(os.path.abspath(path)) or "."
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        dir=output_dir,
+        prefix=f".{os.path.basename(path)}.",
+        suffix=".tmp",
+    )
+    try:
+        # `mkstemp` always creates the file 0600. Match the permissions a
+        # plain `open(path, "wb")` would have produced (0666 minus umask) so
+        # switching to an atomic write doesn't silently make bundles
+        # unreadable by other users/services that consumed them before.
+        umask = os.umask(0)
+        os.umask(umask)
+        os.fchmod(tmp_fd, 0o666 & ~umask)
+        with os.fdopen(tmp_fd, "wb") as output_file:
+            builder.build(output_file)
             plan=plan,
         )
 
@@ -318,6 +388,126 @@ def _build_sample_inputs(
         kv_cache[f"kv_cache_v_{i}"] = torch.zeros(
             shape, dtype=dtype, device=device
         )
+
+    sample = {
+        "tokens": tokens,
+        "input_pos": input_pos,
+    }
+    sample.update(kv_cache)
+    return sample
+
+
+def _get_tokenizer(model):
+    preprocessor = getattr(model, "preprocessor", None)
+    if preprocessor is None:
+        raise ValueError(
+            "LiteRT-LM export requires an attached preprocessor with a "
+            "tokenizer."
+        )
+    tokenizer = getattr(preprocessor, "tokenizer", None)
+    if tokenizer is None:
+        raise ValueError(
+            "LiteRT-LM export requires an attached tokenizer on the "
+            "preprocessor."
+        )
+    return tokenizer
+
+
+def _is_sentencepiece_tokenizer(tokenizer):
+    """Return ``True`` if *tokenizer* is SentencePiece-compatible."""
+    if isinstance(tokenizer, SentencePieceTokenizer):
+        return True
+    file_assets = set(getattr(tokenizer, "file_assets", []) or [])
+    return "vocabulary.spm" in file_assets
+
+
+def _materialize_sentencepiece_tokenizer(tokenizer, temp_dir):
+    preset_dir = os.path.join(temp_dir, "tokenizer_preset")
+    tokenizer.save_to_preset(preset_dir)
+    tokenizer_path = os.path.join(
+        preset_dir, TOKENIZER_ASSET_DIR, "vocabulary.spm"
+    )
+    if not os.path.exists(tokenizer_path):
+        raise ValueError(
+            "Failed to materialize the SentencePiece tokenizer asset at "
+            f"{tokenizer_path}."
+        )
+    return tokenizer_path
+
+
+def _build_llm_metadata(
+    spec,
+    tokenizer,
+    max_num_tokens,
+    path,
+    sampler_config=None,
+    model_type_overridden=False,
+):
+    """Serialize an ``LlmMetadata`` protobuf to *path*."""
+    # The protobuf lives under an internal-looking subpackage of
+    # ``litert-lm-builder``; import defensively and surface a clear error
+    # if the internal layout changes.
+    try:
+        from litert_lm_builder.runtime.proto import llm_metadata_pb2
+    except ImportError as e:
+        raise ImportError(
+            "LiteRT-LM export requires the metadata protobuf from "
+            "`litert-lm-builder`. The internal module layout appears to have "
+            "changed. Please verify your `litert-lm-builder` installation."
+        ) from e
+
+    meta = llm_metadata_pb2.LlmMetadata()
+
+    start_id = getattr(tokenizer, "start_token_id", None)
+    if start_id is not None:
+        meta.start_token.token_ids.ids.append(int(start_id))
+
+    # The primary EOS (used for packing/training) is always a stop token.
+    stop_token_ids = []
+    end_id = getattr(tokenizer, "end_token_id", None)
+    if end_id is not None:
+        stop_token_ids.append(int(end_id))
+
+    # Add each family's extra chat-turn stop token (e.g. Gemma's
+    # `<end_of_turn>`; see `LiteRTLMExportSpec.get_chat_stop_token_ids`),
+    # de-duplicated against `end_token_id`.
+    for extra_id in spec.get_chat_stop_token_ids(tokenizer):
+        extra_id = int(extra_id)
+        if extra_id not in stop_token_ids:
+            stop_token_ids.append(extra_id)
+
+    for stop_id in stop_token_ids:
+        meta.stop_tokens.add().token_ids.ids.append(stop_id)
+
+    meta.max_num_tokens = int(max_num_tokens)
+
+    getattr(meta.llm_model_type, spec.model_type).SetInParent()
+
+    # Populate function-calling fields (only `FunctionGemmaSpec` overrides
+    # the base no-op). Skipped on an explicit `llm_model_type` override:
+    # litert-torch also skips its model-specific metadata builder then.
+    if not model_type_overridden:
+        spec.populate_function_gemma_metadata(meta)
+
+    # Sampler defaults are written only when the caller passes a
+    # `sampler_config` (mirroring litert-torch's conditional
+    # `sampler_params`); otherwise the runtime picks its own policy.
+    if sampler_config is not None:
+        try:
+            from litert_lm_builder.runtime.proto import sampler_params_pb2
+        except ImportError as e:
+            raise ImportError(
+                "LiteRT-LM export requires the sampler protobuf from "
+                "`litert-lm-builder`. The internal module layout appears to "
+                "have changed. Please verify your `litert-lm-builder` "
+                "installation."
+            ) from e
+
+        sp = meta.sampler_params
+        top_k = sampler_config.top_k
+        if top_k is not None:
+            sp.k = top_k
+        if sampler_config.top_p is not None:
             sp.p = sampler_config.top_p
         if sampler_config.temperature is not None:
             sp.temperature = sampler_config.temperature
