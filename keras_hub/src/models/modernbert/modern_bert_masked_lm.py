@@ -76,13 +76,37 @@ class ModernBertMaskedLM(MaskedLM):
         preprocessor=None,
         **kwargs,
     ):
-        self.mlm_head_norm = layers.RMSNormalization(
+        # HF ModernBERT prediction head:
+        #
+        # hidden
+        #   -> Dense(hidden)
+        #   -> GELU
+        #   -> LayerNorm
+        #   -> tied decoder
+        self.mlm_head_dense = layers.Dense(
+            backbone.hidden_dim,
+            use_bias=True,
+            name="mlm_head_dense",
+        )
+
+        self.mlm_head_activation = layers.Activation(
+            "gelu",
+            name="mlm_head_activation",
+        )
+
+        self.mlm_head_norm = layers.LayerNormalization(
             epsilon=backbone.layer_norm_epsilon,
             name="mlm_head_norm",
         )
-        # === Inputs ===
-        inputs = backbone.input
 
+        self.decoder = layers.Dense(
+            backbone.vocabulary_size,
+            use_bias=True,
+            name="decoder",
+        )
+
+        # Inputs
+        inputs = backbone.input
         mask_positions = keras.Input(
             shape=(None,),
             dtype="int32",
@@ -97,13 +121,19 @@ class ModernBertMaskedLM(MaskedLM):
             axis=1,
         )
 
-        masked_sequence_output = self.mlm_head_norm(masked_sequence_output)
+        # HF prediction head
+        masked_sequence_output = self.mlm_head_dense(masked_sequence_output)
 
-        logits = backbone.token_embedding(
-            masked_sequence_output,
-            reverse=True,
+        masked_sequence_output = self.mlm_head_activation(
+            masked_sequence_output
         )
 
+        masked_sequence_output = self.mlm_head_norm(masked_sequence_output)
+
+        # Decoder
+        logits = self.decoder(masked_sequence_output)
+
+        # Initialize MaskedLM
         super().__init__(
             inputs={
                 **inputs,

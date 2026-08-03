@@ -9,6 +9,7 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.modernbert.modern_bert_layers import (
     ModernBertEncoderLayer,
 )
+from keras_hub.src.models.modernbert.modern_bert_presets import backbone_presets
 
 
 @keras_hub_export("keras_hub.models.ModernBertBackbone")
@@ -65,6 +66,8 @@ class ModernBertBackbone(Backbone):
     ```
     """
 
+    presets = backbone_presets
+
     def __init__(
         self,
         vocabulary_size=50368,
@@ -76,6 +79,7 @@ class ModernBertBackbone(Backbone):
         global_attn_every_n_layers=3,
         dropout=0.0,
         rotary_max_wavelength=160000,
+        local_rotary_max_wavelength=None,
         layer_norm_epsilon=1e-5,
         dtype=None,
         **kwargs,
@@ -89,10 +93,13 @@ class ModernBertBackbone(Backbone):
         self.global_attn_every_n_layers = global_attn_every_n_layers
         self.dropout = dropout
         self.rotary_max_wavelength = rotary_max_wavelength
+        self.local_rotary_max_wavelength = local_rotary_max_wavelength
         self.layer_norm_epsilon = layer_norm_epsilon
 
+        # Dtype handling
         if isinstance(dtype, dict):
             dtype = keras.saving.deserialize_keras_object(dtype)
+
         if dtype is None:
             layer_dtype_policy = None
         elif isinstance(dtype, keras.DTypePolicy):
@@ -100,6 +107,7 @@ class ModernBertBackbone(Backbone):
         else:
             layer_dtype_policy = keras.DTypePolicy(dtype)
 
+        # Token embedding
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
@@ -109,6 +117,8 @@ class ModernBertBackbone(Backbone):
             dtype=dtype,
             name="token_embedding",
         )
+
+        # Embedding normalization
         self.embedding_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
             center=False,
@@ -117,31 +127,56 @@ class ModernBertBackbone(Backbone):
             name="embedding_norm",
         )
 
-        self.rotary_embedding = RotaryEmbedding(
+        # Global-attention RoPE
+        self.global_rotary_embedding = RotaryEmbedding(
             max_wavelength=rotary_max_wavelength,
             dtype=dtype,
-            name="rotary_embedding",
+            name="global_rotary_embedding",
         )
 
+        # Local-attention RoPE
+        # If local_rotary_max_wavelength isn't provided, fall back
+        # to the global value.
+        if local_rotary_max_wavelength is None:
+            local_rotary_max_wavelength = rotary_max_wavelength
+
+        self.local_rotary_embedding = RotaryEmbedding(
+            max_wavelength=local_rotary_max_wavelength,
+            dtype=dtype,
+            name="local_rotary_embedding",
+        )
+        self.rotary_embedding = self.global_rotary_embedding
+
+        # Transformer layers
         self.transformer_layers = []
+
         for i in range(num_layers):
+            # ModernBERT uses global attention every Nth layer.
             is_global = (i % global_attn_every_n_layers) == 0
-            attn_window = None if is_global else local_attention_window
+
+            if is_global:
+                attn_window = None
+                rotary_embedding = self.global_rotary_embedding
+            else:
+                attn_window = local_attention_window
+                rotary_embedding = self.local_rotary_embedding
 
             layer = ModernBertEncoderLayer(
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
                 num_heads=num_heads,
                 layer_idx=i,
-                rotary_embedding=self.rotary_embedding,
+                rotary_embedding=rotary_embedding,
                 local_attention_window=attn_window,
                 dropout=dropout,
                 layer_norm_epsilon=layer_norm_epsilon,
                 dtype=layer_dtype_policy,
                 name=f"transformer_layer_{i}",
             )
+
             self.transformer_layers.append(layer)
 
+        # Final normalization
         self.final_norm = keras.layers.LayerNormalization(
             axis=-1,
             epsilon=layer_norm_epsilon,
@@ -151,17 +186,29 @@ class ModernBertBackbone(Backbone):
             name="final_norm",
         )
 
-        token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
+        # Functional inputs
+        token_ids = keras.Input(
+            shape=(None,),
+            dtype="int32",
+            name="token_ids",
         )
 
+        padding_mask = keras.Input(
+            shape=(None,),
+            dtype="int32",
+            name="padding_mask",
+        )
+
+        # Embeddings
         x = self.token_embedding(token_ids)
         x = self.embedding_norm(x)
 
+        # Transformer
         for layer in self.transformer_layers:
-            x = layer(x, padding_mask=padding_mask)
-
+            x = layer(
+                x,
+                padding_mask=padding_mask,
+            )
         x = self.final_norm(x)
 
         super().__init__(
@@ -171,12 +218,12 @@ class ModernBertBackbone(Backbone):
             },
             outputs=x,
             dtype=dtype,
-            # dtype=layer_dtype_policy,
             **kwargs,
         )
 
     def get_config(self):
         config = super().get_config()
+
         config.update(
             {
                 "vocabulary_size": self.vocabulary_size,
@@ -188,8 +235,10 @@ class ModernBertBackbone(Backbone):
                 "global_attn_every_n_layers": self.global_attn_every_n_layers,
                 "dropout": self.dropout,
                 "rotary_max_wavelength": self.rotary_max_wavelength,
+                "local_rotary_max_wavelength": self.local_rotary_max_wavelength,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dtype": keras.saving.serialize_keras_object(self.dtype_policy),
             }
         )
+
         return config

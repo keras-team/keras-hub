@@ -47,6 +47,7 @@ class ModernBertMLP(layers.Layer):
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.activation = keras.activations.get(activation)
+
         self.wi_0 = layers.Dense(
             intermediate_dim,
             use_bias=False,
@@ -71,13 +72,16 @@ class ModernBertMLP(layers.Layer):
     def build(self, input_shape):
         self.wi_0.build(input_shape)
         self.wi_1.build(input_shape)
+
         self.wo.build((*input_shape[:-1], self.intermediate_dim))
+
         super().build(input_shape)
 
     def call(self, x):
         """Forward pass of the GeGLU MLP layer."""
         gate = self.activation(self.wi_0(x))
         value = self.wi_1(x)
+
         return self.wo(gate * value)
 
     def get_config(self):
@@ -180,70 +184,115 @@ class ModernBertAttention(layers.Layer):
         super().build(input_shape)
 
     def _get_sliding_window_mask(self, seq_len, dtype):
+        """Create the ModernBERT local attention mask.
+
+        HF ModernBERT interprets `local_attention` as the full
+        window size, so each side receives `window // 2`.
+        """
         idx = ops.arange(seq_len)
         dist = ops.abs(idx[:, None] - idx[None, :])
-        return ops.cast(dist <= self.local_attention_window, dtype)
+        mask = dist <= (self.local_attention_window // 2)
+        return ops.cast(mask, dtype)
 
     def call(self, x, padding_mask=None, training=None):
         b = ops.shape(x)[0]
         t = ops.shape(x)[1]
 
-        # Project QKV
+        # QKV projection
         qkv = self.qkv(x)
 
-        # Split continuously along hidden dim
         q, k, v = ops.split(qkv, 3, axis=-1)
 
-        # Reshape to (b, t, num_heads, head_dim)
         q = ops.reshape(q, (b, t, self.num_heads, self.head_dim))
         k = ops.reshape(k, (b, t, self.num_heads, self.head_dim))
         v = ops.reshape(v, (b, t, self.num_heads, self.head_dim))
 
-        # Apply RoPE before head permutation
+        # Rotary embedding
         if self.rotary_embedding is not None:
             q = self.rotary_embedding(q)
             k = self.rotary_embedding(k)
 
-        # Transpose to (b, num_heads, t, head_dim)
+        # [B,T,H,D] -> [B,H,T,D]
         q = ops.transpose(q, (0, 2, 1, 3))
         k = ops.transpose(k, (0, 2, 3, 1))
         v = ops.transpose(v, (0, 2, 1, 3))
 
         scale = self.head_dim**-0.5
         scores = ops.matmul(q, k) * scale
-        dtype = scores.dtype
 
         if self.local_attention_window is not None:
-            mask = self._get_sliding_window_mask(t, dtype)
-            scores = scores + (1.0 - mask[None, None]) * ops.cast(-1e9, dtype)
+            local_mask = self._get_sliding_window_mask(
+                t,
+                scores.dtype,
+            )
+
+            scores = scores + (1.0 - local_mask[None, None]) * ops.cast(
+                -1e9,
+                scores.dtype,
+            )
 
         if padding_mask is not None:
-            pm = ops.cast(padding_mask, dtype)
-            mask_offset = (1.0 - pm[:, None, None, :]) * ops.cast(-1e9, dtype)
-            scores = scores + mask_offset
+            pm = ops.cast(
+                padding_mask,
+                scores.dtype,
+            )
 
-        probs = ops.softmax(scores, axis=-1)
-        probs = self.attn_dropout(probs, training=training)
+            scores = scores + (1.0 - pm[:, None, None, :]) * ops.cast(
+                -1e9,
+                scores.dtype,
+            )
 
-        out = ops.matmul(probs, v)
-        out = ops.transpose(out, (0, 2, 1, 3))
-        out = ops.reshape(out, (b, t, self.hidden_dim))
+        probs = ops.softmax(
+            ops.cast(scores, "float32"),
+            axis=-1,
+        )
 
-        return self.output_dense(out)
+        probs = ops.cast(
+            probs,
+            q.dtype,
+        )
+
+        probs = self.attn_dropout(
+            probs,
+            training=training,
+        )
+
+        out = ops.matmul(
+            probs,
+            v,
+        )
+
+        out = ops.transpose(
+            out,
+            (0, 2, 1, 3),
+        )
+
+        out = ops.reshape(
+            out,
+            (b, t, self.hidden_dim),
+        )
+
+        out = self.output_dense(out)
+
+        return out
 
     def get_config(self):
         config = super().get_config()
+
         config.update(
             {
                 "hidden_dim": self.hidden_dim,
                 "num_heads": self.num_heads,
                 "local_attention_window": self.local_attention_window,
                 "dropout": self.dropout,
-                "rotary_embedding": keras.saving.serialize_keras_object(
-                    self.rotary_embedding
+                "rotary_embedding": (
+                    keras.saving.serialize_keras_object(self.rotary_embedding)
+                    if self.rotary_embedding is not None
+                    else None
                 ),
             }
         )
+
         return config
 
     @classmethod
@@ -252,6 +301,7 @@ class ModernBertAttention(layers.Layer):
             config["rotary_embedding"] = keras.saving.deserialize_keras_object(
                 config["rotary_embedding"]
             )
+
         return cls(**config)
 
 
@@ -325,10 +375,11 @@ class ModernBertEncoderLayer(layers.Layer):
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
 
+        # ModernBERT layer 0 has no attention LayerNorm.
         if layer_idx == 0:
             self.attn_norm = layers.Identity(
                 name="attention_norm",
-                dtype=self.dtype_policy,
+                dtype=dtype,
             )
         else:
             self.attn_norm = layers.LayerNormalization(
@@ -379,35 +430,59 @@ class ModernBertEncoderLayer(layers.Layer):
         self.attn.build(input_shape)
         self.mlp_norm.build(input_shape)
         self.mlp.build(input_shape)
+
         super().build(input_shape)
 
-    def call(self, x, padding_mask=None, training=None):
+    def call(
+        self,
+        x,
+        padding_mask=None,
+        training=None,
+    ):
         """Forward pass of the complete encoder layer block."""
+
+        # Attention residual block
         residual = x
-
         x = self.attn_norm(x)
-        x = self.attn(x, padding_mask=padding_mask, training=training)
-        x = self.attn_dropout(x, training=training)
+        x = self.attn(
+            x,
+            padding_mask=padding_mask,
+            training=training,
+        )
 
+        x = self.attn_dropout(
+            x,
+            training=training,
+        )
         if x.dtype != residual.dtype:
-            x = ops.cast(x, residual.dtype)
+            x = ops.cast(
+                x,
+                residual.dtype,
+            )
         x = residual + x
 
+        # MLP residual block
         residual = x
 
         x = self.mlp_norm(x)
         x = self.mlp(x)
-        x = self.mlp_dropout(x, training=training)
-
+        x = self.mlp_dropout(
+            x,
+            training=training,
+        )
         if x.dtype != residual.dtype:
-            x = ops.cast(x, residual.dtype)
-        x = ops.add(residual, x)
+            x = ops.cast(
+                x,
+                residual.dtype,
+            )
+        x = residual + x
 
         return x
 
     def get_config(self):
         """Returns the serialization configuration of the encoder layer."""
         config = super().get_config()
+
         config.update(
             {
                 "hidden_dim": self.hidden_dim,
@@ -416,12 +491,14 @@ class ModernBertEncoderLayer(layers.Layer):
                 "layer_idx": self.layer_idx,
                 "dropout": self.dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "local_attention_window": self.local_attention_window,
-                "rotary_embedding": keras.saving.serialize_keras_object(
-                    self.rotary_embedding
+                "rotary_embedding": (
+                    keras.saving.serialize_keras_object(self.rotary_embedding)
+                    if self.rotary_embedding is not None
+                    else None
                 ),
             }
         )
+
         return config
 
     @classmethod
@@ -430,4 +507,5 @@ class ModernBertEncoderLayer(layers.Layer):
             config["rotary_embedding"] = keras.saving.deserialize_keras_object(
                 config["rotary_embedding"]
             )
+
         return super().from_config(config)

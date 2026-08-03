@@ -17,7 +17,6 @@ def convert_backbone_config(transformers_config):
     if rope_theta is None:
         rope_config = transformers_config.get("rope_config", {})
         rope_theta = rope_config.get("rope_theta", 160000.0)
-        # rope_theta = rope_config.get("rope_theta", 10000.0)
 
     return {
         "vocabulary_size": transformers_config.get("vocab_size", 50368),

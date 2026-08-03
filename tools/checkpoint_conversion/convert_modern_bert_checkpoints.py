@@ -170,37 +170,64 @@ def convert_modern_bert_weights(keras_model, hf_model):
 
 
 def convert_modern_bert_masked_lm_weights(keras_lm, backbone, hf_model):
-    """Maps HF MaskedLM head weights to Keras ModernBertMaskedLM."""
-    print("Converting MaskedLM Head Weights...")
+    """Convert Hugging Face ModernBERT MLM weights to Keras."""
+
+    print("Converting MaskedLM head weights...")
     convert_modern_bert_weights(backbone, hf_model)
 
-    # Intermediate prediction head dense layer
-    if hasattr(hf_model, "head") and hasattr(hf_model.head, "dense"):
-        if hasattr(keras_lm, "head_dense"):
-            keras_lm.head_dense.kernel.assign(
-                hf_model.head.dense.weight.detach().cpu().numpy().T
-            )
+    hf_head = hf_model.head
+    hf_decoder = hf_model.decoder
 
-    # Decoder Bias
-    decoder_bias = None
-    if hasattr(hf_model, "decoder") and hasattr(hf_model.decoder, "bias"):
-        decoder_bias = hf_model.decoder.bias.detach().cpu().numpy()
-    elif (
-        hasattr(hf_model, "head")
-        and hasattr(hf_model.head, "decoder")
-        and hasattr(hf_model.head.decoder, "bias")
+    # Prediction head
+    #
+    # HF:
+    #
+    #   head.dense
+    #       ↓
+    #   head.act
+    #       ↓
+    #   head.norm
+    #
+    keras_lm.mlm_head_dense.kernel.assign(
+        hf_head.dense.weight.detach().cpu().numpy().T
+    )
+
+    # Dense bias
+    if (
+        hf_head.dense.bias is not None
+        and keras_lm.mlm_head_dense.bias is not None
     ):
-        decoder_bias = hf_model.head.decoder.bias.detach().cpu().numpy()
+        keras_lm.mlm_head_dense.bias.assign(
+            hf_head.dense.bias.detach().cpu().numpy()
+        )
 
-    if decoder_bias is not None:
-        if hasattr(keras_lm, "decoder_bias"):
-            keras_lm.decoder_bias.assign(decoder_bias)
-        elif hasattr(keras_lm, "prediction_head") and hasattr(
-            keras_lm.prediction_head, "bias"
-        ):
-            keras_lm.prediction_head.bias.assign(decoder_bias)
+    # LayerNorm
+    keras_lm.mlm_head_norm.gamma.assign(
+        hf_head.norm.weight.detach().cpu().numpy()
+    )
 
-    print("MaskedLM weight conversion complete.")
+    if (
+        hf_head.norm.bias is not None
+        and keras_lm.mlm_head_norm.beta is not None
+    ):
+        keras_lm.mlm_head_norm.beta.assign(
+            hf_head.norm.bias.detach().cpu().numpy()
+        )
+
+    # decoder.weight = tied embedding weight
+    # decoder.bias   = decoder bias
+    # PyTorch Linear:
+    #   [vocab_size, hidden_size]
+    #
+    # Keras Dense:
+    #   [hidden_size, vocab_size]
+
+    keras_lm.decoder.kernel.assign(hf_decoder.weight.detach().cpu().numpy().T)
+
+    if hf_decoder.bias is not None and keras_lm.decoder.bias is not None:
+        keras_lm.decoder.bias.assign(hf_decoder.bias.detach().cpu().numpy())
+
+    print("MaskedLM head weights converted successfully.")
 
 
 def verify_conversion(keras_lm, hf_model, hf_tokenizer):
@@ -228,7 +255,7 @@ def verify_conversion(keras_lm, hf_model, hf_tokenizer):
     bitwise-identical outputs.
     """
 
-    print("Running numerical verification")
+    print("Running numerical verification..")
 
     text = "The capital of France is [MASK]."
 
@@ -241,8 +268,6 @@ def verify_conversion(keras_lm, hf_model, hf_tokenizer):
     backbone = keras_lm.backbone
 
     # Embedding verification
-    print("\nVerifying embeddings:")
-
     with torch.no_grad():
         hf_embedding = (
             hf_model.model.embeddings(hf_inputs["input_ids"]).cpu().numpy()
@@ -252,8 +277,8 @@ def verify_conversion(keras_lm, hf_model, hf_tokenizer):
     keras_embedding = backbone.embedding_norm(keras_embedding)
     keras_embedding = keras.ops.convert_to_numpy(keras_embedding)
 
-    diff = np.max(np.abs(hf_embedding - keras_embedding))
-    print(f"Embedding max diff : {diff:.8f}")
+    embedding_diff = np.max(np.abs(hf_embedding - keras_embedding))
+    print(f"Embedding max diff: {embedding_diff:.6e}")
 
     np.testing.assert_allclose(
         hf_embedding,
@@ -262,11 +287,7 @@ def verify_conversion(keras_lm, hf_model, hf_tokenizer):
         rtol=1e-6,
     )
 
-    print("Embeddings matched.")
-
     # Backbone verification
-    print("\nVerifying backbone:")
-
     with torch.no_grad():
         hf_hidden = (
             hf_model.model(
@@ -286,19 +307,12 @@ def verify_conversion(keras_lm, hf_model, hf_tokenizer):
     )
 
     keras_hidden = keras.ops.convert_to_numpy(keras_hidden)
-    diff = np.max(np.abs(hf_hidden - keras_hidden))
 
-    print(f"Backbone max diff : {diff:.8f}")
-    print(f"HF mean           : {hf_hidden.mean():.8f}")
-    print(f"Keras mean        : {keras_hidden.mean():.8f}")
-    print(f"HF std            : {hf_hidden.std():.8f}")
-    print(f"Keras std         : {keras_hidden.std():.8f}")
+    backbone_diff = np.max(np.abs(hf_hidden - keras_hidden))
+    print(f"Backbone max diff: {backbone_diff:.6e}")
 
-    # MLM logits verification
-    print("\nVerifying MLM head:")
-
+    # Masked LM verification
     mask_token_id = hf_tokenizer.mask_token_id
-
     mask_positions = np.argwhere(input_ids == mask_token_id)[:, 1:].astype(
         "int32"
     )
@@ -314,11 +328,7 @@ def verify_conversion(keras_lm, hf_model, hf_tokenizer):
         )
 
     batch_index = np.arange(input_ids.shape[0])[:, None]
-
-    hf_mask_logits = hf_logits[
-        batch_index,
-        mask_positions,
-    ]
+    hf_mask_logits = hf_logits[batch_index, mask_positions]
 
     keras_logits = keras_lm(
         {
@@ -334,12 +344,10 @@ def verify_conversion(keras_lm, hf_model, hf_tokenizer):
 
     keras_logits = keras.ops.convert_to_numpy(keras_logits)
 
-    diff = np.max(np.abs(hf_mask_logits - keras_logits))
+    logits_diff = np.max(np.abs(hf_mask_logits - keras_logits))
+    print(f"MaskedLM max diff: {logits_diff:.6e}")
 
-    print(f"MaskedLM max diff : {diff:.8f}")
-    print(f"HF logits mean    : {hf_mask_logits.mean():.8f}")
-    print(f"Keras logits mean : {keras_logits.mean():.8f}")
-    print("Verification complete.")
+    print("Numerical verification complete.")
 
 
 def main(preset, output_dir):
@@ -390,10 +398,12 @@ def main(preset, output_dir):
         "mask_positions": ops.zeros((batch_size, 1), dtype="int32"),
     }
     _ = keras_lm(dummy_input)
+    text = "The capital of France is [MASK]."
+    hf_inputs = hf_tokenizer(text, return_tensors="pt")
+    hf_inputs.pop("token_type_ids", None)
 
     convert_modern_bert_masked_lm_weights(keras_lm, backbone, hf_model)
     verify_conversion(keras_lm, hf_model, hf_tokenizer)
-
     keras_lm.save_to_preset(preset_dir)
 
 
