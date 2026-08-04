@@ -513,15 +513,7 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         )
         x = x * embed_scale
 
-        sc = getattr(self.backbone, "diffusion_self_conditioning", None)
-        if sc is not None:
-            x = sc(
-                x,
-                prev_logits,
-                self.backbone.token_embedding.embeddings,
-                embed_scale,
-            )
-        return x
+        return self.backbone.diffusion_self_conditioning(x, prev_logits)
 
     def _prepare_encoder_cache_for_decoding(self, encoder_cache):
         paddings = [

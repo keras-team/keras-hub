@@ -288,6 +288,26 @@ class Gemma4Backbone(Backbone):
                 name="per_layer_projection_norm",
             )
 
+        if has_diffusion_self_conditioning:
+            self.diffusion_self_conditioning = (
+                Gemma4BlockDiffusionSelfConditioning(
+                    hidden_dim=hidden_dim,
+                    intermediate_dim=intermediate_dim,
+                    epsilon=layer_norm_epsilon,
+                    dtype=dtype,
+                    name="diffusion_self_conditioning",
+                )
+            )
+            # Store the token-embedding layer reference on SC without going
+            # through Keras __setattr__, so it is not double-tracked as a
+            # sublayer of SC.
+            object.__setattr__(
+                self.diffusion_self_conditioning,
+                "_token_embedding_layer",
+                self.token_embedding,
+            )
+            self.diffusion_self_conditioning.build((None, None, hidden_dim))
+
         self.vision_encoder = vision_encoder
         self.audio_encoder = audio_encoder
         self.layer_types = layer_types
@@ -566,6 +586,14 @@ class Gemma4Backbone(Backbone):
         # vision/audio positions remain at their pre-scaled embed magnitude.
         x = x * ops.cast(ops.sqrt(hidden_dim), x.dtype)
 
+        # Self-conditioning: call SC with zeros so it lands in
+        # self._operations → self._layers and is fully tracked by Keras.
+        # Actual SC computation during generation goes through
+        # _prepare_canvas_embeds, which calls SC directly with real prev_logits.
+        if has_diffusion_self_conditioning:
+            _zero_prev = ops.zeros((1, 1, vocabulary_size), dtype=x.dtype)
+            x = self.diffusion_self_conditioning(x, _zero_prev)
+
         # Per-layer model projection, computed after the global scale.
         if hidden_size_per_layer_input > 0:
             _per_proj = self.per_layer_model_projection(x)
@@ -725,18 +753,6 @@ class Gemma4Backbone(Backbone):
         self.num_experts_per_token = num_experts_per_token
         self.has_encoder_layer_scalar = has_encoder_layer_scalar
         self.has_diffusion_self_conditioning = has_diffusion_self_conditioning
-
-        if has_diffusion_self_conditioning:
-            self.diffusion_self_conditioning = (
-                Gemma4BlockDiffusionSelfConditioning(
-                    hidden_dim=hidden_dim,
-                    intermediate_dim=intermediate_dim,
-                    epsilon=layer_norm_epsilon,
-                    dtype=dtype,
-                    name="diffusion_self_conditioning",
-                )
-            )
-            self.diffusion_self_conditioning.build((None, None, hidden_dim))
 
         # Keep `num_vision_tokens_per_image` and `text_only_model` accessible.
         if vision_encoder is not None:
