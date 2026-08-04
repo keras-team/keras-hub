@@ -39,10 +39,6 @@ class Gemma4BlockDiffusionSelfConditioning(keras.layers.Layer):
             Raw canvas token embeddings from the current step.
         prev_logits: float tensor of shape `(B, canvas_length, vocab_size)`
             from the previous denoising step, or `None` on the first step.
-        embed_tokens_weight: float tensor of shape `(vocab_size, hidden_dim)`.
-            Shared token embedding matrix.
-        embed_scale: float scalar. Embedding scale factor (typically
-            `sqrt(hidden_dim)`).
 
     Returns:
         Float tensor of shape `(B, canvas_length, hidden_dim)`.
@@ -106,19 +102,24 @@ class Gemma4BlockDiffusionSelfConditioning(keras.layers.Layer):
 
         self.built = True
 
-    def call(
-        self, canvas_embeds, prev_logits, embed_tokens_weight, embed_scale
-    ):
+    def call(self, canvas_embeds, prev_logits):
         if prev_logits is None:
             return self.post_norm(canvas_embeds)
 
         # Soft token embeddings: weighted combination of embedding rows.
+        # embed_tokens_weight and embed_scale are accessed from the backbone's
+        # token embedding layer stored on this instance at backbone init time.
+        embed_tokens_weight = self._token_embedding_layer.embeddings
+        embed_scale = ops.cast(
+            ops.sqrt(ops.cast(self.hidden_dim, "float32")),
+            embed_tokens_weight.dtype,
+        )
         prev_logits = ops.cast(prev_logits, embed_tokens_weight.dtype)
         probs = ops.softmax(ops.cast(prev_logits, "float32"), axis=-1)
         probs = ops.cast(probs, embed_tokens_weight.dtype)
         # (B, canvas_length, vocab_size) x (vocab_size, hidden_dim)
         soft_embeds = ops.matmul(probs, embed_tokens_weight)
-        soft_embeds = soft_embeds * ops.cast(embed_scale, soft_embeds.dtype)
+        soft_embeds = soft_embeds * embed_scale
         soft_embeds = ops.cast(soft_embeds, self.compute_dtype)
 
         x = self.pre_norm(soft_embeds)
@@ -128,6 +129,11 @@ class Gemma4BlockDiffusionSelfConditioning(keras.layers.Layer):
         return self.post_norm(canvas_embeds + out)
 
     def compute_output_shape(self, input_shape):
+        # input_shape may be (canvas_embeds_shape, prev_logits_shape) when
+        # called with two positional arguments; the output has the same shape
+        # as canvas_embeds.
+        if isinstance(input_shape, (list, tuple)) and len(input_shape) == 2:
+            return input_shape[0]
         return input_shape
 
     def get_config(self):

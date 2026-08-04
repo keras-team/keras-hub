@@ -27,6 +27,9 @@ from transformers import DiffusionGemmaForBlockDiffusion
 
 import keras_hub
 
+GENERATION_SEED = 123
+torch.manual_seed(GENERATION_SEED)
+
 device = torch.device("cpu")
 torch.set_default_device(device)
 
@@ -91,16 +94,13 @@ def _precompute_hf_outputs(hf_repo_id):
     canvas_length = getattr(hf_model.config, "canvas_length", 256)
     fixed_canvas = torch.zeros(1, canvas_length, dtype=torch.long)
 
-    print("-> Running HF text verification ...", flush=True)
     text_fwd = _hf_forward(
         hf_model, processor, PROMPT_TEXT, decoder_input_ids=fixed_canvas
     )
-    print("-> HF text verification complete.", flush=True)
 
     image_data = None
     if is_multimodal:
         try:
-            print("-> Running HF image verification ...", flush=True)
             raw_image = _load_test_image()
             img_fwd = _hf_forward(
                 hf_model,
@@ -118,7 +118,6 @@ def _precompute_hf_outputs(hf_repo_id):
                 "generated_text": img_fwd["generated_text"],
                 "raw_image": raw_image,
             }
-            print("-> HF image verification complete.", flush=True)
         except Exception as e:
             print(f"⚠️  Image HF forward skipped: {e}")
 
@@ -143,7 +142,6 @@ def _load_test_image():
     response = requests.get(IMAGE_URL, timeout=30)
     response.raise_for_status()
     image = Image.open(BytesIO(response.content)).convert("RGB")
-    print("   Verification image downloaded.", flush=True)
     return image
 
 
@@ -169,9 +167,8 @@ def _hf_forward(
     always supply a fixed canvas so verification is deterministic.
 
     When ``--skip_generate`` is not set, this function also runs
-    ``hf_model.generate(**hf_inputs, max_new_tokens=512)`` on the same
-    ``hf_inputs`` — matching the DiffusionGemma model-card usage — and returns
-    the decoded output text alongside the logits.
+    ``hf_model.generate(**hf_inputs)`` using the preset generation config and
+    returns the decoded generated tokens alongside the logits.
     """
     modality = "image" if raw_image is not None else "text"
     print(f"   Preprocessing HF {modality} inputs ...", flush=True)
@@ -213,13 +210,14 @@ def _hf_forward(
     else:
         try:
             print(
-                f"   Running HF {modality} generation (up to 512 tokens) ...",
+                f"   Running HF {modality} generation ...",
                 flush=True,
             )
             with _no_grad():
-                output = hf_model.generate(**hf_inputs, max_new_tokens=512)
+                output = hf_model.generate(**hf_inputs)
+            prompt_length = hf_inputs["input_ids"].shape[1]
             generated_text = processor.decode(
-                output[0], skip_special_tokens=True
+                output[0, prompt_length:], skip_special_tokens=True
             )
             print(f"   HF {modality} generation complete.", flush=True)
         except Exception as e:
@@ -286,7 +284,6 @@ def _kh_forward(
         encoder_kv_cache = diffusion_lm._prepare_encoder_cache_for_decoding(
             encoder_kv_cache
         )
-        print("   KerasHub encoder pass complete.", flush=True)
 
         # Step 2: canvas embeddings (first step → self-conditioning is no-op).
         canvas_embeds = diffusion_lm._prepare_canvas_embeds(
@@ -305,7 +302,6 @@ def _kh_forward(
 
         # Step 4: project to vocabulary logits with soft-cap.
         logits = diffusion_lm._canvas_logits(hidden)
-        print("   KerasHub decoder step complete.", flush=True)
 
     return ops.convert_to_numpy(logits).astype(np.float32)
 
@@ -349,8 +345,8 @@ def _test_generate(
 ):
     """Run KH ``.generate()`` and print the output alongside HF's output.
 
-    ``max_length`` is the prompt sequence length. Defaults to the
-    preprocessor's configured ``sequence_length`` when ``None``.
+    ``max_length`` is the generated output length. Defaults to one canvas when
+    ``None``, matching the preset's default HF generation length.
     """
     if FLAGS.skip_generate:
         print(f"[{label}] Generate comparison skipped (--skip_generate).")
@@ -364,6 +360,13 @@ def _test_generate(
     generate_kwargs = {}
     if max_length is not None:
         generate_kwargs["max_length"] = max_length
+
+    diffusion_lm.compile(
+        sampler=keras_hub.samplers.EntropyBoundSampler(
+            seed=GENERATION_SEED,
+        )
+    )
+
     try:
         if media_kwargs:
             kh_inputs = {
@@ -386,6 +389,12 @@ def _test_generate(
         return
     kh_text = kh_output[0] if isinstance(kh_output, list) else kh_output
 
+    raw_image = media_kwargs.get("images")
+    if raw_image is not None:
+        print(
+            f"\n[{label}] Input image: url={IMAGE_URL}, "
+            f"size={raw_image.size}, mode={raw_image.mode}"
+        )
     print(f"\n[{label}] HF generate output:\n  {hf_generated_text}")
     print(f"[{label}] KH generate output:\n  {kh_text}")
 
