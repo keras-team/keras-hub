@@ -31,6 +31,13 @@ class GemmaBackboneTest(TestCase):
             expected_output_shape=(2, 5, 16),
         )
 
+    def test_flexible_positions(self):
+        self.run_positions_test(
+            cls=GemmaBackbone,
+            init_kwargs=self.init_kwargs,
+            vocabulary_size=self.init_kwargs["vocabulary_size"],
+        )
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
@@ -186,6 +193,13 @@ class Gemma2BackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 10, 16),
+        )
+
+    def test_flexible_positions(self):
+        self.run_positions_test(
+            cls=GemmaBackbone,
+            init_kwargs=self.init_kwargs,
+            vocabulary_size=self.init_kwargs["vocabulary_size"],
         )
 
     def test_sliding_window(self):
