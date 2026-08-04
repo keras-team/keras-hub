@@ -28,6 +28,24 @@ class WordPieceTokenizerTest(TestCase):
             expected_detokenize_output=["the quick brown fox ."],
         )
 
+    def test_tokenizer_basics_with_non_default_config(self):
+        special_tokens = ["@UNK@", "@MASK@"]
+        vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@own", "fox", "@MASK@"]
+        self.run_preprocessing_layer_test(
+            cls=WordPieceTokenizer,
+            init_kwargs={
+                "vocabulary": vocab_data,
+                "lowercase": True,
+                "oov_token": "@UNK@",
+                "suffix_indicator": "@@",
+                "special_tokens": special_tokens,
+                "special_tokens_in_strings": True,
+            },
+            input_data=["quick brown whale @MASK@"],
+            expected_output=[[1, 2, 3, 4, 0, 6]],
+            expected_detokenize_output=["quick brown @UNK@ @MASK@"],
+        )
+
     def test_dense_output(self):
         input_data = ["the quick brown fox."]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]

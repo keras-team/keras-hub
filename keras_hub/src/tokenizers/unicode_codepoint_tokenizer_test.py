@@ -37,6 +37,26 @@ class UnicodeCodepointTokenizerTest(TestCase):
             ],
         )
 
+    def test_tokenizer_basics_with_non_default_config(self):
+        self.run_preprocessing_layer_test(
+            cls=UnicodeCodepointTokenizer,
+            init_kwargs={
+                "lowercase": False,
+                "sequence_length": 8,
+                "normalization_form": "NFC",
+                "errors": "ignore",
+                "replacement_char": 0,
+                "vocabulary_size": 100,
+            },
+            input_data=["ninja", "samurai", "▀▁▂▃"],
+            expected_output=[
+                [99, 99, 99, 99, 97, 0, 0, 0],
+                [99, 97, 99, 99, 99, 97, 99, 0],
+                [99, 99, 99, 99, 0, 0, 0, 0],
+            ],
+            expected_detokenize_output=[b"cccca", b"cacccac", b"cccc"],
+        )
+
     def test_tokenize_scalar(self):
         input_data = "ninja"
         tokenizer = UnicodeCodepointTokenizer()
