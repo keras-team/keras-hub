@@ -8,8 +8,6 @@ and tpu-inference are installed; importing it works anywhere (api-gen walks
 every module), with the nnx base class swapped in only when flax exists.
 """
 
-import jax
-from jax.sharding import Mesh
 from keras import ops
 
 try:
@@ -53,9 +51,7 @@ class KerasHubVllmModel(_NnxModule):
       the tied token embedding.
     """
 
-    def __init__(
-        self, vllm_config, rng_key: jax.Array, mesh: Mesh = None
-    ) -> None:
+    def __init__(self, vllm_config, rng_key, mesh=None):
         """Records what `load_weights` needs; builds nothing.
 
         The loader constructs models under `nnx.eval_shape`, where concrete
@@ -88,7 +84,7 @@ class KerasHubVllmModel(_NnxModule):
         # `str(torch.bfloat16)` is "torch.bfloat16"; Keras wants "bfloat16".
         self._dtype = str(resolved_dtype).removeprefix("torch.")
 
-    def load_weights(self, *args, **kwargs) -> None:
+    def load_weights(self, *args, **kwargs):
         """Builds the KerasHub model and loads the preset weights.
 
         One `CausalLM.from_preset` call, the same as any other KerasHub
