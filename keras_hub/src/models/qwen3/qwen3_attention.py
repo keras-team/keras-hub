@@ -4,7 +4,6 @@ import keras
 from keras import ops
 
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
-from keras_hub.src.models.qwen3.qwen3_layernorm import Qwen3LayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
@@ -84,13 +83,12 @@ class Qwen3Attention(keras.layers.Layer):
         )
         self._query_dense.build(inputs_shape)
 
-        self._query_dense_layer_norm = Qwen3LayerNorm(
+        self._query_dense_layer_norm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
-            head_dim=self.head_dim,
             name="query_dense_layernorm",
         )
-        self._query_dense_layer_norm.build(inputs_shape)
+        self._query_dense_layer_norm.build((None, None, self.head_dim))
 
         self._key_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
@@ -105,13 +103,12 @@ class Qwen3Attention(keras.layers.Layer):
         )
         self._key_dense.build(inputs_shape)
 
-        self._key_dense_layer_norm = Qwen3LayerNorm(
+        self._key_dense_layer_norm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
-            head_dim=self.head_dim,
             name="key_dense_layernorm",
         )
-        self._key_dense_layer_norm.build(inputs_shape)
+        self._key_dense_layer_norm.build((None, None, self.head_dim))
 
         self._value_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
