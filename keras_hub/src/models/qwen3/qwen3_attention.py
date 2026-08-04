@@ -88,7 +88,9 @@ class Qwen3Attention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="query_dense_layernorm",
         )
-        self._query_dense_layer_norm.build((None, None, self.head_dim))
+        self._query_dense_layer_norm.build(
+            (None, None, self.num_query_heads, self.head_dim)
+        )
 
         self._key_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
@@ -108,7 +110,9 @@ class Qwen3Attention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="key_dense_layernorm",
         )
-        self._key_dense_layer_norm.build((None, None, self.head_dim))
+        self._key_dense_layer_norm.build(
+            (None, None, self.num_key_value_heads, self.head_dim)
+        )
 
         self._value_dense = keras.layers.EinsumDense(
             equation="bkm,mvh->bkvh",
