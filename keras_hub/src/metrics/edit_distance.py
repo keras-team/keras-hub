@@ -1,6 +1,7 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 
 try:
@@ -126,7 +127,9 @@ class EditDistance(keras.metrics.Metric):
 
         if self.normalize:
             self._aggregate_reference_length.assign_add(
-                tf.cast(tf.size(y_true.flat_values), dtype=self.dtype)
+                convert_to_numpy(
+                    tf.cast(tf.size(y_true.flat_values), dtype=self.dtype)
+                )
             )
 
         def calculate_edit_distance(args):
@@ -135,7 +138,7 @@ class EditDistance(keras.metrics.Metric):
             reference = tf.sparse.from_dense([reference])
             hypothesis = tf.sparse.from_dense([hypothesis])
 
-            edit_distance = tf.squeeze(
+            return tf.squeeze(
                 tf.edit_distance(
                     hypothesis=hypothesis,
                     truth=reference,
@@ -143,18 +146,24 @@ class EditDistance(keras.metrics.Metric):
                 )
             )
 
-            self._aggregate_unnormalized_edit_distance.assign_add(
-                tf.cast(edit_distance, dtype=self.dtype)
-            )
-            if not self.normalize:
-                self._number_of_samples.assign_add(tf.cast(1, dtype=self.dtype))
-            return 0
-
-        _ = tf.map_fn(
+        # `tf.map_fn` traces its body into a graph, so the aggregation has to
+        # happen outside of it: the state variables belong to the Keras backend,
+        # which is not necessarily TensorFlow.
+        edit_distances = tf.map_fn(
             fn=calculate_edit_distance,
             elems=(y_true, y_pred),
-            fn_output_signature="int8",
+            fn_output_signature=self.dtype,
         )
+
+        self._aggregate_unnormalized_edit_distance.assign_add(
+            convert_to_numpy(tf.reduce_sum(edit_distances))
+        )
+        if not self.normalize:
+            self._number_of_samples.assign_add(
+                convert_to_numpy(
+                    tf.cast(tf.shape(edit_distances)[0], dtype=self.dtype)
+                )
+            )
 
     def result(self):
         if self.normalize:
