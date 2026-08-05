@@ -2,8 +2,6 @@ import keras
 from keras import layers
 from keras import ops
 
-from keras_hub.src.utils.keras_utils import gelu_approximate
-
 
 @keras.utils.register_keras_serializable(package="keras_hub")
 class ModernBertMLP(layers.Layer):
@@ -35,7 +33,7 @@ class ModernBertMLP(layers.Layer):
         self,
         hidden_dim,
         intermediate_dim,
-        activation=gelu_approximate,
+        activation="gelu",
         dtype=None,
         **kwargs,
     ):
@@ -148,7 +146,7 @@ class ModernBertAttention(layers.Layer):
 
         if hidden_dim % num_heads != 0:
             raise ValueError(
-                f"`hidden_dim` ({hidden_dim}) must be perfectly divisible "
+                f"`hidden_dim` ({hidden_dim}) must be divisible "
                 f"by `num_heads` ({num_heads})."
             )
 
@@ -176,105 +174,221 @@ class ModernBertAttention(layers.Layer):
         self.attn_dropout = layers.Dropout(
             dropout,
             dtype=dtype,
+            name="attention_dropout",
         )
 
     def build(self, input_shape):
         self.qkv.build(input_shape)
-        self.output_dense.build(input_shape)
+
+        self.output_dense.build(
+            (
+                input_shape[0],
+                input_shape[1],
+                self.hidden_dim,
+            )
+        )
+
         super().build(input_shape)
 
     def _get_sliding_window_mask(self, seq_len, dtype):
-        """Create the ModernBERT local attention mask.
+        """Return the bidirectional local-attention mask."""
 
-        HF ModernBERT interprets `local_attention` as the full
-        window size, so each side receives `window // 2`.
-        """
-        idx = ops.arange(seq_len)
-        dist = ops.abs(idx[:, None] - idx[None, :])
-        mask = dist <= (self.local_attention_window // 2)
+        half_window = self.local_attention_window // 2
+
+        positions = ops.arange(seq_len)
+
+        distance = ops.abs(positions[:, None] - positions[None, :])
+
+        mask = distance <= half_window
+
         return ops.cast(mask, dtype)
 
-    def call(self, x, padding_mask=None, training=None):
-        b = ops.shape(x)[0]
-        t = ops.shape(x)[1]
+    def _apply_rope(self, x):
+        """Apply RotaryEmbedding while preserving [B, H, T, D]."""
+
+        batch_size = ops.shape(x)[0]
+        num_heads = ops.shape(x)[1]
+        seq_len = ops.shape(x)[2]
+
+        x = ops.reshape(
+            x,
+            (
+                batch_size * num_heads,
+                seq_len,
+                self.head_dim,
+            ),
+        )
+
+        x = self.rotary_embedding(x)
+
+        x = ops.reshape(
+            x,
+            (
+                batch_size,
+                num_heads,
+                seq_len,
+                self.head_dim,
+            ),
+        )
+
+        return x
+
+    def call(
+        self,
+        x,
+        padding_mask=None,
+        training=None,
+    ):
+        batch_size = ops.shape(x)[0]
+        seq_len = ops.shape(x)[1]
 
         # QKV projection
         qkv = self.qkv(x)
 
-        q, k, v = ops.split(qkv, 3, axis=-1)
+        q, k, v = ops.split(
+            qkv,
+            3,
+            axis=-1,
+        )
 
-        q = ops.reshape(q, (b, t, self.num_heads, self.head_dim))
-        k = ops.reshape(k, (b, t, self.num_heads, self.head_dim))
-        v = ops.reshape(v, (b, t, self.num_heads, self.head_dim))
+        # [B, T, H*D] -> [B, T, H, D]
+        q = ops.reshape(
+            q,
+            (
+                batch_size,
+                seq_len,
+                self.num_heads,
+                self.head_dim,
+            ),
+        )
 
-        # Rotary embedding
+        k = ops.reshape(
+            k,
+            (
+                batch_size,
+                seq_len,
+                self.num_heads,
+                self.head_dim,
+            ),
+        )
+
+        v = ops.reshape(
+            v,
+            (
+                batch_size,
+                seq_len,
+                self.num_heads,
+                self.head_dim,
+            ),
+        )
+
+        # [B, T, H, D] -> [B, H, T, D]
+        q = ops.transpose(
+            q,
+            (0, 2, 1, 3),
+        )
+
+        k = ops.transpose(
+            k,
+            (0, 2, 1, 3),
+        )
+
+        v = ops.transpose(
+            v,
+            (0, 2, 1, 3),
+        )
+
+        # Rotary position embedding
         if self.rotary_embedding is not None:
-            q = self.rotary_embedding(q)
-            k = self.rotary_embedding(k)
+            q = self._apply_rope(q)
+            k = self._apply_rope(k)
 
-        # [B,T,H,D] -> [B,H,T,D]
-        q = ops.transpose(q, (0, 2, 1, 3))
-        k = ops.transpose(k, (0, 2, 3, 1))
-        v = ops.transpose(v, (0, 2, 1, 3))
-
+        # Attention scores
         scale = self.head_dim**-0.5
-        scores = ops.matmul(q, k) * scale
 
+        scores = ops.matmul(
+            q,
+            ops.transpose(
+                k,
+                (0, 1, 3, 2),
+            ),
+        )
+
+        scores = scores * scale
+
+        # Local sliding-window attention
         if self.local_attention_window is not None:
             local_mask = self._get_sliding_window_mask(
-                t,
+                seq_len,
                 scores.dtype,
             )
 
-            scores = scores + (1.0 - local_mask[None, None]) * ops.cast(
+            local_mask = local_mask[None, None, :, :]
+
+            scores = scores + (1.0 - local_mask) * ops.cast(
                 -1e9,
                 scores.dtype,
             )
 
+        # Padding mask
         if padding_mask is not None:
-            pm = ops.cast(
+            padding_mask = ops.cast(
                 padding_mask,
                 scores.dtype,
             )
 
-            scores = scores + (1.0 - pm[:, None, None, :]) * ops.cast(
+            padding_mask = padding_mask[:, None, None, :]
+
+            scores = scores + (1.0 - padding_mask) * ops.cast(
                 -1e9,
                 scores.dtype,
             )
 
-        probs = ops.softmax(
-            ops.cast(scores, "float32"),
+        # Softmax
+        probabilities = ops.softmax(
+            ops.cast(
+                scores,
+                "float32",
+            ),
             axis=-1,
         )
 
-        probs = ops.cast(
-            probs,
-            q.dtype,
+        probabilities = ops.cast(
+            probabilities,
+            v.dtype,
         )
 
-        probs = self.attn_dropout(
-            probs,
+        probabilities = self.attn_dropout(
+            probabilities,
             training=training,
         )
 
-        out = ops.matmul(
-            probs,
+        # Attention output
+        output = ops.matmul(
+            probabilities,
             v,
         )
 
-        out = ops.transpose(
-            out,
+        # [B, H, T, D] -> [B, T, H, D]
+        output = ops.transpose(
+            output,
             (0, 2, 1, 3),
         )
 
-        out = ops.reshape(
-            out,
-            (b, t, self.hidden_dim),
+        # [B, T, H, D] -> [B, T, hidden_dim]
+        output = ops.reshape(
+            output,
+            (
+                batch_size,
+                seq_len,
+                self.hidden_dim,
+            ),
         )
 
-        out = self.output_dense(out)
+        # Output projection
+        output = self.output_dense(output)
 
-        return out
+        return output
 
     def get_config(self):
         config = super().get_config()
@@ -283,7 +397,7 @@ class ModernBertAttention(layers.Layer):
             {
                 "hidden_dim": self.hidden_dim,
                 "num_heads": self.num_heads,
-                "local_attention_window": self.local_attention_window,
+                "local_attention_window": (self.local_attention_window),
                 "dropout": self.dropout,
                 "rotary_embedding": (
                     keras.saving.serialize_keras_object(self.rotary_embedding)
@@ -297,9 +411,11 @@ class ModernBertAttention(layers.Layer):
 
     @classmethod
     def from_config(cls, config):
-        if config.get("rotary_embedding") is not None:
+        rotary_config = config.get("rotary_embedding")
+
+        if rotary_config is not None:
             config["rotary_embedding"] = keras.saving.deserialize_keras_object(
-                config["rotary_embedding"]
+                rotary_config
             )
 
         return cls(**config)

@@ -79,7 +79,7 @@ class ModernBertBackbone(Backbone):
         global_attn_every_n_layers=3,
         dropout=0.0,
         rotary_max_wavelength=160000,
-        local_rotary_max_wavelength=None,
+        local_rotary_max_wavelength=10000,
         layer_norm_epsilon=1e-5,
         dtype=None,
         **kwargs,
@@ -135,8 +135,6 @@ class ModernBertBackbone(Backbone):
         )
 
         # Local-attention RoPE
-        # If local_rotary_max_wavelength isn't provided, fall back
-        # to the global value.
         if local_rotary_max_wavelength is None:
             local_rotary_max_wavelength = rotary_max_wavelength
 
@@ -145,6 +143,7 @@ class ModernBertBackbone(Backbone):
             dtype=dtype,
             name="local_rotary_embedding",
         )
+
         self.rotary_embedding = self.global_rotary_embedding
 
         # Transformer layers
