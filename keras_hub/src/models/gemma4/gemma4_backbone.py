@@ -586,13 +586,14 @@ class Gemma4Backbone(Backbone):
         # vision/audio positions remain at their pre-scaled embed magnitude.
         x = x * ops.cast(ops.sqrt(hidden_dim), x.dtype)
 
-        # Self-conditioning: call SC with zeros so it lands in
-        # self._operations → self._layers and is fully tracked by Keras.
-        # Actual SC computation during generation goes through
-        # _prepare_canvas_embeds, which calls SC directly with real prev_logits.
+        # Include SC in the functional graph for weight tracking. Multiplying
+        # its output by 0 ensures no numerical effect on x; Keras registers
+        # the layer at Python trace time before XLA folds the zero away.
         if has_diffusion_self_conditioning:
             _zero_prev = ops.zeros((1, 1, vocabulary_size), dtype=x.dtype)
-            x = self.diffusion_self_conditioning(x, _zero_prev)
+            x = x + ops.cast(0.0, x.dtype) * self.diffusion_self_conditioning(
+                x[:, :1], _zero_prev
+            )
 
         # Per-layer model projection, computed after the global scale.
         if hidden_size_per_layer_input > 0:
