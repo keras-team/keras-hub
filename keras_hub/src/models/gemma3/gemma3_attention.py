@@ -11,6 +11,8 @@ from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
 from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.keras_utils import running_on_tpu
+from keras_hub.src.vllm.attention import vllm_paged_attention
+from keras_hub.src.vllm.context import get_vllm_context
 
 
 class CachedGemma3Attention(keras.layers.Layer):
@@ -149,6 +151,59 @@ class CachedGemma3Attention(keras.layers.Layer):
         """Rope rotate q or k."""
         x = self.rope_layer(x, start_index=start_index)
         return x
+
+    def _compute_vllm_attention(self, x, cache, vllm_context):
+        """vLLM paged-attention route for this layer.
+
+        Used only while serving through vLLM on TPU (when a serving context
+        is active). It mirrors `call`'s projection + RoPE + output steps but
+        applies RoPE at the engine's per-token positions and hands Q/K/V to
+        the shared paged-attention bridge instead of the dense path. All
+        Gemma3-specific choices (Q/K norm, the softmax scale, the sliding
+        window, and the logit soft cap) are made here, in the model.
+        """
+        # RoPE at vLLM's absolute positions: one flattened batch mixes many
+        # requests, each at its own position, so the usual contiguous
+        # start_index does not apply.
+        positions = ops.reshape(vllm_context.positions, (-1, 1))
+
+        query = self.query_dense(x)
+        if self.use_query_key_norm:
+            query = self.query_norm(query)
+        query = self.rope_layer(query, positions=positions)
+
+        key = self.key_dense(x)
+        if self.use_query_key_norm:
+            key = self.key_norm(key)
+        key = self.rope_layer(key, positions=positions)
+
+        value = self.value_dense(x)
+
+        if self.query_head_dim_normalize:
+            scale = 1.0 / np.sqrt(self.head_dim)
+        else:
+            scale = 1.0 / np.sqrt(self.hidden_dim // self.num_query_heads)
+
+        sliding_window = (
+            self.sliding_window_size
+            if self.use_sliding_window_attention
+            else None
+        )
+
+        attention_vec = vllm_paged_attention(
+            query,
+            key,
+            value,
+            scale,
+            num_kv_heads=self.num_key_value_heads,
+            soft_cap=self.logit_soft_cap,
+            sliding_window=sliding_window,
+        )
+
+        attention_output = self.output_dense(attention_vec)
+        if cache is not None:
+            return attention_output, cache
+        return attention_output
 
     def _use_fused_attention_op(self):
         if not fused_attention_op_available():
@@ -323,6 +378,15 @@ class CachedGemma3Attention(keras.layers.Layer):
         cache_update_mask=None,
         training=False,
     ):
+        # Route to vLLM paged attention while serving on TPU; otherwise the
+        # original dense path below runs unchanged.
+        vllm_context = get_vllm_context()
+        if (
+            vllm_context is not None
+            and vllm_context.paged_attention_func is not None
+        ):
+            return self._compute_vllm_attention(x, cache, vllm_context)
+
         query = self.query_dense(x)
 
         if self.use_query_key_norm:
