@@ -194,11 +194,8 @@ class ModernBertAttention(layers.Layer):
         """Return the bidirectional local-attention mask."""
 
         half_window = self.local_attention_window // 2
-
         positions = ops.arange(seq_len)
-
         distance = ops.abs(positions[:, None] - positions[None, :])
-
         mask = distance <= half_window
 
         return ops.cast(mask, dtype)
@@ -438,8 +435,9 @@ class ModernBertEncoderLayer(layers.Layer):
         rotary position embedding layer passed to the underlying
         attention object.
             Defaults to `None`.
-        local_attention_window: int. Maximum sequence length context window
-        limit for sliding window operations. Set to `None` for global attention.
+        local_attention_window: int. Attention radius for local
+        sliding-window attention. A token can attend to tokens within
+        this many positions on either side.
             Defaults to `None`.
         dropout: float. Attention map and feature output dropout probability.
             Defaults to `0.0`.
