@@ -382,7 +382,7 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         x = x * embed_scale
 
         batch_size = ops.shape(token_ids)[0]
-        prompt_length = ops.shape(token_ids)[1]
+        prompt_length = token_ids.shape[1]
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_key_value_heads
         head_dim = self.backbone.head_dim
@@ -535,7 +535,7 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
     ):
         x = canvas_embeds
         batch_size = ops.shape(x)[0]
-        canvas_length = ops.shape(x)[1]
+        canvas_length = x.shape[1]
 
         # Auto-pad encoder KV cache to prompt + canvas length if not pre-padded.
         cache_seq_len = ops.shape(encoder_kv_cache)[3]
@@ -572,9 +572,22 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
         else:
             combined_padding_mask = None
 
+        canvas_positions = ops.arange(
+            prompt_length,
+            prompt_length + canvas_length,
+            dtype="int32",
+        )
+        canvas_positions = ops.broadcast_to(
+            ops.expand_dims(canvas_positions, axis=0),
+            (batch_size, canvas_length),
+        )
+
         caches = []
         for i, layer in enumerate(self.backbone.transformer_layers):
             current_cache = combined_cache[:, i, ...]
+            current_padding_mask = combined_padding_mask
+            cache_update_index = prompt_length
+            positions = None
             shared_kv = None
             if (
                 layer.is_kv_shared_layer
@@ -586,13 +599,62 @@ class Gemma4BlockDiffusionLM(BlockDiffusionLM):
                 else:
                     shared_kv = combined_cache[:, idx, ...]
 
+            if (
+                layer.use_sliding_window_attention
+                and not layer.is_global_attention
+            ):
+                # HF exposes only the rolling encoder prefix to local decoder
+                # layers, then appends the current canvas read-only.
+                prefix_length = min(
+                    prompt_length, layer.sliding_window_size - 1
+                )
+                cache_start = prompt_length - prefix_length
+                local_cache_length = prefix_length + canvas_length
+                cache_shape = ops.shape(current_cache)
+                current_cache = ops.slice(
+                    current_cache,
+                    (0, 0, cache_start, 0, 0),
+                    (
+                        cache_shape[0],
+                        cache_shape[1],
+                        local_cache_length,
+                        cache_shape[3],
+                        cache_shape[4],
+                    ),
+                )
+                if shared_kv is not None:
+                    shared_cache_shape = ops.shape(shared_kv)
+                    shared_cache_start = (
+                        shared_cache_shape[2] - local_cache_length
+                    )
+                    shared_kv = ops.slice(
+                        shared_kv,
+                        (0, 0, shared_cache_start, 0, 0),
+                        (
+                            shared_cache_shape[0],
+                            shared_cache_shape[1],
+                            local_cache_length,
+                            shared_cache_shape[3],
+                            shared_cache_shape[4],
+                        ),
+                    )
+                if current_padding_mask is not None:
+                    current_padding_mask = ops.slice(
+                        current_padding_mask,
+                        (0, cache_start),
+                        (batch_size, local_cache_length),
+                    )
+                cache_update_index = prefix_length
+                positions = canvas_positions
+
             x, next_cache = layer(
                 x,
                 cache=current_cache,
-                cache_update_index=prompt_length,
+                cache_update_index=cache_update_index,
                 canvas_mask=canvas_mask,
-                padding_mask=combined_padding_mask,
+                padding_mask=current_padding_mask,
                 shared_kv=shared_kv,
+                positions=positions,
             )
             caches.append(next_cache)
 
