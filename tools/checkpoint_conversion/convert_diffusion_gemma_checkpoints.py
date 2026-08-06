@@ -214,10 +214,9 @@ def _hf_forward(
                 flush=True,
             )
             with _no_grad():
-                output = hf_model.generate(**hf_inputs, max_new_tokens=512)
-            prompt_length = hf_inputs["input_ids"].shape[1]
+                output = hf_model.generate(**hf_inputs)
             generated_text = processor.decode(
-                output[0, prompt_length:], skip_special_tokens=True
+                output[0], skip_special_tokens=True
             )
             print(f"   HF {modality} generation complete.", flush=True)
         except Exception as e:

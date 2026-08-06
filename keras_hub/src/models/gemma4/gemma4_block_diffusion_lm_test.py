@@ -194,7 +194,12 @@ class Gemma4BlockDiffusionLMTest(TestCase, parameterized.TestCase):
             dtype="float32",
         )
         embedding_weights = ops.ones((6, 4), dtype="float16")
-        embed_scale = ops.array(2.0, dtype="float16")
+
+        class _MockEmbedding:
+            embeddings = embedding_weights
+
+        object.__setattr__(layer, "_token_embedding_layer", _MockEmbedding())
+
         operand_dtypes = []
         softmax_inputs = []
         original_matmul = ops.matmul
@@ -225,12 +230,7 @@ class Gemma4BlockDiffusionLMTest(TestCase, parameterized.TestCase):
                 side_effect=record_softmax,
             ),
         ):
-            layer(
-                canvas_embeds,
-                prev_logits,
-                embedding_weights,
-                embed_scale,
-            )
+            layer(canvas_embeds, prev_logits)
 
         self.assertEqual(operand_dtypes, [("float16", "float16")])
         expected_logits = ops.cast(ops.cast(prev_logits, "float16"), "float32")
