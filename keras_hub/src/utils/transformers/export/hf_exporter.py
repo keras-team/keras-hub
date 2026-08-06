@@ -119,11 +119,10 @@ def export_backbone(backbone, path, include_lm_head=False, tokenizer=None):
 
     # Get config
     get_config_fn = MODEL_CONFIGS[model_type]
-    # Llama3 config requires the tokenizer for bos/eos token IDs.
-    if model_type == "Llama3Backbone" and tokenizer is not None:
-        hf_config = get_config_fn(backbone, tokenizer)
-    else:
-        hf_config = get_config_fn(backbone)
+    hf_config = get_config_fn(backbone)
+    if tokenizer is not None:
+        hf_config["bos_token_id"] = tokenizer.token_to_id(tokenizer.start_token)
+        hf_config["eos_token_id"] = tokenizer.token_to_id(tokenizer.end_token)
 
     # Get weights
     get_weights_fn = MODEL_EXPORTERS[model_type]

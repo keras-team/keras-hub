@@ -1,13 +1,15 @@
 import keras.ops as ops
 
+from keras_hub.src.tokenizers.byte_pair_tokenizer import (
+    SPLIT_PATTERN_TOKENIZERS,
+)
 
-def get_llama3_config(backbone, tokenizer=None):
+
+def get_llama3_config(backbone):
     """Convert Keras Llama3 backbone config to Hugging Face dictionary.
 
     Args:
         backbone: Llama3Backbone. The Keras Llama3 backbone instance.
-        tokenizer: Llama3Tokenizer. Optional tokenizer used to populate
-            ``bos_token_id`` and ``eos_token_id`` in the config.
 
     Returns:
         A dict containing the Hugging Face model configuration.
@@ -16,7 +18,7 @@ def get_llama3_config(backbone, tokenizer=None):
 
     # Llama 3.1/3.2 (scaled RoPE) support up to 131072 tokens; Llama 3.0
     # uses an 8192-token context window.
-    rope_freq_adj = getattr(backbone, "rope_frequency_adjustment_factor", None)
+    rope_freq_adj = backbone.rope_frequency_adjustment_factor
     max_position_embeddings = 131072 if rope_freq_adj is not None else 8192
 
     hf_config = {
@@ -41,25 +43,15 @@ def get_llama3_config(backbone, tokenizer=None):
         "torch_dtype": backbone.dtype_policy.compute_dtype,
     }
 
-    # BOS/EOS token IDs — read from the tokenizer when provided so that the
-    # correct vocabulary indices are written to config.json.
-    if tokenizer is not None:
-        hf_config["bos_token_id"] = tokenizer.token_to_id(tokenizer.start_token)
-        hf_config["eos_token_id"] = tokenizer.token_to_id(tokenizer.end_token)
-
     # Llama 3.1+ uses scaled RoPE ("llama3" rope_type).
-    # Use getattr with None defaults so that older Llama 3.0 backbones that
-    # lack these attributes do not raise AttributeError.
     if rope_freq_adj is not None:
         hf_config["rope_scaling"] = {
             "rope_type": "llama3",
             "factor": rope_freq_adj,
-            "low_freq_factor": getattr(backbone, "rope_low_freq_factor", None),
-            "high_freq_factor": getattr(
-                backbone, "rope_high_freq_factor", None
-            ),
-            "original_max_position_embeddings": getattr(
-                backbone, "rope_pretraining_sequence_length", None
+            "low_freq_factor": backbone.rope_low_freq_factor,
+            "high_freq_factor": backbone.rope_high_freq_factor,
+            "original_max_position_embeddings": (
+                backbone.rope_pretraining_sequence_length
             ),
         }
 
@@ -254,17 +246,7 @@ def build_llama3_tokenizer_json(tokenizer):
             "pretokenizers": [
                 {
                     "type": "Split",
-                    "pattern": {
-                        "Regex": (
-                            r"(?i:'s|'t|'re|'ve|'m|'ll|'d)"
-                            r"|[^\r\n\p{L}\p{N}]?\p{L}+"
-                            r"|\p{N}{1,3}"
-                            r"| ?[^\s\p{L}\p{N}]+[\r\n]*"
-                            r"|\s*[\r\n]+"
-                            r"|\s+(?!\S)"
-                            r"|\s+"
-                        )
-                    },
+                    "pattern": {"Regex": SPLIT_PATTERN_TOKENIZERS},
                     "behavior": "Removed",
                     "invert": True,
                 },

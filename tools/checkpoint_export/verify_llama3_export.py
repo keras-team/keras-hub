@@ -317,7 +317,7 @@ def validate_exported_model(
         f"original={orig_params:,}, exported={exp_params:,}"
     )
 
-    exp_tokenizer = AutoTokenizer.from_pretrained(hf_model_id)
+    exp_tokenizer = AutoTokenizer.from_pretrained(export_path)
 
     print("\n[5/6] Validating configs and token IDs...")
     orig_cfg = AutoConfig.from_pretrained(hf_model_id)
