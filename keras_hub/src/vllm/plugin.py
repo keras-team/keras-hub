@@ -28,15 +28,17 @@ def register_keras_hub():
     Serving runs on tpu-inference's native JAX path, so without it there is
     nothing to register and this returns; vLLM continues unaffected.
     """
+    # Imported together and before any registration: a plugin that raises
+    # would break vLLM's startup, and a partial import would leave the
+    # architecture registered with no tokenizer behind it.
     try:
         from tpu_inference.models.common.model_loader import register_model
+        from vllm.renderers.registry import RENDERER_REGISTRY
+        from vllm.tokenizers.registry import TokenizerRegistry
+
+        from keras_hub.src.vllm.keras_hub_vllm_wrapper import KerasHubVllmModel
     except ImportError:
         return
-
-    from vllm.renderers.registry import RENDERER_REGISTRY
-    from vllm.tokenizers.registry import TokenizerRegistry
-
-    from keras_hub.src.vllm.keras_hub_vllm_wrapper import KerasHubVllmModel
 
     register_hf_config()
     register_model(KERAS_HUB_ARCHITECTURE, KerasHubVllmModel)
