@@ -28,9 +28,9 @@ def register_keras_hub():
     Serving runs on tpu-inference's native JAX path, so without it there is
     nothing to register and this returns; vLLM continues unaffected.
     """
-    # Imported together and before any registration: a plugin that raises
-    # would break vLLM's startup, and a partial import would leave the
-    # architecture registered with no tokenizer behind it.
+    # One block, because vLLM calls this during startup: an ImportError
+    # that escapes here would take the engine down rather than leave the
+    # integration unregistered.
     try:
         from tpu_inference.models.common.model_loader import register_model
         from vllm.renderers.registry import RENDERER_REGISTRY
