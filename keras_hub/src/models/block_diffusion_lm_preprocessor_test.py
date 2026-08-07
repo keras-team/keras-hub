@@ -3,8 +3,8 @@ import numpy as np
 from keras_hub.src.models.block_diffusion_lm_preprocessor import (
     BlockDiffusionLMPreprocessor,
 )
-from keras_hub.src.models.gemma4.gemma4_block_diffusion_lm_preprocessor import (
-    Gemma4BlockDiffusionLMPreprocessor,
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm_preprocessor import (  # noqa: E501
+    DiffusionGemmaBlockDiffusionLMPreprocessor,
 )
 from keras_hub.src.tests.mocks.mock_gemma4_tokenizer import MockGemma4Tokenizer
 from keras_hub.src.tests.test_case import TestCase
@@ -24,7 +24,7 @@ class TestBlockDiffusionLMPreprocessor(TestCase):
 
     def test_preset_accessors(self):
         subclass_presets = set(
-            Gemma4BlockDiffusionLMPreprocessor.presets.keys()
+            DiffusionGemmaBlockDiffusionLMPreprocessor.presets.keys()
         )
         all_presets = set(BlockDiffusionLMPreprocessor.presets.keys())
         self.assertTrue(subclass_presets.issubset(all_presets))

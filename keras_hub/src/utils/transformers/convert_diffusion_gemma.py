@@ -1,15 +1,14 @@
 import numpy as np
 
-from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_backbone import (
+    DiffusionGemmaBackbone,
+)
 from keras_hub.src.models.gemma4.gemma4_vision_encoder import (
     Gemma4VisionEncoder,
 )
 from keras_hub.src.samplers.entropy_bound_sampler import EntropyBoundSampler
 from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import load_json
-from keras_hub.src.utils.transformers.convert_gemma4 import (
-    _convert_decoder_block,
-)
 from keras_hub.src.utils.transformers.convert_gemma4 import (
     _convert_decoder_block_weights,
 )
@@ -29,11 +28,12 @@ def load_image_converter_config(preset, transformers_config):
     return target_load_image_converter_config(preset, transformers_config)
 
 
-backbone_cls = Gemma4Backbone
+backbone_cls = DiffusionGemmaBackbone
 
 
 def convert_backbone_config(transformers_config):
-    """Map a DiffusionGemma Transformers config → Gemma4Backbone kwargs."""
+    """Map a DiffusionGemma Transformers config → DiffusionGemmaBackbone
+    kwargs."""
     model_type = transformers_config.get("model_type", "diffusion_gemma")
     is_text_only = model_type == "diffusion_gemma_text"
 
@@ -132,21 +132,12 @@ def convert_backbone_config(transformers_config):
         "layer_norm_epsilon": text_cfg.get("rms_norm_eps", 1e-6),
         "layer_types": text_cfg["layer_types"],
         "vision_encoder": vision_encoder,
-        "audio_encoder": None,
-        "num_kv_shared_layers": text_cfg.get("num_kv_shared_layers", 0),
         "num_global_key_value_heads": text_cfg.get(
             "num_global_key_value_heads", None
-        ),
-        "hidden_size_per_layer_input": (
-            text_cfg.get("hidden_size_per_layer_input") or 0
-        ),
-        "vocab_size_per_layer_input": text_cfg.get(
-            "vocab_size_per_layer_input", None
         ),
         "global_rope_partial_rotary_factor": global_rope_partial_rotary_factor,
         "global_rope_wavelength": global_rope_theta,
         "local_rope_wavelength": local_rope_theta,
-        "use_double_wide_mlp": text_cfg.get("use_double_wide_mlp", False),
         "enable_moe_block": enable_moe_block,
         "num_experts": text_cfg.get("num_experts", None),
         "expert_intermediate_dim": (
@@ -157,13 +148,12 @@ def convert_backbone_config(transformers_config):
         "use_vision_bidirectional_attention": (
             use_vision_bidirectional_attention
         ),
-        "has_encoder_layer_scalar": True,
-        "has_diffusion_self_conditioning": True,
     }
 
 
 def convert_task_config(transformers_config):
-    """Map DiffusionGemma config keys → Gemma4BlockDiffusionLM kwargs."""
+    """Map DiffusionGemma config keys → DiffusionGemmaBlockDiffusionLM
+    kwargs."""
     kwargs = {}
     if "canvas_length" in transformers_config:
         kwargs["canvas_length"] = transformers_config["canvas_length"]
@@ -219,6 +209,168 @@ def _convert_vision_encoder(vision_encoder, loader, transformers_config):
         )
 
 
+def _convert_decoder_block(decoder_layer, layer_idx, loader, hf_key_fn):
+    """Port a single DiffusionGemmaTransformerLayer from HF."""
+    layer_prefix = f"layers.{layer_idx}"
+
+    def layer_key(attr):
+        return hf_key_fn(f"{layer_prefix}.{attr}")
+
+    # Layer norms
+    loader.port_weight(
+        keras_variable=decoder_layer.pre_attention_norm.scale,
+        hf_weight_key=layer_key("input_layernorm.weight"),
+    )
+    loader.port_weight(
+        keras_variable=decoder_layer.post_attention_norm.scale,
+        hf_weight_key=layer_key("post_attention_layernorm.weight"),
+    )
+    loader.port_weight(
+        keras_variable=decoder_layer.pre_ffw_norm.scale,
+        hf_weight_key=layer_key("pre_feedforward_layernorm.weight"),
+    )
+    loader.port_weight(
+        keras_variable=decoder_layer.post_ffw_norm.scale,
+        hf_weight_key=layer_key("post_feedforward_layernorm.weight"),
+    )
+
+    # Attention Q / K / V / O + Q-norm / K-norm
+    loader.port_weight(
+        keras_variable=decoder_layer.attention.query_dense.kernel,
+        hf_weight_key=layer_key("self_attn.q_proj.weight"),
+        # HF: [num_q_heads * head_dim, hidden]
+        # → Keras: [num_q_heads, hidden, head_dim]
+        hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+            np.reshape(
+                hf_tensor,
+                (keras_shape[0], keras_shape[2], keras_shape[1]),
+            ),
+            axes=(0, 2, 1),
+        ),
+    )
+    loader.port_weight(
+        keras_variable=decoder_layer.attention.query_norm.scale,
+        hf_weight_key=layer_key("self_attn.q_norm.weight"),
+    )
+    loader.port_weight(
+        keras_variable=decoder_layer.attention.key_dense.kernel,
+        hf_weight_key=layer_key("self_attn.k_proj.weight"),
+        hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+            np.reshape(
+                hf_tensor,
+                (keras_shape[0], keras_shape[2], keras_shape[1]),
+            ),
+            axes=(0, 2, 1),
+        ),
+    )
+    loader.port_weight(
+        keras_variable=decoder_layer.attention.key_norm.scale,
+        hf_weight_key=layer_key("self_attn.k_norm.weight"),
+    )
+    # v_proj is absent on global-attention layers when
+    # attention_k_eq_v=True: value reuses the key projection, so
+    # value_dense=None.
+    if decoder_layer.attention.value_dense is not None:
+        loader.port_weight(
+            keras_variable=decoder_layer.attention.value_dense.kernel,
+            hf_weight_key=layer_key("self_attn.v_proj.weight"),
+            hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+                np.reshape(
+                    hf_tensor,
+                    (keras_shape[0], keras_shape[2], keras_shape[1]),
+                ),
+                axes=(0, 2, 1),
+            ),
+        )
+    # v_norm (Gemma4VNorm) is parameter-free — no weight to port.
+    loader.port_weight(
+        keras_variable=decoder_layer.attention.output_dense.kernel,
+        hf_weight_key=layer_key("self_attn.o_proj.weight"),
+        # HF: [hidden, num_q_heads * head_dim]
+        # → Keras: [num_q_heads, head_dim, hidden]
+        hook_fn=lambda hf_tensor, keras_shape: np.transpose(
+            np.reshape(
+                hf_tensor,
+                (keras_shape[2], keras_shape[0], keras_shape[1]),
+            ),
+            axes=(1, 2, 0),
+        ),
+    )
+
+    loader.port_weight(
+        keras_variable=decoder_layer.gating_ffw.kernel,
+        hf_weight_key=layer_key("mlp.gate_proj.weight"),
+        hook_fn=lambda x, _: np.transpose(x),
+    )
+    loader.port_weight(
+        keras_variable=decoder_layer.gating_ffw_2.kernel,
+        hf_weight_key=layer_key("mlp.up_proj.weight"),
+        hook_fn=lambda x, _: np.transpose(x),
+    )
+    loader.port_weight(
+        keras_variable=decoder_layer.ffw_linear.kernel,
+        hf_weight_key=layer_key("mlp.down_proj.weight"),
+        hook_fn=lambda x, _: np.transpose(x),
+    )
+
+    # MoE block (parallel dense + expert paths).
+    if decoder_layer.enable_moe_block:
+        # Extra norms.
+        loader.port_weight(
+            keras_variable=decoder_layer.post_ffw_norm_dense.scale,
+            hf_weight_key=layer_key("post_feedforward_layernorm_1.weight"),
+        )
+        loader.port_weight(
+            keras_variable=decoder_layer.pre_ffw_norm_moe.scale,
+            hf_weight_key=layer_key("pre_feedforward_layernorm_2.weight"),
+        )
+        loader.port_weight(
+            keras_variable=decoder_layer.post_ffw_norm_moe_path.scale,
+            hf_weight_key=layer_key("post_feedforward_layernorm_2.weight"),
+        )
+        # Router: per-dim scale + projection (rms_norm has no learnable
+        # weights).
+        loader.port_weight(
+            keras_variable=decoder_layer.moe_router.per_dim_scale,
+            hf_weight_key=layer_key("router.scale"),
+        )
+        loader.port_weight(
+            keras_variable=decoder_layer.moe_router.proj.kernel,
+            hf_weight_key=layer_key("router.proj.weight"),
+            hook_fn=lambda x, _: np.transpose(x),
+        )
+        # Expert bank: HF `gate_up_proj` is [E, 2*I, H], `down_proj` is [E, H,
+        # I].
+        # Keras Hub `gate` / `up` are [E, H, I], `down` is [E, I, H].
+        I = decoder_layer.expert_intermediate_dim
+        loader.port_weight(
+            keras_variable=decoder_layer.moe_expert_bank.gate_proj,
+            hf_weight_key=layer_key("experts.gate_up_proj"),
+            hook_fn=lambda x, _: np.transpose(x[:, :I, :], axes=(0, 2, 1)),
+        )
+        loader.port_weight(
+            keras_variable=decoder_layer.moe_expert_bank.up_proj,
+            hf_weight_key=layer_key("experts.gate_up_proj"),
+            hook_fn=lambda x, _: np.transpose(x[:, I:, :], axes=(0, 2, 1)),
+        )
+        loader.port_weight(
+            keras_variable=decoder_layer.moe_expert_bank.down_proj,
+            hf_weight_key=layer_key("experts.down_proj"),
+            hook_fn=lambda x, _: np.transpose(x, axes=(0, 2, 1)),
+        )
+        loader.port_weight(
+            keras_variable=decoder_layer.moe_expert_bank.per_expert_scale,
+            hf_weight_key=layer_key("router.per_expert_scale"),
+        )
+
+    # layer_scalar — present on all text decoder layers (HF Buffer).
+    loader.port_weight(
+        keras_variable=decoder_layer.layer_scalar,
+        hf_weight_key=layer_key("layer_scalar"),
+        hook_fn=lambda x, _: np.squeeze(x),
+    )
+
+
 def convert_weights(backbone, loader, transformers_config):
     model_type = transformers_config.get("model_type", "diffusion_gemma")
 
@@ -236,27 +388,6 @@ def convert_weights(backbone, loader, transformers_config):
         keras_variable=backbone.get_layer("token_embedding").embeddings,
         hf_weight_key=hf_key("embed_tokens.weight"),
     )
-
-    if backbone.hidden_size_per_layer_input > 0:
-        loader.port_weight(
-            keras_variable=backbone.get_layer(
-                "per_layer_token_embedding"
-            ).embeddings,
-            hf_weight_key=hf_key("embed_tokens_per_layer.weight"),
-        )
-        loader.port_weight(
-            keras_variable=backbone.get_layer(
-                "per_layer_model_projection"
-            ).kernel,
-            hf_weight_key=hf_key("per_layer_model_projection.weight"),
-            hook_fn=lambda x, _: np.transpose(x),
-        )
-        loader.port_weight(
-            keras_variable=backbone.get_layer(
-                "per_layer_projection_norm"
-            ).scale,
-            hf_weight_key=hf_key("per_layer_projection_norm.weight"),
-        )
 
     vision_encoder = backbone.vision_encoder
     if vision_encoder is not None:
@@ -277,29 +408,28 @@ def convert_weights(backbone, loader, transformers_config):
             hook_fn=lambda x, _: np.squeeze(x),
         )
 
-    if backbone.has_diffusion_self_conditioning:
-        sc = backbone.diffusion_self_conditioning
-        hf_sc_prefix = "model.decoder.self_conditioning"
-        loader.port_weight(
-            keras_variable=sc.pre_norm.scale,
-            hf_weight_key=f"{hf_sc_prefix}.pre_norm.weight",
-        )
-        loader.port_weight(
-            keras_variable=sc.gate_proj.kernel,
-            hf_weight_key=f"{hf_sc_prefix}.gate_proj.weight",
-            hook_fn=lambda x, _: np.transpose(x),
-        )
-        loader.port_weight(
-            keras_variable=sc.up_proj.kernel,
-            hf_weight_key=f"{hf_sc_prefix}.up_proj.weight",
-            hook_fn=lambda x, _: np.transpose(x),
-        )
-        loader.port_weight(
-            keras_variable=sc.down_proj.kernel,
-            hf_weight_key=f"{hf_sc_prefix}.down_proj.weight",
-            hook_fn=lambda x, _: np.transpose(x),
-        )
-        # post_norm has no learnable scale (Gemma4VNorm) — no weight to port.
+    sc = backbone.diffusion_self_conditioning
+    hf_sc_prefix = "model.decoder.self_conditioning"
+    loader.port_weight(
+        keras_variable=sc.pre_norm.scale,
+        hf_weight_key=f"{hf_sc_prefix}.pre_norm.weight",
+    )
+    loader.port_weight(
+        keras_variable=sc.gate_proj.kernel,
+        hf_weight_key=f"{hf_sc_prefix}.gate_proj.weight",
+        hook_fn=lambda x, _: np.transpose(x),
+    )
+    loader.port_weight(
+        keras_variable=sc.up_proj.kernel,
+        hf_weight_key=f"{hf_sc_prefix}.up_proj.weight",
+        hook_fn=lambda x, _: np.transpose(x),
+    )
+    loader.port_weight(
+        keras_variable=sc.down_proj.kernel,
+        hf_weight_key=f"{hf_sc_prefix}.down_proj.weight",
+        hook_fn=lambda x, _: np.transpose(x),
+    )
+    # post_norm has no learnable scale (Gemma4VNorm) — no weight to port.
 
     loader.port_weight(
         keras_variable=backbone.get_layer("final_normalization").scale,
@@ -310,7 +440,8 @@ def convert_weights(backbone, loader, transformers_config):
 
 
 def load_task_config(preset, transformers_config):
-    """Read generation_config.json and return Gemma4BlockDiffusionLM kwargs."""
+    """Read generation_config.json and return DiffusionGemmaBlockDiffusionLM
+    kwargs."""
     if not check_file_exists(preset, "generation_config.json"):
         return {}
     gen_cfg = load_json(preset, "generation_config.json")
@@ -345,7 +476,7 @@ def load_task_config(preset, transformers_config):
 
 
 def load_preprocessor_config(preset, transformers_config):
-    """Return extra Gemma4BlockDiffusionLMPreprocessor kwargs."""
+    """Return extra DiffusionGemmaBlockDiffusionLMPreprocessor kwargs."""
     return {
         "add_start_token": False,
         "add_end_token": False,

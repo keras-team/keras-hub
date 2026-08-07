@@ -43,8 +43,8 @@ class EntropyBoundSampler(Sampler):
 
     Examples:
     ```python
-    diffusion_lm = keras_hub.models.Gemma4BlockDiffusionLM.from_preset(
-        "gemma4_diffusion_2b_en"
+    diffusion_lm = keras_hub.models.DiffusionGemmaBlockDiffusionLM.from_preset(
+        "diffusion_gemma_26b_a4b_it"
     )
 
     # Pass by object.

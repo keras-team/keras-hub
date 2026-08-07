@@ -19,8 +19,6 @@ class ConvertDiffusionGemmaTest(TestCase):
         )
         self.assertEqual(kwargs["num_layers"], 2)
         self.assertEqual(kwargs["hidden_dim"], 64)
-        self.assertTrue(kwargs["has_encoder_layer_scalar"])
-        self.assertTrue(kwargs["has_diffusion_self_conditioning"])
 
     def test_convert_task_config(self):
         transformers_config = {
