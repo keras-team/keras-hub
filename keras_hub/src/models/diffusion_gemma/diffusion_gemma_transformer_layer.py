@@ -9,24 +9,27 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 )
 from keras_hub.src.models.gemma4.gemma4_attention import Gemma4TextAttention
 from keras_hub.src.models.gemma4.gemma4_attention import Gemma4VisionAttention
-from keras_hub.src.models.gemma4.gemma4_layers import Gemma4ClippableEinsumDense
 from keras_hub.src.models.gemma4.gemma4_layers import RMSNormalization
 from keras_hub.src.models.gemma4.gemma4_moe import Gemma4MoEBlock
 from keras_hub.src.models.gemma4.gemma4_moe import Gemma4Router
 
 
-class Gemma4TextDecoderBlock(keras.layers.Layer):
-    """Transformer decoder layer for Gemma4.
+class DiffusionGemmaTransformerLayer(keras.layers.Layer):
+    """Transformer layer for DiffusionGemma.
 
-    Gemma4 has several differences from Gemma3:
+    Identical to `Gemma4TextDecoderBlock` with two additions:
 
-    1. Four normalizations per block (pre + post for both attention and FFW),
-       which are always active (unlike Gemma3 where they are configurable).
-    2. Q/K/V normalization always applied in attention.
-    3. `scaling = 1.0` in attention (Q/K norms replace explicit scaling).
-    4. All text decoder layers have a non-trainable `layer_scalar` (init 1.0)
-       that the output is multiplied by (vision encoder blocks do not).
-    5. Default sliding_window_size is 512 (vs 1024 in Gemma3).
+    1. **`encoder_layer_scalar`** — a second non-trainable scalar (init 1.0)
+       used when `is_encoder=True` (causal encoder pass).  The existing
+       `layer_scalar` is used for decoder passes (`is_encoder=False`).
+
+    2. **Canvas bidirectional attention** — when `canvas_mask` is not `None`,
+       canvas query positions attend bidirectionally to all canvas key positions
+       in the KV cache, overriding the causal mask.
+
+    The layer acts as both the causal encoder (prompt → KV cache) and the
+    bidirectional decoder (canvas denoising), hence "transformer layer" rather
+    than "decoder block".
 
     Args:
         hidden_dim: int. Dimensionality of the model's hidden representations.
@@ -40,9 +43,9 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             before softmax. Defaults to `None`.
         use_sliding_window_attention: bool. Whether to use sliding-window
             (local) attention. Defaults to `False`.
-        sliding_window_size: int. Size of the sliding attention window when
-            `use_sliding_window_attention=True`. Defaults to `512`.
-        layer_norm_epsilon: float. Epsilon value for RMS normalization layers.
+        sliding_window_size: int. Size of the sliding attention window.
+            Defaults to `512`.
+        layer_norm_epsilon: float. Epsilon value for RMS normalization.
             Defaults to `1e-6`.
         rope_wavelength: float. Base wavelength for rotary position embeddings.
             Defaults to `10000.0`.
@@ -58,34 +61,27 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         is_global_attention: bool. Whether this layer uses global (full-
             sequence) attention rather than sliding-window attention. Defaults
             to `False`.
-        global_head_dim: int. Head dimensionality to use for global attention
-            layers (may differ from `head_dim`). Defaults to `None`.
+        global_head_dim: int or `None`. Head dimensionality to use for global
+            attention layers (may differ from `head_dim`). Defaults to
+            `None`.
         dropout: float. Dropout rate applied after attention and FFW
             sub-layers. Defaults to `0`.
-        is_kv_shared_layer: bool. Whether this layer shares key/value
-            projections with another layer. Defaults to `False`.
-        kv_shared_layer_index: int. Index of the layer whose key/value
-            projections are reused when `is_kv_shared_layer=True`. Defaults
-            to `None`.
-        hidden_size_per_layer_input: int. Extra hidden units added per-layer
-            for recurrent-style inputs. Defaults to `0`.
         attention_k_eq_v: bool. Whether key and value projections share
             weights. Defaults to `False`.
-        num_global_key_value_heads: int. Number of key/value heads used in
-            global attention layers. Defaults to `None`.
-        use_double_wide_mlp: bool. Whether to double the intermediate
-            dimension in MLP layers for KV-shared layers. Defaults to `False`.
+        num_global_key_value_heads: int or `None`. Number of key/value heads
+            used in global attention layers. Defaults to `None`.
         enable_moe_block: bool. Whether to replace the dense FFW block with a
             Mixture-of-Experts block. Defaults to `False`.
-        num_experts: int. Total number of experts when
+        num_experts: int or `None`. Total number of experts when
             `enable_moe_block=True`. Defaults to `None`.
-        expert_intermediate_dim: int. Intermediate dimension of each expert
-            MLP when `enable_moe_block=True`. Defaults to `None`.
+        expert_intermediate_dim: int or `None`. Intermediate dimension of each
+            expert MLP when `enable_moe_block=True`. Defaults to `None`.
         num_experts_per_token: int. Number of experts activated per token
             when `enable_moe_block=True`. Defaults to `8`.
         is_text_layer: bool. Whether this block is a text (as opposed to
             vision) decoder layer; controls whether a non-trainable
-            `layer_scalar` is applied to the output. Defaults to `True`.
+            `layer_scalar` (or `encoder_layer_scalar`) is applied to the
+            output. Defaults to `True`.
     """
 
     def __init__(
@@ -107,12 +103,8 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         is_global_attention=False,
         global_head_dim=None,
         dropout=0,
-        is_kv_shared_layer=False,
-        kv_shared_layer_index=None,
-        hidden_size_per_layer_input=0,
         attention_k_eq_v=False,
         num_global_key_value_heads=None,
-        use_double_wide_mlp=False,
         enable_moe_block=False,
         num_experts=None,
         expert_intermediate_dim=None,
@@ -139,34 +131,21 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             use_vision_bidirectional_attention
         )
         self.is_global_attention = is_global_attention
-        # For global attention layers, head_dim may be larger than local.
         self.global_head_dim = global_head_dim
         self.dropout = dropout
-        self.is_kv_shared_layer = is_kv_shared_layer
-        self.kv_shared_layer_index = kv_shared_layer_index
-        self.hidden_size_per_layer_input = hidden_size_per_layer_input
         self.attention_k_eq_v = attention_k_eq_v
         self.num_global_key_value_heads = num_global_key_value_heads
-        self.use_double_wide_mlp = use_double_wide_mlp
         self.enable_moe_block = enable_moe_block
         self.num_experts = num_experts
         self.expert_intermediate_dim = expert_intermediate_dim
         self.num_experts_per_token = num_experts_per_token
         self.is_text_layer = is_text_layer
-        # KV-shared layers optionally use a wider MLP (double intermediate).
-        self.actual_intermediate_dim = (
-            intermediate_dim * 2
-            if (use_double_wide_mlp and is_kv_shared_layer)
-            else intermediate_dim
-        )
 
-        # Pre-attention normalization.
         self.pre_attention_norm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="pre_attention_norm",
         )
-        # Post-attention normalization (always present in Gemma4).
         self.post_attention_norm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
@@ -194,7 +173,6 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             rope_partial_rotary_factor=rope_partial_rotary_factor,
             use_bidirectional_attention=use_bidirectional_attention,
             is_global_attention=is_global_attention,
-            is_kv_shared_layer=is_kv_shared_layer,
             attention_k_eq_v=attention_k_eq_v,
             num_global_key_value_heads=num_global_key_value_heads,
             dropout=dropout,
@@ -206,31 +184,26 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             self.attention_dropout = keras.layers.Dropout(rate=dropout)
             self.feedforward_dropout = keras.layers.Dropout(rate=dropout)
 
-        # Pre-FFW normalization.
         self.pre_ffw_norm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="pre_ffw_norm",
         )
-        # Post-FFW normalization (always present in Gemma4).
         self.post_ffw_norm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="post_ffw_norm",
         )
 
-        # Feed-forward network uses standard gated GELU activation.
-        # `actual_intermediate_dim` may be 2x for KV-shared layers when
-        # `use_double_wide_mlp=True` (E2B architecture).
         self.gating_ffw = keras.layers.EinsumDense(
             equation="btd,df->btf",
-            output_shape=(None, self.actual_intermediate_dim),
+            output_shape=(None, intermediate_dim),
             dtype=self.dtype_policy,
             name="ffw_gating",
         )
         self.gating_ffw_2 = keras.layers.EinsumDense(
             equation="btd,df->btf",
-            output_shape=(None, self.actual_intermediate_dim),
+            output_shape=(None, intermediate_dim),
             dtype=self.dtype_policy,
             name="ffw_gating_2",
         )
@@ -241,9 +214,6 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             name="ffw_linear",
         )
 
-        # MoE blocks (26b-a4b architecture).  When enabled, EVERY decoder layer
-        # runs a dense MLP in parallel with a sparse MoE block; the two outputs
-        # are summed BEFORE the combined post-FFW norm.
         if enable_moe_block:
             assert num_experts is not None, (
                 "`num_experts` must be set when `enable_moe_block=True`."
@@ -252,27 +222,21 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
                 "`expert_intermediate_dim` must be set when "
                 "`enable_moe_block=True`."
             )
-            # Separate pre-norm for the MoE path (pre_feedforward_layernorm_2).
             self.pre_ffw_norm_moe = RMSNormalization(
                 epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
                 name="pre_ffw_norm_moe",
             )
-            # A separate dense-path normalization (post FFW) exists natively in
-            # the HF checkpoint for MoE blocks.
             self.post_ffw_norm_dense = RMSNormalization(
                 epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
                 name="post_ffw_norm_dense",
             )
-            # Post-norms for dense and MoE paths individually
-            # (post_feedforward_layernorm_1 / _2).
             self.post_ffw_norm_moe_path = RMSNormalization(
                 epsilon=self.layer_norm_epsilon,
                 dtype=self.dtype_policy,
                 name="post_ffw_norm_moe_path",
             )
-            # Router: takes raw hidden_states, computes dispatch weights.
             self.moe_router = Gemma4Router(
                 num_experts=num_experts,
                 num_experts_per_token=num_experts_per_token,
@@ -280,34 +244,12 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
                 dtype=self.dtype_policy,
                 name="moe_router",
             )
-            # Expert bank: does the actual per-expert computation.
             self.moe_expert_bank = Gemma4MoEBlock(
                 num_experts=num_experts,
                 hidden_dim=hidden_dim,
                 expert_intermediate_dim=expert_intermediate_dim,
                 dtype=self.dtype_policy,
                 name="moe_expert_bank",
-            )
-
-        # Per-layer input gate (E4B).  Applies a token-conditioned residual
-        # to the layer output: residual + norm(proj_up(GELU(gate(x)) * emb)).
-        if hidden_size_per_layer_input > 0:
-            self.per_layer_input_gate = keras.layers.Dense(
-                hidden_size_per_layer_input,
-                use_bias=False,
-                dtype=self.dtype_policy,
-                name="per_layer_input_gate",
-            )
-            self.per_layer_up_proj = keras.layers.Dense(
-                hidden_dim,
-                use_bias=False,
-                dtype=self.dtype_policy,
-                name="per_layer_up_proj",
-            )
-            self.post_per_layer_input_norm = RMSNormalization(
-                epsilon=layer_norm_epsilon,
-                dtype=self.dtype_policy,
-                name="post_per_layer_input_norm",
             )
 
     def build(self, input_shape):
@@ -329,7 +271,6 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         ffw_out_shape = self.ffw_linear.compute_output_shape(ffn_shape)
         self.post_ffw_norm.build(ffw_out_shape)
 
-        # MoE extra layers (26b-a4b).
         if self.enable_moe_block:
             self.pre_ffw_norm_moe.build(input_shape)
             self.post_ffw_norm_dense.build(input_shape)
@@ -337,24 +278,17 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             self.moe_router.build(input_shape)
             self.moe_expert_bank.build(input_shape)
 
-        # Per-layer input gate (E4B).
-        if self.hidden_size_per_layer_input > 0:
-            self.per_layer_input_gate.build(input_shape)
-            gate_out_shape = self.per_layer_input_gate.compute_output_shape(
-                input_shape
-            )
-            self.per_layer_up_proj.build(gate_out_shape)
-            up_out_shape = self.per_layer_up_proj.compute_output_shape(
-                gate_out_shape
-            )
-            self.post_per_layer_input_norm.build(up_out_shape)
-
-        # Text decoder layers have a layer_scalar (Buffer, non-trainable,
-        # initialised to 1.0 — matches HF nn.parameter.Buffer behaviour).
-        # Vision encoder blocks do NOT get this weight.
         if self.is_text_layer:
+            # Decoder-pass scalar (matches Gemma4 layer_scalar).
             self.layer_scalar = self.add_weight(
                 name="layer_scalar",
+                shape=(),
+                initializer="ones",
+                trainable=False,
+            )
+            # Encoder-pass scalar (causal prompt encoding).
+            self.encoder_layer_scalar = self.add_weight(
+                name="encoder_layer_scalar",
                 shape=(),
                 initializer="ones",
                 trainable=False,
@@ -366,7 +300,6 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         """Allow image tokens to attend to each other within the same image."""
         bidirectional_mask = vision_mask
 
-        # Left pad with 0.
         padded_mask = ops.cast(
             ops.pad(bidirectional_mask, [(0, 0), (1, 0)], constant_values=0),
             dtype="int32",
@@ -406,8 +339,6 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             input_length = ops.shape(cache)[2]
 
         if self.use_bidirectional_attention:
-            # For embedding models with bidirectional attention.
-            # When there is no padding, return None (attend to everything).
             if decoder_mask is None:
                 return None
             mask_1 = decoder_mask
@@ -421,22 +352,12 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             cache_index=cache_update_index,
         )
 
-        # For local (sliding-window) layers, restrict the causal mask to the
-        # sliding window BEFORE OR-ing with the vision bidirec mask.
-        # This matches HF's ordering: (causal AND sliding) OR vision_bidirec.
-        # Doing the AND after the OR would incorrectly block vision tokens that
-        # are in the same image but more than sliding_window_size apart.
         if self.use_sliding_window_attention and not self.is_global_attention:
             causal_mask = self.attention._mask_sliding_window(
                 causal_mask,
                 cache_update_index=cache_update_index,
             )
 
-        # Image tokens attend bidirectionally within the same image, but ONLY
-        # for local (sliding-window) layers — matching HF's behaviour where
-        # the `or_mask_function` is applied only to `sliding_attention` masks
-        # and NOT to `full_attention` (global) masks.
-        # (e.g. HF 2B has use_bidirectional_attention=None → purely causal.)
         if (
             vision_mask is not None
             and cache is None
@@ -448,11 +369,47 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             )
             causal_mask = ops.logical_or(causal_mask, bidirectional_image_mask)
 
-        # Respect the padding mask.
         if decoder_mask is not None:
             causal_mask = ops.minimum(decoder_mask, causal_mask)
 
         return causal_mask
+
+    def _compute_canvas_bidirectional_attention_mask(
+        self, canvas_mask, cache_update_index, output_length, input_length
+    ):
+        """Return a bool mask that lets canvas queries attend to canvas keys.
+
+        Canvas key positions are `[cache_update_index,
+        cache_update_index + output_length)` within the KV cache of length
+        `input_length`.  Canvas query positions are marked by `canvas_mask`.
+
+        Args:
+            canvas_mask: bool tensor `(B, output_length)`.
+            cache_update_index: int or scalar — index of the first canvas key
+                in the KV cache.
+            output_length: int or scalar — number of canvas tokens.
+            input_length: int or scalar — total KV cache sequence length.
+
+        Returns:
+            Bool tensor `(B, output_length, input_length)`.
+        """
+        batch_size = ops.shape(canvas_mask)[0]
+        j = ops.arange(input_length)
+        canvas_key = ops.logical_and(
+            j >= cache_update_index,
+            j < cache_update_index + output_length,
+        )
+        canvas_key = ops.broadcast_to(
+            ops.reshape(canvas_key, (1, 1, input_length)),
+            (batch_size, output_length, input_length),
+        )
+        q = ops.broadcast_to(
+            ops.reshape(
+                ops.cast(canvas_mask, "bool"), (batch_size, output_length, 1)
+            ),
+            (batch_size, output_length, input_length),
+        )
+        return ops.logical_and(canvas_key, q)
 
     def call(
         self,
@@ -462,9 +419,9 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         cache=None,
         cache_update_index=0,
         cache_update_mask=None,
-        per_layer_input=None,
-        shared_kv=None,
         positions=None,
+        canvas_mask=None,
+        is_encoder=False,
     ):
         # Clamp float16 to avoid overflow.
         is_float16 = keras.backend.standardize_dtype(x.dtype) == "float16"
@@ -477,6 +434,20 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         attention_mask = self._compute_attention_mask(
             normalized_x, padding_mask, vision_mask, cache, cache_update_index
         )
+
+        # Canvas bidirectional mask: all canvas queries attend to all canvas
+        # keys, overriding the causal restriction for those positions.
+        if canvas_mask is not None and cache is not None:
+            output_length = ops.shape(normalized_x)[1]
+            input_length = ops.shape(cache)[2]
+            canvas_bidirec = self._compute_canvas_bidirectional_attention_mask(
+                canvas_mask, cache_update_index, output_length, input_length
+            )
+            if attention_mask is not None:
+                attention_mask = ops.logical_or(attention_mask, canvas_bidirec)
+            else:
+                attention_mask = canvas_bidirec
+
         if cache is not None:
             attention, new_cache = self.attention(
                 normalized_x,
@@ -484,18 +455,15 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
                 cache=cache,
                 cache_update_index=cache_update_index,
                 cache_update_mask=cache_update_mask,
-                shared_kv=shared_kv,
                 positions=positions,
             )
         else:
             attention, new_cache = self.attention(
                 normalized_x,
                 attention_mask=attention_mask,
-                shared_kv=shared_kv,
                 positions=positions,
             )
 
-        # Post-attention norm (always applied in Gemma4).
         attention = self.post_attention_norm(attention)
 
         if self.dropout:
@@ -520,10 +488,6 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         residual = x
 
         if self.enable_moe_block:
-            # === Parallel Dense + MoE paths (26b-a4b architecture) ===
-            # Dense path: pre_ffw_norm → dense MLP → post_ffw_norm_dense
-            # HOTFIX: use direct matmul (same as the non-MoE path) to bypass
-            # EinsumDense graph tracer bugs.
             normalized_x = self.pre_ffw_norm(x)
             x1 = ops.matmul(normalized_x, self.gating_ffw.kernel)
             x2 = ops.matmul(normalized_x, self.gating_ffw_2.kernel)
@@ -531,26 +495,16 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             dense_out = ops.matmul(dense_out, self.ffw_linear.kernel)
             dense_out = self.post_ffw_norm_dense(dense_out)
 
-            # MoE path: router uses raw x; expert bank uses pre_ffw_norm_moe(x)
-            # Router returns sparse dispatch_weights [T, E] (k non-zero per row)
-            dispatch_weights = self.moe_router(x)  # [T, E]
+            dispatch_weights = self.moe_router(x)
             moe_in = self.pre_ffw_norm_moe(x)
-            # Flatten for expert bank.
             shape = ops.shape(moe_in)
-            moe_in_flat = ops.reshape(moe_in, (-1, shape[-1]))  # [T, H]
-            # Single batched GEMM across all experts; sparse combine via dw.
-            moe_out = self.moe_expert_bank(
-                moe_in_flat, dispatch_weights
-            )  # [T, H]
-            moe_out = ops.reshape(moe_out, shape)  # [B, S, H]
+            moe_in_flat = ops.reshape(moe_in, (-1, shape[-1]))
+            moe_out = self.moe_expert_bank(moe_in_flat, dispatch_weights)
+            moe_out = ops.reshape(moe_out, shape)
             moe_out = self.post_ffw_norm_moe_path(moe_out)
 
-            # Sum both paths, then shared post-FFW norm.
             x = dense_out + moe_out
         else:
-            # === Standard dense FFW path ===
-            # HOTFIX: Replacing EinsumDense with direct matmul to bypass graph
-            # tracer bugs.
             normalized_x = self.pre_ffw_norm(x)
             x1 = ops.matmul(normalized_x, self.gating_ffw.kernel)
             x2 = ops.matmul(normalized_x, self.gating_ffw_2.kernel)
@@ -558,7 +512,6 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
             x = keras.activations.gelu(x1, approximate=True) * x2
             x = ops.matmul(x, self.ffw_linear.kernel)
 
-        # Post-FFW norm (shared; always applied in Gemma4).
         x = self.post_ffw_norm(x)
 
         if self.dropout:
@@ -578,22 +531,12 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         else:
             x = residual + x
 
-        # Per-layer input gate (E4B): gated residual conditioned on per-token
-        # per-layer embedding. Applied AFTER the FFW residual and BEFORE the
-        # layer_scalar (matching HF Gemma4DecoderLayer forward() order).
-        if self.hidden_size_per_layer_input > 0 and per_layer_input is not None:
-            residual = x
-            gated = self.per_layer_input_gate(x)
-            gated = keras.activations.gelu(gated, approximate=True)
-            gated = gated * ops.cast(per_layer_input, gated.dtype)
-            gated = self.per_layer_up_proj(gated)
-            gated = self.post_per_layer_input_norm(gated)
-            x = residual + gated
-
-        # Text decoder layers scale the output by their layer_scalar.
-        # Applied AFTER the per-layer input gate (matching HF order).
+        # Scale by encoder or decoder scalar depending on the pass type.
         if self.is_text_layer:
-            x = x * ops.cast(self.layer_scalar, x.dtype)
+            scalar = (
+                self.encoder_layer_scalar if is_encoder else self.layer_scalar
+            )
+            x = x * ops.cast(scalar, x.dtype)
 
         return x, new_cache
 
@@ -628,241 +571,13 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
                 ),
                 "is_global_attention": self.is_global_attention,
                 "global_head_dim": self.global_head_dim,
-                "is_kv_shared_layer": self.is_kv_shared_layer,
-                "kv_shared_layer_index": self.kv_shared_layer_index,
-                "hidden_size_per_layer_input": self.hidden_size_per_layer_input,
                 "attention_k_eq_v": self.attention_k_eq_v,
                 "num_global_key_value_heads": self.num_global_key_value_heads,
-                "use_double_wide_mlp": self.use_double_wide_mlp,
                 "enable_moe_block": self.enable_moe_block,
                 "num_experts": self.num_experts,
                 "expert_intermediate_dim": self.expert_intermediate_dim,
                 "num_experts_per_token": self.num_experts_per_token,
                 "is_text_layer": self.is_text_layer,
-            }
-        )
-        return config
-
-
-class Gemma4VisionDecoderBlock(keras.layers.Layer):
-    """Vision decoder block for Gemma4.
-
-    This operates strictly on images and disables MoE arrays, explicit layer
-    scalars, and global sliding windows.
-
-    Args:
-        hidden_dim: int. Dimensionality of the model's hidden representations.
-        intermediate_dim: int. Dimensionality of the feed-forward intermediate
-            layer.
-        head_dim: int. Dimensionality of each attention head.
-        num_query_heads: int. Number of query attention heads.
-        num_key_value_heads: int. Number of key/value attention heads (for
-            grouped-query attention).
-        layer_norm_epsilon: float. Epsilon value for RMS normalization layers.
-            Defaults to `1e-6`.
-        rope_wavelength: float. Base wavelength for rotary position embeddings.
-            Defaults to `10000.0`.
-        dropout: float. Dropout rate applied after attention and FFW
-            sub-layers. Defaults to `0`.
-        use_clipped_linears: bool. Whether to use clipped (numerically stable)
-            linear projections in attention. Defaults to `True`.
-    """
-
-    def __init__(
-        self,
-        hidden_dim,
-        intermediate_dim,
-        head_dim,
-        num_query_heads,
-        num_key_value_heads,
-        layer_norm_epsilon=1e-6,
-        rope_wavelength=10_000.0,
-        dropout=0,
-        use_clipped_linears=True,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.hidden_dim = hidden_dim
-        self.intermediate_dim = intermediate_dim
-        self.head_dim = head_dim
-        self.num_query_heads = num_query_heads
-        self.num_key_value_heads = num_key_value_heads
-        self.layer_norm_epsilon = layer_norm_epsilon
-        self.rope_wavelength = rope_wavelength
-        self.dropout = dropout
-        self.use_clipped_linears = use_clipped_linears
-
-        self.pre_attention_norm = RMSNormalization(
-            epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
-            name="pre_attention_norm",
-        )
-        self.post_attention_norm = RMSNormalization(
-            epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
-            name="post_attention_norm",
-        )
-
-        self.attention = Gemma4VisionAttention(
-            head_dim=head_dim,
-            num_query_heads=num_query_heads,
-            num_key_value_heads=num_key_value_heads,
-            layer_norm_epsilon=layer_norm_epsilon,
-            rope_wavelength=rope_wavelength,
-            dropout=dropout,
-            use_clipped_linears=use_clipped_linears,
-            dtype=self.dtype_policy,
-            name="attention",
-        )
-
-        if self.dropout > 0:
-            self.attention_dropout = keras.layers.Dropout(rate=dropout)
-            self.feedforward_dropout = keras.layers.Dropout(rate=dropout)
-
-        self.pre_ffw_norm = RMSNormalization(
-            epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
-            name="pre_ffw_norm",
-        )
-        self.post_ffw_norm = RMSNormalization(
-            epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
-            name="post_ffw_norm",
-        )
-
-        self.gating_ffw = Gemma4ClippableEinsumDense(
-            equation="btd,df->btf",
-            output_shape=(None, intermediate_dim),
-            use_clipped_linears=use_clipped_linears,
-            dtype=self.dtype_policy,
-            name="ffw_gating",
-        )
-        self.gating_ffw_2 = Gemma4ClippableEinsumDense(
-            equation="btd,df->btf",
-            output_shape=(None, intermediate_dim),
-            use_clipped_linears=use_clipped_linears,
-            dtype=self.dtype_policy,
-            name="ffw_gating_2",
-        )
-        self.ffw_linear = Gemma4ClippableEinsumDense(
-            equation="btf,fd->btd",
-            output_shape=(None, hidden_dim),
-            use_clipped_linears=use_clipped_linears,
-            dtype=self.dtype_policy,
-            name="ffw_linear",
-        )
-
-    def build(self, input_shape):
-        self.pre_attention_norm.build(input_shape)
-        self.attention.build(input_shape)
-
-        attn_out_shape, cache_shape = self.attention.compute_output_shape(
-            input_shape
-        )
-        self.post_attention_norm.build(attn_out_shape)
-
-        self.pre_ffw_norm.build(input_shape)
-        self.gating_ffw.build(input_shape)
-        self.gating_ffw_2.build(input_shape)
-
-        ffn_shape = self.gating_ffw.compute_output_shape(input_shape)
-        self.ffw_linear.build(ffn_shape)
-
-        ffw_out_shape = self.ffw_linear.compute_output_shape(ffn_shape)
-        self.post_ffw_norm.build(ffw_out_shape)
-        self.built = True
-
-    def compute_output_shape(self, input_shape):
-        return input_shape, None
-
-    def call(self, x, position_ids=None):
-        # Clamp float16 to avoid overflow.
-        is_float16 = keras.backend.standardize_dtype(x.dtype) == "float16"
-        if is_float16:
-            x = ops.clip(x, -65504, 65504)
-
-        # === Attention sub-block ===
-        residual = x
-        normalized_x = self.pre_attention_norm(x)
-
-        # Calculate mask where both x and y positions are NOT -1
-        attention_mask = None
-        if position_ids is not None:
-            # position_ids shape is (B, Tokens, 2)
-            attention_mask = ops.any(ops.not_equal(position_ids, -1), axis=-1)
-
-        attention, _ = self.attention(
-            normalized_x,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-        )
-
-        # Post-attention norm (always applied in Gemma4).
-        attention = self.post_attention_norm(attention)
-
-        if self.dropout:
-            attention = self.attention_dropout(attention)
-
-        if is_float16:
-            x = ops.cast(
-                ops.clip(
-                    ops.add(
-                        ops.cast(residual, "float32"),
-                        ops.cast(attention, "float32"),
-                    ),
-                    -65504,
-                    65504,
-                ),
-                "float16",
-            )
-        else:
-            x = residual + attention
-
-        # === Feed-forward sub-block ===
-        residual = x
-
-        # === Standard dense FFW path ===
-        normalized_x = self.pre_ffw_norm(x)
-        x1 = self.gating_ffw(normalized_x)
-        x2 = self.gating_ffw_2(normalized_x)
-
-        x = keras.activations.gelu(x1, approximate=True) * x2
-        x = self.ffw_linear(x)
-
-        # Post-FFW norm (shared; always applied in Gemma4).
-        x = self.post_ffw_norm(x)
-
-        if self.dropout:
-            x = self.feedforward_dropout(x)
-
-        if is_float16:
-            x = ops.cast(
-                ops.clip(
-                    ops.add(
-                        ops.cast(residual, "float32"), ops.cast(x, "float32")
-                    ),
-                    -65504,
-                    65504,
-                ),
-                "float16",
-            )
-        else:
-            x = residual + x
-
-        return x, None
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "hidden_dim": self.hidden_dim,
-                "intermediate_dim": self.intermediate_dim,
-                "head_dim": self.head_dim,
-                "num_query_heads": self.num_query_heads,
-                "num_key_value_heads": self.num_key_value_heads,
-                "layer_norm_epsilon": self.layer_norm_epsilon,
-                "dropout": self.dropout,
-                "rope_wavelength": self.rope_wavelength,
             }
         )
         return config

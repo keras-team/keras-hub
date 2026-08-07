@@ -226,6 +226,15 @@ from keras_hub.src.models.depth_estimator import (
 from keras_hub.src.models.depth_estimator_preprocessor import (
     DepthEstimatorPreprocessor as DepthEstimatorPreprocessor,
 )
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_backbone import (
+    DiffusionGemmaBackbone as DiffusionGemmaBackbone,
+)
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm import (
+    DiffusionGemmaBlockDiffusionLM as DiffusionGemmaBlockDiffusionLM,
+)
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm_preprocessor import (
+    DiffusionGemmaBlockDiffusionLMPreprocessor as DiffusionGemmaBlockDiffusionLMPreprocessor,
+)
 from keras_hub.src.models.dinov2.dinov2_backbone import (
     DINOV2Backbone as DINOV2Backbone,
 )

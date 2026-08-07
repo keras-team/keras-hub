@@ -252,7 +252,7 @@ def _kh_forward(
          ``_decode_canvas_step``).
 
     Args:
-        diffusion_lm: ``Gemma4BlockDiffusionLM`` instance.
+        diffusion_lm: ``DiffusionGemmaBlockDiffusionLM`` instance.
         token_ids: int32 array ``(B, prompt_len)`` — encoder input.
         padding_mask: int32 array ``(B, prompt_len)``.
         canvas_token_ids: int32 array ``(B, canvas_len)`` — must match the
@@ -623,8 +623,10 @@ def _save_preset(hf_preset, preset_name, save_dtype, diffusion_lm=None):
             "(this may take a while) ...",
             flush=True,
         )
-        diffusion_lm_bf16 = keras_hub.models.Gemma4BlockDiffusionLM.from_preset(
-            hf_preset, dtype="bfloat16"
+        diffusion_lm_bf16 = (
+            keras_hub.models.DiffusionGemmaBlockDiffusionLM.from_preset(
+                hf_preset, dtype="bfloat16"
+            )
         )
         print("-> bfloat16 model loaded. Writing preset files ...", flush=True)
         diffusion_lm_bf16.save_to_preset(save_path)
@@ -648,11 +650,11 @@ def main(_):
 
     hf_data = _precompute_hf_outputs(hf_repo_id)
     print(
-        f"-> Loading Gemma4BlockDiffusionLM from {hf_preset} "
+        f"-> Loading DiffusionGemmaBlockDiffusionLM from {hf_preset} "
         "(this may take a while) ...",
         flush=True,
     )
-    diffusion_lm = keras_hub.models.Gemma4BlockDiffusionLM.from_preset(
+    diffusion_lm = keras_hub.models.DiffusionGemmaBlockDiffusionLM.from_preset(
         hf_preset, dtype="float32"
     )
     print("✓ All weights loaded")
