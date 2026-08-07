@@ -402,12 +402,6 @@ from keras_hub.src.models.gemma4.gemma4_audio_encoder import (
 from keras_hub.src.models.gemma4.gemma4_backbone import (
     Gemma4Backbone as Gemma4Backbone,
 )
-from keras_hub.src.models.gemma4.gemma4_block_diffusion_lm import (
-    Gemma4BlockDiffusionLM as Gemma4BlockDiffusionLM,
-)
-from keras_hub.src.models.gemma4.gemma4_block_diffusion_lm_preprocessor import (
-    Gemma4BlockDiffusionLMPreprocessor as Gemma4BlockDiffusionLMPreprocessor,
-)
 from keras_hub.src.models.gemma4.gemma4_causal_lm import (
     Gemma4CausalLM as Gemma4CausalLM,
 )
