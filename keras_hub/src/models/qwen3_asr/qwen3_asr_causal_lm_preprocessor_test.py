@@ -20,7 +20,17 @@ class Qwen3ASRCausalLMPreprocessorTest(TestCase):
         for merge in self.merges:
             a, b = merge.split(" ")
             self.vocab.extend([a, b, a + b])
-        self.vocab += ["<|im_end|>", "<|endoftext|>", "!", "<|AUDIO|>"]
+        self.vocab += [
+            "<|im_end|>",
+            "<|endoftext|>",
+            "!",
+            "<|AUDIO|>",
+            "<asr_text>",
+            "<|im_start|>",
+            "[time]",
+            "<|audio_start|>",
+            "<|audio_end|>",
+        ]
         self.vocab = sorted(set(self.vocab))
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
 

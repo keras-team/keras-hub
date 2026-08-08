@@ -1,3 +1,4 @@
+import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -180,3 +181,57 @@ class Qwen3ASRCausalLM(CausalLM):
             "token_ids": token_ids,
             "padding_mask": padding_mask,
         }
+
+    def score(
+        self,
+        token_ids,
+        padding_mask=None,
+        audio_embeddings=None,
+        audio_indices=None,
+        scoring_mode="logits",
+        layer_intercept_fn=None,
+        target_ids=None,
+    ):
+        """Score a generation represented by the provided token ids."""
+        if scoring_mode not in ("logits", "loss"):
+            raise ValueError(
+                "Unsupported scoring_mode. Must be one of 'logits' or 'loss'."
+            )
+
+        if scoring_mode == "loss" and target_ids is None:
+            raise ValueError(
+                "Cannot compute loss without targets. Please provide target "
+                "token ids via the target_ids parameter."
+            )
+
+        batch_shape = ops.shape(token_ids)[:2]
+
+        if padding_mask is None:
+            padding_mask = ops.ones(shape=batch_shape, dtype="bool")
+
+        if layer_intercept_fn is None:
+
+            def default_layer_intercept_fn(x, unused_i):
+                return x
+
+            layer_intercept_fn = default_layer_intercept_fn
+
+        x = self.backbone.token_embedding(token_ids)
+        x = layer_intercept_fn(x, -1)
+
+        x = self._interleave(x, audio_embeddings, audio_indices)
+
+        for i, transformer_layer in enumerate(self.backbone.transformer_layers):
+            x = transformer_layer(x, decoder_padding_mask=padding_mask)
+            x = layer_intercept_fn(x, i)
+        x = self.backbone.layer_norm(x)
+        logits = self.backbone.token_embedding(x, reverse=True)
+
+        if scoring_mode == "logits":
+            return logits
+
+        per_token_loss_fn = keras.losses.SparseCategoricalCrossentropy(
+            from_logits=True, reduction="none"
+        )
+        per_token_loss = per_token_loss_fn(target_ids, logits)
+        return per_token_loss
