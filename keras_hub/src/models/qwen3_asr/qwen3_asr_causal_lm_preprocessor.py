@@ -66,6 +66,7 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
         audio = x.get("audio", None)
         prompts = x["prompts"]
         responses = x.get("responses", None)
+        language = x.get("language", "English")  # Default to English
 
         # 1. Process Audio
         audio_mel = None
@@ -78,25 +79,31 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
                 (ops.shape(audio_mel)[0], T), dtype="int32"
             )
 
-            chunk_len = 100
-            num_chunks = T // chunk_len
-            num_audio_tokens = num_chunks * 13
+            # Report says 12.5Hz (80ms/token).
+            # If 100Hz frames, tokens = T / 8.
+            num_audio_tokens = int(T // 8)
 
-        # 2. Expand Prompts with placeholders
-        if num_audio_tokens > 0:
-            if isinstance(prompts, str):
-                prompts = prompts.replace(
+        # 2. Template Prompts
+        # Format: <|im_start|>assistant\nlanguage {language}<asr_text>
+        # Note: <|im_start|> is added by the packer if add_start_token=True.
+        # We need to prepend "assistant\nlanguage {language}<asr_text>" to
+        # user prompt.
+        prefix = f"assistant\nlanguage {language}<asr_text>"
+
+        if isinstance(prompts, str):
+            prompts = prefix + prompts.replace(
+                self.audio_placeholder,
+                self.audio_placeholder * num_audio_tokens,
+            )
+        elif isinstance(prompts, (list, tuple)):
+            prompts = [
+                prefix
+                + p.replace(
                     self.audio_placeholder,
                     self.audio_placeholder * num_audio_tokens,
                 )
-            elif isinstance(prompts, (list, tuple)):
-                prompts = [
-                    p.replace(
-                        self.audio_placeholder,
-                        self.audio_placeholder * num_audio_tokens,
-                    )
-                    for p in prompts
-                ]
+                for p in prompts
+            ]
 
         # 3. Tokenize
         prompts = self.tokenizer(prompts)

@@ -21,4 +21,14 @@ class Qwen3ASRTokenizer(Qwen3Tokenizer):
 
     def __init__(self, vocabulary=None, merges=None, **kwargs):
         self._add_special_token("<|AUDIO|>", "audio_token")
+        self._add_special_token("<asr_text>", "asr_token")
+        self._add_special_token("<|im_start|>", "start_token")
         super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
+
+    @property
+    def audio_token_id(self):
+        return self.special_token_to_id("<|AUDIO|>")
+
+    @property
+    def asr_token_id(self):
+        return self.special_token_to_id("<asr_text>")

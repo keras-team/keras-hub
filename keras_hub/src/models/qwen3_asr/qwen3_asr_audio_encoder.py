@@ -1,10 +1,17 @@
-import math
-
 import keras
 from keras import ops
 
 from keras_hub.src import api_export
 from keras_hub.src.layers.modeling import transformer_encoder
+
+
+def _post_cnn_length(lengths):
+    """Length after three (k=3, s=2, p=1) convolutions."""
+    for _ in range(3):
+        lengths = ops.where(
+            lengths > 0, (lengths - 1) // 2 + 1, ops.zeros_like(lengths)
+        )
+    return lengths
 
 
 class SinusoidsPositionEmbedding(keras.layers.Layer):
@@ -28,9 +35,6 @@ class SinusoidsPositionEmbedding(keras.layers.Layer):
             * ops.cast(ops.arange(self.channels // 2), "float32")
         )
 
-        # We can't easily compute this statically if length is dynamic,
-        # but usually length is max_position_embeddings.
-
         scaled_time = ops.expand_dims(
             ops.cast(ops.arange(self.length), "float32"), axis=1
         ) * ops.expand_dims(inv_timescales, axis=0)
@@ -49,16 +53,19 @@ class SinusoidsPositionEmbedding(keras.layers.Layer):
             self.positional_embedding, [0, 0], [seqlen, self.channels]
         )
 
-
-def _post_cnn_length(lengths):
-    """Length after three (k=3, s=2, p=1) convolutions."""
-    # In Keras, we can use ops.where and integer division.
-    # But wait, lengths might be a tensor of counts.
-    for _ in range(3):
-        lengths = ops.where(
-            lengths > 0, (lengths - 1) // 2 + 1, ops.zeros_like(lengths)
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "length": self.length,
+                "channels": self.channels,
+                "max_timescale": self.max_timescale,
+            }
         )
-    return lengths
+        return config
+
+
+import math
 
 
 @api_export.keras_hub_export("keras_hub.models.Qwen3ASRAudioEncoder")
@@ -180,146 +187,64 @@ class Qwen3ASRAudioEncoder(keras.Model):
         self.built = True
 
     def _build_attention_mask(self, batch_size, num_chunks, time_steps):
-        # Build block diagonal attention mask to block attention across chunks
-        # We can create a mask of shape (total_steps, total_steps)
-        # where elements are True only if they belong to the same chunk.
-        # This is static for a given batch shape if we don't pack.
-        # Let's try to do it dynamically.
-        # Chunk indices for each position:
         chunk_indices = ops.repeat(ops.arange(num_chunks), repeats=time_steps)
-        # Compare indices:
         chunk_indices_exp1 = ops.expand_dims(chunk_indices, axis=-1)
         chunk_indices_exp2 = ops.expand_dims(chunk_indices, axis=0)
-        # Mask: (total_steps, total_steps)
         mask = ops.equal(chunk_indices_exp1, chunk_indices_exp2)
-
-        # Expand to (B, total_steps, total_steps)
         mask = ops.expand_dims(mask, axis=0)
         mask = ops.repeat(mask, repeats=batch_size, axis=0)
-
         return mask
 
     def call(self, audio_mel, audio_mel_mask=None):
-        """Encode audio mel features.
-
-        Args:
-            audio_mel: Tensor of shape ``(B, T, num_mel_bins)``.
-            audio_mel_mask: Tensor of shape ``(B, T)``. True = valid.
-
-        Returns:
-            Tensor of shape ``(B, T_out, d_model)``.
-        """
         B = ops.shape(audio_mel)[0]
         T = ops.shape(audio_mel)[1]
         F = ops.shape(audio_mel)[2]
 
         num_chunks = T // self.chunk_len
-
-        # Chunking time dimension
-        # (B, T, F) -> (B, num_chunks, chunk_len, F)
         audio_mel = ops.reshape(audio_mel, (B, -1, self.chunk_len, F))
-
-        # Prepare for 2D Conv: (B_packed, H, W, C) where H=Freq, W=Time, C=1
-        # (B, num_chunks, chunk_len, F) -> (B, num_chunks, F, chunk_len)
         audio_mel = ops.transpose(audio_mel, (0, 1, 3, 2))
-        # Reshape to (B * num_chunks, F, chunk_len, 1)
         audio_mel = ops.reshape(audio_mel, (-1, F, self.chunk_len, 1))
 
-        # CNN Layers
         x = self.conv2d1(audio_mel)
         x = self.conv2d2(x)
         x = self.conv2d3(x)
 
-        # Output shape: (B * num_chunks, H_out, W_out, downsample_hidden_size)
-        # Where H_out = 16, W_out = 13 (for chunk_len=100)
         W_out = ops.shape(x)[2]
-
-        # Permute to (B * num_chunks, W_out, downsample_hidden_size, H_out)
-        # Index: 0, 1, 2, 3 -> B_packed, H, W, C
-        # We want (B_packed, W, C, H) -> 0, 2, 3, 1
         x = ops.transpose(x, (0, 2, 3, 1))
-
-        # Flatten last two:
-        # (B * num_chunks, W_out, downsample_hidden_size * H_out)
         x = ops.reshape(x, (-1, W_out, x.shape[2] * x.shape[3]))
-
-        # Projection
         x = self.conv_out(x)
 
-        # Positional Embedding
-        # Added to each chunk locally
         pos_emb = self.positional_embedding(seqlen=W_out)
-        # Expand pos_emb to match batch dim: (1, W_out, D)
         pos_emb = ops.expand_dims(pos_emb, axis=0)
         x = x + pos_emb
 
-        # Reshape back to (B, num_chunks * W_out, d_model)
         x = ops.reshape(x, (B, -1, self.d_model))
 
-        # Update Mask if provided
         padding_mask = None
         attention_mask = None
         if audio_mel_mask is not None:
-            # Reshape input mask: (B, T) -> (B, num_chunks, chunk_len)
             mask_chunked = ops.reshape(audio_mel_mask, (B, -1, self.chunk_len))
-            # Sum valid elements per chunk
             chunk_valid_lens = ops.sum(ops.cast(mask_chunked, "int32"), axis=-1)
-            # Compute new valid lengths
             valid_lens_after_cnn = _post_cnn_length(chunk_valid_lens)
 
-            # Create new padding mask of shape (B, num_chunks, W_out)
-            # This is slightly tricky, but we can do it with comparison.
             indices = ops.arange(W_out)
             indices = ops.expand_dims(indices, axis=0)
-            indices = ops.expand_dims(indices, axis=0)  # (1, 1, W_out)
-
+            indices = ops.expand_dims(indices, axis=0)
             valid_lens_after_cnn_exp = ops.expand_dims(
                 valid_lens_after_cnn, axis=-1
-            )  # (B, num_chunks, 1)
-
-            new_mask = ops.less(
-                indices, valid_lens_after_cnn_exp
-            )  # (B, num_chunks, W_out)
-
-            # Reshape to (B, num_chunks * W_out)
+            )
+            new_mask = ops.less(indices, valid_lens_after_cnn_exp)
             padding_mask = ops.reshape(new_mask, (B, -1))
-
-            # Build attention mask to block across chunks
             attention_mask = self._build_attention_mask(B, num_chunks, W_out)
 
-            # Combine attention_mask with padding_mask?
-            # TransformerEncoder usually handles padding_mask separately, but
-            # customized attention_mask can override it.
-            # If we provide attention_mask, we should ensure it also handles
-            # padding.
-            # Let's check TransformerEncoder docstring.
-            # It says attention_mask overrides if provided.
-            # So attention_mask should also block padding!
-            # padding_mask_exp1 = ops.expand_dims(padding_mask, axis=-1)
-            # padding_mask_exp2 = ops.expand_dims(padding_mask, axis=1)
-            # padding_mask_2d = ops.logical_and(padding_mask_exp1,
-            #                                   padding_mask_exp2)
-            # attention_mask = ops.logical_and(attention_mask, padding_mask_2d)
-
-        # Transformer Layers
         for transformer_layer in self.transformer_layers:
-            # Pass custom attention mask if available
-            # Wait, TransformerEncoder might not expect 3D attention_mask in
-            # this shape?
-            # It expects [batch_size, sequence_length, sequence_length].
-            # Our attention_mask is (B, total_steps, total_steps).
-            # This matches PERFECTLY.
-            # But let's verify if attention_mask is preferred over padding_mask.
             x = transformer_layer(
                 x, padding_mask=padding_mask, attention_mask=attention_mask
             )
 
         x = self.ln_post(x)
-
-        # Apply Projector
         x = self.proj_linear_1(x)
         x = self.proj_linear_2(x)
-
         return x
 
     def get_config(self):
