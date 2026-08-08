@@ -2,6 +2,7 @@ import os
 from unittest.mock import patch
 
 import keras
+import numpy as np
 import pytest
 from keras import ops
 
@@ -155,7 +156,72 @@ class LlamaCausalLMTest(TestCase):
         # reserve the decode loop would overwrite what was just retained.
         expected_reserve = max_length - real_length
         self.assertEqual(cache.shape[3], expected_keep_len + expected_reserve)
+        # The last prompt token maps to the final retained slot, so decoding
+        # continues into the reserve rather than back over the prompt.
         self.assertEqual(cache_index_offset, real_length - expected_keep_len)
+        self.assertEqual(
+            (real_length - 1) - cache_index_offset, expected_keep_len - 1
+        )
+        # The very last decode step must still land inside the buffer.
+        self.assertLess((max_length - 1) - cache_index_offset, cache.shape[3])
+
+    def test_kv_cache_compression_retains_prompt_through_decoding(self):
+        # Regression test for the retained prompt being silently clobbered:
+        # every retained slot must still be read by the decode loop. If the
+        # slot mapping is off, corrupting them leaves the logits untouched.
+        if keras.config.backend() != "torch":
+            self.skipTest("Compression during generate() is torch-only.")
+        prompt = "the quick brown fox"
+        preprocessed = self.preprocessor.generate_preprocess([prompt])
+        padding_mask = preprocessed["padding_mask"]
+        prompt_length = int(ops.sum(ops.cast(padding_mask, "int32")))
+
+        def logits_with_corrupted_prompt_cache(corrupt):
+            causal_lm = LlamaCausalLM(**self.init_kwargs)
+            causal_lm.compile(
+                sampler="greedy", press=KnormPress(compression_ratio=0.5)
+            )
+            keep_len = max(1, round(prompt_length * 0.5))
+            seen = []
+            original = causal_lm._compress_layer_cache
+
+            def compress_layer_cache(layer_cache, padding_mask=None):
+                layer_cache = original(layer_cache, padding_mask)
+                if corrupt:
+                    corrupted = ops.convert_to_numpy(layer_cache).copy()
+                    corrupted[:, :, :keep_len, :, :] = 37.0
+                    layer_cache = ops.convert_to_tensor(corrupted)
+                return layer_cache
+
+            call_with_cache = causal_lm.call_with_cache
+
+            def spy(
+                token_ids,
+                cache,
+                cache_update_index,
+                position_index=None,
+                compress_cache=False,
+                padding_mask=None,
+            ):
+                out = call_with_cache(
+                    token_ids,
+                    cache,
+                    cache_update_index,
+                    position_index,
+                    compress_cache=compress_cache,
+                    padding_mask=padding_mask,
+                )
+                seen.append(ops.convert_to_numpy(out[0]).copy())
+                return out
+
+            causal_lm._compress_layer_cache = compress_layer_cache
+            causal_lm.call_with_cache = spy
+            causal_lm.generate([prompt], stop_token_ids=None)
+            return np.concatenate(seen[1:], axis=1)
+
+        clean = logits_with_corrupted_prompt_cache(corrupt=False)
+        corrupted = logits_with_corrupted_prompt_cache(corrupt=True)
+        self.assertGreater(np.abs(clean - corrupted).max(), 0.0)
 
     def test_press_string_identifier(self):
         causal_lm = LlamaCausalLM(**self.init_kwargs)
