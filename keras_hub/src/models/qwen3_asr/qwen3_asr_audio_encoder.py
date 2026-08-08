@@ -42,10 +42,10 @@ class Qwen3ASRAudioEncoder(keras.Model):
 
     def __init__(
         self,
-        d_model=1024,
-        encoder_layers=24,
-        encoder_attention_heads=16,
-        encoder_ffn_dim=4096,
+        d_model=896,
+        encoder_layers=18,
+        encoder_attention_heads=14,
+        encoder_ffn_dim=3584,
         downsample_hidden_size=480,
         num_mel_bins=128,
         n_window=50,
@@ -53,7 +53,7 @@ class Qwen3ASRAudioEncoder(keras.Model):
         dropout=0.0,
         attention_dropout=0.0,
         activation_function="gelu",
-        output_dim=2048,
+        output_dim=1024,
         **kwargs,
     ):
         super().__init__(**kwargs)
