@@ -42,18 +42,18 @@ class Qwen3ASRAudioEncoder(keras.Model):
 
     def __init__(
         self,
-        d_model=768,
+        d_model=1024,
         encoder_layers=24,
-        encoder_attention_heads=12,
-        encoder_ffn_dim=3072,
-        downsample_hidden_size=512,
+        encoder_attention_heads=16,
+        encoder_ffn_dim=4096,
+        downsample_hidden_size=480,
         num_mel_bins=128,
         n_window=50,
         max_position_embeddings=1500,
         dropout=0.0,
         attention_dropout=0.0,
         activation_function="gelu",
-        output_dim=3584,
+        output_dim=2048,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -137,7 +137,6 @@ class Qwen3ASRAudioEncoder(keras.Model):
         # T frames -> ceil(T / 8) tokens.
         # However, for chunk-based processing, each 100-frame chunk produces
         # exactly 13 tokens (as confirmed by technical report).
-        # We use the _post_cnn_length logic here.
         T = audio_mel_shape[1]
         chunk_len = self.chunk_len
         num_chunks = T // chunk_len

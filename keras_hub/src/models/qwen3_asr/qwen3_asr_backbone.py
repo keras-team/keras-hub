@@ -13,39 +13,19 @@ def _qwen3_kernel_initializer(stddev=0.02):
 
 
 class Qwen3ASRInterleaveEmbeddings(keras.layers.Layer):
-    """Scatter audio token embeddings into the text embedding sequence.
-
-    Given a (batch, seq_len, hidden) text embedding tensor and a list of
-    audio token embeddings, this layer replaces positions indicated by
-    `audio_indices` with the corresponding audio embeddings.
-    """
+    """Scatter audio token embeddings into the text embedding sequence."""
 
     def __init__(self, hidden_dim, **kwargs):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
 
     def call(self, audio_embeddings, text_embeddings, audio_indices):
-        """Interleave audio tokens into the text embedding sequence.
-
-        Args:
-            audio_embeddings: Tensor with audio token embeddings.
-                Shape: (batch, audio_seq_len, hidden_dim).
-            text_embeddings: Tensor (batch, seq_len, hidden_dim).
-            audio_indices: int32 Tensor with flat indices into the
-                concatenated (batch * seq_len) sequence.
-        """
         batch_size = ops.shape(text_embeddings)[0]
         seq_len = ops.shape(text_embeddings)[1]
 
-        # Flatten the text embedding to (batch * seq_len, hidden_dim).
         flat_text = ops.reshape(text_embeddings, (-1, self.hidden_dim))
-
-        # Flatten the audio embedding to (batch * audio_seq_len, hidden_dim).
         flat_audio = ops.reshape(audio_embeddings, (-1, self.hidden_dim))
 
-        # Handle batched audio_indices from the functional graph.
-        # We assume audio_indices are relative to the sample.
-        # We need to add offset: seq_len * batch_idx
         offsets = ops.arange(batch_size, dtype="int32") * seq_len
         offsets = ops.expand_dims(offsets, axis=-1)
 
@@ -53,10 +33,7 @@ class Qwen3ASRInterleaveEmbeddings(keras.layers.Layer):
         audio_indices = audio_indices + offsets
         flat_indices = ops.reshape(audio_indices, (-1, 1))
 
-        # Scatter audio embeddings into the flat text tensor.
         flat_out = ops.scatter_update(flat_text, flat_indices, flat_audio)
-
-        # Reshape back to (batch, seq_len, hidden_dim).
         return ops.reshape(flat_out, (batch_size, seq_len, self.hidden_dim))
 
     def compute_output_spec(
@@ -90,7 +67,7 @@ class Qwen3ASRBackbone(Backbone):
             for each transformer.
         head_dim (int): The size of each attention head.
         rope_max_wavelength (int, optional): The maximum angular wavelength of
-            the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
+            the sine/cosine curves, for rotary embeddings. Defaults to `1000000`.
         rope_scaling_factor (float, optional): The scaling factor for
             calculation of rotary embedding. Defaults to `1.0`.
         layer_norm_epsilon (float, optional): Epsilon for the layer
@@ -109,14 +86,14 @@ class Qwen3ASRBackbone(Backbone):
 
     def __init__(
         self,
-        vocabulary_size,
-        num_layers,
-        num_query_heads,
-        num_key_value_heads,
-        head_dim,
-        hidden_dim,
-        intermediate_dim,
-        rope_max_wavelength=10000,
+        vocabulary_size=151936,
+        num_layers=28,
+        num_query_heads=16,
+        num_key_value_heads=8,
+        head_dim=128,
+        hidden_dim=2048,
+        intermediate_dim=6144,
+        rope_max_wavelength=1000000,
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
         dropout=0.0,
@@ -181,13 +158,9 @@ class Qwen3ASRBackbone(Backbone):
                 shape=(None, audio_encoder.num_mel_bins),
                 name="audio_mel",
             )
-            # audio_mel_mask shape (B, T) where T is total time steps in mel
-            # frames.
             audio_mel_mask_input = keras.Input(
                 shape=(None,), dtype="int32", name="audio_mel_mask"
             )
-            # audio_indices shape (B, A) where A is number of audio tokens to
-            # interleave.
             audio_indices_input = keras.Input(
                 shape=(None,), dtype="int32", name="audio_indices"
             )
@@ -196,17 +169,14 @@ class Qwen3ASRBackbone(Backbone):
             inputs["audio_mel_mask"] = audio_mel_mask_input
             inputs["audio_indices"] = audio_indices_input
 
-            # 1. Encode Audio
             audio_features = self.audio_encoder(
                 audio_mel_input, audio_mel_mask=audio_mel_mask_input
             )
 
-            # 2. Interleave
-            interleave_layer = Qwen3ASRInterleaveEmbeddings(
+            self.interleave_layer = Qwen3ASRInterleaveEmbeddings(
                 hidden_dim=hidden_dim, dtype=dtype, name="interleave_embeddings"
             )
-            self.interleave_layer = interleave_layer
-            x = interleave_layer(
+            x = self.interleave_layer(
                 audio_embeddings=audio_features,
                 text_embeddings=x,
                 audio_indices=audio_indices_input,
@@ -223,7 +193,6 @@ class Qwen3ASRBackbone(Backbone):
             **kwargs,
         )
 
-        # Save config
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
@@ -264,11 +233,8 @@ class Qwen3ASRBackbone(Backbone):
 
     @classmethod
     def from_config(cls, config):
-        config.update(
-            {
-                "audio_encoder": None
-                if config.get("audio_encoder") is None
-                else keras.layers.deserialize(config["audio_encoder"]),
-            }
-        )
+        if config.get("audio_encoder") is not None:
+            config["audio_encoder"] = keras.layers.deserialize(
+                config["audio_encoder"]
+            )
         return super().from_config(config)

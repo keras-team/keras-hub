@@ -4,9 +4,11 @@ backbone_presets = {
     "qwen3_asr_1.7b": {
         "metadata": {
             "description": (
-                "Qwen3-ASR 1.7B model supporting 52 languages and dialects."
+                "Qwen3-ASR 1.7B model supporting 52 languages and dialects. "
+                "Uses 2048 hidden size and 6144 intermediate size for the "
+                "text backbone, and 480 filters for the audio CNN."
             ),
-            "params": 2042211328,
+            "params": 2245231360,
             "path": "qwen3_asr",
         },
         "kaggle_handle": "kaggle://keras/qwen3-asr/keras/qwen3_asr_1.7b/1",
