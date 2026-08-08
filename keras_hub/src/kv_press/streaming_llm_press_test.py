@@ -40,3 +40,8 @@ class StreamingLLMPressTest(TestCase):
         kept = ops.convert_to_numpy(compressed[0, 0, 0, :4, 0, 0]).astype(int)
         # n_sink=1, n_recent=3 -> sink {0}, recent real tail {5, 6, 7}.
         self.assertAllEqual(kept, [0, 5, 6, 7])
+
+    def test_serialization(self):
+        self.run_serialization_test(
+            StreamingLLMPress(compression_ratio=0.7, n_sink=3)
+        )

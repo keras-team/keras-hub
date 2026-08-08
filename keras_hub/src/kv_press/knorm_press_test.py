@@ -18,3 +18,6 @@ class KnormPressTest(TestCase):
         kept_keys = ops.convert_to_numpy(compressed[0, 0, 0, :, 0, :])
         expected = np.array([[1, 0, 0], [2, 0, 0], [3, 0, 0]])
         self.assertAllClose(kept_keys, expected)
+
+    def test_serialization(self):
+        self.run_serialization_test(KnormPress(compression_ratio=0.7))

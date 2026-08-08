@@ -13,3 +13,6 @@ class RandomPressTest(TestCase):
             cache
         )
         self.assertAllClose(compressed_a, compressed_b)
+
+    def test_serialization(self):
+        self.run_serialization_test(RandomPress(compression_ratio=0.7, seed=42))
