@@ -69,11 +69,12 @@ class KerasHubTorchModel(_TorchModule):
     - `compute_logits` projects through the tied token embedding.
 
     Sliding windows and attention soft caps are per-layer constructor
-    arguments on `vllm.Attention`, not per-call arguments, so families that
-    use them (Gemma 2/3, windowed Qwen presets) need config-side support
-    that this first GPU version does not carry. Their routes pass the
-    per-call values, and the published function fails loudly rather than
-    serving with a silently missing window or cap.
+    arguments on `vllm.Attention`, while the routes pass them per call. The
+    config writer bridges the two: it serializes each layer's window into
+    `keras_hub_sliding_window_per_layer` (and the cap into
+    `keras_hub_soft_cap`), this wrapper constructs each module accordingly,
+    and the published function verifies the route's per-call values against
+    what its layer was built with, failing loudly on any disagreement.
     """
 
     def __init__(self, vllm_config, prefix=""):
@@ -102,6 +103,18 @@ class KerasHubTorchModel(_TorchModule):
         self._head_dim = head_dim
         self._scale = head_dim**-0.5
 
+        # Per-layer attention statics from the config: the window pattern
+        # (e.g. Gemma windows alternate layers) and the logit soft cap.
+        windows = getattr(hf_config, "keras_hub_sliding_window_per_layer", None)
+        if windows is None:
+            windows = [None] * num_layers
+        if len(windows) != num_layers:
+            raise ValueError(
+                f"keras_hub_sliding_window_per_layer has {len(windows)} "
+                f"entries for {num_layers} layers."
+            )
+        self._soft_cap = getattr(hf_config, "keras_hub_soft_cap", None)
+
         # One Attention module per backbone layer. The engine scans the
         # model for these and binds a paged KV cache to each, keyed by
         # `prefix`, so the prefixes must be stable and unique.
@@ -113,12 +126,18 @@ class KerasHubTorchModel(_TorchModule):
                     head_dim,
                     scale=self._scale,
                     num_kv_heads=num_kv_heads,
+                    per_layer_sliding_window=windows[i],
+                    logits_soft_cap=self._soft_cap,
                     cache_config=vllm_config.cache_config,
                     prefix=f"{prefix}.layers.{i}.attn",
                 )
                 for i in range(num_layers)
             ]
         )
+        # What each layer was built with, for the published function's
+        # per-call cross-check.
+        for module, window in zip(self.layers, windows):
+            module._keras_hub_window = window
 
     def load_preset(self):
         """Builds the KerasHub model and loads the preset weights.
@@ -208,8 +227,8 @@ class KerasHubTorchModel(_TorchModule):
 
         The per-call arguments exist to cross-check the module's
         construction-time configuration: a mismatch means the config wrote
-        different dims than the backbone actually has, or the family needs
-        per-layer options this GPU version does not support yet.
+        different dims or a different window pattern than the backbone
+        actually has.
         """
         if (
             num_heads != self._num_heads
@@ -225,12 +244,14 @@ class KerasHubTorchModel(_TorchModule):
                 f"{self._num_heads}, kv_heads={self._num_kv_heads}, "
                 f"head_dim={self._head_dim}, scale={self._scale})."
             )
-        if sliding_window is not None or soft_cap is not None:
+        expected_window = getattr(kv_cache, "_keras_hub_window", None)
+        if sliding_window != expected_window or soft_cap != self._soft_cap:
             raise RuntimeError(
-                "Sliding-window and soft-cap attention are per-layer "
-                "constructor options on vLLM's GPU Attention layer and are "
-                "not supported by the GPU path yet; this family serves on "
-                "the TPU path."
+                "The attention route passed sliding_window="
+                f"{sliding_window}, soft_cap={soft_cap}, but this layer's "
+                f"Attention module was built with window={expected_window},"
+                f" soft_cap={self._soft_cap}. The config's per-layer "
+                "pattern does not match the model's."
             )
         return kv_cache, kv_cache(q, k, v)
 

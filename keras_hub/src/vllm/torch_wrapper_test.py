@@ -132,23 +132,60 @@ class KerasHubTorchModelTest(TestCase):
                 num_kv_heads=KV_HEADS,
             )
 
-    def test_published_function_rejects_window_and_cap(self):
-        # Per-layer options are constructor arguments on vLLM's Attention;
-        # families that need them are not served by this wrapper yet.
-        wrapper = self.build_wrapper()
-        for option in (dict(sliding_window=128), dict(soft_cap=50.0)):
-            with self.assertRaisesRegex(RuntimeError, "not supported"):
-                wrapper._paged_attention(
-                    wrapper.layers[0],
-                    None,
-                    None,
-                    None,
-                    scale=HEAD_DIM**-0.5,
-                    head_size=HEAD_DIM,
-                    num_heads=HEADS,
-                    num_kv_heads=KV_HEADS,
-                    **option,
-                )
+    def test_window_and_cap_built_per_layer_and_verified(self):
+        # Gemma-style pattern: even layers windowed, uniform soft cap. Each
+        # module is constructed with its own window, and the published
+        # function accepts exactly the value its layer was built with.
+        config = fake_vllm_config()
+        config.model_config.hf_config.keras_hub_sliding_window_per_layer = [
+            256,
+            None,
+        ]
+        config.model_config.hf_config.keras_hub_soft_cap = 50.0
+        wrapper = KerasHubTorchModel(config, prefix="model")
+
+        for i, expected in enumerate([256, None]):
+            self.assertEqual(
+                wrapper.layers[i].init_args["per_layer_sliding_window"],
+                expected,
+            )
+            self.assertEqual(
+                wrapper.layers[i].init_args["logits_soft_cap"], 50.0
+            )
+            out = wrapper._paged_attention(
+                wrapper.layers[i],
+                "q",
+                None,
+                None,
+                scale=HEAD_DIM**-0.5,
+                head_size=HEAD_DIM,
+                num_heads=HEADS,
+                num_kv_heads=KV_HEADS,
+                sliding_window=expected,
+                soft_cap=50.0,
+            )
+            self.assertEqual(out[1], "q")
+
+        # A route value the layer was not built with must fail loudly.
+        with self.assertRaisesRegex(RuntimeError, "pattern"):
+            wrapper._paged_attention(
+                wrapper.layers[1],  # built without a window
+                "q",
+                None,
+                None,
+                scale=HEAD_DIM**-0.5,
+                head_size=HEAD_DIM,
+                num_heads=HEADS,
+                num_kv_heads=KV_HEADS,
+                sliding_window=256,
+                soft_cap=50.0,
+            )
+
+    def test_window_list_length_must_match_layers(self):
+        config = fake_vllm_config()
+        config.model_config.hf_config.keras_hub_sliding_window_per_layer = [256]
+        with self.assertRaisesRegex(ValueError, "entries"):
+            KerasHubTorchModel(config, prefix="model")
 
     def test_embed_and_logits_use_the_tied_embedding(self):
         wrapper = self.build_wrapper()
