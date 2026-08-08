@@ -30,14 +30,8 @@ class SegFormerTest(TestCase):
             "image_encoder": image_encoder,
         }
 
-    def test_segformer_backbone_construction(self):
-        SegFormerBackbone(**self.init_kwargs)
-
     @pytest.mark.large
     def test_segformer_call(self):
-        # `test_backbone_basics` below already covers the direct `__call__`
-        # path via `run_vision_backbone_test`; this only needs to additionally
-        # verify the shape returned by the compiled `predict` path.
         segformer_backbone = SegFormerBackbone(
             image_encoder=self.init_kwargs["image_encoder"],
             projection_filters=self.init_kwargs["projection_filters"],

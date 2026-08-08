@@ -96,9 +96,6 @@ class Gemma3MeanPoolingTest(TestCase, parameterized.TestCase):
         """Tests that the layer can be successfully saved and loaded."""
         layer = Gemma3MeanPooling(name="mean_pooling_test")
         self.run_serialization_test(layer)
-        new_layer = Gemma3MeanPooling.from_config(layer.get_config())
-        self.assertEqual(new_layer.name, layer.name)
-        self.assertIsInstance(new_layer, Gemma3MeanPooling)
 
 
 class Gemma3InterleaveEmbeddingsTest(TestCase):

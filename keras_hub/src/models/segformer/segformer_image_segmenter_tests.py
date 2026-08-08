@@ -42,14 +42,8 @@ class SegFormerTest(TestCase):
             "preprocessor": self.preprocessor,
         }
 
-    def test_segformer_segmenter_construction(self):
-        SegFormerImageSegmenter(backbone=self.backbone, num_classes=4)
-
     @pytest.mark.large
     def test_segformer_call(self):
-        # `test_task` below already covers `predict()`'s output shape via
-        # `run_task_test`; `run_task_test` never exercises the raw `__call__`
-        # path (it only drives `predict`/`fit`), so this keeps that check.
         segformer = SegFormerImageSegmenter(
             backbone=self.backbone, num_classes=4
         )
