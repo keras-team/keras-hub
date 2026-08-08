@@ -323,7 +323,7 @@ class Bleu(keras.metrics.Metric):
             elif inputs.shape.rank == base_rank + 2:
                 if tf.shape(inputs)[-1] != 1:
                     raise ValueError(
-                        f"{tensor_name} is of rank {input.shape.rank}. The "
+                        f"{tensor_name} is of rank {inputs.shape.rank}. The "
                         f"last dimension must be of size 1."
                     )
                 return tf.squeeze(inputs, axis=-1)
