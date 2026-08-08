@@ -47,16 +47,17 @@ class SegFormerTest(TestCase):
 
     @pytest.mark.large
     def test_segformer_call(self):
+        # `test_task` below already covers `predict()`'s output shape via
+        # `run_task_test`; `run_task_test` never exercises the raw `__call__`
+        # path (it only drives `predict`/`fit`), so this keeps that check.
         segformer = SegFormerImageSegmenter(
             backbone=self.backbone, num_classes=4
         )
 
         images = np.random.uniform(size=(2, 32, 32, 3))
         segformer_output = segformer(images)
-        segformer_predict = segformer.predict(images)
 
         self.assertAllEqual(segformer_output.shape, (2, 32, 32, 4))
-        self.assertAllEqual(segformer_predict.shape, (2, 32, 32, 4))
 
     def test_task(self):
         self.run_task_test(

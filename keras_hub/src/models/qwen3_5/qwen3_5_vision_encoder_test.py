@@ -4,6 +4,7 @@ from keras import ops
 from keras_hub.src.models.qwen3_5.qwen3_5_vision_encoder import (
     Qwen3_5VisionEncoder,
 )
+from keras_hub.src.tests.test_case import TestCase
 
 
 def _make_encoder(out_hidden_size=64):
@@ -29,7 +30,7 @@ def _make_pixel_values(t, h, w, patch_size=4, temporal_patch_size=2):
     ).astype("float32")
 
 
-class TestQwen3_5VisionEncoder:
+class TestQwen3_5VisionEncoder(TestCase):
     def test_output_shape_single_image(self):
         """16 patches, merge=2 → 4 output tokens."""
         encoder = _make_encoder()
@@ -76,6 +77,7 @@ class TestQwen3_5VisionEncoder:
     def test_get_config_roundtrip(self):
         """get_config should return all expected constructor arguments."""
         encoder = _make_encoder(out_hidden_size=128)
+        self.run_serialization_test(encoder)
         cfg = encoder.get_config()
         assert cfg["depth"] == 2
         assert cfg["hidden_size"] == 32

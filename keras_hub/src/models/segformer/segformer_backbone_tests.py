@@ -35,16 +35,17 @@ class SegFormerTest(TestCase):
 
     @pytest.mark.large
     def test_segformer_call(self):
+        # `test_backbone_basics` below already covers the direct `__call__`
+        # path via `run_vision_backbone_test`; this only needs to additionally
+        # verify the shape returned by the compiled `predict` path.
         segformer_backbone = SegFormerBackbone(
             image_encoder=self.init_kwargs["image_encoder"],
             projection_filters=self.init_kwargs["projection_filters"],
         )
 
         images = np.random.uniform(size=(2, 32, 32, 3))
-        segformer_output = segformer_backbone(images)
         segformer_predict = segformer_backbone.predict(images)
 
-        assert segformer_output.shape == (2, 8, 8, 256)
         assert segformer_predict.shape == (2, 8, 8, 256)
 
     def test_backbone_basics(self):
