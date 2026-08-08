@@ -132,7 +132,7 @@ class Qwen3ASRAudioEncoder(keras.Model):
         self.built = True
 
     def get_num_audio_tokens(self, audio_mel_shape):
-        """Calculate number of audio tokens for a given mel spectrogram shape."""
+        """Calculate number of audio tokens for a given mel shape."""
         # Based on 8x downsampling (3 stride-2 layers)
         # T frames -> ceil(T / 8) tokens.
         # However, for chunk-based processing, each 100-frame chunk produces

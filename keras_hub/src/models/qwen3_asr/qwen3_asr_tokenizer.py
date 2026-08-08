@@ -20,32 +20,12 @@ class Qwen3ASRTokenizer(Qwen3Tokenizer):
     backbone_cls = Qwen3ASRBackbone
 
     def __init__(self, vocabulary=None, merges=None, **kwargs):
+        # We use names that will automatically set properties.
         self._add_special_token("<|AUDIO|>", "audio_token")
         self._add_special_token("<asr_text>", "asr_token")
         self._add_special_token("<|im_start|>", "start_token")
         self._add_special_token("<|im_end|>", "end_token")
-        # [time] is used by the Forced Aligner part of the Qwen3-ASR family.
         self._add_special_token("[time]", "time_token")
+        self._add_special_token("<|audio_start|>", "audio_start_token")
+        self._add_special_token("<|audio_end|>", "audio_end_token")
         super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
-
-    @property
-    def audio_token_id(self):
-        return self.special_token_to_id("<|AUDIO|>")
-
-    @property
-    def asr_token_id(self):
-        return self.special_token_to_id("<asr_text>")
-
-    @property
-    def time_token_id(self):
-        return self.special_token_to_id("[time]")
-
-    @property
-    def audio_start_token_id(self):
-        # As per config: 151669
-        return self.special_token_to_id("<|audio_start|>")
-
-    @property
-    def audio_end_token_id(self):
-        # As per config: 151670
-        return self.special_token_to_id("<|audio_end|>")

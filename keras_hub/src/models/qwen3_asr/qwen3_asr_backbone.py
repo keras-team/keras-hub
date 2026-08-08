@@ -67,7 +67,8 @@ class Qwen3ASRBackbone(Backbone):
             for each transformer.
         head_dim (int): The size of each attention head.
         rope_max_wavelength (int, optional): The maximum angular wavelength of
-            the sine/cosine curves, for rotary embeddings. Defaults to `1000000`.
+            the sine/cosine curves, for rotary embeddings.
+            Defaults to `1000000`.
         rope_scaling_factor (float, optional): The scaling factor for
             calculation of rotary embedding. Defaults to `1.0`.
         layer_norm_epsilon (float, optional): Epsilon for the layer

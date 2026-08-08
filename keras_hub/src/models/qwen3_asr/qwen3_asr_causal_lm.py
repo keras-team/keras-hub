@@ -1,4 +1,3 @@
-import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -40,11 +39,12 @@ class Qwen3ASRCausalLM(CausalLM):
 
     def _interleave(self, x, audio_embeddings, audio_indices):
         if audio_embeddings is not None and audio_indices is not None:
-            return self.backbone.interleave_layer(
-                audio_embeddings=audio_embeddings,
-                text_embeddings=x,
-                audio_indices=audio_indices,
-            )
+            if hasattr(self.backbone, "interleave_layer"):
+                return self.backbone.interleave_layer(
+                    audio_embeddings=audio_embeddings,
+                    text_embeddings=x,
+                    audio_indices=audio_indices,
+                )
         return x
 
     def call_with_cache(
@@ -66,8 +66,8 @@ class Qwen3ASRCausalLM(CausalLM):
             x, next_cache = self.backbone.transformer_layers[i](
                 x,
                 decoder_padding_mask=padding_mask,
-                decoder_attention_cache=current_cache,
-                decoder_attention_cache_update_index=cache_update_index,
+                self_attention_cache=current_cache,
+                self_attention_cache_update_index=cache_update_index,
             )
             updated_cache.append(next_cache)
         cache = ops.stack(updated_cache, axis=1)
