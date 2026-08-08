@@ -121,7 +121,7 @@ class Qwen3ASRAudioEncoder(keras.Model):
         self.chunk_len = n_window * 2
 
         # CNN Layers
-        self.conv2d1 = keras.layers.Conv2D(
+        self._conv2d1 = keras.layers.Conv2D(
             downsample_hidden_size,
             3,
             strides=2,
@@ -129,7 +129,7 @@ class Qwen3ASRAudioEncoder(keras.Model):
             activation="gelu",
             name="conv2d1",
         )
-        self.conv2d2 = keras.layers.Conv2D(
+        self._conv2d2 = keras.layers.Conv2D(
             downsample_hidden_size,
             3,
             strides=2,
@@ -137,7 +137,7 @@ class Qwen3ASRAudioEncoder(keras.Model):
             activation="gelu",
             name="conv2d2",
         )
-        self.conv2d3 = keras.layers.Conv2D(
+        self._conv2d3 = keras.layers.Conv2D(
             downsample_hidden_size,
             3,
             strides=2,
@@ -149,7 +149,7 @@ class Qwen3ASRAudioEncoder(keras.Model):
         # Projection
         # Output of CNN has 16 freq bins (128 // 8).
         self.freq_bins_out = 16
-        self.conv_out = keras.layers.Dense(
+        self._conv_out = keras.layers.Dense(
             d_model, use_bias=False, name="conv_out"
         )
 
@@ -157,12 +157,12 @@ class Qwen3ASRAudioEncoder(keras.Model):
         # Output sequence length of a chunk in time dimension is 13
         # (100 // 8 + 1).
         self.chunk_time_steps_out = 13
-        self.positional_embedding = SinusoidsPositionEmbedding(
+        self._positional_embedding = SinusoidsPositionEmbedding(
             max_position_embeddings, d_model, name="positional_embedding"
         )
 
         # Transformer Layers
-        self.transformer_layers = []
+        self._transformer_layers = []
         for i in range(encoder_layers):
             layer = transformer_encoder.TransformerEncoder(
                 intermediate_dim=encoder_ffn_dim,
@@ -171,17 +171,17 @@ class Qwen3ASRAudioEncoder(keras.Model):
                 activation=activation_function,
                 name=f"transformer_layer_{i}",
             )
-            self.transformer_layers.append(layer)
+            self._transformer_layers.append(layer)
 
-        self.ln_post = keras.layers.LayerNormalization(
+        self._ln_post = keras.layers.LayerNormalization(
             epsilon=1e-5, name="ln_post"
         )
 
         # Projector
-        self.proj_linear_1 = keras.layers.Dense(
+        self._proj_linear_1 = keras.layers.Dense(
             d_model, activation=activation_function, name="proj_linear_1"
         )
-        self.proj_linear_2 = keras.layers.Dense(
+        self._proj_linear_2 = keras.layers.Dense(
             output_dim, name="proj_linear_2"
         )
         self.built = True
@@ -205,16 +205,16 @@ class Qwen3ASRAudioEncoder(keras.Model):
         audio_mel = ops.transpose(audio_mel, (0, 1, 3, 2))
         audio_mel = ops.reshape(audio_mel, (-1, F, self.chunk_len, 1))
 
-        x = self.conv2d1(audio_mel)
-        x = self.conv2d2(x)
-        x = self.conv2d3(x)
+        x = self._conv2d1(audio_mel)
+        x = self._conv2d2(x)
+        x = self._conv2d3(x)
 
         W_out = ops.shape(x)[2]
         x = ops.transpose(x, (0, 2, 3, 1))
         x = ops.reshape(x, (-1, W_out, x.shape[2] * x.shape[3]))
-        x = self.conv_out(x)
+        x = self._conv_out(x)
 
-        pos_emb = self.positional_embedding(seqlen=W_out)
+        pos_emb = self._positional_embedding(seqlen=W_out)
         pos_emb = ops.expand_dims(pos_emb, axis=0)
         x = x + pos_emb
 
@@ -237,14 +237,14 @@ class Qwen3ASRAudioEncoder(keras.Model):
             padding_mask = ops.reshape(new_mask, (B, -1))
             attention_mask = self._build_attention_mask(B, num_chunks, W_out)
 
-        for transformer_layer in self.transformer_layers:
+        for transformer_layer in self._transformer_layers:
             x = transformer_layer(
                 x, padding_mask=padding_mask, attention_mask=attention_mask
             )
 
-        x = self.ln_post(x)
-        x = self.proj_linear_1(x)
-        x = self.proj_linear_2(x)
+        x = self._ln_post(x)
+        x = self._proj_linear_1(x)
+        x = self._proj_linear_2(x)
         return x
 
     def get_config(self):
