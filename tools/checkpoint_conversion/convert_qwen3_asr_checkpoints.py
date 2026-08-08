@@ -93,8 +93,10 @@ def map_audio_encoder(keras_audio_encoder, hf_audio_encoder):
     """Maps Qwen3-ASR Audio Encoder weights."""
     print("Mapping audio encoder...")
 
-    # Note: This mapping is based on standard naming conventions for audio encoders in HF.
-    # If the HF model uses different naming (e.g., audio_tower), adjust keys accordingly.
+    # Note: This mapping is based on standard naming conventions for audio
+    # encoders in HF.
+    # If the HF model uses different naming (e.g., audio_tower), adjust keys
+    # accordingly.
 
     # Convolutional Layers
     try:
@@ -139,7 +141,8 @@ def map_audio_encoder(keras_audio_encoder, hf_audio_encoder):
             )
 
     # Transformer Encoder Layers
-    # Qwen3ASRAudioEncoder transformer layers are listed in self.transformer_layers
+    # Qwen3ASRAudioEncoder transformer layers are listed in
+    # self.transformer_layers
     if hasattr(keras_audio_encoder, "transformer_layers") and hasattr(
         hf_audio_encoder, "layers"
     ):
@@ -203,7 +206,8 @@ def convert_checkpoints(keras_model, hf_model):
             map_audio_encoder(keras_model.backbone.audio_encoder, hf_audio)
     else:
         print(
-            "Warning: No audio encoder found in HF model or Keras model backbone."
+            "Warning: No audio encoder found in HF model or "
+            "Keras model backbone."
         )
 
 
@@ -227,7 +231,7 @@ def main():
         "--preset",
         type=str,
         default="qwen3_asr_1.7b",
-        help="Preset name to use for initialization (e.g., qwen3_asr_1.7b, qwen3_asr_0.6b).",
+        help="Preset name to use (e.g., qwen3_asr_1.7b, qwen3_asr_0.6b).",
     )
 
     args = parser.parse_args()

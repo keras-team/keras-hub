@@ -19,7 +19,8 @@ from keras_hub.src.utils.tensor_utils import preprocessing_function
 class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
     """Qwen3-ASR task preprocessor.
 
-    Prepares inputs for causal language model generation tasks with interleaved audio.
+    Prepares inputs for causal language model generation tasks with interleaved
+    audio.
     """
 
     backbone_cls = Qwen3ASRBackbone

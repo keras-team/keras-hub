@@ -58,7 +58,8 @@ class Qwen3ASRCausalLMPreprocessorTest(TestCase):
         self.assertIn("audio_mel", x)
         self.assertIn("audio_indices", x)
 
-        # Verify audio_indices shape matches expanded placeholders (13 for 1 chunk)
+        # Verify audio_indices shape matches expanded placeholders (13 for 1
+        # chunk).
         self.assertEqual(x["audio_indices"].shape[-1], 13)
 
         self.assertEqual(x["token_ids"].shape[-1], 32)

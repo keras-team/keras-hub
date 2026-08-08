@@ -13,7 +13,8 @@ class Qwen3ASRTokenizer(Qwen3Tokenizer):
     """Tokenizer for Qwen3-ASR models.
 
     This tokenizer inherits from `Qwen3Tokenizer` but is bound to
-    `Qwen3ASRBackbone` to enable accessing presets under the `qwen3_asr` namespace.
+    `Qwen3ASRBackbone` to enable accessing presets under the `qwen3_asr`
+    namespace.
     """
 
     backbone_cls = Qwen3ASRBackbone

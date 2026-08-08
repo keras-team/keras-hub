@@ -181,11 +181,13 @@ class Qwen3ASRBackbone(Backbone):
                 shape=(None, audio_encoder.num_mel_bins),
                 name="audio_mel",
             )
-            # audio_mel_mask shape (B, T) where T is total time steps in mel frames
+            # audio_mel_mask shape (B, T) where T is total time steps in mel
+            # frames.
             audio_mel_mask_input = keras.Input(
                 shape=(None,), dtype="int32", name="audio_mel_mask"
             )
-            # audio_indices shape (B, A) where A is number of audio tokens to interleave
+            # audio_indices shape (B, A) where A is number of audio tokens to
+            # interleave.
             audio_indices_input = keras.Input(
                 shape=(None,), dtype="int32", name="audio_indices"
             )

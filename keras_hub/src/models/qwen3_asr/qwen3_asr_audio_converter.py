@@ -35,7 +35,8 @@ class Qwen3ASRAudioConverter(AudioConverter):
             Hz. Defaults to ``0.0``.
         max_frequency: float. Upper frequency bound for the mel filterbank in
             Hz. Defaults to ``8000.0``.
-        dither: float. Dither to add to audio before recording. Defaults to ``0.0``.
+        dither: float. Dither to add to audio before recording. Defaults
+            to ``0.0``.
         **kwargs: Additional keyword arguments forwarded to
             ``keras_hub.layers.AudioConverter``.
     """

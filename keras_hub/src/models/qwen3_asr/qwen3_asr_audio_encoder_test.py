@@ -147,7 +147,8 @@ class Qwen3ASRAudioEncoder(keras.Model):
         )
 
         # Position Embedding
-        # Output sequence length of a chunk in time dimension is 13 (100 // 8 + 1).
+        # Output sequence length of a chunk in time dimension is 13
+        # (100 // 8 + 1).
         self.chunk_time_steps_out = 13
         self.positional_embedding = SinusoidsPositionEmbedding(
             max_position_embeddings, d_model, name="positional_embedding"
@@ -238,7 +239,8 @@ class Qwen3ASRAudioEncoder(keras.Model):
         # We want (B_packed, W, C, H) -> 0, 2, 3, 1
         x = ops.transpose(x, (0, 2, 3, 1))
 
-        # Flatten last two: (B * num_chunks, W_out, downsample_hidden_size * H_out)
+        # Flatten last two:
+        # (B * num_chunks, W_out, downsample_hidden_size * H_out)
         x = ops.reshape(x, (-1, W_out, x.shape[2] * x.shape[3]))
 
         # Projection
@@ -286,20 +288,24 @@ class Qwen3ASRAudioEncoder(keras.Model):
             attention_mask = self._build_attention_mask(B, num_chunks, W_out)
 
             # Combine attention_mask with padding_mask?
-            # TransformerEncoder usually handles padding_mask separately, but customized attention_mask can override it.
-            # If we provide attention_mask, we should ensure it also handles padding.
+            # TransformerEncoder usually handles padding_mask separately, but
+            # customized attention_mask can override it.
+            # If we provide attention_mask, we should ensure it also handles
+            # padding.
             # Let's check TransformerEncoder docstring.
             # It says attention_mask overrides if provided.
             # So attention_mask should also block padding!
             # padding_mask_exp1 = ops.expand_dims(padding_mask, axis=-1)
             # padding_mask_exp2 = ops.expand_dims(padding_mask, axis=1)
-            # padding_mask_2d = ops.logical_and(padding_mask_exp1, padding_mask_exp2)
+            # padding_mask_2d = ops.logical_and(padding_mask_exp1,
+            #                                   padding_mask_exp2)
             # attention_mask = ops.logical_and(attention_mask, padding_mask_2d)
 
         # Transformer Layers
         for transformer_layer in self.transformer_layers:
             # Pass custom attention mask if available
-            # Wait, TransformerEncoder might not expect 3D attention_mask in this shape?
+            # Wait, TransformerEncoder might not expect 3D attention_mask in
+            # this shape?
             # It expects [batch_size, sequence_length, sequence_length].
             # Our attention_mask is (B, total_steps, total_steps).
             # This matches PERFECTLY.

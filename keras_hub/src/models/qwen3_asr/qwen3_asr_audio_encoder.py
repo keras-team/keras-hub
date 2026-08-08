@@ -54,9 +54,7 @@ class Qwen3ASRAudioEncoderTest(TestCase):
 
         # Make second sample shorter
         mask = np.ones_like(self.audio_mel_mask)
-        mask[1, 15:] = (
-            0  # Only first 15 steps valid in 2nd sample (belongs to chunk 0 and 1)
-        )
+        mask[1, 15:] = 0  # Only first 15 steps valid in 2nd sample
 
         out = encoder(self.audio_mel, audio_mel_mask=mask)
 
