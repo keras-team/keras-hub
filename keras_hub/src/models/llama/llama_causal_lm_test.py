@@ -1,9 +1,13 @@
 import os
 from unittest.mock import patch
 
+import keras
 import pytest
 from keras import ops
 
+from keras_hub.src.kv_press.knorm_press import KnormPress
+from keras_hub.src.kv_press.random_press import RandomPress
+from keras_hub.src.kv_press.streaming_llm_press import StreamingLLMPress
 from keras_hub.src.models.llama.llama_backbone import LlamaBackbone
 from keras_hub.src.models.llama.llama_causal_lm import LlamaCausalLM
 from keras_hub.src.models.llama.llama_causal_lm_preprocessor import (
@@ -97,6 +101,112 @@ class LlamaCausalLMTest(TestCase):
         # Assert we do recompile after compile is called.
         causal_lm.compile(sampler="greedy")
         self.assertIsNone(causal_lm.generate_function)
+
+    def test_call_with_cache_position_index_decoupling(self):
+        # `position_index` (used for rotary embeddings) must be decoupled
+        # from `cache_update_index` (the physical cache write slot / causal
+        # mask offset) -- this is what lets a compressed, shorter-than-
+        # original cache still assign tokens their true original position.
+        causal_lm = LlamaCausalLM(**self.init_kwargs)
+        prompt = "the quick brown fox"
+        preprocessed = self.preprocessor.generate_preprocess([prompt])
+        token_ids = preprocessed["token_ids"]
+        padding_mask = preprocessed["padding_mask"]
+        hidden_states, cache, cache_index_offset = causal_lm._build_cache(
+            token_ids, padding_mask
+        )
+        self.assertEqual(cache_index_offset, 0)
+        next_token = ops.slice(token_ids, [0, 0], [1, 1])
+
+        # Same `cache_update_index` both times, but different
+        # `position_index` -- isolates the effect of the rotary embedding
+        # from cache addressing/masking.
+        _, hidden_a, _ = causal_lm.call_with_cache(
+            next_token, cache, 2, position_index=2
+        )
+        _, hidden_b, _ = causal_lm.call_with_cache(
+            next_token, cache, 2, position_index=5
+        )
+        self.assertNotAllClose(hidden_a, hidden_b)
+
+        # Omitting `position_index` falls back to `cache_update_index`,
+        # matching pre-compression behavior exactly.
+        _, hidden_c, _ = causal_lm.call_with_cache(next_token, cache, 2)
+        self.assertAllClose(hidden_a, hidden_c)
+
+    def test_kv_cache_compression_shrinks_cache_and_offsets_index(self):
+        if keras.config.backend() != "torch":
+            self.skipTest("Compression during generate() is torch-only.")
+        causal_lm = LlamaCausalLM(**self.init_kwargs)
+        causal_lm.compile(press=KnormPress(compression_ratio=0.5))
+        prompt = "the quick brown fox"
+        preprocessed = self.preprocessor.generate_preprocess([prompt])
+        token_ids = preprocessed["token_ids"]
+        padding_mask = preprocessed["padding_mask"]
+        max_length = int(token_ids.shape[1])
+
+        _, cache, cache_index_offset = causal_lm._build_cache(
+            token_ids, padding_mask
+        )
+        real_length = int(ops.sum(ops.cast(padding_mask, "int32")))
+        expected_keep_len = max(1, round(real_length * 0.5))
+        # The buffer keeps `expected_keep_len` prompt slots *plus* one free
+        # slot per token generation is about to write -- without that
+        # reserve the decode loop would overwrite what was just retained.
+        expected_reserve = max_length - real_length
+        self.assertEqual(cache.shape[3], expected_keep_len + expected_reserve)
+        self.assertEqual(cache_index_offset, real_length - expected_keep_len)
+
+    def test_press_string_identifier(self):
+        causal_lm = LlamaCausalLM(**self.init_kwargs)
+        causal_lm.compile(press="knorm")
+        self.assertIsInstance(causal_lm.press, KnormPress)
+
+    def test_generate_with_kv_cache_compression_ratio_zero_matches_baseline(
+        self,
+    ):
+        # A `compression_ratio=0.0` press is a true no-op end-to-end, so
+        # generation must match the uncompressed baseline exactly. The two
+        # models share the same (already-built) backbone, so weights match.
+        baseline = LlamaCausalLM(**self.init_kwargs)
+        baseline.compile(sampler="greedy")
+        compressed = LlamaCausalLM(**self.init_kwargs)
+        compressed.compile(
+            sampler="greedy",
+            press=StreamingLLMPress(compression_ratio=0.0),
+        )
+
+        prompt = "the quick brown fox"
+        baseline_output = baseline.generate(prompt, stop_token_ids=None)
+        compressed_output = compressed.generate(prompt, stop_token_ids=None)
+        self.assertEqual(baseline_output, compressed_output)
+
+    def test_generate_with_kv_cache_compression(self):
+        if keras.config.backend() != "torch":
+            self.skipTest("Compression during generate() is torch-only.")
+        for press in (
+            RandomPress(compression_ratio=0.5),
+            KnormPress(compression_ratio=0.5),
+            StreamingLLMPress(compression_ratio=0.5, n_sink=1),
+        ):
+            causal_lm = LlamaCausalLM(**self.init_kwargs)
+            causal_lm.compile(sampler="greedy", press=press)
+            prompt = "the quick brown fox"
+            output = causal_lm.generate(prompt, stop_token_ids=None)
+            self.assertTrue(prompt in output)
+
+    def test_generate_with_kv_cache_compression_mixed_length_batch(self):
+        if keras.config.backend() != "torch":
+            self.skipTest("Compression during generate() is torch-only.")
+        causal_lm = LlamaCausalLM(**self.init_kwargs)
+        causal_lm.compile(
+            sampler="greedy",
+            press=StreamingLLMPress(compression_ratio=0.5, n_sink=1),
+        )
+        prompts = ["the quick brown fox", "the earth"]
+        output = causal_lm.generate(prompts, stop_token_ids=None)
+        for prompt, generated in zip(prompts, output):
+            self.assertTrue(prompt in generated)
 
     @pytest.mark.large
     def test_saved_model(self):
