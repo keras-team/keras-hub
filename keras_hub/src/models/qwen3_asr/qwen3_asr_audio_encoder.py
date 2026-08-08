@@ -172,7 +172,7 @@ class Qwen3ASRAudioEncoder(keras.Model):
         x = self._conv_out(x)
 
         # Positional Encoding
-        x = self._position_encoding(x)
+        x = x + self._position_encoding(x)
 
         x = ops.reshape(x, (B, -1, self.d_model))
 
