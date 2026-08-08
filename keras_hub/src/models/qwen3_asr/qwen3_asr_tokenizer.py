@@ -23,6 +23,8 @@ class Qwen3ASRTokenizer(Qwen3Tokenizer):
         self._add_special_token("<|AUDIO|>", "audio_token")
         self._add_special_token("<asr_text>", "asr_token")
         self._add_special_token("<|im_start|>", "start_token")
+        # [time] is used by the Forced Aligner part of the Qwen3-ASR family.
+        self._add_special_token("[time]", "time_token")
         super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
 
     @property
@@ -32,3 +34,7 @@ class Qwen3ASRTokenizer(Qwen3Tokenizer):
     @property
     def asr_token_id(self):
         return self.special_token_to_id("<asr_text>")
+
+    @property
+    def time_token_id(self):
+        return self.special_token_to_id("[time]")

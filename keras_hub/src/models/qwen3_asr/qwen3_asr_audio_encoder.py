@@ -2,7 +2,10 @@ import keras
 from keras import ops
 
 from keras_hub.src import api_export
-from keras_hub.src.layers.modeling import transformer_encoder
+from keras_hub.src.layers.modeling.sine_position_encoding import (
+    SinePositionEncoding,
+)
+from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
 
 
 def _post_cnn_length(lengths):
@@ -12,60 +15,6 @@ def _post_cnn_length(lengths):
             lengths > 0, (lengths - 1) // 2 + 1, ops.zeros_like(lengths)
         )
     return lengths
-
-
-class SinusoidsPositionEmbedding(keras.layers.Layer):
-    """Sinusoidal position embedding for Qwen3-ASR."""
-
-    def __init__(self, length, channels, max_timescale=10000, **kwargs):
-        super().__init__(**kwargs)
-        self.length = length
-        self.channels = channels
-        self.max_timescale = max_timescale
-        if channels % 2 != 0:
-            raise ValueError(
-                "SinusoidsPositionEmbedding needs even channels input"
-            )
-
-        log_timescale_increment = math.log(self.max_timescale) / (
-            self.channels // 2 - 1
-        )
-        inv_timescales = ops.exp(
-            -log_timescale_increment
-            * ops.cast(ops.arange(self.channels // 2), "float32")
-        )
-
-        scaled_time = ops.expand_dims(
-            ops.cast(ops.arange(self.length), "float32"), axis=1
-        ) * ops.expand_dims(inv_timescales, axis=0)
-        positional_embedding = ops.concatenate(
-            [
-                ops.sin(scaled_time),
-                ops.cos(ops.convert_to_tensor(scaled_time)),
-            ],
-            axis=1,
-        )
-
-        self.positional_embedding = ops.cast(positional_embedding, "float32")
-
-    def call(self, seqlen):
-        return ops.slice(
-            self.positional_embedding, [0, 0], [seqlen, self.channels]
-        )
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "length": self.length,
-                "channels": self.channels,
-                "max_timescale": self.max_timescale,
-            }
-        )
-        return config
-
-
-import math
 
 
 @api_export.keras_hub_export("keras_hub.models.Qwen3ASRAudioEncoder")
@@ -87,6 +36,7 @@ class Qwen3ASRAudioEncoder(keras.Model):
         dropout: float. Dropout rate.
         attention_dropout: float. Attention dropout rate.
         activation_function: str. Activation function in MLP.
+        output_dim: int. Output dimension of the projector.
         **kwargs: Additional arguments.
     """
 
@@ -147,24 +97,19 @@ class Qwen3ASRAudioEncoder(keras.Model):
         )
 
         # Projection
-        # Output of CNN has 16 freq bins (128 // 8).
-        self.freq_bins_out = 16
         self._conv_out = keras.layers.Dense(
             d_model, use_bias=False, name="conv_out"
         )
 
-        # Position Embedding
-        # Output sequence length of a chunk in time dimension is 13
-        # (100 // 8 + 1).
-        self.chunk_time_steps_out = 13
-        self._positional_embedding = SinusoidsPositionEmbedding(
-            max_position_embeddings, d_model, name="positional_embedding"
+        # Position Encoding
+        self._position_encoding = SinePositionEncoding(
+            name="positional_embedding"
         )
 
         # Transformer Layers
         self._transformer_layers = []
         for i in range(encoder_layers):
-            layer = transformer_encoder.TransformerEncoder(
+            layer = TransformerEncoder(
                 intermediate_dim=encoder_ffn_dim,
                 num_heads=encoder_attention_heads,
                 dropout=dropout,
@@ -185,6 +130,18 @@ class Qwen3ASRAudioEncoder(keras.Model):
             output_dim, name="proj_linear_2"
         )
         self.built = True
+
+    def get_num_audio_tokens(self, audio_mel_shape):
+        """Calculate number of audio tokens for a given mel spectrogram shape."""
+        # Based on 8x downsampling (3 stride-2 layers)
+        # T frames -> ceil(T / 8) tokens.
+        # However, for chunk-based processing, each 100-frame chunk produces
+        # exactly 13 tokens (as confirmed by technical report).
+        # We use the _post_cnn_length logic here.
+        T = audio_mel_shape[1]
+        chunk_len = self.chunk_len
+        num_chunks = T // chunk_len
+        return num_chunks * 13
 
     def _build_attention_mask(self, batch_size, num_chunks, time_steps):
         chunk_indices = ops.repeat(ops.arange(num_chunks), repeats=time_steps)
@@ -214,9 +171,8 @@ class Qwen3ASRAudioEncoder(keras.Model):
         x = ops.reshape(x, (-1, W_out, x.shape[2] * x.shape[3]))
         x = self._conv_out(x)
 
-        pos_emb = self._positional_embedding(seqlen=W_out)
-        pos_emb = ops.expand_dims(pos_emb, axis=0)
-        x = x + pos_emb
+        # Positional Encoding
+        x = self._position_encoding(x)
 
         x = ops.reshape(x, (B, -1, self.d_model))
 

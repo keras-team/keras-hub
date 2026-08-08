@@ -66,7 +66,7 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
         audio = x.get("audio", None)
         prompts = x["prompts"]
         responses = x.get("responses", None)
-        language = x.get("language", "English")  # Default to English
+        language = x.get("language", None)
 
         # 1. Process Audio
         audio_mel = None
@@ -79,16 +79,25 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
                 (ops.shape(audio_mel)[0], T), dtype="int32"
             )
 
-            # Report says 12.5Hz (80ms/token).
-            # If 100Hz frames, tokens = T / 8.
-            num_audio_tokens = int(T // 8)
+            # Use backbone's audio encoder to determine token count if available
+            if hasattr(self, "backbone") and self.backbone.audio_encoder:
+                num_audio_tokens = (
+                    self.backbone.audio_encoder.get_num_audio_tokens(
+                        ops.shape(audio_mel)
+                    )
+                )
+            else:
+                # Default to report's 12.5Hz (80ms/token) logic:
+                # 100 frames (1s) -> 13 tokens.
+                num_audio_tokens = (T // 100) * 13
 
         # 2. Template Prompts
         # Format: <|im_start|>assistant\nlanguage {language}<asr_text>
-        # Note: <|im_start|> is added by the packer if add_start_token=True.
-        # We need to prepend "assistant\nlanguage {language}<asr_text>" to
-        # user prompt.
-        prefix = f"assistant\nlanguage {language}<asr_text>"
+        # If language is None, we prompt for LID: "assistant\nlanguage "
+        if language:
+            prefix = f"assistant\nlanguage {language}<asr_text>"
+        else:
+            prefix = "assistant\nlanguage "
 
         if isinstance(prompts, str):
             prompts = prefix + prompts.replace(
