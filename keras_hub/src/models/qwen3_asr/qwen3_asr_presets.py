@@ -6,7 +6,7 @@ backbone_presets = {
             "description": (
                 "Qwen3-ASR 1.7B model supporting 52 languages and dialects."
             ),
-            "params": 2000000000,
+            "params": 2042211328,
             "path": "qwen3_asr",
         },
         "kaggle_handle": "kaggle://keras/qwen3-asr/keras/qwen3_asr_1.7b/1",
@@ -16,7 +16,7 @@ backbone_presets = {
             "description": (
                 "Qwen3-ASR 0.6B model supporting 52 languages and dialects."
             ),
-            "params": 900000000,
+            "params": 834103296,
             "path": "qwen3_asr",
         },
         "kaggle_handle": "kaggle://keras/qwen3-asr/keras/qwen3_asr_0.6b/1",
