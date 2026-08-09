@@ -67,7 +67,8 @@ jobs:
         # tensorflow-text pulls in full tensorflow (GPU), overriding tensorflow-cpu.
         # Force-reinstall tensorflow-cpu so TF stays CPU-only for non-TF backends,
         # preventing GPU memory contention and JIT compilation issues.
-        pip install tensorflow-cpu --force-reinstall --no-deps --progress-bar off
+        pip uninstall -y tensorflow tensorflow-cpu
+        pip install tensorflow-cpu --no-deps --progress-bar off
 
     - name: Test with pytest
       run: |
