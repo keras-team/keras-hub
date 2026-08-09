@@ -58,18 +58,15 @@ jobs:
       run: |
         pip install -U pip setuptools psutil
         pip install -r requirements-${{ matrix.backend }}-cuda.txt --progress-bar off --timeout 1000
+        # CUDA toolkit (ptxas) needed for TF XLA JIT via tensorflow-text.
+        pip install nvidia-cuda-nvcc-cu12 --progress-bar off
         pip install huggingface_hub --progress-bar off
         pip install --no-deps -e "." --progress-bar off
 
-    - name: Force tensorflow-cpu for non-TF backends
-      if: matrix.backend != 'tensorflow'
-      run: |
-        # tensorflow-text pulls in full tensorflow (GPU), overriding tensorflow-cpu.
-        # Force-reinstall tensorflow-cpu so TF stays CPU-only for non-TF backends,
-        # preventing GPU memory contention and JIT compilation issues.
-        pip uninstall -y tensorflow tensorflow-cpu
-        pip install tensorflow-cpu --no-deps --progress-bar off
-
     - name: Test with pytest
+      env:
+        # Prevent TF from pre-allocating all GPU memory, leaving room for
+        # the primary backend (torch/jax) when TF is used for preprocessing.
+        TF_FORCE_GPU_ALLOW_GROWTH: "true"
       run: |
         pytest keras_hub --check_gpu --run_large --cov=keras_hub --durations=50
