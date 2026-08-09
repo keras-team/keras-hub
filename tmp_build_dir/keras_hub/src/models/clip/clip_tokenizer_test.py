@@ -1,0 +1,85 @@
+import pytest
+import tensorflow as tf
+
+from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
+from keras_hub.src.tests.test_case import TestCase
+
+
+class CLIPTokenizerTest(TestCase):
+    def setUp(self):
+        merges = ["a i", "p l", "n e</w>", "p o", "r t</w>", "ai r", "pl a"]
+        merges += ["po rt</w>", "pla ne</w>"]
+        self.merges = merges
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<|endoftext|>", "<|startoftext|>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
+        self.input_data = ["airplane ", " airport"]
+
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=CLIPTokenizer,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            # Whitespaces should be removed.
+            expected_output=[[4, 14], [4, 16]],
+            expected_detokenize_output=["airplane", "airport"],
+        )
+
+    def test_pad_with_end_token(self):
+        init_kwargs = self.init_kwargs.copy()
+        init_kwargs["pad_with_end_token"] = True
+        tokenizer = CLIPTokenizer(**init_kwargs)
+        self.assertEqual(tokenizer.pad_token_id, tokenizer.end_token_id)
+
+    def test_python_tf_consistency(self):
+        init_kwargs = self.init_kwargs.copy()
+        init_kwargs["sequence_length"] = 10
+        init_kwargs["pad_with_end_token"] = True
+        tokenizer = CLIPTokenizer(**init_kwargs)
+        input_data = ["airplane", "airplane airport"]
+
+        # Python workflow
+        python_output = tokenizer(input_data)
+
+        # TF workflow
+        ds = tf.data.Dataset.from_tensor_slices(input_data)
+        ds = ds.map(tokenizer)
+        tf_outputs = list(ds.as_numpy_iterator())
+
+        self.assertAllEqual(python_output, tf_outputs)
+        self.assertAllEqual(python_output[0][-1], tokenizer.pad_token_id)
+        self.assertAllEqual(tf_outputs[0][-1], tokenizer.pad_token_id)
+        self.assertAllEqual(tokenizer.pad_token_id, tokenizer.end_token_id)
+
+    def test_errors_missing_special_tokens(self):
+        with self.assertRaises(ValueError):
+            CLIPTokenizer(vocabulary={"foo": 0, "bar": 1}, merges=["fo o"])
+
+    @pytest.mark.extra_large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=CLIPTokenizer,
+            preset="clip_vit_base_patch16",
+            input_data=["The quick brown fox."],
+            expected_output=[[51, 797, 3712, 2866, 3240, 269]],
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in CLIPTokenizer.presets:
+            self.run_preset_test(
+                cls=CLIPTokenizer,
+                preset=preset,
+                input_data=self.input_data,
+            )
+
+
+class CLIPTokenizerDisallowPythonWorkflowTest(CLIPTokenizerTest):
+    def setUp(self):
+        super().setUp()
+        self.init_kwargs.update({"_allow_python_workflow": False})

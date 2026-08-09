@@ -698,8 +698,8 @@ from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import (
 from keras_hub.src.models.qwen3_asr.qwen3_asr_causal_lm import (
     Qwen3ASRCausalLM as Qwen3ASRCausalLM,
 )
-from keras_hub.src.models.qwen3_asr.qwen3_asr_causal_lm_preprocessor import (
-    Qwen3ASRCausalLMPreprocessor as Qwen3ASRCausalLMPreprocessor,
+from keras_hub.src.models.qwen3_asr.qwen3_asr_preprocessor import (
+    Qwen3ASRPreprocessor as Qwen3ASRPreprocessor,
 )
 from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import (
     Qwen3ASRTokenizer as Qwen3ASRTokenizer,
