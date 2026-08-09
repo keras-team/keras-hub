@@ -61,6 +61,14 @@ jobs:
         pip install huggingface_hub --progress-bar off
         pip install --no-deps -e "." --progress-bar off
 
+    - name: Force tensorflow-cpu for non-TF backends
+      if: matrix.backend != 'tensorflow'
+      run: |
+        # tensorflow-text pulls in full tensorflow (GPU), overriding tensorflow-cpu.
+        # Force-reinstall tensorflow-cpu so TF stays CPU-only for non-TF backends,
+        # preventing GPU memory contention and JIT compilation issues.
+        pip install tensorflow-cpu --force-reinstall --no-deps --progress-bar off
+
     - name: Test with pytest
       run: |
         pytest keras_hub --check_gpu --run_large --cov=keras_hub --durations=50
