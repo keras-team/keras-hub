@@ -44,7 +44,7 @@ jobs:
     - name: Install binary dependencies
       run: |
         apt-get update
-        apt-get -y install build-essential curl git gnupg
+        apt-get -y install build-essential curl git gnupg procps
         git config --global --add safe.directory '*'
 
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,18 +60,18 @@ jobs:
         free -h
         echo ""
         echo "=== CPU Info ==="
-        nproc && cat /proc/cpuinfo | grep "model name" | head -1
+        grep -c processor /proc/cpuinfo && grep "model name" /proc/cpuinfo | head -1
         echo ""
         echo "=== Disk Space ==="
         df -h
         echo ""
         echo "=== Container cgroup memory limits ==="
-        echo -n "cgroup v2 (memory.max): " && cat /sys/fs/cgroup/memory.max 2>/dev/null || echo "N/A"
-        echo -n "cgroup v1 (memory.limit_in_bytes): " && cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo "N/A"
+        echo -n "cgroup v2 (memory.max): "; cat /sys/fs/cgroup/memory.max 2>/dev/null || echo "N/A"
+        echo -n "cgroup v1 (memory.limit_in_bytes): "; cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo "N/A"
         echo ""
         echo "=== Container cgroup memory usage ==="
-        echo -n "cgroup v2 (memory.current): " && cat /sys/fs/cgroup/memory.current 2>/dev/null || echo "N/A"
-        echo -n "cgroup v1 (memory.usage_in_bytes): " && cat /sys/fs/cgroup/memory/memory.usage_in_bytes 2>/dev/null || echo "N/A"
+        echo -n "cgroup v2 (memory.current): "; cat /sys/fs/cgroup/memory.current 2>/dev/null || echo "N/A"
+        echo -n "cgroup v1 (memory.usage_in_bytes): "; cat /sys/fs/cgroup/memory/memory.usage_in_bytes 2>/dev/null || echo "N/A"
 
     - name: Install dependencies
       run: |
@@ -90,7 +90,10 @@ jobs:
       run: |
         # Start background GPU/RAM monitor (logs every 30s)
         (while true; do
-          echo "$(date -u +%H:%M:%S) | GPU: $(nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits 2>/dev/null) | RAM: $(free -m | awk '/^Mem:/{printf \"%s/%sMB (%.0f%%)\", $3, $2, $3/$2*100}')"
+          TS=$(date -u +%H:%M:%S)
+          GPU=$(nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits 2>/dev/null || echo "N/A")
+          RAM=$(awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{u=t-a; printf "%dMB/%dMB (%.0f%%)", u/1024, t/1024, u/t*100}' /proc/meminfo 2>/dev/null || echo "N/A")
+          echo "$TS | GPU: $GPU | RAM: $RAM"
           sleep 30
         done) > /tmp/resource_monitor.log 2>&1 &
         echo $! > /tmp/monitor_pid
@@ -112,15 +115,11 @@ jobs:
 
         echo ""
         echo "=== Final System Memory ==="
-        free -h 2>/dev/null || echo "free command failed"
-
-        echo ""
-        echo "=== OOM Killer Activity ==="
-        dmesg 2>/dev/null | grep -i -E "oom|kill|memory" | tail -20 || echo "Cannot read dmesg (expected in container)"
+        free -h 2>/dev/null || echo "free command unavailable"
 
         echo ""
         echo "=== Container cgroup memory state ==="
-        echo -n "Current usage: " && cat /sys/fs/cgroup/memory.current 2>/dev/null || cat /sys/fs/cgroup/memory/memory.usage_in_bytes 2>/dev/null || echo "N/A"
-        echo -n "Max usage: " && cat /sys/fs/cgroup/memory.peak 2>/dev/null || cat /sys/fs/cgroup/memory/memory.max_usage_in_bytes 2>/dev/null || echo "N/A"
-        echo -n "Limit: " && cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo "N/A"
-        echo -n "OOM events: " && cat /sys/fs/cgroup/memory.events 2>/dev/null | grep oom || echo "N/A"
+        echo -n "Current usage: "; cat /sys/fs/cgroup/memory.current 2>/dev/null || cat /sys/fs/cgroup/memory/memory.usage_in_bytes 2>/dev/null || echo "N/A"
+        echo -n "Peak usage: "; cat /sys/fs/cgroup/memory.peak 2>/dev/null || cat /sys/fs/cgroup/memory/memory.max_usage_in_bytes 2>/dev/null || echo "N/A"
+        echo -n "Limit: "; cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo "N/A"
+        echo -n "OOM events: "; cat /sys/fs/cgroup/memory.events 2>/dev/null | grep oom || echo "N/A"
