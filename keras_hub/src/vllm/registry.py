@@ -334,15 +334,17 @@ if _BaseLLM is not None:
                 # in this process and in any engine workers it spawns, so
                 # there is no narrower place to set it.
                 os.environ.pop("MODEL_IMPL_TYPE", None)
-                # Without tpu-inference, serving runs on vLLM's own torch
-                # engine, where the backbone must compute in torch: the
-                # engine's tensors are torch tensors, and the paged KV
-                # cache lives in torch Attention modules. Keras reads its
-                # backend once at import, so by now it is either right or
-                # unfixable -- check, and fail with the remedy.
-                try:
-                    import tpu_inference  # noqa: F401
-                except ImportError:
+                # Off TPU, serving runs on vLLM's own torch engine, where
+                # the backbone must compute in torch: the engine's tensors
+                # are torch tensors and the paged KV cache lives in torch
+                # Attention modules. The platform decides this, not which
+                # packages are installed -- tpu-inference can sit unused in
+                # a GPU image.
+                from vllm.platforms import current_platform
+
+                if not current_platform.is_tpu():
+                    # Keras reads its backend once at import, so by now it
+                    # is either right or unfixable: check, and say so.
                     if keras.config.backend() != "torch":
                         raise RuntimeError(
                             "Serving on vLLM's GPU engine runs the "
@@ -351,9 +353,10 @@ if _BaseLLM is not None:
                             "Set KERAS_BACKEND=torch before keras is "
                             "first imported."
                         )
-                    # The model dir holds only a config; the keras_hub
-                    # load format (registered by the plugin) fills the
-                    # model from the preset instead of streaming weights.
+                    # The model dir holds only a config, so the stock
+                    # loaders have nothing to stream; the keras_hub load
+                    # format (registered by the plugin) routes to the
+                    # model, whose weights came with its backbone.
                     kwargs.setdefault("load_format", "keras_hub")
                 self._default_sampling_kwargs = _default_sampling_kwargs()
                 self._keras_hub_dir = setup_vllm_model(

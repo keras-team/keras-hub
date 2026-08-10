@@ -5,6 +5,7 @@ These drive `KerasHubTorchModel` with a recording stand-in for vLLM's
 is required.
 """
 
+import math
 from types import SimpleNamespace
 
 import numpy as np
@@ -14,7 +15,7 @@ from keras import ops
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.vllm import torch_wrapper
 from keras_hub.src.vllm.attention import vllm_paged_attention
-from keras_hub.src.vllm.torch_wrapper import KerasHubPresetLoader
+from keras_hub.src.vllm.plugin import KerasHubPresetLoader
 from keras_hub.src.vllm.torch_wrapper import KerasHubTorchModel
 
 torch = pytest.importorskip("torch")
@@ -54,10 +55,12 @@ def fake_vllm_config():
 class FakeAttentionLayer:
     """Stands in for a family's attention layer, carrying its options."""
 
-    def __init__(self, window=None, soft_cap=None):
+    def __init__(self, window=None, soft_cap=None, scale=None):
         self.use_sliding_window_attention = window is not None
         self.sliding_window_size = window
         self.logit_soft_cap = soft_cap
+        if scale is not None:
+            self._inv_norm_factor = scale
 
 
 class FakeBlock:
@@ -208,14 +211,56 @@ class KerasHubTorchModelTest(TestCase):
                 soft_cap=50.0,
             )
 
-    def test_llama_style_blocks_are_read_too(self):
-        # Llama-style blocks hold attention under a different attribute.
-        block = SimpleNamespace(
-            _self_attention_layer=FakeAttentionLayer(window=128)
-        )
+    def test_every_family_attribute_name_is_read(self):
+        # Blocks name their attention differently by family; all are read,
+        # and a block with none is configured from head_dim alone.
+        for name in torch_wrapper._ATTENTION_ATTRS:
+            block = SimpleNamespace(**{name: FakeAttentionLayer(window=128)})
+            self.assertEqual(
+                torch_wrapper._layer_attention_options(block, HEAD_DIM),
+                (HEAD_DIM**-0.5, 128, None),
+            )
         self.assertEqual(
-            torch_wrapper._layer_attention_options(block), (128, None)
+            torch_wrapper._layer_attention_options(SimpleNamespace(), HEAD_DIM),
+            (HEAD_DIM**-0.5, None, None),
         )
+
+    def test_scale_comes_from_the_layer_when_it_has_one(self):
+        # Most families keep their own scale; it is used as is.
+        block = SimpleNamespace(attention=FakeAttentionLayer(scale=0.25))
+        scale, _, _ = torch_wrapper._layer_attention_options(block, HEAD_DIM)
+        self.assertEqual(scale, 0.25)
+
+    def test_scale_tolerates_a_different_route_to_the_same_number(self):
+        # The route computes 1 / sqrt(d) where the wrapper has d ** -0.5.
+        wrapper = self.build_wrapper()
+        out = wrapper._paged_attention(
+            wrapper.layers[0],
+            "q",
+            None,
+            None,
+            scale=1.0 / math.sqrt(HEAD_DIM),
+            head_size=HEAD_DIM,
+            num_heads=HEADS,
+            num_kv_heads=KV_HEADS,
+        )
+        self.assertEqual(out[1], "q")
+
+    def test_a_different_scale_convention_is_still_an_error(self):
+        # Gemma without query_head_dim_normalize scales by
+        # hidden_dim // heads instead; that must not pass as rounding.
+        wrapper = self.build_wrapper()
+        with self.assertRaisesRegex(RuntimeError, "does not match"):
+            wrapper._paged_attention(
+                wrapper.layers[0],
+                "q",
+                None,
+                None,
+                scale=(HEAD_DIM // 2) ** -0.5,
+                head_size=HEAD_DIM,
+                num_heads=HEADS,
+                num_kv_heads=KV_HEADS,
+            )
 
     def test_embed_and_logits_use_the_tied_embedding(self):
         wrapper = self.build_wrapper()

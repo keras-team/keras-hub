@@ -17,6 +17,8 @@ Importing this module works anywhere (api-gen walks every module); torch
 and vLLM are only needed on the serving path.
 """
 
+import math
+
 from keras import ops
 
 try:
@@ -26,11 +28,6 @@ try:
 except ImportError:  # torch is only present on the GPU serving path
     nn = None
     _TorchModule = object
-
-try:
-    from vllm.model_executor.model_loader import BaseModelLoader
-except ImportError:  # vllm is only present on the serving path
-    BaseModelLoader = object
 
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.vllm.context import get_vllm_context
@@ -48,27 +45,48 @@ def _attention_cls():
     return Attention
 
 
-def _layer_attention_options(block):
-    """Returns `(sliding_window, soft_cap)` for one transformer block.
+# What a block calls its attention layer, by family: Gemma/Gemma 3/Phi-3
+# use "attention", Llama/Qwen/Mistral/GPT-NeoX "_self_attention_layer",
+# SmolLM3 "self_attn"; "self_attention" is what the encoder-decoder layers
+# use, kept for families routed later.
+_ATTENTION_ATTRS = (
+    "attention",
+    "_self_attention_layer",
+    "self_attn",
+    "self_attention",
+)
+
+
+def _layer_attention_options(block, head_dim):
+    """Returns `(scale, sliding_window, soft_cap)` for one transformer block.
 
     Read off the built attention layer, which is where a family records
-    what it does: whether the layer windows, how wide, and whether it caps
-    its logits. Families that do none of this simply have neither
-    attribute. Only the attribute the block stores its attention under is
-    family-specific ("attention" for Gemma, "_self_attention_layer" for
-    Llama-style blocks), and a family the wrapper cannot read is served
-    without options rather than with wrong ones -- the published function
-    then rejects any route that passes some.
+    what it does: its softmax scale, whether it windows and how wide, and
+    whether it caps its logits. A family that does none of this simply has
+    none of the attributes, and one whose attention this cannot find is
+    configured from `head_dim` alone rather than wrongly -- the published
+    function then rejects any route whose values disagree.
     """
-    attn = getattr(block, "attention", None) or getattr(
-        block, "_self_attention_layer", None
+    attn = next(
+        (
+            layer
+            for name in _ATTENTION_ATTRS
+            if (layer := getattr(block, name, None)) is not None
+        ),
+        None,
     )
+    default_scale = head_dim**-0.5
     if attn is None:
-        return None, None
+        return default_scale, None, None
+    # Most families keep their scale here. Gemma computes it in its route
+    # instead (it depends on `query_head_dim_normalize`), so it falls back
+    # to the usual formula and the published function catches the case
+    # where Gemma's differs.
+    scale = getattr(attn, "_inv_norm_factor", None) or default_scale
     window = None
     if getattr(attn, "use_sliding_window_attention", False):
         window = getattr(attn, "sliding_window_size", None)
-    return window, getattr(attn, "logit_soft_cap", None)
+    return scale, window, getattr(attn, "logit_soft_cap", None)
 
 
 class KerasHubTorchModel(_TorchModule):
@@ -121,7 +139,6 @@ class KerasHubTorchModel(_TorchModule):
         self._num_heads = num_heads
         self._num_kv_heads = num_kv_heads
         self._head_dim = head_dim
-        self._scale = head_dim**-0.5
 
         # Build the backbone up front, unlike the TPU wrapper: there the
         # loader constructs models under `nnx.eval_shape`, where KerasHub's
@@ -138,11 +155,11 @@ class KerasHubTorchModel(_TorchModule):
         attention = _attention_cls()
         modules = []
         for i, block in enumerate(self.backbone.transformer_layers):
-            window, soft_cap = _layer_attention_options(block)
+            scale, window, soft_cap = _layer_attention_options(block, head_dim)
             module = attention(
                 num_heads,
                 head_dim,
-                scale=self._scale,
+                scale=scale,
                 num_kv_heads=num_kv_heads,
                 per_layer_sliding_window=window,
                 logits_soft_cap=soft_cap,
@@ -151,6 +168,7 @@ class KerasHubTorchModel(_TorchModule):
             )
             # What this layer was built with, for the published function's
             # per-call cross-check.
+            module._keras_hub_scale = scale
             module._keras_hub_window = window
             module._keras_hub_soft_cap = soft_cap
             modules.append(module)
@@ -253,19 +271,24 @@ class KerasHubTorchModel(_TorchModule):
         different dims or a different window pattern than the backbone
         actually has.
         """
+        expected_scale = getattr(kv_cache, "_keras_hub_scale", None)
+        # `isclose` because the two sides reach the same number by
+        # different routes (`1 / sqrt(d)` against `d ** -0.5`); the
+        # tolerance is far tighter than any real difference in convention,
+        # which stays an error.
         if (
             num_heads != self._num_heads
             or num_kv_heads != self._num_kv_heads
             or head_size != self._head_dim
-            or scale != self._scale
+            or not math.isclose(scale, expected_scale, rel_tol=1e-9)
         ):
             raise RuntimeError(
                 "The attention route's per-call configuration (heads="
                 f"{num_heads}, kv_heads={num_kv_heads}, head_dim="
-                f"{head_size}, scale={scale}) does not match the config "
-                f"this wrapper built its Attention modules from (heads="
+                f"{head_size}, scale={scale}) does not match what this "
+                f"layer's Attention module was built with (heads="
                 f"{self._num_heads}, kv_heads={self._num_kv_heads}, "
-                f"head_dim={self._head_dim}, scale={self._scale})."
+                f"head_dim={self._head_dim}, scale={expected_scale})."
             )
         expected_window = getattr(kv_cache, "_keras_hub_window", None)
         expected_cap = getattr(kv_cache, "_keras_hub_soft_cap", None)
@@ -278,21 +301,3 @@ class KerasHubTorchModel(_TorchModule):
                 "belongs to disagree."
             )
         return kv_cache, kv_cache(q, k, v)
-
-
-class KerasHubPresetLoader(BaseModelLoader):
-    """The `keras_hub` load format: weights come from the preset.
-
-    The model directory `setup_vllm_model` writes holds only a config, so
-    the stock loaders have nothing to stream — and `load_format="dummy"`
-    would randomize the backbone's parameters after loading. This loader
-    delegates to the model's own `load_preset`, which is one
-    `CausalLM.from_preset` call.
-    """
-
-    def download_model(self, model_config):
-        # from_preset downloads on demand; nothing to prefetch here.
-        pass
-
-    def load_weights(self, model, model_config):
-        model.load_preset()
