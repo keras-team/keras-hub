@@ -124,6 +124,14 @@ class DiffusionGemmaBackboneTest(TestCase, parameterized.TestCase):
             ),
         )
 
+    def test_from_config_reinjects_self_conditioning_reference(self):
+        backbone = DiffusionGemmaBackbone(**self.init_kwargs)
+        restored = DiffusionGemmaBackbone.from_config(backbone.get_config())
+        self.assertIs(
+            restored.diffusion_self_conditioning._token_embedding_layer,
+            restored.token_embedding,
+        )
+
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=DiffusionGemmaBackbone,

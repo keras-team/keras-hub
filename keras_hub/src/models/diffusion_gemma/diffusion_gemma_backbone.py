@@ -479,4 +479,10 @@ class DiffusionGemmaBackbone(Backbone):
                 else keras.layers.deserialize(config["vision_encoder"]),
             }
         )
-        return super().from_config(config)
+        model = super().from_config(config)
+        object.__setattr__(
+            model.diffusion_self_conditioning,
+            "_token_embedding_layer",
+            model.token_embedding,
+        )
+        return model

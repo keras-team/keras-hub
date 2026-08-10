@@ -280,9 +280,6 @@ def _kh_forward(
         # Step 1: encoder — builds KV cache over the prompt.
         print("   Building KerasHub encoder KV cache ...", flush=True)
         encoder_kv_cache, prompt_length = diffusion_lm._encode_prompt(inputs)
-        encoder_kv_cache = diffusion_lm._prepare_encoder_cache_for_decoding(
-            encoder_kv_cache
-        )
 
         # Step 2: canvas embeddings (first step → self-conditioning is no-op).
         canvas_embeds = diffusion_lm._prepare_canvas_embeds(

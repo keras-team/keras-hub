@@ -70,7 +70,6 @@ class EntropyBoundSampler(Sampler):
         self.stability_threshold = stability_threshold
         self.seed = seed
         self.seed_generator = random.SeedGenerator(seed)
-        self._state = None
 
     def initialize_state(self, canvas):
         """Create tensor state for adaptive stopping."""
@@ -241,10 +240,6 @@ class EntropyBoundSampler(Sampler):
             model=model,
         )
         return argmax_canvas
-
-    def reset(self):
-        """Reset per-call state between independent generate() calls."""
-        self._state = None
 
     def get_config(self):
         config = super().get_config()
