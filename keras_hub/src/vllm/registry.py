@@ -170,9 +170,7 @@ def _derive_arch_config(preset):
     A missing config would make vLLM guess dims from ``model_type`` and
     mis-size the KV cache, so a config that fails to load raises here.
     """
-    data = load_json(preset)
-    cfg = data.get("config", {})
-    backbone_class = data.get("class_name") or data.get("registered_name", "")
+    cfg = load_json(preset).get("config", {})
 
     hidden = cfg.get("hidden_dim")
     n_heads = (
@@ -209,23 +207,6 @@ def _derive_arch_config(preset):
         arch["max_position_embeddings"] = int(cfg["max_sequence_length"])
     # Fail here with the real cause: without these, vLLM would die later
     # inside KV-cache profiling with a far less useful error.
-    # Per-layer attention statics, namespaced: vLLM's GPU Attention layer
-    # fixes sliding window and soft cap at construction, so the GPU wrapper
-    # needs them here. Namespaced because a bare `sliding_window` field
-    # makes vLLM cap max_model_len. The TPU path ignores these (its kernel
-    # takes both per call).
-    soft_cap = cfg.get("attention_logit_soft_cap")
-    if soft_cap is not None:
-        arch["keras_hub_soft_cap"] = float(soft_cap)
-    windows = _sliding_window_per_layer(
-        backbone_class,
-        cfg.get("num_layers"),
-        cfg.get("sliding_window_size"),
-        cfg.get("use_sliding_window_attention", False),
-    )
-    if windows is not None:
-        arch["keras_hub_sliding_window_per_layer"] = windows
-
     required = ["num_hidden_layers", "num_attention_heads", "hidden_size"]
     missing = [key for key in required if key not in arch]
     if missing:
@@ -234,27 +215,6 @@ def _derive_arch_config(preset):
             f"for vLLM serving: {missing}. Is this a CausalLM backbone?"
         )
     return arch
-
-
-def _sliding_window_per_layer(backbone_class, num_layers, size, enabled):
-    """Returns each layer's sliding window (or None), or None when unused.
-
-    Which layers use the window is decided in each backbone's __init__, not
-    serialized in its config, so the patterns are restated here from the
-    model source: Gemma windows even layers (`i % 2 == 0`), Gemma 3 runs
-    five local layers per global one (`i % 6 < 5`), and every other family
-    applies its window uniformly.
-    """
-    if not enabled or not size or not num_layers:
-        return None
-    size = int(size)
-    if "Gemma3" in backbone_class:
-        used = [i % 6 < 5 for i in range(num_layers)]
-    elif "Gemma" in backbone_class:
-        used = [i % 2 == 0 for i in range(num_layers)]
-    else:
-        used = [True] * num_layers
-    return [size if u else None for u in used]
 
 
 def sampler_to_sampling_kwargs(sampler):

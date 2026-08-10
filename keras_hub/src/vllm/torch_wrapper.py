@@ -48,6 +48,29 @@ def _attention_cls():
     return Attention
 
 
+def _layer_attention_options(block):
+    """Returns `(sliding_window, soft_cap)` for one transformer block.
+
+    Read off the built attention layer, which is where a family records
+    what it does: whether the layer windows, how wide, and whether it caps
+    its logits. Families that do none of this simply have neither
+    attribute. Only the attribute the block stores its attention under is
+    family-specific ("attention" for Gemma, "_self_attention_layer" for
+    Llama-style blocks), and a family the wrapper cannot read is served
+    without options rather than with wrong ones -- the published function
+    then rejects any route that passes some.
+    """
+    attn = getattr(block, "attention", None) or getattr(
+        block, "_self_attention_layer", None
+    )
+    if attn is None:
+        return None, None
+    window = None
+    if getattr(attn, "use_sliding_window_attention", False):
+        window = getattr(attn, "sliding_window_size", None)
+    return window, getattr(attn, "logit_soft_cap", None)
+
+
 class KerasHubTorchModel(_TorchModule):
     """Serves a KerasHub `CausalLM` on vLLM's GPU (torch) engine.
 
@@ -56,12 +79,12 @@ class KerasHubTorchModel(_TorchModule):
     which the `keras_hub` load format calls instead of `load_weights`
     (the preset carries the weights; there is no safetensors iterator).
 
-    - `__init__` builds one `vllm.Attention` module per backbone layer from
-      the dims in the config. The engine finds these modules and allocates
-      the paged KV cache against them; the backbone itself is not built
-      here.
-    - `load_preset` builds the model and loads the preset weights with a
-      single `CausalLM.from_preset` call, on the torch backend.
+    - `__init__` builds the backbone with a single `CausalLM.from_preset`
+      call, then one `vllm.Attention` module per layer, configured from
+      what that layer actually holds. The engine finds those modules and
+      allocates the paged KV cache against them.
+    - `load_preset` is what the `keras_hub` load format calls; the weights
+      arrived with the backbone, so it only checks that.
     - `forward` publishes the serving context with the `Attention` modules
       riding as the per-layer caches, then delegates to the backbone; each
       attention layer's route dispatches through the shared bridge to this
@@ -69,12 +92,10 @@ class KerasHubTorchModel(_TorchModule):
     - `compute_logits` projects through the tied token embedding.
 
     Sliding windows and attention soft caps are per-layer constructor
-    arguments on `vllm.Attention`, while the routes pass them per call. The
-    config writer bridges the two: it serializes each layer's window into
-    `keras_hub_sliding_window_per_layer` (and the cap into
-    `keras_hub_soft_cap`), this wrapper constructs each module accordingly,
-    and the published function verifies the route's per-call values against
-    what its layer was built with, failing loudly on any disagreement.
+    arguments on `vllm.Attention`, while the routes pass them per call.
+    Both come from the built layer itself, so the two sides cannot drift:
+    the module is constructed from what the layer holds, and the published
+    function checks the route's per-call values against it.
     """
 
     def __init__(self, vllm_config, prefix=""):
@@ -91,7 +112,6 @@ class KerasHubTorchModel(_TorchModule):
             resolved_dtype = getattr(hf_config, "torch_dtype", "bfloat16")
         self._dtype = str(resolved_dtype).removeprefix("torch.")
 
-        num_layers = hf_config.num_hidden_layers
         num_heads = hf_config.num_attention_heads
         num_kv_heads = getattr(hf_config, "num_key_value_heads", num_heads)
         head_dim = getattr(hf_config, "head_dim", None)
@@ -103,51 +123,54 @@ class KerasHubTorchModel(_TorchModule):
         self._head_dim = head_dim
         self._scale = head_dim**-0.5
 
-        # Per-layer attention statics from the config: the window pattern
-        # (e.g. Gemma windows alternate layers) and the logit soft cap.
-        windows = getattr(hf_config, "keras_hub_sliding_window_per_layer", None)
-        if windows is None:
-            windows = [None] * num_layers
-        if len(windows) != num_layers:
-            raise ValueError(
-                f"keras_hub_sliding_window_per_layer has {len(windows)} "
-                f"entries for {num_layers} layers."
-            )
-        self._soft_cap = getattr(hf_config, "keras_hub_soft_cap", None)
+        # Build the backbone up front, unlike the TPU wrapper: there the
+        # loader constructs models under `nnx.eval_shape`, where KerasHub's
+        # concrete constructor work cannot run. vLLM's GPU path has no such
+        # tracing pass, and building here means each `Attention` module can
+        # be configured from the layer it stands for rather than from a
+        # description of it.
+        model = CausalLM.from_preset(self.preset_name, dtype=self._dtype)
+        self.backbone = model.backbone
 
         # One Attention module per backbone layer. The engine scans the
         # model for these and binds a paged KV cache to each, keyed by
         # `prefix`, so the prefixes must be stable and unique.
         attention = _attention_cls()
-        self.layers = nn.ModuleList(
-            [
-                attention(
-                    num_heads,
-                    head_dim,
-                    scale=self._scale,
-                    num_kv_heads=num_kv_heads,
-                    per_layer_sliding_window=windows[i],
-                    logits_soft_cap=self._soft_cap,
-                    cache_config=vllm_config.cache_config,
-                    prefix=f"{prefix}.layers.{i}.attn",
-                )
-                for i in range(num_layers)
-            ]
-        )
-        # What each layer was built with, for the published function's
-        # per-call cross-check.
-        for module, window in zip(self.layers, windows):
+        modules = []
+        for i, block in enumerate(self.backbone.transformer_layers):
+            window, soft_cap = _layer_attention_options(block)
+            module = attention(
+                num_heads,
+                head_dim,
+                scale=self._scale,
+                num_kv_heads=num_kv_heads,
+                per_layer_sliding_window=window,
+                logits_soft_cap=soft_cap,
+                cache_config=vllm_config.cache_config,
+                prefix=f"{prefix}.layers.{i}.attn",
+            )
+            # What this layer was built with, for the published function's
+            # per-call cross-check.
             module._keras_hub_window = window
+            module._keras_hub_soft_cap = soft_cap
+            modules.append(module)
+        self.layers = nn.ModuleList(modules)
 
     def load_preset(self):
-        """Builds the KerasHub model and loads the preset weights.
+        """Confirms the preset's weights are loaded.
 
-        Called by the `keras_hub` load format's loader. One
-        `CausalLM.from_preset` call, like any other KerasHub usage; only
-        the backbone is kept, since serving never calls the task wrapper.
+        `__init__` already built the backbone with `CausalLM.from_preset`,
+        which loads the weights, so there is nothing left to stream. The
+        `keras_hub` load format still routes through here rather than
+        letting a stock loader run: those would look for weight files the
+        model directory does not have, and `dummy` would overwrite the
+        preset with random values.
         """
-        model = CausalLM.from_preset(self.preset_name, dtype=self._dtype)
-        self.backbone = model.backbone
+        if getattr(self, "backbone", None) is None:
+            raise RuntimeError(
+                f"The backbone for preset '{self.preset_name}' was not "
+                "built during model construction."
+            )
 
     def embed_input_ids(self, input_ids):
         return self.backbone.token_embedding(input_ids)
@@ -245,13 +268,14 @@ class KerasHubTorchModel(_TorchModule):
                 f"head_dim={self._head_dim}, scale={self._scale})."
             )
         expected_window = getattr(kv_cache, "_keras_hub_window", None)
-        if sliding_window != expected_window or soft_cap != self._soft_cap:
+        expected_cap = getattr(kv_cache, "_keras_hub_soft_cap", None)
+        if sliding_window != expected_window or soft_cap != expected_cap:
             raise RuntimeError(
                 "The attention route passed sliding_window="
                 f"{sliding_window}, soft_cap={soft_cap}, but this layer's "
                 f"Attention module was built with window={expected_window},"
-                f" soft_cap={self._soft_cap}. The config's per-layer "
-                "pattern does not match the model's."
+                f" soft_cap={expected_cap}. The route and the layer it "
+                "belongs to disagree."
             )
         return kv_cache, kv_cache(q, k, v)
 

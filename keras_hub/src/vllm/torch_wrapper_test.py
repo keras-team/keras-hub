@@ -51,11 +51,27 @@ def fake_vllm_config():
     return SimpleNamespace(model_config=model_config, cache_config=None)
 
 
+class FakeAttentionLayer:
+    """Stands in for a family's attention layer, carrying its options."""
+
+    def __init__(self, window=None, soft_cap=None):
+        self.use_sliding_window_attention = window is not None
+        self.sliding_window_size = window
+        self.logit_soft_cap = soft_cap
+
+
+class FakeBlock:
+    def __init__(self, window=None, soft_cap=None):
+        self.attention = FakeAttentionLayer(window, soft_cap)
+
+
 class RoutedBackbone:
     """Fake backbone whose 'attention layers' call the real bridge."""
 
-    def __init__(self, num_layers):
+    def __init__(self, num_layers, windows=None, soft_cap=None):
         self.num_layers = num_layers
+        windows = windows if windows is not None else [None] * num_layers
+        self.transformer_layers = [FakeBlock(w, soft_cap) for w in windows]
 
     def __call__(self, inputs, training=False):
         token_ids = inputs["token_ids"]
@@ -76,10 +92,23 @@ class KerasHubTorchModelTest(TestCase):
     def setUp(self):
         super().setUp()
         self._real_attention_cls = torch_wrapper._attention_cls
+        self._real_causal_lm = torch_wrapper.CausalLM
         torch_wrapper._attention_cls = lambda: FakeAttention
+        # `__init__` builds the backbone; hand it a fake instead of
+        # downloading a preset.
+        self.backbone = RoutedBackbone(LAYERS)
+        outer = self
+
+        class FakeCausalLM:
+            @staticmethod
+            def from_preset(preset, dtype=None):
+                return SimpleNamespace(backbone=outer.backbone)
+
+        torch_wrapper.CausalLM = FakeCausalLM
 
     def tearDown(self):
         torch_wrapper._attention_cls = self._real_attention_cls
+        torch_wrapper.CausalLM = self._real_causal_lm
         super().tearDown()
 
     def build_wrapper(self):
@@ -101,7 +130,6 @@ class KerasHubTorchModelTest(TestCase):
 
     def test_forward_dispatches_once_per_layer(self):
         wrapper = self.build_wrapper()
-        wrapper.backbone = RoutedBackbone(LAYERS)
         hidden = wrapper.forward(
             np.zeros((3,), dtype="int32"), np.arange(3, dtype="int32")
         )
@@ -111,8 +139,10 @@ class KerasHubTorchModelTest(TestCase):
             self.assertLen(layer.calls, 1)
 
     def test_forward_raises_when_a_layer_skips_dispatch(self):
+        # A backbone that routes fewer layers than the engine has caches.
+        self.backbone = RoutedBackbone(LAYERS)
         wrapper = self.build_wrapper()
-        wrapper.backbone = RoutedBackbone(LAYERS - 1)
+        wrapper.backbone.num_layers = LAYERS - 1
         with self.assertRaisesRegex(RuntimeError, "skipped"):
             wrapper.forward(
                 np.zeros((3,), dtype="int32"), np.arange(3, dtype="int32")
@@ -132,17 +162,14 @@ class KerasHubTorchModelTest(TestCase):
                 num_kv_heads=KV_HEADS,
             )
 
-    def test_window_and_cap_built_per_layer_and_verified(self):
-        # Gemma-style pattern: even layers windowed, uniform soft cap. Each
-        # module is constructed with its own window, and the published
-        # function accepts exactly the value its layer was built with.
-        config = fake_vllm_config()
-        config.model_config.hf_config.keras_hub_sliding_window_per_layer = [
-            256,
-            None,
-        ]
-        config.model_config.hf_config.keras_hub_soft_cap = 50.0
-        wrapper = KerasHubTorchModel(config, prefix="model")
+    def test_window_and_cap_read_from_the_built_layers(self):
+        # Gemma-style: the first layer windows, the second does not, and
+        # both cap their logits. Each Attention module is configured from
+        # the layer it stands for.
+        self.backbone = RoutedBackbone(
+            LAYERS, windows=[256, None], soft_cap=50.0
+        )
+        wrapper = self.build_wrapper()
 
         for i, expected in enumerate([256, None]):
             self.assertEqual(
@@ -166,8 +193,8 @@ class KerasHubTorchModelTest(TestCase):
             )
             self.assertEqual(out[1], "q")
 
-        # A route value the layer was not built with must fail loudly.
-        with self.assertRaisesRegex(RuntimeError, "pattern"):
+        # A route disagreeing with its own layer must fail loudly.
+        with self.assertRaisesRegex(RuntimeError, "disagree"):
             wrapper._paged_attention(
                 wrapper.layers[1],  # built without a window
                 "q",
@@ -181,11 +208,14 @@ class KerasHubTorchModelTest(TestCase):
                 soft_cap=50.0,
             )
 
-    def test_window_list_length_must_match_layers(self):
-        config = fake_vllm_config()
-        config.model_config.hf_config.keras_hub_sliding_window_per_layer = [256]
-        with self.assertRaisesRegex(ValueError, "entries"):
-            KerasHubTorchModel(config, prefix="model")
+    def test_llama_style_blocks_are_read_too(self):
+        # Llama-style blocks hold attention under a different attribute.
+        block = SimpleNamespace(
+            _self_attention_layer=FakeAttentionLayer(window=128)
+        )
+        self.assertEqual(
+            torch_wrapper._layer_attention_options(block), (128, None)
+        )
 
     def test_embed_and_logits_use_the_tied_embedding(self):
         wrapper = self.build_wrapper()
@@ -194,12 +224,18 @@ class KerasHubTorchModelTest(TestCase):
             def __call__(self, x, reverse=False):
                 return ("reverse" if reverse else "forward", x)
 
-        wrapper.backbone = SimpleNamespace(token_embedding=FakeEmbedding())
+        wrapper.backbone.token_embedding = FakeEmbedding()
         self.assertEqual(wrapper.embed_input_ids("ids")[0], "forward")
         self.assertEqual(wrapper.compute_logits("hidden")[0], "reverse")
 
-    def test_loader_fills_the_model_from_the_preset(self):
+    def test_loader_routes_through_the_model(self):
         loaded = []
         model = SimpleNamespace(load_preset=lambda: loaded.append(True))
         KerasHubPresetLoader().load_weights(model, model_config=None)
         self.assertTrue(loaded)
+
+    def test_load_preset_raises_without_a_backbone(self):
+        wrapper = self.build_wrapper()
+        wrapper.backbone = None
+        with self.assertRaisesRegex(RuntimeError, "not built"):
+            wrapper.load_preset()
