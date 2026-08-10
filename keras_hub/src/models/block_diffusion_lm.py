@@ -290,9 +290,6 @@ class BlockDiffusionLM(Task):
             Decoded string(s) or integer token arrays, depending on whether
             a `preprocessor` is attached.
         """
-        if hasattr(self, "sampler") and hasattr(self.sampler, "reset"):
-            self.sampler.reset()
-
         if max_length is not None and max_length <= 0:
             raise ValueError(
                 "`max_length` must be a positive integer. "

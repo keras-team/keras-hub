@@ -490,17 +490,6 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
 
         return self.backbone.diffusion_self_conditioning(x, prev_logits)
 
-    def _prepare_encoder_cache_for_decoding(self, encoder_cache):
-        paddings = [
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, self.canvas_length],
-            [0, 0],
-            [0, 0],
-        ]
-        return ops.pad(encoder_cache, paddings)
-
     def _decode_canvas_step(
         self,
         canvas_embeds,
