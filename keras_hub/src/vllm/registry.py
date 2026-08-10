@@ -70,6 +70,29 @@ def _normalize_dtype(dtype):
     return dtype
 
 
+def _default_gpu_dtype():
+    """Returns the dtype to serve in on this GPU when none was asked for.
+
+    bfloat16 needs compute capability 8.0 (Ampere). Older cards such as the
+    T4 have none, and vLLM refuses to start rather than pick a substitute,
+    so choose float16 for them here.
+
+    Returns:
+        "float16" on a pre-Ampere GPU, "bfloat16" otherwise.
+    """
+    try:
+        import torch
+
+        if (
+            torch.cuda.is_available()
+            and torch.cuda.get_device_capability()[0] < 8
+        ):
+            return "float16"
+    except ImportError:
+        pass
+    return "bfloat16"
+
+
 def setup_vllm_model(preset, dtype="bfloat16", max_model_len=None):
     """Creates a configuration directory for vLLM to load a Keras Hub preset.
 
@@ -319,15 +342,13 @@ if _BaseLLM is not None:
             )
             if is_keras_hub:
                 preset = model.split("keras_hub:", 1)[1]
-                # dtype defaults to bf16 (TPU paged KV cache). It is written
-                # into config.json as torch_dtype *and* forwarded to vLLM.
-                # Forwarding matters: left unset, vLLM resolves dtype="auto"
-                # and downcasts a float32 config to bfloat16, while the
-                # backbone would still build in float32 from torch_dtype --
-                # the model would then hand float32 q/k/v to a bfloat16 paged
-                # cache, which the attention kernel rejects.
-                dtype = kwargs.pop("dtype", "bfloat16")
-                kwargs.setdefault("dtype", dtype)
+                # The dtype is written into config.json as torch_dtype *and*
+                # forwarded to vLLM. Forwarding matters: left unset, vLLM
+                # resolves dtype="auto" and downcasts a float32 config to
+                # bfloat16, while the backbone would still build in float32
+                # from torch_dtype -- the model would then hand float32 q/k/v
+                # to a bfloat16 paged cache, which the kernel rejects.
+                dtype = kwargs.pop("dtype", None)
                 # The two engines need different things set up.
                 if serves_on_tpu():
                     # Use tpu-inference's native flax/nnx path, where the
@@ -337,6 +358,8 @@ if _BaseLLM is not None:
                     # here and in any engine workers it spawns, so there
                     # is no narrower place to set it.
                     os.environ.pop("MODEL_IMPL_TYPE", None)
+                    # Every TPU the engine runs on has bfloat16.
+                    dtype = dtype or "bfloat16"
                 else:
                     # Keras reads its backend once, at import, so by now
                     # it is either right or unfixable. Say which.
@@ -353,6 +376,9 @@ if _BaseLLM is not None:
                     # `keras_hub` is the format the plugin registers for
                     # exactly this.
                     kwargs.setdefault("load_format", "keras_hub")
+                    # GPUs differ in what they support, so ask the device.
+                    dtype = dtype or _default_gpu_dtype()
+                kwargs["dtype"] = dtype
                 self._default_sampling_kwargs = _default_sampling_kwargs()
                 self._keras_hub_dir = setup_vllm_model(
                     preset,

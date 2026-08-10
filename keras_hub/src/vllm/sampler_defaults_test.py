@@ -1,7 +1,11 @@
 """CPU unit tests for mapping KerasHub samplers to SamplingParams kwargs."""
 
+import builtins
+from unittest import mock
+
 import keras
 import numpy as np
+import pytest
 
 from keras_hub.src.samplers.beam_sampler import BeamSampler
 from keras_hub.src.samplers.greedy_sampler import GreedySampler
@@ -9,9 +13,54 @@ from keras_hub.src.samplers.random_sampler import RandomSampler
 from keras_hub.src.samplers.top_k_sampler import TopKSampler
 from keras_hub.src.samplers.top_p_sampler import TopPSampler
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.vllm import registry
+from keras_hub.src.vllm.registry import _default_gpu_dtype
 from keras_hub.src.vllm.registry import _default_sampling_kwargs
 from keras_hub.src.vllm.registry import _normalize_dtype
 from keras_hub.src.vllm.registry import sampler_to_sampling_kwargs
+
+
+class DefaultGpuDtypeTest(TestCase):
+    """The default must be one the GPU actually has."""
+
+    def _with_capability(self, major, available=True):
+        torch = pytest.importorskip("torch")
+        self.addCleanup(
+            setattr, torch.cuda, "is_available", torch.cuda.is_available
+        )
+        self.addCleanup(
+            setattr,
+            torch.cuda,
+            "get_device_capability",
+            torch.cuda.get_device_capability,
+        )
+        torch.cuda.is_available = lambda: available
+        torch.cuda.get_device_capability = lambda *a, **kw: (major, 0)
+
+    def test_pre_ampere_gets_float16(self):
+        # A T4 is 7.5 and has no bfloat16 at all.
+        self._with_capability(7)
+        self.assertEqual(_default_gpu_dtype(), "float16")
+
+    def test_ampere_and_later_get_bfloat16(self):
+        self._with_capability(8)
+        self.assertEqual(_default_gpu_dtype(), "bfloat16")
+
+    def test_no_gpu_falls_back_to_bfloat16(self):
+        self._with_capability(7, available=False)
+        self.assertEqual(_default_gpu_dtype(), "bfloat16")
+
+    def test_without_torch_falls_back_to_bfloat16(self):
+        # Importing this module must not require torch.
+        real_import = builtins.__import__
+
+        def no_torch(name, *args, **kwargs):
+            if name == "torch":
+                raise ImportError("no torch")
+            return real_import(name, *args, **kwargs)
+
+        with mock.patch.object(builtins, "__import__", no_torch):
+            self.assertEqual(registry._default_gpu_dtype(), "bfloat16")
 
 
 class SamplerDefaultsTest(TestCase):
