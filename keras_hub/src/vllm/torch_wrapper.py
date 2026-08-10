@@ -248,10 +248,12 @@ class KerasHubTorchModel(_TorchModule):
                 {"token_ids": token_ids, "padding_mask": padding_mask},
                 training=False,
             )
-            # Tokens ride as (num_tokens, 1); drop the seq axis the engine
-            # does not expect.
-            if len(hidden_states.shape) == 3 and hidden_states.shape[1] == 1:
-                hidden_states = ops.squeeze(hidden_states, axis=1)
+            # The backbone works in (batch, seq, hidden); the engine wants
+            # one row per token, however those two axes were arranged.
+            if len(hidden_states.shape) == 3:
+                hidden_states = ops.reshape(
+                    hidden_states, (-1, hidden_states.shape[-1])
+                )
 
             # Every attention layer must have dispatched exactly once; a
             # mismatch means one silently ran its dense path.

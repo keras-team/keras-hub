@@ -90,10 +90,9 @@ def serves_on_tpu():
 
     Only breaks the tie when tpu-inference is installed somewhere that is
     not a TPU. If vLLM cannot answer -- an older version, or the platform
-    not resolved at plugin time -- this assumes the installed backend is
-    the one in use, which is how the TPU path behaved before the GPU one
-    existed. A tie-breaker must not be able to break the path it was added
-    to.
+    not resolved at plugin time -- this falls back to whether the TPU
+    backend is installed at all, which is what decided this before the GPU
+    path existed. A tie-breaker must not leave either path unregistered.
 
     Returns:
         Whether this process serves on TPU.
@@ -103,7 +102,13 @@ def serves_on_tpu():
 
         return current_platform.is_tpu()
     except Exception:
+        pass
+    try:
+        import tpu_inference  # noqa: F401
+
         return True
+    except ImportError:
+        return False
 
 
 def _register_tpu_model():
