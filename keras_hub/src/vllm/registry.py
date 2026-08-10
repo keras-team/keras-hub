@@ -42,6 +42,7 @@ from keras_hub.src.utils.preset_utils import load_json
 from keras_hub.src.vllm.hf_config import KERAS_HUB_ARCHITECTURE
 from keras_hub.src.vllm.hf_config import KERAS_HUB_MODEL_TYPE
 from keras_hub.src.vllm.hf_config import register_hf_config
+from keras_hub.src.vllm.plugin import serves_on_tpu
 
 # We write our own neutral architecture/model_type (no borrowed model family):
 # `KerasHubForCausalLM` / `keras_hub` (see `hf_config`). `register_hf_config`
@@ -327,24 +328,18 @@ if _BaseLLM is not None:
                 # cache, which the attention kernel rejects.
                 dtype = kwargs.pop("dtype", "bfloat16")
                 kwargs.setdefault("dtype", dtype)
-                # Use tpu-inference's native flax/nnx path, where the
-                # KerasHubForCausalLM architecture is registered. This
-                # change is process-wide on purpose: MODEL_IMPL_TYPE is an
-                # environment knob that tpu-inference reads at model load,
-                # in this process and in any engine workers it spawns, so
-                # there is no narrower place to set it.
-                os.environ.pop("MODEL_IMPL_TYPE", None)
-                # Off TPU, serving runs on vLLM's own torch engine, where
-                # the backbone must compute in torch: the engine's tensors
-                # are torch tensors and the paged KV cache lives in torch
-                # Attention modules. The platform decides this, not which
-                # packages are installed -- tpu-inference can sit unused in
-                # a GPU image.
-                from vllm.platforms import current_platform
-
-                if not current_platform.is_tpu():
-                    # Keras reads its backend once at import, so by now it
-                    # is either right or unfixable: check, and say so.
+                # The two engines need different things set up.
+                if serves_on_tpu():
+                    # Use tpu-inference's native flax/nnx path, where the
+                    # KerasHubForCausalLM architecture is registered. This
+                    # is process-wide on purpose: MODEL_IMPL_TYPE is an
+                    # environment knob tpu-inference reads at model load,
+                    # here and in any engine workers it spawns, so there
+                    # is no narrower place to set it.
+                    os.environ.pop("MODEL_IMPL_TYPE", None)
+                else:
+                    # Keras reads its backend once, at import, so by now
+                    # it is either right or unfixable. Say which.
                     if keras.config.backend() != "torch":
                         raise RuntimeError(
                             "Serving on vLLM's GPU engine runs the "
@@ -353,10 +348,10 @@ if _BaseLLM is not None:
                             "Set KERAS_BACKEND=torch before keras is "
                             "first imported."
                         )
-                    # The model dir holds only a config, so the stock
-                    # loaders have nothing to stream; the keras_hub load
-                    # format (registered by the plugin) routes to the
-                    # model, whose weights came with its backbone.
+                    # A KerasHub model directory holds only a config, so
+                    # the stock loaders have no weights to stream;
+                    # `keras_hub` is the format the plugin registers for
+                    # exactly this.
                     kwargs.setdefault("load_format", "keras_hub")
                 self._default_sampling_kwargs = _default_sampling_kwargs()
                 self._keras_hub_dir = setup_vllm_model(

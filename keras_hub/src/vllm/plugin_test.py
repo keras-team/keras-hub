@@ -12,12 +12,13 @@ class RegisterKerasHubTest(TestCase):
         # TPU backend installed. It must be a no-op there, not an error.
         register_keras_hub()
 
-    def test_tpu_registration_declines_when_it_is_not_the_platform(self):
-        # The two engines share an architecture string, so the TPU
-        # registration has to decline rather than race the GPU one.
-        from keras_hub.src.vllm.plugin import _register_tpu_model
+    def test_tpu_is_assumed_when_vllm_cannot_say(self):
+        # The tie-breaker exists for GPU boxes with tpu-inference
+        # installed. Anywhere it cannot get an answer it must keep the TPU
+        # path working, which is how things behaved before it existed.
+        from keras_hub.src.vllm.plugin import serves_on_tpu
 
-        self.assertFalse(_register_tpu_model())
+        self.assertTrue(serves_on_tpu())
 
     def test_entry_point_is_exposed(self):
         # vLLM reads entry points from the installed package metadata, so a

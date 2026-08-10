@@ -15,7 +15,6 @@ from keras import ops
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.vllm import torch_wrapper
 from keras_hub.src.vllm.attention import vllm_paged_attention
-from keras_hub.src.vllm.plugin import KerasHubPresetLoader
 from keras_hub.src.vllm.torch_wrapper import KerasHubTorchModel
 
 torch = pytest.importorskip("torch")
@@ -282,15 +281,3 @@ class KerasHubTorchModelTest(TestCase):
         wrapper.backbone.token_embedding = FakeEmbedding()
         self.assertEqual(wrapper.embed_input_ids("ids")[0], "forward")
         self.assertEqual(wrapper.compute_logits("hidden")[0], "reverse")
-
-    def test_loader_routes_through_the_model(self):
-        loaded = []
-        model = SimpleNamespace(load_preset=lambda: loaded.append(True))
-        KerasHubPresetLoader().load_weights(model, model_config=None)
-        self.assertTrue(loaded)
-
-    def test_load_preset_raises_without_a_backbone(self):
-        wrapper = self.build_wrapper()
-        wrapper.backbone = None
-        with self.assertRaisesRegex(RuntimeError, "not built"):
-            wrapper.load_preset()

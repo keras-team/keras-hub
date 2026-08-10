@@ -66,6 +66,15 @@ def _layer_attention_options(block, head_dim):
     none of the attributes, and one whose attention this cannot find is
     configured from `head_dim` alone rather than wrongly -- the published
     function then rejects any route whose values disagree.
+
+    Args:
+        block: A transformer block from the backbone.
+        head_dim: The head dimension, used for the softmax scale when the
+            layer does not carry one.
+
+    Returns:
+        A `(scale, sliding_window, soft_cap)` tuple, where the window and
+        the cap are `None` when the layer does not use them.
     """
     attn = next(
         (
@@ -101,8 +110,6 @@ class KerasHubTorchModel(_TorchModule):
       call, then one `vllm.Attention` module per layer, configured from
       what that layer actually holds. The engine finds those modules and
       allocates the paged KV cache against them.
-    - `load_preset` is what the `keras_hub` load format calls; the weights
-      arrived with the backbone, so it only checks that.
     - `forward` publishes the serving context with the `Attention` modules
       riding as the per-layer caches, then delegates to the backbone; each
       attention layer's route dispatches through the shared bridge to this
@@ -117,6 +124,14 @@ class KerasHubTorchModel(_TorchModule):
     """
 
     def __init__(self, vllm_config, prefix=""):
+        """Builds the backbone and one `Attention` module per layer.
+
+        Args:
+            vllm_config: The vLLM config; `model_config.hf_config` carries
+                the `keras_hub_preset` written by `setup_vllm_model`.
+            prefix: Name prefix for this model's modules. vLLM keys each
+                layer's paged KV cache by its `Attention` module's prefix.
+        """
         super().__init__()
         self.vllm_config = vllm_config
         hf_config = vllm_config.model_config.hf_config
@@ -174,22 +189,6 @@ class KerasHubTorchModel(_TorchModule):
             modules.append(module)
         self.layers = nn.ModuleList(modules)
 
-    def load_preset(self):
-        """Confirms the preset's weights are loaded.
-
-        `__init__` already built the backbone with `CausalLM.from_preset`,
-        which loads the weights, so there is nothing left to stream. The
-        `keras_hub` load format still routes through here rather than
-        letting a stock loader run: those would look for weight files the
-        model directory does not have, and `dummy` would overwrite the
-        preset with random values.
-        """
-        if getattr(self, "backbone", None) is None:
-            raise RuntimeError(
-                f"The backbone for preset '{self.preset_name}' was not "
-                "built during model construction."
-            )
-
     def embed_input_ids(self, input_ids):
         return self.backbone.token_embedding(input_ids)
 
@@ -206,6 +205,21 @@ class KerasHubTorchModel(_TorchModule):
         the per-layer `Attention` modules as the caches, and the engine's
         per-token positions — then delegates to the backbone. The routes
         and `PositionEmbedding` read the context exactly as they do on TPU.
+
+        Args:
+            input_ids: The packed token ids for this step.
+            positions: Each token's absolute position in its own request.
+            intermediate_tensors: Pipeline-parallel input; unsupported.
+            inputs_embeds: Pre-computed embeddings; unsupported.
+
+        Returns:
+            The hidden states for the step, one row per token.
+
+        Raises:
+            NotImplementedError: If `intermediate_tensors` or
+                `inputs_embeds` is given.
+            RuntimeError: If the layers did not each dispatch once to the
+                paged-attention kernel.
         """
         # Both belong to features this wrapper does not implement:
         # `inputs_embeds` enters below the token embedding, and
@@ -279,9 +293,31 @@ class KerasHubTorchModel(_TorchModule):
         `(num_tokens, heads * head_dim)` tensors the bridge already built.
 
         The per-call arguments exist to cross-check the module's
-        construction-time configuration: a mismatch means the config wrote
-        different dims or a different window pattern than the backbone
-        actually has.
+        construction-time configuration: a mismatch means the route and
+        the layer it belongs to disagree about how attention runs.
+
+        Args:
+            kv_cache: This layer's `vllm.Attention` module, handed over by
+                the bridge in layer-call order.
+            q: Query in the kernel's flat `(num_tokens, heads * head_dim)`
+                layout.
+            k: Key, in the same layout and with its own head count.
+            v: Value, in the same layout as the key.
+            scale: The softmax scale the route applies.
+            head_size: The route's head dimension.
+            num_heads: The route's query head count.
+            num_kv_heads: The route's key/value head count, unexpanded.
+            sliding_window: The route's local-attention window, if any.
+            soft_cap: The route's attention-logit cap, if any.
+
+        Returns:
+            A `(kv_cache, attention_output)` tuple. The cache comes back
+            as it went in: the module owns its paged storage, so there is
+            no updated copy for the bridge to collect.
+
+        Raises:
+            RuntimeError: If any of the route's values disagrees with what
+                this layer's module was built with.
         """
         expected_scale = getattr(kv_cache, "_keras_hub_scale", None)
         # `isclose` because the two sides reach the same number by
