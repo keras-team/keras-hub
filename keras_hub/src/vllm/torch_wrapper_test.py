@@ -141,6 +141,16 @@ class KerasHubTorchModelTest(TestCase):
         for layer in wrapper.layers:
             self.assertLen(layer.calls, 1)
 
+    def test_forward_rejects_args_it_does_not_honour(self):
+        # Ignoring these would serve something quietly wrong.
+        wrapper = self.build_wrapper()
+        ids = np.zeros((3,), dtype="int32")
+        pos = np.arange(3, dtype="int32")
+        with self.assertRaisesRegex(NotImplementedError, "inputs_embeds"):
+            wrapper.forward(None, pos, inputs_embeds="embeds")
+        with self.assertRaisesRegex(NotImplementedError, "pipeline"):
+            wrapper.forward(ids, pos, intermediate_tensors="stage")
+
     def test_forward_raises_when_a_layer_skips_dispatch(self):
         # A backbone that routes fewer layers than the engine has caches.
         self.backbone = RoutedBackbone(LAYERS)

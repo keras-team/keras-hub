@@ -207,6 +207,18 @@ class KerasHubTorchModel(_TorchModule):
         per-token positions — then delegates to the backbone. The routes
         and `PositionEmbedding` read the context exactly as they do on TPU.
         """
+        # Both belong to features this wrapper does not implement:
+        # `inputs_embeds` enters below the token embedding, and
+        # `intermediate_tensors` is pipeline parallelism. Ignoring either
+        # would serve something quietly wrong -- and with `inputs_embeds`,
+        # `input_ids` is None, so the failure would be obscure.
+        if inputs_embeds is not None or intermediate_tensors is not None:
+            raise NotImplementedError(
+                "The KerasHub GPU path takes token ids and runs one "
+                "pipeline stage; it does not support inputs_embeds or "
+                "pipeline parallelism."
+            )
+
         token_ids = input_ids
         if len(token_ids.shape) == 1:
             token_ids = ops.expand_dims(token_ids, axis=-1)

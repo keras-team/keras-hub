@@ -109,6 +109,12 @@ def _register_torch_model():
     which is why the load format's loader lives in this module rather than
     beside the model class.
     """
+    if BaseModelLoader is object:
+        # The guarded import at the top of this module failed, so the
+        # loader is not a real `BaseModelLoader` and vLLM would reject it
+        # with a ValueError -- out of a plugin, that stops the engine
+        # starting at all. Leave the path unregistered instead.
+        return
     try:
         from vllm import ModelRegistry
         from vllm.model_executor.model_loader import register_model_loader
