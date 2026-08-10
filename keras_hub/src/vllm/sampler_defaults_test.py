@@ -1,6 +1,7 @@
 """CPU unit tests for mapping KerasHub samplers to SamplingParams kwargs."""
 
 import builtins
+from types import SimpleNamespace
 from unittest import mock
 
 import keras
@@ -17,6 +18,7 @@ from keras_hub.src.vllm import registry
 from keras_hub.src.vllm.registry import _default_gpu_dtype
 from keras_hub.src.vllm.registry import _default_sampling_kwargs
 from keras_hub.src.vllm.registry import _normalize_dtype
+from keras_hub.src.vllm.registry import _without_cudagraph_capture
 from keras_hub.src.vllm.registry import sampler_to_sampling_kwargs
 
 
@@ -61,6 +63,33 @@ class DefaultGpuDtypeTest(TestCase):
 
         with mock.patch.object(builtins, "__import__", no_torch):
             self.assertEqual(registry._default_gpu_dtype(), "bfloat16")
+
+
+class CudagraphCaptureTest(TestCase):
+    """Capture stays off however the caller spells its compilation config."""
+
+    def test_no_config_turns_capture_off(self):
+        self.assertEqual(
+            _without_cudagraph_capture(None), {"cudagraph_mode": "NONE"}
+        )
+
+    def test_a_dict_config_is_filled_in_not_replaced(self):
+        config = {"mode": 0}
+        self.assertEqual(
+            _without_cudagraph_capture(config),
+            {"mode": 0, "cudagraph_mode": "NONE"},
+        )
+        self.assertEqual(config, {"mode": 0})  # caller's dict untouched
+
+    def test_an_explicit_capture_mode_wins(self):
+        self.assertEqual(
+            _without_cudagraph_capture({"cudagraph_mode": "PIECEWISE"}),
+            {"cudagraph_mode": "PIECEWISE"},
+        )
+
+    def test_a_config_object_is_left_alone(self):
+        config = SimpleNamespace(cudagraph_mode="FULL")
+        self.assertIs(_without_cudagraph_capture(config), config)
 
 
 class SamplerDefaultsTest(TestCase):

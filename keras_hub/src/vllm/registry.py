@@ -70,15 +70,27 @@ def _normalize_dtype(dtype):
     return dtype
 
 
+def _without_cudagraph_capture(compilation_config):
+    """Turns CUDA graph capture off in a caller's compilation config.
+
+    Capture forbids host-to-device copies, and KerasHub layers make them:
+    building a tensor from a Python scalar is one, and the causal mask does
+    it on every call. That is not one family's quirk, so capture stays off
+    for all of them; vLLM already declines to torch.compile these models,
+    so only capture is lost. A config the caller built themselves is left
+    alone, and an explicit `cudagraph_mode` wins.
+    """
+    if compilation_config is None or isinstance(compilation_config, dict):
+        return {"cudagraph_mode": "NONE", **(compilation_config or {})}
+    return compilation_config
+
+
 def _default_gpu_dtype():
     """Returns the dtype to serve in on this GPU when none was asked for.
 
     bfloat16 needs compute capability 8.0 (Ampere). Older cards such as the
     T4 have none, and vLLM refuses to start rather than pick a substitute,
     so choose float16 for them here.
-
-    Returns:
-        "float16" on a pre-Ampere GPU, "bfloat16" otherwise.
     """
     try:
         import torch
@@ -378,6 +390,9 @@ if _BaseLLM is not None:
                     kwargs.setdefault("load_format", "keras_hub")
                     # GPUs differ in what they support, so ask the device.
                     dtype = dtype or _default_gpu_dtype()
+                    kwargs["compilation_config"] = _without_cudagraph_capture(
+                        kwargs.get("compilation_config")
+                    )
                 kwargs["dtype"] = dtype
                 self._default_sampling_kwargs = _default_sampling_kwargs()
                 self._keras_hub_dir = setup_vllm_model(
