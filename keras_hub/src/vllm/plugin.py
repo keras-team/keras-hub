@@ -41,9 +41,9 @@ class KerasHubPresetLoader(BaseModelLoader):
 def register_keras_hub():
     """Registers everything needed to serve KerasHub presets on vLLM.
 
-    The serving model differs by engine — `KerasHubVllmModel` on
+    The serving model differs by engine -- `KerasHubVllmModel` on
     tpu-inference's flax/nnx path, `KerasHubTorchModel` on vLLM's own torch
-    engine — so the model registration branches on the platform this
+    engine -- so the model registration branches on the platform this
     process serves on. Everything else is common:
 
     - `register_hf_config()` teaches transformers the `keras_hub`
@@ -127,7 +127,7 @@ def _register_gpu_model():
     """Registers the serving model and load format for vLLM's torch engine.
 
     The model goes in by module path, so torch and the KerasHub model stack
-    import only when the engine resolves the architecture — which is why
+    import only when the engine resolves the architecture -- which is why
     `KerasHubPresetLoader` lives here rather than beside the model class.
     """
     if BaseModelLoader is object:

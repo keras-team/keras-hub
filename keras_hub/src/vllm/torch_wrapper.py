@@ -10,7 +10,7 @@ Attention reaches vLLM's paged kernels through the same serving context and
 bridge the TPU path uses: the wrapper builds one `vllm.Attention` module per
 backbone layer (the engine discovers these and binds paged KV cache to
 them), publishes the module list as the context's per-layer caches, and the
-bridge hands each attention route "its cache" — here, its module — in call
+bridge hands each attention route "its cache" -- here, its module -- in call
 order. The published function simply calls that module.
 
 Importing this module works anywhere (api-gen walks every module); torch
@@ -18,6 +18,7 @@ and vLLM are only needed on the serving path.
 """
 
 import math
+from typing import NamedTuple
 
 from keras import ops
 
@@ -55,6 +56,20 @@ _ATTENTION_ATTRS = (
     "self_attn",
     "self_attention",
 )
+
+
+class _ServedLayer(NamedTuple):
+    """One layer's `Attention` module and what it was built with.
+
+    The context carries these as the per-layer caches, so the published
+    function can check a route's per-call values against its own layer
+    without storing anything on vLLM's module.
+    """
+
+    module: object
+    scale: float
+    window: int | None
+    soft_cap: float | None
 
 
 def _layer_attention_options(block, head_dim):
@@ -101,8 +116,8 @@ def _layer_attention_options(block, head_dim):
 class KerasHubTorchModel(_TorchModule):
     """Serves a KerasHub `CausalLM` on vLLM's GPU (torch) engine.
 
-    Implements the model protocol vLLM's V1 engine drives — `__init__`,
-    `embed_input_ids`, `forward`, `compute_logits` — plus `load_preset`,
+    Implements the model protocol vLLM's V1 engine drives -- `__init__`,
+    `embed_input_ids`, `forward`, `compute_logits` -- plus `load_preset`,
     which the `keras_hub` load format calls instead of `load_weights`
     (the preset carries the weights; there is no safetensors iterator).
 
@@ -168,7 +183,7 @@ class KerasHubTorchModel(_TorchModule):
         # model for these and binds a paged KV cache to each, keyed by
         # `prefix`, so the prefixes must be stable and unique.
         attention = _attention_cls()
-        modules = []
+        modules, served = [], []
         for i, block in enumerate(self.backbone.transformer_layers):
             scale, window, soft_cap = _layer_attention_options(block, head_dim)
             module = attention(
@@ -181,15 +196,17 @@ class KerasHubTorchModel(_TorchModule):
                 cache_config=vllm_config.cache_config,
                 prefix=f"{prefix}.layers.{i}.attn",
             )
-            # What this layer was built with, for the published function's
-            # per-call cross-check.
-            module._keras_hub_scale = scale
-            module._keras_hub_window = window
-            module._keras_hub_soft_cap = soft_cap
             modules.append(module)
+            served.append(_ServedLayer(module, scale, window, soft_cap))
+        # The engine binds KV cache by scanning for Attention modules, so
+        # they have to hang off the model. The context carries the records
+        # instead, which keeps what each layer was built with on an object
+        # this file owns.
         self.layers = nn.ModuleList(modules)
+        self._served_layers = served
 
     def embed_input_ids(self, input_ids):
+        """Returns the token embeddings for `input_ids`."""
         return self.backbone.token_embedding(input_ids)
 
     def forward(
@@ -201,9 +218,9 @@ class KerasHubTorchModel(_TorchModule):
     ):
         """Runs one forward step against vLLM's paged KV cache.
 
-        Publishes the serving context — the published attention function,
+        Publishes the serving context -- the published attention function,
         the per-layer `Attention` modules as the caches, and the engine's
-        per-token positions — then delegates to the backbone. The routes
+        per-token positions -- then delegates to the backbone. The routes
         and `PositionEmbedding` read the context exactly as they do on TPU.
 
         Args:
@@ -242,7 +259,7 @@ class KerasHubTorchModel(_TorchModule):
         with vllm_context_scope(
             paged_attention_func=self._paged_attention,
             positions=positions,
-            kv_caches=list(self.layers),
+            kv_caches=self._served_layers,
         ):
             hidden_states = self.backbone(
                 {"token_ids": token_ids, "padding_mask": padding_mask},
@@ -271,6 +288,7 @@ class KerasHubTorchModel(_TorchModule):
         return hidden_states
 
     def compute_logits(self, hidden_states):
+        """Projects hidden states to logits through the tied embedding."""
         return self.backbone.token_embedding(hidden_states, reverse=True)
 
     def _paged_attention(
@@ -288,40 +306,24 @@ class KerasHubTorchModel(_TorchModule):
     ):
         """The published attention function for the GPU path.
 
-        `kv_cache` is this layer's `vllm.Attention` module (the context
-        carries the module list as the per-layer caches). The module owns
-        the paged KV cache and reads the attention metadata from vLLM's
-        forward context, so the call is just `module(q, k, v)` on the flat
-        `(num_tokens, heads * head_dim)` tensors the bridge already built.
+        `kv_cache` is this layer's `_ServedLayer`, handed over by the
+        bridge in layer-call order. Its module owns the paged KV cache and
+        reads vLLM's attention metadata itself, so the call is just
+        `module(q, k, v)` on the flat tensors the bridge already built.
 
-        The per-call arguments exist to cross-check the module's
-        construction-time configuration: a mismatch means the route and
-        the layer it belongs to disagree about how attention runs.
-
-        Args:
-            kv_cache: This layer's `vllm.Attention` module, handed over by
-                the bridge in layer-call order.
-            q: Query in the kernel's flat `(num_tokens, heads * head_dim)`
-                layout.
-            k: Key, in the same layout and with its own head count.
-            v: Value, in the same layout as the key.
-            scale: The softmax scale the route applies.
-            head_size: The route's head dimension.
-            num_heads: The route's query head count.
-            num_kv_heads: The route's key/value head count, unexpanded.
-            sliding_window: The route's local-attention window, if any.
-            soft_cap: The route's attention-logit cap, if any.
+        The per-call arguments are checked against what the layer was
+        built with; a mismatch means the route and its layer disagree
+        about how attention runs.
 
         Returns:
             A `(kv_cache, attention_output)` tuple. The cache comes back
-            as it went in: the module owns its paged storage, so there is
-            no updated copy for the bridge to collect.
+            as it went in, since the module owns its paged storage.
 
         Raises:
             RuntimeError: If any of the route's values disagrees with what
                 this layer's module was built with.
         """
-        expected_scale = getattr(kv_cache, "_keras_hub_scale", None)
+        expected_scale = kv_cache.scale
         # `isclose` because the two sides reach the same number by
         # different routes (`1 / sqrt(d)` against `d ** -0.5`); the
         # tolerance is far tighter than any real difference in convention,
@@ -340,8 +342,8 @@ class KerasHubTorchModel(_TorchModule):
                 f"{self._num_heads}, kv_heads={self._num_kv_heads}, "
                 f"head_dim={self._head_dim}, scale={expected_scale})."
             )
-        expected_window = getattr(kv_cache, "_keras_hub_window", None)
-        expected_cap = getattr(kv_cache, "_keras_hub_soft_cap", None)
+        expected_window = kv_cache.window
+        expected_cap = kv_cache.soft_cap
         if sliding_window != expected_window or soft_cap != expected_cap:
             raise RuntimeError(
                 "The attention route passed sliding_window="
@@ -350,4 +352,4 @@ class KerasHubTorchModel(_TorchModule):
                 f" soft_cap={expected_cap}. The route and the layer it "
                 "belongs to disagree."
             )
-        return kv_cache, kv_cache(q, k, v)
+        return kv_cache, kv_cache.module(q, k, v)

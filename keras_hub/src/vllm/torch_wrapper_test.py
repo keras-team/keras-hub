@@ -130,6 +130,17 @@ class KerasHubTorchModelTest(TestCase):
                 layer.init_args["prefix"], f"model.layers.{i}.attn"
             )
 
+    def test_nothing_is_stored_on_vllms_attention_module(self):
+        # What a layer was built with belongs on our own record, not on an
+        # object vLLM owns.
+        wrapper = self.build_wrapper()
+        self.assertLen(wrapper._served_layers, LAYERS)
+        for served, module in zip(wrapper._served_layers, wrapper.layers):
+            self.assertIs(served.module, module)
+            self.assertEqual(served.scale, HEAD_DIM**-0.5)
+            added = [a for a in vars(module) if a.startswith("_keras_hub")]
+            self.assertEqual(added, [])
+
     def test_forward_dispatches_once_per_layer(self):
         wrapper = self.build_wrapper()
         hidden = wrapper.forward(
@@ -164,7 +175,7 @@ class KerasHubTorchModelTest(TestCase):
         wrapper = self.build_wrapper()
         with self.assertRaisesRegex(RuntimeError, "does not match"):
             wrapper._paged_attention(
-                wrapper.layers[0],
+                wrapper._served_layers[0],
                 None,
                 None,
                 None,
@@ -192,7 +203,7 @@ class KerasHubTorchModelTest(TestCase):
                 wrapper.layers[i].init_args["logits_soft_cap"], 50.0
             )
             out = wrapper._paged_attention(
-                wrapper.layers[i],
+                wrapper._served_layers[i],
                 "q",
                 None,
                 None,
@@ -208,7 +219,7 @@ class KerasHubTorchModelTest(TestCase):
         # A route disagreeing with its own layer must fail loudly.
         with self.assertRaisesRegex(RuntimeError, "disagree"):
             wrapper._paged_attention(
-                wrapper.layers[1],  # built without a window
+                wrapper._served_layers[1],  # built without a window
                 "q",
                 None,
                 None,
@@ -244,7 +255,7 @@ class KerasHubTorchModelTest(TestCase):
         # The route computes 1 / sqrt(d) where the wrapper has d ** -0.5.
         wrapper = self.build_wrapper()
         out = wrapper._paged_attention(
-            wrapper.layers[0],
+            wrapper._served_layers[0],
             "q",
             None,
             None,
@@ -261,7 +272,7 @@ class KerasHubTorchModelTest(TestCase):
         wrapper = self.build_wrapper()
         with self.assertRaisesRegex(RuntimeError, "does not match"):
             wrapper._paged_attention(
-                wrapper.layers[0],
+                wrapper._served_layers[0],
                 "q",
                 None,
                 None,

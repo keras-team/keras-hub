@@ -14,7 +14,7 @@ import tempfile
 import keras
 
 # vLLM is an optional dependency of KerasHub, and `import keras_hub` imports
-# this module (via the generated `keras_hub.vllm` API) — so it must import
+# this module (via the generated `keras_hub.vllm` API) -- so it must import
 # cleanly without vLLM. The serving class is defined only when vLLM (with its
 # tokenizer registry) is present; otherwise a stub raises with install
 # instructions on use. Same optional-import pattern as the tensorflow and
@@ -138,7 +138,7 @@ def setup_vllm_model(preset, dtype="bfloat16", max_model_len=None):
     register_hf_config()
 
     # Serving tokenizes with this same tokenizer (`tokenizer_mode=
-    # "keras_hub"`), so it must load — fail here at setup, with the real
+    # "keras_hub"`), so it must load -- fail here at setup, with the real
     # error, rather than somewhere inside vLLM's engine. It also supplies
     # vocab_size (vLLM profiles KV-cache memory from it) and eos.
     tokenizer = Tokenizer.from_preset(preset)
@@ -237,7 +237,7 @@ def _derive_arch_config(preset):
     # vLLM caps max_model_len at max_position_embeddings. Learned-position
     # presets (GPT-2) serialize max_sequence_length; write it so a sequence
     # can't index past the position table. RoPE presets don't serialize it
-    # and fall to KerasHubConfig's 8192 default — pass `max_model_len` to
+    # and fall to KerasHubConfig's 8192 default -- pass `max_model_len` to
     # `KerasHubLLM` to raise that ceiling.
     if cfg.get("max_sequence_length"):
         arch["max_position_embeddings"] = int(cfg["max_sequence_length"])
@@ -265,7 +265,7 @@ def sampler_to_sampling_kwargs(sampler):
 
     Returns:
         A dict of `SamplingParams` kwargs, or `None` when the sampler has no
-        vLLM equivalent (beam, contrastive, speculative) — vLLM's own
+        vLLM equivalent (beam, contrastive, speculative) -- vLLM's own
         defaults apply in that case.
     """
     if sampler is None:
@@ -304,7 +304,7 @@ def _default_sampling_kwargs():
     that default is what every preset would generate with. It is read from
     the `compile` signature instead of building the task: a JAX model build
     would allocate real parameter memory before vLLM's engine starts.
-    Returns `None` if anything fails — serving then uses vLLM's defaults.
+    Returns `None` if anything fails -- serving then uses vLLM's defaults.
     """
     try:
         default = inspect.signature(CausalLM.compile).parameters["sampler"]
@@ -333,7 +333,7 @@ if _BaseLLM is not None:
 
         When `generate` is called without `sampling_params`, the defaults
         come from the model's own compiled sampler (e.g. GPT-2's `top_k`),
-        translated into `SamplingParams` — not from vLLM's generic defaults.
+        translated into `SamplingParams` -- not from vLLM's generic defaults.
         Passing explicit `sampling_params` overrides this.
 
         Example::
@@ -403,7 +403,7 @@ if _BaseLLM is not None:
                 model = self._keras_hub_dir.name
                 kwargs.setdefault("tokenizer", model)
                 # Serve the preset's own KerasHub tokenizer through vLLM's
-                # tokenizer registry (tokenizer_mode="keras_hub") — no HF
+                # tokenizer registry (tokenizer_mode="keras_hub") -- no HF
                 # conversion. Registered by module path, so vLLM resolves
                 # the class lazily in whichever process loads the tokenizer.
                 TokenizerRegistry.register(
