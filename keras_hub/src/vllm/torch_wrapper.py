@@ -107,9 +107,13 @@ def _layer_attention_options(block, head_dim):
     # to the usual formula and the published function catches the case
     # where Gemma's differs.
     scale = getattr(attn, "_inv_norm_factor", None) or default_scale
+    # Gemma and Qwen alternate windowed and full layers, so a boolean gates
+    # the width. Mistral windows every layer and only holds the width.
     window = None
     if getattr(attn, "use_sliding_window_attention", False):
         window = getattr(attn, "sliding_window_size", None)
+    elif getattr(attn, "_sliding_window", None):
+        window = attn._sliding_window
     return scale, window, getattr(attn, "logit_soft_cap", None)
 
 

@@ -245,6 +245,24 @@ class KerasHubTorchModelTest(TestCase):
             (HEAD_DIM**-0.5, None, None),
         )
 
+    def test_mistral_style_window_is_read(self):
+        # Mistral windows every layer and holds the width in
+        # `_sliding_window`, with no boolean to gate it.
+        block = SimpleNamespace(attention=SimpleNamespace(_sliding_window=4096))
+        self.assertEqual(
+            torch_wrapper._layer_attention_options(block, HEAD_DIM),
+            (HEAD_DIM**-0.5, 4096, None),
+        )
+
+    def test_gemma_style_window_still_wins(self):
+        # A layer carrying both spellings is gated by the boolean.
+        attn = FakeAttentionLayer(window=256)
+        attn._sliding_window = 4096
+        _, window, _ = torch_wrapper._layer_attention_options(
+            SimpleNamespace(attention=attn), HEAD_DIM
+        )
+        self.assertEqual(window, 256)
+
     def test_scale_comes_from_the_layer_when_it_has_one(self):
         # Most families keep their own scale; it is used as is.
         block = SimpleNamespace(attention=FakeAttentionLayer(scale=0.25))
