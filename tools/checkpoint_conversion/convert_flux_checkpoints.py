@@ -2,15 +2,10 @@ import gc
 import os
 import shutil
 
-os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
-
-os.environ.setdefault("TF_FORCE_GPU_ALLOW_GROWTH", "true")
-
 import keras
 from huggingface_hub import hf_hub_download
 from safetensors import safe_open
 
-from keras_hub.src.models.flux.flux_maths import TimestepEmbedding
 from keras_hub.src.models.flux.flux_model import FluxBackbone
 
 REPO_ID = "black-forest-labs/FLUX.1-schnell"
@@ -37,16 +32,6 @@ BUILD_IMAGE_TOKENS = 4
 BUILD_TEXT_TOKENS = 4
 
 keras.config.set_dtype_policy("bfloat16")
-
-_original_timestep_embedding_call = TimestepEmbedding.call
-
-
-def _timestep_embedding_call_float32(self, t, dim=256):
-    t = keras.ops.cast(t, "float32")
-    return _original_timestep_embedding_call(self, t, dim)
-
-
-TimestepEmbedding.call = _timestep_embedding_call_float32
 
 
 def validate_safetensors_file(path):
@@ -441,7 +426,6 @@ def convert_flux_weights(
         )
 
     # Convert txt_in weights
-
     keras_model.text_input_embedder.set_weights(
         [
             weights_dict["txt_in.weight"].T,
@@ -493,8 +477,6 @@ def main():
     keras.backend.clear_session()
 
     keras.config.set_dtype_policy("bfloat16")
-
-    TimestepEmbedding.call = _timestep_embedding_call_float32
 
     keras_model = FluxBackbone(
         input_channels=INPUT_CHANNELS,
