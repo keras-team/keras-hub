@@ -27,8 +27,15 @@ class EmbedND(keras.Model):
 
     def build(self, input_shape):
         n_axes = input_shape[-1]
+        if n_axes != len(self.axes_dim):
+            raise ValueError(
+                f"EmbedND received {n_axes} positional axes, "
+                f"but axes_dim has {len(self.axes_dim)} entries. "
+                f"input_shape={input_shape}, axes_dim={self.axes_dim}"
+            )
+
         for i in range(n_axes):
-            self.rope.build((input_shape[:-1] + (self.axes_dim[i],)))
+            self.rope.build(input_shape[:-1] + (self.axes_dim[i],))
 
     def call(self, ids):
         """Computes the positional embeddings for each axis and concatenates.
@@ -228,7 +235,7 @@ class Modulation(keras.Model):
         return first_output, second_output
 
 
-class DoubleStreamBlock(keras.Model):
+class DoubleStreamBlock(keras.layers.Layer):
     """
     A block that processes image and text inputs in parallel using
     self-attention and MLP layers, with modulation.
@@ -248,42 +255,63 @@ class DoubleStreamBlock(keras.Model):
         num_heads,
         mlp_ratio,
         use_bias=False,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
 
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         self.num_heads = num_heads
         self.hidden_size = hidden_size
 
+        # Image stream layers
         self.image_mod = Modulation(hidden_size, double=True)
-        self.image_norm1 = keras.layers.LayerNormalization(epsilon=1e-6)
-        self.image_attn = SelfAttention(
-            dim=hidden_size, num_heads=num_heads, use_bias=use_bias
+        self.image_norm1 = keras.layers.LayerNormalization(
+            epsilon=1e-6, scale=False, center=False
+        )
+        self.image_qkv = keras.layers.Dense(
+            3 * hidden_size, use_bias=use_bias, name="img_qkv"
+        )
+        self.image_attn_proj = keras.layers.Dense(
+            hidden_size, use_bias=use_bias, name="img_attn_proj"
         )
 
-        self.image_norm2 = keras.layers.LayerNormalization(epsilon=1e-6)
+        self.image_norm2 = keras.layers.LayerNormalization(
+            epsilon=1e-6, scale=False, center=False
+        )
         self.image_mlp = keras.Sequential(
             [
                 keras.layers.Dense(mlp_hidden_dim, use_bias=True),
                 keras.layers.Activation("gelu"),
                 keras.layers.Dense(hidden_size, use_bias=True),
-            ]
+            ],
+            name="image_mlp",
         )
 
+        # Text stream layers
         self.text_mod = Modulation(hidden_size, double=True)
-        self.text_norm1 = keras.layers.LayerNormalization(epsilon=1e-6)
-        self.text_attn = SelfAttention(
-            dim=hidden_size, num_heads=num_heads, use_bias=use_bias
+        self.text_norm1 = keras.layers.LayerNormalization(
+            epsilon=1e-6, scale=False, center=False
+        )
+        self.text_qkv = keras.layers.Dense(
+            3 * hidden_size, use_bias=use_bias, name="txt_qkv"
+        )
+        self.text_attn_proj = keras.layers.Dense(
+            hidden_size, use_bias=use_bias, name="txt_attn_proj"
         )
 
-        self.text_norm2 = keras.layers.LayerNormalization(epsilon=1e-6)
+        self.text_norm2 = keras.layers.LayerNormalization(
+            epsilon=1e-6, scale=False, center=False
+        )
         self.text_mlp = keras.Sequential(
             [
                 keras.layers.Dense(mlp_hidden_dim, use_bias=True),
                 keras.layers.Activation("gelu"),
                 keras.layers.Dense(hidden_size, use_bias=True),
-            ]
+            ],
+            name="text_mlp",
         )
+
+        # RoPE Attention
         self.attention = FluxRoPEAttention()
 
     def call(self, image, text, modulation_encoding, positional_encoding):
@@ -299,60 +327,51 @@ class DoubleStreamBlock(keras.Model):
         Returns:
             A `(image, text)` tuple of modified image and text tensors.
         """
-        image_mod1, image_mod2 = self.image_mod(modulation_encoding)
-        text_mod1, text_mod2 = self.text_mod(modulation_encoding)
+        img_mod1, img_mod2 = self.image_mod(modulation_encoding)
+        txt_mod1, txt_mod2 = self.text_mod(modulation_encoding)
 
-        # prepare image for attention
-        image_modulated = self.image_norm1(image)
-        image_modulated = (
-            1 + image_mod1["scale"]
-        ) * image_modulated + image_mod1["shift"]
-        image_qkv = self.image_attn.qkv(image_modulated)
-
-        image_q, image_k, image_v = rearrange_symbolic_tensors(
-            image_qkv, K=3, H=self.num_heads
+        img_normed = (
+            self.image_norm1(image) * (1 + img_mod1["scale"])
+            + img_mod1["shift"]
         )
-        image_q, image_k = self.image_attn.norm(image_q, image_k)
-
-        # prepare text for attention
-        text_modulated = self.text_norm1(text)
-        text_modulated = (1 + text_mod1["scale"]) * text_modulated + text_mod1[
-            "shift"
-        ]
-        text_qkv = self.text_attn.qkv(text_modulated)
-
-        text_q, text_k, text_v = rearrange_symbolic_tensors(
-            text_qkv, K=3, H=self.num_heads
+        txt_normed = (
+            self.text_norm1(text) * (1 + txt_mod1["scale"]) + txt_mod1["shift"]
         )
 
-        text_q, text_k = self.text_attn.norm(text_q, text_k)
+        img_qkv = self.image_qkv(img_normed)
+        txt_qkv = self.text_qkv(txt_normed)
 
-        # run actual attention
-        q = ops.concatenate((text_q, image_q), axis=2)
-        k = ops.concatenate((text_k, image_k), axis=2)
-        v = ops.concatenate((text_v, image_v), axis=2)
-
-        attn = self.attention(
-            q=q, k=k, v=v, positional_encoding=positional_encoding
+        img_q, img_k, img_v = rearrange_symbolic_tensors(
+            img_qkv, 3, self.num_heads
         )
-        text_attn, image_attn = (
-            attn[:, : text.shape[1]],
-            attn[:, text.shape[1] :],
+        txt_q, txt_k, txt_v = rearrange_symbolic_tensors(
+            txt_qkv, 3, self.num_heads
         )
 
-        # calculate the image blocks
-        image = image + image_mod1["gate"] * self.image_attn.proj(image_attn)
-        image = image + image_mod2["gate"] * self.image_mlp(
-            (1 + image_mod2["scale"]) * self.image_norm2(image)
-            + image_mod2["shift"]
+        q = ops.concatenate([img_q, txt_q], axis=2)
+        k = ops.concatenate([img_k, txt_k], axis=2)
+        v = ops.concatenate([img_v, txt_v], axis=2)
+
+        attn_out = self.attention(q, k, v, positional_encoding)
+
+        img_seq_len = ops.shape(image)[1]
+        img_attn = attn_out[:, :img_seq_len, :]
+        txt_attn = attn_out[:, img_seq_len:, :]
+
+        image = image + img_mod1["gate"] * self.image_attn_proj(img_attn)
+        text = text + txt_mod1["gate"] * self.text_attn_proj(txt_attn)
+
+        img_normed_2 = (
+            self.image_norm2(image) * (1 + img_mod2["scale"])
+            + img_mod2["shift"]
+        )
+        txt_normed_2 = (
+            self.text_norm2(text) * (1 + txt_mod2["scale"]) + txt_mod2["shift"]
         )
 
-        # calculate the text blocks
-        text = text + text_mod1["gate"] * self.text_attn.proj(text_attn)
-        text = text + text_mod2["gate"] * self.text_mlp(
-            (1 + text_mod2["scale"]) * self.text_norm2(text)
-            + text_mod2["shift"]
-        )
+        image = image + img_mod2["gate"] * self.image_mlp(img_normed_2)
+        text = text + txt_mod2["gate"] * self.text_mlp(txt_normed_2)
+
         return image, text
 
 
