@@ -309,7 +309,9 @@ def validate_configs(exp_cfg, orig_cfg, has_vision):
         original_missing = original_value == "<missing>"
         exported_missing = exported_value == "<missing>"
 
-        if key in optional_runtime_keys and (original_missing or exported_missing):
+        if key in optional_runtime_keys and (
+            original_missing or exported_missing
+        ):
             return True, "optional/runtime-only field"
 
         if (
@@ -323,7 +325,7 @@ def validate_configs(exp_cfg, orig_cfg, has_vision):
         return False, ""
 
     def compare_section(section_name, original_section, exported_section):
-        """Compare config sections and classify critical vs non-critical deltas."""
+        """Compare config and classify critical vs non-critical deltas."""
         if section_name:
             print(f"\n  {section_name}:")
 
@@ -331,7 +333,9 @@ def validate_configs(exp_cfg, orig_cfg, has_vision):
         critical_diffs = []
         warning_diffs = []
 
-        keys = sorted(set(original_section.keys()) | set(exported_section.keys()))
+        keys = sorted(
+            set(original_section.keys()) | set(exported_section.keys())
+        )
         for key in keys:
             if key in skip_keys:
                 continue
@@ -349,7 +353,8 @@ def validate_configs(exp_cfg, orig_cfg, has_vision):
             if is_non_critical:
                 print(
                     "    ⚠ "
-                    f"{key}: original={original_value}, exported={exported_value} "
+                    f"{key}: original={original_value}, \
+                    exported={exported_value} "
                     f"({reason})"
                 )
                 warning_diffs.append(key)
