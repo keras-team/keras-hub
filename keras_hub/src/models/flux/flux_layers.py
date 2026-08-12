@@ -259,9 +259,11 @@ class DoubleStreamBlock(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
 
-        mlp_hidden_dim = int(hidden_size * mlp_ratio)
-        self.num_heads = num_heads
         self.hidden_size = hidden_size
+        self.num_heads = num_heads
+        self.mlp_ratio = mlp_ratio
+        self.use_bias = use_bias
+        mlp_hidden_dim = int(hidden_size * mlp_ratio)
 
         # Image stream layers
         self.image_mod = Modulation(hidden_size, double=True)
@@ -373,6 +375,18 @@ class DoubleStreamBlock(keras.layers.Layer):
         text = text + txt_mod2["gate"] * self.text_mlp(txt_normed_2)
 
         return image, text
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_size": self.hidden_size,
+                "num_heads": self.num_heads,
+                "mlp_ratio": self.mlp_ratio,
+                "use_bias": self.use_bias,
+            }
+        )
+        return config
 
 
 class SingleStreamBlock(keras.Model):
