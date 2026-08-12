@@ -117,8 +117,14 @@ def export_backbone(backbone, path, include_lm_head=False, tokenizer=None):
     get_config_fn = MODEL_CONFIGS[model_type]
     hf_config = get_config_fn(backbone)
     if tokenizer is not None:
-        hf_config["bos_token_id"] = tokenizer.token_to_id(tokenizer.start_token)
-        hf_config["eos_token_id"] = tokenizer.token_to_id(tokenizer.end_token)
+        if tokenizer.start_token is not None:
+            hf_config["bos_token_id"] = tokenizer.token_to_id(
+                tokenizer.start_token
+            )
+        if tokenizer.end_token is not None:
+            hf_config["eos_token_id"] = tokenizer.token_to_id(
+                tokenizer.end_token
+            )
 
     # Get weights
     get_weights_fn = MODEL_EXPORTERS[model_type]
