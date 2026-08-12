@@ -9,7 +9,7 @@ presets = {
             "path": "flux",
             "model_card": "https://huggingface.co/black-forest-labs/FLUX.1-schnell",
         },
-        "kaggle_handle": "kaggle://<org>/flux/keras/flux1_schnell",
+        "kaggle_handle": "kaggle://keras/flux/keras/flux1_schnell",
     },
     "flux1_dev": {
         "metadata": {
@@ -19,6 +19,6 @@ presets = {
             "path": "flux",
             "model_card": "https://huggingface.co/black-forest-labs/FLUX.1-dev",
         },
-        "kaggle_handle": "kaggle://<org>/flux/keras/flux1_dev",
+        "kaggle_handle": "kaggle://keras/flux/keras/flux1_dev",
     },
 }
