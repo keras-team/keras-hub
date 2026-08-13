@@ -6,6 +6,7 @@ import pytest
 # OpenVINO supported test paths
 OPENVINO_SUPPORTED_PATHS = [
     "integration_tests",
+    "keras_hub/src/metrics",
     "keras_hub/src/tokenizers",
     "keras_hub/src/models/albert",
     "keras_hub/src/models/basnet",
@@ -33,6 +34,7 @@ OPENVINO_SUPPORTED_PATHS = [
     "keras_hub/src/models/mobilenet",
     "keras_hub/src/models/mobilenetv5",
     "keras_hub/src/models/opt",
+    "keras_hub/src/models/pali_gemma",
     "keras_hub/src/models/parseq",
     "keras_hub/src/models/phi3",
     "keras_hub/src/models/qwen",
@@ -41,14 +43,17 @@ OPENVINO_SUPPORTED_PATHS = [
     "keras_hub/src/models/qwen_moe",
     "keras_hub/src/models/roberta",
     "keras_hub/src/models/rqvae",
+    "keras_hub/src/models/siglip",
     "keras_hub/src/models/smollm3",
     "keras_hub/src/models/swin_transformer",
+    "keras_hub/src/models/t5",
     "keras_hub/src/models/t5gemma2",
     "keras_hub/src/models/vae",
     "keras_hub/src/models/vgg",
     "keras_hub/src/models/vit_det",
     "keras_hub/src/models/whisper",
     "keras_hub/src/models/xception",
+    "keras_hub/src/models/xlm_roberta",
     "keras_hub/src/models/xlnet",
 ]
 
