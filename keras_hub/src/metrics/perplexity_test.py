@@ -1,3 +1,4 @@
+import keras
 from keras import ops
 
 from keras_hub.src.metrics.perplexity import Perplexity
@@ -253,6 +254,43 @@ class PerplexityTest(TestCase):
         perplexity.update_state(y_true_2, y_pred_2)
         perplexity_val = perplexity.result()
         self.assertAlmostEqual(perplexity_val, 3.8563, delta=1e-3)
+
+    def test_unequal_batch_sizes(self):
+        perplexity = Perplexity(from_logits=True, mask_token_id=0)
+
+        # Batch 1: size 2, 4 active tokens
+        y_true_1 = ops.array([[1, 2, 0], [2, 1, 0]])
+        y_pred_1 = ops.ones((2, 3, 4))
+        perplexity.update_state(y_true_1, y_pred_1)
+
+        # Batch 2: size 1, 1 active token
+        y_true_2 = ops.array([[1, 0, 0]])
+        y_pred_2 = ops.ones((1, 3, 4))
+        perplexity.update_state(y_true_2, y_pred_2)
+
+        # Total loss sum: 5 tokens * log(4) = 6.93147
+        # Total tokens: 5
+        # Expected: exp(log(4)) = 4.0
+        self.assertAlmostEqual(perplexity.result(), 4.0, delta=1e-3)
+
+    def test_multi_batch_fractional_weights(self):
+        perplexity = Perplexity(from_logits=True)
+
+        y_true = ops.array([[1, 2]])
+        y_pred = ops.ones((1, 2, 4))
+
+        # Batch 1: weight sum = 1.0
+        sw_1 = ops.array([[0.5, 0.5]])
+        perplexity.update_state(y_true, y_pred, sw_1)
+
+        # Batch 2: weight sum = 1.0
+        sw_2 = ops.array([[0.2, 0.8]])
+        perplexity.update_state(y_true, y_pred, sw_2)
+
+        # Total weighted loss sum: 2.0 * log(4)
+        # Total weights: 2.0
+        # Expected: exp(log(4)) = 4.0
+        self.assertAlmostEqual(perplexity.result(), 4.0, delta=1e-3)
 
     def test_get_config(self):
         perplexity = Perplexity(
