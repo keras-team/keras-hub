@@ -97,9 +97,6 @@ class ModernBertBackbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
 
         # Dtype handling
-        if isinstance(dtype, dict):
-            dtype = keras.saving.deserialize_keras_object(dtype)
-
         if dtype is None:
             layer_dtype_policy = None
         elif isinstance(dtype, keras.DTypePolicy):

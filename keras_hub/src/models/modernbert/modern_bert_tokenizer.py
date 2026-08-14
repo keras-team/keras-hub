@@ -103,3 +103,42 @@ class ModernBertTokenizer(BytePairTokenizer):
             sep_token,
             "sep_token",
         )
+
+    @property
+    def start_token_id(self):
+        return self.cls_token_id
+
+    @property
+    def end_token_id(self):
+        return self.sep_token_id
+
+    def get_config(self):
+        config = super().get_config()
+
+        config.update(
+            {
+                "vocabulary": self.vocabulary,
+                "merges": self.merges,
+            }
+        )
+
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        config = config.copy()
+
+        dtype = config.get("dtype")
+        if isinstance(dtype, dict):
+            dtype_config = dtype.get("config", {})
+            if isinstance(dtype_config, dict):
+                config["dtype"] = dtype_config.get("name", "int32")
+
+        vocabulary = config.pop("vocabulary", None)
+        merges = config.pop("merges", None)
+
+        return cls(
+            vocabulary=vocabulary,
+            merges=merges,
+            **config,
+        )

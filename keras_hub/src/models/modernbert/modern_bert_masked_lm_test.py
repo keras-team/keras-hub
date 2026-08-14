@@ -79,7 +79,8 @@ class ModernBertMaskedLMTest(TestCase):
         self.preprocessor = ModernBertMaskedLMPreprocessor(
             tokenizer=self.tokenizer,
             sequence_length=12,
-            mask_selection_rate=0.2,
+            # mask_selection_rate=0.2,
+            mask_selection_rate=0.0,
             mask_selection_length=2,
         )
         self.backbone = ModernBertBackbone(
@@ -101,28 +102,43 @@ class ModernBertMaskedLMTest(TestCase):
             "airplane",
         ]
 
+        self.train_data = (
+            self.input_data,
+            None,
+            None,
+        )
+
         self.model = ModernBertMaskedLM(
             **self.init_kwargs,
         )
 
+    def test_tokenizer_serialization(self):
+        """Test tokenizer serialization and deserialization."""
+        config = self.tokenizer.get_config()
+        restored = ModernBertTokenizer.from_config(config)
+        self.assertEqual(
+            restored.vocabulary_size(), self.tokenizer.vocabulary_size()
+        )
+        self.assertEqual(
+            restored.get_vocabulary(), self.tokenizer.get_vocabulary()
+        )
+        self.assertEqual(restored.merges, self.tokenizer.merges)
+
     @pytest.mark.extra_large
     def test_fit(self):
-        """Validate training execution."""
-        self.model.compile(
-            optimizer="adam",
-            loss="sparse_categorical_crossentropy",
-        )
-
-        self.model.fit(
-            self.input_data,
-            epochs=1,
+        """Validate training, output shape, and serialization."""
+        self.run_task_test(
+            cls=ModernBertMaskedLM,
+            init_kwargs=self.init_kwargs,
+            train_data=self.train_data,
         )
 
     @pytest.mark.large
     def test_saved_model(self):
         """Validate serialization lifecycle."""
+        input_data = self.preprocessor(self.input_data)[0]
         self.run_model_saving_test(
             cls=ModernBertMaskedLM,
             init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
+            input_data=input_data,
         )

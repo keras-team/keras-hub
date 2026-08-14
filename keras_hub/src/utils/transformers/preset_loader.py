@@ -24,6 +24,7 @@ from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_metaclip_2
 from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_mixtral
+from keras_hub.src.utils.transformers import convert_modern_bert
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
@@ -52,6 +53,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_deit
         elif model_type == "distilbert":
             self.converter = convert_distilbert
+        elif model_type == "modernbert":
+            self.converter = convert_modern_bert
         elif model_type in ("dinov2", "dinov2_with_registers"):
             self.converter = convert_dinov2
         elif model_type == "dinov3_vit":

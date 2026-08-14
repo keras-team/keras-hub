@@ -557,22 +557,21 @@ class ModernBertEncoderLayer(layers.Layer):
 
         # Attention residual block
         residual = x
+
         x = self.attn_norm(x)
         x = self.attn(
             x,
             padding_mask=padding_mask,
             training=training,
         )
-
         x = self.attn_dropout(
             x,
             training=training,
         )
-        if x.dtype != residual.dtype:
-            x = ops.cast(
-                x,
-                residual.dtype,
-            )
+
+        if residual.dtype != x.dtype:
+            residual = ops.cast(residual, x.dtype)
+
         x = residual + x
 
         # MLP residual block
@@ -584,11 +583,10 @@ class ModernBertEncoderLayer(layers.Layer):
             x,
             training=training,
         )
-        if x.dtype != residual.dtype:
-            x = ops.cast(
-                x,
-                residual.dtype,
-            )
+
+        if residual.dtype != x.dtype:
+            residual = ops.cast(residual, x.dtype)
+
         x = residual + x
 
         return x

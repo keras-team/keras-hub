@@ -83,6 +83,22 @@ class ModernBertTokenizerTest(TestCase):
                 merges=[],
             )
 
+    def test_special_token_ids(self):
+        tokenizer = ModernBertTokenizer(**self.init_kwargs)
+
+        self.assertEqual(
+            tokenizer.start_token_id,
+            tokenizer.cls_token_id,
+        )
+        self.assertEqual(
+            tokenizer.end_token_id,
+            tokenizer.sep_token_id,
+        )
+        self.assertEqual(
+            tokenizer.start_token_id,
+            tokenizer.end_token_id,
+        )
+
     @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(

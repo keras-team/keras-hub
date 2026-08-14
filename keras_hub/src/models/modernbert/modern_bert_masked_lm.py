@@ -76,6 +76,9 @@ class ModernBertMaskedLM(MaskedLM):
         preprocessor=None,
         **kwargs,
     ):
+        self.backbone = backbone
+        self.preprocessor = preprocessor
+
         # HF ModernBERT prediction head:
         #
         # hidden
@@ -97,12 +100,6 @@ class ModernBertMaskedLM(MaskedLM):
         self.mlm_head_norm = layers.LayerNormalization(
             epsilon=backbone.layer_norm_epsilon,
             name="mlm_head_norm",
-        )
-
-        self.decoder = layers.Dense(
-            backbone.vocabulary_size,
-            use_bias=True,
-            name="decoder",
         )
 
         # Inputs
@@ -130,8 +127,11 @@ class ModernBertMaskedLM(MaskedLM):
 
         masked_sequence_output = self.mlm_head_norm(masked_sequence_output)
 
-        # Decoder
-        logits = self.decoder(masked_sequence_output)
+        # Tied decoder: reuse the backbone token embedding weights.
+        logits = backbone.token_embedding(
+            masked_sequence_output,
+            reverse=True,
+        )
 
         # Initialize MaskedLM
         super().__init__(
@@ -144,6 +144,3 @@ class ModernBertMaskedLM(MaskedLM):
             preprocessor=preprocessor,
             **kwargs,
         )
-
-        self.backbone = backbone
-        self.preprocessor = preprocessor

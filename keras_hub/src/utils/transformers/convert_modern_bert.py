@@ -9,48 +9,58 @@ from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = ModernBertBackbone
 
+# def convert_backbone_config(transformers_config):
+#     """Convert a Hugging Face ModernBERT config to KerasHub backbone params."""
 
+
+#     return {
+#         "vocabulary_size": transformers_config["vocab_size"],
+#         "hidden_dim": transformers_config["hidden_size"],
+#         "intermediate_dim": transformers_config["intermediate_size"],
+#         "num_layers": transformers_config["num_hidden_layers"],
+#         "num_heads": transformers_config["num_attention_heads"],
+#         "dropout": transformers_config["attention_dropout"],
+#         "local_attention_window": transformers_config["local_attention"],
+#         "global_attn_every_n_layers": transformers_config[
+#             "global_attn_every_n_layers"
+#         ],
+#         "rotary_max_wavelength": float(
+#             transformers_config["rope_parameters"]["full_attention"][
+#                 "rope_theta"
+#             ]
+#         ),
+#         "layer_norm_epsilon": transformers_config["norm_eps"],
+#     }
 def convert_backbone_config(transformers_config):
     """Convert a Hugging Face ModernBERT config to KerasHub backbone params."""
 
-    rope_theta = transformers_config.get("rope_theta")
-    if rope_theta is None:
-        rope_config = transformers_config.get("rope_config", {})
-        rope_theta = rope_config.get("rope_theta", 160000.0)
+    rope_parameters = transformers_config.get("rope_parameters", {})
+
+    global_rope = (
+        rope_parameters.get("full_attention")
+        or rope_parameters.get("global_attention")
+        or {}
+    )
+
+    rotary_max_wavelength = global_rope.get(
+        "rope_theta",
+        transformers_config.get("global_rope_theta", 160000.0),
+    )
 
     return {
-        "vocabulary_size": transformers_config.get("vocab_size", 50368),
-        "hidden_dim": transformers_config.get("hidden_size", 768),
-        "intermediate_dim": transformers_config.get("intermediate_size", 1152),
-        "num_layers": transformers_config.get("num_hidden_layers", 22),
-        "num_heads": transformers_config.get("num_attention_heads", 12),
-        "dropout": transformers_config.get("attention_dropout", 0.0),
-        "local_attention_window": transformers_config.get(
-            "local_attention", 128
-        ),
-        "global_attn_every_n_layers": transformers_config.get(
-            "global_attn_every_n_layers", 3
-        ),
-        "max_sequence_length": transformers_config.get(
-            "max_position_embeddings", 8192
-        ),
-        "rotary_max_wavelength": float(rope_theta),
-        "layer_norm_epsilon": transformers_config.get(
-            "norm_eps", transformers_config.get("layer_norm_eps", 1e-5)
-        ),
+        "vocabulary_size": transformers_config["vocab_size"],
+        "hidden_dim": transformers_config["hidden_size"],
+        "intermediate_dim": transformers_config["intermediate_size"],
+        "num_layers": transformers_config["num_hidden_layers"],
+        "num_heads": transformers_config["num_attention_heads"],
+        "dropout": transformers_config["attention_dropout"],
+        "local_attention_window": transformers_config["local_attention"],
+        "global_attn_every_n_layers": transformers_config[
+            "global_attn_every_n_layers"
+        ],
+        "rotary_max_wavelength": float(rotary_max_wavelength),
+        "layer_norm_epsilon": transformers_config["norm_eps"],
     }
-
-
-def _port_wqkv(hf_tensor, keras_shape, num_heads):
-    del keras_shape, num_heads
-
-    return hf_tensor.T
-
-
-def _port_wqkv_bias(hf_tensor, keras_shape, num_heads):
-    del keras_shape, num_heads
-
-    return hf_tensor
 
 
 def _split_wi(hf_tensor, keras_shape, index):
@@ -77,21 +87,16 @@ def _split_bias(hf_tensor, keras_shape, index):
 
 
 def _get_norm_variable(norm_layer):
-    """Extract weight/gamma/scale variable from Keras LayerNorm/RMSNorm."""
+    """Extract the scale variable from a normalization layer."""
     if norm_layer is None:
         return None
     if hasattr(norm_layer, "gamma") and norm_layer.gamma is not None:
         return norm_layer.gamma
-    if hasattr(norm_layer, "scale") and norm_layer.scale is not None:
-        return norm_layer.scale
-    if hasattr(norm_layer, "weights") and len(norm_layer.weights) > 0:
-        return norm_layer.weights[0]
     return None
 
 
 def convert_weights(backbone, loader, _):
     """Port HuggingFace ModernBERT weights into KerasHub backbone."""
-
     # Token Embeddings
     loader.port_weight(
         keras_variable=backbone.token_embedding.embeddings,
@@ -119,15 +124,12 @@ def convert_weights(backbone, loader, _):
             loader.port_weight(
                 keras_variable=keras_layer.attn.qkv.kernel,
                 hf_weight_key=f"layers.{index}.attn.Wqkv.weight",
-                hook_fn=lambda x, s: _port_wqkv(x, s, backbone.num_heads),
+                hook_fn=lambda x, _: np.transpose(x),
             )
             if getattr(keras_layer.attn.qkv, "bias", None) is not None:
                 loader.port_weight(
                     keras_variable=keras_layer.attn.qkv.bias,
                     hf_weight_key=f"layers.{index}.attn.Wqkv.bias",
-                    hook_fn=lambda x, s: _port_wqkv_bias(
-                        x, s, backbone.num_heads
-                    ),
                 )
 
         # Output Dense (Wo)

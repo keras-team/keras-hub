@@ -55,44 +55,26 @@ class ModernBertLayersTest(TestCase):
         )
 
         # ModernBertEncoderLayer
-        # Manual test as it is a composite layer
-        encoder = ModernBertEncoderLayer(
-            hidden_dim=16,
-            intermediate_dim=32,
-            num_heads=2,
-            layer_idx=1,
-            rotary_embedding=RotaryEmbedding(
-                max_wavelength=10000,
-                dtype=keras.config.dtype_policy(),
+        self.run_layer_test(
+            cls=ModernBertEncoderLayer,
+            init_kwargs={
+                "hidden_dim": 16,
+                "intermediate_dim": 32,
+                "num_heads": 2,
+                "layer_idx": 1,
+                "rotary_embedding": RotaryEmbedding(
+                    max_wavelength=10000,
+                    dtype=keras.config.dtype_policy(),
+                ),
+                "local_attention_window": 128,
+            },
+            input_data=ops.ones(
+                (2, 4, 16),
+                dtype=compute_dtype,
             ),
-            local_attention_window=128,
+            expected_output_shape=(2, 4, 16),
+            expected_num_trainable_weights=7,
         )
-
-        inputs = ops.ones(
-            (2, 4, 16),
-            dtype=compute_dtype,
-        )
-
-        outputs = encoder(inputs)
-
-        self.assertEqual(
-            outputs.shape,
-            (2, 4, 16),
-        )
-
-        self.assertEqual(
-            len(encoder.trainable_weights),
-            7,
-        )
-
-        for layer in encoder._flatten_layers(
-            include_self=True,
-            recursive=True,
-        ):
-            self.assertEqual(
-                layer.compute_dtype,
-                compute_dtype,
-            )
 
         # Attention masking logic
         attention = ModernBertAttention(
@@ -141,13 +123,10 @@ class ModernBertLayersTest(TestCase):
         )
 
         expected = [
+            [1, 1, 0, 0],
             [1, 1, 1, 0],
-            [1, 1, 1, 1],
-            [1, 1, 1, 1],
             [0, 1, 1, 1],
+            [0, 0, 1, 1],
         ]
 
-        self.assertAllClose(
-            mask,
-            expected,
-        )
+        self.assertAllClose(mask, expected)
