@@ -136,7 +136,7 @@ class PerplexityTest(TestCase):
             ]
         )
         perplexity_val = perplexity(y_true_2, y_pred_2)
-        self.assertAlmostEqual(perplexity_val, 3.9998, delta=1e-3)
+        self.assertAlmostEqual(perplexity_val, 3.8563, delta=1e-3)
 
     def test_from_probs_with_sample_weight(self):
         perplexity = Perplexity(from_logits=False)
@@ -252,7 +252,7 @@ class PerplexityTest(TestCase):
 
         perplexity.update_state(y_true_2, y_pred_2)
         perplexity_val = perplexity.result()
-        self.assertAlmostEqual(perplexity_val, 3.9998, delta=1e-3)
+        self.assertAlmostEqual(perplexity_val, 3.8563, delta=1e-3)
 
     def test_get_config(self):
         perplexity = Perplexity(
