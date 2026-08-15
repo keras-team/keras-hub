@@ -43,14 +43,15 @@ def test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_processor):
     # Keras input
     # The KerasHub preprocessor will prepend audio tokens if <audio> is missing.
     keras_inputs = {"audio": audio_data, "prompts": "transcribe"}
-    keras_output = keras_hub_model.generate(keras_inputs, max_length=20)
+    # Use max_length > prompt length (395) to see generation
+    keras_output = keras_hub_model.generate(keras_inputs, max_length=450)
     # generate returns strings when preprocessor is attached
     if isinstance(keras_output, dict):
         keras_output_text = keras_output["token_ids"]
         decoded_keras = keras_hub_tokenizer.detokenize(keras_output_text)
     else:
         decoded_keras = keras_output
-    print("🔶 KerasHub output:", decoded_keras)
+    print("🔶 KerasHub output (truncated):", decoded_keras[-100:])
 
     # HF input
     # HF processor expects audio as numpy array and text as prompt
@@ -68,7 +69,7 @@ def test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_processor):
     # HF generate
     outputs = hf_model.generate(
         **hf_inputs,
-        max_length=20,
+        max_new_tokens=20,
         do_sample=False,
     )
     hf_output_text = hf_processor.batch_decode(
