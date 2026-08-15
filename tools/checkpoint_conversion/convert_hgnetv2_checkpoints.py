@@ -48,7 +48,10 @@ UPLOAD_URI = flags.DEFINE_string(
 
 def validate_output(keras_model, hf_model):
     file = keras.utils.get_file(
-        origin="https://upload.wikimedia.org/wikipedia/commons/4/43/Cute_dog.jpg"
+        origin=(
+            "https://storage.googleapis.com/keras-cv/"
+            "models/paligemma/cow_beach_1.png"
+        )
     )
     image = Image.open(file)
     images = np.expand_dims(np.array(image).astype("float32"), axis=0)
