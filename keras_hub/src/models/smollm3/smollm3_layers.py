@@ -15,6 +15,7 @@ from keras_hub.src.models.smollm3.smollm3_utils import apply_rotary_pos_emb
 from keras_hub.src.models.smollm3.smollm3_utils import rope_init
 from keras_hub.src.vllm.attention import vllm_paged_attention
 from keras_hub.src.vllm.context import get_vllm_context
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
 class SmolLM3Attention(layers.Layer):
@@ -366,6 +367,18 @@ class SmolLM3Attention(layers.Layer):
         Returns:
             attention_output: Output tensor after applying attention.
         """
+        if fused_attention_op_available():
+            if attention_mask is not None:
+                attention_mask = ops.expand_dims(attention_mask, axis=1)
+                attention_mask = ops.cast(attention_mask, dtype="bool")
+            return ops.dot_product_attention(
+                query,
+                key,
+                value,
+                mask=attention_mask,
+                scale=self._inv_norm_factor,
+            )
+
         attention_scores = ops.einsum(self._dot_product_equation, query, key)
 
         attention_scores = ops.multiply(
