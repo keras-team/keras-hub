@@ -30,9 +30,6 @@ class SegFormerTest(TestCase):
             "image_encoder": image_encoder,
         }
 
-    def test_segformer_backbone_construction(self):
-        SegFormerBackbone(**self.init_kwargs)
-
     @pytest.mark.large
     def test_segformer_call(self):
         segformer_backbone = SegFormerBackbone(
@@ -41,10 +38,8 @@ class SegFormerTest(TestCase):
         )
 
         images = np.random.uniform(size=(2, 32, 32, 3))
-        segformer_output = segformer_backbone(images)
         segformer_predict = segformer_backbone.predict(images)
 
-        assert segformer_output.shape == (2, 8, 8, 256)
         assert segformer_predict.shape == (2, 8, 8, 256)
 
     def test_backbone_basics(self):

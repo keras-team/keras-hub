@@ -1,6 +1,5 @@
 import os
 
-import tensorflow as tf
 from keras.src.saving import serialization_lib
 
 from keras_hub.src.tests.test_case import TestCase
@@ -12,10 +11,35 @@ from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
 class SentencePieceTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
+        self._allow_python_workflow = True
         self.proto = os.path.join(
             self.get_test_data_dir(), "tokenizer_test_vocab.spm"
         )
-        self.tokenizer = SentencePieceTokenizer(proto=self.proto)
+        self.tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=SentencePieceTokenizer,
+            init_kwargs={
+                "proto": self.proto,
+                "_allow_python_workflow": self._allow_python_workflow,
+            },
+            input_data=[
+                "the quick brown fox.",
+                "the quick",
+                "the",
+                "quick brown fox.",
+            ],
+            expected_output=[
+                [6, 5, 3, 4],
+                [6, 5],
+                [6],
+                [5, 3, 4],
+            ],
+        )
 
     def test_tokenize(self):
         input_data = ["the quick brown fox."]
@@ -36,6 +60,7 @@ class SentencePieceTokenizerTest(TestCase):
         tokenizer = SentencePieceTokenizer(
             proto=self.proto,
             sequence_length=10,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output_data = tokenizer(input_data)
         self.assertAllEqual(output_data, [[6, 5, 3, 4, 0, 0, 0, 0, 0, 0]])
@@ -45,6 +70,7 @@ class SentencePieceTokenizerTest(TestCase):
         tokenizer = SentencePieceTokenizer(
             proto=self.proto,
             dtype="string",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output_data = tokenizer(input_data)
         self.assertAllEqual(
@@ -58,6 +84,7 @@ class SentencePieceTokenizerTest(TestCase):
             proto=self.proto,
             add_bos=True,
             add_eos=True,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output_data = tokenizer(input_data)
         self.assertAllEqual(output_data, [1, 6, 5, 3, 4, 2])
@@ -69,6 +96,7 @@ class SentencePieceTokenizerTest(TestCase):
             dtype="string",
             add_bos=True,
             add_eos=True,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output_data = tokenizer(input_data)
         self.assertAllEqual(
@@ -105,57 +133,12 @@ class SentencePieceTokenizerTest(TestCase):
     def test_from_bytes(self):
         with open(self.proto, "rb") as file:
             proto = file.read()
-        tokenizer = SentencePieceTokenizer(proto=proto)
+        tokenizer = SentencePieceTokenizer(
+            proto=proto,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
         output_data = tokenizer(["the quick brown fox."])
         self.assertAllEqual(output_data, [[6, 5, 3, 4]])
-
-    def test_tokenize_then_batch(self):
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox.", "the quick", "the", "quick brown fox."]
-        )
-        ds = ds.map(self.tokenizer).apply(
-            tf.data.experimental.dense_to_ragged_batch(4)
-        )
-        output_data = ds.take(1).get_single_element()
-
-        expected = [
-            [6, 5, 3, 4],
-            [6, 5],
-            [6],
-            [5, 3, 4],
-        ]
-        for i in range(4):
-            self.assertAllEqual(output_data[i], expected[i])
-
-    def test_batch_then_tokenize(self):
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox.", "the quick", "the", "quick brown fox."]
-        )
-        ds = ds.batch(4).map(self.tokenizer)
-        output_data = ds.take(1).get_single_element()
-
-        expected = [
-            [6, 5, 3, 4],
-            [6, 5],
-            [6],
-            [5, 3, 4],
-        ]
-        for i in range(4):
-            self.assertAllEqual(output_data[i], expected[i])
-
-    def test_config(self):
-        input_data = ["the quick brown whale."]
-        original_tokenizer = SentencePieceTokenizer(
-            proto=self.proto,
-        )
-        cloned_tokenizer = SentencePieceTokenizer.from_config(
-            original_tokenizer.get_config()
-        )
-        cloned_tokenizer.set_proto(original_tokenizer.proto)
-        self.assertAllEqual(
-            original_tokenizer(input_data),
-            cloned_tokenizer(input_data),
-        )
 
     def test_safe_mode_proto_file_disallowed(self):
         temp_dir = self.get_temp_dir()
@@ -178,65 +161,8 @@ class SentencePieceTokenizerTFTest(SentencePieceTokenizerTest):
 
     def setUp(self):
         super().setUp()
+        self._allow_python_workflow = False
         self.tokenizer = SentencePieceTokenizer(
             proto=self.proto,
-            _allow_python_workflow=False,
+            _allow_python_workflow=self._allow_python_workflow,
         )
-
-    def test_dense_output(self):
-        input_data = ["the quick brown fox."]
-        tokenizer = SentencePieceTokenizer(
-            proto=self.proto,
-            sequence_length=10,
-            _allow_python_workflow=False,
-        )
-        output_data = tokenizer(input_data)
-        self.assertAllEqual(output_data, [[6, 5, 3, 4, 0, 0, 0, 0, 0, 0]])
-
-    def test_string_tokenize(self):
-        input_data = ["the quick brown fox."]
-        tokenizer = SentencePieceTokenizer(
-            proto=self.proto,
-            dtype="string",
-            _allow_python_workflow=False,
-        )
-        output_data = tokenizer(input_data)
-        self.assertAllEqual(
-            output_data,
-            [["▁the", "▁quick", "▁brown", "▁fox."]],
-        )
-
-    def test_scalar_bos_eos(self):
-        input_data = "the quick brown fox."
-        tokenizer = SentencePieceTokenizer(
-            proto=self.proto,
-            add_bos=True,
-            add_eos=True,
-            _allow_python_workflow=False,
-        )
-        output_data = tokenizer(input_data)
-        self.assertAllEqual(output_data, [1, 6, 5, 3, 4, 2])
-
-    def test_string_bos_eos(self):
-        input_data = ["the quick brown fox."]
-        tokenizer = SentencePieceTokenizer(
-            proto=self.proto,
-            dtype="string",
-            add_bos=True,
-            add_eos=True,
-            _allow_python_workflow=False,
-        )
-        output_data = tokenizer(input_data)
-        self.assertAllEqual(
-            output_data, [["<s>", "▁the", "▁quick", "▁brown", "▁fox.", "</s>"]]
-        )
-
-    def test_from_bytes(self):
-        with open(self.proto, "rb") as file:
-            proto = file.read()
-        tokenizer = SentencePieceTokenizer(
-            proto=proto,
-            _allow_python_workflow=False,
-        )
-        output_data = tokenizer(["the quick brown fox."])
-        self.assertAllEqual(output_data, [[6, 5, 3, 4]])

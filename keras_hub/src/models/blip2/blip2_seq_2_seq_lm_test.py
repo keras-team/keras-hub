@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
 from keras_hub.src.models.blip2.blip2_flan_t5_lm import BLIP2FlanT5
@@ -97,6 +98,51 @@ class BLIP2Seq2SeqLMTest(TestCase):
                 self.preprocessor.tokenizer.vocabulary_size(),
             ),
         )
+
+    def test_cached_decoding_matches_uncached_forward_pass(self):
+        """Cached decoding must match recomputing the decoder every step."""
+        seq_2_seq_lm = BLIP2Seq2SeqLM(**self.init_kwargs)
+        lm_head = seq_2_seq_lm.backbone.language_model.lm_head
+        images = np.ones((2, 32, 32, 3), dtype="float32")
+        encoder_token_ids = ops.array([[4, 9, 5, 7, 1]] * 2, "int32")
+        encoder_padding_mask = ops.ones((2, 5), "int32")
+        decoder_token_ids = ops.array([[0, 4, 6, 8, 10]] * 2, "int32")
+        decoder_length = 5
+
+        encoder_hidden_states, encoder_attention_mask = (
+            seq_2_seq_lm.call_encoder(
+                encoder_token_ids, encoder_padding_mask, images
+            )
+        )
+        # Reference: a single uncached pass over the whole decoder sequence.
+        expected_logits = lm_head(
+            seq_2_seq_lm.call_decoder(
+                decoder_token_ids,
+                ops.ones((2, decoder_length), "int32"),
+                encoder_hidden_states,
+                encoder_attention_mask,
+            )
+        )
+
+        _, self_cache, cross_cache = seq_2_seq_lm._build_cache(
+            encoder_hidden_states, encoder_attention_mask, decoder_token_ids
+        )
+        for index in range(decoder_length):
+            logits, _, self_cache, _ = seq_2_seq_lm.call_decoder_with_cache(
+                decoder_token_ids=decoder_token_ids[:, index : index + 1],
+                encoder_hidden_states=encoder_hidden_states,
+                encoder_attention_mask=encoder_attention_mask,
+                self_attention_cache=self_cache,
+                self_attention_cache_update_index=index,
+                cross_attention_cache=cross_cache,
+                cross_attention_cache_update_index=None,
+            )
+            self.assertAllClose(
+                logits[:, 0, :],
+                expected_logits[:, index, :],
+                atol=1e-4,
+                rtol=1e-4,
+            )
 
     def test_generate_compilation(self):
         seq_2_seq_lm = BLIP2Seq2SeqLM(**self.init_kwargs)

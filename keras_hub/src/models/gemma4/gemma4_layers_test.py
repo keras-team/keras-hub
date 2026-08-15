@@ -93,10 +93,7 @@ class Gemma4MeanPoolingTest(TestCase, parameterized.TestCase):
     def test_config_serialization(self):
         """Tests that the layer can be successfully saved and loaded."""
         layer = Gemma4MeanPooling(name="mean_pooling_test")
-        config = layer.get_config()
-        new_layer = Gemma4MeanPooling.from_config(config)
-        self.assertEqual(new_layer.name, layer.name)
-        self.assertIsInstance(new_layer, Gemma4MeanPooling)
+        self.run_serialization_test(layer)
 
 
 class Gemma4InterleaveEmbeddingsTest(TestCase):
@@ -184,9 +181,4 @@ class Gemma4InterleaveEmbeddingsTest(TestCase):
             num_vision_tokens_per_image=4,
             name="interleave_test",
         )
-        config = layer.get_config()
-        new_layer = Gemma4InterleaveEmbeddings.from_config(config)
-        self.assertEqual(
-            new_layer.num_vision_tokens_per_image,
-            layer.num_vision_tokens_per_image,
-        )
+        self.run_serialization_test(layer)
