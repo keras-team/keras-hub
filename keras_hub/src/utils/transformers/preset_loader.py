@@ -34,6 +34,7 @@ from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_sam3
 from keras_hub.src.utils.transformers import convert_smollm3
+from keras_hub.src.utils.transformers import convert_smolvlm2
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_t5gemma2
 from keras_hub.src.utils.transformers import convert_vit
@@ -108,6 +109,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_xlm_roberta
         elif model_type == "smollm3":
             self.converter = convert_smollm3
+        elif model_type == "smolvlm":
+            self.converter = convert_smolvlm2
         elif model_type == "t5gemma":
             self.converter = convert_t5gemma
         elif model_type == "t5gemma2":
