@@ -4,7 +4,9 @@ Usage:
     export KAGGLE_USERNAME=XXX
     export KAGGLE_KEY=XXX
 
-    python tools/checkpoint_conversion/convert_hgnetv2_checkpoints.py
+    python tools/checkpoint_conversion/convert_hgnetv2_checkpoints.py \
+        --preset hgnetv2_b4_ssld_stage2_ft_in1k \
+        --upload_uri kaggle://keras/hgnetv2/keras/hgnetv2_b4_ssld_stage2_ft_in1k
 """
 
 import os
@@ -23,8 +25,6 @@ from keras_hub.src.utils.imagenet.imagenet_utils import (
     decode_imagenet_predictions,
 )
 
-FLAGS = flags.FLAGS
-
 PRESET_MAP = {
     "hgnetv2_b6_ssld_stage2_ft_in1k": "timm/hgnetv2_b6.ssld_stage2_ft_in1k",
     "hgnetv2_b6_ssld_stage1_in22k_in1k": "timm/hgnetv2_b6.ssld_stage1_in22k_in1k",  # noqa: E501
@@ -33,11 +33,16 @@ PRESET_MAP = {
     "hgnetv2_b4_ssld_stage2_ft_in1k": "timm/hgnetv2_b4.ssld_stage2_ft_in1k",
 }
 
-flags.DEFINE_string(
+PRESET = flags.DEFINE_string(
+    "preset",
+    None,
+    f"Must be one of {','.join(PRESET_MAP.keys())}",
+    required=True,
+)
+UPLOAD_URI = flags.DEFINE_string(
     "upload_uri",
     None,
     'Could be "kaggle://keras/hgnetv2/keras/{preset}"',
-    required=False,
 )
 
 
@@ -80,32 +85,34 @@ def validate_output(keras_model, hf_model):
 
 
 def main(_):
-    for preset, hf_preset in PRESET_MAP.items():
-        if os.path.exists(preset):
-            shutil.rmtree(preset)
-
-        print(f"\nConverting {preset}")
-        hf_model = create_model(hf_preset, pretrained=True)
-        hf_model.eval()
-
-        # `ImageClassifier.from_preset` dispatches through
-        # `convert_hgnetv2.py`, which handles config translation and weight
-        # porting directly from the Hugging Face safetensors checkpoint.
-        keras_model = keras_hub.models.ImageClassifier.from_preset(
-            f"hf://{hf_preset}"
+    preset = PRESET.value
+    if preset not in PRESET_MAP:
+        raise ValueError(
+            f"Invalid preset {preset}. "
+            f"Must be one of {','.join(PRESET_MAP.keys())}"
         )
-        print("KerasHub model loaded.")
+    hf_preset = PRESET_MAP[preset]
+    if os.path.exists(preset):
+        shutil.rmtree(preset)
 
-        validate_output(keras_model, hf_model)
+    print(f"\nConverting {preset}")
+    hf_model = create_model(hf_preset, pretrained=True)
+    hf_model.eval()
 
-        keras_model.save_to_preset(f"./{preset}")
-        print(f"Preset saved to ./{preset}.")
+    keras_model = keras_hub.models.ImageClassifier.from_preset(
+        f"hf://{hf_preset}"
+    )
+    print("KerasHub model loaded.")
 
-        upload_uri = FLAGS.upload_uri
-        if upload_uri:
-            keras_hub.upload_preset(uri=upload_uri, preset=f"./{preset}")
-            print(f"Successfully uploaded {preset} to {upload_uri}")
-    print("\nAll presets validated and saved successfully!")
+    validate_output(keras_model, hf_model)
+
+    keras_model.save_to_preset(f"./{preset}")
+    print(f"Preset saved to ./{preset}.")
+
+    upload_uri = UPLOAD_URI.value
+    if upload_uri:
+        keras_hub.upload_preset(uri=upload_uri, preset=f"./{preset}")
+        print(f"Successfully uploaded {preset} to {upload_uri}")
 
 
 if __name__ == "__main__":
