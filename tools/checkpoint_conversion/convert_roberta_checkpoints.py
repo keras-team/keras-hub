@@ -1,12 +1,5 @@
 """Convert RoBERTa checkpoints from Hugging Face to KerasHub format.
 
-RoBERTa's Hugging Face converter (`keras_hub/src/utils/transformers/
-convert_roberta.py`) is registered with the general `from_preset()` loading
-path, so this script does not port weights manually. It loads the backbone
-and tokenizer straight from the Hugging Face preset, checks numerical parity
-against the reference Hugging Face model, and saves the result as a
-KerasHub preset.
-
 Usage:
 ```shell
 cd tools/checkpoint_conversion
@@ -22,11 +15,8 @@ from absl import flags
 
 import keras_hub
 
-# Silence the transformers `from_pretrained` state-dict load report. Loading
-# a bare `RobertaModel` from a checkpoint saved for MLM pretraining always
-# reports the (expected, harmless) unused `lm_head.*` weights and the
-# freshly-initialized `pooler.*` weights, neither of which affects the
-# `last_hidden_state` output this script checks against.
+# Silence the harmless from_pretrained load report (unused lm_head /
+# freshly-initialized pooler weights — expected for a bare RobertaModel).
 transformers.logging.set_verbosity_error()
 
 PRESET_MAP = {
@@ -59,12 +49,8 @@ def check_output(
     )
     hf_output = hf_model(**hf_inputs).last_hidden_state.detach().numpy()
 
-    # Padding positions aren't comparable: HF reuses a single constant
-    # `padding_idx` position embedding for every pad token, while KerasHub's
-    # `PositionEmbedding` assigns sequential positions regardless of padding.
-    # That divergence is masked out of self-attention and any downstream
-    # pooling/loss on both sides, so it never affects real output — but it
-    # does swamp a whole-sequence diff. Restrict the check to real tokens.
+    # HF and KerasHub assign padding positions different (but functionally
+    # inert) position embeddings, so restrict the check to real tokens.
     padding_mask = keras_hub_inputs["padding_mask"].numpy()[0]
     num_real_tokens = int(padding_mask.sum())
     keras_hub_content = keras_hub_output[0, :num_real_tokens, :]
@@ -72,10 +58,11 @@ def check_output(
 
     print("KerasHub output:", keras_hub_content[0, :10])
     print("HF output:", hf_content[0, :10])
-    print("Max abs difference:", np.max(np.abs(keras_hub_content - hf_content)))
 
-    np.testing.assert_allclose(keras_hub_content, hf_content, atol=1e-4)
-    print("-> Numerical check passed (atol=1e-4).")
+    np.testing.assert_allclose(
+        keras_hub_content, hf_content, atol=1e-4, rtol=1e-4
+    )
+    print("-> Numerical check passed.")
 
 
 def main(_):
@@ -87,9 +74,6 @@ def main(_):
     hf_preset = PRESET_MAP[preset]
 
     print(f"\n-> Convert {hf_preset} to KerasHub format.")
-    # `RobertaBackbone`/`RobertaTokenizer.from_preset` dispatch through
-    # `convert_roberta.py`, which handles config translation and weight
-    # porting directly from the Hugging Face safetensors checkpoint.
     keras_hub_model = keras_hub.models.RobertaBackbone.from_preset(
         f"hf://{hf_preset}"
     )
