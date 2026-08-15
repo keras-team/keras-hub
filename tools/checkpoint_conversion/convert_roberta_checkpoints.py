@@ -22,6 +22,13 @@ from absl import flags
 
 import keras_hub
 
+# Silence the transformers `from_pretrained` state-dict load report. Loading
+# a bare `RobertaModel` from a checkpoint saved for MLM pretraining always
+# reports the (expected, harmless) unused `lm_head.*` weights and the
+# freshly-initialized `pooler.*` weights, neither of which affects the
+# `last_hidden_state` output this script checks against.
+transformers.logging.set_verbosity_error()
+
 PRESET_MAP = {
     "roberta_base_en": "FacebookAI/roberta-base",
     "roberta_large_en": "FacebookAI/roberta-large",
@@ -50,11 +57,25 @@ def check_output(
     hf_inputs = hf_tokenizer(
         input_str, padding="max_length", return_tensors="pt"
     )
-    hf_output = hf_model(**hf_inputs).last_hidden_state
+    hf_output = hf_model(**hf_inputs).last_hidden_state.detach().numpy()
 
-    print("KerasHub output:", keras_hub_output[0, 0, :10])
-    print("HF output:", hf_output[0, 0, :10])
-    print("Difference:", np.mean(keras_hub_output - hf_output.detach().numpy()))
+    # Padding positions aren't comparable: HF reuses a single constant
+    # `padding_idx` position embedding for every pad token, while KerasHub's
+    # `PositionEmbedding` assigns sequential positions regardless of padding.
+    # That divergence is masked out of self-attention and any downstream
+    # pooling/loss on both sides, so it never affects real output — but it
+    # does swamp a whole-sequence diff. Restrict the check to real tokens.
+    padding_mask = keras_hub_inputs["padding_mask"].numpy()[0]
+    num_real_tokens = int(padding_mask.sum())
+    keras_hub_content = keras_hub_output[0, :num_real_tokens, :]
+    hf_content = hf_output[0, :num_real_tokens, :]
+
+    print("KerasHub output:", keras_hub_content[0, :10])
+    print("HF output:", hf_content[0, :10])
+    print("Max abs difference:", np.max(np.abs(keras_hub_content - hf_content)))
+
+    np.testing.assert_allclose(keras_hub_content, hf_content, atol=1e-4)
+    print("-> Numerical check passed (atol=1e-4).")
 
 
 def main(_):
