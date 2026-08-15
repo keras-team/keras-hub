@@ -153,7 +153,7 @@ class BLIP2FlanT5Test(TestCase):
         out = self.model(data)
         self.assertNotAllClose(out[0], out[1])
 
-    def test_config_round_trip(self):
+    def test_config_contains_expected_keys(self):
         cfg = self.model.get_config()
         self.assertIn("language_projection", cfg)
         self.assertIn("lm_head", cfg)
