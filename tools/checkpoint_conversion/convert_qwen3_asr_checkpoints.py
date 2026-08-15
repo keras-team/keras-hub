@@ -15,6 +15,7 @@ device = torch.device("cpu")
 torch.set_default_device(device)
 
 import keras  # noqa: E402
+from keras import ops  # noqa: E402
 from transformers import AutoModelForSpeechSeq2Seq  # noqa: E402
 from transformers import AutoProcessor  # noqa: E402
 
@@ -48,10 +49,34 @@ def test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_processor):
     # generate returns strings when preprocessor is attached
     if isinstance(keras_output, dict):
         keras_output_text = keras_output["token_ids"]
-        decoded_keras = keras_hub_tokenizer.detokenize(keras_output_text)
+        decoded_keras = keras_hub_tokenizer.detokenize(
+            keras_output_text, skip_special_tokens=True
+        )
     else:
-        decoded_keras = keras_output
-    print("🔶 KerasHub output (truncated):", decoded_keras[-100:])
+        # If it returned a string, we detokenize again with skip_special_tokens
+        # To match HF, we just take the generated part.
+        # But for testing, let's just use the tokenizer directly on IDs.
+        # We need the token IDs from generate.
+        # Let's call generate with preprocessor=None to get IDs.
+        old_preprocessor = keras_hub_model.preprocessor
+        keras_hub_model.preprocessor = None
+        # Preprocess manually
+        preprocessed = old_preprocessor(keras_inputs)
+        # Add batch dimension as preprocessor squeezes for single dict inputs
+        preprocessed = {
+            k: ops.expand_dims(v, 0)
+            if ops.ndim(v) < (3 if k == "audio_mel" else 2)
+            else v
+            for k, v in preprocessed.items()
+        }
+
+        keras_output = keras_hub_model.generate(
+            preprocessed, max_length=450, stop_token_ids=None
+        )
+        decoded_keras = keras_hub_tokenizer.detokenize(
+            keras_output["token_ids"], skip_special_tokens=True
+        )
+        keras_hub_model.preprocessor = old_preprocessor
 
     # HF input
     # HF processor expects audio as numpy array and text as prompt
@@ -75,7 +100,15 @@ def test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_processor):
     hf_output_text = hf_processor.batch_decode(
         outputs, skip_special_tokens=True
     )[0]
-    print("🔶 Huggingface output:", hf_output_text)
+
+    # Clean up both for comparison (strip the 'transcribe' prompt)
+    if isinstance(decoded_keras, list):
+        decoded_keras = decoded_keras[0]
+    keras_final = decoded_keras.replace("transcribe", "").strip()
+    hf_final = hf_output_text.replace("transcribe", "").strip()
+
+    print("🔶 KerasHub output:", keras_final)
+    print("🔶 Huggingface output:", hf_final)
 
 
 def main(_):

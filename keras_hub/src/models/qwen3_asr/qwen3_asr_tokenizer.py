@@ -49,3 +49,15 @@ class Qwen3ASRTokenizer(BytePairTokenizer):
             merges=merges,
             **kwargs,
         )
+
+    def detokenize(self, inputs, skip_special_tokens=False):
+        """Convert a list of integer ids to a string."""
+        if skip_special_tokens:
+            self._maybe_initialized_tokenizers()
+            # Tokenizers library decode supports skipping special tokens.
+            res = self._tokenizer.decode_batch(
+                [inputs] if isinstance(inputs[0], int) else inputs,
+                skip_special_tokens=True,
+            )
+            return res[0] if isinstance(inputs[0], int) else res
+        return super().detokenize(inputs)
