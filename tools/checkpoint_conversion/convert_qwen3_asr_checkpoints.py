@@ -15,7 +15,7 @@ device = torch.device("cpu")
 torch.set_default_device(device)
 
 import keras  # noqa: E402
-from transformers import AutoModelForCausalLM  # noqa: E402
+from transformers import AutoModelForSpeechSeq2Seq  # noqa: E402
 from transformers import AutoProcessor  # noqa: E402
 
 import keras_hub  # noqa: E402
@@ -35,26 +35,32 @@ flags.DEFINE_string(
 def test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_processor):
     # Test with dummy/synthetic audio
     sample_rate = 16000
+    # Use 30 seconds to match model default max_audio_length
     audio_data = np.sin(
-        2 * np.pi * 440 * np.arange(sample_rate * 3) / sample_rate
+        2 * np.pi * 440 * np.arange(sample_rate * 30) / sample_rate
     ).astype("float32")
 
     # Keras input
+    # The KerasHub preprocessor will prepend audio tokens if <audio> is missing.
     keras_inputs = {"audio": audio_data, "prompts": "transcribe"}
     keras_output = keras_hub_model.generate(keras_inputs, max_length=20)
-    keras_output_text = keras_output[
-        "token_ids"
-    ]  # generate returns dict or tensor depending on preprocessor
-    # Actually preprocessor returns dict, so generate returns dict.
-    # We need to decode it.
-    decoded_keras = keras_hub_tokenizer.detokenize(keras_output_text)
+    # generate returns strings when preprocessor is attached
+    if isinstance(keras_output, dict):
+        keras_output_text = keras_output["token_ids"]
+        decoded_keras = keras_hub_tokenizer.detokenize(keras_output_text)
+    else:
+        decoded_keras = keras_output
     print("🔶 KerasHub output:", decoded_keras)
 
     # HF input
     # HF processor expects audio as numpy array and text as prompt
+    # Use <|audio_pad|> which the processor will replace with the correct
+    # sequence. We also add start/end tokens manually as they are usually
+    # expected.
+    hf_prompt = "<|audio_start|><|audio_pad|><|audio_end|>\ntranscribe"
     hf_inputs = hf_processor(
-        text="transcribe",
-        audios=audio_data,
+        text=hf_prompt,
+        audio=audio_data,
         sampling_rate=16000,
         return_tensors="pt",
     ).to(device)
@@ -82,12 +88,16 @@ def main(_):
 
     # === Load the Huggingface model ===
     print(f"Loading HF model {hf_preset}...")
-    hf_model = AutoModelForCausalLM.from_pretrained(
+    hf_model = AutoModelForSpeechSeq2Seq.from_pretrained(
         hf_preset,
         device_map=device,
         torch_dtype=torch.float32,
+        trust_remote_code=True,
     )
-    hf_processor = AutoProcessor.from_pretrained(hf_preset)
+    hf_processor = AutoProcessor.from_pretrained(
+        hf_preset,
+        trust_remote_code=True,
+    )
     hf_model.eval()
 
     print(f"Loading Keras Hub model hf://{hf_preset}...")

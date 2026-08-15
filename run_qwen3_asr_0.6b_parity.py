@@ -60,9 +60,8 @@ def verify_parity(keras_model, hf_model, hf_processor):
         hf_full_outputs = hf_model(input_ids=hf_tokens)
         hf_full_logits = to_numpy(hf_full_outputs.logits)
 
-    print(
-        f"Max Text-Only Logits Difference: {np.max(np.abs(keras_logits - hf_full_logits)):.6e}"
-    )
+    diff = np.max(np.abs(keras_logits - hf_full_logits))
+    print(f"Max Text-Only Logits Difference: {diff:.6e}")
 
     # 2. Check RoPE parity
     print("\n--- RoPE Parity Check (Layer 0) ---")
