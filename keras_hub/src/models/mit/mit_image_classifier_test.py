@@ -3,6 +3,10 @@ import pytest
 
 from keras_hub.src.models.mit.mit_backbone import MiTBackbone
 from keras_hub.src.models.mit.mit_image_classifier import MiTImageClassifier
+from keras_hub.src.models.mit.mit_image_classifier_preprocessor import (
+    MiTImageClassifierPreprocessor,
+)
+from keras_hub.src.models.mit.mit_image_converter import MiTImageConverter
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -10,7 +14,7 @@ class MiTImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
         self.images = np.ones((2, 32, 32, 3), dtype="float32")
-        self.labels = [0, 3]
+        self.labels = [0, 1]
         self.backbone = MiTBackbone(
             layerwise_depths=[2, 2, 2, 2],
             image_shape=(32, 32, 3),
@@ -26,6 +30,9 @@ class MiTImageClassifierTest(TestCase):
             "backbone": self.backbone,
             "num_classes": 2,
             "activation": "softmax",
+            "preprocessor": MiTImageClassifierPreprocessor(
+                image_converter=MiTImageConverter(image_size=(32, 32))
+            ),
         }
         self.train_data = (
             self.images,
@@ -33,14 +40,11 @@ class MiTImageClassifierTest(TestCase):
         )
 
     def test_classifier_basics(self):
-        pytest.skip(
-            reason="TODO: enable after preprocessor flow is figured out"
-        )
         self.run_task_test(
             cls=MiTImageClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(4, 4),
+            expected_output_shape=(2, 2),
         )
 
     @pytest.mark.large
