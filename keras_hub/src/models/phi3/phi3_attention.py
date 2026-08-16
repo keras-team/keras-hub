@@ -241,7 +241,9 @@ class Phi3Attention(keras.layers.Layer):
         token decoded past the pretraining length still gets long-context
         frequencies.
         """
-        positions = ops.reshape(vllm_context.positions, (-1, 1))
+        positions = ops.reshape(
+            vllm_context.positions, ops.shape(hidden_states)[:-1]
+        )
         query = self.rotary_embedding_layer(
             self.query_dense(hidden_states), positions=positions
         )

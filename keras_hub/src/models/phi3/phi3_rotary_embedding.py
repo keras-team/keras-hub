@@ -80,7 +80,7 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
             positions = ops.expand_dims(positions, axis=batch_axis)
         else:
             positions = ops.cast(positions, "float32")
-            if len(ops.shape(positions)) == 1:
+            if ops.ndim(positions) == 1:
                 positions = ops.expand_dims(positions, axis=batch_axis)
 
         # Multiply inverse_freq by a factor, chosen by how far into the
