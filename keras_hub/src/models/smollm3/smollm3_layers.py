@@ -138,10 +138,7 @@ class SmolLM3Attention(layers.Layer):
         self.q_proj.build(hidden_states_shape)
         self.k_proj.build(hidden_states_shape)
         self.v_proj.build(hidden_states_shape)
-        # Build the rotary embedding here too. Left unbuilt, it builds on its
-        # first call instead, which under a serving engine happens inside a
-        # traced function -- and marking a layer built is a mutation the trace
-        # rejects.
+        # Build the rotary embedding here as well.
         self.rotary_embedding.build(hidden_states_shape)
         super().build(input_shape)
 
@@ -338,10 +335,8 @@ class SmolLM3Attention(layers.Layer):
                 query, key, cos, sin, expansion_axis=2
             )
 
-        # This family's rotary computes in float32, and bfloat16 times
-        # float32 promotes, so query and key come back wider than the paged
-        # KV cache, which follows the model's dtype. The kernel compares the
-        # two and refuses the mismatch.
+        # This rotary computes in float32, which promotes query and key
+        # past the KV cache's dtype. The kernel rejects the mismatch.
         query = ops.cast(query, self.compute_dtype)
         key = ops.cast(key, self.compute_dtype)
         value = ops.cast(value, self.compute_dtype)
