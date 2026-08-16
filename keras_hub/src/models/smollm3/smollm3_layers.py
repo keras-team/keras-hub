@@ -13,9 +13,9 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 )
 from keras_hub.src.models.smollm3.smollm3_utils import apply_rotary_pos_emb
 from keras_hub.src.models.smollm3.smollm3_utils import rope_init
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.vllm.attention import vllm_paged_attention
 from keras_hub.src.vllm.context import get_vllm_context
-from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
 class SmolLM3Attention(layers.Layer):
@@ -332,7 +332,7 @@ class SmolLM3Attention(layers.Layer):
         value = ops.reshape(self.v_proj(hidden_states), kv_shape)
 
         if self.use_rope:
-            positions = ops.reshape(vllm_context.positions, (-1, 1))
+            positions = ops.reshape(vllm_context.positions, input_shape)
             cos, sin = self.rotary_embedding(query, positions=positions)
             query, key = apply_rotary_pos_emb(
                 query, key, cos, sin, expansion_axis=2
@@ -778,7 +778,7 @@ class SmolLM3RotaryEmbedding(layers.Layer):
             inv_freq_expanded, (batch_size, ops.shape(self.inv_freq)[0], 1)
         )
 
-        if len(ops.shape(positions)) == 1:
+        if ops.ndim(positions) == 1:
             # positions: (seq_len,) -> (1, 1, seq_len)
             # -> (batch, 1, seq_len)
             position_ids_expanded = ops.expand_dims(
