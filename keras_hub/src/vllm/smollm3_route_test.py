@@ -4,6 +4,7 @@ Drives a real `SmolLM3Attention` with a recording stand-in kernel, so no TPU
 or vLLM install is needed.
 """
 
+from keras import backend
 from keras import ops
 
 from keras_hub.src.models.smollm3.smollm3_layers import SmolLM3Attention
@@ -34,6 +35,40 @@ class SmolLM3RouteTest(TestCase):
         # SmolLM3Attention.build takes a list of input shapes.
         layer.build([ops.shape(inputs)])
         return layer, inputs
+
+    def test_route_hands_the_kernel_the_layers_dtype(self):
+        """The rotary computes in float32, and bfloat16 times float32
+        promotes. The paged KV cache follows the model dtype, and the kernel
+        refuses q/k/v that are wider than it."""
+        layer = SmolLM3Attention(
+            hidden_size=16,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            attention_bias=False,
+            attention_dropout=0.0,
+            rope_layer_enabled_list=[True],
+            layer_types=["attention"],
+            layer_idx=0,
+            dtype="bfloat16",
+        )
+        inputs = ops.ones((3, 1, 16), dtype="bfloat16")
+        layer.build([ops.shape(inputs)])
+
+        kernel = RecordingKernel()
+        activate_serving(
+            kernel,
+            kv_caches=["SC0"],
+            positions=ops.convert_to_tensor([0, 1, 2]),
+        )
+        layer(inputs)
+
+        call = kernel.calls[0]
+        for name in ("q", "k", "v"):
+            self.assertEqual(
+                backend.standardize_dtype(call[name].dtype),
+                "bfloat16",
+                f"{name} reached the kernel wider than the KV cache",
+            )
 
     def test_route_passes_unexpanded_kv_heads_and_scale(self):
         layer, inputs = self._build_layer()

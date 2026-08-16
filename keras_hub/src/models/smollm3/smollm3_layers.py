@@ -338,6 +338,14 @@ class SmolLM3Attention(layers.Layer):
                 query, key, cos, sin, expansion_axis=2
             )
 
+        # This family's rotary computes in float32, and bfloat16 times
+        # float32 promotes, so query and key come back wider than the paged
+        # KV cache, which follows the model's dtype. The kernel compares the
+        # two and refuses the mismatch.
+        query = ops.cast(query, self.compute_dtype)
+        key = ops.cast(key, self.compute_dtype)
+        value = ops.cast(value, self.compute_dtype)
+
         attention_output = vllm_paged_attention(
             query,
             key,
