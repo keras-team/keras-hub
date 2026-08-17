@@ -1,4 +1,5 @@
 import pytest
+from keras import backend
 from keras import ops
 
 from keras_hub.src.models.vae.vae_backbone import VAEBackbone
@@ -34,6 +35,10 @@ class VAEBackboneTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        condition=backend.backend() == "torch",
+        reason="VAE's pow ops fail TFLite legalization (tfl.pow).",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=VAEBackbone,

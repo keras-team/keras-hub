@@ -1,6 +1,9 @@
 import numpy as np
 
 from keras_hub.src.models.bert.bert_backbone import BertBackbone
+from keras_hub.src.models.xlm_roberta.xlm_roberta_tokenizer import (
+    XLMRobertaTokenizer,
+)
 from keras_hub.src.utils.preset_utils import HF_TOKENIZER_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
@@ -16,6 +19,7 @@ def convert_backbone_config(transformers_config):
         "num_heads": transformers_config["num_attention_heads"],
         "hidden_dim": transformers_config["hidden_size"],
         "intermediate_dim": transformers_config["intermediate_size"],
+        "max_sequence_length": transformers_config["max_position_embeddings"],
     }
 
 
@@ -154,6 +158,11 @@ def convert_weights(backbone, loader, transformers_config):
 
 def convert_tokenizer(cls, preset, **kwargs):
     transformers_config = load_json(preset, HF_TOKENIZER_CONFIG_FILE)
+    # Some models (e.g. multilingual-e5) use XLM-RoBERTa SentencePiece.
+    if "XLMRoberta" in transformers_config.get("tokenizer_class", ""):
+        return XLMRobertaTokenizer(
+            proto=get_file(preset, "sentencepiece.bpe.model"), **kwargs
+        )
     return cls(
         get_file(preset, "vocab.txt"),
         lowercase=transformers_config["do_lower_case"],

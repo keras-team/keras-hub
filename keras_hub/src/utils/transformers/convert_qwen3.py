@@ -1,9 +1,42 @@
 import numpy as np
 
 from keras_hub.src.models.qwen3.qwen3_backbone import Qwen3Backbone
+from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = Qwen3Backbone
+
+
+def load_task_config(preset, transformers_config):
+    """Detect sentence-transformer pipeline settings.
+
+    Reads two sentence-transformer config files when available:
+
+    - ``modules.json``: determines whether L2 normalization is applied.
+    - ``1_Pooling/config.json``: determines the pooling strategy
+      (mean or last).
+
+    Returns kwargs suitable for ``Qwen3TextEmbedder``.
+    """
+    kwargs = {}
+
+    # Detect normalization from modules.json.
+    if check_file_exists(preset, "modules.json"):
+        modules = load_json(preset, "modules.json")
+        kwargs["normalize"] = any(
+            "Normalize" in m.get("type", "") for m in modules
+        )
+
+    # Detect pooling mode from 1_Pooling/config.json.
+    pooling_config_file = "1_Pooling/config.json"
+    if check_file_exists(preset, pooling_config_file):
+        pooling_config = load_json(preset, pooling_config_file)
+        if pooling_config.get("pooling_mode_mean_tokens", False):
+            kwargs["pooling_mode"] = "mean"
+        else:
+            kwargs["pooling_mode"] = "last"
+
+    return kwargs
 
 
 def convert_backbone_config(transformers_config):
@@ -32,7 +65,7 @@ def convert_backbone_config(transformers_config):
 def convert_weights(backbone, loader, transformers_config):
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
-        hf_weight_key="model.embed_tokens.weight",
+        hf_weight_key="embed_tokens.weight",
     )
     if not backbone.tie_word_embeddings:
         loader.port_weight(
@@ -53,7 +86,7 @@ def convert_weights(backbone, loader, transformers_config):
         # Input layernorm
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layernorm.scale,
-            hf_weight_key=f"model.layers.{i}.input_layernorm.weight",
+            hf_weight_key=f"layers.{i}.input_layernorm.weight",
         )
 
         # Attention layers
@@ -61,33 +94,33 @@ def convert_weights(backbone, loader, transformers_config):
         ## Query
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._query_dense.kernel,
-            hf_weight_key=f"model.layers.{i}.self_attn.q_proj.weight",
+            hf_weight_key=f"layers.{i}.self_attn.q_proj.weight",
             hook_fn=transpose_and_reshape,
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._query_dense_layer_norm.scale,
-            hf_weight_key=f"model.layers.{i}.self_attn.q_norm.weight",
+            hf_weight_key=f"layers.{i}.self_attn.q_norm.weight",
         )
         ## Key
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
-            hf_weight_key=f"model.layers.{i}.self_attn.k_proj.weight",
+            hf_weight_key=f"layers.{i}.self_attn.k_proj.weight",
             hook_fn=transpose_and_reshape,
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense_layer_norm.scale,
-            hf_weight_key=f"model.layers.{i}.self_attn.k_norm.weight",
+            hf_weight_key=f"layers.{i}.self_attn.k_norm.weight",
         )
         ## Value
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._value_dense.kernel,
-            hf_weight_key=f"model.layers.{i}.self_attn.v_proj.weight",
+            hf_weight_key=f"layers.{i}.self_attn.v_proj.weight",
             hook_fn=transpose_and_reshape,
         )
         ## Output
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._output_dense.kernel,
-            hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
+            hf_weight_key=f"layers.{i}.self_attn.o_proj.weight",
             # rearrange_patterns="c (a b) -> a b c",
             # rearrange_dims={"a": backbone.num_query_heads},
             hook_fn=transpose_and_reshape,
@@ -96,19 +129,19 @@ def convert_weights(backbone, loader, transformers_config):
         # MLP layers
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_intermediate_dense.kernel,
-            hf_weight_key=f"model.layers.{i}.mlp.up_proj.weight",
+            hf_weight_key=f"layers.{i}.mlp.up_proj.weight",
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_output_dense.kernel,
-            hf_weight_key=f"model.layers.{i}.mlp.down_proj.weight",
+            hf_weight_key=f"layers.{i}.mlp.down_proj.weight",
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_gate_dense.kernel,
-            hf_weight_key=f"model.layers.{i}.mlp.gate_proj.weight",
+            hf_weight_key=f"layers.{i}.mlp.gate_proj.weight",
             # rearrange_patterns="b a -> a b",
             hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, axes=(1, 0)),
         )
@@ -116,13 +149,13 @@ def convert_weights(backbone, loader, transformers_config):
         # Feedforward layernorm
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_layernorm.scale,
-            hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
+            hf_weight_key=f"layers.{i}.post_attention_layernorm.weight",
         )
 
     # Final normalization layer
     loader.port_weight(
         keras_variable=backbone.get_layer("sequence_output_layernorm").scale,
-        hf_weight_key="model.norm.weight",
+        hf_weight_key="norm.weight",
     )
 
     return backbone

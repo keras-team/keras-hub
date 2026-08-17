@@ -2,6 +2,8 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.vllm.attention import vllm_paged_attention
+from keras_hub.src.vllm.context import get_vllm_context
 
 
 @keras_hub_export("keras_hub.layers.CachedMultiHeadAttention")
@@ -52,16 +54,17 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             `cache` (usually the index of the current token being processed
             when running generation). If `cache_update_index=None` while `cache`
             is set, the cache will not be updated.
+        return_attention_scores: a boolean indicating whether the output
+            should include attention scores.
         training: a boolean indicating whether the layer should behave in
             training mode or in inference mode.
 
     Returns:
-        An `(attention_output, cache)` tuple. `attention_output` is the result
-        of the computation, of shape `(B, T, dim)`, where `T` is for target
-        sequence shapes and `dim` is the query input last dimension if
-        `output_shape` is `None`. Otherwise, the multi-head outputs are
-        projected to the shape specified by `output_shape`. `cache` is the
-        updated cache.
+        One of the following:
+        - `attention_output`
+        - `(attention_output, attention_scores)`
+        - `(attention_output, cache)`
+        - `(attention_output, attention_scores, cache)`
     """
 
     def call(
@@ -72,10 +75,34 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         attention_mask=None,
         cache=None,
         cache_update_index=None,
+        return_attention_scores=False,
         training=None,
     ):
         if key is None:
             key = value
+
+        # Route to vLLM paged attention while serving on TPU; otherwise the
+        # original dense path below runs unchanged.
+        vllm_context = get_vllm_context()
+        if (
+            vllm_context is not None
+            and vllm_context.paged_attention_func is not None
+        ):
+            if return_attention_scores:
+                raise ValueError(
+                    "`return_attention_scores=True` is not supported while "
+                    "serving through vLLM paged attention."
+                )
+            # Self-attention passes the same tensor for query and value;
+            # cross-attention (e.g. TransformerDecoder's second attention
+            # block) must not push encoder K/V into the paged cache.
+            if value is not query:
+                raise ValueError(
+                    "Cross-attention is not supported under vLLM serving; "
+                    "only decoder self-attention can use the paged KV "
+                    "cache."
+                )
+            return self._compute_vllm_attention(query, key, value, cache)
 
         query = self._query_dense(query)
 
@@ -113,11 +140,38 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             key=key,
             value=value,
             attention_mask=attention_mask,
+            return_attention_scores=return_attention_scores,
             training=training,
         )
 
         attention_output = self._output_dense(attention_output)
 
+        if return_attention_scores and cache is not None:
+            return attention_output, attention_scores, cache
+        elif return_attention_scores:
+            return attention_output, attention_scores
+        elif cache is not None:
+            return attention_output, cache
+        else:
+            return attention_output
+
+    def _compute_vllm_attention(self, query, key, value, cache):
+        """vLLM paged-attention route (serving on TPU only).
+
+        Projects Q/K/V and hands them to the shared paged-attention bridge.
+        Unlike the RoPE model routes, no positional encoding is applied here:
+        models built on this layer (GPT-2, OPT) add learned position
+        embeddings to the token embeddings before the transformer layers run,
+        so the inputs to this layer already carry position information. The
+        softmax scale matches Keras MHA's ``1/sqrt(key_dim)``.
+        """
+        attention_output = vllm_paged_attention(
+            self._query_dense(query),
+            self._key_dense(key),
+            self._value_dense(value),
+            float(self._key_dim) ** -0.5,
+        )
+        attention_output = self._output_dense(attention_output)
         if cache is not None:
             return attention_output, cache
         return attention_output

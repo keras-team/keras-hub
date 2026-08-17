@@ -1,3 +1,5 @@
+import pytest
+
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.mixtral.mixtral_backbone import MixtralBackbone
@@ -7,6 +9,7 @@ from keras_hub.src.utils.transformers import convert_mixtral
 
 
 class TestMixtralConverter(TestCase):
+    @pytest.mark.extra_large
     def test_convert_tiny_preset(self):
         model = MixtralCausalLM.from_preset(
             "hf://hf-internal-testing/tiny-random-MixtralForCausalLM",
@@ -15,6 +18,7 @@ class TestMixtralConverter(TestCase):
         prompt = "What is your favorite condiment?"
         model.generate([prompt], max_length=15)
 
+    @pytest.mark.large
     def test_class_detection(self):
         model = CausalLM.from_preset(
             "hf://hf-internal-testing/tiny-random-MixtralForCausalLM",
