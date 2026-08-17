@@ -787,8 +787,12 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             ]
 
         if unbatched:
-            return batched_tokens[0]
-        return batched_tokens
+            tokens = batched_tokens[0]
+        else:
+            tokens = batched_tokens
+        if output_is_int and self.sequence_length:
+            return np.asarray(tokens, dtype=self.compute_dtype)
+        return tokens
 
     def detokenize(self, inputs):
         self._check_vocabulary()

@@ -418,6 +418,33 @@ class WordPieceTokenizerTest(TestCase):
         output = tokenizer(np.bytes_("the quick"))
         self.assertAllEqual(output, [1, 2, 3])
 
+    def test_python_workflow_with_seq_len_returns_dense_output(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+            "br",
+            "##own",
+            "fox",
+            ".",
+        ]
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            sequence_length=10,
+        )
+
+        output = tokenizer(["The quick brown fox.", "The fox"])
+
+        self.assertEqual(output.shape, (2, 10))
+        self.assertAllEqual(
+            output,
+            [
+                [0, 2, 3, 4, 5, 6, 7, 0, 0, 0],
+                [0, 6, 0, 0, 0, 0, 0, 0, 0, 0],
+            ],
+        )
+
     def test_safe_mode_vocabulary_file_disallowed(self):
         temp_dir = self.get_temp_dir()
         vocab_path = os.path.join(temp_dir, "vocab.txt")
