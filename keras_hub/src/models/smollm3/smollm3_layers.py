@@ -82,21 +82,25 @@ class SmolLM3Attention(layers.Layer):
         self.q_proj = layers.Dense(
             self.num_attention_heads * self.head_dim,
             use_bias=self.attention_bias,
+            dtype=self.dtype_policy,
             name="q_proj",
         )
         self.k_proj = layers.Dense(
             self.num_key_value_heads * self.head_dim,
             use_bias=self.attention_bias,
+            dtype=self.dtype_policy,
             name="k_proj",
         )
         self.v_proj = layers.Dense(
             self.num_key_value_heads * self.head_dim,
             use_bias=self.attention_bias,
+            dtype=self.dtype_policy,
             name="v_proj",
         )
         self.o_proj = layers.EinsumDense(
             equation="bquh,uhm->bqm",
             output_shape=(None, self.hidden_size),
+            dtype=self.dtype_policy,
             name="o_proj",
         )
         self.o_proj.build((None, None, self.num_attention_heads, self.head_dim))
@@ -113,6 +117,7 @@ class SmolLM3Attention(layers.Layer):
             max_position_embeddings=self.max_position_embeddings,
             rope_theta=self.rope_theta,
             partial_rotary_factor=self.partial_rotary_factor,
+            dtype=self.dtype_policy,
             name="rotary_emb",
         )
 
@@ -415,13 +420,22 @@ class SmolLM3MLP(layers.Layer):
         self.mlp_bias = mlp_bias
 
         self.gate_proj = layers.Dense(
-            self.intermediate_size, use_bias=self.mlp_bias, name="gate_proj"
+            self.intermediate_size,
+            use_bias=self.mlp_bias,
+            dtype=self.dtype_policy,
+            name="gate_proj",
         )
         self.up_proj = layers.Dense(
-            self.intermediate_size, use_bias=self.mlp_bias, name="up_proj"
+            self.intermediate_size,
+            use_bias=self.mlp_bias,
+            dtype=self.dtype_policy,
+            name="up_proj",
         )
         self.down_proj = layers.Dense(
-            self.hidden_size, use_bias=self.mlp_bias, name="down_proj"
+            self.hidden_size,
+            use_bias=self.mlp_bias,
+            dtype=self.dtype_policy,
+            name="down_proj",
         )
 
     def build(self, input_shape):
@@ -527,6 +541,7 @@ class SmolLM3DecoderLayer(layers.Layer):
             max_position_embeddings=max_position_embeddings,
             rope_theta=rope_theta,
             partial_rotary_factor=partial_rotary_factor,
+            dtype=self.dtype_policy,
             name="self_attn",
         )
 
@@ -534,14 +549,21 @@ class SmolLM3DecoderLayer(layers.Layer):
             hidden_size=hidden_size,
             intermediate_size=intermediate_size,
             mlp_bias=mlp_bias,
+            dtype=self.dtype_policy,
             name="mlp",
         )
 
         self.input_layernorm = layers.RMSNormalization(
-            epsilon=layer_norm_epsilon, axis=-1, name="input_layernorm"
+            epsilon=layer_norm_epsilon,
+            axis=-1,
+            dtype=self.dtype_policy,
+            name="input_layernorm",
         )
         self.post_attention_layernorm = layers.RMSNormalization(
-            epsilon=layer_norm_epsilon, axis=-1, name="post_attention_layernorm"
+            epsilon=layer_norm_epsilon,
+            axis=-1,
+            dtype=self.dtype_policy,
+            name="post_attention_layernorm",
         )
 
         self.attention_type = layer_types[layer_idx]
