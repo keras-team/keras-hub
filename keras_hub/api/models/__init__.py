@@ -692,6 +692,9 @@ from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_video_converter import (
 from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_encoder import (
     Qwen3ASRAudioEncoder as Qwen3ASRAudioEncoder,
 )
+from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_encoder import (
+    Qwen3ASRMultiModalProjector as Qwen3ASRMultiModalProjector,
+)
 from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import (
     Qwen3ASRBackbone as Qwen3ASRBackbone,
 )

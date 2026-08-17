@@ -97,7 +97,10 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
         )
         self.built = True
 
-    def _process_audio_and_text(self, x, sequence_length):
+    def _process_audio_and_text(self, x, sequence_length, add_end_token=None):
+        if add_end_token is None:
+            add_end_token = self.add_end_token if "responses" in x else False
+
         audios = x["audio"]
         prompts = x["prompts"]
 
@@ -262,7 +265,7 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
             segments,
             sequence_length=sequence_length,
             add_start_value=self.add_start_token,
-            add_end_value=self.add_end_token if "responses" in x else False,
+            add_end_value=add_end_token,
         )
 
         padding_mask = token_ids != self.tokenizer.pad_token_id
@@ -342,7 +345,9 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
 
     def _generate_preprocess_python(self, x, sequence_length=None):
         sequence_length = sequence_length or self.sequence_length
-        features, _ = self._process_audio_and_text(x, sequence_length)
+        features, _ = self._process_audio_and_text(
+            x, sequence_length, add_end_token=False
+        )
         return features
 
     @preprocessing_function

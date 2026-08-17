@@ -150,6 +150,25 @@ class Qwen3ASRCausalLM(CausalLM):
         )
         return hidden_states, cache
 
+    def generate(
+        self,
+        inputs,
+        max_length=None,
+        stop_token_ids="auto",
+        strip_prompt=False,
+    ):
+        if stop_token_ids == "auto":
+            stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
+            if hasattr(self.preprocessor.tokenizer, "end_token2_id"):
+                stop_token_ids.append(self.preprocessor.tokenizer.end_token2_id)
+
+        return super().generate(
+            inputs,
+            max_length=max_length,
+            stop_token_ids=stop_token_ids,
+            strip_prompt=strip_prompt,
+        )
+
     def generate_step(self, inputs, stop_token_ids=None):
         token_ids, padding_mask = (
             inputs["token_ids"],

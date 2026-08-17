@@ -1,3 +1,5 @@
+import numpy as np
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import Qwen3ASRBackbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
@@ -35,11 +37,27 @@ class Qwen3ASRTokenizer(BytePairTokenizer):
         **kwargs,
     ):
         # Add EOS token
-        eos_token = "<|im_end|>"
-        self._add_special_token(eos_token, "end_token")
+        self._add_special_token("<|endoftext|>", "end_token")
+        self._add_special_token("<|im_end|>", "end_token2")
 
         pad_token = "<|endoftext|>"
         self._add_special_token(pad_token, "pad_token")
+
+        required_tokens = [
+            "<|im_start|>",
+            "<|im_end|>",
+            "<|endoftext|>",
+            "<|audio_start|>",
+            "<|audio_end|>",
+            "<|audio_pad|>",
+            "<asr_text>",
+        ]
+        if "unsplittable_tokens" in kwargs:
+            kwargs["unsplittable_tokens"] = sorted(
+                list(set(kwargs["unsplittable_tokens"]) | set(required_tokens))
+            )
+        else:
+            kwargs["unsplittable_tokens"] = sorted(required_tokens)
 
         self.start_token_id = None
         self.start_token = None
@@ -55,9 +73,16 @@ class Qwen3ASRTokenizer(BytePairTokenizer):
         if skip_special_tokens:
             self._maybe_initialized_tokenizers()
             # Tokenizers library decode supports skipping special tokens.
-            res = self._tokenizer.decode_batch(
-                [inputs] if isinstance(inputs[0], int) else inputs,
-                skip_special_tokens=True,
-            )
-            return res[0] if isinstance(inputs[0], int) else res
+            # Handle both single sequence and batch
+            inputs_np = np.array(inputs)
+            if len(inputs_np.shape) == 1:
+                res = self._tokenizer.decode(
+                    inputs_np.tolist(), skip_special_tokens=True
+                )
+                return res
+            else:
+                res = self._tokenizer.decode_batch(
+                    inputs_np.tolist(), skip_special_tokens=True
+                )
+                return res
         return super().detokenize(inputs)

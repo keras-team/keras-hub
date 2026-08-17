@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 
-from keras_hub.src.models.qwen3.qwen3_tokenizer import Qwen3Tokenizer
 from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
     Qwen3ASRAudioConverter,
 )
@@ -10,6 +9,7 @@ from keras_hub.src.models.qwen3_asr.qwen3_asr_causal_lm import Qwen3ASRCausalLM
 from keras_hub.src.models.qwen3_asr.qwen3_asr_preprocessor import (
     Qwen3ASRPreprocessor,
 )
+from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import Qwen3ASRTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -25,30 +25,22 @@ class Qwen3ASRCausalLMTest(TestCase):
             self.vocab.extend([a, b, a + b])
 
         # Audio special tokens
-        self.audio_token_id = 100
         self.vocab += [
             "<|audio_pad|>",
             "<|audio_info|>",
             "<|im_end|>",
             "<|endoftext|>",
-            "<|audio_bos|>",
-            "<|audio_eos|>",
+            "<|audio_start|>",
+            "<|audio_end|>",
         ]
         self.vocab = sorted(set(self.vocab))  # Remove duplicates
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
 
         self.audio_token_id = self.vocab["<|audio_pad|>"]
 
-        self.tokenizer = Qwen3Tokenizer(
+        self.tokenizer = Qwen3ASRTokenizer(
             vocabulary=self.vocab,
             merges=self.merges,
-            unsplittable_tokens=[
-                "<|im_end|>",
-                "<|endoftext|>",
-                "<|audio_bos|>",
-                "<|audio_eos|>",
-                "<|audio_pad|>",
-            ],
         )
 
         self.audio_converter = Qwen3ASRAudioConverter(

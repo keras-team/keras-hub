@@ -36,34 +36,10 @@ flags.DEFINE_string(
 def test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_processor):
     # Test with dummy/synthetic audio
     sample_rate = 16000
-    # Use 30 seconds to match model default max_audio_length
+    # Use 5 seconds for faster testing
     audio_data = np.sin(
-        2 * np.pi * 440 * np.arange(sample_rate * 30) / sample_rate
+        2 * np.pi * 440 * np.arange(sample_rate * 5) / sample_rate
     ).astype("float32")
-
-    # Keras input
-    print("-> Running KerasHub generation...")
-    # The KerasHub preprocessor will prepend audio tokens if <audio> is missing.
-    keras_inputs = {"audio": audio_data, "prompts": "transcribe"}
-    # Use max_length slightly above prompt length (~395) for speed
-    old_preprocessor = keras_hub_model.preprocessor
-    keras_hub_model.preprocessor = None
-    preprocessed = old_preprocessor(keras_inputs)
-    # Add batch dimension
-    preprocessed = {
-        k: ops.expand_dims(v, 0)
-        if ops.ndim(v) < (3 if k == "audio_mel" else 2)
-        else v
-        for k, v in preprocessed.items()
-    }
-    keras_output = keras_hub_model.generate(
-        preprocessed, max_length=400, stop_token_ids=None
-    )
-    decoded_keras = keras_hub_tokenizer.detokenize(
-        keras_output["token_ids"], skip_special_tokens=True
-    )
-    keras_hub_model.preprocessor = old_preprocessor
-    print("-> KerasHub generation finished.")
 
     # HF input
     print("-> Running Huggingface generation...")
@@ -78,22 +54,61 @@ def test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_processor):
     # HF generate
     outputs = hf_model.generate(
         **hf_inputs,
-        max_new_tokens=5,
+        max_new_tokens=20,
         do_sample=False,
     )
-    hf_output_text = hf_processor.batch_decode(
-        outputs, skip_special_tokens=True
-    )[0]
+    # Extract only new tokens for comparison
+    hf_new_tokens = outputs[0, hf_inputs.input_ids.shape[-1] :]
+    hf_output_text = hf_processor.tokenizer.decode(
+        hf_new_tokens, skip_special_tokens=True
+    ).strip()
     print("-> Huggingface generation finished.")
 
-    # Clean up both for comparison
-    if isinstance(decoded_keras, list):
-        decoded_keras = decoded_keras[0]
-    keras_final = decoded_keras.replace("transcribe", "").strip()
-    hf_final = hf_output_text.replace("transcribe", "").strip()
+    # Free HF memory to avoid OOM/Hang during Keras compilation
+    del hf_model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
-    print("🔶 KerasHub output:", keras_final)
-    print("🔶 Huggingface output:", hf_final)
+    # Keras input
+    print("-> Starting KerasHub generation...")
+    keras_inputs = {"audio": audio_data, "prompts": "transcribe"}
+
+    # Run inference
+    print("   Running inference...")
+    # Get prompt length and stop tokens
+    preprocessed = keras_hub_model.preprocessor.generate_preprocess(
+        keras_inputs, sequence_length=256
+    )
+    prompt_len = int(ops.sum(ops.cast(preprocessed["padding_mask"], "int32")))
+    stop_ids = [keras_hub_tokenizer.end_token_id]
+    if hasattr(keras_hub_tokenizer, "end_token2_id"):
+        stop_ids.append(keras_hub_tokenizer.end_token2_id)
+
+    # Detach preprocessor to get raw token IDs
+    old_preprocessor = keras_hub_model.preprocessor
+    keras_hub_model.preprocessor = None
+
+    # Prepare batch
+    batch = {
+        k: ops.expand_dims(ops.convert_to_tensor(v), 0)
+        for k, v in preprocessed.items()
+    }
+
+    keras_outputs = keras_hub_model.generate(
+        batch, max_length=prompt_len + 20, stop_token_ids=stop_ids
+    )
+
+    # Extract only new tokens and detokenize skipping special ones
+    keras_new_tokens = keras_outputs["token_ids"][0, prompt_len:]
+    keras_output_text = keras_hub_tokenizer.detokenize(
+        keras_new_tokens, skip_special_tokens=True
+    ).strip()
+
+    keras_hub_model.preprocessor = old_preprocessor
+    print("-> KerasHub generation finished.")
+
+    print(f"🔶 KerasHub output:    '{keras_output_text}'")
+    print(f"🔶 Huggingface output: '{hf_output_text}'")
 
 
 def main(_):
