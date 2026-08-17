@@ -250,6 +250,94 @@ class WordPieceTokenizerTest(TestCase):
         output = tokenizer(input_data)
         self.assertAllEqual(output, [0, 0, 1, 2])
 
+    def test_python_workflow_is_default(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+        ]
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+
+        self.assertTrue(tokenizer._allow_python_workflow)
+
+        # Ensure the Python implementation is actually used.
+        tokenizer._fast_word_piece = None
+
+        output = tokenizer("the quick")
+        self.assertAllEqual(output, [1, 2, 3])
+
+    def test_python_workflow_does_not_require_tf_text(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+        ]
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            _allow_python_workflow=True,
+        )
+        tokenizer._fast_word_piece = None
+
+        output = tokenizer("the quick")
+        self.assertAllEqual(output, [1, 2, 3])
+
+        output = tokenizer.detokenize([1, 2, 3])
+        self.assertAllEqual(output, "the quick")
+
+    def test_tf_workflow_can_be_explicitly_requested(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+        ]
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            _allow_python_workflow=False,
+        )
+
+        output = tokenizer("the quick")
+        self.assertAllEqual(output, [1, 2, 3])
+
+        output = tokenizer.detokenize([1, 2, 3])
+        self.assertAllEqual(output, "the quick")
+
+    def test_python_and_tf_workflows_match(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+            "br",
+            "##own",
+            "fox",
+            ".",
+        ]
+        input_data = ["The quick brown fox."]
+
+        python_tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            lowercase=True,
+            _allow_python_workflow=True,
+        )
+        tf_tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            lowercase=True,
+            _allow_python_workflow=False,
+        )
+
+        python_output = python_tokenizer(input_data)
+        tf_output = tf_tokenizer(input_data)
+
+        self.assertAllEqual(python_output, tf_output)
+
+        python_detokenized = python_tokenizer.detokenize(python_output)
+        tf_detokenized = tf_tokenizer.detokenize(tf_output)
+
+        self.assertAllEqual(python_detokenized, tf_detokenized)
+
     def test_safe_mode_vocabulary_file_disallowed(self):
         temp_dir = self.get_temp_dir()
         vocab_path = os.path.join(temp_dir, "vocab.txt")
