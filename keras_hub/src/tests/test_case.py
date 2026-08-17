@@ -228,6 +228,39 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         output_ds = ds.batch(1_000).map(layer)
         self.assertAllClose(output, output_ds.get_single_element())
 
+        # Run with PyGrain datasets if available
+        try:
+            import grain.python as grain
+        except ImportError:
+            grain = None
+
+        if grain:
+            length = tree.flatten(input_data)[0].shape[0]
+            unbatched_data = [
+                tree.map_structure(lambda x: x[i], input_data)
+                for i in range(length)
+            ]
+
+            # Unbatched grain dataset
+            grain_ds = grain.MapDataset.source(unbatched_data)
+            if isinstance(input_data, tuple):
+                grain_ds = grain_ds.map(lambda x: layer(*x))
+            else:
+                grain_ds = grain_ds.map(layer)
+
+            # Batch and compare to `output`
+            grain_ds = grain_ds.batch(length)
+            self.assertAllClose(output, grain_ds[0])
+
+            # Batched grain dataset
+            grain_batched_ds = grain.MapDataset.source([input_data])
+            if isinstance(input_data, tuple):
+                grain_batched_ds = grain_batched_ds.map(lambda x: layer(*x))
+            else:
+                grain_batched_ds = grain_batched_ds.map(layer)
+
+            self.assertAllClose(output, grain_batched_ds[0])
+
         if expected_output:
             self.assertAllClose(output, expected_output)
 
@@ -260,7 +293,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         output, _, _ = keras.utils.unpack_x_y_sample_weight(output)
         shape = ops.shape(output[token_id_key])
         self.assertEqual(shape[-1], layer.sequence_length)
-        # Update the sequence length.
         layer.sequence_length = 17
         if isinstance(input_data, tuple):
             output = layer(*input_data)
@@ -269,6 +301,46 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         output, _, _ = keras.utils.unpack_x_y_sample_weight(output)
         shape = ops.shape(output[token_id_key])
         self.assertEqual(shape[-1], 17)
+
+        # Grain parity for sequence length update
+        try:
+            import grain.python as grain
+        except ImportError:
+            grain = None
+
+        if grain:
+            length = tree.flatten(input_data)[0].shape[0]
+            unbatched_data = [
+                tree.map_structure(lambda x: x[i], input_data)
+                for i in range(length)
+            ]
+
+            # Unbatched
+            grain_ds = grain.MapDataset.source(unbatched_data)
+            if isinstance(input_data, tuple):
+                grain_ds = grain_ds.map(lambda x: layer(*x))
+            else:
+                grain_ds = grain_ds.map(layer)
+
+            grain_ds = grain_ds.batch(length)
+            grain_output = grain_ds[0]
+            grain_output, _, _ = keras.utils.unpack_x_y_sample_weight(
+                grain_output
+            )
+            self.assertAllClose(output, grain_output)
+
+            # Batched
+            grain_batched_ds = grain.MapDataset.source([input_data])
+            if isinstance(input_data, tuple):
+                grain_batched_ds = grain_batched_ds.map(lambda x: layer(*x))
+            else:
+                grain_batched_ds = grain_batched_ds.map(layer)
+
+            grain_batched_output = grain_batched_ds[0]
+            grain_batched_output, _, _ = keras.utils.unpack_x_y_sample_weight(
+                grain_batched_output
+            )
+            self.assertAllClose(output, grain_batched_output)
 
     def run_serialization_test(self, instance):
         """Check idempotency of serialize/deserialize.
