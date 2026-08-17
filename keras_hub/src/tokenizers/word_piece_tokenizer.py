@@ -719,62 +719,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         return tokens
 
-    def _canonicalize_python_inputs(self, inputs):
-        """Convert `inputs` into `(sequences, unbatched)`.
-
-        `sequences` is always a python list. Each element is either a
-        string (if `self.split=True`, inputs should be pre-tokenized into
-        whole words) or a list of word strings (if `self.split=False`).
-        """
-        if tf is not None and isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            if isinstance(inputs, tf.RaggedTensor):
-                inputs = inputs.to_list()
-            else:
-                unbatched = inputs.shape.rank == 0
-                inputs = inputs.numpy()
-                if unbatched:
-                    if isinstance(inputs, bytes):
-                        inputs = inputs.decode("utf-8")
-                    elif isinstance(inputs, np.ndarray):
-                        inputs = inputs.item()
-                else:
-                    inputs = inputs.tolist()
-
-        if isinstance(inputs, bytes):
-            inputs = inputs.decode("utf-8")
-
-        if self.split:
-            if isinstance(inputs, str):
-                return [inputs], True
-            if isinstance(inputs, (list, tuple, np.ndarray)):
-                return [
-                    x.decode("utf-8") if isinstance(x, bytes) else str(x)
-                    for x in inputs
-                ], False
-            raise ValueError(
-                "Input should be a string or a list of strings. "
-                f"Received: {inputs}"
-            )
-        else:
-            # Inputs are already split into whole words. A single sequence
-            # is a list of word strings; a batch is a list of such lists.
-            def is_word_list(x):
-                return isinstance(x, (list, tuple, np.ndarray)) and (
-                    len(x) == 0 or isinstance(x[0], (str, bytes))
-                )
-
-            if is_word_list(inputs):
-                return [list(inputs)], True
-            if isinstance(inputs, (list, tuple)) and all(
-                is_word_list(x) for x in inputs
-            ):
-                return [list(x) for x in inputs], False
-            raise ValueError(
-                "`split=False` expects inputs pre-split into words, e.g. a "
-                "list of strings, or a batch of such lists. "
-                f"Received: {inputs}"
-            )
-
     def _tokenize_python(self, inputs):
         self._check_vocabulary()
         sequences, unbatched = self._canonicalize_python_inputs(inputs)
@@ -862,25 +806,112 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             outputs = tf.squeeze(outputs, 0)
         return outputs
 
+    def _canonicalize_python_inputs(self, inputs):
+        """Convert `inputs` into `(sequences, unbatched)`.
+
+        `sequences` is always a python list. For `split=True`, each
+        sequence is represented by a string. For `split=False`, each
+        sequence is a list of pre-tokenized word strings.
+        """
+        if tf is not None and isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            if isinstance(inputs, tf.RaggedTensor):
+                inputs = inputs.to_list()
+            else:
+                unbatched = inputs.shape.rank == 0
+                inputs = inputs.numpy()
+                if unbatched:
+                    if isinstance(inputs, bytes):
+                        inputs = inputs.decode("utf-8")
+                    elif isinstance(inputs, np.ndarray):
+                        inputs = inputs.item()
+                else:
+                    inputs = inputs.tolist()
+
+        if isinstance(inputs, np.ndarray):
+            if inputs.ndim == 0:
+                inputs = inputs.item()
+            else:
+                inputs = inputs.tolist()
+
+        if isinstance(inputs, bytes):
+            inputs = inputs.decode("utf-8")
+
+        if self.split:
+            if isinstance(inputs, str):
+                return [inputs], True
+
+            if isinstance(inputs, (list, tuple)):
+                if len(inputs) == 0:
+                    return [], False
+
+                if isinstance(inputs[0], (list, tuple, np.ndarray)):
+                    raise ValueError(
+                        "When `split=True`, `inputs` must be a string or a "
+                        "1D list/tuple of strings."
+                    )
+
+                return [
+                    x.decode("utf-8") if isinstance(x, bytes) else str(x)
+                    for x in inputs
+                ], False
+
+            raise ValueError(
+                "Input should be a string or a (possibly batched) list of "
+                f"strings. Received: {inputs}"
+            )
+
+        if isinstance(inputs, str):
+            return [inputs], True
+
+        if isinstance(inputs, (list, tuple)):
+            if len(inputs) == 0:
+                return [[]], True
+
+            if isinstance(inputs[0], (list, tuple, np.ndarray)):
+                return [list(x) for x in inputs], False
+
+            return [list(inputs)], True
+
+        raise ValueError(
+            "Input should be a string or a (possibly batched) list of strings. "
+            f"Received: {inputs}"
+        )
+
     def _canonicalize_python_detokenize_inputs(self, inputs):
         """Convert `inputs` into `(sequences_of_ids, unbatched)`."""
         if tf is not None and isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             if isinstance(inputs, tf.RaggedTensor):
                 inputs = inputs.to_list()
             else:
+                unbatched = inputs.shape.rank == 0
                 inputs = inputs.numpy()
-        if isinstance(inputs, np.ndarray):
-            inputs = inputs.tolist()
+                if unbatched:
+                    if isinstance(inputs, np.ndarray):
+                        inputs = inputs.item()
+                else:
+                    inputs = inputs.tolist()
 
-        if isinstance(inputs, (int, str, bytes)):
-            return [[inputs]], True
+        if isinstance(inputs, np.ndarray):
+            if inputs.ndim == 0:
+                inputs = inputs.item()
+            else:
+                inputs = inputs.tolist()
+
+        if isinstance(inputs, (int, np.integer)):
+            return [[int(inputs)]], True
+
         if isinstance(inputs, (list, tuple)):
-            if len(inputs) == 0 or isinstance(inputs[0], (int, str, bytes)):
+            if len(inputs) == 0:
                 return [list(inputs)], True
-            return [list(x) for x in inputs], False
+
+            if isinstance(inputs[0], (list, tuple, np.ndarray)):
+                return [list(x) for x in inputs], False
+
+            return [list(inputs)], True
+
         raise ValueError(
-            "Input should be an integer id, a string token, or a "
-            f"(possibly batched) list of these. Received: {inputs}"
+            "Input should be an integer id or a (possibly batched) "
+            f"list of integer ids. Received: {inputs}"
         )
 
     def _detokenize_python(self, inputs):
