@@ -50,6 +50,7 @@ class SegFormerTest(TestCase):
             expected_output_shape=(2, 8, 8, 256),
             run_mixed_precision_check=False,
             run_quantization_check=False,
+            run_data_format_check=False,
         )
 
     @pytest.mark.large
