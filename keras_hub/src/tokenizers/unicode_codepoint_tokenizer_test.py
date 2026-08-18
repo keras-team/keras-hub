@@ -152,7 +152,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
     def test_detokenize_strict_error(self):
         input_data = tf.ragged.constant([[110, 105, 10000000, 110, 106, 97]])
         tokenizer = UnicodeCodepointTokenizer(errors="strict")
-        with self.assertRaises(tf.errors.InvalidArgumentError):
+        with self.assertRaises(ValueError):
             _ = tokenizer.detokenize(input_data)
 
     def test_normalization_without_UTF8_valueerror(self):

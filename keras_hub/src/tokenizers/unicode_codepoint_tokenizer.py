@@ -1,4 +1,6 @@
+import unicodedata
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.tokenizers import tokenizer
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import is_int_dtype
@@ -65,7 +67,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         vocabulary_size: Set the vocabulary `vocabulary_size`,
             by clamping all codepoints to the range [0, vocabulary_size).
             Effectively this will make the `vocabulary_size - 1` id the
-            the OOV value.
+            OOV value.
 
     Examples:
 
@@ -232,7 +234,12 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
                     ""
                 )
 
-        super().__init__(dtype=dtype, **kwargs)
+        self._allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            dtype=dtype, 
+            _allow_python_workflow=self._allow_python_workflow, 
+            **kwargs
+        )
 
         self.sequence_length = sequence_length
         self.lowercase = lowercase
@@ -267,13 +274,16 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         return self._vocabulary_size
 
     def get_vocabulary(self):
+        vocab_size = self.vocabulary_size()
+        if vocab_size is None:
+            return {}
         vocab = {}
-        for i in range(self.vocabulary_size()):
+        for i in range(vocab_size):
             vocab[chr(i)] = i
         return vocab
 
     @preprocessing_function
-    def tokenize(self, inputs):
+    def _tokenize_tf(self, inputs):
         unbatched = inputs.shape.rank == 0
         if unbatched:
             inputs = tf.expand_dims(inputs, 0)
@@ -310,7 +320,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         return tokens
 
     @preprocessing_function
-    def detokenize(self, inputs):
+    def _detokenize_tf(self, inputs):
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
         outputs = tf.strings.unicode_encode(
@@ -323,19 +333,130 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
             outputs = tf.squeeze(outputs, 0)
         return outputs
 
+    def tokenize(self, inputs):
+        if not self._allow_python_workflow or in_tf_function():
+            return self._tokenize_tf(inputs)
+        return self._tokenize_python(inputs)
+
+    def detokenize(self, inputs):
+        if not self._allow_python_workflow or in_tf_function():
+            return self._detokenize_tf(inputs)
+        return self._detokenize_python(inputs)
+
+    def _tokenize_python(self, inputs):
+        # Unwrap Tensors / NumPy arrays back to Python primitives
+        if hasattr(inputs, "numpy"):
+            inputs = inputs.numpy()
+        if hasattr(inputs, "tolist"):
+            inputs = inputs.tolist()
+            
+        unbatched = isinstance(inputs, (str, bytes))
+        if unbatched:
+            inputs = [inputs]
+            
+        batched_tokens = []
+        
+        # Localize variables for performance in the hot loop
+        seq_len = self.sequence_length
+        vocab_size = self._vocabulary_size
+        max_id = vocab_size - 1 if vocab_size else None
+        errors = self.errors
+        
+        for text in inputs:
+            if not isinstance(text, (str, bytes)):
+                raise ValueError(
+                    f"Expected a string or bytes, but received: {type(text)}. "
+                    "Multi-dimensional lists are not supported. Please flatten your input."
+                )
+                
+            if isinstance(text, bytes):
+                text = text.decode("utf-8", errors=errors)
+                # If a custom replacement char is set, we must replace the default U+FFFD
+                if errors == "replace" and self.replacement_char != 65533:
+                    text = text.replace("\ufffd", chr(self.replacement_char))
+                
+            if self.lowercase:
+                text = text.lower()
+            if self.normalization_form:
+                text = unicodedata.normalize(self.normalization_form, text)
+                
+            # Combine ord() and clipping into a single list comprehension to save O(N) traversals
+            if max_id is not None:
+                tokens = [min(ord(c), max_id) for c in text]
+            else:
+                tokens = [ord(c) for c in text]
+            
+            if seq_len:
+                tokens = tokens[:seq_len] 
+                pad_len = seq_len - len(tokens)
+                if pad_len > 0:
+                    tokens.extend([0] * pad_len)
+                
+            batched_tokens.append(tokens)
+            
+        if unbatched:
+            return batched_tokens[0]
+        return batched_tokens
+
+    def _detokenize_python(self, inputs):
+        # Unwrap Tensors / NumPy arrays back to Python primitives
+        if hasattr(inputs, "numpy"):
+            inputs = inputs.numpy()
+        if hasattr(inputs, "tolist"):
+            inputs = inputs.tolist()
+            
+        # Detect if it's a 1D list (single sentence) or 2D list (batch)
+        unbatched = False
+        if isinstance(inputs, list):
+            if not inputs or isinstance(inputs[0], int):
+                unbatched = True
+                inputs = [inputs]
+            
+        batched_strings = []
+        
+        # Localize variables and pre-compute for performance
+        vocab_size = self._vocabulary_size
+        errors = self.errors
+        replace_char_str = chr(self.replacement_char) if self.replacement_char is not None else ""
+        has_vocab = vocab_size is not None
+        
+        for seq in inputs:
+            result = []
+            for i in seq:
+                if i == 0 or (has_vocab and i >= vocab_size):
+                    continue 
+                    
+                # Python's chr() only accepts values from 0 to 0x10FFFF (1114111)
+                if 0 < i < 1114112:
+                    result.append(chr(i))
+                else:
+                    if errors == "replace":
+                        result.append(replace_char_str)
+                    elif errors == "strict":
+                        raise ValueError(f"chr() arg not in range(0x110000). Received: {i}")
+            batched_strings.append("".join(result))
+            
+        if unbatched:
+            return batched_strings[0]
+        return batched_strings
+
     def id_to_token(self, id):
         """Convert an integer id to a string token."""
-        if id >= self.vocabulary_size() or id < 0:
+        vocab_size = self.vocabulary_size()
+        if vocab_size is not None and id >= vocab_size:
             raise ValueError(
-                f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
+                f"`id` must be in range [0, {vocab_size - 1}]. "
                 f"Received: {id}"
             )
+        if id < 0:
+            raise ValueError(f"`id` must be >= 0. Received: {id}")
         return chr(id)
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
         id = ord(token)
-        if id >= self.vocabulary_size():
+        vocab_size = self.vocabulary_size()
+        if vocab_size is not None and id >= vocab_size:
             raise ValueError(
                 f"Token {token} is not supported by "
                 "`UnicodeCodepointTokenizer`."
