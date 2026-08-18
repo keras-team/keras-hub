@@ -52,7 +52,7 @@ version = {attr = "keras_hub.src.version.__version__"}
 "keras_hub.src" = "keras_hub/src"
 
 [tool.ruff]
-line-length = 80
+line-length = 120
 
 [tool.ruff.lint]
 select = [
