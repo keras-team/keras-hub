@@ -3,7 +3,6 @@ from tokenizers import decoders
 from tokenizers import models
 from tokenizers import normalizers
 from tokenizers import pre_tokenizers
-from tokenizers import processors
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.clip.clip_backbone import CLIPBackbone
@@ -151,13 +150,6 @@ class CLIPTokenizer(BytePairTokenizer):
         super().set_vocabulary_and_merges(vocabulary, merges)
         if self.pad_with_end_token:
             self.pad_token_id = self.end_token_id
-        if getattr(self, "_tokenizer") is not None:
-            self._tokenizer.post_processor = processors.RobertaProcessing(
-                sep=(str(self.end_token), self.end_token_id),
-                cls=(str(self.start_token), self.start_token_id),
-                add_prefix_space=False,
-                trim_offsets=False,
-            )
 
     def _bpe_merge_and_update_cache_tf(self, tokens):
         """Process unseen tokens and add to cache."""
@@ -241,27 +233,15 @@ class CLIPTokenizer(BytePairTokenizer):
         if self.sequence_length:
             output_shape = tokens.shape.as_list()
             output_shape[-1] = self.sequence_length
-            tokens = tokens.to_tensor(shape=output_shape)
+            tokens = tokens.to_tensor(
+                shape=output_shape, default_value=self.pad_token_id
+            )
 
         # Convert to a dense output if input in scalar
         if unbatched:
             tokens = tf.squeeze(tokens, 0)
             tf.ensure_shape(tokens, shape=[self.sequence_length])
         return tokens
-
-    def _tokenize_tokenizers(self, inputs):
-        outputs = super()._tokenize_tokenizers(inputs)
-        is_batched = True
-        if isinstance(outputs, str):
-            is_batched = False
-            outputs = [outputs]
-        elif isinstance(outputs, list) and isinstance(outputs[0], int):
-            is_batched = False
-            outputs = [outputs]
-        outputs = [output[1:-1] for output in outputs]
-        if not is_batched:
-            outputs = outputs[0]
-        return outputs
 
     @preprocessing_function
     def _detokenize_tf(self, inputs):

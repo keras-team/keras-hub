@@ -5,7 +5,7 @@ from keras_hub.src.models.xlm_roberta.xlm_roberta_backbone import (
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
-from keras_hub.src.utils.tensor_utils import tensor_to_list
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -84,6 +84,9 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
     backbone_cls = XLMRobertaBackbone
 
+    # Prefix tokens that are handled specially in XLM-RoBERTa
+    _vocabulary_prefix = ["<s>", "<pad>", "</s>", "<unk>"]
+
     def __init__(self, proto, **kwargs):
         # Handle special tokens manually, as the tokenizer maps these tokens in
         # a way that is not reflected in the vocabulary.
@@ -115,11 +118,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     def get_vocabulary(self):
         """Get the size of the tokenizer vocabulary."""
         self._check_vocabulary()
-        vocabulary = tensor_to_list(
-            self._sentence_piece.id_to_string(
-                tf.range(super().vocabulary_size())
-            )
-        )
+        vocabulary = super().get_vocabulary()
         return self._vocabulary_prefix + vocabulary[3:] + ["<mask>"]
 
     def id_to_token(self, id):
@@ -132,33 +131,37 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         if id < len(self._vocabulary_prefix) and id >= 0:
             return self._vocabulary_prefix[id]
 
-        if id - 1 >= super().vocabulary_size() or id - 1 < 0:
+        if id >= self.vocabulary_size() or id < 0:
             raise ValueError(
                 f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
                 f"Received: {id}"
             )
 
-        return tensor_to_list(self._sentence_piece.id_to_string(id - 1))
+        return super().id_to_token(id - 1)
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
         self._check_vocabulary()
 
+        if hasattr(token, "numpy"):
+            token = token.numpy()
+        if isinstance(token, bytes):
+            token = token.decode("utf-8")
+
+        if token == "<mask>":
+            return self.mask_token_id
         if token in self._vocabulary_prefix:
             return self._vocabulary_prefix.index(token)
 
-        spm_token_id = self._sentence_piece.string_to_id(token)
-
-        # OOV token
-        spm_unk_token_id = self._sentence_piece.string_to_id("<unk>")
-        if spm_token_id == spm_unk_token_id:
+        spm_id = super().token_to_id(token)
+        if spm_id == super().token_to_id("<unk>"):
             return self.unk_token_id
 
-        return int(spm_token_id.numpy()) + 1
+        return spm_id + 1
 
-    def tokenize(self, inputs):
-        self._check_vocabulary()
-        tokens = super().tokenize(inputs)
+    @preprocessing_function
+    def _tokenize_tf(self, inputs):
+        tokens = super()._tokenize_tf(inputs)
 
         # Correct `unk_token_id` (0 -> 3). Note that we do not correct
         # `start_token_id` and `end_token_id`; they are dealt with in
@@ -168,8 +171,21 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         # Shift the tokens IDs right by one.
         return tf.add(tokens, 1)
 
-    def detokenize(self, inputs):
-        self._check_vocabulary()
+    def _tokenize_spm(self, inputs):
+        tokens = super()._tokenize_spm(inputs)
+
+        def process(ids):
+            return [
+                (id if id != 0 else self.unk_token_id - 1) + 1 for id in ids
+            ]
+
+        if tokens and isinstance(tokens[0], list):
+            return [process(ids) for ids in tokens]
+        else:
+            return process(tokens)
+
+    @preprocessing_function
+    def _detokenize_tf(self, inputs):
         tokens = tf.ragged.boolean_mask(
             inputs, tf.not_equal(inputs, self.mask_token_id)
         )
@@ -189,4 +205,29 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         # Note: Even though we map `"<s>" and `"</s>"` to the correct IDs,
         # the `detokenize` method will return empty strings for these tokens.
         # This is a vagary of the `sentencepiece` library.
-        return super().detokenize(tokens)
+        return super()._detokenize_tf(tokens)
+
+    def _detokenize_spm(self, inputs):
+        self._maybe_initialized_spm()
+        inputs, batched = self._canonicalize_detokenize_spm_inputs(inputs)
+
+        def process(ids):
+            ids = [id for id in ids if id != self.mask_token_id]
+            new_ids = []
+            for id in ids:
+                id -= 1
+                if id == self.unk_token_id - 1:
+                    new_ids.append(0)
+                elif id == self.end_token_id - 1:
+                    new_ids.append(2)
+                elif id == self.start_token_id - 1:
+                    new_ids.append(1)
+                else:
+                    new_ids.append(id)
+            return new_ids
+
+        processed_inputs = [process(ids) for ids in inputs]
+        outputs = self._sentence_piece_spm.Decode(processed_inputs)
+        if not batched:
+            outputs = outputs[0]
+        return outputs
