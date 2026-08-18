@@ -4,12 +4,8 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.masked_lm import MaskedLM
-from keras_hub.src.models.modernbert.modern_bert_backbone import (
-    ModernBertBackbone,
-)
-from keras_hub.src.models.modernbert.modern_bert_masked_lm_preprocessor import (
-    ModernBertMaskedLMPreprocessor,
-)
+from keras_hub.src.models.modernbert.modern_bert_backbone import ModernBertBackbone
+from keras_hub.src.models.modernbert.modern_bert_masked_lm_preprocessor import ModernBertMaskedLMPreprocessor
 
 
 @keras_hub_export("keras_hub.models.ModernBertMaskedLM")
@@ -88,7 +84,7 @@ class ModernBertMaskedLM(MaskedLM):
         #   -> tied decoder
         self.mlm_head_dense = layers.Dense(
             backbone.hidden_dim,
-            use_bias=True,
+            use_bias=False,
             name="mlm_head_dense",
         )
 
@@ -99,7 +95,17 @@ class ModernBertMaskedLM(MaskedLM):
 
         self.mlm_head_norm = layers.LayerNormalization(
             epsilon=backbone.layer_norm_epsilon,
+            center=False,
+            scale=True,
             name="mlm_head_norm",
+        )
+
+        self.mlm_head_decoder_bias = keras.Variable(
+            initializer=keras.initializers.Zeros(),
+            shape=(backbone.vocabulary_size,),
+            dtype=backbone.compute_dtype,
+            trainable=True,
+            name="mlm_head_decoder_bias",
         )
 
         # Inputs
@@ -118,12 +124,11 @@ class ModernBertMaskedLM(MaskedLM):
             axis=1,
         )
 
-        # HF prediction head
+        # HF prediction head:
+        # hidden -> dense -> GELU -> layer norm -> tied decoder + bias.
         masked_sequence_output = self.mlm_head_dense(masked_sequence_output)
 
-        masked_sequence_output = self.mlm_head_activation(
-            masked_sequence_output
-        )
+        masked_sequence_output = self.mlm_head_activation(masked_sequence_output)
 
         masked_sequence_output = self.mlm_head_norm(masked_sequence_output)
 
@@ -133,7 +138,8 @@ class ModernBertMaskedLM(MaskedLM):
             reverse=True,
         )
 
-        # Initialize MaskedLM
+        logits = logits + self.mlm_head_decoder_bias
+
         super().__init__(
             inputs={
                 **inputs,
