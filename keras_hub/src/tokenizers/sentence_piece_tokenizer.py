@@ -149,8 +149,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         )
 
     def _set_proto_spm(self, proto):
-        self._sentence_piece_spm = spm.SentencePieceProcessor()
-        if hasattr(self._sentence_piece_spm, "Init"):
+        if hasattr(spm.SentencePieceProcessor, "Init"):
+            self._sentence_piece_spm = spm.SentencePieceProcessor()
             self._sentence_piece_spm.Init(
                 model_proto=proto,
                 out_type=str if is_string_dtype(self.compute_dtype) else int,
