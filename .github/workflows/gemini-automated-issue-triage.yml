@@ -15,6 +15,10 @@ on:
         required: true
         type: 'number'
 
+permissions:
+  contents: 'read'
+  issues: 'write'
+
 concurrency:
   group: '${{ github.workflow }}-${{ github.event.issue.number || github.event.inputs.issue_number }}'
   cancel-in-progress: true
@@ -33,7 +37,7 @@ jobs:
           ))
         )
       )
-    uses: keras-team/shared-workflows/.github/workflows/gemini-issue-triage.yml@v1
+    uses: keras-team/shared-workflows/.github/workflows/gemini-issue-triage.yml@64ae73715760c234c65f489fab4b561d8e5f3c50 # v1
     secrets:
       GEMINI_API: '${{ secrets.GEMINI_API }}'
     with:

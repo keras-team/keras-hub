@@ -11,6 +11,11 @@ on:
   pull_request_review_comment:
     types: [created]
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 jobs:
   jules:
     # Only PR comments that mention @jules, from maintainers.
@@ -18,6 +23,6 @@ jobs:
       (github.event_name == 'pull_request_review_comment' || github.event.issue.pull_request) &&
       contains(github.event.comment.body, '@jules') &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
-    uses: keras-team/shared-workflows/.github/workflows/jules-review.yml@v1
+    uses: keras-team/shared-workflows/.github/workflows/jules-review.yml@64ae73715760c234c65f489fab4b561d8e5f3c50 # v1
     secrets:
       JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
