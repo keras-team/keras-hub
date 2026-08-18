@@ -37,9 +37,10 @@ jobs:
           ))
         )
       )
-    uses: keras-team/shared-workflows/.github/workflows/gemini-issue-triage.yml@64ae73715760c234c65f489fab4b561d8e5f3c50 # v1
+    uses: keras-team/shared-workflows/.github/workflows/gemini-issue-triage.yml@d9d89774659b8a8b1a8d80f83733075c3f683416 # v1
     secrets:
       GEMINI_API: '${{ secrets.GEMINI_API }}'
     with:
+      issue_number: '${{ github.event.inputs.issue_number || inputs.issue_number }}'
       allowed_labels: 'backend:jax,backend:tensorflow,backend:torch,backend:OpenVino,Gemma,layers,python,dependencies,Duplicate,stale,stat:awaiting response from contributor,stat:awaiting keras-eng,Good first issue,keras-team-review-pending,irrelevant issue'
       gemini_model: 'gemini-3.5-flash'
