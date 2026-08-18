@@ -150,13 +150,18 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def _set_proto_spm(self, proto):
         self._sentence_piece_spm = spm.SentencePieceProcessor()
-        self._sentence_piece_spm.Init(
-            model_proto=proto,
-            out_type=str if is_string_dtype(self.compute_dtype) else int,
-            add_bos=self.add_bos,
-            add_eos=self.add_eos,
-            alpha=1.0,
-        )
+        if hasattr(self._sentence_piece_spm, "Init"):
+            self._sentence_piece_spm.Init(
+                model_proto=proto,
+                out_type=str if is_string_dtype(self.compute_dtype) else int,
+                add_bos=self.add_bos,
+                add_eos=self.add_eos,
+                alpha=1.0,
+            )
+        else:
+            self._sentence_piece_spm = spm.SentencePieceProcessor(
+                model_proto=proto
+            )
 
     def set_proto(self, proto):
         if proto is None:
@@ -373,8 +378,12 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 )
 
         inputs, batched = _canonicalize_tokenize_inputs(inputs)
+        out_type = str if is_string_dtype(self.compute_dtype) else int
         batched_tokens = self._sentence_piece_spm.Encode(
-            inputs, add_bos=self.add_bos, add_eos=self.add_eos
+            inputs,
+            out_type=out_type,
+            add_bos=self.add_bos,
+            add_eos=self.add_eos,
         )
 
         # Convert to a dense output if `sequence_length` is set.
