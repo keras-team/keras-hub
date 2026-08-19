@@ -385,6 +385,7 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
         x = x * embed_scale
 
         batch_size = ops.shape(token_ids)[0]
+        # static: preprocessor pads to fixed sequence_length
         prompt_length = token_ids.shape[1]
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_key_value_heads
@@ -502,6 +503,8 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
         canvas_length = x.shape[1]
 
         # Auto-pad encoder KV cache to prompt + canvas length if not pre-padded.
+        # All ints: cache dim 3 is static prompt_length from _encode_prompt,
+        # canvas_length is a fixed config attribute, so the comparison is safe.
         cache_seq_len = ops.shape(encoder_kv_cache)[3]
         if cache_seq_len < prompt_length + canvas_length:
             pad_len = (prompt_length + canvas_length) - cache_seq_len

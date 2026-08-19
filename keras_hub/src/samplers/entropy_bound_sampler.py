@@ -144,7 +144,7 @@ class EntropyBoundSampler(Sampler):
         )
 
         # Per-row stop: shape (B,) bool
-        stop = confidence_met & stability_met
+        stop = ops.logical_and(confidence_met, stability_met)
 
         state = (
             cur_argmax,

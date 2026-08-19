@@ -28,6 +28,7 @@ from transformers import DiffusionGemmaForBlockDiffusion
 import keras_hub
 
 GENERATION_SEED = 123
+CANVAS_SEED = 1234
 torch.manual_seed(GENERATION_SEED)
 
 device = torch.device("cpu")
@@ -88,14 +89,21 @@ def _precompute_hf_outputs(hf_repo_id):
     param_count = _count_hf_params(hf_model)
     print(f"-> HF parameter count: {param_count:,}", flush=True)
 
-    # Fixed all-zero canvas for deterministic verification.
-    # Both text and image tests use the same canvas so HF and KH are compared
-    # on identical decoder inputs.
     canvas_length = getattr(hf_model.config, "canvas_length", 256)
+    vocab_size = len(processor.tokenizer)
+
+    # Text uses a seeded random canvas so the diverse token embeddings prevent
+    # float32 BLAS rounding from landing on an MoE routing boundary at layer 29.
+    # Image uses all-zeros canvas to match PR behaviour (deterministic, 99.6%+).
+    rng = np.random.default_rng(CANVAS_SEED)
+    text_canvas_np = rng.integers(
+        0, vocab_size, size=(1, canvas_length), dtype=np.int32
+    )
+    text_canvas = torch.tensor(text_canvas_np, dtype=torch.long)
     fixed_canvas = torch.zeros(1, canvas_length, dtype=torch.long)
 
     text_fwd = _hf_forward(
-        hf_model, processor, PROMPT_TEXT, decoder_input_ids=fixed_canvas
+        hf_model, processor, PROMPT_TEXT, decoder_input_ids=text_canvas
     )
 
     image_data = None
@@ -128,7 +136,8 @@ def _precompute_hf_outputs(hf_repo_id):
 
     return {
         "param_count": param_count,
-        "canvas_token_ids": np.zeros((1, canvas_length), dtype=np.int32),
+        "text_canvas_token_ids": text_canvas_np,
+        "image_canvas_token_ids": np.zeros((1, canvas_length), dtype=np.int32),
         "text_logits": text_fwd["logits"],
         "text_input_ids": text_fwd["input_ids"],
         "text_attention_mask": text_fwd["attention_mask"],
@@ -477,7 +486,8 @@ def _verify(diffusion_lm, hf_data):
     np.testing.assert_equal(kh_params, hf_params)
     print(f"✅ Parameter counts match: {kh_params:,}")
 
-    canvas_token_ids = hf_data["canvas_token_ids"]
+    text_canvas_token_ids = hf_data["text_canvas_token_ids"]
+    image_canvas_token_ids = hf_data["image_canvas_token_ids"]
 
     # Patch preprocessor's num_vision_tokens_per_image if image data exists in
     # HF output
@@ -520,7 +530,7 @@ def _verify(diffusion_lm, hf_data):
         diffusion_lm,
         hf_data["text_input_ids"].astype(np.int32),
         hf_data["text_attention_mask"].astype(np.int32),
-        canvas_token_ids=canvas_token_ids,
+        canvas_token_ids=text_canvas_token_ids,
     )
     _test_numerics("text", kh_logits, hf_data["text_logits"])
 
@@ -556,7 +566,7 @@ def _verify(diffusion_lm, hf_data):
                     diffusion_lm,
                     token_ids,
                     padding_mask,
-                    canvas_token_ids=canvas_token_ids,
+                    canvas_token_ids=image_canvas_token_ids,
                     pixel_values=pixel_values,
                     pixel_position_ids=pixel_position_ids,
                     vision_indices=vision_indices,
