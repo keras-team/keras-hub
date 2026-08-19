@@ -58,6 +58,8 @@ class MistralCausalLM(CausalLM):
         token_ids,
         cache,
         cache_update_index,
+        img_embeddings=None,
+        placeholder_indices=None,
     ):
         """Forward pass of `MistralCausalLM` with cache.
 
@@ -71,6 +73,15 @@ class MistralCausalLM(CausalLM):
             cache: a dense float Tensor, the cache of key and value.
             cache_update_index: int, or int Tensor. The index of current inputs
             in the whole sequence.
+            img_embeddings: a dense float Tensor of projected image features,
+                or `None` for a text-only forward pass. When provided, these
+                are scattered into `token_ids`' embeddings at
+                `placeholder_indices` before the decoder layers run. This is
+                only ever non-`None` on the initial cache-seeding forward
+                pass; incremental decode steps always pass `None`, since the
+                image features have already been folded into the cache.
+            placeholder_indices: flat positions of image placeholder tokens,
+                required alongside `img_embeddings` when it is not `None`.
 
         Returns:
             A (logits, hidden_states, cache) tuple. Where `logits` is the
@@ -79,6 +90,10 @@ class MistralCausalLM(CausalLM):
             the decoding cache.
         """
         x = self.backbone.token_embedding(token_ids)
+        if img_embeddings is not None:
+            x = self.backbone.image_text_embedding_merger(
+                x, img_embeddings, placeholder_indices
+            )
         # Each decoder layer has a cache; we update them separately.
         updated_cache = []
         for i in range(self.backbone.num_layers):
@@ -94,7 +109,9 @@ class MistralCausalLM(CausalLM):
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
-    def _build_cache(self, token_ids):
+    def _build_cache(
+        self, token_ids, img_embeddings=None, placeholder_indices=None
+    ):
         """Build an empty cache for use with `call_with_cache()`."""
         batch_size = ops.shape(token_ids)[0]
         max_length = ops.shape(token_ids)[1]
@@ -113,7 +130,13 @@ class MistralCausalLM(CausalLM):
         ]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
         # Seed the cache.
-        _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
+        _, hidden_states, cache = self.call_with_cache(
+            token_ids,
+            cache,
+            0,
+            img_embeddings=img_embeddings,
+            placeholder_indices=placeholder_indices,
+        )
         return hidden_states, cache
 
     def generate_step(
@@ -135,8 +158,33 @@ class MistralCausalLM(CausalLM):
                 will stop.
         """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
+        pixel_values = inputs.get("pixel_values", None)
+        image_sizes = inputs.get("image_sizes", None)
+        placeholder_indices = inputs.get("placeholder_indices", None)
+
+        # Compute image features once, at prefill, from a static (Python
+        # int, not tensor) shape check on the number of images. An unknown
+        # static shape (`None`) is treated as "no images", matching Gemma3's
+        # convention of falling back to a text-only forward pass whenever
+        # the number of images can't be determined without tracing.
+        img_embeddings = None
+        if (
+            not self.backbone.text_only_model
+            and pixel_values is not None
+            and pixel_values.shape[0]
+        ):
+            img_embeddings = self.backbone.image_feature_extractor(
+                pixel_values, image_sizes
+            )
+        else:
+            placeholder_indices = None
+
         # Create and seed cache with a single forward pass.
-        hidden_states, cache = self._build_cache(token_ids)
+        hidden_states, cache = self._build_cache(
+            token_ids,
+            img_embeddings=img_embeddings,
+            placeholder_indices=placeholder_indices,
+        )
         # Compute the lengths of all user inputted tokens ids.
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         # Start at the first index that has no user inputted id.
