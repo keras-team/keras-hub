@@ -27,10 +27,9 @@ jobs:
       fail-fast: false
       matrix:
         backend: [jax, tensorflow, torch]
-        shard: [1, 2, 3, 4]
 
-    name: GPU tests (${{ matrix.backend }}, shard ${{ matrix.shard }})
-    runs-on: keras-linux-x86-g2-32-l4-1gpu
+    name: GPU tests (${{ matrix.backend }})
+    runs-on: linux-x86-g2-48-l4-4gpu
     timeout-minutes: 240
 
     container:
@@ -60,7 +59,6 @@ jobs:
         pip install -U pip setuptools psutil
         pip install -r requirements-${{ matrix.backend }}-cuda.txt --progress-bar off --timeout 1000
         pip install huggingface_hub --progress-bar off
-        pip install pytest-split --progress-bar off
         pip install --no-deps -e "." --progress-bar off
 
     - name: Test with pytest
@@ -70,4 +68,4 @@ jobs:
         TF_FORCE_GPU_ALLOW_GROWTH: "true"
       run: |
         pytest keras_hub --check_gpu --run_large --cov=keras_hub \
-          --durations=50 --splits 4 --group ${{ matrix.shard }}
+          --durations=50 -n 4 --dist loadfile
