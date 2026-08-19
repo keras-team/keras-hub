@@ -366,12 +366,14 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
             if not isinstance(text, (str, bytes)):
                 raise ValueError(
                     f"Expected a string or bytes, but received: {type(text)}. "
-                    "Multi-dimensional lists are not supported. Please flatten your input."
+                    "Multi-dimensional lists are not supported. "
+                    "Please flatten your input."
                 )
                 
             if isinstance(text, bytes):
                 text = text.decode("utf-8", errors=errors)
-                # If a custom replacement char is set, we must replace the default U+FFFD
+                # If a custom replacement char is set, we must replace the 
+                # default U+FFFD
                 if errors == "replace" and self.replacement_char != 65533:
                     text = text.replace("\ufffd", chr(self.replacement_char))
                 
@@ -380,7 +382,8 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
             if self.normalization_form:
                 text = unicodedata.normalize(self.normalization_form, text)
                 
-            # Combine ord() and clipping into a single list comprehension to save O(N) traversals
+            # Combine ord() and clipping into a single list comprehension to 
+            # save O(N) traversals
             if max_id is not None:
                 tokens = [min(ord(c), max_id) for c in text]
             else:
@@ -426,7 +429,8 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
                 if i == 0 or (has_vocab and i >= vocab_size):
                     continue 
                     
-                # Python's chr() only accepts values from 0 to 0x10FFFF (1114111)
+                # Python's chr() only accepts values from 0 to 0x10FFFF
+                # (1114111)
                 if 0 < i < 1114112:
                     result.append(chr(i))
                 else:
