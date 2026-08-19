@@ -56,6 +56,36 @@ def _tekken_init_kwargs():
     }
 
 
+def _tekken_vision_init_kwargs():
+    """Like `_tekken_init_kwargs`, but with the Mistral image tokens."""
+    byte_encoder = _bytes_to_unicode()
+    special_tokens = [
+        "<unk>",
+        "<s>",
+        "</s>",
+        "<pad>",
+        "[INST]",
+        "[IMG]",
+        "[IMG_BREAK]",
+        "[IMG_END]",
+    ]
+    vocabulary = {token: i for i, token in enumerate(special_tokens)}
+    offset = len(special_tokens)
+    for i in range(256):
+        vocabulary[byte_encoder[i]] = offset + i
+    merges = []
+    next_id = offset + 256
+    for a, b in [("t", "h"), ("th", "e"), ("i", "n")]:
+        vocabulary[a + b] = next_id
+        merges.append(f"{a} {b}")
+        next_id += 1
+    return {
+        "vocabulary": vocabulary,
+        "merges": merges,
+        "split_pattern": _TEKKEN_SPLIT_PATTERN,
+    }
+
+
 class MistralTokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
@@ -101,6 +131,75 @@ class MistralTokenizerTest(TestCase):
                 input_data=self.input_data,
             )
 
+    def test_no_vision_tokens_by_default(self):
+        tokenizer = MistralTokenizer(**self.init_kwargs)
+        self.assertFalse(tokenizer.has_vision_tokens)
+        self.assertEqual(tokenizer.image_placeholder_token_id, -1)
+        self.assertEqual(tokenizer.image_break_token_id, -1)
+        self.assertEqual(tokenizer.image_end_token_id, -1)
+
+    def test_no_vision_tokens_when_explicitly_disabled(self):
+        tokenizer = MistralTokenizer(
+            has_vision_tokens=False, **self.init_kwargs
+        )
+        self.assertFalse(tokenizer.has_vision_tokens)
+        self.assertEqual(tokenizer.image_placeholder_token_id, -1)
+        self.assertEqual(tokenizer.image_break_token_id, -1)
+        self.assertEqual(tokenizer.image_end_token_id, -1)
+
+    def test_vision_tokens_when_enabled(self):
+        tokenizer = MistralTokenizer(
+            # Generated using create_mistral_vision_test_proto.py
+            proto=os.path.join(
+                self.get_test_data_dir(), "mistral_vision_test_vocab.spm"
+            ),
+            has_vision_tokens=True,
+        )
+        self.assertTrue(tokenizer.has_vision_tokens)
+        ids = [
+            tokenizer.image_placeholder_token_id,
+            tokenizer.image_break_token_id,
+            tokenizer.image_end_token_id,
+        ]
+        for token_id in ids:
+            self.assertNotEqual(token_id, -1)
+        # All three ids are distinct from each other.
+        self.assertEqual(len(set(ids)), 3)
+        # And distinct from the other existing special tokens.
+        existing_ids = {
+            tokenizer.start_token_id,
+            tokenizer.end_token_id,
+            tokenizer.pad_token_id,
+        }
+        self.assertTrue(existing_ids.isdisjoint(set(ids)))
+
+    def test_vision_tokens_config_round_trip(self):
+        tokenizer = MistralTokenizer(
+            # Generated using create_mistral_vision_test_proto.py
+            proto=os.path.join(
+                self.get_test_data_dir(), "mistral_vision_test_vocab.spm"
+            ),
+            has_vision_tokens=True,
+        )
+        config = tokenizer.get_config()
+        self.assertTrue(config["has_vision_tokens"])
+        # `proto` is persisted as a file asset rather than in `get_config()`
+        # (see `SentencePieceTokenizer.get_config()`), so re-supply it
+        # explicitly to fully rebuild an equivalent tokenizer.
+        config["proto"] = tokenizer.proto
+        restored = MistralTokenizer.from_config(config)
+        self.assertTrue(restored.has_vision_tokens)
+        self.assertEqual(
+            restored.image_placeholder_token_id,
+            tokenizer.image_placeholder_token_id,
+        )
+        self.assertEqual(
+            restored.image_break_token_id, tokenizer.image_break_token_id
+        )
+        self.assertEqual(
+            restored.image_end_token_id, tokenizer.image_end_token_id
+        )
+
 
 class MistralTekkenTokenizerTest(TestCase):
     def setUp(self):
@@ -122,3 +221,73 @@ class MistralTekkenTokenizerTest(TestCase):
         # Round-trip a simple string.
         output = tokenizer("the tin")
         self.assertEqual(tokenizer.detokenize(output), "the tin")
+
+    def test_no_vision_tokens_by_default(self):
+        tokenizer = MistralTekkenTokenizer(**self.init_kwargs)
+        self.assertFalse(tokenizer.has_vision_tokens)
+        self.assertEqual(tokenizer.image_placeholder_token_id, -1)
+        self.assertEqual(tokenizer.image_break_token_id, -1)
+        self.assertEqual(tokenizer.image_end_token_id, -1)
+
+    def test_no_vision_tokens_when_explicitly_disabled(self):
+        tokenizer = MistralTekkenTokenizer(
+            has_vision_tokens=False, **self.init_kwargs
+        )
+        self.assertFalse(tokenizer.has_vision_tokens)
+        self.assertEqual(tokenizer.image_placeholder_token_id, -1)
+        self.assertEqual(tokenizer.image_break_token_id, -1)
+        self.assertEqual(tokenizer.image_end_token_id, -1)
+
+    def test_vision_tokens_when_enabled(self):
+        tokenizer = MistralTekkenTokenizer(
+            has_vision_tokens=True, **_tekken_vision_init_kwargs()
+        )
+        self.assertTrue(tokenizer.has_vision_tokens)
+        ids = [
+            tokenizer.image_placeholder_token_id,
+            tokenizer.image_break_token_id,
+            tokenizer.image_end_token_id,
+        ]
+        for token_id in ids:
+            self.assertNotEqual(token_id, -1)
+        # All three ids are distinct from each other.
+        self.assertEqual(len(set(ids)), 3)
+        # And distinct from the other existing special tokens.
+        existing_ids = {
+            tokenizer.start_token_id,
+            tokenizer.end_token_id,
+            tokenizer.pad_token_id,
+        }
+        self.assertTrue(existing_ids.isdisjoint(set(ids)))
+        # The image tokens are unsplittable, just like `<s>`/`</s>`.
+        self.assertIn(
+            tokenizer.image_placeholder_token, tokenizer.unsplittable_tokens
+        )
+        self.assertIn(
+            tokenizer.image_break_token, tokenizer.unsplittable_tokens
+        )
+        self.assertIn(tokenizer.image_end_token, tokenizer.unsplittable_tokens)
+
+    def test_vision_tokens_config_round_trip(self):
+        tokenizer = MistralTekkenTokenizer(
+            has_vision_tokens=True, **_tekken_vision_init_kwargs()
+        )
+        config = tokenizer.get_config()
+        self.assertTrue(config["has_vision_tokens"])
+        # `vocabulary`/`merges` are persisted as file assets rather than in
+        # `get_config()` (see `BytePairTokenizer.get_config()`), so re-supply
+        # them explicitly to fully rebuild an equivalent tokenizer.
+        config["vocabulary"] = tokenizer.vocabulary
+        config["merges"] = tokenizer.merges
+        restored = MistralTekkenTokenizer.from_config(config)
+        self.assertTrue(restored.has_vision_tokens)
+        self.assertEqual(
+            restored.image_placeholder_token_id,
+            tokenizer.image_placeholder_token_id,
+        )
+        self.assertEqual(
+            restored.image_break_token_id, tokenizer.image_break_token_id
+        )
+        self.assertEqual(
+            restored.image_end_token_id, tokenizer.image_end_token_id
+        )
