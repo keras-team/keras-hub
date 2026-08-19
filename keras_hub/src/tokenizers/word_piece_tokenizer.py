@@ -435,6 +435,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
      - [Song et al., 2020](https://arxiv.org/abs/2012.15524)
 
     Examples:
+    >>> import numpy as np
+    >>> import tensorflow as tf
+    >>> import keras_hub
 
     Ragged outputs.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -444,8 +447,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ...     lowercase=True,
     ... )
     >>> outputs = tokenizer(inputs)
-    >>> np.array(outputs)
-    array([1, 2, 3, 4, 5, 6, 7], dtype=int32)
+    >>> np.array(outputs).tolist()
+    [1, 2, 3, 4, 5, 6, 7]
 
     Dense outputs.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
