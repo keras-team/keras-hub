@@ -563,6 +563,18 @@ from keras_hub.src.models.modernbert.modern_bert_masked_lm import (
 from keras_hub.src.models.modernbert.modern_bert_masked_lm_preprocessor import (
     ModernBertMaskedLMPreprocessor as ModernBertMaskedLMPreprocessor,
 )
+from keras_hub.src.models.modernbert.modern_bert_text_classifier import (
+    ModernBertTextClassifier as ModernBertClassifier,
+)
+from keras_hub.src.models.modernbert.modern_bert_text_classifier import (
+    ModernBertTextClassifier as ModernBertTextClassifier,
+)
+from keras_hub.src.models.modernbert.modern_bert_text_classifier_preprocessor import (
+    ModernBertTextClassifierPreprocessor as ModernBertPreprocessor,
+)
+from keras_hub.src.models.modernbert.modern_bert_text_classifier_preprocessor import (
+    ModernBertTextClassifierPreprocessor as ModernBertTextClassifierPreprocessor,
+)
 from keras_hub.src.models.modernbert.modern_bert_tokenizer import (
     ModernBertTokenizer as ModernBertTokenizer,
 )
