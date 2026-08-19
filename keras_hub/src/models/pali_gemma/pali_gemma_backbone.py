@@ -100,7 +100,7 @@ class PaliGemmaBackbone(Backbone):
     # Randomly initialized PaliGemma decoder with custom config.
     model = keras_hub.models.PaliGemmaBackbone(
         vocabulary_size=50257,
-        images_size=224,
+        image_size=224,
         num_layers=12,
         num_query_heads=12,
         num_key_value_heads=1,
