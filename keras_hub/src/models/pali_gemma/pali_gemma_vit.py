@@ -426,7 +426,7 @@ class PaliGemmaVit(keras.Model):
             as a image classifier, this value would correspond to the number of
             output classes.
         pooling: string. The encoded vision embeddings are pooled using the
-            specified polling setting. The accepted values are `"map"`, `"gap"`,
+            specified pooling setting. The accepted values are `"map"`, `"gap"`,
             `"zero"` or `None`. Defaults to `None`.
         classifier_activation: activation fucntion. The activation that is used
             for final output classification
