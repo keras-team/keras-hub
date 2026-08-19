@@ -6,7 +6,7 @@ from keras_hub.src.models.modernbert.modern_bert_backbone import (
 from keras_hub.src.models.modernbert.modern_bert_text_classifier import (
     ModernBertTextClassifier,
 )
-from keras_hub.src.models.modernbert.modern_bert_text_classifier_preprocessor import (
+from keras_hub.src.models.modernbert.modern_bert_text_classifier_preprocessor import (  # noqa: E501
     ModernBertTextClassifierPreprocessor,
 )
 from keras_hub.src.models.modernbert.modern_bert_tokenizer import (

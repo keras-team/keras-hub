@@ -120,17 +120,22 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_t5gemma2
         else:
             raise ValueError(
-                f"KerasHub has no converter for huggingface/transformers models with model type `'{model_type}'`."
+                "KerasHub has no converter for huggingface/transformers models "
+                f"with model type `'{model_type}`."
             )
 
     def check_backbone_class(self):
         return self.converter.backbone_cls
 
     def load_backbone(self, cls, load_weights, **kwargs):
-        convert_backbone_config_param_len = len(inspect.signature(self.converter.convert_backbone_config).parameters)
+        convert_backbone_config_param_len = len(
+            inspect.signature(self.converter.convert_backbone_config).parameters
+        )
         if convert_backbone_config_param_len != 1:
             backbone_kwargs, kwargs = self.get_backbone_kwargs(**kwargs)
-            keras_config = self.converter.convert_backbone_config(self.config, cls, **backbone_kwargs)
+            keras_config = self.converter.convert_backbone_config(
+                self.config, cls, **backbone_kwargs
+            )
         else:
             keras_config = self.converter.convert_backbone_config(self.config)
         backbone = cls(**{**keras_config, **kwargs})
@@ -160,7 +165,9 @@ class TransformersPresetLoader(PresetLoader):
             and architecture != "ViTModel"
             and not hasattr(self.converter, "convert_head")
         ):
-            return super().load_task(cls, load_weights, load_task_weights, **kwargs)
+            return super().load_task(
+                cls, load_weights, load_task_weights, **kwargs
+            )
         # Support loading the classification head for classifier models.
         if "ForImageClassification" in architecture:
             kwargs["num_classes"] = len(self.config["id2label"])
@@ -175,7 +182,9 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_image_converter(self, cls, **kwargs):
         if hasattr(self.converter, "load_image_converter_config"):
-            config = self.converter.load_image_converter_config(self.preset, self.config)
+            config = self.converter.load_image_converter_config(
+                self.preset, self.config
+            )
             if config is not None:
                 return cls(**{**config, **kwargs})
         # TODO: set image size for pali gemma checkpoints.
@@ -183,21 +192,27 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_audio_converter(self, cls, **kwargs):
         if hasattr(self.converter, "load_audio_converter_config"):
-            config = self.converter.load_audio_converter_config(self.preset, self.config)
+            config = self.converter.load_audio_converter_config(
+                self.preset, self.config
+            )
             if config is not None:
                 return cls(**{**config, **kwargs})
         return None
 
     def load_video_converter(self, cls, **kwargs):
         if hasattr(self.converter, "load_video_converter_config"):
-            config = self.converter.load_video_converter_config(self.preset, self.config)
+            config = self.converter.load_video_converter_config(
+                self.preset, self.config
+            )
             if config is not None:
                 return cls(**{**config, **kwargs})
         return None
 
     def load_preprocessor(self, cls, config_file=None, **kwargs):
         if hasattr(self.converter, "load_preprocessor_config"):
-            extra = self.converter.load_preprocessor_config(self.preset, self.config)
+            extra = self.converter.load_preprocessor_config(
+                self.preset, self.config
+            )
             if extra:
                 kwargs = {**extra, **kwargs}
         if config_file is not None:

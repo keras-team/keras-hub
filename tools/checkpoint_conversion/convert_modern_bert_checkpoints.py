@@ -24,7 +24,9 @@ import torch
 from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 
-from keras_hub.src.models.modernbert.modern_bert_masked_lm import ModernBertMaskedLM
+from keras_hub.src.models.modernbert.modern_bert_masked_lm import (
+    ModernBertMaskedLM,
+)
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -112,7 +114,9 @@ def verify_embeddings(
         keras_embedding,
     )
 
-    diff = np.abs(hf_embedding.astype("float32") - keras_embedding.astype("float32"))
+    diff = np.abs(
+        hf_embedding.astype("float32") - keras_embedding.astype("float32")
+    )
 
     max_diff = np.max(diff)
     mean_diff = np.mean(diff)
@@ -384,7 +388,9 @@ def verify_masked_lm(
         pass
 
     else:
-        raise ValueError(f"Unexpected Keras MLM output shape: {keras_logits.shape}")
+        raise ValueError(
+            f"Unexpected Keras MLM output shape: {keras_logits.shape}"
+        )
 
     # Verify shape.
     print(f"HF masked logits shape    : {hf_mask_logits.shape}")
@@ -454,8 +460,10 @@ def verify_masked_lm(
             [keras_top1],
             clean_up_tokenization_spaces=False,
         )
-
-        print(f"  HF: '{hf_word}' | Keras: '{keras_word}' | top-1 match: {top1_match} | top-5 match: {top5_match}")
+        print(
+            f"  HF: '{hf_word}' | Keras: '{keras_word}' | "
+            f"top-1 match: {top1_match} | top-5 match: {top5_match}"
+        )
 
     return (
         max_diff,
@@ -534,7 +542,10 @@ def main(preset):
         "Hello, my name is [MASK] and I live in [MASK].",
         "The [MASK] barked loudly at the mailman.",
         "In 1969, humans first landed on the [MASK].",
-        ("The quick brown fox jumps over the lazy dog while the " * 5 + "[MASK] watches."),
+        (
+            "The quick brown fox jumps over the lazy dog while the " * 5
+            + "[MASK] watches."
+        ),
     ]
 
     results = []
@@ -552,21 +563,29 @@ def main(preset):
     print("\n")
     print("NUMERICAL VERIFICATION SUMMARY")
 
-    valid_logits_results = [result for result in results if result["logits_max_diff"] is not None]
+    valid_logits_results = [
+        result for result in results if result["logits_max_diff"] is not None
+    ]
 
     total_top1 = sum(result["top1_matches"] for result in valid_logits_results)
 
     total_top5 = sum(result["top5_matches"] for result in valid_logits_results)
 
-    total_masks = sum(result["top1_matches"] * 0 for result in valid_logits_results)
+    total_masks = sum(
+        result["top1_matches"] * 0 for result in valid_logits_results
+    )
 
     print(f"Test cases run: {len(test_cases)}")
 
-    print(f"Max embedding diff: {max(result['embedding_max_diff'] for result in results):.6e}")
+    max_embedding_diff = max(result["embedding_max_diff"] for result in results)
+    max_backbone_diff = max(result["backbone_max_diff"] for result in results)
+    max_mlm_logits_diff = max(
+        result["logits_max_diff"] for result in valid_logits_results
+    )
 
-    print(f"Max backbone diff: {max(result['backbone_max_diff'] for result in results):.6e}")
-
-    print(f"Max MLM logits diff: {max(result['logits_max_diff'] for result in valid_logits_results):.6e}")
+    print(f"Max embedding diff: {max_embedding_diff:.6e}")
+    print(f"Max backbone diff: {max_backbone_diff:.6e}")
+    print(f"Max MLM logits diff: {max_mlm_logits_diff:.6e}")
 
     # Count masks directly from the tokenizer inputs.
     total_masks = 0
@@ -581,9 +600,13 @@ def main(preset):
 
     print(f"Top-5 prediction matches: {total_top5}/{total_masks}")
 
-    assert total_top1 == total_masks, "At least one top-1 prediction differs from Hugging Face."
+    assert total_top1 == total_masks, (
+        "At least one top-1 prediction differs from Hugging Face."
+    )
 
-    assert total_top5 == total_masks, "At least one top-5 prediction differs from Hugging Face."
+    assert total_top5 == total_masks, (
+        "At least one top-5 prediction differs from Hugging Face."
+    )
 
     print("\nAll numerical verification checks passed.")
 

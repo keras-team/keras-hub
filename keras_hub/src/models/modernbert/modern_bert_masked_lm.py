@@ -4,8 +4,12 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.masked_lm import MaskedLM
-from keras_hub.src.models.modernbert.modern_bert_backbone import ModernBertBackbone
-from keras_hub.src.models.modernbert.modern_bert_masked_lm_preprocessor import ModernBertMaskedLMPreprocessor
+from keras_hub.src.models.modernbert.modern_bert_backbone import (
+    ModernBertBackbone,
+)
+from keras_hub.src.models.modernbert.modern_bert_masked_lm_preprocessor import (
+    ModernBertMaskedLMPreprocessor,
+)
 
 
 @keras_hub_export("keras_hub.models.ModernBertMaskedLM")
@@ -128,7 +132,9 @@ class ModernBertMaskedLM(MaskedLM):
         # hidden -> dense -> GELU -> layer norm -> tied decoder + bias.
         masked_sequence_output = self.mlm_head_dense(masked_sequence_output)
 
-        masked_sequence_output = self.mlm_head_activation(masked_sequence_output)
+        masked_sequence_output = self.mlm_head_activation(
+            masked_sequence_output
+        )
 
         masked_sequence_output = self.mlm_head_norm(masked_sequence_output)
 

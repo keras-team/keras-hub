@@ -1,6 +1,8 @@
 import numpy as np
 
-from keras_hub.src.models.modernbert.modern_bert_backbone import ModernBertBackbone
+from keras_hub.src.models.modernbert.modern_bert_backbone import (
+    ModernBertBackbone,
+)
 from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = ModernBertBackbone
@@ -11,7 +13,11 @@ def convert_backbone_config(transformers_config):
 
     rope_parameters = transformers_config.get("rope_parameters", {})
 
-    global_rope = rope_parameters.get("full_attention") or rope_parameters.get("global_attention") or {}
+    global_rope = (
+        rope_parameters.get("full_attention")
+        or rope_parameters.get("global_attention")
+        or {}
+    )
 
     rotary_max_wavelength = global_rope.get(
         "rope_theta",
@@ -26,7 +32,9 @@ def convert_backbone_config(transformers_config):
         "num_heads": transformers_config["num_attention_heads"],
         "dropout": transformers_config["attention_dropout"],
         "local_attention_window": transformers_config["local_attention"],
-        "global_attn_every_n_layers": transformers_config["global_attn_every_n_layers"],
+        "global_attn_every_n_layers": transformers_config[
+            "global_attn_every_n_layers"
+        ],
         "rotary_max_wavelength": float(rotary_max_wavelength),
         "layer_norm_epsilon": transformers_config["norm_eps"],
     }
@@ -73,7 +81,10 @@ def convert_weights(backbone, loader, _):
     )
 
     # Embedding Norm
-    if hasattr(backbone, "embedding_norm") and backbone.embedding_norm is not None:
+    if (
+        hasattr(backbone, "embedding_norm")
+        and backbone.embedding_norm is not None
+    ):
         embedding_norm_var = _get_norm_variable(backbone.embedding_norm)
         if embedding_norm_var is not None:
             loader.port_weight(
@@ -208,7 +219,10 @@ def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_model = tokenizer_json["model"]
 
     if tokenizer_model["type"] != "BPE":
-        raise ValueError(f"Expected a BPE tokenizer for ModernBERT, got {tokenizer_model['type']!r}.")
+        raise ValueError(
+            "Expected a BPE tokenizer for ModernBERT, got "
+            f"{tokenizer_model['type']!r}."
+        )
 
     return cls(
         vocabulary=tokenizer_model["vocab"],
