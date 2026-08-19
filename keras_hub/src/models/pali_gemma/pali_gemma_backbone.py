@@ -55,7 +55,7 @@ class PaliGemmaBackbone(Backbone):
             in a two-layer feedforward network for vision transformer. Defaults
             to `4304`.
         vit_pooling: `None` or string. The encoded vision embeddings are pooled
-            using the specified polling setting. The accepted values are
+            using the specified pooling setting. The accepted values are
             `"map"`, `"gap"`, `"zero"` or `None`. Defaults to `None`.
         vit_classifier_activation: activation function. The activation that
             is used for final output classification in the vision transformer.
