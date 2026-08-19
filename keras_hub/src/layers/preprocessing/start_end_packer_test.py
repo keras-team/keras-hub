@@ -10,6 +10,24 @@ class StartEndPackerTest(TestCase):
         ("allow_python_workflow", True),
         ("disallow_python_workflow", False),
     )
+    def test_layer_basics(self, allow_python_workflow):
+        self.run_preprocessing_layer_test(
+            cls=StartEndPacker,
+            init_kwargs={
+                "sequence_length": 7,
+                "start_value": 1,
+                "end_value": 2,
+                "pad_value": 3,
+                "_allow_python_workflow": allow_python_workflow,
+            },
+            input_data=tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]]),
+            expected_output=[[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 11, 2, 3]],
+        )
+
+    @parameterized.named_parameters(
+        ("allow_python_workflow", True),
+        ("disallow_python_workflow", False),
+    )
     def test_dense_input(self, allow_python_workflow):
         # right padding
         input_data = [5, 6, 7]
@@ -333,20 +351,6 @@ class StartEndPackerTest(TestCase):
     def test_special_token_dtype_error(self):
         with self.assertRaises(ValueError):
             StartEndPacker(sequence_length=5, start_value=1.0)
-
-    def test_batch(self):
-        start_end_packer = StartEndPacker(
-            sequence_length=7, start_value=1, end_value=2, pad_value=3
-        )
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
-        )
-        ds = ds.batch(2).map(start_end_packer)
-        output = ds.take(1).get_single_element()
-
-        exp_output = [[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 11, 2, 3]]
-        self.assertAllEqual(output, exp_output)
 
     @parameterized.named_parameters(
         ("allow_python_workflow", True),

@@ -490,7 +490,7 @@ class PaliGemmaVit(keras.Model):
         else:
             raise ValueError(
                 "Invalid value for argument `pooling`. "
-                "Expected one of 'map', 'gap', None. "
+                "Expected one of 'map', 'gap', 'zero', None. "
                 f"Received: pooling={pooling}"
             )
         outputs = keras.layers.Dense(

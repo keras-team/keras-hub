@@ -44,6 +44,11 @@ dependencies = [
 Home = "https://keras.io/keras_hub/"
 Repository = "https://github.com/keras-team/keras/keras_hub"
 
+# vLLM calls this at startup, in the driver and every worker. It returns
+# immediately unless the TPU backend is installed.
+[project.entry-points."vllm.general_plugins"]
+register_keras_hub = "keras_hub.src.vllm.plugin:register_keras_hub"
+
 [tool.setuptools.dynamic]
 version = {attr = "keras_hub.src.version.__version__"}
 
