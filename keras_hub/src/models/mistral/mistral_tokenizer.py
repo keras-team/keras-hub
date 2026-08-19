@@ -50,6 +50,10 @@ class MistralTokenizer(SentencePieceTokenizer):
             `bytes` object with a serialized SentencePiece proto. See the
             [SentencePiece repository](https://github.com/google/sentencepiece)
             for more details on the format.
+        has_vision_tokens: bool. Whether the vocabulary contains the
+            special image tokens (`"[IMG]"`, `"[IMG_BREAK]"`, `"[IMG_END]"`)
+            used by multimodal Mistral models such as Pixtral. Defaults to
+            `False`, since Mistral is primarily a text model.
 
     Examples:
     ```python
@@ -69,11 +73,27 @@ class MistralTokenizer(SentencePieceTokenizer):
 
     backbone_cls = MistralBackbone
 
-    def __init__(self, proto, **kwargs):
+    def __init__(self, proto, has_vision_tokens=False, **kwargs):
+        self.has_vision_tokens = has_vision_tokens
         self._add_special_token("<s>", "start_token")
         self._add_special_token("</s>", "end_token")
         self.pad_token_id = 0
+
+        if has_vision_tokens:
+            self._add_special_token("[IMG]", "image_placeholder_token")
+            self._add_special_token("[IMG_BREAK]", "image_break_token")
+            self._add_special_token("[IMG_END]", "image_end_token")
+        else:
+            self.image_placeholder_token_id = -1
+            self.image_break_token_id = -1
+            self.image_end_token_id = -1
+
         super().__init__(proto=proto, **kwargs)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"has_vision_tokens": self.has_vision_tokens})
+        return config
 
 
 @keras_hub_export(
@@ -106,6 +126,10 @@ class MistralTekkenTokenizer(BytePairTokenizer):
             vocabulary JSON file.
         merges: A list of BPE merge rules, or a path to a merges file.
         split_pattern: str. The Tekken pre-tokenization regex.
+        has_vision_tokens: bool. Whether the vocabulary contains the
+            special image tokens (`"[IMG]"`, `"[IMG_BREAK]"`, `"[IMG_END]"`)
+            used by multimodal Mistral models such as Pixtral. Defaults to
+            `False`, since Mistral is primarily a text model.
 
     Examples:
     ```python
@@ -120,16 +144,38 @@ class MistralTekkenTokenizer(BytePairTokenizer):
     backbone_cls = MistralBackbone
 
     def __init__(
-        self, vocabulary=None, merges=None, split_pattern=None, **kwargs
+        self,
+        vocabulary=None,
+        merges=None,
+        split_pattern=None,
+        has_vision_tokens=False,
+        **kwargs,
     ):
         self.split_pattern = split_pattern
+        self.has_vision_tokens = has_vision_tokens
         self._add_special_token("<s>", "start_token")
         self._add_special_token("</s>", "end_token")
         self.pad_token_id = 0
+
+        unsplittable_tokens = [self.start_token, self.end_token]
+        if has_vision_tokens:
+            self._add_special_token("[IMG]", "image_placeholder_token")
+            self._add_special_token("[IMG_BREAK]", "image_break_token")
+            self._add_special_token("[IMG_END]", "image_end_token")
+            unsplittable_tokens += [
+                self.image_placeholder_token,
+                self.image_break_token,
+                self.image_end_token,
+            ]
+        else:
+            self.image_placeholder_token_id = -1
+            self.image_break_token_id = -1
+            self.image_end_token_id = -1
+
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            unsplittable_tokens=[self.start_token, self.end_token],
+            unsplittable_tokens=unsplittable_tokens,
             **kwargs,
         )
 
@@ -225,7 +271,12 @@ class MistralTekkenTokenizer(BytePairTokenizer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({"split_pattern": self.split_pattern})
+        config.update(
+            {
+                "split_pattern": self.split_pattern,
+                "has_vision_tokens": self.has_vision_tokens,
+            }
+        )
         # `unsplittable_tokens` is derived from the special tokens in the
         # constructor, so it is not a separate config argument.
         del config["unsplittable_tokens"]

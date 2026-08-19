@@ -1,6 +1,7 @@
 import os
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 from keras import ops
 
@@ -10,6 +11,15 @@ from keras_hub.src.models.mistral.mistral_causal_lm_preprocessor import (
     MistralCausalLMPreprocessor,
 )
 from keras_hub.src.models.mistral.mistral_tokenizer import MistralTokenizer
+from keras_hub.src.models.mistral.mistral_vision_encoder import (
+    Mistral3MultiModalProjector,
+)
+from keras_hub.src.models.mistral.mistral_vision_encoder import (
+    Mistral3VisionEncoder,
+)
+from keras_hub.src.models.mistral.mistral_vision_encoder import (
+    compute_image_placeholder_indices,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -263,3 +273,153 @@ class MistralCausalLMTest(TestCase):
         )
 
         self.assertIsNone(causal_lm.get_quantization_layer_structure("int8"))
+
+
+class MistralCausalLMMultimodalTest(TestCase):
+    """Multimodal generation: vision features computed once at prefill.
+
+    Regression gate for `MistralCausalLM.generate_step`/`call_with_cache`/
+    `_build_cache`: image features must be computed exactly once (during
+    cache seeding) and never recomputed during incremental decode steps.
+    """
+
+    def _build_multimodal_causal_lm(self):
+        # `head_dim` must be a multiple of 4: Pixtral's 2D rotary embedding
+        # splits it into height/width halves, each further halved for
+        # sin/cos, so anything else produces mismatched weight shapes.
+        vision_encoder = Mistral3VisionEncoder(
+            image_size=8,
+            patch_size=4,
+            hidden_dim=8,
+            num_layers=1,
+            num_heads=2,
+            head_dim=4,
+            intermediate_dim=8,
+        )
+        multimodal_projector = Mistral3MultiModalProjector(
+            vision_hidden_dim=8,
+            text_hidden_dim=8,
+            spatial_merge_size=1,
+            patch_size=4,
+            image_size=8,
+        )
+        # `image_token_index` must stay inside `vocabulary_size`, since the
+        # token embedding lookup happens before the image-text merger
+        # overwrites those positions.
+        image_token_index = 9
+        backbone = MistralBackbone(
+            vocabulary_size=10,
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            vision_encoder=vision_encoder,
+            multimodal_projector=multimodal_projector,
+            image_token_index=image_token_index,
+        )
+        causal_lm = MistralCausalLM(backbone=backbone, preprocessor=None)
+
+        # Two images, each an 8x8 canvas patchified into a 2x2 grid (4
+        # patches); with `spatial_merge_size=1` every patch is its own merge
+        # window, so each image contributes 4 image-feature rows. Followed
+        # by one real token, then two padding positions to leave room for
+        # incremental decoding.
+        token_ids = ops.array(
+            [
+                [image_token_index] * 4 + [3, 0, 0],
+                [image_token_index] * 4 + [4, 0, 0],
+            ],
+            dtype="int32",
+        )
+        padding_mask = ops.array(
+            [
+                [1, 1, 1, 1, 1, 0, 0],
+                [1, 1, 1, 1, 1, 0, 0],
+            ],
+        )
+        placeholder_indices = compute_image_placeholder_indices(
+            token_ids, image_token_index=image_token_index
+        )
+        input_data = {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+            "pixel_values": ops.convert_to_tensor(
+                np.random.rand(2, 3, 8, 8).astype("float32")
+            ),
+            "image_sizes": ops.array([[8, 8], [8, 8]], dtype="int32"),
+            "placeholder_indices": ops.convert_to_tensor(placeholder_indices)[
+                None, :
+            ],
+        }
+        return causal_lm, input_data
+
+    def test_multimodal_generate(self):
+        causal_lm, input_data = self._build_multimodal_causal_lm()
+        output = causal_lm.generate(input_data, stop_token_ids=None)
+        self.assertEqual(ops.shape(output["token_ids"]), (2, 7))
+        self.assertEqual(ops.shape(output["padding_mask"]), (2, 7))
+
+    def test_multimodal_generate_computes_vision_features_once(self):
+        causal_lm, input_data = self._build_multimodal_causal_lm()
+        call_with_cache = causal_lm.call_with_cache
+        recorded_calls = []
+
+        def wrapper(*args, **kwargs):
+            recorded_calls.append(kwargs)
+            return call_with_cache(*args, **kwargs)
+
+        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
+            causal_lm.generate(input_data, stop_token_ids=None)
+
+        # At least one seeding call, plus incremental decode steps.
+        self.assertGreater(len(recorded_calls), 1)
+        # The first (cache-seeding) call computes image features.
+        self.assertIsNotNone(recorded_calls[0].get("img_embeddings"))
+        # Every subsequent (incremental decode) call must be text-only: the
+        # `next()` closure never forwards `img_embeddings`, so the kwarg is
+        # simply absent (and thus defaults to `None`) on every such call.
+        for call_kwargs in recorded_calls[1:]:
+            self.assertIsNone(call_kwargs.get("img_embeddings"))
+            self.assertNotIn("img_embeddings", call_kwargs)
+
+
+class MistralCausalLMTextOnlyMultimodalRegressionTest(TestCase):
+    """A text-only backbone must never compute or forward image features."""
+
+    def setUp(self):
+        self.preprocessor = MistralCausalLMPreprocessor(
+            MistralTokenizer(
+                proto=os.path.join(
+                    self.get_test_data_dir(), "mistral_test_vocab.spm"
+                )
+            ),
+            sequence_length=8,
+        )
+        self.backbone = MistralBackbone(
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+        )
+
+    def test_text_only_never_computes_img_embeddings(self):
+        causal_lm = MistralCausalLM(
+            preprocessor=self.preprocessor, backbone=self.backbone
+        )
+        self.assertTrue(causal_lm.backbone.text_only_model)
+        call_with_cache = causal_lm.call_with_cache
+        recorded_calls = []
+
+        def wrapper(*args, **kwargs):
+            recorded_calls.append(kwargs)
+            return call_with_cache(*args, **kwargs)
+
+        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
+            causal_lm.generate("the quick brown fox")
+
+        self.assertGreater(len(recorded_calls), 0)
+        for call_kwargs in recorded_calls:
+            self.assertIsNone(call_kwargs.get("img_embeddings"))

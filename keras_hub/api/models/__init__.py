@@ -517,6 +517,9 @@ from keras_hub.src.models.mistral.mistral_tokenizer import (
 from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
+from keras_hub.src.models.mistral.mistral_vision_encoder import (
+    Mistral3VisionEncoder as Mistral3VisionEncoder,
+)
 from keras_hub.src.models.mit.mit_backbone import MiTBackbone as MiTBackbone
 from keras_hub.src.models.mit.mit_image_classifier import (
     MiTImageClassifier as MiTImageClassifier,
