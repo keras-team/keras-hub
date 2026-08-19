@@ -1,3 +1,8 @@
+import pytest
+
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_backbone import (
+    DiffusionGemmaBackbone,
+)
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.transformers import convert_diffusion_gemma
 
@@ -36,3 +41,11 @@ class ConvertDiffusionGemmaTest(TestCase):
         kwargs = convert_diffusion_gemma.load_preprocessor_config(temp_dir, {})
         self.assertFalse(kwargs["add_start_token"])
         self.assertFalse(kwargs["add_end_token"])
+
+    @pytest.mark.extra_large
+    def test_backbone_from_hf_preset(self):
+        model = DiffusionGemmaBackbone.from_preset(
+            "hf://google/diffusiongemma-26B-A4B-it",
+            load_weights=False,
+        )
+        self.assertEqual(model.num_layers, 30)

@@ -328,6 +328,7 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         vision_mask,
         cache,
         cache_update_index,
+        is_encoder=False,
     ):
         decoder_mask = merge_padding_and_attention_mask(
             inputs=x, padding_mask=padding_mask, attention_mask=None
@@ -352,22 +353,15 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
             cache_index=cache_update_index,
         )
 
-        if self.use_sliding_window_attention and not self.is_global_attention:
+        if (
+            self.use_sliding_window_attention
+            and not self.is_global_attention
+            and is_encoder
+        ):
             causal_mask = self.attention._mask_sliding_window(
                 causal_mask,
                 cache_update_index=cache_update_index,
             )
-
-        if (
-            vision_mask is not None
-            and cache is None
-            and self.use_vision_bidirectional_attention
-            and not self.is_global_attention
-        ):
-            bidirectional_image_mask = (
-                self._compute_image_bidirectional_attention_mask(vision_mask)
-            )
-            causal_mask = ops.logical_or(causal_mask, bidirectional_image_mask)
 
         if decoder_mask is not None:
             causal_mask = ops.minimum(decoder_mask, causal_mask)
@@ -432,7 +426,12 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         residual = x
         normalized_x = self.pre_attention_norm(x)
         attention_mask = self._compute_attention_mask(
-            normalized_x, padding_mask, vision_mask, cache, cache_update_index
+            normalized_x,
+            padding_mask,
+            vision_mask,
+            cache,
+            cache_update_index,
+            is_encoder=is_encoder,
         )
 
         # Canvas bidirectional mask: all canvas queries attend to all canvas

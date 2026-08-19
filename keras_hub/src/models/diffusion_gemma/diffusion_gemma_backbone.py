@@ -272,7 +272,10 @@ class DiffusionGemmaBackbone(Backbone):
             dtype=dtype,
             name="diffusion_self_conditioning",
         )
-        # Inject token_embedding without re-registering it as a sub-layer.
+        # Inject a reference to the shared token_embedding without Keras layer
+        # tracking. Normal setattr would register it as a sub-layer of
+        # diffusion_self_conditioning, causing duplicate weight serialization.
+        # from_config() re-injects this reference after deserialization.
         object.__setattr__(
             self.diffusion_self_conditioning,
             "_token_embedding_layer",
@@ -344,7 +347,10 @@ class DiffusionGemmaBackbone(Backbone):
                 positions=position_ids_input,
             )
 
-        # Wire diffusion_self_conditioning into the graph.
+        # Wire diffusion_self_conditioning into the functional graph so Keras
+        # tracks its weights. The zero-multiply makes this a no-op at runtime;
+        # the layer is called with real inputs in _prepare_canvas_embeds()
+        # during generation.
         _zero_prev = ops.tile(
             ops.zeros_like(x[:, :1, :1]), [1, 1, vocabulary_size]
         )
