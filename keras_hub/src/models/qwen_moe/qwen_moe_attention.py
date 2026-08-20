@@ -10,6 +10,8 @@ from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
 from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.keras_utils import running_on_tpu
+from keras_hub.src.vllm.attention import vllm_paged_attention
+from keras_hub.src.vllm.context import get_vllm_context
 
 
 class QwenMoeAttention(keras.layers.Layer):
@@ -176,6 +178,17 @@ class QwenMoeAttention(keras.layers.Layer):
             attention_output: Output tensor after applying attention.
             cache: Updated cache tensors (if cache is provided).
         """
+        # Route to vLLM paged attention while serving on TPU; otherwise the
+        # original dense path below runs unchanged.
+        vllm_context = get_vllm_context()
+        if (
+            vllm_context is not None
+            and vllm_context.paged_attention_func is not None
+        ):
+            return self._compute_vllm_attention(
+                hidden_states, cache, vllm_context
+            )
+
         start_index = (
             cache_update_index if cache_update_index is not None else 0
         )
@@ -264,6 +277,41 @@ class QwenMoeAttention(keras.layers.Layer):
             return "attn_logits_soft_cap" in sig.parameters
         else:
             return False
+
+    def _compute_vllm_attention(self, hidden_states, cache, vllm_context):
+        """vLLM paged-attention route (serving on TPU only).
+
+        Projects Q/K/V, applies RoPE at the engine's per-token positions, and
+        hands the (unexpanded) K/V to the shared paged-attention bridge,
+        forwarding the sliding window when the layer uses one. The
+        mixture-of-experts block sits after attention and is untouched.
+        """
+        positions = ops.reshape(vllm_context.positions, (-1, 1))
+        query = self.rotary_embedding_layer(
+            self.query_dense(hidden_states), positions=positions
+        )
+        key = self.rotary_embedding_layer(
+            self.key_dense(hidden_states), positions=positions
+        )
+        value = self.value_dense(hidden_states)
+
+        sliding_window = (
+            self.sliding_window_size
+            if self.use_sliding_window_attention
+            else None
+        )
+        attention_output = vllm_paged_attention(
+            query,
+            key,
+            value,
+            self._inv_norm_factor,
+            num_kv_heads=self.num_key_value_heads,
+            sliding_window=sliding_window,
+        )
+        attention_output = self._output_dense(attention_output)
+        if cache is not None:
+            return attention_output, cache
+        return attention_output
 
     def _compute_attention(
         self,
