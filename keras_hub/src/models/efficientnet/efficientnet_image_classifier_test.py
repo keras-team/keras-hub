@@ -51,14 +51,11 @@ class EfficientNetImageClassifierTest(TestCase):
         self.train_data = (self.images, self.labels)
 
     def test_classifier_basics(self):
-        pytest.skip(
-            reason="TODO: enable after preprocessor flow is figured out"
-        )
         self.run_task_test(
             cls=EfficientNetImageClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 2),
+            expected_output_shape=(2, 1000),
         )
 
     @pytest.mark.extra_large
