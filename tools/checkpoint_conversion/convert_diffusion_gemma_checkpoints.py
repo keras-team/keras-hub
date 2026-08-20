@@ -312,7 +312,7 @@ def _kh_forward(
 
 
 def _test_numerics(label, kh_logits, hf_logits):
-    """Log max/mean absolute logit difference; warn if > 1e-3."""
+    """Log max/mean absolute logit difference and matching %; warn if > 1e-3."""
     # Trim to common sequence length.
     min_len = min(kh_logits.shape[1], hf_logits.shape[1])
     kh = kh_logits[:, :min_len, :]
@@ -322,21 +322,24 @@ def _test_numerics(label, kh_logits, hf_logits):
     max_diff = float(np.max(abs_diff))
     mean_diff = float(np.mean(abs_diff))
 
+    # Fraction of logits inside the same band `assert_allclose` checks below.
+    tol = 1e-3 + 1e-3 * np.abs(hf)
+    total = hf.size
+    matched = total - int(np.sum(abs_diff > tol))
+    pct = 100.0 * matched / total
+
     try:
         np.testing.assert_allclose(kh, hf, atol=1e-3, rtol=1e-3)
         print(
-            f"✅ [{label}] Logits within 1e-3 tolerance "
-            f"(max={max_diff:.6f}, mean={mean_diff:.6f})."
+            f"✅ [{label}] Logits within 1e-3 tolerance — "
+            f"max={max_diff:.6f}, mean={mean_diff:.6f}, "
+            f"matching={pct:.2f}% ({matched}/{total})."
         )
     except AssertionError:
-        tol = 1e-3 + 1e-3 * np.abs(hf)
-        mismatched = int(np.sum(np.abs(kh - hf) > tol))
-        total = hf.size
-        pct = 100.0 * (1.0 - mismatched / total)
         print(
             f"⚠️  [{label}] Logits exceed 1e-3 tolerance — "
             f"max={max_diff:.6f}, mean={mean_diff:.6f}, "
-            f"matching={pct:.2f}% ({total - mismatched}/{total})."
+            f"matching={pct:.2f}% ({matched}/{total})."
         )
 
 
