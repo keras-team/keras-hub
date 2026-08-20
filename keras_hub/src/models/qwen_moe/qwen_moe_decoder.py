@@ -8,7 +8,6 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
 from keras_hub.src.models.qwen_moe.qwen_moe_attention import QwenMoeAttention
-from keras_hub.src.models.qwen_moe.qwen_moe_layernorm import QwenMoeLayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -403,7 +402,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
-        self._self_attention_layernorm = QwenMoeLayerNorm(
+        self._self_attention_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="self_attention_layernorm",
@@ -441,7 +440,7 @@ class QwenMoeTransformerDecoder(keras.layers.Layer):
             )
             self.mlp.build(decoder_sequence_shape)
 
-        self._feedforward_layernorm = QwenMoeLayerNorm(
+        self._feedforward_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="feedforward_layernorm",
