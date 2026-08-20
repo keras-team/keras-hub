@@ -11,12 +11,15 @@ class ConvertDiffusionGemmaTest(TestCase):
     def test_convert_backbone_config(self):
         transformers_config = {
             "model_type": "diffusion_gemma_text",
+            "vocab_size": 256,
             "num_hidden_layers": 2,
             "num_attention_heads": 4,
             "num_key_value_heads": 2,
             "hidden_size": 64,
             "intermediate_size": 128,
             "head_dim": 16,
+            "global_head_dim": 32,
+            "attn_logit_softcapping": 50.0,
             "layer_types": ["full_attention", "sliding_attention"],
         }
         kwargs = convert_diffusion_gemma.convert_backbone_config(
@@ -24,6 +27,9 @@ class ConvertDiffusionGemmaTest(TestCase):
         )
         self.assertEqual(kwargs["num_layers"], 2)
         self.assertEqual(kwargs["hidden_dim"], 64)
+        self.assertEqual(kwargs["vocabulary_size"], 256)
+        self.assertEqual(kwargs["global_head_dim"], 32)
+        self.assertEqual(kwargs["attention_logit_soft_cap"], 50.0)
 
     def test_convert_task_config(self):
         transformers_config = {
