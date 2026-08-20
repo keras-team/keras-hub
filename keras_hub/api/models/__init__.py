@@ -76,6 +76,39 @@ from keras_hub.src.models.bert.bert_text_embedder_preprocessor import (
 from keras_hub.src.models.bert.bert_tokenizer import (
     BertTokenizer as BertTokenizer,
 )
+from keras_hub.src.models.blip2.blip2_backbone import (
+    BLIP2Backbone as BLIP2Backbone,
+)
+from keras_hub.src.models.blip2.blip2_causal_lm import (
+    BLIP2CausalLM as BLIP2CausalLM,
+)
+from keras_hub.src.models.blip2.blip2_causal_lm_preprocessor import (
+    BLIP2CausalLMPreprocessor as BLIP2CausalLMPreprocessor,
+)
+from keras_hub.src.models.blip2.blip2_custom_opt import (
+    BLIP2CustomOPT as BLIP2CustomOPT,
+)
+from keras_hub.src.models.blip2.blip2_flan_t5_lm import (
+    BLIP2FlanT5 as BLIP2FlanT5,
+)
+from keras_hub.src.models.blip2.blip2_flan_t5_tokenizer import (
+    BLIP2FlanT5Tokenizer as BLIP2FlanT5Tokenizer,
+)
+from keras_hub.src.models.blip2.blip2_opt_tokenizer import (
+    BLIP2OPTTokenizer as BLIP2OPTTokenizer,
+)
+from keras_hub.src.models.blip2.blip2_qformer import (
+    BLIP2QFormer as BLIP2QFormer,
+)
+from keras_hub.src.models.blip2.blip2_seq_2_seq_lm import (
+    BLIP2Seq2SeqLM as BLIP2Seq2SeqLM,
+)
+from keras_hub.src.models.blip2.blip2_seq_2_seq_lm_preprocessor import (
+    BLIP2Seq2SeqLMPreprocessor as BLIP2Seq2SeqLMPreprocessor,
+)
+from keras_hub.src.models.blip2.blip2_vision_encoder import (
+    BLIP2VisionEncoder as BLIP2VisionEncoder,
+)
 from keras_hub.src.models.bloom.bloom_backbone import (
     BloomBackbone as BloomBackbone,
 )
@@ -479,6 +512,9 @@ from keras_hub.src.models.mistral.mistral_causal_lm_preprocessor import (
     MistralCausalLMPreprocessor as MistralCausalLMPreprocessor,
 )
 from keras_hub.src.models.mistral.mistral_tokenizer import (
+    MistralTekkenTokenizer as MistralTekkenTokenizer,
+)
+from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
 from keras_hub.src.models.mit.mit_backbone import MiTBackbone as MiTBackbone
@@ -847,6 +883,10 @@ from keras_hub.src.models.swin_transformer.swin_transformer_image_classifier_pre
 from keras_hub.src.models.t5.t5_backbone import T5Backbone as T5Backbone
 from keras_hub.src.models.t5.t5_preprocessor import (
     T5Preprocessor as T5Preprocessor,
+)
+from keras_hub.src.models.t5.t5_seq_2_seq_lm import T5Seq2SeqLM as T5Seq2SeqLM
+from keras_hub.src.models.t5.t5_seq_2_seq_lm_preprocessor import (
+    T5Seq2SeqLMPreprocessor as T5Seq2SeqLMPreprocessor,
 )
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer as T5Tokenizer
 from keras_hub.src.models.t5gemma.t5gemma_backbone import (

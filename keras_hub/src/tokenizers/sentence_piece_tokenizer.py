@@ -9,6 +9,7 @@ from keras.src.saving import serialization_lib
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
 from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
@@ -344,7 +345,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 or keras.ops.is_tensor(inputs)
                 or (tf is not None and isinstance(inputs, tf.Tensor))
             ):
-                inputs = keras.ops.convert_to_numpy(inputs)
+                inputs = convert_to_numpy(inputs)
                 if inputs.ndim == 0:
                     val = inputs.item()
                     if isinstance(val, bytes):

@@ -12,6 +12,7 @@ from keras_hub.src.models.metaclip_2.metaclip_2_image_converter import (
 from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (
     MetaCLIP2Tokenizer,
 )
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -120,6 +121,9 @@ class MetaCLIP2CausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length = sequence_length or self.sequence_length
         images, prompts = x["images"], x["prompts"]
         if self.to_lower:
+            assert_tf_installed(
+                "MetaCLIP2CausalLMPreprocessor with to_lower=True"
+            )
             prompts = tf.strings.lower(prompts)
         prompts = self.tokenizer(prompts)
         if images is not None and self.image_converter:

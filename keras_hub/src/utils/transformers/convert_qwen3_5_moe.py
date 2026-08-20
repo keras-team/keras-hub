@@ -36,6 +36,8 @@ def load_image_converter_config(preset, transformers_config):
     """Return kwargs for Qwen3_5ImageConverter, or None for text-only."""
     if "vision_config" not in transformers_config:
         return None
+    if transformers_config.get("language_model_only", False):
+        return None
 
     vision_config = transformers_config["vision_config"]
     preprocessor_config = load_json(preset, "preprocessor_config.json")
@@ -66,6 +68,8 @@ def load_video_converter_config(preset, transformers_config):
     pixel budgets that differ from the image preprocessor config.
     """
     if "vision_config" not in transformers_config:
+        return None
+    if transformers_config.get("language_model_only", False):
         return None
 
     vision_config = transformers_config["vision_config"]
@@ -102,6 +106,7 @@ def convert_backbone_config(transformers_config):
 
     top_level_vision_config = transformers_config.get("vision_config", None)
     top_level_hidden_size = transformers_config.get("hidden_size", None)
+    language_model_only = transformers_config.get("language_model_only", False)
 
     if "text_config" in transformers_config:
         transformers_config = transformers_config["text_config"]
@@ -120,7 +125,7 @@ def convert_backbone_config(transformers_config):
 
     vision_encoder = None
     vision_config = top_level_vision_config
-    if vision_config is not None:
+    if vision_config is not None and not language_model_only:
         text_hidden = transformers_config.get(
             "hidden_size", top_level_hidden_size
         )

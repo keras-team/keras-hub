@@ -388,4 +388,44 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/multilingual-e5/keras/multilingual_e5_small/1",
     },
+    # "mxbai-embed-*" family: mixedbread-ai embedding models.
+    "mxbai_embed_large_v1_en": {
+        "metadata": {
+            "description": (
+                "24-layer BERT sentence embedding model by mixedbread-ai. "
+                "Maps sentences to 1024-dimensional dense vectors using "
+                "CLS pooling. Trained for semantic similarity, search, "
+                "and clustering tasks."
+            ),
+            "params": 335141888,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/mxbai-embed/keras/mxbai_embed_large_v1_en/1",
+    },
+    "mxbai_embed_2d_large_v1_en": {
+        "metadata": {
+            "description": (
+                "24-layer BERT sentence embedding model by mixedbread-ai "
+                "with 2D Matryoshka representation learning. Maps "
+                "sentences to 1024-dimensional dense vectors using CLS "
+                "pooling. Supports flexible truncation of both layers "
+                "and dimensions."
+            ),
+            "params": 335141888,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/mxbai-embed/keras/mxbai_embed_2d_large_v1_en/1",
+    },
+    "mxbai_embed_xsmall_v1_en": {
+        "metadata": {
+            "description": (
+                "6-layer BERT sentence embedding model by mixedbread-ai. "
+                "Maps sentences to 384-dimensional dense vectors using "
+                "mean pooling. Compact model for fast inference."
+            ),
+            "params": 24089472,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/mxbai-embed/keras/mxbai_embed_xsmall_v1_en/1",
+    },
 }
