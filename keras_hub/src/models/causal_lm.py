@@ -342,15 +342,23 @@ class CausalLM(Task):
         # 3. Optionally postprocess dense integer tensors back to string.
         generate_function = self.make_generate_function()
 
+        if self.preprocessor is None and max_length is not None:
+            raise ValueError(
+                "`max_length` has no effect when `preprocessor=None`. "
+                "Inputs should already be tokenized and padded to the "
+                "desired maximum length. Either attach a preprocessor "
+                "or remove the `max_length` argument."
+            )
+
+        # Setup our three main passes.
+        # 1. Optionally preprocessing strings to dense integer tensors.
+        # 2. Generate new tokens via a compiled function on dense tensors.
+        # 3. Optionally postprocess dense integer tensors back to string.
+        generate_function = self.make_generate_function()
+
         if stop_token_ids == "auto":
             if self.preprocessor is not None:
                 stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
-                # Some models like Llama3 use two end tokens: <|eot_id|> in
-                # "instruct" versions and <|end_of_text|> in others.
-                if hasattr(self.preprocessor.tokenizer, "end_token2_id"):
-                    stop_token_ids.append(
-                        self.preprocessor.tokenizer.end_token2_id
-                    )
             else:
                 stop_token_ids = None
 
