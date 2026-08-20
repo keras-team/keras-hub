@@ -129,9 +129,7 @@ class EditDistance(keras.metrics.Metric):
 
         if self.normalize:
             self._aggregate_reference_length.assign_add(
-                convert_to_numpy(
-                    tf.cast(tf.size(y_true.flat_values), dtype=self.dtype)
-                )
+                convert_to_numpy(tf.cast(tf.size(y_true), dtype=self.dtype))
             )
 
         def calculate_edit_distance(args):
