@@ -43,6 +43,8 @@ def convert_backbone_config(transformers_config):
         image_size = None
     else:
         text_cfg = transformers_config.get("text_config", transformers_config)
+        # image_size is not present in the HF vision_config; 896 is the fixed
+        # positional-embedding size used across all DiffusionGemma checkpoints.
         image_size = 896
 
         if "vision_config" in transformers_config:
@@ -113,15 +115,15 @@ def convert_backbone_config(transformers_config):
     )
 
     return {
-        "vocabulary_size": text_cfg.get("vocab_size", 262144),
+        "vocabulary_size": text_cfg["vocab_size"],
         "image_size": image_size,
         "num_layers": text_cfg["num_hidden_layers"],
-        "num_query_heads": text_cfg.get("num_attention_heads", 8),
-        "num_key_value_heads": text_cfg.get("num_key_value_heads", 1),
+        "num_query_heads": text_cfg["num_attention_heads"],
+        "num_key_value_heads": text_cfg["num_key_value_heads"],
         "hidden_dim": text_cfg["hidden_size"],
         "intermediate_dim": text_cfg["intermediate_size"],
         "head_dim": text_cfg["head_dim"],
-        "global_head_dim": text_cfg.get("global_head_dim", None),
+        "global_head_dim": text_cfg["global_head_dim"],
         "attention_logit_soft_cap": text_cfg.get(
             "attn_logit_softcapping", None
         ),

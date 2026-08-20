@@ -2,7 +2,11 @@ import re
 
 import keras
 import numpy as np
-import tensorflow as tf
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
@@ -400,7 +404,11 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             prompts = [prompts]
             if responses is not None:
                 responses = [responses]
-        if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
+        if (
+            tf is not None
+            and isinstance(prompts, tf.Tensor)
+            and len(prompts.shape) == 0
+        ):
             batched = False
             prompts = tf.expand_dims(prompts, axis=0)
             if responses is not None:
@@ -531,7 +539,11 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
         if isinstance(prompts, str):
             batched = False
             prompts = [prompts]
-        if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
+        if (
+            tf is not None
+            and isinstance(prompts, tf.Tensor)
+            and len(prompts.shape) == 0
+        ):
             batched = False
             prompts = tf.expand_dims(prompts, axis=0)
 

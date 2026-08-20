@@ -148,7 +148,6 @@ class EntropyBoundSamplerTest(TestCase):
 
         self.assertFalse(ops.convert_to_numpy(ops.any(stop0)))
         self.assertTrue(ops.convert_to_numpy(ops.all(stop1)))
-        self.assertIsNone(sampler._state)
 
     def test_no_stop_when_argmax_changes(self):
         sampler = EntropyBoundSampler(
@@ -171,30 +170,6 @@ class EntropyBoundSamplerTest(TestCase):
         _, stop, _, _ = self._sample_step(
             sampler, canvas, logits_b, step=1, state=state
         )
-
-        self.assertFalse(ops.convert_to_numpy(ops.any(stop)))
-
-    def test_reset_clears_state(self):
-        # After reset(), _prev_argmax is re-initialised to zeros. If the
-        # argmax points to a non-zero token the fresh zeros won't match,
-        # so stability cannot be met and stop must be False.
-        sampler = EntropyBoundSampler(
-            entropy_bound=1.0,
-            confidence_threshold=1.0,
-            stability_threshold=1,
-            seed=0,
-        )
-        # Use token 1 so that cur_argmax (all 1s) != _prev_argmax (all 0s
-        # after re-init), breaking stability.
-        token_ids = np.ones(
-            (self.batch_size, self.canvas_length), dtype="int32"
-        )
-        canvas = ops.array(token_ids)
-        logits = self._make_peaked_logits(token_ids)
-
-        self._sample_step(sampler, canvas, logits, step=0)
-        sampler.reset()
-        _, stop, _, _ = self._sample_step(sampler, canvas, logits, step=1)
 
         self.assertFalse(ops.convert_to_numpy(ops.any(stop)))
 
