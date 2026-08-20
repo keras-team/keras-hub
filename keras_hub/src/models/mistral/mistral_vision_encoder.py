@@ -66,25 +66,20 @@ class Mistral3ImageFeatureExtractor(keras.layers.Layer):
             image_sizes=image_sizes,
             training=training,
         )
-        # `vision_encoder` concatenates all images into a single batch-1
-        # sequence of exactly `sum(patch_counts)` tokens, in the same
-        # per-image order/offsets as `image_sizes`. That is already the
-        # "real content" prefix `Mistral3MultiModalProjector` expects — it
-        # just needs zero-padding at the tail up to the padded-canvas size
-        # `num_images * max_patch_height * max_patch_width` so the
-        # projector can operate on a fixed-shape buffer.
+        # `vision_encoder` already returns a padded canvas of exactly
+        # `num_images * max_patch_height * max_patch_width` rows (real
+        # content first, per-image order/offsets matching `image_sizes`,
+        # zero-padded at the tail) — precisely what
+        # `Mistral3MultiModalProjector` expects, so no further padding is
+        # needed here. `max_patch_height`/`max_patch_width` are recomputed
+        # from `pixel_values`' static shape (not `ops.max` over
+        # `image_sizes`' values) so they match what `vision_encoder`
+        # itself used, and stay `jax.jit`-safe.
         image_features = ops.squeeze(image_features, axis=0)
 
-        image_sizes_int = ops.cast(ops.convert_to_tensor(image_sizes), "int32")
         patch_size = self.multimodal_projector.patch_size
-        patch_heights = image_sizes_int[:, 0] // patch_size
-        patch_widths = image_sizes_int[:, 1] // patch_size
-        max_patch_height = ops.max(patch_heights)
-        max_patch_width = ops.max(patch_widths)
-        num_images = ops.shape(image_sizes)[0]
-        padded_total = num_images * max_patch_height * max_patch_width
-        pad_amount = padded_total - ops.shape(image_features)[0]
-        image_features = ops.pad(image_features, [[0, pad_amount], [0, 0]])
+        max_patch_height = ops.shape(pixel_values)[2] // patch_size
+        max_patch_width = ops.shape(pixel_values)[3] // patch_size
 
         return self.multimodal_projector(
             image_features,
@@ -190,6 +185,13 @@ class Mistral3ImageTextEmbeddingMerger(keras.layers.Layer):
         # `(batch * seq_length,)` sequence either way.
         if len(ops.shape(placeholder_indices)) == 2:
             placeholder_indices = ops.reshape(placeholder_indices, (-1,))
+        # `placeholder_indices`' row count is static (it comes from an
+        # eagerly-precomputed input, so its *shape* is concrete even under
+        # `jax.jit` tracing). `image_features` may carry trailing zero
+        # padding from `Mistral3MultiModalProjector`'s fixed-capacity
+        # output; keep only the real prefix that fills every placeholder.
+        num_placeholders = ops.shape(placeholder_indices)[0]
+        image_features = image_features[:num_placeholders]
         placeholder_indices = ops.expand_dims(
             ops.cast(placeholder_indices, "int32"),
             axis=-1,
@@ -770,7 +772,18 @@ class Mistral3VisionEncoder(keras.Model):
         max_patch_height,
         max_patch_width,
     ):
-        """Create mesh-grid position IDs using tensor image sizes."""
+        """Create mesh-grid position IDs matching the compacted layout.
+
+        Mirrors `_extract_patch_sequences`'s compaction so position IDs
+        line up with the patches they belong to: valid patches (in
+        per-image row-major order, images concatenated back-to-back) are
+        moved to the front of a `capacity`-sized buffer via a cumulative-
+        sum rank, with the remainder left as (unused) zero padding. This
+        avoids `ops.nonzero`, whose output shape depends on the *values*
+        inside `image_sizes` rather than on any static shape — which is
+        incompatible with `jax.jit` tracing (used by `generate`).
+        """
+        image_sizes = ops.cast(image_sizes, "int32")
         patch_heights = image_sizes[:, 0] // self.patch_size
         patch_widths = image_sizes[:, 1] // self.patch_size
         num_images = ops.shape(image_sizes)[0]
@@ -800,20 +813,54 @@ class Mistral3VisionEncoder(keras.Model):
         valid_patches = ops.logical_and(height_valid, width_valid)
         position_grid = ops.reshape(position_grid, (-1,))
         valid_patches = ops.reshape(valid_patches, (-1,))
-        valid_indices = ops.nonzero(valid_patches)[0]
-        return ops.take(position_grid, valid_indices, axis=0)
 
-    def _create_block_attention_mask(self, patch_counts, dtype):
-        """Create a block-diagonal attention mask from tensor patch counts."""
+        capacity = num_images * max_patch_height * max_patch_width
+        valid_int = ops.cast(valid_patches, "int32")
+        rank = ops.cumsum(valid_int) - valid_int
+        scatter_target = ops.where(valid_patches, rank, capacity)
+        buffer = ops.zeros((capacity + 1,), dtype="int32")
+        buffer = ops.scatter_update(
+            buffer,
+            ops.expand_dims(scatter_target, axis=1),
+            position_grid,
+        )
+        return buffer[:capacity]
+
+    def _create_block_attention_mask(self, patch_counts, dtype, capacity):
+        """Create a block-diagonal mask over the padded, compacted layout.
+
+        `patch_counts` gives each image's real patch count; slots at or
+        past `sum(patch_counts)` are the tail padding produced by
+        `_extract_patch_sequences` and are assigned a sentinel block ID
+        (`num_images`) so they never attend to, or are attended to by, a
+        real patch. Computes each slot's image ID via a cumulative-sum
+        comparison rather than `ops.repeat(..., patch_counts)`, whose
+        output length depends on the *values* in `patch_counts` — which is
+        incompatible with `jax.jit` tracing (used by `generate`).
+        """
         patch_counts = ops.cast(patch_counts, "int32")
         num_images = ops.shape(patch_counts)[0]
-        block_ids = ops.repeat(
-            ops.arange(num_images, dtype="int32"),
-            patch_counts,
+        total_valid = ops.sum(patch_counts)
+        cumulative_ends = ops.cumsum(patch_counts)
+
+        token_indices = ops.arange(capacity, dtype="int32")
+        image_ids = ops.sum(
+            ops.cast(
+                ops.expand_dims(token_indices, axis=1)
+                >= ops.expand_dims(cumulative_ends, axis=0),
+                "int32",
+            ),
+            axis=1,
         )
+        image_ids = ops.where(
+            token_indices >= total_valid,
+            num_images,
+            image_ids,
+        )
+
         same_block = ops.equal(
-            ops.expand_dims(block_ids, axis=0),
-            ops.expand_dims(block_ids, axis=1),
+            ops.expand_dims(image_ids, axis=0),
+            ops.expand_dims(image_ids, axis=1),
         )
 
         dtype = keras.backend.standardize_dtype(dtype)
@@ -845,12 +892,24 @@ class Mistral3VisionEncoder(keras.Model):
         return ops.cast(image_sizes, "int32")
 
     def _extract_patch_sequences(self, patch_embeds, image_sizes):
-        """Crop and flatten patch embeddings with a tensor mask."""
+        """Compact per-image patches into cumsum-offset order, tail-padded.
+
+        Output has the same row count as the input
+        (`num_images * max_patch_height * max_patch_width`): valid patches
+        are moved to the front, in per-image row-major order with images
+        concatenated back-to-back (the layout `Mistral3PatchMerger`
+        expects), and the remainder is zeroed out. Uses a cumulative-sum
+        rank instead of `ops.nonzero`, whose output shape depends on the
+        *values* inside `image_sizes` rather than on any static shape —
+        which is incompatible with `jax.jit` tracing (used by `generate`).
+        """
         image_sizes = ops.cast(image_sizes, "int32")
         patch_heights = image_sizes[:, 0] // self.patch_size
         patch_widths = image_sizes[:, 1] // self.patch_size
+        num_images = ops.shape(patch_embeds)[0]
         max_patch_height = ops.shape(patch_embeds)[1]
         max_patch_width = ops.shape(patch_embeds)[2]
+        hidden_dim = ops.shape(patch_embeds)[-1]
 
         height_indices = ops.arange(max_patch_height, dtype="int32")
         width_indices = ops.arange(max_patch_width, dtype="int32")
@@ -865,13 +924,20 @@ class Mistral3VisionEncoder(keras.Model):
             axis=1,
         )
         valid_patches = ops.logical_and(height_valid, width_valid)
-        patch_embeds = ops.reshape(
-            patch_embeds,
-            (-1, ops.shape(patch_embeds)[-1]),
-        )
+        patch_embeds = ops.reshape(patch_embeds, (-1, hidden_dim))
         valid_patches = ops.reshape(valid_patches, (-1,))
-        valid_indices = ops.nonzero(valid_patches)[0]
-        return ops.take(patch_embeds, valid_indices, axis=0)
+
+        capacity = num_images * max_patch_height * max_patch_width
+        valid_int = ops.cast(valid_patches, "int32")
+        rank = ops.cumsum(valid_int) - valid_int
+        scatter_target = ops.where(valid_patches, rank, capacity)
+        buffer = ops.zeros((capacity + 1, hidden_dim), patch_embeds.dtype)
+        buffer = ops.scatter_update(
+            buffer,
+            ops.expand_dims(scatter_target, axis=1),
+            patch_embeds,
+        )
+        return buffer[:capacity]
 
     def call(
         self,
@@ -916,9 +982,13 @@ class Mistral3VisionEncoder(keras.Model):
         patch_counts = (image_sizes[:, 0] // self.patch_size) * (
             image_sizes[:, 1] // self.patch_size
         )
+        capacity = (
+            ops.shape(pixel_values)[0] * max_patch_height * max_patch_width
+        )
         attention_mask = self._create_block_attention_mask(
             patch_counts,
             patch_embeds.dtype,
+            capacity,
         )
 
         hidden_states = patch_embeds
@@ -1292,7 +1362,13 @@ class Mistral3MultiModalProjector(keras.layers.Layer):
             image_features,
         )
 
-        image_features, valid_count = self.patch_merger(
+        # `valid_count` (the real, unpadded row count) is intentionally
+        # unused here: trimming to it would need a data-dependent slice,
+        # which breaks under `jax.jit` tracing (used by `generate`). The
+        # padded output is trimmed downstream, in
+        # `Mistral3ImageTextEmbeddingMerger`, using the *placeholder*
+        # count instead — a statically known shape.
+        image_features, _ = self.patch_merger(
             image_features,
             image_sizes=image_sizes,
             max_patch_height=max_patch_height,
@@ -1311,7 +1387,7 @@ class Mistral3MultiModalProjector(keras.layers.Layer):
             hidden_states,
         )
 
-        return hidden_states[:valid_count]
+        return hidden_states
 
     def compute_output_spec(
         self,
@@ -1324,13 +1400,11 @@ class Mistral3MultiModalProjector(keras.layers.Layer):
 
         Needed for the same reason as
         `Mistral3VisionEncoder.compute_output_spec`: `MistralBackbone`
-        wraps this projector inside a Keras functional model, and its
-        output row count (`valid_count`, the number of real patch-merge
-        windows) is data-dependent. Tracing `call()` on the JAX backend to
-        infer that shape hits the same `InconclusiveDimensionOperation`
-        issue, since it relies on `Mistral3PatchMerger`'s
-        `ops.nonzero`-equivalent cumulative-sum indexing over symbolic
-        dimensions.
+        wraps this projector inside a Keras functional model, whose
+        `pixel_values` input has a dynamic (`None`) height/width, so
+        `max_patch_height`/`max_patch_width` (and therefore the padded
+        output row count) can't be inferred by tracing `call()` at graph-
+        construction time.
 
         Returns:
             A `KerasTensor` with shape `(None, text_hidden_dim)`.
