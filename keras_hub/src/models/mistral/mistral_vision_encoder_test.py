@@ -166,9 +166,9 @@ class Mistral3VisionEncoderTest(TestCase):
         pixel_values = np.random.rand(2, 3, self.image_size, self.image_size)
         image_sizes = np.array([[16, 16], [16, 8]], dtype="int32")
         output = encoder(pixel_values, image_sizes=image_sizes)
-        # 16 valid patches from image 0, 8 valid patches from image 1
-        # (cropped to half width) = 24 total tokens.
-        self.assertEqual(output.shape, (1, 24, self.hidden_dim))
+        # Output is padded to the full canvas capacity (real patches first,
+        # zero-padded tail): 2 images * 4x4 patch grid = 32 total tokens.
+        self.assertEqual(output.shape, (1, 32, self.hidden_dim))
 
     def test_patch_merger_output_shape(self):
         merger = Mistral3PatchMerger(
@@ -218,8 +218,9 @@ class Mistral3VisionEncoderTest(TestCase):
             max_patch_height=4,
             max_patch_width=8,
         )
-        # Padding is sliced off before returning: 4 + 8 = 12 valid windows.
-        self.assertEqual(output.shape, (12, self.text_hidden_dim))
+        # Output is padded to the full merge-window capacity (not sliced to
+        # the valid count): 2 images * (4//2) * (8//2) = 16 windows.
+        self.assertEqual(output.shape, (16, self.text_hidden_dim))
 
     def test_multimodal_projector_serialization(self):
         projector = Mistral3MultiModalProjector(
@@ -297,10 +298,10 @@ class Mistral3VisionEncoderTest(TestCase):
         image_sizes = np.array([[16, 16], [16, 8]], dtype="int32")
         extractor = Mistral3ImageFeatureExtractor(vision_encoder, projector)
         output = extractor(pixel_values, image_sizes)
-        # Image 0: 4x4 patches -> 2x2 = 4 merge windows.
-        # Image 1: 4x2 patches -> only column 0 qualifies -> 2 merge
-        # windows (rows 0 and 2).
-        self.assertEqual(output.shape, (6, self.text_hidden_dim))
+        # Output is padded to the full merge-window capacity (real windows
+        # first, zero-padded tail), not sliced to the valid count: 2 images
+        # * (4//2) * (4//2) = 8 windows.
+        self.assertEqual(output.shape, (8, self.text_hidden_dim))
 
     def test_get_mistral3_image_features_rejects_unsupported_layer(self):
         vision_encoder = Mistral3VisionEncoder(
