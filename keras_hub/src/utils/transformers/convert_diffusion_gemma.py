@@ -124,7 +124,9 @@ def convert_backbone_config(transformers_config):
         "intermediate_dim": text_cfg["intermediate_size"],
         "head_dim": text_cfg["head_dim"],
         "global_head_dim": text_cfg["global_head_dim"],
-        "attention_logit_soft_cap": text_cfg["attn_logit_softcapping"],
+        "attention_logit_soft_cap": text_cfg.get(
+            "attn_logit_softcapping", None
+        ),
         "final_logit_soft_cap": text_cfg.get("final_logit_softcapping", None),
         "use_sliding_window_attention": text_cfg.get("sliding_window", 0) > 0,
         "sliding_window_size": text_cfg.get("sliding_window", 512) or 512,
