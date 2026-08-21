@@ -1,0 +1,71 @@
+name: KerasHub GPU Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    types: [unlabeled]
+  release:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  gpu_tests:
+    # Only run on pushes to master, releases or "kokoro:force-run" unlabel
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'release' ||
+      (github.event.action == 'unlabeled' && github.event.label.name == 'kokoro:force-run')
+
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [jax, tensorflow, torch]
+
+    name: GPU tests (${{ matrix.backend }})
+    runs-on: linux-x86-g2-48-l4-4gpu
+    timeout-minutes: 240
+
+    container:
+      image: python:3.11-slim
+
+    env:
+      KERAS_BACKEND: ${{ matrix.backend }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+
+    steps:
+    - name: Install binary dependencies
+      run: |
+        apt-get update
+        apt-get -y install build-essential curl git gnupg
+        git config --global --add safe.directory '*'
+
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Check CUDA Version
+      run: nvidia-smi
+
+    - name: Install dependencies
+      run: |
+        pip install -U pip setuptools psutil
+        pip install -r requirements-${{ matrix.backend }}-cuda.txt --progress-bar off --timeout 1000
+        pip install huggingface_hub --progress-bar off
+        pip install --no-deps -e "." --progress-bar off
+
+    - name: Test with pytest
+      env:
+        # Prevent TF from pre-allocating all GPU memory, leaving room for
+        # the primary backend (torch/jax) when TF is used for preprocessing.
+        TF_FORCE_GPU_ALLOW_GROWTH: "true"
+      run: |
+        pytest keras_hub --check_gpu --run_large --cov=keras_hub \
+          --durations=50 -n 4 --dist loadfile
