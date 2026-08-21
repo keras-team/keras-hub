@@ -140,7 +140,7 @@ def main(_):
     # Configure optimizer.
     lr = keras.optimizers.schedules.PolynomialDecay(
         FLAGS.learning_rate,
-        decay_steps=train_ds.cardinality() * FLAGS.epochs,
+        decay_steps=int(train_ds.cardinality()) * FLAGS.epochs,
         end_learning_rate=0.0,
     )
     optimizer = keras.optimizers.AdamW(learning_rate=lr, weight_decay=0.01)
