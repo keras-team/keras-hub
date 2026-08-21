@@ -118,10 +118,22 @@ class FalconTransformerDecoder(keras.layers.Layer):
 
         x = self.input_layernorm(inputs)
 
-        mask = decoder_padding_mask
-        if mask is None:
-            batch_size, seq_length = ops.shape(inputs)[:2]
-            mask = ops.ones((batch_size, seq_length), dtype="int32")
+        if attention_cache is not None:
+            # Keys and values span the whole cache, so the ALiBi bias must
+            # too. Building it from the query window instead leaves the bias
+            # shorter than the attention scores: it fails to broadcast when
+            # more than one token is passed, and collapses to all zeros
+            # during single-token decoding, silently disabling ALiBi.
+            # Unused cache positions are already masked out by the causal
+            # attention mask, so an all-ones mask gives absolute positions.
+            batch_size = ops.shape(inputs)[0]
+            kv_length = ops.shape(attention_cache)[2]
+            mask = ops.ones((batch_size, kv_length), dtype="int32")
+        else:
+            mask = decoder_padding_mask
+            if mask is None:
+                batch_size, seq_length = ops.shape(inputs)[:2]
+                mask = ops.ones((batch_size, seq_length), dtype="int32")
         alibi = self._build_alibi_tensor(self.num_attention_heads, mask)
 
         # Attention block.
