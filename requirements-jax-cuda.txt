@@ -1,6 +1,6 @@
 # Tensorflow cpu-only version.
 tensorflow-cpu
-tensorflow-text>=2.20.1
+tensorflow-text>=2.20.1,<2.21.0
 
 # Torch cpu-only version.
 --extra-index-url https://download.pytorch.org/whl/cpu
