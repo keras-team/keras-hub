@@ -1,11 +1,9 @@
 import math
 
 import numpy as np
+from keras import ops
+from keras import random
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.models.gemma3n.gemma3n_backbone import Gemma3nBackbone
@@ -168,9 +166,10 @@ class Gemma3nAudioConverter(AudioConverter):
         if self.fft_overdrive:
             fft_length *= 2
         self.fft_length = fft_length
-        hann_arange = tf.range(self.frame_length, dtype=self.compute_dtype)
-        self.window = 0.5 * (
-            1 - tf.cos(2 * np.pi * hann_arange / self.frame_length)
+        hann_arange = np.arange(self.frame_length, dtype=np.float32)
+        self.window = ops.convert_to_tensor(
+            0.5 * (1.0 - np.cos(2.0 * np.pi * hann_arange / self.frame_length)),
+            dtype=self.compute_dtype,
         )
         self.mel_filters = self._create_filterbank_matrix(
             n_freqs=self.fft_length // 2 + 1,
@@ -193,7 +192,9 @@ class Gemma3nAudioConverter(AudioConverter):
         sample_rate,
         fft_length,
     ):
-        all_freqs = tf.cast(tf.range(n_freqs), dtype=self.compute_dtype) * (
+        # Keep all filterbank construction in float64 to match the
+        # Hugging Face / NumPy reference implementation.
+        all_freqs = np.arange(n_freqs, dtype=np.float64) * (
             sample_rate / fft_length
         )
         # HTK mel-scale formula:
@@ -203,74 +204,89 @@ class Gemma3nAudioConverter(AudioConverter):
         # crossover that models human auditory perception. They are the
         # standard values used by HTK, Kaldi, and librosa.
         # Ref: https://en.wikipedia.org/wiki/Mel_scale#Formula
-        m_min = 2595.0 * math.log10(1.0 + (f_min / 700.0))
-        m_max = 2595.0 * math.log10(1.0 + (f_max / 700.0))
-        m_pts = np.linspace(m_min, m_max, n_mels + 2, dtype=np.float32)
-        f_pts = 700.0 * (10 ** (m_pts / 2595.0) - 1.0)
-        f_pts = tf.constant(f_pts, dtype=self.compute_dtype)
+        m_min = 2595.0 * math.log10(1.0 + f_min / 700.0)
+        m_max = 2595.0 * math.log10(1.0 + f_max / 700.0)
+        m_pts = np.linspace(m_min, m_max, n_mels + 2, dtype=np.float64)
+        f_pts = 700.0 * (10.0 ** (m_pts / 2595.0) - 1.0)
         f_diff = f_pts[1:] - f_pts[:-1]
-        slopes = tf.expand_dims(f_pts, 0) - tf.expand_dims(all_freqs, 1)
-        zero = tf.zeros(1, dtype=self.compute_dtype)
-        down_slopes = (-1.0 * slopes[:, :-2]) / f_diff[:-1]
+        slopes = f_pts[None, :] - all_freqs[:, None]
+        down_slopes = -slopes[:, :-2] / f_diff[:-1]
         up_slopes = slopes[:, 2:] / f_diff[1:]
-        fb = tf.maximum(zero, tf.minimum(down_slopes, up_slopes))
-        return tf.constant(fb, dtype=self.compute_dtype)
+        fb = np.maximum(0.0, np.minimum(down_slopes, up_slopes))
+        return ops.convert_to_tensor(fb, dtype=self.compute_dtype)
 
     def _extract_spectrogram(self, waveform, attention_mask):
-        waveform = tf.cast(waveform, dtype=self.compute_dtype)
+        # waveform from call() is normally: (1, num_samples)
+        if ops.ndim(waveform) == 1:
+            waveform = ops.expand_dims(waveform, axis=0)
+        waveform = ops.cast(waveform, dtype=self.compute_dtype)
         if self.dither > 0.0:
-            waveform = waveform + self.dither * tf.random.normal(
-                tf.shape(waveform), dtype=waveform.dtype
+            waveform = waveform + self.dither * random.normal(
+                ops.shape(waveform), dtype=waveform.dtype
             )
         if self.input_scale_factor != 1.0:
             waveform = waveform * self.input_scale_factor
+        frames_to_process = ops.extract_sequences(
+            waveform,
+            sequence_length=self.frame_length + 1,
+            sequence_stride=self.hop_length,
+        )
         if self.preemphasis > 0.0:
             if self.preemphasis_htk_flavor:
-                first_sample = waveform[:, :1] * (1.0 - self.preemphasis)
+                first_sample = frames_to_process[..., :1] * (
+                    1.0 - self.preemphasis
+                )
                 rest_of_samples = (
-                    waveform[:, 1:] - self.preemphasis * waveform[:, :-1]
+                    frames_to_process[..., 1:-1]
+                    - self.preemphasis * frames_to_process[..., :-2]
                 )
-                waveform = tf.concat([first_sample, rest_of_samples], axis=-1)
+                frames = ops.concatenate(
+                    [first_sample, rest_of_samples], axis=-1
+                )
             else:
-                waveform = tf.concat(
-                    [
-                        waveform[:, :1],
-                        waveform[:, 1:] - self.preemphasis * waveform[:, :-1],
-                    ],
-                    axis=-1,
+                frames = (
+                    frames_to_process[..., 1:]
+                    - self.preemphasis * frames_to_process[..., :-1]
                 )
-        frames = tf.signal.frame(
-            waveform,
-            frame_length=self.frame_length,
-            frame_step=self.hop_length,
-            pad_end=False,
-        )
+        else:
+            frames = frames_to_process[..., :-1]
         frames = frames * self.window
-        pad_length = self.fft_length - self.frame_length
-        paddings = [[0, 0], [0, 0], [0, pad_length]]
-        frames = tf.pad(frames, paddings)
-        stft = tf.signal.rfft(frames)
-        magnitude_spec = tf.abs(stft)
-        mel_spec = tf.matmul(magnitude_spec, self.mel_filters)
-        mel_floor_tensor = tf.constant(self.mel_floor, dtype=self.compute_dtype)
-        log_mel_spec = tf.math.log(tf.maximum(mel_spec, mel_floor_tensor))
+        fft_frames = ops.cast(frames, dtype="float64")
+
+        fft_pad = self.fft_length - self.frame_length
+        if fft_pad > 0:
+            fft_frames = ops.pad(
+                fft_frames,
+                [[0, 0], [0, 0], [0, fft_pad]],
+            )
+
+        real, imag = ops.rfft(fft_frames, fft_length=self.fft_length)
+        magnitude_spec = ops.sqrt(ops.square(real) + ops.square(imag))
+
+        mel_filters = ops.cast(self.mel_filters, dtype="float64")
+        mel_spec = ops.matmul(magnitude_spec, mel_filters)
+
+        mel_floor_tensor = ops.cast(self.mel_floor, dtype="float64")
+        log_mel_spec = ops.log(ops.maximum(mel_spec, mel_floor_tensor))
+
         if self.per_bin_mean is not None:
-            per_bin_mean_tensor = tf.constant(
-                self.per_bin_mean,
-                shape=(1, 1, self.feature_size),
-                dtype=self.compute_dtype,
+            per_bin_mean_tensor = ops.reshape(
+                ops.convert_to_tensor(self.per_bin_mean, dtype="float64"),
+                (1, 1, self.feature_size),
             )
             log_mel_spec = log_mel_spec - per_bin_mean_tensor
+
         if self.per_bin_stddev is not None:
-            per_bin_stddev_tensor = tf.constant(
-                self.per_bin_stddev,
-                shape=(1, 1, self.feature_size),
-                dtype=self.compute_dtype,
+            per_bin_stddev_tensor = ops.reshape(
+                ops.convert_to_tensor(self.per_bin_stddev, dtype="float64"),
+                (1, 1, self.feature_size),
             )
             log_mel_spec = log_mel_spec / per_bin_stddev_tensor
-        mel_spectrogram = tf.squeeze(log_mel_spec, axis=0)
-        mask = tf.cast(attention_mask[:: self.hop_length], dtype=tf.bool)
-        return mel_spectrogram, mask[: tf.shape(mel_spectrogram)[0]]
+        mel_spectrogram = ops.squeeze(log_mel_spec, axis=0)
+        mask = ops.cast(attention_mask[:: self.hop_length], dtype="bool")
+        mask = mask[: ops.shape(mel_spectrogram)[0]]
+        mel_spectrogram = ops.cast(mel_spectrogram, dtype=self.compute_dtype)
+        return mel_spectrogram, mask
 
     def _get_padding_strategies(self, padding=False, max_length=None):
         if padding is not False:
@@ -453,59 +469,60 @@ class Gemma3nAudioConverter(AudioConverter):
         pad_to_multiple_of=128,
         return_attention_mask=True,
     ):
-        def _process_in_py(raw_speech_tensor):
-            raw_speech_np = raw_speech_tensor.numpy()
-            is_batched = raw_speech_np.ndim > 1
-            if is_batched:
-                speech_list = [rs.reshape(-1, 1) for rs in raw_speech_np]
+        if isinstance(raw_speech, (list, tuple)):
+            was_batched = True
+            raw_speech_list = [np.asarray(speech) for speech in raw_speech]
+        else:
+            raw_speech_np = np.asarray(raw_speech)
+            was_batched = raw_speech_np.ndim > 1
+            if was_batched:
+                raw_speech_list = [speech for speech in raw_speech_np]
             else:
-                raw_speech_np = np.atleast_1d(raw_speech_np)
-                speech_list = [raw_speech_np.reshape(-1, 1)]
-            input_features_list, attention_mask_list = self.pad(
-                speech_list,
-                padding=padding,
-                max_length=max_length,
-                truncation=truncation,
-                pad_to_multiple_of=pad_to_multiple_of,
-                return_attention_mask=return_attention_mask,
-            )
-            prepared_speech = []
-            prepared_speech_mask = []
-            for speech, mask in zip(input_features_list, attention_mask_list):
-                speech_tensor = tf.constant(speech.T, dtype=self.compute_dtype)
-                mask_tensor = tf.constant(mask, dtype=tf.int32)
-                features, feature_mask = self._extract_spectrogram(
-                    speech_tensor, mask_tensor
-                )
-                prepared_speech.append(features)
-                prepared_speech_mask.append(feature_mask)
-            input_features = tf.stack(prepared_speech)
-            input_features_mask = tf.stack(prepared_speech_mask)
-            if not is_batched:
-                input_features = tf.squeeze(input_features, axis=0)
-                input_features_mask = tf.squeeze(input_features_mask, axis=0)
-            return input_features, input_features_mask
+                raw_speech_list = [np.atleast_1d(raw_speech_np)]
 
-        if not isinstance(raw_speech, (tf.Tensor, tf.RaggedTensor)):
-            was_batched = isinstance(raw_speech, (list, tuple))
-            raw_speech = tf.convert_to_tensor(
-                raw_speech, dtype=self.compute_dtype
-            )
-        else:
-            was_batched = raw_speech.shape.rank > 1
-        input_features, input_features_mask = tf.py_function(
-            _process_in_py,
-            inp=[raw_speech],
-            Tout=[self.compute_dtype, tf.bool],
+        speech_list = [speech.reshape(-1, 1) for speech in raw_speech_list]
+
+        input_features_list, attention_mask_list = self.pad(
+            speech_list,
+            padding=padding,
+            max_length=max_length,
+            truncation=truncation,
+            pad_to_multiple_of=pad_to_multiple_of,
+            return_attention_mask=return_attention_mask,
         )
-        num_frames = None
-        if was_batched:
-            input_features.set_shape([None, num_frames, self.feature_size])
-            input_features_mask.set_shape([None, num_frames])
-        else:
-            input_features.set_shape([num_frames, self.feature_size])
-            input_features_mask.set_shape([num_frames])
-        input_features_mask = tf.cast(input_features_mask, dtype="int32")
+
+        prepared_speech = []
+        prepared_speech_mask = []
+
+        for speech, mask in zip(
+            input_features_list,
+            attention_mask_list,
+        ):
+            speech_tensor = ops.convert_to_tensor(
+                speech.T,
+                dtype=self.compute_dtype,
+            )
+            mask_tensor = ops.convert_to_tensor(
+                mask,
+                dtype="int32",
+            )
+
+            features, feature_mask = self._extract_spectrogram(
+                speech_tensor,
+                mask_tensor,
+            )
+
+            prepared_speech.append(features)
+            prepared_speech_mask.append(feature_mask)
+
+        input_features = ops.stack(prepared_speech, axis=0)
+        input_features_mask = ops.stack(prepared_speech_mask, axis=0)
+
+        if not was_batched:
+            input_features = ops.squeeze(input_features, axis=0)
+            input_features_mask = ops.squeeze(input_features_mask, axis=0)
+
+        input_features_mask = ops.cast(input_features_mask, dtype="int32")
         return input_features, input_features_mask
 
     def get_config(self):
