@@ -110,7 +110,7 @@ def build_multimodal_inputs(hf_config, hf_processor, image):
     }
 
 
-def compute_hf_text_outputs(hf_preset):
+def precompute_hf_text_outputs(hf_preset):
     hf_model = MistralForCausalLM.from_pretrained(
         hf_preset, device_map="cpu", torch_dtype=torch.float32
     )
@@ -129,7 +129,7 @@ def compute_hf_text_outputs(hf_preset):
     return hf_results
 
 
-def compute_hf_multimodal_outputs(hf_preset, hf_config):
+def precompute_hf_multimodal_outputs(hf_preset, hf_config):
     hf_model = Mistral3ForConditionalGeneration.from_pretrained(
         hf_preset, device_map="cpu", torch_dtype=torch.float32
     )
@@ -178,7 +178,7 @@ def test_numerics(keras_logits, hf_logits, atol):
         print(err.args[0])
 
 
-def check_token_ids(keras_model, hf_results):
+def test_token_ids(keras_model, hf_results):
     # Runs `generate_preprocess` so multimodal inputs also exercise the
     # preprocessor's own image-placeholder expansion.
     hf_token_ids = hf_results["token_ids"]
@@ -202,7 +202,7 @@ def check_token_ids(keras_model, hf_results):
 
 def validate_output(keras_model, hf_results):
     check_param_count(keras_model, hf_results)
-    check_token_ids(keras_model, hf_results)
+    test_token_ids(keras_model, hf_results)
 
     multimodal = "placeholder_indices" in hf_results
     if multimodal:
@@ -257,9 +257,9 @@ def main(_):
     )
 
     if multimodal:
-        hf_results = compute_hf_multimodal_outputs(hf_preset, hf_config)
+        hf_results = precompute_hf_multimodal_outputs(hf_preset, hf_config)
     else:
-        hf_results = compute_hf_text_outputs(hf_preset)
+        hf_results = precompute_hf_text_outputs(hf_preset)
     print("\n-> Huggingface model loaded and reference outputs computed")
 
     keras_model = keras_hub.models.MistralCausalLM.from_preset(
