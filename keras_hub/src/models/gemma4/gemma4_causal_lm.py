@@ -140,6 +140,9 @@ class Gemma4CausalLM(CausalLM):
             **kwargs,
         )
 
+    def build(self, input_shape=None):
+        pass
+
     def _normalize_generate_inputs(
         self,
         inputs,
