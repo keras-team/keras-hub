@@ -121,3 +121,34 @@ class Gemma3nAudioConverterTest(TestCase):
     def test_serialization(self):
         instance = Gemma3nAudioConverter(**self.init_kwargs)
         self.run_serialization_test(instance=instance)
+
+    def test_feature_mask_padding(self):
+        converter = Gemma3nAudioConverter(**self.init_kwargs)
+        audio = np.zeros(512, dtype=np.float32)
+        features, mask = converter(
+            audio,
+            padding="max_length",
+            max_length=1024,
+            truncation=True,
+            return_attention_mask=True,
+        )
+        self.assertEqual(len(features), len(mask))
+        self.assertTrue(mask[0])
+
+    def test_normalization_preserves_mask(self):
+        mean = np.random.rand(self.feature_size).tolist()
+        stddev = (np.random.rand(self.feature_size) + 0.1).tolist()
+
+        converter_no_norm = Gemma3nAudioConverter(**self.init_kwargs)
+
+        norm_kwargs = self.init_kwargs.copy()
+        norm_kwargs["per_bin_mean"] = mean
+        norm_kwargs["per_bin_stddev"] = stddev
+
+        converter_norm = Gemma3nAudioConverter(**norm_kwargs)
+
+        features_1, mask_1 = converter_no_norm(self.input_data)
+        features_2, mask_2 = converter_norm(self.input_data)
+
+        np.testing.assert_array_equal(mask_1, mask_2)
+        assert features_1.shape == features_2.shape
