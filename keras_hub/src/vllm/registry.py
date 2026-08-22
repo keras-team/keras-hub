@@ -14,7 +14,7 @@ import tempfile
 import keras
 
 # vLLM is an optional dependency of KerasHub, and `import keras_hub` imports
-# this module (via the generated `keras_hub.vllm` API) — so it must import
+# this module (via the generated `keras_hub.vllm` API) -- so it must import
 # cleanly without vLLM. The serving class is defined only when vLLM (with its
 # tokenizer registry) is present; otherwise a stub raises with install
 # instructions on use. Same optional-import pattern as the tensorflow and
@@ -42,6 +42,7 @@ from keras_hub.src.utils.preset_utils import load_json
 from keras_hub.src.vllm.hf_config import KERAS_HUB_ARCHITECTURE
 from keras_hub.src.vllm.hf_config import KERAS_HUB_MODEL_TYPE
 from keras_hub.src.vllm.hf_config import register_hf_config
+from keras_hub.src.vllm.plugin import serves_on_tpu
 
 # We write our own neutral architecture/model_type (no borrowed model family):
 # `KerasHubForCausalLM` / `keras_hub` (see `hf_config`). `register_hf_config`
@@ -67,6 +68,41 @@ def _normalize_dtype(dtype):
     if dtype.startswith("mixed_"):
         dtype = dtype.removeprefix("mixed_")
     return dtype
+
+
+def _without_cudagraph_capture(compilation_config):
+    """Turns CUDA graph capture off in a caller's compilation config.
+
+    Capture forbids host-to-device copies, and KerasHub layers make them:
+    building a tensor from a Python scalar is one, and the causal mask does
+    it on every call. That is not one family's quirk, so capture stays off
+    for all of them; vLLM already declines to torch.compile these models,
+    so only capture is lost. A config the caller built themselves is left
+    alone, and an explicit `cudagraph_mode` wins.
+    """
+    if compilation_config is None or isinstance(compilation_config, dict):
+        return {"cudagraph_mode": "NONE", **(compilation_config or {})}
+    return compilation_config
+
+
+def _default_gpu_dtype():
+    """Returns the dtype to serve in on this GPU when none was asked for.
+
+    bfloat16 needs compute capability 8.0 (Ampere). Older cards such as the
+    T4 have none, and vLLM refuses to start rather than pick a substitute,
+    so choose float16 for them here.
+    """
+    try:
+        import torch
+
+        if (
+            torch.cuda.is_available()
+            and torch.cuda.get_device_capability()[0] < 8
+        ):
+            return "float16"
+    except ImportError:
+        pass
+    return "bfloat16"
 
 
 def setup_vllm_model(preset, dtype="bfloat16", max_model_len=None):
@@ -102,7 +138,7 @@ def setup_vllm_model(preset, dtype="bfloat16", max_model_len=None):
     register_hf_config()
 
     # Serving tokenizes with this same tokenizer (`tokenizer_mode=
-    # "keras_hub"`), so it must load — fail here at setup, with the real
+    # "keras_hub"`), so it must load -- fail here at setup, with the real
     # error, rather than somewhere inside vLLM's engine. It also supplies
     # vocab_size (vLLM profiles KV-cache memory from it) and eos.
     tokenizer = Tokenizer.from_preset(preset)
@@ -201,7 +237,7 @@ def _derive_arch_config(preset):
     # vLLM caps max_model_len at max_position_embeddings. Learned-position
     # presets (GPT-2) serialize max_sequence_length; write it so a sequence
     # can't index past the position table. RoPE presets don't serialize it
-    # and fall to KerasHubConfig's 8192 default — pass `max_model_len` to
+    # and fall to KerasHubConfig's 8192 default -- pass `max_model_len` to
     # `KerasHubLLM` to raise that ceiling.
     if cfg.get("max_sequence_length"):
         arch["max_position_embeddings"] = int(cfg["max_sequence_length"])
@@ -229,7 +265,7 @@ def sampler_to_sampling_kwargs(sampler):
 
     Returns:
         A dict of `SamplingParams` kwargs, or `None` when the sampler has no
-        vLLM equivalent (beam, contrastive, speculative) — vLLM's own
+        vLLM equivalent (beam, contrastive, speculative) -- vLLM's own
         defaults apply in that case.
     """
     if sampler is None:
@@ -268,7 +304,7 @@ def _default_sampling_kwargs():
     that default is what every preset would generate with. It is read from
     the `compile` signature instead of building the task: a JAX model build
     would allocate real parameter memory before vLLM's engine starts.
-    Returns `None` if anything fails — serving then uses vLLM's defaults.
+    Returns `None` if anything fails -- serving then uses vLLM's defaults.
     """
     try:
         default = inspect.signature(CausalLM.compile).parameters["sampler"]
@@ -297,7 +333,7 @@ if _BaseLLM is not None:
 
         When `generate` is called without `sampling_params`, the defaults
         come from the model's own compiled sampler (e.g. GPT-2's `top_k`),
-        translated into `SamplingParams` — not from vLLM's generic defaults.
+        translated into `SamplingParams` -- not from vLLM's generic defaults.
         Passing explicit `sampling_params` overrides this.
 
         Example::
@@ -318,22 +354,46 @@ if _BaseLLM is not None:
             )
             if is_keras_hub:
                 preset = model.split("keras_hub:", 1)[1]
-                # dtype defaults to bf16 (TPU paged KV cache). It is written
-                # into config.json as torch_dtype *and* forwarded to vLLM.
-                # Forwarding matters: left unset, vLLM resolves dtype="auto"
-                # and downcasts a float32 config to bfloat16, while the
-                # backbone would still build in float32 from torch_dtype --
-                # the model would then hand float32 q/k/v to a bfloat16 paged
-                # cache, which the attention kernel rejects.
-                dtype = kwargs.pop("dtype", "bfloat16")
-                kwargs.setdefault("dtype", dtype)
-                # Use tpu-inference's native flax/nnx path, where the
-                # KerasHubForCausalLM architecture is registered. This
-                # change is process-wide on purpose: MODEL_IMPL_TYPE is an
-                # environment knob that tpu-inference reads at model load,
-                # in this process and in any engine workers it spawns, so
-                # there is no narrower place to set it.
-                os.environ.pop("MODEL_IMPL_TYPE", None)
+                # The dtype is written into config.json as torch_dtype *and*
+                # forwarded to vLLM. Forwarding matters: left unset, vLLM
+                # resolves dtype="auto" and downcasts a float32 config to
+                # bfloat16, while the backbone would still build in float32
+                # from torch_dtype -- the model would then hand float32 q/k/v
+                # to a bfloat16 paged cache, which the kernel rejects.
+                dtype = kwargs.pop("dtype", None)
+                # The two engines need different things set up.
+                if serves_on_tpu():
+                    # Use tpu-inference's native flax/nnx path, where the
+                    # KerasHubForCausalLM architecture is registered. This
+                    # is process-wide on purpose: MODEL_IMPL_TYPE is an
+                    # environment knob tpu-inference reads at model load,
+                    # here and in any engine workers it spawns, so there
+                    # is no narrower place to set it.
+                    os.environ.pop("MODEL_IMPL_TYPE", None)
+                    # Every TPU the engine runs on has bfloat16.
+                    dtype = dtype or "bfloat16"
+                else:
+                    # Keras reads its backend once, at import, so by now
+                    # it is either right or unfixable. Say which.
+                    if keras.config.backend() != "torch":
+                        raise RuntimeError(
+                            "Serving on vLLM's GPU engine runs the "
+                            "KerasHub backbone on the torch backend, but "
+                            f"Keras is using '{keras.config.backend()}'. "
+                            "Set KERAS_BACKEND=torch before keras is "
+                            "first imported."
+                        )
+                    # A KerasHub model directory holds only a config, so
+                    # the stock loaders have no weights to stream;
+                    # `keras_hub` is the format the plugin registers for
+                    # exactly this.
+                    kwargs.setdefault("load_format", "keras_hub")
+                    # GPUs differ in what they support, so ask the device.
+                    dtype = dtype or _default_gpu_dtype()
+                    kwargs["compilation_config"] = _without_cudagraph_capture(
+                        kwargs.get("compilation_config")
+                    )
+                kwargs["dtype"] = dtype
                 self._default_sampling_kwargs = _default_sampling_kwargs()
                 self._keras_hub_dir = setup_vllm_model(
                     preset,
@@ -343,7 +403,7 @@ if _BaseLLM is not None:
                 model = self._keras_hub_dir.name
                 kwargs.setdefault("tokenizer", model)
                 # Serve the preset's own KerasHub tokenizer through vLLM's
-                # tokenizer registry (tokenizer_mode="keras_hub") — no HF
+                # tokenizer registry (tokenizer_mode="keras_hub") -- no HF
                 # conversion. Registered by module path, so vLLM resolves
                 # the class lazily in whichever process loads the tokenizer.
                 TokenizerRegistry.register(
