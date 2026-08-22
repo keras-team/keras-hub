@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 import tensorflow as tf
 from keras.src.saving import serialization_lib
 
@@ -249,6 +250,200 @@ class WordPieceTokenizerTest(TestCase):
         )
         output = tokenizer(input_data)
         self.assertAllEqual(output, [0, 0, 1, 2])
+
+    def test_python_workflow_is_default(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+        ]
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+
+        self.assertTrue(tokenizer._allow_python_workflow)
+
+        # Ensure the Python implementation is actually used.
+        tokenizer._fast_word_piece = None
+
+        output = tokenizer("the quick")
+        self.assertAllEqual(output, [1, 2, 3])
+
+    def test_python_workflow_does_not_require_tf_text(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+        ]
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            _allow_python_workflow=True,
+        )
+        tokenizer._fast_word_piece = None
+
+        output = tokenizer("the quick")
+        self.assertAllEqual(output, [1, 2, 3])
+
+        output = tokenizer.detokenize([1, 2, 3])
+        self.assertAllEqual(output, "the quick")
+
+    def test_tf_workflow_can_be_explicitly_requested(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+        ]
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            _allow_python_workflow=False,
+        )
+
+        output = tokenizer("the quick")
+        self.assertAllEqual(output, [1, 2, 3])
+
+        output = tokenizer.detokenize([1, 2, 3])
+        self.assertAllEqual(output, "the quick")
+
+    def test_python_and_tf_workflows_match(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+            "br",
+            "##own",
+            "fox",
+            ".",
+        ]
+        input_data = ["The quick brown fox."]
+
+        python_tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            lowercase=True,
+            _allow_python_workflow=True,
+        )
+        tf_tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            lowercase=True,
+            _allow_python_workflow=False,
+        )
+
+        python_output = python_tokenizer(input_data)
+        tf_output = tf_tokenizer(input_data)
+
+        self.assertAllEqual(python_output, tf_output)
+
+        python_detokenized = python_tokenizer.detokenize(python_output)
+        tf_detokenized = tf_tokenizer.detokenize(tf_output)
+
+        self.assertAllEqual(python_detokenized, tf_detokenized)
+
+    def test_python_workflow_with_numpy_inputs(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+        ]
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+
+        # 0-D NumPy string.
+        output = tokenizer(np.array("the quick"))
+        self.assertAllEqual(output, [1, 2, 3])
+
+        # 1-D NumPy array.
+        output = tokenizer(np.array(["the quick"]))
+        self.assertAllEqual(output, [[1, 2, 3]])
+
+        # 1-D NumPy array with multiple strings.
+        output = tokenizer(np.array(["the quick", "the"]))
+        self.assertAllEqual(output, [[1, 2, 3], [1]])
+
+    def test_python_workflow_rejects_2d_list_input(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+        ]
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+
+        # 2-D Python lists are not supported when split=True.
+        with self.assertRaisesRegex(
+            ValueError,
+            r"When `split=True`, `inputs` must be a string or a "
+            r"1D list/tuple of strings.",
+        ):
+            tokenizer([["the", "quick"], ["the", "quick"]])
+
+    def test_python_workflow_rejects_2d_numpy_input(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+        ]
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+
+        # A 2-D NumPy array is also invalid when split=True.
+        with self.assertRaisesRegex(
+            ValueError,
+            r"When `split=True`, `inputs` must be a string or a "
+            r"1D list/tuple of strings.",
+        ):
+            tokenizer(
+                np.array(
+                    [
+                        ["the", "quick"],
+                        ["the", "quick"],
+                    ]
+                )
+            )
+
+    def test_python_workflow_with_numpy_scalar_inputs(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+        ]
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+
+        # NumPy scalar string.
+        output = tokenizer(np.str_("the quick"))
+        self.assertAllEqual(output, [1, 2, 3])
+
+        # NumPy scalar bytes.
+        output = tokenizer(np.bytes_("the quick"))
+        self.assertAllEqual(output, [1, 2, 3])
+
+    def test_python_workflow_with_seq_len_returns_dense_output(self):
+        vocab_data = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+            "br",
+            "##own",
+            "fox",
+            ".",
+        ]
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            sequence_length=10,
+        )
+
+        output = tokenizer(["The quick brown fox.", "The fox"])
+
+        self.assertEqual(output.shape, (2, 10))
+        self.assertAllEqual(
+            output,
+            [
+                [0, 2, 3, 4, 5, 6, 7, 0, 0, 0],
+                [0, 6, 0, 0, 0, 0, 0, 0, 0, 0],
+            ],
+        )
 
     def test_safe_mode_vocabulary_file_disallowed(self):
         temp_dir = self.get_temp_dir()
