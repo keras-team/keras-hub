@@ -8,6 +8,7 @@ import threading
 import keras
 import numpy as np
 from keras import ops
+from keras.src.utils.backend_utils import in_grain_data_pipeline
 from packaging import version
 
 try:
@@ -63,6 +64,12 @@ def preprocessing_function(fn):
 
     params = inspect.signature(fn).parameters
     accepts_labels = all(k in params for k in ("x", "y", "sample_weight"))
+
+    def convert_outputs(x):
+        if in_grain_data_pipeline():
+            return x
+        return convert_preprocessing_outputs(x)
+
     if not accepts_labels:
 
         @functools.wraps(fn)
@@ -71,7 +78,7 @@ def preprocessing_function(fn):
                 x = convert_preprocessing_inputs(x)
                 with no_convert_scope():
                     x = fn(self, x, **kwargs)
-                return convert_preprocessing_outputs(x)
+                return convert_outputs(x)
 
     else:
 
@@ -83,7 +90,7 @@ def preprocessing_function(fn):
                 )
                 with no_convert_scope():
                     x = fn(self, x, y=y, sample_weight=sample_weight, **kwargs)
-                return convert_preprocessing_outputs(x)
+                return convert_outputs(x)
 
     return wrapper
 
