@@ -107,4 +107,3 @@ branch = true
 omit = [
     "*/*_test.py",
 ]
-
