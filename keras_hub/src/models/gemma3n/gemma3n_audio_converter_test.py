@@ -152,3 +152,62 @@ class Gemma3nAudioConverterTest(TestCase):
 
         np.testing.assert_array_equal(mask_1, mask_2)
         assert features_1.shape == features_2.shape
+
+    def test_batched_audio(self):
+        converter = Gemma3nAudioConverter(**self.init_kwargs)
+
+        audio_1 = np.sin(
+            2
+            * np.pi
+            * 440
+            * np.linspace(0, 1, self.sampling_rate, dtype=np.float32)
+        )
+        audio_2 = np.sin(
+            2
+            * np.pi
+            * 880
+            * np.linspace(0, 0.5, self.sampling_rate // 2, dtype=np.float32)
+        )
+
+        features, mask = converter(
+            [audio_1, audio_2],
+            padding="longest",
+            pad_to_multiple_of=128,
+        )
+
+        self.assertEqual(features.shape[0], 2)
+        self.assertEqual(features.shape[2], self.feature_size)
+        self.assertEqual(mask.shape[0], 2)
+        self.assertEqual(mask.shape[1], features.shape[1])
+
+        self.assertTrue(np.all(mask[0]))
+        self.assertTrue(np.any(mask[1] == 0))
+
+        def test_truncation(self):
+            converter = Gemma3nAudioConverter(**self.init_kwargs)
+
+            max_length = 1024
+            features, mask = converter(
+                self.input_data[0],
+                padding="max_length",
+                max_length=max_length,
+                truncation=True,
+            )
+
+            frame_length = int(
+                round(self.sampling_rate * self.frame_length_ms / 1000.0)
+            )
+            hop_length = int(
+                round(self.sampling_rate * self.hop_length_ms / 1000.0)
+            )
+
+            # _extract_spectrogram() uses frame_length + 1 because of
+            # the preemphasis calculation.
+            sequence_length = frame_length + 1
+            num_frames = ((max_length - sequence_length) // hop_length) + 1
+
+            self.assertEqual(
+                features.shape,
+                (num_frames, self.feature_size),
+            )
+            self.assertEqual(mask.shape, (num_frames,))

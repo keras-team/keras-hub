@@ -1,6 +1,7 @@
 import math
 
 import numpy as np
+from keras import KerasTensor
 from keras import ops
 from keras import random
 
@@ -57,7 +58,7 @@ class Gemma3nAudioConverter(AudioConverter):
             array. Can be unbatched (1D) or batched (list of 1D arrays).
         padding: str or bool. Padding strategy for batches. Options are
             `"longest"` (pad to longest sequence in batch), `True` (same as
-            "longest"), or `False` (no padding). Defaults to `"longest"`.
+            `"longest"`), or `False` (no padding). Defaults to `"longest"`.
         max_length: int. Maximum length to truncate or pad to. Defaults to
             480000.
         truncation: bool. Whether to truncate sequences longer than
@@ -71,12 +72,10 @@ class Gemma3nAudioConverter(AudioConverter):
     ```python
     import numpy as np
 
-    # Create a simple audio signal (1 second of 440 Hz sine wave).
     audio = np.sin(
         2 * np.pi * 440 * np.linspace(0, 1, 16000, dtype=np.float32)
     )
 
-    # Initialize the audio converter
     converter = keras_hub.layers.Gemma3nAudioConverter(
         feature_size=128,
         sampling_rate=16000,
@@ -97,24 +96,9 @@ class Gemma3nAudioConverter(AudioConverter):
         padding_side="right",
     )
 
-    # Convert audio to log-mel spectrogram.
     features, mask = converter(audio)
-    print(features.shape)  # (num_frames, 128)
-    print(mask.shape)      # (num_frames,)
-
-    # Convert a batch of audio with padding.
-    audio_1 = np.sin(
-        2 * np.pi * 440 * np.linspace(0, 1, 16000, dtype=np.float32)
-    )
-    audio_2 = np.sin(
-        2 * np.pi * 880 * np.linspace(0, 0.5, 8000, dtype=np.float32)
-    )
-    features, mask = converter(
-        [audio_1, audio_2],
-        padding="longest",
-        pad_to_multiple_of=128,
-    )
-    print(features.shape)  # (2, num_frames, 128)
+    print(features.shape)
+    print(mask.shape)
     ```
     """
 
@@ -179,6 +163,7 @@ class Gemma3nAudioConverter(AudioConverter):
             sample_rate=self.sampling_rate,
             fft_length=fft_length,
         )
+
         self._convert_input_args = False
         self._allow_non_tensor_positional_args = True
         self.built = True
@@ -192,8 +177,8 @@ class Gemma3nAudioConverter(AudioConverter):
         sample_rate,
         fft_length,
     ):
-        # Keep all filterbank construction in float64 to match the
-        # Hugging Face / NumPy reference implementation.
+        # Construct the filterbank in float64 with NumPy at initialization
+        # time for numerical consistency with the reference implementation.
         all_freqs = np.arange(n_freqs, dtype=np.float64) * (
             sample_rate / fft_length
         )
@@ -216,13 +201,14 @@ class Gemma3nAudioConverter(AudioConverter):
         return ops.convert_to_tensor(fb, dtype=self.compute_dtype)
 
     def _extract_spectrogram(self, waveform, attention_mask):
-        # waveform from call() is normally: (1, num_samples)
+        # waveform is normally shaped (1, num_samples).
         if ops.ndim(waveform) == 1:
             waveform = ops.expand_dims(waveform, axis=0)
         waveform = ops.cast(waveform, dtype=self.compute_dtype)
         if self.dither > 0.0:
             waveform = waveform + self.dither * random.normal(
-                ops.shape(waveform), dtype=waveform.dtype
+                ops.shape(waveform),
+                dtype=waveform.dtype,
             )
         if self.input_scale_factor != 1.0:
             waveform = waveform * self.input_scale_factor
@@ -241,7 +227,8 @@ class Gemma3nAudioConverter(AudioConverter):
                     - self.preemphasis * frames_to_process[..., :-2]
                 )
                 frames = ops.concatenate(
-                    [first_sample, rest_of_samples], axis=-1
+                    [first_sample, rest_of_samples],
+                    axis=-1,
                 )
             else:
                 frames = (
@@ -250,8 +237,9 @@ class Gemma3nAudioConverter(AudioConverter):
                 )
         else:
             frames = frames_to_process[..., :-1]
+
         frames = frames * self.window
-        fft_frames = ops.cast(frames, dtype="float64")
+        fft_frames = ops.cast(frames, dtype=self.compute_dtype)
 
         fft_pad = self.fft_length - self.frame_length
         if fft_pad > 0:
@@ -260,29 +248,52 @@ class Gemma3nAudioConverter(AudioConverter):
                 [[0, 0], [0, 0], [0, fft_pad]],
             )
 
-        real, imag = ops.rfft(fft_frames, fft_length=self.fft_length)
-        magnitude_spec = ops.sqrt(ops.square(real) + ops.square(imag))
+        # Keras versions used by this repository may return the real and
+        # imaginary components separately from ops.rfft. Handle that form
+        # while also supporting versions returning a complex tensor.
+        stft = ops.rfft(fft_frames, fft_length=self.fft_length)
 
-        mel_filters = ops.cast(self.mel_filters, dtype="float64")
-        mel_spec = ops.matmul(magnitude_spec, mel_filters)
+        if isinstance(stft, (tuple, list)):
+            real, imag = stft
+            magnitude_spec = ops.sqrt(ops.square(real) + ops.square(imag))
+        else:
+            magnitude_spec = ops.abs(stft)
 
-        mel_floor_tensor = ops.cast(self.mel_floor, dtype="float64")
+        mel_spec = ops.matmul(magnitude_spec, self.mel_filters)
+
+        mel_floor_tensor = ops.cast(self.mel_floor, dtype=self.compute_dtype)
         log_mel_spec = ops.log(ops.maximum(mel_spec, mel_floor_tensor))
 
         if self.per_bin_mean is not None:
             per_bin_mean_tensor = ops.reshape(
-                ops.convert_to_tensor(self.per_bin_mean, dtype="float64"),
+                ops.convert_to_tensor(
+                    self.per_bin_mean,
+                    dtype=self.compute_dtype,
+                ),
                 (1, 1, self.feature_size),
             )
             log_mel_spec = log_mel_spec - per_bin_mean_tensor
 
         if self.per_bin_stddev is not None:
             per_bin_stddev_tensor = ops.reshape(
-                ops.convert_to_tensor(self.per_bin_stddev, dtype="float64"),
+                ops.convert_to_tensor(
+                    self.per_bin_stddev,
+                    dtype=self.compute_dtype,
+                ),
                 (1, 1, self.feature_size),
             )
             log_mel_spec = log_mel_spec / per_bin_stddev_tensor
-        mel_spectrogram = ops.squeeze(log_mel_spec, axis=0)
+
+        # Depending on the backend/version, the FFT/matmul path can preserve
+        # or remove the leading singleton dimension. Only squeeze it when it
+        # is actually present.
+        if ops.ndim(log_mel_spec) == 3:
+            if log_mel_spec.shape[0] == 1:
+                mel_spectrogram = ops.squeeze(log_mel_spec, axis=0)
+            else:
+                mel_spectrogram = log_mel_spec
+        else:
+            mel_spectrogram = log_mel_spec
         mask = ops.cast(attention_mask[:: self.hop_length], dtype="bool")
         mask = mask[: ops.shape(mel_spectrogram)[0]]
         mel_spectrogram = ops.cast(mel_spectrogram, dtype=self.compute_dtype)
@@ -296,13 +307,15 @@ class Gemma3nAudioConverter(AudioConverter):
                 padding_strategy = padding
         else:
             padding_strategy = "do_not_pad"
+
         if max_length is None:
             if padding_strategy == "max_length":
                 raise ValueError(
-                    "When setting padding='max_length', max_length must be "
-                    "defined"
+                    "When setting padding='max_length', max_length must "
+                    "be defined"
                 )
-        if padding_strategy != "do_not_pad" and (self.padding_value is None):
+
+        if padding_strategy != "do_not_pad" and self.padding_value is None:
             raise ValueError("Padding requested but no padding_value defined")
         return padding_strategy
 
@@ -316,16 +329,18 @@ class Gemma3nAudioConverter(AudioConverter):
         return_attention_mask=None,
     ):
         required_input = input_features
+
         if padding_strategy == "longest":
             max_length = len(required_input)
         if (
             max_length is not None
             and pad_to_multiple_of is not None
-            and (max_length % pad_to_multiple_of != 0)
+            and max_length % pad_to_multiple_of != 0
         ):
             max_length = (
                 (max_length // pad_to_multiple_of) + 1
             ) * pad_to_multiple_of
+
         needs_to_be_padded = (
             padding_strategy != "do_not_pad"
             and len(required_input) < max_length
@@ -336,7 +351,10 @@ class Gemma3nAudioConverter(AudioConverter):
             difference = max_length - len(required_input)
             if self.padding_side == "right":
                 if return_attention_mask:
-                    attention_mask = np.pad(attention_mask, (0, difference))
+                    attention_mask = np.pad(
+                        attention_mask,
+                        (0, difference),
+                    )
                 if required_input.ndim > 1:
                     padding_shape = ((0, difference), (0, 0))
                 else:
@@ -350,8 +368,15 @@ class Gemma3nAudioConverter(AudioConverter):
             elif self.padding_side == "left":
                 if return_attention_mask:
                     attention_mask = np.pad(attention_mask, (difference, 0))
+                    attention_mask = np.pad(
+                        attention_mask,
+                        (difference, 0),
+                    )
                 if required_input.ndim > 1:
-                    padding_shape = ((difference, 0), (0, 0))
+                    padding_shape = (
+                        (difference, 0),
+                        (0, 0),
+                    )
                 else:
                     padding_shape = ((difference, 0),)
                 input_features = np.pad(
@@ -372,19 +397,22 @@ class Gemma3nAudioConverter(AudioConverter):
     ):
         if not truncation:
             return input_features, attention_mask
-        elif truncation and max_length is None:
+
+        if truncation and max_length is None:
             raise ValueError(
                 "When setting truncation=True, max_length must be defined"
             )
+
         required_input = input_features
         if (
             max_length is not None
             and pad_to_multiple_of is not None
-            and (max_length % pad_to_multiple_of != 0)
+            and max_length % pad_to_multiple_of != 0
         ):
             max_length = (
                 (max_length // pad_to_multiple_of) + 1
             ) * pad_to_multiple_of
+
         needs_to_be_truncated = len(required_input) > max_length
         if needs_to_be_truncated:
             input_features = input_features[:max_length]
@@ -407,15 +435,23 @@ class Gemma3nAudioConverter(AudioConverter):
             if return_attention_mask is not None
             else self.return_attention_mask
         )
+
         if len(required_input) == 0:
-            return [], [] if return_attention_mask else None
+            if return_attention_mask:
+                return [], []
+            return [], None
+
         required_input = [np.asarray(v) for v in required_input]
+
         padding_strategy = self._get_padding_strategies(
-            padding=padding, max_length=max_length
+            padding=padding,
+            max_length=max_length,
         )
+
         batch_size = len(required_input)
         truncated_inputs = []
         truncated_masks = []
+
         for i in range(batch_size):
             inputs = required_input[i]
             mask = (
@@ -430,6 +466,7 @@ class Gemma3nAudioConverter(AudioConverter):
                 pad_to_multiple_of=pad_to_multiple_of,
                 truncation=truncation,
             )
+
             truncated_inputs.append(inputs_slice)
             if mask_slice is not None:
                 truncated_masks.append(mask_slice)
@@ -460,6 +497,20 @@ class Gemma3nAudioConverter(AudioConverter):
             return batch_outputs_features, None
         return batch_outputs_features, batch_outputs_masks
 
+    def compute_output_spec(self, raw_speech, *args, **kwargs):
+        was_batched = len(raw_speech.shape) > 1
+
+        if was_batched:
+            features_shape = (raw_speech.shape[0], None, self.feature_size)
+            mask_shape = (raw_speech.shape[0], None)
+        else:
+            features_shape = (None, self.feature_size)
+            mask_shape = (None,)
+        return (
+            KerasTensor(shape=features_shape, dtype=self.compute_dtype),
+            KerasTensor(shape=mask_shape, dtype="int32"),
+        )
+
     def call(
         self,
         raw_speech,
@@ -469,12 +520,19 @@ class Gemma3nAudioConverter(AudioConverter):
         pad_to_multiple_of=128,
         return_attention_mask=True,
     ):
+        # Handle symbolic inputs before NumPy conversion.
+        if isinstance(raw_speech, KerasTensor):
+            return self.compute_output_spec(
+                raw_speech,
+            )
+
         if isinstance(raw_speech, (list, tuple)):
             was_batched = True
             raw_speech_list = [np.asarray(speech) for speech in raw_speech]
         else:
             raw_speech_np = np.asarray(raw_speech)
             was_batched = raw_speech_np.ndim > 1
+
             if was_batched:
                 raw_speech_list = [speech for speech in raw_speech_np]
             else:
@@ -502,6 +560,7 @@ class Gemma3nAudioConverter(AudioConverter):
                 speech.T,
                 dtype=self.compute_dtype,
             )
+
             mask_tensor = ops.convert_to_tensor(
                 mask,
                 dtype="int32",
@@ -515,18 +574,39 @@ class Gemma3nAudioConverter(AudioConverter):
             prepared_speech.append(features)
             prepared_speech_mask.append(feature_mask)
 
-        input_features = ops.stack(prepared_speech, axis=0)
-        input_features_mask = ops.stack(prepared_speech_mask, axis=0)
+        input_features = ops.stack(
+            prepared_speech,
+            axis=0,
+        )
+
+        input_features_mask = ops.stack(
+            prepared_speech_mask,
+            axis=0,
+        )
 
         if not was_batched:
-            input_features = ops.squeeze(input_features, axis=0)
-            input_features_mask = ops.squeeze(input_features_mask, axis=0)
+            input_features = ops.squeeze(
+                input_features,
+                axis=0,
+            )
+            input_features_mask = ops.squeeze(
+                input_features_mask,
+                axis=0,
+            )
 
-        input_features_mask = ops.cast(input_features_mask, dtype="int32")
-        return input_features, input_features_mask
+        input_features_mask = ops.cast(
+            input_features_mask,
+            dtype="int32",
+        )
+
+        return (
+            input_features,
+            input_features_mask,
+        )
 
     def get_config(self):
         config = super().get_config()
+
         config.update(
             {
                 "feature_size": self.feature_size,
@@ -548,4 +628,5 @@ class Gemma3nAudioConverter(AudioConverter):
                 "padding_side": self.padding_side,
             }
         )
+
         return config
