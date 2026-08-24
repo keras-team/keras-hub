@@ -200,10 +200,7 @@ class Gemma3nAudioConverter(AudioConverter):
         fb = np.maximum(0.0, np.minimum(down_slopes, up_slopes))
         return ops.convert_to_tensor(fb, dtype=self.compute_dtype)
 
-    def _extract_spectrogram(self, waveform, attention_mask):
-        # waveform is normally shaped (1, num_samples).
-        if ops.ndim(waveform) == 1:
-            waveform = ops.expand_dims(waveform, axis=0)
+    def _extract_spectrogram(self, waveform, attention_mask=None):
         waveform = ops.cast(waveform, dtype=self.compute_dtype)
         if self.dither > 0.0:
             waveform = waveform + self.dither * random.normal(
@@ -237,66 +234,67 @@ class Gemma3nAudioConverter(AudioConverter):
                 )
         else:
             frames = frames_to_process[..., :-1]
-
         frames = frames * self.window
-        fft_frames = ops.cast(frames, dtype=self.compute_dtype)
-
         fft_pad = self.fft_length - self.frame_length
         if fft_pad > 0:
-            fft_frames = ops.pad(
-                fft_frames,
-                [[0, 0], [0, 0], [0, fft_pad]],
+            frames = ops.pad(
+                frames,
+                [[0, 0], [0, fft_pad]],
             )
-
-        # Keras versions used by this repository may return the real and
-        # imaginary components separately from ops.rfft. Handle that form
-        # while also supporting versions returning a complex tensor.
-        stft = ops.rfft(fft_frames, fft_length=self.fft_length)
-
+        stft = ops.rfft(
+            frames,
+            fft_length=self.fft_length,
+        )
         if isinstance(stft, (tuple, list)):
             real, imag = stft
             magnitude_spec = ops.sqrt(ops.square(real) + ops.square(imag))
         else:
             magnitude_spec = ops.abs(stft)
-
-        mel_spec = ops.matmul(magnitude_spec, self.mel_filters)
-
-        mel_floor_tensor = ops.cast(self.mel_floor, dtype=self.compute_dtype)
+        mel_spec = ops.matmul(
+            magnitude_spec,
+            self.mel_filters,
+        )
+        mel_floor_tensor = ops.cast(
+            self.mel_floor,
+            dtype=self.compute_dtype,
+        )
         log_mel_spec = ops.log(ops.maximum(mel_spec, mel_floor_tensor))
-
         if self.per_bin_mean is not None:
-            per_bin_mean_tensor = ops.reshape(
-                ops.convert_to_tensor(
-                    self.per_bin_mean,
-                    dtype=self.compute_dtype,
-                ),
-                (1, 1, self.feature_size),
+            mean = ops.convert_to_tensor(
+                self.per_bin_mean,
+                dtype=self.compute_dtype,
             )
-            log_mel_spec = log_mel_spec - per_bin_mean_tensor
-
+            mean = ops.reshape(mean, (1, self.feature_size))
+            log_mel_spec = log_mel_spec - mean
         if self.per_bin_stddev is not None:
-            per_bin_stddev_tensor = ops.reshape(
-                ops.convert_to_tensor(
-                    self.per_bin_stddev,
-                    dtype=self.compute_dtype,
-                ),
-                (1, 1, self.feature_size),
+            stddev = ops.convert_to_tensor(
+                self.per_bin_stddev,
+                dtype=self.compute_dtype,
             )
-            log_mel_spec = log_mel_spec / per_bin_stddev_tensor
-
-        # Depending on the backend/version, the FFT/matmul path can preserve
-        # or remove the leading singleton dimension. Only squeeze it when it
-        # is actually present.
-        if ops.ndim(log_mel_spec) == 3:
-            if log_mel_spec.shape[0] == 1:
-                mel_spectrogram = ops.squeeze(log_mel_spec, axis=0)
-            else:
-                mel_spectrogram = log_mel_spec
+            stddev = ops.reshape(stddev, (1, self.feature_size))
+            log_mel_spec = log_mel_spec / stddev
+        mel_spectrogram = ops.cast(
+            log_mel_spec,
+            dtype=self.compute_dtype,
+        )
+        num_output_frames = ops.shape(mel_spectrogram)[-2]
+        if attention_mask is None:
+            mask = None
         else:
-            mel_spectrogram = log_mel_spec
-        mask = ops.cast(attention_mask[:: self.hop_length], dtype="bool")
-        mask = mask[: ops.shape(mel_spectrogram)[0]]
-        mel_spectrogram = ops.cast(mel_spectrogram, dtype=self.compute_dtype)
+            # A spectrogram frame is valid only when all samples contributing
+            # to that frame are non-padding.
+            frame_masks = ops.extract_sequences(
+                attention_mask,
+                sequence_length=self.frame_length,
+                sequence_stride=self.hop_length,
+            )
+            mask = ops.all(
+                ops.cast(frame_masks, dtype="bool"),
+                axis=-1,
+            )
+            # Keep the mask exactly aligned with the frames produced by
+            # `ops.extract_sequences()` / STFT.
+            mask = mask[:num_output_frames]
         return mel_spectrogram, mask
 
     def _get_padding_strategies(self, padding=False, max_length=None):
@@ -368,10 +366,6 @@ class Gemma3nAudioConverter(AudioConverter):
             elif self.padding_side == "left":
                 if return_attention_mask:
                     attention_mask = np.pad(attention_mask, (difference, 0))
-                    attention_mask = np.pad(
-                        attention_mask,
-                        (difference, 0),
-                    )
                 if required_input.ndim > 1:
                     padding_shape = (
                         (difference, 0),
@@ -402,7 +396,6 @@ class Gemma3nAudioConverter(AudioConverter):
             raise ValueError(
                 "When setting truncation=True, max_length must be defined"
             )
-
         required_input = input_features
         if (
             max_length is not None
@@ -440,18 +433,13 @@ class Gemma3nAudioConverter(AudioConverter):
             if return_attention_mask:
                 return [], []
             return [], None
-
         required_input = [np.asarray(v) for v in required_input]
-
         padding_strategy = self._get_padding_strategies(
-            padding=padding,
-            max_length=max_length,
+            padding=padding, max_length=max_length
         )
-
         batch_size = len(required_input)
         truncated_inputs = []
         truncated_masks = []
-
         for i in range(batch_size):
             inputs = required_input[i]
             mask = (
@@ -466,7 +454,6 @@ class Gemma3nAudioConverter(AudioConverter):
                 pad_to_multiple_of=pad_to_multiple_of,
                 truncation=truncation,
             )
-
             truncated_inputs.append(inputs_slice)
             if mask_slice is not None:
                 truncated_masks.append(mask_slice)
@@ -497,19 +484,34 @@ class Gemma3nAudioConverter(AudioConverter):
             return batch_outputs_features, None
         return batch_outputs_features, batch_outputs_masks
 
-    def compute_output_spec(self, raw_speech, *args, **kwargs):
+    def compute_output_spec(
+        self, raw_speech, return_attention_mask=None, *args, **kwargs
+    ):
         was_batched = len(raw_speech.shape) > 1
-
         if was_batched:
-            features_shape = (raw_speech.shape[0], None, self.feature_size)
+            features_shape = (
+                raw_speech.shape[0],
+                None,
+                self.feature_size,
+            )
             mask_shape = (raw_speech.shape[0], None)
         else:
             features_shape = (None, self.feature_size)
             mask_shape = (None,)
-        return (
-            KerasTensor(shape=features_shape, dtype=self.compute_dtype),
-            KerasTensor(shape=mask_shape, dtype="int32"),
+
+        features_spec = KerasTensor(
+            shape=features_shape,
+            dtype=self.compute_dtype,
         )
+        if return_attention_mask is None:
+            return_attention_mask = self.return_attention_mask
+
+        if return_attention_mask:
+            return (
+                features_spec,
+                KerasTensor(shape=mask_shape, dtype="int32"),
+            )
+        return features_spec, None
 
     def call(
         self,
@@ -520,26 +522,30 @@ class Gemma3nAudioConverter(AudioConverter):
         pad_to_multiple_of=128,
         return_attention_mask=True,
     ):
-        # Handle symbolic inputs before NumPy conversion.
         if isinstance(raw_speech, KerasTensor):
-            return self.compute_output_spec(
-                raw_speech,
-            )
+            return self.compute_output_spec(raw_speech)
 
         if isinstance(raw_speech, (list, tuple)):
             was_batched = True
-            raw_speech_list = [np.asarray(speech) for speech in raw_speech]
+            raw_speech_list = list(raw_speech)
         else:
-            raw_speech_np = np.asarray(raw_speech)
-            was_batched = raw_speech_np.ndim > 1
+            raw_speech_tensor = ops.convert_to_tensor(raw_speech)
+            was_batched = ops.ndim(raw_speech_tensor) > 1
 
             if was_batched:
-                raw_speech_list = [speech for speech in raw_speech_np]
+                raw_speech_list = ops.unstack(
+                    raw_speech_tensor,
+                    axis=0,
+                )
             else:
-                raw_speech_list = [np.atleast_1d(raw_speech_np)]
+                raw_speech_list = [raw_speech_tensor]
 
-        speech_list = [speech.reshape(-1, 1) for speech in raw_speech_list]
-
+        speech_list = [
+            np.asarray(speech).reshape(-1)
+            if not ops.is_tensor(speech)
+            else ops.reshape(speech, (-1,))
+            for speech in raw_speech_list
+        ]
         input_features_list, attention_mask_list = self.pad(
             speech_list,
             padding=padding,
@@ -548,6 +554,32 @@ class Gemma3nAudioConverter(AudioConverter):
             pad_to_multiple_of=pad_to_multiple_of,
             return_attention_mask=return_attention_mask,
         )
+        if not input_features_list:
+            if not was_batched:
+                empty_features = ops.zeros(
+                    (0, self.feature_size),
+                    dtype=self.compute_dtype,
+                )
+                empty_mask = (
+                    ops.zeros((0,), dtype="int32")
+                    if return_attention_mask
+                    else None
+                )
+                return empty_features, empty_mask
+
+            empty_features = ops.zeros(
+                (0, 0, self.feature_size),
+                dtype=self.compute_dtype,
+            )
+            empty_mask = (
+                ops.zeros((0, 0), dtype="int32")
+                if return_attention_mask
+                else None
+            )
+            return empty_features, empty_mask
+
+        if not return_attention_mask:
+            attention_mask_list = [None] * len(input_features_list)
 
         prepared_speech = []
         prepared_speech_mask = []
@@ -556,57 +588,73 @@ class Gemma3nAudioConverter(AudioConverter):
             input_features_list,
             attention_mask_list,
         ):
-            speech_tensor = ops.convert_to_tensor(
-                speech.T,
-                dtype=self.compute_dtype,
-            )
+            if len(speech) == 0:
+                features = ops.zeros(
+                    (0, self.feature_size),
+                    dtype=self.compute_dtype,
+                )
+                feature_mask = (
+                    ops.zeros((0,), dtype="bool")
+                    if return_attention_mask
+                    else None
+                )
+            else:
+                speech_tensor = ops.convert_to_tensor(
+                    speech,
+                    dtype=self.compute_dtype,
+                )
 
-            mask_tensor = ops.convert_to_tensor(
-                mask,
-                dtype="int32",
-            )
+                mask_tensor = (
+                    ops.convert_to_tensor(mask, dtype="int32")
+                    if mask is not None
+                    else None
+                )
 
-            features, feature_mask = self._extract_spectrogram(
-                speech_tensor,
-                mask_tensor,
-            )
+                features, feature_mask = self._extract_spectrogram(
+                    speech_tensor,
+                    mask_tensor,
+                )
 
             prepared_speech.append(features)
-            prepared_speech_mask.append(feature_mask)
+
+            if return_attention_mask:
+                prepared_speech_mask.append(feature_mask)
 
         input_features = ops.stack(
             prepared_speech,
             axis=0,
         )
 
-        input_features_mask = ops.stack(
-            prepared_speech_mask,
-            axis=0,
-        )
+        if return_attention_mask:
+            input_features_mask = ops.stack(
+                prepared_speech_mask,
+                axis=0,
+            )
+        else:
+            input_features_mask = None
 
         if not was_batched:
             input_features = ops.squeeze(
                 input_features,
                 axis=0,
             )
-            input_features_mask = ops.squeeze(
+
+            if input_features_mask is not None:
+                input_features_mask = ops.squeeze(
+                    input_features_mask,
+                    axis=0,
+                )
+
+        if input_features_mask is not None:
+            input_features_mask = ops.cast(
                 input_features_mask,
-                axis=0,
+                dtype="int32",
             )
 
-        input_features_mask = ops.cast(
-            input_features_mask,
-            dtype="int32",
-        )
-
-        return (
-            input_features,
-            input_features_mask,
-        )
+        return input_features, input_features_mask
 
     def get_config(self):
         config = super().get_config()
-
         config.update(
             {
                 "feature_size": self.feature_size,
