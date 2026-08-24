@@ -201,10 +201,7 @@ class Gemma3nAudioConverter(AudioConverter):
         return ops.convert_to_tensor(fb, dtype=self.compute_dtype)
 
     def _extract_spectrogram(self, waveform, attention_mask=None):
-        waveform = ops.cast(
-            waveform,
-            dtype=self.compute_dtype,
-        )
+        waveform = ops.cast(waveform, dtype=self.compute_dtype)
         waveform_rank = ops.ndim(waveform)
         if waveform_rank not in (1, 2):
             raise ValueError(
@@ -230,7 +227,6 @@ class Gemma3nAudioConverter(AudioConverter):
                 first_sample = frames_to_process[..., :1] * (
                     1.0 - self.preemphasis
                 )
-
                 rest_of_samples = (
                     frames_to_process[..., 1:-1]
                     - self.preemphasis * frames_to_process[..., :-2]
@@ -252,7 +248,6 @@ class Gemma3nAudioConverter(AudioConverter):
                 frames = ops.pad(frames, [[0, 0], [0, fft_pad]])
             else:
                 frames = ops.pad(frames, [[0, 0], [0, 0], [0, fft_pad]])
-
         stft = ops.rfft(frames, fft_length=self.fft_length)
         if isinstance(stft, (tuple, list)):
             real, imag = stft
@@ -275,19 +270,29 @@ class Gemma3nAudioConverter(AudioConverter):
             stddev = ops.reshape(stddev, (1, self.feature_size))
             log_mel_spec = log_mel_spec / stddev
         mel_spectrogram = ops.cast(log_mel_spec, dtype=self.compute_dtype)
-
         num_output_frames = ops.shape(mel_spectrogram)[-2]
         if attention_mask is None:
             mask = None
         else:
-            frame_masks = ops.extract_sequences(
-                attention_mask,
-                sequence_length=self.frame_length,
-                sequence_stride=self.hop_length,
+            # Compute valid frame counts based on unpadded lengths
+            # rather than sliding windows over padded areas
+            if waveform_rank == 2:
+                audio_lengths = ops.sum(
+                    ops.cast(attention_mask, dtype="int32"), axis=-1
+                )
+            else:
+                audio_lengths = ops.sum(ops.cast(attention_mask, dtype="int32"))
+            num_valid_frames = ops.maximum(
+                0, (audio_lengths - self.frame_length) // self.hop_length + 1
             )
-            frame_masks = ops.cast(frame_masks, dtype="bool")
-            mask = ops.all(frame_masks, axis=-1)
-            mask = mask[..., :num_output_frames]
+            if waveform_rank == 2:
+                indices = ops.arange(num_output_frames, dtype="int32")
+                indices = ops.expand_dims(indices, axis=0)
+                valid_lengths = ops.expand_dims(num_valid_frames, axis=1)
+                mask = ops.cast(indices < valid_lengths, dtype="int32")
+            else:
+                indices = ops.arange(num_output_frames, dtype="int32")
+                mask = ops.cast(indices < num_valid_frames, dtype="int32")
         return mel_spectrogram, mask
 
     def _get_padding_strategies(self, padding=False, max_length=None):
