@@ -11,9 +11,9 @@ Tests cover:
 
 import os
 
-import keras.ops as ops
 import numpy as np
 import torch
+from keras import ops
 from transformers import AutoModelForCausalLM
 
 from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
@@ -77,7 +77,7 @@ def _make_vision_encoder(image_size=16):
     )
 
 
-def _make_multimodal_backbone(vocab_size=256, image_size=16, num_layers=6):
+def _make_multimodal_backbone(vocab_size=256, image_size=16, num_layers=2):
     """Create a tiny multimodal Gemma4Backbone (text + vision) for testing."""
     vision_encoder = _make_vision_encoder(image_size)
     return Gemma4Backbone(
@@ -262,7 +262,7 @@ class TestGemma4WeightsMap(TestCase):
         self.assertEqual(weights[f"{lp}.layer_scalar"].shape, (1,))
 
     def test_multimodal_key_presence(self):
-        backbone = _make_multimodal_backbone(num_layers=6)
+        backbone = _make_multimodal_backbone(num_layers=2)
         # Build with dummy multimodal input.
         num_patches = (16 // 4) ** 2  # 16
         patch_dim = 3 * 4 * 4  # 48
@@ -390,7 +390,7 @@ class TestGemma4Export(TestCase):
         backbone = Gemma4Backbone(
             vocabulary_size=tokenizer.vocabulary_size(),
             image_size=16,
-            num_layers=6,
+            num_layers=2,
             num_query_heads=2,
             num_key_value_heads=1,
             hidden_dim=64,
@@ -505,15 +505,7 @@ class TestGemma4Export(TestCase):
             hf_out = hf_model(input_ids=input_ids)
         hf_logits = hf_out.logits.float().numpy()
 
-        # Mean absolute difference should be numerically small.
-        # We use the token_embedding to produce final logits in both cases so
-        # the outputs should be essentially identical.
-        diff = np.abs(hf_logits[0] - keras_logits[0]).mean()
-        self.assertLess(
-            diff,
-            1.0,
-            f"Logit parity check failed: mean abs diff = {diff:.4f}",
-        )
+        self.assertAllClose(keras_logits, hf_logits, atol=1e-3, rtol=1e-3)
 
 
 # ---------------------------------------------------------------------------

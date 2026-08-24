@@ -55,6 +55,7 @@ Requirements
 import argparse
 import gc
 import os
+import sys
 import tempfile
 
 os.environ.setdefault("KERAS_BACKEND", "torch")
@@ -178,11 +179,9 @@ def validate_configs(exp_cfg, orig_cfg):
     """Compare all architecture-relevant config fields."""
     print("\n  CONFIG VALIDATION")
 
+    # Skip HF-internal metadata keys (private keys starting with "_") and
+    # runtime fields that differ by environment but not architecture.
     skip_keys = {
-        "_name_or_path",
-        "_attn_implementation",
-        "_attn_implementation_autoset",
-        "_commit_hash",
         "transformers_version",
         "torch_dtype",
         "auto_map",
@@ -196,7 +195,7 @@ def validate_configs(exp_cfg, orig_cfg):
     all_keys = sorted(set(orig_dict.keys()) | set(exp_dict.keys()))
     mismatches = []
     for key in all_keys:
-        if key in skip_keys:
+        if key in skip_keys or key.startswith("_"):
             continue
         o = orig_dict.get(key, "<missing>")
         e = exp_dict.get(key, "<missing>")
@@ -209,8 +208,10 @@ def validate_configs(exp_cfg, orig_cfg):
     if mismatches:
         print(f"\n    ⚠ {len(mismatches)} field(s) differ: {mismatches}")
     else:
-        checked = len(all_keys) - len(skip_keys)
-        print(f"\n    ✓ All {checked} config fields match")
+        skipped = sum(
+            1 for k in all_keys if k in skip_keys or k.startswith("_")
+        )
+        print(f"\n    ✓ All {len(all_keys) - skipped} config fields match")
 
     return len(mismatches) == 0
 
@@ -582,7 +583,7 @@ def main():
     # --- Structural smoke-test ---
     if args.text_only:
         success = run_structural_smoke_test(export_dir)
-        exit(0 if success else 1)
+        sys.exit(0 if success else 1)
 
     # --- Real-weights round-trip ---
     if args.preset is None:
@@ -631,7 +632,7 @@ def main():
     )
 
     success = print_summary(validation_results)
-    exit(0 if success else 1)
+    sys.exit(0 if success else 1)
 
 
 if __name__ == "__main__":

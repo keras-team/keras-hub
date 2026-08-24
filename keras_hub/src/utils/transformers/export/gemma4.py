@@ -13,7 +13,7 @@ Multimodal (vision + audio) models are fully supported.  Text-only models
 ``model.language_model.*``.
 """
 
-import keras.ops as ops
+from keras import ops
 
 # ---------------------------------------------------------------------------
 # Config helpers
@@ -47,8 +47,6 @@ def _build_text_config(backbone):
         "hidden_size": backbone.hidden_dim,
         "intermediate_size": backbone.intermediate_dim,
         "head_dim": backbone.head_dim,
-        # HF expects int (defaults to 512); fall back to head_dim for models
-        # without a separate global head dimension.
         "global_head_dim": backbone.global_head_dim or backbone.head_dim,
         "rms_norm_eps": backbone.layer_norm_epsilon,
         "attention_bias": False,
@@ -61,13 +59,10 @@ def _build_text_config(backbone):
         "attn_logit_softcapping": backbone.attention_logit_soft_cap,
         "final_logit_softcapping": backbone.final_logit_soft_cap,
         "num_kv_shared_layers": backbone.num_kv_shared_layers,
-        # HF expects int; fall back to num_key_value_heads when None.
         "num_global_key_value_heads": (
             backbone.num_global_key_value_heads or backbone.num_key_value_heads
         ),
         "hidden_size_per_layer_input": backbone.hidden_size_per_layer_input,
-        # HF Gemma4TextConfig requires an int (default 262144); fall back to
-        # vocabulary_size when the backbone has no PLE (None).
         "vocab_size_per_layer_input": (
             backbone.vocab_size_per_layer_input or backbone.vocabulary_size
         ),

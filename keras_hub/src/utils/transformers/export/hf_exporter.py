@@ -93,6 +93,19 @@ MODEL_TOKENIZER_CONFIGS = {
 }
 
 
+def _to_numpy_dict(weights_dict):
+    """Convert a weight dict to a plain numpy dict for safetensors."""
+    import numpy as np
+
+    result = {}
+    for k, v in weights_dict.items():
+        tensor = v.value if hasattr(v, "value") else v
+        result[k] = np.array(
+            tensor.numpy() if hasattr(tensor, "numpy") else tensor
+        )
+    return result
+
+
 def export_backbone(backbone, path, include_lm_head=False):
     """Export the backbone model to HuggingFace format.
 
@@ -208,36 +221,30 @@ def export_backbone(backbone, path, include_lm_head=False):
                 if hasattr(t, "contiguous"):
                     t = t.contiguous()
 
-                # reshape handles 0-D scalars; view(uint8) gets raw bytes
+                # reshape(-1) handles 0-D scalars (e.g. layer_scalar)
                 b = t.reshape(-1).view(torch.uint8).numpy().tobytes()
                 f.write(b)
 
     elif backend == "tensorflow":
-        import numpy as np
+        # Use safetensors.numpy for backend-agnostic serialization; this
+        # correctly handles 0-D scalar tensors that the TF writer rejects.
         from safetensors.numpy import save_file
 
-        np_weights = {}
-        for k, v in weights_dict.items():
-            tensor = v.value if hasattr(v, "value") else v
-            if hasattr(tensor, "numpy"):
-                arr = np.array(tensor.numpy())
-            else:
-                arr = np.array(tensor)
-            np_weights[k] = arr
-        save_file(np_weights, weights_path, metadata={"format": "pt"})
+        save_file(
+            _to_numpy_dict(weights_dict),
+            weights_path,
+            metadata={"format": "pt"},
+        )
     elif backend == "jax":
-        import numpy as np
+        # Same as TF: convert to numpy first so safetensors.numpy handles
+        # all tensor shapes uniformly.
         from safetensors.numpy import save_file
 
-        np_weights = {}
-        for k, v in weights_dict.items():
-            tensor = v.value if hasattr(v, "value") else v
-            if hasattr(tensor, "numpy"):
-                arr = np.array(tensor.numpy())
-            else:
-                arr = np.array(tensor)
-            np_weights[k] = arr
-        save_file(np_weights, weights_path, metadata={"format": "pt"})
+        save_file(
+            _to_numpy_dict(weights_dict),
+            weights_path,
+            metadata={"format": "pt"},
+        )
     else:
         raise ValueError(f"Unsupported backend: {backend}")
 
