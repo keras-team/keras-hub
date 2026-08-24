@@ -235,13 +235,8 @@ class Gemma3nAudioConverter(AudioConverter):
                     frames_to_process[..., 1:-1]
                     - self.preemphasis * frames_to_process[..., :-2]
                 )
-
                 frames = ops.concatenate(
-                    [
-                        first_sample,
-                        rest_of_samples,
-                    ],
-                    axis=-1,
+                    [first_sample, rest_of_samples], axis=-1
                 )
             else:
                 frames = (
@@ -280,6 +275,8 @@ class Gemma3nAudioConverter(AudioConverter):
             stddev = ops.reshape(stddev, (1, self.feature_size))
             log_mel_spec = log_mel_spec / stddev
         mel_spectrogram = ops.cast(log_mel_spec, dtype=self.compute_dtype)
+
+        num_output_frames = ops.shape(mel_spectrogram)[-2]
         if attention_mask is None:
             mask = None
         else:
@@ -288,12 +285,8 @@ class Gemma3nAudioConverter(AudioConverter):
                 sequence_length=self.frame_length,
                 sequence_stride=self.hop_length,
             )
-            frame_masks_bool = ops.cast(frame_masks, dtype="bool")
-            mask = ops.all(frame_masks_bool, axis=-1)
-
-            # mask and spectrogram must have the same number
-            # of frames.
-            num_output_frames = ops.shape(mel_spectrogram)[-2]
+            frame_masks = ops.cast(frame_masks, dtype="bool")
+            mask = ops.all(frame_masks, axis=-1)
             mask = mask[..., :num_output_frames]
         return mel_spectrogram, mask
 
@@ -367,12 +360,9 @@ class Gemma3nAudioConverter(AudioConverter):
                 if return_attention_mask:
                     attention_mask = np.pad(attention_mask, (difference, 0))
                 if required_input.ndim > 1:
-                    padding_shape = (
-                        (difference, 0),
-                        (0, 0),
-                    )
+                    padding_shape = ((difference, 0), (0, 0))
                 else:
-                    padding_shape = ((difference, 0),)
+                    padding_shape = (difference, 0)
                 input_features = np.pad(
                     required_input,
                     padding_shape,
@@ -428,7 +418,6 @@ class Gemma3nAudioConverter(AudioConverter):
             if return_attention_mask is not None
             else self.return_attention_mask
         )
-
         if len(required_input) == 0:
             if return_attention_mask:
                 return [], []
@@ -550,12 +539,12 @@ class Gemma3nAudioConverter(AudioConverter):
 
                 mask_tensor = (
                     ops.convert_to_tensor(
-                        np.asarray(mask).reshape(-1),
-                        dtype="int32",
+                        np.asarray(mask).reshape(-1), dtype="int32"
                     )
                     if mask is not None
                     else None
                 )
+
                 # Single waveform -> 1-D input.
                 features, feature_mask = self._extract_spectrogram(
                     speech, mask_tensor
@@ -580,7 +569,21 @@ class Gemma3nAudioConverter(AudioConverter):
                 input_features_mask = None
             return input_features, input_features_mask
 
-        raw_speech_tensor = ops.convert_to_tensor(raw_speech)
+        if isinstance(raw_speech, (list, tuple)):
+            raw_speech_tensor = ops.stack(
+                [
+                    speech
+                    if ops.is_tensor(speech)
+                    else ops.convert_to_tensor(speech)
+                    for speech in raw_speech
+                ],
+                axis=0,
+            )
+        elif ops.is_tensor(raw_speech):
+            raw_speech_tensor = raw_speech
+        else:
+            raw_speech_tensor = ops.convert_to_tensor(raw_speech)
+
         rank = ops.ndim(raw_speech_tensor)
         if rank == 1:
             speech_np = np.asarray(raw_speech_tensor).reshape(-1)
@@ -598,25 +601,18 @@ class Gemma3nAudioConverter(AudioConverter):
                     (0, self.feature_size), dtype=self.compute_dtype
                 )
                 mask = (
-                    ops.zeros(
-                        (0,),
-                        dtype="int32",
-                    )
+                    ops.zeros((0,), dtype="int32")
                     if return_attention_mask
                     else None
                 )
-
                 return features, mask
 
             speech = ops.convert_to_tensor(
-                input_features_list[0],
-                dtype=self.compute_dtype,
+                input_features_list[0], dtype=self.compute_dtype
             )
-
             if return_attention_mask:
                 mask = ops.convert_to_tensor(
-                    attention_mask_list[0],
-                    dtype="int32",
+                    attention_mask_list[0], dtype="int32"
                 )
             else:
                 mask = None
