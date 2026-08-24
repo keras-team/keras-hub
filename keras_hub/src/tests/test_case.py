@@ -282,11 +282,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
     def _run_grain_test(self, layer, input_data, output, unpack=False):
         if grain:
-            length = tree.flatten(input_data)[0].shape[0]
-            unbatched_data = [
-                tree.map_structure(lambda x: x[i], input_data)
-                for i in range(length)
-            ]
+            ds = tf.data.Dataset.from_tensor_slices(input_data)
+            unbatched_data = list(ds)
+            length = len(unbatched_data)
 
             # Unbatched grain dataset
             grain_ds = grain.MapDataset.source(unbatched_data)
@@ -302,7 +300,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 grain_output, _, _ = keras.utils.unpack_x_y_sample_weight(
                     grain_output
                 )
-            
 
             self.assertAllClose(output, grain_output)
 
@@ -318,7 +315,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 grain_batched_output, _, _ = keras.utils.unpack_x_y_sample_weight(
                     grain_batched_output
                 )
+
             self.assertAllClose(output, grain_batched_output)
+        else:
+            print(
+                "\n[INFO] PyGrain not installed - "
+                "skipping PyGrain parity checks.\n"
+            )
 
     def run_serialization_test(self, instance):
         """Check idempotency of serialize/deserialize.
