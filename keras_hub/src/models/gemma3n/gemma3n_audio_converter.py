@@ -1,7 +1,6 @@
 import math
 
 import numpy as np
-import tensorflow as tf
 from keras import KerasTensor
 from keras import ops
 from keras import random
@@ -523,6 +522,8 @@ class Gemma3nAudioConverter(AudioConverter):
         pad_to_multiple_of=128,
         return_attention_mask=True,
     ):
+        import tensorflow as tf
+
         if isinstance(raw_speech, KerasTensor):
             return self.compute_output_spec(raw_speech)
         if isinstance(raw_speech, (list, tuple)):
