@@ -6,6 +6,8 @@ from keras import ops
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.vllm.attention import vllm_paged_attention
+from keras_hub.src.vllm.context import get_vllm_context
 
 
 # This is just a self-attention layer in Mistral. But it can be generalized
@@ -136,6 +138,17 @@ class CachedMistralAttention(keras.layers.Layer):
         cache_update_index=None,
         training=None,
     ):
+        # Route to vLLM paged attention while serving on TPU; otherwise the
+        # original dense path below runs unchanged.
+        vllm_context = get_vllm_context()
+        if (
+            vllm_context is not None
+            and vllm_context.paged_attention_func is not None
+        ):
+            return self._compute_vllm_attention(
+                hidden_states, cache, vllm_context
+            )
+
         start_index = (
             cache_update_index if cache_update_index is not None else 0
         )
@@ -187,6 +200,37 @@ class CachedMistralAttention(keras.layers.Layer):
 
         attention_output = self._output_dense(attention_output)
 
+        if cache is not None:
+            return attention_output, cache
+        return attention_output
+
+    def _compute_vllm_attention(self, hidden_states, cache, vllm_context):
+        """vLLM paged-attention route (serving on TPU only).
+
+        Projects Q/K/V, applies RoPE at the engine's per-token positions,
+        and hands the (unexpanded) K/V to the shared paged-attention bridge,
+        forwarding Mistral's sliding window. The kernel handles
+        grouped-query attention via ``num_kv_heads``, so the dense path's
+        `ops.repeat` of K/V is not needed here.
+        """
+        positions = ops.reshape(vllm_context.positions, (-1, 1))
+        query = self.rotary_embedding_layer(
+            self._query_dense(hidden_states), positions=positions
+        )
+        key = self.rotary_embedding_layer(
+            self._key_dense(hidden_states), positions=positions
+        )
+        value = self._value_dense(hidden_states)
+
+        attention_output = vllm_paged_attention(
+            query,
+            key,
+            value,
+            self._inv_norm_factor,
+            num_kv_heads=self._num_key_value_heads,
+            sliding_window=self._sliding_window,
+        )
+        attention_output = self._output_dense(attention_output)
         if cache is not None:
             return attention_output, cache
         return attention_output
