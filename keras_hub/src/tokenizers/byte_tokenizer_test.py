@@ -86,8 +86,40 @@ class ByteTokenizerTest(TestCase):
         input_data = [[104, 101, 226, 150, 108, 108, 111]]
 
         tokenizer = ByteTokenizer(errors="strict")
-        with self.assertRaises(tf.errors.InvalidArgumentError):
+        expected_errors = (ValueError,)
+        if tf is not None:
+            expected_errors = (ValueError, tf.errors.InvalidArgumentError)
+        with self.assertRaises(expected_errors):
             _ = tokenizer.detokenize(input_data)
+
+    def test_detokenize_replace_valid_chars(self):
+        # 255 is invalid, 239,191,189 is valid U+FFFD.
+        # The invalid byte should be replaced by 'H' (72), but the valid
+        # U+FFFD should remain.
+        input_data = [[104, 101, 255, 108, 108, 111, 239, 191, 189]]
+        tokenizer = ByteTokenizer(errors="replace", replacement_char=72)
+        detokenize_output = tokenizer.detokenize(input_data)
+        self.assertAllEqual(detokenize_output, ["heHllo\ufffd"])
+
+    def test_workflow_parity(self):
+        if tf is None:
+            return  # Skip if TensorFlow is not available
+
+        input_data = ["hello", "fun", "▀▁▂▃", "haha"]
+        tokenizer = ByteTokenizer(sequence_length=12)
+
+        # Force TF Workflow
+        tokenizer._allow_python_workflow = False
+        tf_out = tokenizer(input_data)
+        tf_detok = tokenizer.detokenize(tf_out)
+
+        # Force Python Workflow
+        tokenizer._allow_python_workflow = True
+        python_out = tokenizer(input_data)
+        python_detok = tokenizer.detokenize(python_out)
+
+        self.assertAllEqual(tf_out, python_out)
+        self.assertAllEqual(tf_detok, python_detok)
 
     def test_vocab_size(self):
         tokenizer = ByteTokenizer()
