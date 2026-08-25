@@ -219,6 +219,12 @@ class ByteTokenizer(tokenizer.Tokenizer):
         self.replacement_char = replacement_char
 
         self._char_lst = [i.tobytes() for i in np.arange(256, dtype=np.uint8)]
+
+        # Build the tensor once, safely outside of any graph compilation
+        self._char_lst_tensor = None
+        if tf is not None:
+            self._char_lst_tensor = tf.constant(self._char_lst)
+
         self._update_special_token_ids()
 
     def vocabulary_size(self):
@@ -273,12 +279,6 @@ class ByteTokenizer(tokenizer.Tokenizer):
             if isinstance(inputs, str):
                 return [inputs], False
             elif isinstance(inputs, (tuple, list)):
-                if not all(isinstance(i, str) for i in inputs):
-                    raise ValueError(
-                        "If a list or tuple is provided as input, all elements "
-                        "must be strings. "
-                        f"Received: {inputs}"
-                    )
                 return list(inputs), True
             elif tf is not None and isinstance(inputs, tf.Tensor):
                 unbatched = inputs.shape.rank == 0
@@ -297,24 +297,27 @@ class ByteTokenizer(tokenizer.Tokenizer):
 
         inputs, batched = _canonicalize_tokenize_inputs(inputs)
 
-        batched_tokens = []
-        for text in inputs:
+        def tokenize_single_string(text):
+            if isinstance(text, bytes):
+                text = text.decode("utf-8")
             if self.lowercase:
                 text = text.casefold()
             if self.normalization_form is not None:
                 text = unicodedata.normalize(self.normalization_form, text)
             # Convert to byte integers
-            tokens = list(text.encode("utf-8"))
-            batched_tokens.append(tokens)
+            seq = list(text.encode("utf-8"))
 
-        # Handle sequence_length truncation and padding
-        if self.sequence_length:
-            pad_token_id = getattr(self, "pad_token_id", 0)
-            batched_tokens = [
-                tokens[: self.sequence_length]
-                + [pad_token_id] * max(0, self.sequence_length - len(tokens))
-                for tokens in batched_tokens
-            ]
+            # Handle sequence_length truncation and padding
+            if self.sequence_length:
+                pad_token_id = getattr(self, "pad_token_id", 0)
+                seq = seq[: self.sequence_length] + [pad_token_id] * max(
+                    0, self.sequence_length - len(seq)
+                )
+            return seq
+
+        batched_tokens = keras.tree.map_structure(
+            tokenize_single_string, inputs
+        )
 
         if not batched:
             batched_tokens = batched_tokens[0]
@@ -333,9 +336,8 @@ class ByteTokenizer(tokenizer.Tokenizer):
         # show up in the detokenized output.
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
 
-        _char_lst_tensor = tf.constant(self._char_lst)
         outputs = tf.strings.reduce_join(
-            tf.gather(_char_lst_tensor, inputs), axis=-1
+            tf.gather(self._char_lst_tensor, inputs), axis=-1
         )
 
         # Handle errors if an invalid byte sequence is encountered.
