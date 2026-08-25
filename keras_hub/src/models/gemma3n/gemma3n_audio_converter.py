@@ -1,11 +1,6 @@
 import math
 
 import numpy as np
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 from keras import KerasTensor
 from keras import ops
 from keras import random
@@ -522,153 +517,134 @@ class Gemma3nAudioConverter(AudioConverter):
         return_attention_mask=True,
     ):
         if isinstance(raw_speech, KerasTensor):
-            return self.compute_output_spec(raw_speech)
-        if isinstance(raw_speech, (list, tuple)):
-            speech_list = [
-                np.asarray(speech).reshape(-1) for speech in raw_speech
-            ]
-            input_features_list, attention_mask_list = self.pad(
-                speech_list,
-                padding=padding,
-                max_length=max_length,
-                truncation=truncation,
-                pad_to_multiple_of=pad_to_multiple_of,
-                return_attention_mask=return_attention_mask,
+            return self.compute_output_spec(
+                raw_speech, return_attention_mask=return_attention_mask
             )
-            if not return_attention_mask:
-                attention_mask_list = [None] * len(input_features_list)
-            prepared_features = []
-            prepared_masks = []
-            for speech, mask in zip(input_features_list, attention_mask_list):
-                speech = ops.convert_to_tensor(
-                    np.asarray(speech).reshape(-1), dtype=self.compute_dtype
+
+        if ops.is_tensor(raw_speech):
+            waveform = ops.cast(raw_speech, dtype=self.compute_dtype)
+            waveform_rank = len(ops.shape(waveform))
+            if waveform_rank not in (1, 2):
+                raise ValueError(
+                    f"`raw_speech` must have rank 1 or 2. "
+                    f"Received shape: {ops.shape(raw_speech)}."
+                )
+            if (
+                max_length is not None
+                and pad_to_multiple_of is not None
+                and max_length % pad_to_multiple_of != 0
+            ):
+                max_length = (
+                    (max_length // pad_to_multiple_of) + 1
+                ) * pad_to_multiple_of
+
+            if truncation and max_length is not None:
+                waveform = waveform[..., :max_length]
+
+            if padding == "max_length" and max_length is not None:
+                current_len = ops.shape(waveform)[-1]
+                pad_len = ops.maximum(0, max_length - current_len)
+                paddings = (
+                    [[0, pad_len]]
+                    if waveform_rank == 1
+                    else [[0, 0], [0, pad_len]]
+                )
+                waveform = ops.pad(
+                    waveform, paddings, constant_values=self.padding_value
+                )
+            elif padding == "longest" and pad_to_multiple_of is not None:
+                current_len = ops.shape(waveform)[-1]
+                rem = current_len % pad_to_multiple_of
+                pad_len = (pad_to_multiple_of - rem) % pad_to_multiple_of
+                paddings = (
+                    [[0, pad_len]]
+                    if waveform_rank == 1
+                    else [[0, 0], [0, pad_len]]
+                )
+                waveform = ops.pad(
+                    waveform, paddings, constant_values=self.padding_value
                 )
 
-                mask_tensor = (
-                    ops.convert_to_tensor(
-                        np.asarray(mask).reshape(-1), dtype="int32"
-                    )
-                    if mask is not None
-                    else None
-                )
-
-                # Single waveform -> 1-D input.
-                features, feature_mask = self._extract_spectrogram(
-                    speech, mask_tensor
-                )
-                features = ops.reshape(features, (-1, self.feature_size))
-                if return_attention_mask:
-                    if feature_mask is None:
-                        feature_mask = ops.ones(
-                            (ops.shape(features)[0],), dtype="int32"
-                        )
-                    else:
-                        feature_mask = ops.reshape(feature_mask, (-1,))
-                        feature_mask = ops.cast(feature_mask, "int32")
-
-                    prepared_masks.append(feature_mask)
-                prepared_features.append(features)
-
-            input_features = ops.stack(prepared_features, axis=0)
             if return_attention_mask:
-                input_features_mask = ops.stack(prepared_masks, axis=0)
-            else:
-                input_features_mask = None
-            return input_features, input_features_mask
-
-        if isinstance(raw_speech, (list, tuple)):
-            raw_speech_tensor = ops.stack(
-                [
-                    speech
-                    if ops.is_tensor(speech)
-                    else ops.convert_to_tensor(speech)
-                    for speech in raw_speech
-                ],
-                axis=0,
-            )
-        elif ops.is_tensor(raw_speech):
-            raw_speech_tensor = raw_speech
-        else:
-            raw_speech_tensor = ops.convert_to_tensor(raw_speech)
-
-        rank = ops.ndim(raw_speech_tensor)
-        if rank == 1:
-            speech_np = np.asarray(raw_speech_tensor).reshape(-1)
-
-            input_features_list, attention_mask_list = self.pad(
-                [speech_np],
-                padding=padding,
-                max_length=max_length,
-                truncation=truncation,
-                pad_to_multiple_of=pad_to_multiple_of,
-                return_attention_mask=return_attention_mask,
-            )
-            if not input_features_list:
-                features = ops.zeros(
-                    (0, self.feature_size), dtype=self.compute_dtype
-                )
-                mask = (
-                    ops.zeros((0,), dtype="int32")
-                    if return_attention_mask
-                    else None
-                )
-                return features, mask
-
-            speech = ops.convert_to_tensor(
-                input_features_list[0], dtype=self.compute_dtype
-            )
-            if return_attention_mask:
-                mask = ops.convert_to_tensor(
-                    attention_mask_list[0], dtype="int32"
-                )
+                current_len = ops.shape(waveform)[-1]
+                if waveform_rank == 1:
+                    mask = ops.ones((current_len,), dtype="int32")
+                else:
+                    batch_size = ops.shape(waveform)[0]
+                    mask = ops.ones((batch_size, current_len), dtype="int32")
             else:
                 mask = None
-            features, feature_mask = self._extract_spectrogram(speech, mask)
-            features = ops.reshape(features, (-1, self.feature_size))
 
-            if return_attention_mask:
-                if feature_mask is None:
-                    feature_mask = ops.ones(
-                        (ops.shape(features)[0],), dtype="int32"
-                    )
-                else:
-                    feature_mask = ops.reshape(feature_mask, (-1,))
-                    feature_mask = ops.cast(feature_mask, "int32")
-            else:
-                feature_mask = None
+            features, feature_mask = self._extract_spectrogram(waveform, mask)
             return features, feature_mask
 
-        def process_one_audio(speech):
-            speech = ops.reshape(speech, (-1,))
-            speech = ops.cast(speech, self.compute_dtype)
-            speech_batched = ops.expand_dims(speech, axis=0)
-            speech_length = ops.shape(speech_batched)[1]
-            speech_mask = ops.ones((1, speech_length), dtype="int32")
-            features, feature_mask = self._extract_spectrogram(
-                speech_batched, speech_mask
-            )
-            features = ops.reshape(features, (-1, self.feature_size))
-            features = ops.cast(features, self.compute_dtype)
-            if feature_mask is None:
-                num_frames = ops.shape(features)[0]
-                feature_mask = ops.ones((num_frames,), dtype="int32")
+        # Handle NumPy inputs and determine whether input is batched
+        if isinstance(raw_speech, (list, tuple)):
+            is_batched = True
+            speech_list = [
+                ops.convert_to_numpy(s).reshape(-1) for s in raw_speech
+            ]
+        else:
+            speech_np = ops.convert_to_numpy(raw_speech)
+            if speech_np.ndim == 1:
+                is_batched = False
+                speech_list = [speech_np.reshape(-1)]
+            elif speech_np.ndim == 2:
+                is_batched = True
+                speech_list = [s.reshape(-1) for s in speech_np]
             else:
-                feature_mask = ops.reshape(feature_mask, (-1,))
-                feature_mask = ops.cast(feature_mask, "int32")
-            return features, feature_mask
+                raise ValueError(
+                    f"`raw_speech` must have rank 1 or 2. "
+                    f"Received shape: {speech_np.shape}."
+                )
 
-        input_features, input_features_mask = tf.map_fn(
-            process_one_audio,
-            raw_speech_tensor,
-            fn_output_signature=(
-                tf.TensorSpec(
-                    shape=(None, self.feature_size),
-                    dtype=tf.as_dtype(self.compute_dtype),
-                ),
-                tf.TensorSpec(shape=(None,), dtype=tf.int32),
-            ),
+        # Pad or truncate using self.pad()
+        input_features_list, attention_mask_list = self.pad(
+            speech_list,
+            padding=padding,
+            max_length=max_length,
+            truncation=truncation,
+            pad_to_multiple_of=pad_to_multiple_of,
+            return_attention_mask=return_attention_mask,
         )
-        return input_features, input_features_mask
+
+        if not input_features_list:
+            features = ops.zeros(
+                (0, 0, self.feature_size)
+                if is_batched
+                else (0, self.feature_size),
+                dtype=self.compute_dtype,
+            )
+            mask = (
+                ops.zeros((0, 0) if is_batched else (0,), dtype="int32")
+                if return_attention_mask
+                else None
+            )
+            return features, mask
+
+        # Stack into tensors
+        padded_speech = ops.convert_to_tensor(
+            np.stack(input_features_list, axis=0), dtype=self.compute_dtype
+        )
+        padded_mask = (
+            ops.convert_to_tensor(
+                np.stack(attention_mask_list, axis=0), dtype="int32"
+            )
+            if return_attention_mask
+            else None
+        )
+
+        # If unbatched (1D), squeeze the batch dimension
+        if not is_batched:
+            padded_speech = ops.squeeze(padded_speech, axis=0)
+            if padded_mask is not None:
+                padded_mask = ops.squeeze(padded_mask, axis=0)
+
+        # Extract spectrograms (natively supports 1D and 2D with Keras ops)
+        features, feature_mask = self._extract_spectrogram(
+            padded_speech, padded_mask
+        )
+        return features, feature_mask
 
     def get_config(self):
         config = super().get_config()

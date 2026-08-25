@@ -1,4 +1,5 @@
 import numpy as np
+from keras import ops
 
 from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
     Gemma3nAudioConverter,
@@ -110,12 +111,13 @@ class Gemma3nAudioConverterTest(TestCase):
         self.assertEqual(len(outputs_norm), 2)
         features_no_norm, _ = outputs_no_norm
         features_norm, _ = outputs_norm
+        features_no_norm_np = ops.convert_to_numpy(features_no_norm)
         # We would want outputs to be different.
         self.assertNotAllClose(features_no_norm, features_norm)
         # Manually normalize and check for closeness.
-        manual_norm_features = (features_no_norm - np.array(mean)) / np.array(
-            stddev
-        )
+        manual_norm_features = (
+            features_no_norm_np - np.array(mean)
+        ) / np.array(stddev)
         self.assertAllClose(manual_norm_features, features_norm)
 
     def test_serialization(self):
@@ -150,12 +152,11 @@ class Gemma3nAudioConverterTest(TestCase):
         features_1, mask_1 = converter_no_norm(self.input_data)
         features_2, mask_2 = converter_norm(self.input_data)
 
-        np.testing.assert_array_equal(mask_1, mask_2)
-        assert features_1.shape == features_2.shape
+        self.assertAllEqual(mask_1, mask_2)
+        self.assertEqual(features_1.shape, features_2.shape)
 
     def test_batched_audio(self):
         converter = Gemma3nAudioConverter(**self.init_kwargs)
-
         audio_1 = np.sin(
             2
             * np.pi
@@ -180,34 +181,35 @@ class Gemma3nAudioConverterTest(TestCase):
         self.assertEqual(mask.shape[0], 2)
         self.assertEqual(mask.shape[1], features.shape[1])
 
-        self.assertTrue(np.all(mask[0]))
-        self.assertTrue(np.any(mask[1] == 0))
+        mask_np = ops.convert_to_numpy(mask)
+        self.assertTrue(np.all(mask_np[0]))
+        self.assertTrue(np.any(mask_np[1] == 0))
 
-        def test_truncation(self):
-            converter = Gemma3nAudioConverter(**self.init_kwargs)
+    def test_truncation(self):
+        converter = Gemma3nAudioConverter(**self.init_kwargs)
 
-            max_length = 1024
-            features, mask = converter(
-                self.input_data[0],
-                padding="max_length",
-                max_length=max_length,
-                truncation=True,
-            )
+        max_length = 1024
+        features, mask = converter(
+            self.input_data[0],
+            padding="max_length",
+            max_length=max_length,
+            truncation=True,
+        )
 
-            frame_length = int(
-                round(self.sampling_rate * self.frame_length_ms / 1000.0)
-            )
-            hop_length = int(
-                round(self.sampling_rate * self.hop_length_ms / 1000.0)
-            )
+        frame_length = int(
+            round(self.sampling_rate * self.frame_length_ms / 1000.0)
+        )
+        hop_length = int(
+            round(self.sampling_rate * self.hop_length_ms / 1000.0)
+        )
 
-            # _extract_spectrogram() uses frame_length + 1 because of
-            # the preemphasis calculation.
-            sequence_length = frame_length + 1
-            num_frames = ((max_length - sequence_length) // hop_length) + 1
+        # _extract_spectrogram() uses frame_length + 1 because of
+        # the preemphasis calculation.
+        sequence_length = frame_length + 1
+        num_frames = ((max_length - sequence_length) // hop_length) + 1
 
-            self.assertEqual(
-                features.shape,
-                (num_frames, self.feature_size),
-            )
-            self.assertEqual(mask.shape, (num_frames,))
+        self.assertEqual(
+            features.shape,
+            (num_frames, self.feature_size),
+        )
+        self.assertEqual(mask.shape, (num_frames,))
