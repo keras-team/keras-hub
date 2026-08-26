@@ -291,13 +291,7 @@ class Mistral3VisionRotaryEmbedding(keras.layers.Layer):
         )
 
     def build(self, input_shape):
-        max_patches = self.max_patches_per_side
-        self.inv_freq = self.add_weight(
-            name="inv_freq",
-            shape=(max_patches**2, self.head_dim),
-            initializer=keras.initializers.Constant(self._create_inv_freq()),
-            trainable=False,
-        )
+        self.inv_freq = self._create_inv_freq()
         super().build(input_shape)
 
     def get_config(self):
@@ -314,7 +308,7 @@ class Mistral3VisionRotaryEmbedding(keras.layers.Layer):
 
     def call(self, position_ids, dtype=None):
         freqs = ops.take(
-            self.inv_freq,
+            ops.convert_to_tensor(self.inv_freq),
             position_ids,
             axis=0,
         )
@@ -1303,7 +1297,7 @@ class Mistral3MultiModalProjector(keras.layers.Layer):
         text_hidden_dim=5120,
         spatial_merge_size=MISTRAL3_DEFAULT_SPATIAL_MERGE_SIZE,
         patch_size=14,
-        layer_norm_epsilon=1e-6,
+        layer_norm_epsilon=1e-5,
         projector_hidden_act="gelu",
         multimodal_projector_bias=False,
         image_size=1540,
