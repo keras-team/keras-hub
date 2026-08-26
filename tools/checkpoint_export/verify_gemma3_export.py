@@ -257,12 +257,11 @@ def precompute_original_outputs(hf_model_id, has_vision, skip_generation):
         )
         print(f'    Text generation: "{results["text_generated"][:80]}"')
 
-    # TODO: Add vision validation when image processing is supported
-    # if has_vision:
-    #     print("\n  Computing vision logits...")
-    #     # Create a dummy image or load a test image
-    #     # Process with hf_processor
-    #     # Compute logits and generation
+    # Vision logit comparison is not included: the text logits and generation
+    # above already exercise the shared transformer weights. Validating vision
+    # logits would require a representative test image and pixel-level
+    # preprocessing to match the HF reference exactly, which is better
+    # covered by an integration test against real checkpoints.
 
     # Free original HF model.
     del hf_model
