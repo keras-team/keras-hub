@@ -149,15 +149,25 @@ class MistralTekkenTokenizer(BytePairTokenizer):
         merges=None,
         split_pattern=None,
         has_vision_tokens=False,
+        control_tokens=None,
         **kwargs,
     ):
         self.split_pattern = split_pattern
         self.has_vision_tokens = has_vision_tokens
+        self.control_tokens = list(control_tokens) if control_tokens else []
         self._add_special_token("<s>", "start_token")
         self._add_special_token("</s>", "end_token")
         self.pad_token_id = 0
 
+        # Tekken's control tokens (e.g. `"[INST]"`, `"[/INST]"`) occupy a
+        # reserved id block outside of the BPE merges, so they must be
+        # registered as unsplittable/special tokens or literal occurrences
+        # in a prompt get shredded into regular byte-level tokens instead of
+        # mapping to their single reserved id.
         unsplittable_tokens = [self.start_token, self.end_token]
+        for token in self.control_tokens:
+            if token not in unsplittable_tokens:
+                unsplittable_tokens.append(token)
         if has_vision_tokens:
             self._add_special_token("[IMG]", "image_placeholder_token")
             self._add_special_token("[IMG_BREAK]", "image_break_token")
@@ -275,6 +285,7 @@ class MistralTekkenTokenizer(BytePairTokenizer):
             {
                 "split_pattern": self.split_pattern,
                 "has_vision_tokens": self.has_vision_tokens,
+                "control_tokens": self.control_tokens,
             }
         )
         # `unsplittable_tokens` is derived from the special tokens in the

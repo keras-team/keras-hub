@@ -209,6 +209,10 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
 
         Returns:
             A tuple `(expanded_prompts, pixel_values, image_sizes)`.
+            `pixel_values`/`image_sizes` are `None` when the batch has no
+            images at all, matching HF's `Mistral3Model.forward()`, which
+            only invokes the vision tower `if pixel_values is not None`
+            rather than feeding it an empty/dummy batch.
         """
         # Flatten all images across all prompts into one ordered list,
         # batch-row-major then per-prompt left-to-right. This exact order
@@ -221,18 +225,7 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
             flat_images.extend(images)
 
         if len(flat_images) == 0:
-            # `Mistral3VisionEncoder`/`Mistral3PatchMerger` do not handle
-            # `num_images=0` gracefully (verified: a zero-row `pixel_values`
-            # call raises a shape error inside `RMSNormalization`, since the
-            # convolved patch grid's channel dimension collapses
-            # incorrectly for an empty batch). Rather than patching the
-            # vision encoder (out of scope here), require at least one
-            # image per batch when multimodal.
-            raise ValueError(
-                "Mistral3's multimodal preprocessor requires at least one "
-                "image per batch when `image_converter` is set; got a "
-                "batch with zero images."
-            )
+            return list(prompts), None, None
 
         pixel_values, image_sizes = self.image_converter(flat_images)
 
@@ -301,6 +294,12 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
         prompts, pixel_values, image_sizes = self._build_multimodal_inputs(
             prompts, images_per_prompt
         )
+        if pixel_values is None:
+            raise ValueError(
+                "Mistral3's multimodal preprocessor requires at least one "
+                "image per batch when `image_converter` is set; got a "
+                "batch with zero images."
+            )
 
         tokenized = self.tokenizer(prompts)
         # Pad with one extra token to account for the truncation below.
@@ -372,18 +371,19 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
         token_ids, padding_mask = self.packer(
             tokenized, sequence_length=sequence_length, add_end_value=False
         )
-        placeholder_indices = compute_image_placeholder_indices(
-            keras.ops.convert_to_numpy(token_ids),
-            self.tokenizer.image_placeholder_token_id,
-        )[None, :]
 
         out_x = {
             "token_ids": token_ids,
             "padding_mask": padding_mask,
-            "pixel_values": pixel_values,
-            "image_sizes": image_sizes,
-            "placeholder_indices": placeholder_indices,
         }
+        if pixel_values is not None:
+            placeholder_indices = compute_image_placeholder_indices(
+                keras.ops.convert_to_numpy(token_ids),
+                self.tokenizer.image_placeholder_token_id,
+            )[None, :]
+            out_x["pixel_values"] = pixel_values
+            out_x["image_sizes"] = image_sizes
+            out_x["placeholder_indices"] = placeholder_indices
         if not batched:
             out_x["token_ids"] = keras.ops.squeeze(out_x["token_ids"], axis=0)
             out_x["padding_mask"] = keras.ops.squeeze(

@@ -100,7 +100,9 @@ class MistralCausalLMPreprocessorTest(TestCase):
         )
         kwargs.setdefault(
             "image_converter",
-            Mistral3ImageConverter(longest_edge=16, patch_size=4),
+            Mistral3ImageConverter(
+                longest_edge=16, patch_size=4, spatial_merge_size=1
+            ),
         )
         kwargs.setdefault("sequence_length", 32)
         kwargs.setdefault("spatial_merge_size", 1)
@@ -208,19 +210,28 @@ class MistralCausalLMPreprocessorTest(TestCase):
         )
         self.assertEqual(expanded[1], f"two {block_b1} and {block_b2} here")
 
-    def test_build_multimodal_inputs_zero_images_raises(self):
-        # `Mistral3VisionEncoder` does not handle `num_images=0` gracefully
-        # (verified directly against `MistralBackbone`: a zero-row
-        # `pixel_values` call raises a shape error inside
-        # `RMSNormalization`, since the convolved patch grid's dimensions
-        # degenerate for an empty image batch). Rather than patch the
-        # vision encoder (out of scope), the preprocessor raises a clear
-        # `ValueError` up front.
+    def test_build_multimodal_inputs_zero_images_returns_none(self):
         preprocessor = self._multimodal_preprocessor()
-        with self.assertRaises(ValueError):
+        prompts, pixel_values, image_sizes = (
             preprocessor._build_multimodal_inputs(
                 ["just text, no images"], [[]]
             )
+        )
+        self.assertEqual(prompts, ["just text, no images"])
+        self.assertIsNone(pixel_values)
+        self.assertIsNone(image_sizes)
+
+    def test_multimodal_generate_preprocess_text_only(self):
+        preprocessor = self._multimodal_preprocessor()
+        x = preprocessor.generate_preprocess("the quick")
+        self.assertNotIn("pixel_values", x)
+        self.assertNotIn("image_sizes", x)
+        self.assertNotIn("placeholder_indices", x)
+
+    def test_multimodal_call_zero_images_raises(self):
+        preprocessor = self._multimodal_preprocessor()
+        with self.assertRaises(ValueError):
+            preprocessor({"prompts": ["just text, no images"]})
 
     def test_text_only_model_flag_and_delegation(self):
         preprocessor = MistralCausalLMPreprocessor(**self.init_kwargs)
