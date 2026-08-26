@@ -108,7 +108,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
     >>> tokenizer = keras_hub.tokenizers.ByteTokenizer()
     >>> outputs = tokenizer("hello")
     >>> np.array(outputs)
-    array([104, 101, 108, 108, 111], dtype=int32)
+    array([104, 101, 108, 108, 111])
 
     Ragged outputs.
     >>> inputs = ["hello", "hi"]
@@ -124,9 +124,9 @@ class ByteTokenizer(tokenizer.Tokenizer):
     >>> tokenizer = keras_hub.tokenizers.ByteTokenizer(sequence_length=8)
     >>> seq1, seq2 = tokenizer(inputs)
     >>> np.array(seq1)
-    array([104, 101, 108, 108, 111,   0,   0,   0], dtype=int32)
+    array([104, 101, 108, 108, 111,   0,   0,   0])
     >>> np.array(seq2)
-    array([104, 105,   0,   0,   0,   0,   0,   0], dtype=int32)
+    array([104, 105,   0,   0,   0,   0,   0,   0])
 
     Tokenize, then batch for ragged outputs.
     >>> tokenizer = keras_hub.tokenizers.ByteTokenizer()
