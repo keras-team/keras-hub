@@ -239,60 +239,58 @@ class Mistral3VisionRotaryEmbedding(keras.layers.Layer):
 
         self.max_patches_per_side = image_size // patch_size
 
-    def _create_inv_freq(self):
+    def _compute_inv_freq(self):
         max_patches = self.max_patches_per_side
 
-        freq_indices = np.arange(0, self.head_dim, 2, dtype="float32")
-        freqs = np.power(
-            self.rope_theta,
-            -freq_indices / self.head_dim,
+        freq_indices = ops.arange(0, self.head_dim, 2, dtype="float32")
+        freqs = ops.divide(
+            1.0,
+            ops.power(self.rope_theta, freq_indices / self.head_dim),
         )
 
-        height_indices = np.arange(max_patches, dtype="float32")
-        width_indices = np.arange(max_patches, dtype="float32")
+        height_indices = ops.arange(max_patches, dtype="float32")
+        width_indices = ops.arange(max_patches, dtype="float32")
 
-        freqs_h = np.einsum(
+        freqs_h = ops.einsum(
             "i,j->ij",
             height_indices,
             freqs[::2],
         )
 
-        freqs_w = np.einsum(
+        freqs_w = ops.einsum(
             "i,j->ij",
             width_indices,
             freqs[1::2],
         )
 
+        half_dim = self.head_dim // 4
+
         # [H, 1, D/4] -> [H, W, D/4]
-        freqs_h = np.broadcast_to(
-            np.expand_dims(freqs_h, axis=1),
-            (max_patches, max_patches, freqs_h.shape[-1]),
+        freqs_h = ops.broadcast_to(
+            ops.expand_dims(freqs_h, axis=1),
+            (max_patches, max_patches, half_dim),
         )
 
         # [1, W, D/4] -> [H, W, D/4]
-        freqs_w = np.broadcast_to(
-            np.expand_dims(freqs_w, axis=0),
-            (max_patches, max_patches, freqs_w.shape[-1]),
+        freqs_w = ops.broadcast_to(
+            ops.expand_dims(freqs_w, axis=0),
+            (max_patches, max_patches, half_dim),
         )
 
-        inv_freq = np.concatenate(
+        inv_freq = ops.concatenate(
             [freqs_h, freqs_w],
             axis=-1,
         )
 
-        inv_freq = np.reshape(
+        inv_freq = ops.reshape(
             inv_freq,
             (-1, self.head_dim // 2),
         )
 
-        return np.concatenate(
+        return ops.concatenate(
             [inv_freq, inv_freq],
             axis=-1,
         )
-
-    def build(self, input_shape):
-        self.inv_freq = self._create_inv_freq()
-        super().build(input_shape)
 
     def get_config(self):
         config = super().get_config()
@@ -308,7 +306,7 @@ class Mistral3VisionRotaryEmbedding(keras.layers.Layer):
 
     def call(self, position_ids, dtype=None):
         freqs = ops.take(
-            ops.convert_to_tensor(self.inv_freq),
+            self._compute_inv_freq(),
             position_ids,
             axis=0,
         )

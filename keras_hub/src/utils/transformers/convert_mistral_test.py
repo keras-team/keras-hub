@@ -345,3 +345,29 @@ class TestTask(TestCase):
         self.assertEqual(tokenizer.vocabulary_size(), 266)
         output = tokenizer("the tin")
         self.assertEqual(tokenizer.detokenize(output), "the tin")
+
+    def test_load_image_converter_config_without_preprocessor_config(self):
+        # Some checkpoints (e.g. Mistral Small 3.2) ship no
+        # `preprocessor_config.json`; the image normalization mean/std
+        # should come from `mistral_common`, not a local hardcoded copy.
+        pytest.importorskip("mistral_common")
+        from mistral_common.tokens.tokenizers.image import DATASET_MEAN
+        from mistral_common.tokens.tokenizers.image import DATASET_STD
+
+        transformers_config = {
+            "vision_config": {"patch_size": 14, "image_size": 1540},
+            "spatial_merge_size": 2,
+        }
+        with tempfile.TemporaryDirectory() as dir_path:
+            with open(os.path.join(dir_path, "config.json"), "w") as f:
+                json.dump(transformers_config, f)
+            config = convert_mistral.load_image_converter_config(
+                dir_path, transformers_config
+            )
+        expected_offset = [-m / s for m, s in zip(DATASET_MEAN, DATASET_STD)]
+        expected_scale = [(1 / 255) / s for s in DATASET_STD]
+        self.assertAllClose(config["offset"], expected_offset)
+        self.assertAllClose(config["scale"], expected_scale)
+        self.assertEqual(config["patch_size"], 14)
+        self.assertEqual(config["longest_edge"], 1540)
+        self.assertEqual(config["spatial_merge_size"], 2)
