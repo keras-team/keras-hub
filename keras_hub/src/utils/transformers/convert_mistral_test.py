@@ -319,7 +319,7 @@ class TestTask(TestCase):
         pytest.importorskip("mistral_common")
         with tempfile.TemporaryDirectory() as dir_path:
             path = _write_tekken_file(dir_path)
-            vocabulary, merges, split_pattern = (
+            vocabulary, merges, split_pattern, control_tokens = (
                 convert_mistral._convert_tekken_tokenizer(path)
             )
         # 5 special tokens + 256 bytes + 5 merges.
@@ -330,11 +330,14 @@ class TestTask(TestCase):
         self.assertEqual(vocabulary["<s>"], 1)
         self.assertEqual(vocabulary["</s>"], 2)
         self.assertEqual(vocabulary["<pad>"], 3)
+        self.assertEqual(len(control_tokens), 5)
+        self.assertIn("<unk>", control_tokens)
 
         tokenizer = MistralTekkenTokenizer(
             vocabulary=vocabulary,
             merges=merges,
             split_pattern=split_pattern,
+            control_tokens=control_tokens,
         )
         self.assertEqual(tokenizer.start_token_id, 1)
         self.assertEqual(tokenizer.end_token_id, 2)

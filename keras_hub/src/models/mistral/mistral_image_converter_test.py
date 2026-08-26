@@ -10,10 +10,15 @@ class Mistral3ImageConverterTest(TestCase):
     def setUp(self):
         self.longest_edge = 16
         self.patch_size = 4
+        # Isolate resize-rounding tests from the patch-merger granularity by
+        # setting `spatial_merge_size=1`, so the effective rounding multiple
+        # is `patch_size` alone.
+        self.spatial_merge_size = 1
 
     def _converter(self, **kwargs):
         kwargs.setdefault("longest_edge", self.longest_edge)
         kwargs.setdefault("patch_size", self.patch_size)
+        kwargs.setdefault("spatial_merge_size", self.spatial_merge_size)
         return Mistral3ImageConverter(**kwargs)
 
     def test_single_image_already_patch_multiple(self):
@@ -72,6 +77,15 @@ class Mistral3ImageConverterTest(TestCase):
         converter = self._converter()
         self.assertEqual(converter.longest_edge, self.longest_edge)
         self.assertEqual(converter.patch_size, self.patch_size)
+        self.assertEqual(converter.spatial_merge_size, self.spatial_merge_size)
         config = converter.get_config()
         self.assertEqual(config["longest_edge"], self.longest_edge)
         self.assertEqual(config["patch_size"], self.patch_size)
+        self.assertEqual(config["spatial_merge_size"], self.spatial_merge_size)
+
+    def test_spatial_merge_size_widens_rounding_multiple(self):
+        converter = self._converter(longest_edge=32, spatial_merge_size=2)
+        image = np.zeros((9, 9, 3), dtype="float32")
+        pixel_values, image_sizes = converter([image])
+        self.assertAllEqual(image_sizes, np.array([[16, 16]], dtype="int32"))
+        self.assertEqual(pixel_values.shape, (1, 3, 16, 16))

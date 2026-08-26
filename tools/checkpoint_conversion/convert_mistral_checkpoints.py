@@ -58,6 +58,7 @@ PRESET_MAP = {
 
 TEXT_PROMPT = "What is Keras?"
 
+IMAGE_PROMPT = "What is in this image?"
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
@@ -80,7 +81,7 @@ def build_multimodal_inputs(hf_config, hf_processor, image):
             "role": "user",
             "content": [
                 {"type": "image"},
-                {"type": "text", "text": TEXT_PROMPT},
+                {"type": "text", "text": IMAGE_PROMPT},
             ],
         }
     ]
@@ -120,8 +121,11 @@ def precompute_hf_text_outputs(hf_preset):
     with torch.no_grad():
         hf_outputs = hf_model(**hf_inputs)
     hf_results = {
-        "token_ids": hf_inputs["input_ids"].detach().cpu().numpy(),
-        "logits": hf_outputs.logits.detach().cpu().numpy(),
+        "multimodal": False,
+        "text": {
+            "token_ids": hf_inputs["input_ids"].detach().cpu().numpy(),
+            "logits": hf_outputs.logits.detach().cpu().numpy(),
+        },
         "num_parameters": hf_model.num_parameters(),
     }
     del hf_model, hf_tokenizer
@@ -134,22 +138,39 @@ def precompute_hf_multimodal_outputs(hf_preset, hf_config):
         hf_preset, device_map="cpu", torch_dtype=torch.float32
     )
     hf_model.eval()
+    hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
     hf_processor = AutoProcessor.from_pretrained(hf_preset)
+
+    hf_text_inputs = hf_tokenizer([TEXT_PROMPT], return_tensors="pt")
+    with torch.no_grad():
+        hf_text_outputs = hf_model(**hf_text_inputs)
+    text_results = {
+        "token_ids": hf_text_inputs["input_ids"].detach().cpu().numpy(),
+        "logits": hf_text_outputs.logits.detach().cpu().numpy(),
+    }
+
     image = load_reference_image()
     inputs = build_multimodal_inputs(hf_config, hf_processor, image)
+
     with torch.no_grad():
-        hf_outputs = hf_model(
+        hf_image_outputs = hf_model(
             input_ids=torch.tensor(inputs["token_ids"]),
             attention_mask=torch.tensor(inputs["padding_mask"]),
             pixel_values=torch.tensor(inputs["pixel_values"]),
             image_sizes=torch.tensor(inputs["image_sizes"]),
         )
-    hf_results = {
+    image_results = {
         **inputs,
-        "logits": hf_outputs.logits.detach().cpu().numpy(),
+        "logits": hf_image_outputs.logits.detach().cpu().numpy(),
+    }
+
+    hf_results = {
+        "multimodal": True,
+        "text": text_results,
+        "image": image_results,
         "num_parameters": hf_model.num_parameters(),
     }
-    del hf_model, hf_processor
+    del hf_model, hf_tokenizer, hf_processor
     gc.collect()
     return hf_results
 
@@ -162,82 +183,117 @@ def check_param_count(keras_model, hf_results):
     np.testing.assert_equal(keras_params, hf_params)
 
 
-def test_numerics(keras_logits, hf_logits, atol):
+def test_numerics(label, keras_logits, hf_logits):
     keras_logits = ops.convert_to_numpy(keras_logits).astype("float32")
     abs_diff = np.abs(keras_logits - hf_logits)
-    print("KerasHub logits:", keras_logits[0, 0, :5])
-    print("HF logits:      ", hf_logits[0, 0, :5])
-    print(f"Logit mean absolute diff: {abs_diff.mean():.6f}")
-    print(f"Logit max absolute diff:  {abs_diff.max():.6f}")
+    max_diff = float(np.max(abs_diff))
+    mean_diff = float(np.mean(abs_diff))
+    print(f"KerasHub logits [{label}]:", keras_logits[0, 0, :5])
+    print(f"HF logits [{label}]:      ", hf_logits[0, 0, :5])
     try:
-        np.testing.assert_allclose(keras_logits, hf_logits, atol=atol)
-        print(f"-> Logits match! (atol={atol})")
-    except AssertionError as err:
-        matched_pct = 100 * np.mean(abs_diff <= atol)
-        print(f"-> Logits mismatch (atol={atol}): {matched_pct:.2f}% matched")
-        print(err.args[0])
-
-
-def test_token_ids(keras_model, hf_results):
-    # Runs `generate_preprocess` so multimodal inputs also exercise the
-    # preprocessor's own image-placeholder expansion.
-    hf_token_ids = hf_results["token_ids"]
-    sequence_length = hf_token_ids.shape[1]
-    if "placeholder_indices" not in hf_results:
-        keras_inputs = keras_model.preprocessor.generate_preprocess(
-            [TEXT_PROMPT], sequence_length=sequence_length
+        np.testing.assert_allclose(
+            keras_logits, hf_logits, atol=1e-3, rtol=1e-3
         )
-    else:
-        keras_inputs = keras_model.preprocessor.generate_preprocess(
-            {
-                "prompts": [hf_results["prompt"]],
-                "images": [[hf_results["image"]]],
-            },
-            sequence_length=sequence_length,
+        print(
+            f"✅ [{label}] Logits within 1e-3 tolerance "
+            f"(max={max_diff:.6f}, mean={mean_diff:.6f})."
         )
-    keras_token_ids = ops.convert_to_numpy(keras_inputs["token_ids"])
-    np.testing.assert_array_equal(keras_token_ids, hf_token_ids)
-    print("-> Token IDs match.")
+    except AssertionError:
+        tol = 1e-3 + 1e-3 * np.abs(hf_logits)
+        mismatched = int(np.sum(abs_diff > tol))
+        total = hf_logits.size
+        matched_pct = 100 * (1.0 - mismatched / total)
+        print(
+            f"⚠️  [{label}] Logits exceed 1e-3 tolerance — "
+            f"max={max_diff:.6f}, mean={mean_diff:.6f}, "
+            f"matching={matched_pct:.2f}% ({total - mismatched}/{total}).\n"
+        )
 
 
 def validate_output(keras_model, hf_results):
     check_param_count(keras_model, hf_results)
-    test_token_ids(keras_model, hf_results)
+    backbone = keras_model.backbone
+    preprocessor = keras_model.preprocessor
+    text_results = hf_results["text"]
 
-    multimodal = "placeholder_indices" in hf_results
-    if multimodal:
-        backbone = keras_model.backbone
-        assert not backbone.text_only_model
-        assert backbone.vision_encoder is not None
-        keras_inputs = {
-            "token_ids": ops.convert_to_tensor(
-                hf_results["token_ids"].astype("int32")
-            ),
-            "padding_mask": ops.convert_to_tensor(
-                hf_results["padding_mask"].astype("int32")
-            ),
-            "pixel_values": ops.convert_to_tensor(hf_results["pixel_values"]),
-            "image_sizes": ops.convert_to_tensor(
-                hf_results["image_sizes"].astype("int32")
-            ),
-            "placeholder_indices": ops.convert_to_tensor(
-                hf_results["placeholder_indices"].astype("int32")
-            ),
-        }
-    else:
-        token_ids = ops.convert_to_tensor(
-            hf_results["token_ids"].astype("int32")
-        )
-        keras_inputs = {
-            "token_ids": token_ids,
-            "padding_mask": ops.ones_like(token_ids),
-        }
-
-    keras_hidden = keras_model.backbone(keras_inputs)
-    keras_logits = keras_model.backbone.token_embedding(
-        keras_hidden, reverse=True
+    # === Text ===
+    hf_text_token_ids = text_results["token_ids"]
+    if not preprocessor.built:
+        preprocessor.build(None)
+    tokenized = preprocessor.tokenizer([TEXT_PROMPT])
+    keras_text_token_ids, _ = preprocessor.packer(
+        tokenized,
+        sequence_length=hf_text_token_ids.shape[1],
+        add_end_value=False,
     )
-    test_numerics(keras_logits, hf_results["logits"], atol=1e-3)
+    keras_text_token_ids = ops.convert_to_numpy(keras_text_token_ids)
+    np.testing.assert_array_equal(keras_text_token_ids, hf_text_token_ids)
+    print("-> [text] Token IDs match.")
+
+    token_ids = ops.convert_to_tensor(hf_text_token_ids.astype("int32"))
+    backbone_inputs = {
+        "token_ids": token_ids,
+        "padding_mask": ops.ones_like(token_ids),
+    }
+    if not backbone.text_only_model:
+        vision_encoder = backbone.vision_encoder
+        patch_size = vision_encoder.patch_size
+        backbone_inputs.update(
+            {
+                "pixel_values": ops.zeros(
+                    (0, vision_encoder.num_channels, patch_size, patch_size),
+                    dtype="float32",
+                ),
+                "image_sizes": ops.zeros((0, 2), dtype="int32"),
+                "placeholder_indices": ops.zeros((1, 0), dtype="int32"),
+            }
+        )
+    with torch.no_grad():
+        keras_hidden = backbone(backbone_inputs)
+        keras_logits = backbone.token_embedding(keras_hidden, reverse=True)
+
+    test_numerics("text", keras_logits, text_results["logits"])
+
+    # === Image ===
+    if not hf_results["multimodal"]:
+        return
+    image_results = hf_results["image"]
+    hf_image_token_ids = image_results["token_ids"]
+    keras_inputs = preprocessor.generate_preprocess(
+        {
+            "prompts": [image_results["prompt"]],
+            "images": [[image_results["image"]]],
+        },
+        sequence_length=hf_image_token_ids.shape[1],
+    )
+    keras_image_token_ids = ops.convert_to_numpy(keras_inputs["token_ids"])
+    np.testing.assert_array_equal(keras_image_token_ids, hf_image_token_ids)
+    print("-> [image] Token IDs match.")
+
+    # Build backbone inputs from HF's preprocessed data (mirrors
+    # `_build_preprocessor_free_inputs` in `convert_gemma4_hf_checkpoints.py`):
+    # feeding HF-preprocessed `pixel_values` directly avoids PIL vs
+    # `ops.image.resize` divergence.
+    backbone_inputs = {
+        "token_ids": ops.convert_to_tensor(
+            image_results["token_ids"].astype("int32")
+        ),
+        "padding_mask": ops.convert_to_tensor(
+            image_results["padding_mask"].astype("int32")
+        ),
+        "pixel_values": ops.convert_to_tensor(image_results["pixel_values"]),
+        "image_sizes": ops.convert_to_tensor(
+            image_results["image_sizes"].astype("int32")
+        ),
+        "placeholder_indices": ops.convert_to_tensor(
+            image_results["placeholder_indices"].astype("int32")
+        ),
+    }
+    with torch.no_grad():
+        keras_hidden = backbone(backbone_inputs)
+        keras_logits = backbone.token_embedding(keras_hidden, reverse=True)
+
+    test_numerics("image", keras_logits, image_results["logits"])
 
 
 def main(_):

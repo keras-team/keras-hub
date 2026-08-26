@@ -56,6 +56,9 @@ def load_image_converter_config(preset, transformers_config):
         config["patch_size"] = patch_size
     if longest_edge is not None:
         config["longest_edge"] = longest_edge
+    config["spatial_merge_size"] = transformers_config.get(
+        "spatial_merge_size", 2
+    )
     return config
 
 
@@ -502,25 +505,45 @@ def _convert_tekken_tokenizer(path):
     ]
 
     # Special tokens occupy the reserved block of ids
-    # `[0, num_special_tokens)`; their id is simply their rank.
+    # `[0, num_special_tokens)`; their id is simply their rank. These are not
+    # reachable through BPE merges (they are not part of `mergeable_ranks`),
+    # so every one of them must be registered as an unsplittable/special
+    # token on the `tokenizers` backend, or literal occurrences in a prompt
+    # (e.g. `"[INST]"` from a chat template) get shredded into several
+    # regular byte-level tokens instead of mapping to their single reserved
+    # id.
+    control_tokens = []
     for rank in range(num_special_tokens):
-        vocabulary[tokenizer.id_to_piece(rank)] = rank
+        piece = tokenizer.id_to_piece(rank)
+        vocabulary[piece] = rank
+        control_tokens.append(piece)
 
-    return vocabulary, merges, split_pattern
+    return vocabulary, merges, split_pattern, control_tokens
 
 
 def convert_tokenizer(cls, preset, **kwargs):
+    # Vision-enabled checkpoints (e.g. Mistral Small 3.x) set `vision_config`
+    # in `config.json`; the tokenizer needs to know this so it can register the
+    # `[IMG]`/`[IMG_BREAK]`/`[IMG_END]` special tokens used to expand image
+    # placeholders during preprocessing.
+    if check_file_exists(preset, "config.json"):
+        transformers_config = load_json(preset, "config.json")
+        kwargs.setdefault(
+            "has_vision_tokens", "vision_config" in transformers_config
+        )
+
     # Newer Mistral checkpoints (e.g. Magistral) ship a Tekken (byte-level BPE)
     # `tekken.json` instead of a SentencePiece `tokenizer.model`.
     if check_file_exists(preset, "tekken.json"):
         tekken_path = get_file(preset, "tekken.json")
-        vocabulary, merges, split_pattern = _convert_tekken_tokenizer(
-            tekken_path
+        vocabulary, merges, split_pattern, control_tokens = (
+            _convert_tekken_tokenizer(tekken_path)
         )
         return MistralTekkenTokenizer(
             vocabulary=vocabulary,
             merges=merges,
             split_pattern=split_pattern,
+            control_tokens=control_tokens,
             **kwargs,
         )
     return cls(get_file(preset, "tokenizer.model"), **kwargs)
