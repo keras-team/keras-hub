@@ -37,6 +37,18 @@ from keras_hub.src.utils.transformers.export.gpt2 import (
 )
 from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_weights_map
 
+# --- Llama3 Utils ---
+from keras_hub.src.utils.transformers.export.llama3 import (
+    build_llama3_tokenizer_json,
+)
+from keras_hub.src.utils.transformers.export.llama3 import get_llama3_config
+from keras_hub.src.utils.transformers.export.llama3 import (
+    get_llama3_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.llama3 import (
+    get_llama3_weights_map,
+)
+
 # --- Mistral Utils ---
 from keras_hub.src.utils.transformers.export.mistral import get_mistral_config
 from keras_hub.src.utils.transformers.export.mistral import (
@@ -66,6 +78,7 @@ MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
     "Gemma3Backbone": get_gemma3_config,
     "Gemma4Backbone": get_gemma4_config,
+    "Llama3Backbone": get_llama3_config,
     "MistralBackbone": get_mistral_config,
     "QwenBackbone": get_qwen_config,
     "Qwen3_5Backbone": get_qwen3_5_config,
@@ -76,6 +89,7 @@ MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
     "Gemma3Backbone": get_gemma3_weights_map,
     "Gemma4Backbone": get_gemma4_weights_map,
+    "Llama3Backbone": get_llama3_weights_map,
     "MistralBackbone": get_mistral_weights_map,
     "QwenBackbone": get_qwen_weights_map,
     "Qwen3_5Backbone": get_qwen3_5_weights_map,
@@ -86,6 +100,7 @@ MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
     "Gemma3Tokenizer": get_gemma3_tokenizer_config,
     "Gemma4Tokenizer": get_gemma4_tokenizer_config,
+    "Llama3Tokenizer": get_llama3_tokenizer_config,
     "MistralTokenizer": get_mistral_tokenizer_config,
     "QwenTokenizer": get_qwen_tokenizer_config,
     "Qwen3_5Tokenizer": get_qwen3_5_tokenizer_config,
@@ -106,13 +121,15 @@ def _to_numpy_dict(weights_dict):
     return result
 
 
-def export_backbone(backbone, path, include_lm_head=False):
+def export_backbone(backbone, path, include_lm_head=False, tokenizer=None):
     """Export the backbone model to HuggingFace format.
 
     Args:
         backbone: The Keras backbone model to convert.
         path: str. Path to save the exported model.
         include_lm_head: bool. If True, include lm_head weights if applicable.
+        tokenizer: Optional tokenizer instance. When provided, model-specific
+            config functions may use it to populate token ID fields.
     """
     backend = keras.config.backend()
     model_type = backbone.__class__.__name__
@@ -128,6 +145,15 @@ def export_backbone(backbone, path, include_lm_head=False):
     # Get config
     get_config_fn = MODEL_CONFIGS[model_type]
     hf_config = get_config_fn(backbone)
+    if tokenizer is not None:
+        if tokenizer.start_token is not None:
+            hf_config["bos_token_id"] = tokenizer.token_to_id(
+                tokenizer.start_token
+            )
+        if tokenizer.end_token is not None:
+            hf_config["eos_token_id"] = tokenizer.token_to_id(
+                tokenizer.end_token
+            )
 
     # Get weights
     get_weights_fn = MODEL_EXPORTERS[model_type]
@@ -302,6 +328,20 @@ def export_tokenizer(tokenizer, path):
                 f"{vocab_json_path} not found.Tokenizer may not load correctly."
             )
 
+    # 3. For Llama3 specifically, write tokenizer.json so that
+    #    PreTrainedTokenizerFast can load without sentencepiece / tiktoken.
+    #    vocab and merges are embedded inside tokenizer.json, so the loose
+    #    vocabulary.json and merges.txt written by save_assets() are removed.
+    if tokenizer_type == "Llama3Tokenizer":
+        tokenizer_json = build_llama3_tokenizer_json(tokenizer)
+        tokenizer_json_path = os.path.join(path, "tokenizer.json")
+        with open(tokenizer_json_path, "w", encoding="utf-8") as f:
+            json.dump(tokenizer_json, f, indent=2, ensure_ascii=False)
+        for leftover in ("vocabulary.json", "merges.txt"):
+            leftover_path = os.path.join(path, leftover)
+            if os.path.exists(leftover_path):
+                os.remove(leftover_path)
+
 
 def export_to_safetensors(keras_model, path):
     """Converts a Keras model to Hugging Face Transformers format.
@@ -316,7 +356,12 @@ def export_to_safetensors(keras_model, path):
           config and tokenizer will be saved.
     """
     backbone = keras_model.backbone
-    export_backbone(backbone, path, include_lm_head=True)
+    tokenizer = (
+        keras_model.preprocessor.tokenizer
+        if keras_model.preprocessor is not None
+        else None
+    )
+    export_backbone(backbone, path, include_lm_head=True, tokenizer=tokenizer)
     if (
         keras_model.preprocessor is not None
         and keras_model.preprocessor.tokenizer is None
