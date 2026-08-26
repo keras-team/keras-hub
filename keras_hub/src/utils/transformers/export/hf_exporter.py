@@ -15,6 +15,18 @@ from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
 # --- Gemma 3 Utils ---
 from keras_hub.src.utils.transformers.export.gemma3 import get_gemma3_config
 from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_generation_config,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_image_converter_config,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_processor_config,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_special_tokens_map,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
     get_gemma3_tokenizer_config,
 )
 from keras_hub.src.utils.transformers.export.gemma3 import (
@@ -303,6 +315,50 @@ def export_tokenizer(tokenizer, path):
             if os.path.exists(leftover_path):
                 os.remove(leftover_path)
 
+    # 4. Generate special_tokens_map.json for Gemma3
+    if tokenizer_type == "Gemma3Tokenizer":
+        special_tokens_map = get_gemma3_special_tokens_map(tokenizer)
+        special_tokens_map_path = os.path.join(path, "special_tokens_map.json")
+        with open(special_tokens_map_path, "w") as f:
+            json.dump(special_tokens_map, f, indent=2)
+
+
+def export_image_converter(backbone, path):
+    """Export image converter config for vision models."""
+    model_type = backbone.__class__.__name__
+    if model_type == "Gemma3Backbone":
+        preprocessor_config = get_gemma3_image_converter_config(backbone)
+        if preprocessor_config is not None:
+            os.makedirs(path, exist_ok=True)
+            preprocessor_config_path = os.path.join(
+                path, "preprocessor_config.json"
+            )
+            with open(preprocessor_config_path, "w") as f:
+                json.dump(preprocessor_config, f, indent=2)
+
+
+def export_processor_config(backbone, path):
+    """Export processor config for vision models."""
+    model_type = backbone.__class__.__name__
+    if model_type == "Gemma3Backbone":
+        processor_config = get_gemma3_processor_config(backbone)
+        if processor_config is not None:
+            os.makedirs(path, exist_ok=True)
+            processor_config_path = os.path.join(path, "processor_config.json")
+            with open(processor_config_path, "w") as f:
+                json.dump(processor_config, f, indent=2)
+
+
+def export_generation_config(backbone, path):
+    """Export generation config for models."""
+    model_type = backbone.__class__.__name__
+    if model_type == "Gemma3Backbone":
+        generation_config = get_gemma3_generation_config(backbone)
+        os.makedirs(path, exist_ok=True)
+        generation_config_path = os.path.join(path, "generation_config.json")
+        with open(generation_config_path, "w") as f:
+            json.dump(generation_config, f, indent=2)
+
 
 def export_to_safetensors(keras_model, path):
     """Converts a Keras model to Hugging Face Transformers format.
@@ -323,6 +379,9 @@ def export_to_safetensors(keras_model, path):
         else None
     )
     export_backbone(backbone, path, include_lm_head=True, tokenizer=tokenizer)
+    export_image_converter(backbone, path)
+    export_processor_config(backbone, path)
+    export_generation_config(backbone, path)
     if (
         keras_model.preprocessor is not None
         and keras_model.preprocessor.tokenizer is None
