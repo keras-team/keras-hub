@@ -17,12 +17,23 @@ from keras_hub.src.utils.preset_utils import load_json
 backbone_cls = MistralBackbone
 
 
-# Pixtral's HF `image_processor_type` defaults (CLIP-style normalization),
-# used when a preset has no `preprocessor_config.json` (e.g. Mistral Small
-# 3.2 ships only `config.json` + `params.json`, no processor config).
-_PIXTRAL_DEFAULT_IMAGE_MEAN = [0.48145466, 0.4578275, 0.40821073]
-_PIXTRAL_DEFAULT_IMAGE_STD = [0.26862954, 0.26130258, 0.27577711]
 _PIXTRAL_DEFAULT_RESCALE_FACTOR = 1 / 255
+
+
+def _load_pixtral_defaults_from_mistral_common():
+    # Some checkpoints (e.g. Mistral Small 3.2) ship no
+    # `preprocessor_config.json`; fall back to `mistral_common`'s fixed
+    # constants instead of duplicating the numbers here.
+    try:
+        from mistral_common.tokens.tokenizers.image import DATASET_MEAN
+        from mistral_common.tokens.tokenizers.image import DATASET_STD
+    except ImportError:
+        raise ImportError(
+            "Converting a Mistral3 checkpoint with no "
+            "`preprocessor_config.json` requires the `mistral_common` "
+            "package. Please install it with `pip install mistral-common`."
+        )
+    return list(DATASET_MEAN), list(DATASET_STD)
 
 
 def load_image_converter_config(preset, transformers_config):
@@ -42,8 +53,7 @@ def load_image_converter_config(preset, transformers_config):
             size.get("longest_edge") if isinstance(size, dict) else None
         )
     else:
-        mean = _PIXTRAL_DEFAULT_IMAGE_MEAN
-        std = _PIXTRAL_DEFAULT_IMAGE_STD
+        mean, std = _load_pixtral_defaults_from_mistral_common()
         rescale_factor = _PIXTRAL_DEFAULT_RESCALE_FACTOR
         patch_size = vision_config.get("patch_size")
         longest_edge = vision_config.get("image_size")
@@ -151,7 +161,7 @@ def _port_text_weights(backbone, loader, prefix, tie_word_embeddings):
     loader.port_weight(
         keras_variable=backbone.token_embedding.embeddings,
         hf_weight_key=f"{prefix}.embed_tokens.weight",
-        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
     )
     # When embeddings are tied, `lm_head.weight` is not saved as a separate
     # tensor in the checkpoint; reuse the embedding weights instead.
@@ -164,7 +174,7 @@ def _port_text_weights(backbone, loader, prefix, tie_word_embeddings):
         keras_variable=backbone.token_embedding.reverse_embeddings,
         hf_weight_key=lm_head_key,
         hook_fn=lambda hf_tensor, _: np.transpose(
-            hf_tensor.astype(np.float16), axes=(1, 0)
+            hf_tensor.astype(np.float32), axes=(1, 0)
         ),
     )
 
@@ -176,14 +186,14 @@ def _port_text_weights(backbone, loader, prefix, tie_word_embeddings):
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layernorm.scale,
             hf_weight_key=f"{prefix}.layers.{index}.input_layernorm.weight",
-            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_layernorm.scale,
             hf_weight_key=(
                 f"{prefix}.layers.{index}.post_attention_layernorm.weight"
             ),
-            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
         )
 
         # Attention layers
@@ -191,28 +201,28 @@ def _port_text_weights(backbone, loader, prefix, tie_word_embeddings):
             keras_variable=decoder_layer._self_attention_layer._query_dense.kernel,
             hf_weight_key=f"{prefix}.layers.{index}.self_attn.q_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float16)), keras_shape
+                np.transpose(hf_tensor.astype(np.float32)), keras_shape
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
             hf_weight_key=f"{prefix}.layers.{index}.self_attn.k_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float16)), keras_shape
+                np.transpose(hf_tensor.astype(np.float32)), keras_shape
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._value_dense.kernel,
             hf_weight_key=f"{prefix}.layers.{index}.self_attn.v_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float16)), keras_shape
+                np.transpose(hf_tensor.astype(np.float32)), keras_shape
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._output_dense.kernel,
             hf_weight_key=f"{prefix}.layers.{index}.self_attn.o_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float16)), keras_shape
+                np.transpose(hf_tensor.astype(np.float32)), keras_shape
             ),
         )
 
@@ -221,21 +231,21 @@ def _port_text_weights(backbone, loader, prefix, tie_word_embeddings):
             keras_variable=decoder_layer._feedforward_gate_dense.kernel,
             hf_weight_key=f"{prefix}.layers.{index}.mlp.gate_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+                hf_tensor.astype(np.float32), axes=(1, 0)
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_intermediate_dense.kernel,
             hf_weight_key=f"{prefix}.layers.{index}.mlp.up_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+                hf_tensor.astype(np.float32), axes=(1, 0)
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_output_dense.kernel,
             hf_weight_key=f"{prefix}.layers.{index}.mlp.down_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+                hf_tensor.astype(np.float32), axes=(1, 0)
             ),
         )
 
@@ -243,7 +253,7 @@ def _port_text_weights(backbone, loader, prefix, tie_word_embeddings):
     loader.port_weight(
         keras_variable=backbone.layer_norm.scale,
         hf_weight_key=f"{prefix}.norm.weight",
-        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
     )
 
 
@@ -255,13 +265,13 @@ def _port_vision_weights(backbone, loader):
         keras_variable=vision_encoder.patch_conv.kernel,
         hf_weight_key="vision_tower.patch_conv.weight",
         hook_fn=lambda hf_tensor, _: np.transpose(
-            hf_tensor.astype(np.float16), axes=(2, 3, 1, 0)
+            hf_tensor.astype(np.float32), axes=(2, 3, 1, 0)
         ),
     )
     loader.port_weight(
         keras_variable=vision_encoder.ln_pre.scale,
         hf_weight_key="vision_tower.ln_pre.weight",
-        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
     )
 
     for index in range(vision_encoder.num_layers):
@@ -271,40 +281,40 @@ def _port_vision_weights(backbone, loader):
         loader.port_weight(
             keras_variable=layer.attention_norm.scale,
             hf_weight_key=f"{layer_prefix}.attention_norm.weight",
-            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
         )
         loader.port_weight(
             keras_variable=layer.ffn_norm.scale,
             hf_weight_key=f"{layer_prefix}.ffn_norm.weight",
-            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
         )
 
         loader.port_weight(
             keras_variable=layer.attention.q_proj.kernel,
             hf_weight_key=f"{layer_prefix}.attention.q_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+                hf_tensor.astype(np.float32), axes=(1, 0)
             ),
         )
         loader.port_weight(
             keras_variable=layer.attention.k_proj.kernel,
             hf_weight_key=f"{layer_prefix}.attention.k_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+                hf_tensor.astype(np.float32), axes=(1, 0)
             ),
         )
         loader.port_weight(
             keras_variable=layer.attention.v_proj.kernel,
             hf_weight_key=f"{layer_prefix}.attention.v_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+                hf_tensor.astype(np.float32), axes=(1, 0)
             ),
         )
         loader.port_weight(
             keras_variable=layer.attention.o_proj.kernel,
             hf_weight_key=f"{layer_prefix}.attention.o_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+                hf_tensor.astype(np.float32), axes=(1, 0)
             ),
         )
 
@@ -312,21 +322,21 @@ def _port_vision_weights(backbone, loader):
             keras_variable=layer.feed_forward.gate_proj.kernel,
             hf_weight_key=f"{layer_prefix}.feed_forward.gate_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+                hf_tensor.astype(np.float32), axes=(1, 0)
             ),
         )
         loader.port_weight(
             keras_variable=layer.feed_forward.up_proj.kernel,
             hf_weight_key=f"{layer_prefix}.feed_forward.up_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+                hf_tensor.astype(np.float32), axes=(1, 0)
             ),
         )
         loader.port_weight(
             keras_variable=layer.feed_forward.down_proj.kernel,
             hf_weight_key=f"{layer_prefix}.feed_forward.down_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+                hf_tensor.astype(np.float32), axes=(1, 0)
             ),
         )
 
@@ -334,39 +344,39 @@ def _port_vision_weights(backbone, loader):
     loader.port_weight(
         keras_variable=projector.norm.scale,
         hf_weight_key="multi_modal_projector.norm.weight",
-        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
     )
     loader.port_weight(
         keras_variable=projector.patch_merger.merging_layer.kernel,
         hf_weight_key="multi_modal_projector.patch_merger.merging_layer.weight",
         hook_fn=lambda hf_tensor, _: np.transpose(
-            hf_tensor.astype(np.float16), axes=(1, 0)
+            hf_tensor.astype(np.float32), axes=(1, 0)
         ),
     )
     loader.port_weight(
         keras_variable=projector.linear_1.kernel,
         hf_weight_key="multi_modal_projector.linear_1.weight",
         hook_fn=lambda hf_tensor, _: np.transpose(
-            hf_tensor.astype(np.float16), axes=(1, 0)
+            hf_tensor.astype(np.float32), axes=(1, 0)
         ),
     )
     loader.port_weight(
         keras_variable=projector.linear_2.kernel,
         hf_weight_key="multi_modal_projector.linear_2.weight",
         hook_fn=lambda hf_tensor, _: np.transpose(
-            hf_tensor.astype(np.float16), axes=(1, 0)
+            hf_tensor.astype(np.float32), axes=(1, 0)
         ),
     )
     if projector.linear_1.use_bias:
         loader.port_weight(
             keras_variable=projector.linear_1.bias,
             hf_weight_key="multi_modal_projector.linear_1.bias",
-            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
         )
         loader.port_weight(
             keras_variable=projector.linear_2.bias,
             hf_weight_key="multi_modal_projector.linear_2.bias",
-            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
         )
 
 
