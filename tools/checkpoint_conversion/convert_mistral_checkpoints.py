@@ -23,6 +23,7 @@ torch.set_default_device(device)
 
 from absl import app  # noqa: E402
 from absl import flags  # noqa: E402
+from huggingface_hub import hf_hub_download  # noqa: E402
 from keras import ops  # noqa: E402
 from PIL import Image  # noqa: E402
 from transformers import AutoConfig  # noqa: E402
@@ -73,27 +74,83 @@ def load_reference_image():
     return Image.open(requests.get(_IMAGE_URL, stream=True).raw).convert("RGB")
 
 
-def build_multimodal_inputs(hf_config, hf_processor, image):
+def build_text_inputs(hf_preset, text):
+    # Some checkpoints (e.g. Mistral Small 3.2) ship only `tekken.json`,
+    # with no `tokenizer_config.json` for `AutoTokenizer` to resolve a
+    # class from; fall back to `mistral_common` reading it directly.
+    try:
+        hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
+        return hf_tokenizer([text], return_tensors="pt")
+    except OSError:
+        pass
+
+    from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+
+    tekken_path = hf_hub_download(hf_preset, "tekken.json")
+    raw_tokenizer = MistralTokenizer.from_file(
+        tekken_path
+    ).instruct_tokenizer.tokenizer
+    token_ids = raw_tokenizer.encode(text, bos=True, eos=False)
+    return {
+        "input_ids": torch.tensor([token_ids]),
+        "attention_mask": torch.ones(1, len(token_ids), dtype=torch.long),
+    }
+
+
+def build_multimodal_inputs(hf_preset, hf_config, image):
+    # Falls back to `mistral_common`'s `encode_chat_completion` when a
+    # checkpoint has no chat template (e.g. a base model) or no
+    # `preprocessor_config.json` for `AutoProcessor` to resolve a class
+    # from (e.g. Mistral Small 3.2).
     image_token_index = hf_config.image_token_index
 
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "image"},
-                {"type": "text", "text": IMAGE_PROMPT},
-            ],
-        }
-    ]
-    prompt = hf_processor.apply_chat_template(
-        messages, add_generation_prompt=True
-    )
-    inputs = hf_processor(text=prompt, images=image, return_tensors="np")
+    try:
+        hf_processor = AutoProcessor.from_pretrained(hf_preset)
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": IMAGE_PROMPT},
+                ],
+            }
+        ]
+        prompt = hf_processor.apply_chat_template(
+            messages, add_generation_prompt=True
+        )
+        inputs = hf_processor(text=prompt, images=image, return_tensors="np")
+        token_ids = inputs["input_ids"].astype("int32")
+        padding_mask = inputs["attention_mask"].astype("int32")
+        pixel_values = inputs["pixel_values"].astype("float32")
+        image_sizes = inputs["image_sizes"].astype("int32")
+    except (OSError, ValueError):
+        from mistral_common.protocol.instruct.chunk import ImageChunk
+        from mistral_common.protocol.instruct.chunk import TextChunk
+        from mistral_common.protocol.instruct.messages import UserMessage
+        from mistral_common.protocol.instruct.request import (
+            ChatCompletionRequest,
+        )
+        from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 
-    token_ids = inputs["input_ids"].astype("int32")
-    padding_mask = inputs["attention_mask"].astype("int32")
-    pixel_values = inputs["pixel_values"].astype("float32")
-    image_sizes = inputs["image_sizes"].astype("int32")
+        tekken_path = hf_hub_download(hf_preset, "tekken.json")
+        request = ChatCompletionRequest(
+            messages=[
+                UserMessage(
+                    content=[
+                        ImageChunk(image=image),
+                        TextChunk(text=IMAGE_PROMPT),
+                    ]
+                )
+            ]
+        )
+        tokenized = MistralTokenizer.from_file(
+            tekken_path
+        ).encode_chat_completion(request)
+        token_ids = np.array([tokenized.tokens], dtype="int32")
+        padding_mask = np.ones_like(token_ids)
+        pixel_values = tokenized.images[0][None, ...].astype("float32")
+        image_sizes = np.array([pixel_values.shape[-2:]], dtype="int32")
+        prompt = f"[INST][IMG]{IMAGE_PROMPT}[/INST]"
 
     flat_ids = token_ids.reshape(-1)
     placeholder_indices = np.where(flat_ids == image_token_index)[0].astype(
@@ -116,8 +173,7 @@ def precompute_hf_text_outputs(hf_preset):
         hf_preset, device_map="cpu", torch_dtype=torch.float32
     )
     hf_model.eval()
-    hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
-    hf_inputs = hf_tokenizer([TEXT_PROMPT], return_tensors="pt")
+    hf_inputs = build_text_inputs(hf_preset, TEXT_PROMPT)
     with torch.no_grad():
         hf_outputs = hf_model(**hf_inputs)
     hf_results = {
@@ -128,7 +184,7 @@ def precompute_hf_text_outputs(hf_preset):
         },
         "num_parameters": hf_model.num_parameters(),
     }
-    del hf_model, hf_tokenizer
+    del hf_model
     gc.collect()
     return hf_results
 
@@ -138,10 +194,8 @@ def precompute_hf_multimodal_outputs(hf_preset, hf_config):
         hf_preset, device_map="cpu", torch_dtype=torch.float32
     )
     hf_model.eval()
-    hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
-    hf_processor = AutoProcessor.from_pretrained(hf_preset)
 
-    hf_text_inputs = hf_tokenizer([TEXT_PROMPT], return_tensors="pt")
+    hf_text_inputs = build_text_inputs(hf_preset, TEXT_PROMPT)
     with torch.no_grad():
         hf_text_outputs = hf_model(**hf_text_inputs)
     text_results = {
@@ -150,7 +204,7 @@ def precompute_hf_multimodal_outputs(hf_preset, hf_config):
     }
 
     image = load_reference_image()
-    inputs = build_multimodal_inputs(hf_config, hf_processor, image)
+    inputs = build_multimodal_inputs(hf_preset, hf_config, image)
 
     with torch.no_grad():
         hf_image_outputs = hf_model(
@@ -170,7 +224,7 @@ def precompute_hf_multimodal_outputs(hf_preset, hf_config):
         "image": image_results,
         "num_parameters": hf_model.num_parameters(),
     }
-    del hf_model, hf_tokenizer, hf_processor
+    del hf_model
     gc.collect()
     return hf_results
 
