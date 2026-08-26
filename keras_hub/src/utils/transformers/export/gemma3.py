@@ -1,5 +1,20 @@
 import keras.ops as ops
 
+# Architecture-fixed IDs for Gemma3 extended-vocabulary vision tokens.
+_GEMMA3_BOI_TOKEN_ID = 255999  # <start_of_image>
+_GEMMA3_EOI_TOKEN_ID = 256000  # <end_of_image>
+_GEMMA3_IMAGE_SOFT_TOKEN_ID = 262144  # <image_soft_token>
+
+# Known special tokens in the Gemma3 base vocabulary.
+_GEMMA3_SPECIAL_TOKENS = [
+    "<pad>",
+    "<bos>",
+    "<eos>",
+    "<unk>",
+    "<start_of_turn>",
+    "<end_of_turn>",
+]
+
 
 def get_gemma3_config(backbone):
     """Convert Keras Gemma3 config to Hugging Face config dictionary."""
@@ -91,9 +106,9 @@ def get_gemma3_config(backbone):
             "layer_norm_eps": image_encoder.layer_norm_epsilon,
             "model_type": "siglip_vision_model",
             "vision_use_head": False,
-            "boi_token_index": 255999,
-            "eoi_token_index": 256000,
-            "image_token_index": 262144,
+            "boi_token_index": _GEMMA3_BOI_TOKEN_ID,
+            "eoi_token_index": _GEMMA3_EOI_TOKEN_ID,
+            "image_token_index": _GEMMA3_IMAGE_SOFT_TOKEN_ID,
             "mm_tokens_per_image": mm_tokens_per_image,
         }
 
@@ -430,34 +445,23 @@ def get_gemma3_tokenizer_config(tokenizer):
         }
 
     added_tokens_decoder = {}
-    vocab_size = tokenizer.vocabulary_size()
+    for token in _GEMMA3_SPECIAL_TOKENS:
+        token_id = tokenizer.token_to_id(token)
+        if token_id is not None:
+            added_tokens_decoder[str(token_id)] = {
+                "content": token,
+                "special": True,
+                "single_word": False,
+                "lstrip": False,
+                "rstrip": False,
+                "normalized": False,
+            }
 
-    # Add only special tokens from the base vocabulary
-    # These are tokens that start/end with < > or have special meaning
-    for token_id in range(vocab_size):
-        token = tokenizer.id_to_token(token_id)
-        if token is not None:
-            # Only add special tokens (those with < >)
-            is_special = token.startswith("<") and token.endswith(">")
-            if is_special or token.startswith("<unused"):
-                added_tokens_decoder[str(token_id)] = {
-                    "content": token,
-                    "special": True,
-                    "single_word": False,
-                    "lstrip": False,
-                    "rstrip": False,
-                    "normalized": False,
-                }
-
-    # Add vision tokens with their correct IDs (beyond base vocabulary)
-    # These tokens exist in the SentencePiece model file but KerasHub's
-    # tokenizer doesn't expose them via id_to_token() since they're outside
-    # the normal vocabulary range (0 to vocabulary_size-1)
     if has_vision_tokens:
         vision_token_mapping = {
-            255999: "<start_of_image>",
-            256000: "<end_of_image>",
-            262144: "<image_soft_token>",
+            _GEMMA3_BOI_TOKEN_ID: "<start_of_image>",
+            _GEMMA3_EOI_TOKEN_ID: "<end_of_image>",
+            _GEMMA3_IMAGE_SOFT_TOKEN_ID: "<image_soft_token>",
         }
         for token_id, token in vision_token_mapping.items():
             added_tokens_decoder[str(token_id)] = {
@@ -491,10 +495,7 @@ def get_gemma3_generation_config(backbone):
     }
 
     # Add soft capping if configured
-    if (
-        hasattr(backbone, "final_logit_soft_cap")
-        and backbone.final_logit_soft_cap
-    ):
+    if backbone.final_logit_soft_cap:
         generation_config["final_logit_soft_cap"] = (
             backbone.final_logit_soft_cap
         )

@@ -547,13 +547,13 @@ def validate_exported_model(
             exp_model = AutoModelForImageTextToText.from_pretrained(
                 export_path, dtype=torch.float32
             )
-            exp_processor = AutoProcessor.from_pretrained(hf_model_id)
+            exp_processor = AutoProcessor.from_pretrained(export_path)
             exp_tokenizer = exp_processor.tokenizer
         else:
             exp_model = AutoModelForCausalLM.from_pretrained(
                 export_path, dtype=torch.float32
             )
-            exp_tokenizer = AutoTokenizer.from_pretrained(hf_model_id)
+            exp_tokenizer = AutoTokenizer.from_pretrained(export_path)
     except Exception as e:
         print(f"  ✗ Failed to load exported model: {e}")
         raise

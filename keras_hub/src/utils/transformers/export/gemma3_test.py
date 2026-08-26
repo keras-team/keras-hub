@@ -229,6 +229,18 @@ class TestGemma3Export(TestCase):
         export_path = os.path.join(self.get_temp_dir(), "export_vision")
         keras_model.export_to_transformers(export_path)
 
+        # Verify config.json structure for vision models
+        config_path = os.path.join(export_path, "config.json")
+        self.assertTrue(os.path.exists(config_path))
+        with open(config_path, "r") as f:
+            config = json.load(f)
+        self.assertEqual(config["model_type"], "gemma3")
+        self.assertIn("text_config", config)
+        self.assertIn("vision_config", config)
+        self.assertEqual(
+            config["vision_config"]["model_type"], "siglip_vision_model"
+        )
+
         # Verify processor config exists for vision models
         processor_config_path = os.path.join(
             export_path, "processor_config.json"
