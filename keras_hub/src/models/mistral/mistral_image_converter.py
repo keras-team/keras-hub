@@ -8,7 +8,7 @@ from keras_hub.src.models.mistral.mistral_vision_encoder import (
     MISTRAL3_DEFAULT_SPATIAL_MERGE_SIZE,
 )
 from keras_hub.src.models.mistral.mistral_vision_encoder import (
-    compute_pixtral_resize_size,
+    compute_resize_size,
 )
 
 # CLIP normalization stats, in [0, 255] pixel-value units.
@@ -87,10 +87,10 @@ class Mistral3ImageConverter(ImageConverter):
         for image in inputs:
             image = ops.convert_to_numpy(image).astype("float32")
             height, width = image.shape[0], image.shape[1]
-            resized_height, resized_width = compute_pixtral_resize_size(
+            resized_height, resized_width = compute_resize_size(
                 height, width, self.longest_edge, merge_patch_size
             )
-            # HF's default resample for Pixtral is bicubic, applied to the
+            # HF's default resample for Mistral3 is bicubic, applied to the
             # `uint8` pixel tensor (via torchvision) before it's ever cast to
             # float, and torchvision rounds/clips its resize output back to
             # the `uint8` grid. `antialias=True` matches its resize kernel
