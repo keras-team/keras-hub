@@ -308,11 +308,9 @@ class MistralCausalLMTest(TestCase):
         )
         causal_lm = MistralCausalLM(backbone=backbone, preprocessor=None)
 
-        # Two images, each an 8x8 canvas patchified into a 2x2 grid (4
-        # patches); with `spatial_merge_size=1` every patch is its own merge
-        # window, so each image contributes 4 image-feature rows. Followed
-        # by one real token, then two padding positions to leave room for
-        # incremental decoding.
+        # Two 8x8 images, each a 2x2 patch grid; `spatial_merge_size=1`
+        # makes every patch its own merge window (4 rows per image).
+        # Followed by one real token, then padding for incremental decoding.
         token_ids = ops.array(
             [
                 [image_token_index] * 4 + [3, 0, 0],

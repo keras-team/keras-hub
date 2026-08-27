@@ -57,7 +57,7 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
         spatial_merge_size: int. The multimodal projector's spatial merge
             size, used to compute how many image placeholder tokens each
             image expands to. Only used when `image_converter` is set.
-            Defaults to `2`, matching `Mistral3PatchMerger`'s default.
+            Defaults to `2`.
 
     Call arguments:
         x: A string, `tf.Tensor` or list of python strings, or (when
@@ -166,11 +166,9 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
     def _tokenize_with_image_blocks(self, prompt, image_sizes):
         """Tokenizes `prompt`, splicing in each image's block token ids.
 
-        Tokenizes the raw, unexpanded `prompt` in a single call, then
-        replaces each `image_placeholder_token_id` occurrence with that
-        image's precomputed block. Segments must not be tokenized
-        independently -- SentencePiece's leading-space handling differs
-        per call, so that wouldn't reproduce whole-string tokenization.
+        Tokenizes the whole, unexpanded `prompt` in one call rather than
+        per-segment, since SentencePiece's leading-space handling differs
+        per call and wouldn't reproduce whole-string tokenization.
 
         Args:
             prompt: str. The raw prompt, containing zero or more literal
@@ -221,20 +219,17 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
 
         Returns:
             A tuple `(tokenized, pixel_values, image_sizes)`. When the batch
-            has no images, `tokenized` is `prompts` unchanged (to be
-            tokenized by the caller) and `pixel_values`/`image_sizes` are
-            `None`, matching HF's `Mistral3Model.forward()`, which only
-            invokes the vision tower `if pixel_values is not None` rather
-            than feeding it an empty/dummy batch. Otherwise, `tokenized` is
-            a list of per-example token ID lists, with each occurrence of
-            the image placeholder token already expanded in place.
+            has no images, `tokenized` is `prompts` unchanged and
+            `pixel_values`/`image_sizes` are `None` (matching HF, which
+            skips the vision tower entirely rather than passing it an
+            empty batch). Otherwise, `tokenized` is a list of per-example
+            token ID lists, with each image placeholder already expanded.
         """
-        # Flatten all images across all prompts into one ordered list,
-        # batch-row-major then per-prompt left-to-right. This exact order
-        # must match: the order images are consumed while expanding each
-        # prompt's placeholders, the order `Mistral3ImageConverter`
-        # processes them in, and the order features get scattered back into
-        # token positions. There is no padding slot to absorb a mismatch.
+        # Flatten into one ordered list, batch-row-major then per-prompt
+        # left-to-right. This order must match the order images are
+        # consumed while expanding placeholders, the order
+        # `Mistral3ImageConverter` processes them in, and the order
+        # features get scattered back into token positions.
         flat_images = []
         for images in images_per_prompt:
             flat_images.extend(images)
