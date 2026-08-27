@@ -80,7 +80,7 @@ class MistralBackbone(Backbone):
             incompatible with `jax.jit` tracing.
         multimodal_projector: A `Mistral3MultiModalProjector` instance.
             Required when `vision_encoder` is set.
-        image_token_index (int, optional): The token ID in `token_ids` that
+        image_token_index: int, optional. The token ID in `token_ids` that
             marks image placeholder positions. Defaults to `10`. Unused in
             text-only mode; used together with
             `compute_image_placeholder_indices` to build the
