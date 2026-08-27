@@ -34,8 +34,7 @@ class Mistral3ImageConverter(ImageConverter):
         spatial_merge_size: int. The number of patches merged together per
             side by the multimodal projector's patch merger. Resized image
             dimensions are rounded up to a multiple of
-            `patch_size * spatial_merge_size`, matching HF's
-            `PixtralProcessor`. Defaults to `2`.
+            `patch_size * spatial_merge_size`. Defaults to `2`.
         scale: float, tuple of floats, or `None`. Per-channel scale applied
             after resizing. Defaults to the CLIP normalization scale.
         offset: float, tuple of floats, or `None`. Per-channel offset
@@ -58,11 +57,10 @@ class Mistral3ImageConverter(ImageConverter):
             scale = [1.0 / 255.0 / s for s in _CLIP_STD]
         if offset is None:
             offset = [-m / s for m, s in zip(_CLIP_MEAN, _CLIP_STD)]
-        # `image_size=None` skips the base class's single-size `Resizing`
-        # sublayer: Pixtral's resize target is dynamic per image, so
-        # resizing is instead done per image in `call()`. `dtype` is always
-        # float32, independent of the model's compute dtype. Both are
-        # hardcoded below, so drop any incoming values (e.g. from a
+        # `image_size=None` skips the base class's `Resizing` sublayer,
+        # since Pixtral's resize target is dynamic per image. `dtype` is
+        # always float32, independent of the model's compute dtype. Both
+        # are hardcoded below, so drop any incoming values (e.g. from a
         # deserialized config) rather than conflict with them.
         kwargs.pop("dtype", None)
         kwargs.pop("image_size", None)

@@ -36,55 +36,40 @@ class MistralBackbone(Backbone):
     constructor.
 
     Args:
-        vocabulary_size (int): The size of the token vocabulary.
-        num_layers (int): The number of transformer layers.
-        num_query_heads (int): The number of query attention heads for
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_query_heads: int. The number of query attention heads for
             each transformer.
-        hidden_dim (int): The size of the transformer encoding and pooling
+        hidden_dim: int. The size of the transformer encoding and pooling
             layers.
-        intermediate_dim (int): The output dimension of the first Dense layer
+        intermediate_dim: int. The output dimension of the first Dense layer
             in a three-layer feedforward network for each transformer.
-        num_key_value_heads (int): The number of key and value attention heads
+        num_key_value_heads: int. The number of key and value attention heads
             for each transformer.
-        rope_max_wavelength (int, optional): The maximum angular wavelength of
+        rope_max_wavelength: int, optional. The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
-        rope_scaling_factor (float, optional): The scaling factor for
+        rope_scaling_factor: float, optional. The scaling factor for
             calculation of roatary embedding. Defaults to `1.0`.
-        layer_norm_epsilon (float, optional): Epsilon for the layer
+        layer_norm_epsilon: float, optional. Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
-        sliding_window (int, optional): The sliding window for the mistral
+        sliding_window: int, optional. The sliding window for the mistral
             attention layers. This controls the maximum cache size for the
             attention layers in each transformer decoder. Only `sliding_window`
             number of tokens are saved in the cache and used to generate the
             next token. Defaults to `512`. Pass `None` to disable sliding
             window attention entirely (e.g. Magistral).
-        head_dim (int, optional): The size of each attention head. When
+        head_dim: int, optional. The size of each attention head. When
             `None` (the default), falls back to `hidden_dim // num_query_heads`.
             Set explicitly when the model's head size is not equal to
             `hidden_dim // num_query_heads` — e.g. Magistral uses
             `head_dim=128` with `hidden_dim=5120` and `num_query_heads=32`.
         vision_encoder: A `keras_hub.models.Mistral3VisionEncoder` instance,
-            or `None` (the default) for a text-only model. When set,
-            `multimodal_projector` must also be provided, and `call()`
-            accepts additional `"pixel_values"`, `"image_sizes"`, and
-            `"placeholder_indices"` inputs. `"pixel_values"` has dynamic
-            spatial dimensions (padded to the batch's largest image, as
-            produced by HF's image processor), not a fixed canvas;
-            `"image_sizes"` gives each image's true `(height, width)` for
-            cropping after patchification. `"placeholder_indices"` gives
-            the flat positions of image placeholder tokens in `token_ids`
-            (into the flattened `batch * seq_length` sequence) that get
-            replaced with projected image features — compute it with
-            `mistral_vision_encoder.compute_image_placeholder_indices`
-            before calling the model, since deriving it in-graph would be
-            incompatible with `jax.jit` tracing.
+            or `None` for a text-only model. `multimodal_projector` must
+            also be provided when set. Defaults to `None`.
         multimodal_projector: A `Mistral3MultiModalProjector` instance.
             Required when `vision_encoder` is set.
         image_token_index: int, optional. The token ID in `token_ids` that
-            marks image placeholder positions. Defaults to `10`. Unused in
-            text-only mode; used together with
-            `compute_image_placeholder_indices` to build the
-            `"placeholder_indices"` model input.
+            marks image placeholder positions. Defaults to `10`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
