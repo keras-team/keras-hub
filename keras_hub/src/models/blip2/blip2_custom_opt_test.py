@@ -1,4 +1,3 @@
-import keras
 import numpy as np
 import pytest
 
@@ -41,8 +40,7 @@ class BLIP2CustomOPTTest(TestCase):
 
     def test_serialization(self):
         backbone = BLIP2CustomOPT(**self.init_kwargs)
-        new_backbone = BLIP2CustomOPT.from_config(backbone.get_config())
-        self.assertEqual(new_backbone.get_config(), backbone.get_config())
+        self.run_serialization_test(backbone)
 
     def test_position_embeddings(self):
         backbone = BLIP2CustomOPT(**self.init_kwargs)
@@ -58,15 +56,10 @@ class BLIP2CustomOPTTest(TestCase):
 
     @pytest.mark.large
     def test_saved_model(self):
-        from keras import ops
-
-        backbone = BLIP2CustomOPT(**self.init_kwargs)
-        model_path = self.get_temp_dir() + "/model.keras"
-        backbone.save(model_path)
-        reloaded_model = keras.models.load_model(model_path)
-
-        np.testing.assert_allclose(
-            ops.convert_to_numpy(backbone(self.input_data)),
-            ops.convert_to_numpy(reloaded_model(self.input_data)),
+        self.run_model_saving_test(
+            cls=BLIP2CustomOPT,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
             atol=1e-5,
+            rtol=1e-5,
         )
