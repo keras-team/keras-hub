@@ -13,68 +13,12 @@ from keras_hub.src.models.mistral.mistral_vision_encoder import (
 from keras_hub.src.models.mistral.mistral_vision_encoder import (
     compute_image_placeholder_indices,
 )
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
-
-def _expand_image_placeholders(
-    prompt,
-    image_sizes,
-    patch_size,
-    spatial_merge_size,
-    image_token,
-    image_break_token,
-    image_end_token,
-):
-    """Expands each `image_token` occurrence in `prompt` into an image block.
-
-    Mirrors HF's Pixtral/Mistral3 processor: every literal occurrence of
-    `image_token` in `prompt` is replaced by a grid of `image_token`s (one
-    per merged vision-patch row/column for that image), with each row
-    terminated by `image_break_token`, and the very last row's trailing
-    `image_break_token` swapped for `image_end_token`.
-
-    Args:
-        prompt: str. The raw prompt, containing zero or more literal
-            occurrences of `image_token`.
-        image_sizes: list of `(height, width)` tuples, one per occurrence of
-            `image_token` in `prompt`, in order.
-        patch_size: int. The vision encoder's patch size.
-        spatial_merge_size: int. The multimodal projector's spatial merge
-            size.
-        image_token: str. The literal image placeholder token, e.g.
-            `"[IMG]"`.
-        image_break_token: str. The literal row-break token, e.g.
-            `"[IMG_BREAK]"`.
-        image_end_token: str. The literal image-end token, e.g.
-            `"[IMG_END]"`.
-
-    Returns:
-        The expanded prompt string.
-    """
-    segments = prompt.split(image_token)
-    num_occurrences = len(segments) - 1
-    if num_occurrences != len(image_sizes):
-        raise ValueError(
-            "The number of `image_token` occurrences in `prompt` must "
-            "match `len(image_sizes)`. Received: "
-            f"{num_occurrences} occurrences of {image_token!r} in "
-            f"{prompt!r}, but `image_sizes` has length {len(image_sizes)}."
-        )
-
-    merge = patch_size * spatial_merge_size
-    blocks = []
-    for height, width in image_sizes:
-        num_width_tokens = width // merge
-        num_height_tokens = height // merge
-        row = image_token * num_width_tokens + image_break_token
-        block = row * num_height_tokens
-        # Swap the final row's trailing break token for the end token.
-        block = block[: -len(image_break_token)] + image_end_token
-        blocks.append(block)
-
-    expanded = segments[0]
-    for segment, block in zip(segments[1:], blocks):
-        expanded += block + segment
-    return expanded
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 @keras_hub_export("keras_hub.models.MistralCausalLMPreprocessor")
@@ -184,8 +128,6 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
         )
         self.image_converter = image_converter
         self.spatial_merge_size = spatial_merge_size
-        # The preprocessor and model are "text-only" if `self.image_converter`
-        # is `None`.
         self.text_only_model = self.image_converter is None
         if not self.text_only_model and not tokenizer.has_vision_tokens:
             raise ValueError(
@@ -197,22 +139,95 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
                 "placeholders in prompts."
             )
 
+    def _compute_image_block_ids(self, height, width):
+        """Builds the token-ID block a single image expands to.
+
+        Mirrors HF's Pixtral/Mistral3 processor: an image contributes one
+        `image_placeholder_token_id` per merged vision-patch row/column,
+        each row terminated by `image_break_token_id`, with the last row's
+        trailing break token swapped for `image_end_token_id`.
+
+        Args:
+            height: int. The image's resized height, in pixels.
+            width: int. The image's resized width, in pixels.
+
+        Returns:
+            list of int. The token IDs this image expands to.
+        """
+        merge = self.image_converter.patch_size * self.spatial_merge_size
+        num_width_tokens = width // merge
+        num_height_tokens = height // merge
+        row = [self.tokenizer.image_placeholder_token_id] * num_width_tokens
+        row.append(self.tokenizer.image_break_token_id)
+        block = row * num_height_tokens
+        block[-1] = self.tokenizer.image_end_token_id
+        return block
+
+    def _tokenize_with_image_blocks(self, prompt, image_sizes):
+        """Tokenizes `prompt`, splicing in each image's block token ids.
+
+        Tokenizes the raw, unexpanded `prompt` in a single call, then
+        replaces each `image_placeholder_token_id` occurrence with that
+        image's precomputed block. Segments must not be tokenized
+        independently -- SentencePiece's leading-space handling differs
+        per call, so that wouldn't reproduce whole-string tokenization.
+
+        Args:
+            prompt: str. The raw prompt, containing zero or more literal
+                occurrences of the image placeholder token.
+            image_sizes: list of `(height, width)` tuples, one per
+                occurrence of the placeholder token in `prompt`, in order.
+
+        Returns:
+            list of int. The complete token ID sequence for `prompt`.
+        """
+        base_ids = self.tokenizer(prompt)
+        if hasattr(base_ids, "numpy"):
+            base_ids = base_ids.numpy().tolist()
+        else:
+            base_ids = list(base_ids)
+
+        placeholder_id = self.tokenizer.image_placeholder_token_id
+        num_occurrences = base_ids.count(placeholder_id)
+        if num_occurrences != len(image_sizes):
+            raise ValueError(
+                "The number of image placeholder token occurrences in "
+                "`prompt` must match `len(image_sizes)`. Received: "
+                f"{num_occurrences} occurrences in {prompt!r}, but "
+                f"`image_sizes` has length {len(image_sizes)}."
+            )
+
+        token_ids = []
+        image_idx = 0
+        for token_id in base_ids:
+            if token_id == placeholder_id:
+                height, width = image_sizes[image_idx]
+                token_ids.extend(self._compute_image_block_ids(height, width))
+                image_idx += 1
+            else:
+                token_ids.append(token_id)
+        return token_ids
+
     def _build_multimodal_inputs(self, prompts, images_per_prompt):
-        """Expands image placeholders and produces vision model inputs.
+        """Tokenizes prompts and produces vision model inputs.
 
         Args:
             prompts: list of str. One raw prompt per batch element, possibly
-                containing literal `image_token` occurrences to expand.
+                containing literal image-placeholder-token occurrences to
+                expand.
             images_per_prompt: list of lists of raw images (each
                 `(height, width, 3)`), the same length as `prompts`. A
                 prompt with no images uses an empty list.
 
         Returns:
-            A tuple `(expanded_prompts, pixel_values, image_sizes)`.
-            `pixel_values`/`image_sizes` are `None` when the batch has no
-            images at all, matching HF's `Mistral3Model.forward()`, which
-            only invokes the vision tower `if pixel_values is not None`
-            rather than feeding it an empty/dummy batch.
+            A tuple `(tokenized, pixel_values, image_sizes)`. When the batch
+            has no images, `tokenized` is `prompts` unchanged (to be
+            tokenized by the caller) and `pixel_values`/`image_sizes` are
+            `None`, matching HF's `Mistral3Model.forward()`, which only
+            invokes the vision tower `if pixel_values is not None` rather
+            than feeding it an empty/dummy batch. Otherwise, `tokenized` is
+            a list of per-example token ID lists, with each occurrence of
+            the image placeholder token already expanded in place.
         """
         # Flatten all images across all prompts into one ordered list,
         # batch-row-major then per-prompt left-to-right. This exact order
@@ -229,7 +244,7 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
 
         pixel_values, image_sizes = self.image_converter(flat_images)
 
-        expanded_prompts = []
+        tokenized = []
         offset = 0
         for prompt, images in zip(prompts, images_per_prompt):
             num_images = len(images)
@@ -237,18 +252,10 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
                 tuple(image_sizes[offset + i]) for i in range(num_images)
             ]
             offset += num_images
-            expanded_prompts.append(
-                _expand_image_placeholders(
-                    prompt,
-                    sizes_slice,
-                    patch_size=self.image_converter.patch_size,
-                    spatial_merge_size=self.spatial_merge_size,
-                    image_token=self.tokenizer.image_placeholder_token,
-                    image_break_token=self.tokenizer.image_break_token,
-                    image_end_token=self.tokenizer.image_end_token,
-                )
+            tokenized.append(
+                self._tokenize_with_image_blocks(prompt, sizes_slice)
             )
-        return expanded_prompts, pixel_values, image_sizes
+        return tokenized, pixel_values, image_sizes
 
     def _extract_multimodal_inputs(self, x):
         """Normalizes `x` into `(prompts, images_per_prompt, batched)`."""
@@ -265,6 +272,16 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
             prompts = [prompts]
             if images is not None:
                 images = [images]
+        elif tf is not None and isinstance(prompts, tf.Tensor):
+            # `@preprocessing_function` converts raw inputs to `tf.Tensor`s
+            # eagerly; decode back to Python strings, since image-placeholder
+            # expansion below is per-example and variable-length.
+            if prompts.shape.rank == 0:
+                batched = False
+                prompts = [prompts]
+                if images is not None:
+                    images = [images]
+            prompts = [p.numpy().decode("utf-8") for p in prompts]
 
         if images is None:
             images_per_prompt = [[] for _ in prompts]
@@ -291,7 +308,7 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
 
         sequence_length = sequence_length or self.sequence_length
         prompts, images_per_prompt, batched = self._extract_multimodal_inputs(x)
-        prompts, pixel_values, image_sizes = self._build_multimodal_inputs(
+        tokenized, pixel_values, image_sizes = self._build_multimodal_inputs(
             prompts, images_per_prompt
         )
         if pixel_values is None:
@@ -301,7 +318,7 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
                 "batch with zero images."
             )
 
-        tokenized = self.tokenizer(prompts)
+        tokenized = tf.ragged.constant(tokenized, dtype="int32")
         # Pad with one extra token to account for the truncation below.
         token_ids, padding_mask = self.packer(
             tokenized,
@@ -338,36 +355,43 @@ class MistralCausalLMPreprocessor(CausalLMPreprocessor):
 
         return keras.utils.pack_x_y_sample_weight(out_x, y, sample_weight)
 
+    @preprocessing_function
     def generate_preprocess(
         self,
         x,
         sequence_length=None,
     ):
-        """Convert strings to integer token input for generation.
+        """Convert strings to integer token ids for generation.
 
-        Similar to calling the layer for training, this method takes in strings
-        or tensor strings, tokenizes and packs the input, and computes a padding
-        mask masking all inputs not filled in with a padded value.
-
-        Unlike calling the layer for training, this method does not compute
-        labels and will never append a `tokenizer.end_token_id` to the end of
-        the sequence (as generation is expected to continue at the end of the
-        inputted prompt).
+        `x` may be a string, list of strings, or a dict with a `"prompts"`
+        key (and, for multimodal presets, an `"images"` key). Returns a dict
+        with `token_ids` and `padding_mask`, plus `pixel_values`,
+        `image_sizes`, and `placeholder_indices` when images are present.
         """
-        if self.text_only_model:
+        images = x.get("images") if isinstance(x, dict) else None
+        if images is None:
+            if isinstance(x, dict):
+                x = x["prompts"]
             return super().generate_preprocess(
                 x, sequence_length=sequence_length
             )
 
+        if self.text_only_model:
+            raise ValueError(
+                "The initialized preprocessor/model is text-only, but "
+                "`images` is not `None`."
+            )
         if not self.built:
             self.build(None)
 
         prompts, images_per_prompt, batched = self._extract_multimodal_inputs(x)
-        prompts, pixel_values, image_sizes = self._build_multimodal_inputs(
+        tokenized, pixel_values, image_sizes = self._build_multimodal_inputs(
             prompts, images_per_prompt
         )
-
-        tokenized = self.tokenizer(prompts)
+        if pixel_values is not None:
+            tokenized = tf.ragged.constant(tokenized, dtype="int32")
+        else:
+            tokenized = self.tokenizer(tokenized)
         token_ids, padding_mask = self.packer(
             tokenized, sequence_length=sequence_length, add_end_value=False
         )

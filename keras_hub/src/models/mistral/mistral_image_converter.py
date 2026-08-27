@@ -60,7 +60,12 @@ class Mistral3ImageConverter(ImageConverter):
             offset = [-m / s for m, s in zip(_CLIP_MEAN, _CLIP_STD)]
         # `image_size=None` skips the base class's single-size `Resizing`
         # sublayer: Pixtral's resize target is dynamic per image, so
-        # resizing is instead done per image in `call()`.
+        # resizing is instead done per image in `call()`. `dtype` is always
+        # float32, independent of the model's compute dtype. Both are
+        # hardcoded below, so drop any incoming values (e.g. from a
+        # deserialized config) rather than conflict with them.
+        kwargs.pop("dtype", None)
+        kwargs.pop("image_size", None)
         super().__init__(
             image_size=None,
             scale=scale,
