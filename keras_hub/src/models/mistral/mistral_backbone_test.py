@@ -98,10 +98,21 @@ class MistralBackboneTest(TestCase):
                 input_data=self.input_data,
             )
 
-    def _build_multimodal_kwargs_and_data(self):
-        # `head_dim` must be a multiple of 4: Pixtral's 2D rotary embedding
-        # splits it into height/width halves, each further halved for
-        # sin/cos, so anything else produces mismatched weight shapes.
+
+class MistralMultimodalBackboneTest(TestCase):
+    """Tests for `MistralBackbone` configured with a vision encoder."""
+
+    def setUp(self):
+        self.text_init_kwargs = {
+            "vocabulary_size": 10,
+            "num_layers": 2,
+            "num_query_heads": 8,
+            "num_key_value_heads": 4,
+            "hidden_dim": 16,
+            "intermediate_dim": 8,
+            "sliding_window": 2,
+        }
+
         vision_encoder = Mistral3VisionEncoder(
             image_size=8,
             patch_size=4,
@@ -113,92 +124,74 @@ class MistralBackboneTest(TestCase):
         )
         multimodal_projector = Mistral3MultiModalProjector(
             vision_hidden_dim=8,
-            text_hidden_dim=self.init_kwargs["hidden_dim"],
+            text_hidden_dim=self.text_init_kwargs["hidden_dim"],
             spatial_merge_size=1,
             patch_size=4,
             image_size=8,
         )
-        # `image_token_index` must stay inside `vocabulary_size`, since the
-        # token embedding lookup happens before the image-text merger
-        # overwrites those positions.
-        image_token_index = 9
-        init_kwargs = {
-            **self.init_kwargs,
+        # Must stay inside `vocabulary_size`: the embedding lookup happens
+        # before the image-text merger overwrites these positions.
+        self.image_token_index = 9
+        self.init_kwargs = {
+            **self.text_init_kwargs,
             "vision_encoder": vision_encoder,
             "multimodal_projector": multimodal_projector,
-            "image_token_index": image_token_index,
+            "image_token_index": self.image_token_index,
         }
-        # Two images, each an 8x8 canvas patchified into a 2x2 grid (4
-        # patches); with `spatial_merge_size=1` every patch is its own
-        # merge window, so each image contributes 4 image-feature rows.
+        # Two 8x8 images, each a 2x2 patch grid; `spatial_merge_size=1`
+        # makes every patch its own merge window (4 rows per image).
         token_ids = ops.array(
             [
-                [image_token_index] * 4 + [3],
-                [image_token_index] * 4 + [4],
+                [self.image_token_index] * 4 + [3],
+                [self.image_token_index] * 4 + [4],
             ],
             dtype="int32",
         )
         placeholder_indices = compute_image_placeholder_indices(
-            token_ids, image_token_index=image_token_index
+            token_ids, image_token_index=self.image_token_index
         )
-        input_data = {
+        self.input_data = {
             "token_ids": token_ids,
             "padding_mask": ops.ones((2, 5), dtype="int32"),
-            # Keras rejects a single nested `call()` argument (here, the
-            # `inputs` dict) that mixes backend tensors with plain
-            # NumPy/non-tensor values, so every entry must be a backend
-            # tensor even though `pixel_values`/`placeholder_indices` are
-            # naturally produced as NumPy arrays.
             "pixel_values": ops.convert_to_tensor(
                 np.random.rand(2, 3, 8, 8).astype("float32")
             ),
             "image_sizes": ops.array([[8, 8], [8, 8]], dtype="int32"),
-            # `placeholder_indices_input` is a `keras.Input(shape=(None,))`,
-            # i.e. rank 2 `(batch, N)`, even though the values themselves are
-            # flat global indices with no real per-example meaning —
-            # `Mistral3ImageTextEmbeddingMerger` flattens whatever batch
-            # dimension it's given right back out. Add a leading batch-of-1
-            # dim here to match that expected input rank.
-            "placeholder_indices": ops.convert_to_tensor(placeholder_indices)[
-                None, :
-            ],
+            "placeholder_indices": ops.reshape(
+                ops.convert_to_tensor(placeholder_indices), (2, 4)
+            ),
         }
-        return init_kwargs, input_data
 
-    def test_multimodal_backbone_forward_pass(self):
-        init_kwargs, input_data = self._build_multimodal_kwargs_and_data()
-        model = MistralBackbone(**init_kwargs)
-        output = model(input_data)
-        self.assertEqual(output.shape, (2, 5, self.init_kwargs["hidden_dim"]))
-
-    def test_multimodal_backbone_serialization(self):
-        init_kwargs, _ = self._build_multimodal_kwargs_and_data()
-        model = MistralBackbone(**init_kwargs)
-        self.run_serialization_test(model)
+    def test_backbone_basics(self):
+        self.run_backbone_test(
+            cls=MistralBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(
+                2,
+                5,
+                self.text_init_kwargs["hidden_dim"],
+            ),
+            # Image inputs have no sequence axis to slice, so skip the
+            # default variable-length sweep.
+            variable_length_data=[self.input_data],
+            # `run_quantization_test` rebuilds `vision_encoder`/
+            # `multimodal_projector` as standalone objects to apply a
+            # path-keyed `DTypePolicyMap`, but their sublayer paths change
+            # once they're no longer nested under the backbone -- the same
+            # structural mismatch `gemma3_backbone_test.py` works around for
+            # its own vision-encoder-bearing backbone.
+            run_quantization_check=False,
+        )
 
     def test_vision_projector_must_be_paired(self):
-        # `head_dim` must be a multiple of 4: Pixtral's 2D rotary embedding
-        # splits it into height/width halves, each further halved for
-        # sin/cos, so anything else produces mismatched weight shapes.
-        vision_encoder = Mistral3VisionEncoder(
-            image_size=8,
-            patch_size=4,
-            hidden_dim=8,
-            num_layers=1,
-            num_heads=2,
-            head_dim=4,
-            intermediate_dim=8,
-        )
-        multimodal_projector = Mistral3MultiModalProjector(
-            vision_hidden_dim=8,
-            text_hidden_dim=self.init_kwargs["hidden_dim"],
-            spatial_merge_size=1,
-            patch_size=4,
-            image_size=8,
-        )
-        with self.assertRaises(ValueError):
-            MistralBackbone(**self.init_kwargs, vision_encoder=vision_encoder)
         with self.assertRaises(ValueError):
             MistralBackbone(
-                **self.init_kwargs, multimodal_projector=multimodal_projector
+                **self.text_init_kwargs,
+                vision_encoder=self.init_kwargs["vision_encoder"],
+            )
+        with self.assertRaises(ValueError):
+            MistralBackbone(
+                **self.text_init_kwargs,
+                multimodal_projector=self.init_kwargs["multimodal_projector"],
             )
