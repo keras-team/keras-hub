@@ -515,13 +515,9 @@ def _convert_tekken_tokenizer(path):
     ]
 
     # Special tokens occupy the reserved block of ids
-    # `[0, num_special_tokens)`; their id is simply their rank. These are not
-    # reachable through BPE merges (they are not part of `mergeable_ranks`),
-    # so every one of them must be registered as an unsplittable/special
-    # token on the `tokenizers` backend, or literal occurrences in a prompt
-    # (e.g. `"[INST]"` from a chat template) get shredded into several
-    # regular byte-level tokens instead of mapping to their single reserved
-    # id.
+    # `[0, num_special_tokens)`; their id is simply their rank. Collect them
+    # as `control_tokens` so the tokenizer can register them as unsplittable
+    # (see `MistralTekkenTokenizer.__init__`).
     control_tokens = []
     for rank in range(num_special_tokens):
         piece = tokenizer.id_to_piece(rank)

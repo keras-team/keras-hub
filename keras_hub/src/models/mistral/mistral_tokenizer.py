@@ -53,7 +53,7 @@ class MistralTokenizer(SentencePieceTokenizer):
         has_vision_tokens: bool. Whether the vocabulary contains the
             special image tokens (`"[IMG]"`, `"[IMG_BREAK]"`, `"[IMG_END]"`)
             used by multimodal Mistral models such as Pixtral. Defaults to
-            `False`, since Mistral is primarily a text model.
+            `False`.
 
     Examples:
     ```python
@@ -129,7 +129,7 @@ class MistralTekkenTokenizer(BytePairTokenizer):
         has_vision_tokens: bool. Whether the vocabulary contains the
             special image tokens (`"[IMG]"`, `"[IMG_BREAK]"`, `"[IMG_END]"`)
             used by multimodal Mistral models such as Pixtral. Defaults to
-            `False`, since Mistral is primarily a text model.
+            `False`.
 
     Examples:
     ```python
@@ -159,11 +159,10 @@ class MistralTekkenTokenizer(BytePairTokenizer):
         self._add_special_token("</s>", "end_token")
         self.pad_token_id = 0
 
-        # Tekken's control tokens (e.g. `"[INST]"`, `"[/INST]"`) occupy a
-        # reserved id block outside of the BPE merges, so they must be
-        # registered as unsplittable/special tokens or literal occurrences
-        # in a prompt get shredded into regular byte-level tokens instead of
-        # mapping to their single reserved id.
+        # Tekken's control tokens (e.g. `"[INST]"`) occupy a reserved id
+        # block outside the BPE merges; register them as unsplittable, or
+        # literal occurrences in a prompt get shredded into byte-level
+        # tokens instead of mapping to their single reserved id.
         unsplittable_tokens = [self.start_token, self.end_token]
         for token in self.control_tokens:
             if token not in unsplittable_tokens:

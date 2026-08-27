@@ -74,14 +74,12 @@ class MistralCausalLM(CausalLM):
             cache_update_index: int, or int Tensor. The index of current inputs
             in the whole sequence.
             img_embeddings: a dense float Tensor of projected image features,
-                or `None` for a text-only forward pass. When provided, these
-                are scattered into `token_ids`' embeddings at
-                `placeholder_indices` before the decoder layers run. This is
-                only ever non-`None` on the initial cache-seeding forward
-                pass; incremental decode steps always pass `None`, since the
-                image features have already been folded into the cache.
-            placeholder_indices: flat positions of image placeholder tokens,
-                required alongside `img_embeddings` when it is not `None`.
+                or `None` for a text-only forward pass. Scattered into
+                `token_ids`' embeddings at `placeholder_indices` before the
+                decoder layers run.
+            placeholder_indices: flat positions of image placeholder tokens
+                in `token_ids`. Required when `img_embeddings` is not
+                `None`.
 
         Returns:
             A (logits, hidden_states, cache) tuple. Where `logits` is the
@@ -164,9 +162,7 @@ class MistralCausalLM(CausalLM):
 
         # Compute image features once, at prefill, from a static (Python
         # int, not tensor) shape check on the number of images. An unknown
-        # static shape (`None`) is treated as "no images", matching Gemma3's
-        # convention of falling back to a text-only forward pass whenever
-        # the number of images can't be determined without tracing.
+        # static shape (`None`) is treated as "no images".
         img_embeddings = None
         if (
             not self.backbone.text_only_model
