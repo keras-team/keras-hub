@@ -1,6 +1,6 @@
 """Convert Mistral HuggingFace checkpoints to KerasHub preset format.
 
-Handles both text-only Mistral checkpoints and multimodal Mistral3 checkpoints. 
+Handles both text-only Mistral checkpoints and multimodal Mistral3 checkpoints.
 The script auto-detects preset type from HF config and validates accordingly.
 
 Usage:
@@ -178,50 +178,34 @@ def run_hf_text_forward(hf_model, hf_preset):
     }
 
 
-def precompute_hf_text_outputs(hf_preset):
-    hf_model = MistralForCausalLM.from_pretrained(
+def precompute_hf_outputs(hf_preset, hf_config, multimodal):
+    model_cls = (
+        Mistral3ForConditionalGeneration if multimodal else MistralForCausalLM
+    )
+    hf_model = model_cls.from_pretrained(
         hf_preset, device_map="cpu", torch_dtype=torch.float32
     )
     hf_model.eval()
     hf_results = {
-        "multimodal": False,
         "text": run_hf_text_forward(hf_model, hf_preset),
         "num_parameters": hf_model.num_parameters(),
     }
-    del hf_model
-    gc.collect()
-    return hf_results
 
+    if multimodal:
+        image = load_reference_image()
+        inputs = build_multimodal_inputs(hf_preset, hf_config, image)
+        with torch.no_grad():
+            hf_image_outputs = hf_model(
+                input_ids=torch.tensor(inputs["token_ids"]),
+                attention_mask=torch.tensor(inputs["padding_mask"]),
+                pixel_values=torch.tensor(inputs["pixel_values"]),
+                image_sizes=torch.tensor(inputs["image_sizes"]),
+            )
+        hf_results["image"] = {
+            **inputs,
+            "logits": hf_image_outputs.logits.detach().cpu().numpy(),
+        }
 
-def precompute_hf_multimodal_outputs(hf_preset, hf_config):
-    hf_model = Mistral3ForConditionalGeneration.from_pretrained(
-        hf_preset, device_map="cpu", torch_dtype=torch.float32
-    )
-    hf_model.eval()
-
-    text_results = run_hf_text_forward(hf_model, hf_preset)
-
-    image = load_reference_image()
-    inputs = build_multimodal_inputs(hf_preset, hf_config, image)
-
-    with torch.no_grad():
-        hf_image_outputs = hf_model(
-            input_ids=torch.tensor(inputs["token_ids"]),
-            attention_mask=torch.tensor(inputs["padding_mask"]),
-            pixel_values=torch.tensor(inputs["pixel_values"]),
-            image_sizes=torch.tensor(inputs["image_sizes"]),
-        )
-    image_results = {
-        **inputs,
-        "logits": hf_image_outputs.logits.detach().cpu().numpy(),
-    }
-
-    hf_results = {
-        "multimodal": True,
-        "text": text_results,
-        "image": image_results,
-        "num_parameters": hf_model.num_parameters(),
-    }
     del hf_model
     gc.collect()
     return hf_results
@@ -287,10 +271,9 @@ def validate_output(keras_model, hf_results):
     preprocessor = keras_model.preprocessor
     text_results = hf_results["text"]
 
-    # === Text ===
     test_token_ids("text", preprocessor, TEXT_PROMPT, text_results["token_ids"])
 
-    if not hf_results["multimodal"]:
+    if "image" not in hf_results:
         return
     image_results = hf_results["image"]
     test_token_ids(
@@ -322,12 +305,9 @@ def validate_output(keras_model, hf_results):
     keras_logits = run_kh_forward(backbone, backbone_inputs)
     test_numerics("text", keras_logits, text_results["logits"])
 
-    # === Image ===
-
-    # Build backbone inputs from HF's preprocessed data (mirrors
-    # `_build_preprocessor_free_inputs` in `convert_gemma4_hf_checkpoints.py`):
-    # feeding HF-preprocessed `pixel_values` directly avoids PIL vs
-    # `ops.image.resize` divergence.
+    # Feed HF's preprocessed `pixel_values` directly, rather than
+    # re-running the Keras preprocessor, to avoid PIL vs `ops.image.resize`
+    # divergence.
     backbone_inputs = {
         "token_ids": ops.convert_to_tensor(
             image_results["token_ids"].astype("int32")
@@ -348,7 +328,7 @@ def validate_output(keras_model, hf_results):
 
 
 def main(_):
-    if FLAGS.preset not in PRESET_MAP.keys():
+    if FLAGS.preset not in PRESET_MAP:
         raise ValueError(
             f"Invalid preset {FLAGS.preset}. Must be one "
             f"of {','.join(PRESET_MAP.keys())}"
@@ -363,10 +343,7 @@ def main(_):
         f"checkpoint for `{hf_preset}`"
     )
 
-    if multimodal:
-        hf_results = precompute_hf_multimodal_outputs(hf_preset, hf_config)
-    else:
-        hf_results = precompute_hf_text_outputs(hf_preset)
+    hf_results = precompute_hf_outputs(hf_preset, hf_config, multimodal)
     print("\n-> Huggingface model loaded and reference outputs computed")
 
     keras_model = keras_hub.models.MistralCausalLM.from_preset(
