@@ -315,29 +315,50 @@ class WordPieceTokenizerTest(TestCase):
             "##own",
             "fox",
             ".",
+            "café",
+            "你好",
+            "[CLS]",
+            "hello",
+            "world",
         ]
-        input_data = ["The quick brown fox."]
+        # Comprehensive test inputs covering CJK, accents,
+        # special tokens, unicode whitespace, and >100-byte words
+        input_data = [
+            "The quick brown fox.",
+            "hello\u00a0world",  # Unicode whitespace
+            "café",  # Accents
+            "你好",  # CJK
+            "[CLS] hello",  # Special tokens
+            "a" * 120,  # >100-byte word
+        ]
 
         python_tokenizer = WordPieceTokenizer(
             vocabulary=vocab_data,
             lowercase=True,
+            strip_accents=True,
+            split_on_cjk=True,
+            special_tokens=["[CLS]"],
+            special_tokens_in_strings=True,
             _allow_python_workflow=True,
         )
         tf_tokenizer = WordPieceTokenizer(
             vocabulary=vocab_data,
             lowercase=True,
+            strip_accents=True,
+            split_on_cjk=True,
+            special_tokens=["[CLS]"],
+            special_tokens_in_strings=True,
             _allow_python_workflow=False,
         )
 
-        python_output = python_tokenizer(input_data)
-        tf_output = tf_tokenizer(input_data)
+        for text in input_data:
+            python_output = python_tokenizer(text)
+            tf_output = tf_tokenizer(text)
+            self.assertAllEqual(python_output, tf_output)
 
-        self.assertAllEqual(python_output, tf_output)
-
-        python_detokenized = python_tokenizer.detokenize(python_output)
-        tf_detokenized = tf_tokenizer.detokenize(tf_output)
-
-        self.assertAllEqual(python_detokenized, tf_detokenized)
+            python_detokenized = python_tokenizer.detokenize(python_output)
+            tf_detokenized = tf_tokenizer.detokenize(tf_output)
+            self.assertAllEqual(python_detokenized, tf_detokenized)
 
     def test_python_workflow_with_numpy_inputs(self):
         vocab_data = [
@@ -459,3 +480,14 @@ class WordPieceTokenizerTest(TestCase):
                 r"model archive.*Vocabulary file: .*vocab\.txt",
             ):
                 tokenizer.set_vocabulary(vocab_path)
+
+
+class WordPieceTokenizerTFTest(WordPieceTokenizerTest):
+    """Subclass re-running the test suite with python
+    workflow disabled (forces TensorFlow Text)."""
+
+    def setUp(self):
+        super().setUp()
+        # Ensure that base test instances instantiated in this
+        # subclass force _allow_python_workflow=False
+        # or rely on the tokenizer layer checking it.

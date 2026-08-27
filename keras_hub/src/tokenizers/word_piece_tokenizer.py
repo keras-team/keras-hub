@@ -27,15 +27,31 @@ except ImportError:
 
 VOCAB_FILENAME = "vocabulary.txt"
 
-# Matches whitespace and control characters.
-WHITESPACE_REGEX = r"|".join(
+# RE2-compatible whitespace pattern for
+# TensorFlow Text (ASCII-only)
+WHITESPACE_REGEX_TF = r"|".join(
     [
-        r"\s",
+        r"[ \t\n\r\f\v]",
         # Invisible control characters
         r"\p{Cc}",
         r"\p{Cf}",
     ]
 )
+
+# Python-compatible whitespace pattern using the
+# `regex` module's scoped ASCII flag
+WHITESPACE_REGEX_PYTHON = r"|".join(
+    [
+        r"(?a:\s)",
+        # Invisible control characters
+        r"\p{Cc}",
+        r"\p{Cf}",
+    ]
+)
+
+# Keep the original WHITESPACE_REGEX as the TF-compatible
+# one (or alias it) to avoid breaking TF regex compilation:
+WHITESPACE_REGEX = WHITESPACE_REGEX_TF
 
 # Matches punctuation compatible with the original bert implementation.
 PUNCTUATION_REGEX = r"|".join(
@@ -290,7 +306,7 @@ def pretokenize_python(
         # the non-capturing whitespace-only alternative are dropped, just
         # like `tf_text.regex_split(..., keep_delim_regex_pattern=...)`.
         split_regex = re.compile(
-            f"({keep_split_pattern})|(?:{WHITESPACE_REGEX})"
+            f"({keep_split_pattern})|(?:{WHITESPACE_REGEX_PYTHON})"
         )
         words = [piece for piece in split_regex.split(text) if piece]
 
@@ -299,11 +315,15 @@ def pretokenize_python(
             # Do not lowercase special tokens, e.g. `"[CLS]"`.
             special_tokens_regex = re.compile(f"^(?:{special_tokens_pattern})$")
             words = [
-                word if special_tokens_regex.match(word) else word.casefold()
+                word
+                if special_tokens_regex.match(word)
+                else unicodedata.normalize("NFKC", word.casefold())
                 for word in words
             ]
         else:
-            words = [word.casefold() for word in words]
+            words = [
+                unicodedata.normalize("NFKC", word.casefold()) for word in words
+            ]
 
     return words
 
@@ -313,7 +333,7 @@ def word_piece_tokenize_word_python(
     vocabulary_set,
     unknown_token,
     suffix_indicator,
-    max_input_chars_per_word=200,
+    max_bytes_per_word=100,
 ):
     """Greedy longest-match-first WordPiece tokenization of a single word.
 
@@ -322,7 +342,7 @@ def word_piece_tokenize_word_python(
     python tokenization workflow. Returns `[unknown_token]` if `word` cannot
     be represented with the given vocabulary.
     """
-    if len(word) > max_input_chars_per_word:
+    if len(word.encode("utf-8")) > max_bytes_per_word:
         return [unknown_token]
 
     output_tokens = []
@@ -597,9 +617,10 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         # workflow (`_tokenize_python`/`_detokenize_python`), which does not
         # require `tensorflow_text` to be installed.
         self._vocabulary_set = set(self.vocabulary)
-        self._token_to_id_python = {
-            token: i for i, token in enumerate(self.vocabulary)
-        }
+        self._token_to_id_python = {}
+        for i, token in enumerate(self.vocabulary):
+            if token not in self._token_to_id_python:
+                self._token_to_id_python[token] = i
 
         # `tensorflow_text` is an optional dependency. Only build the
         # `tf_text`-backed tokenizer if it is installed; the python
@@ -794,7 +815,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         else:
             tokens = batched_tokens
         if output_is_int and self.sequence_length:
-            return np.asarray(tokens, dtype=self.compute_dtype)
+            return keras.ops.convert_to_tensor(tokens, dtype=self.compute_dtype)
         return tokens
 
     def detokenize(self, inputs):
