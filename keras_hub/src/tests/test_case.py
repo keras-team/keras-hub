@@ -42,6 +42,19 @@ def convert_to_comparible_type(x):
     return x
 
 
+class _LayerWrapper:
+    """Pickleable wrapper to apply a layer to tuple or non-tuple inputs."""
+
+    def __init__(self, layer, is_tuple):
+        self.layer = layer
+        self.is_tuple = is_tuple
+
+    def __call__(self, x):
+        if self.is_tuple:
+            return self.layer(*x)
+        return self.layer(x)
+
+
 class TestCase(tf.test.TestCase, parameterized.TestCase):
     """Base test case class for KerasHub."""
 
@@ -268,6 +281,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         output, _, _ = keras.utils.unpack_x_y_sample_weight(output)
         shape = ops.shape(output[token_id_key])
         self.assertEqual(shape[-1], layer.sequence_length)
+        # Update the sequence length.
         layer.sequence_length = 17
         if isinstance(input_data, tuple):
             output = layer(*input_data)
@@ -280,22 +294,60 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # Grain parity for sequence length update
         self._run_grain_test(layer, input_data, output, unpack=True)
 
-    def _run_grain_test(self, layer, input_data, output, unpack=False):
-        if grain:
-            ds = tf.data.Dataset.from_tensor_slices(input_data)
-            unbatched_data = list(ds)
-            length = len(unbatched_data)
+    def _prepare_grain_source_data(self, input_data):
+        """Convert input data to NumPy and prepare unbatched Grain samples."""
+        numpy_input_data = tree.map_structure(
+            ops.convert_to_numpy,
+            input_data,
+        )
 
-            # Unbatched grain dataset
-            grain_ds = grain.MapDataset.source(unbatched_data)
+        if isinstance(numpy_input_data, tuple):
+            source_data = list(zip(*numpy_input_data))
+        elif isinstance(numpy_input_data, dict):
+            source_data = [
+                dict(zip(numpy_input_data.keys(), values))
+                for values in zip(*numpy_input_data.values())
+            ]
+        else:
+            source_data = list(numpy_input_data)
+
+        return numpy_input_data, source_data
+
+    def _run_grain_test(self, layer, input_data, output, unpack=False):
+        if not grain:
+            self.skipTest(
+                "PyGrain not installed - skipping PyGrain parity checks."
+            )
+
+        # Convert input data to NumPy/Python data.
+        # Keeps the Grain pipeline independent of tf.data
+        numpy_input_data, source_data = self._prepare_grain_source_data(
+            input_data
+        )
+
+        def process_and_compare(source_data, is_batched):
+            """Run the layer with Grain and compare the output with Keras."""
+            grain_ds = grain.MapDataset.source(source_data)
+
+            grain_ds = grain_ds.map(
+                _LayerWrapper(
+                    layer,
+                    is_tuple=isinstance(input_data, tuple),
+                )
+            )
+
             if isinstance(input_data, tuple):
                 grain_ds = grain_ds.map(lambda x: layer(*x))
             else:
                 grain_ds = grain_ds.map(layer)
 
-            # Batch and compare to `output`
-            grain_ds = grain_ds.batch(length)
+            if not is_batched:
+                grain_ds = grain_ds.batch(
+                    len(source_data), batch_fn=lambda samples: samples
+                )
+
             grain_output = grain_ds[0]
+
             if unpack:
                 grain_output, _, _ = keras.utils.unpack_x_y_sample_weight(
                     grain_output
@@ -303,25 +355,38 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
             self.assertAllClose(output, grain_output)
 
-            # Batched grain dataset
-            grain_batched_ds = grain.MapDataset.source([input_data])
-            if isinstance(input_data, tuple):
-                grain_batched_ds = grain_batched_ds.map(lambda x: layer(*x))
-            else:
-                grain_batched_ds = grain_batched_ds.map(layer)
+        # Unbatched grain dataset
+        process_and_compare(source_data, is_batched=False)
 
-            grain_batched_output = grain_batched_ds[0]
-            if unpack:
-                grain_batched_output, _, _ = keras.utils.unpack_x_y_sample_weight(
-                    grain_batched_output
-                )
+        # Batched grain dataset
+        process_and_compare([numpy_input_data], is_batched=True)
 
-            self.assertAllClose(output, grain_batched_output)
-        else:
-            print(
-                "\n[INFO] PyGrain not installed - "
-                "skipping PyGrain parity checks.\n"
+        # Multiprocessing smoke test.
+        self._run_grain_multiprocessing_test(layer, input_data, source_data)
+
+    def _run_grain_multiprocessing_test(self, layer, input_data, source_data):
+        """Smoke test Grain layer mapping with multiple worker processes."""
+        if not grain:
+            self.skipTest(
+                "PyGrain not installed - skipping PyGrain multiprocessing test."
             )
+
+        loader = grain.DataLoader(
+            data_source=source_data,
+            sampler=grain.SequentialSampler(
+                num_records=len(source_data),
+                num_epochs=1,
+            ),
+            operations=[
+                grain.MapOperation(
+                    _LayerWrapper(layer, isinstance(input_data, tuple))
+                )
+            ],
+            worker_count=2,
+        )
+
+        for _ in loader:
+            pass
 
     def run_serialization_test(self, instance):
         """Check idempotency of serialize/deserialize.
