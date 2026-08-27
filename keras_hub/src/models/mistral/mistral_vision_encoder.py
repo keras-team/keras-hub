@@ -127,8 +127,8 @@ def compute_image_placeholder_indices(token_ids, image_token_index):
     return np.nonzero(flat_token_ids == image_token_index)[0].astype("int32")
 
 
-def compute_pixtral_resize_size(height, width, longest_edge, patch_size):
-    """Computes the HF `PixtralImageProcessor` resize target for one image.
+def compute_resize_size(height, width, longest_edge, patch_size):
+    """Computes the resize target for one image.
 
     Scales `(height, width)` down (preserving aspect ratio) so its longest
     edge is at most `longest_edge`, then rounds each dimension up to the
@@ -215,10 +215,10 @@ class Mistral3ImageTextEmbeddingMerger(keras.layers.Layer):
 
 class Mistral3VisionRotaryEmbedding(keras.layers.Layer):
     """
-    Pixtral's 2D rotary positional embedding.
+    2D rotary positional embedding for the Mistral3 vision encoder.
 
-    Unlike the text Mistral RoPE, Pixtral constructs frequencies from
-    2D patch coordinates. The first half corresponds to height and the
+    Unlike the text Mistral RoPE, this constructs frequencies from 2D
+    patch coordinates. The first half corresponds to height and the
     second half to width.
     """
 
@@ -347,7 +347,7 @@ def _apply_rotary_pos_emb(q, k, cos, sin):
 
 
 class Mistral3VisionAttention(keras.layers.Layer):
-    """Multi-head self-attention used by Pixtral.
+    """Multi-head self-attention used by the Mistral3 vision encoder.
 
     Args:
         hidden_dim: int. The size of the attention layer's input/output.
@@ -379,28 +379,34 @@ class Mistral3VisionAttention(keras.layers.Layer):
             hidden_dim,
             use_bias=False,
             kernel_initializer=_mistral_kernel_initializer(),
+            dtype=self.dtype_policy,
             name="q_proj",
         )
         self.k_proj = keras.layers.Dense(
             hidden_dim,
             use_bias=False,
             kernel_initializer=_mistral_kernel_initializer(),
+            dtype=self.dtype_policy,
             name="k_proj",
         )
         self.v_proj = keras.layers.Dense(
             hidden_dim,
             use_bias=False,
             kernel_initializer=_mistral_kernel_initializer(),
+            dtype=self.dtype_policy,
             name="v_proj",
         )
         self.o_proj = keras.layers.Dense(
             hidden_dim,
             use_bias=False,
             kernel_initializer=_mistral_kernel_initializer(),
+            dtype=self.dtype_policy,
             name="o_proj",
         )
 
-        self.attention_dropout = keras.layers.Dropout(dropout)
+        self.attention_dropout = keras.layers.Dropout(
+            dropout, dtype=self.dtype_policy
+        )
 
     def _reshape_to_heads(self, x):
         batch_size = ops.shape(x)[0]
@@ -499,7 +505,7 @@ class Mistral3VisionAttention(keras.layers.Layer):
 
 
 class Mistral3VisionMLP(keras.layers.Layer):
-    """SwiGLU MLP used by Pixtral.
+    """SwiGLU MLP used by the Mistral3 vision encoder.
 
     Args:
         hidden_dim: int. The size of the MLP's input/output.
@@ -525,6 +531,7 @@ class Mistral3VisionMLP(keras.layers.Layer):
             intermediate_dim,
             use_bias=False,
             kernel_initializer=_mistral_kernel_initializer(),
+            dtype=self.dtype_policy,
             name="gate_proj",
         )
 
@@ -532,6 +539,7 @@ class Mistral3VisionMLP(keras.layers.Layer):
             intermediate_dim,
             use_bias=False,
             kernel_initializer=_mistral_kernel_initializer(),
+            dtype=self.dtype_policy,
             name="up_proj",
         )
 
@@ -539,6 +547,7 @@ class Mistral3VisionMLP(keras.layers.Layer):
             hidden_dim,
             use_bias=False,
             kernel_initializer=_mistral_kernel_initializer(),
+            dtype=self.dtype_policy,
             name="down_proj",
         )
 
@@ -563,7 +572,7 @@ class Mistral3VisionMLP(keras.layers.Layer):
 
 
 class Mistral3VisionEncoderLayer(keras.layers.Layer):
-    """One Pixtral transformer encoder layer.
+    """One Mistral3 vision transformer encoder layer.
 
     Args:
         hidden_dim: int. The size of the transformer hidden state.
@@ -602,6 +611,7 @@ class Mistral3VisionEncoderLayer(keras.layers.Layer):
 
         self.attention_norm = keras.layers.RMSNormalization(
             epsilon=layer_norm_epsilon,
+            dtype=self.dtype_policy,
             name="attention_norm",
         )
 
@@ -610,11 +620,13 @@ class Mistral3VisionEncoderLayer(keras.layers.Layer):
             num_heads=num_heads,
             head_dim=head_dim,
             dropout=dropout,
+            dtype=self.dtype_policy,
             name="attention",
         )
 
         self.ffn_norm = keras.layers.RMSNormalization(
             epsilon=layer_norm_epsilon,
+            dtype=self.dtype_policy,
             name="ffn_norm",
         )
 
@@ -622,6 +634,7 @@ class Mistral3VisionEncoderLayer(keras.layers.Layer):
             hidden_dim=hidden_dim,
             intermediate_dim=intermediate_dim,
             activation=activation,
+            dtype=self.dtype_policy,
             name="feed_forward",
         )
 
@@ -673,10 +686,10 @@ class Mistral3VisionEncoderLayer(keras.layers.Layer):
 @keras_hub_export("keras_hub.models.Mistral3VisionEncoder")
 class Mistral3VisionEncoder(keras.Model):
     """
-    Pixtral vision encoder used by Mistral3.
+    Vision encoder used by Mistral3.
 
-    This is not exposed as a standalone Pixtral model. It is the vision
-    tower consumed by the Mistral3 multimodal architecture.
+    This is not exposed as a standalone model. It is the vision tower
+    consumed by the Mistral3 multimodal architecture.
 
     `pixel_values` follows the Hugging Face Pixtral layout:
     `(num_images, num_channels, height, width)`.
@@ -726,11 +739,13 @@ class Mistral3VisionEncoder(keras.Model):
             use_bias=False,
             data_format="channels_last",
             kernel_initializer=_mistral_kernel_initializer(),
+            dtype=self.dtype_policy,
             name="patch_conv",
         )
 
         self.ln_pre = keras.layers.RMSNormalization(
             epsilon=layer_norm_epsilon,
+            dtype=self.dtype_policy,
             name="ln_pre",
         )
 
@@ -739,6 +754,7 @@ class Mistral3VisionEncoder(keras.Model):
             patch_size=patch_size,
             head_dim=head_dim,
             rope_theta=rope_theta,
+            dtype=self.dtype_policy,
             name="patch_positional_embedding",
         )
 
@@ -754,6 +770,7 @@ class Mistral3VisionEncoder(keras.Model):
                     layer_norm_epsilon=layer_norm_epsilon,
                     activation=activation,
                     dropout=attention_dropout,
+                    dtype=self.dtype_policy,
                     name=f"transformer_layer_{i}",
                 )
             )
@@ -1038,7 +1055,7 @@ class Mistral3VisionEncoder(keras.Model):
 
 
 class Mistral3PatchMerger(keras.layers.Layer):
-    """Spatially merge Pixtral patches for Mistral3.
+    """Spatially merge vision patches for Mistral3.
 
     Every 2x2 group of vision patches is concatenated along the feature
     dimension and projected from hidden_dim * 4 back to hidden_dim.
@@ -1068,6 +1085,7 @@ class Mistral3PatchMerger(keras.layers.Layer):
             hidden_dim,
             use_bias=False,
             kernel_initializer=_mistral_kernel_initializer(),
+            dtype=self.dtype_policy,
             name="merging_layer",
         )
 
@@ -1314,6 +1332,7 @@ class Mistral3MultiModalProjector(keras.layers.Layer):
 
         self.norm = keras.layers.RMSNormalization(
             epsilon=layer_norm_epsilon,
+            dtype=self.dtype_policy,
             name="norm",
         )
 
@@ -1322,6 +1341,7 @@ class Mistral3MultiModalProjector(keras.layers.Layer):
             spatial_merge_size=spatial_merge_size,
             patch_size=patch_size,
             image_size=image_size,
+            dtype=self.dtype_policy,
             name="patch_merger",
         )
 
@@ -1329,6 +1349,7 @@ class Mistral3MultiModalProjector(keras.layers.Layer):
             text_hidden_dim,
             use_bias=multimodal_projector_bias,
             kernel_initializer=_mistral_kernel_initializer(),
+            dtype=self.dtype_policy,
             name="linear_1",
         )
 
@@ -1340,6 +1361,7 @@ class Mistral3MultiModalProjector(keras.layers.Layer):
             text_hidden_dim,
             use_bias=multimodal_projector_bias,
             kernel_initializer=_mistral_kernel_initializer(),
+            dtype=self.dtype_policy,
             name="linear_2",
         )
 
