@@ -168,20 +168,24 @@ def build_multimodal_inputs(hf_preset, hf_config, image):
     }
 
 
+def run_hf_text_forward(hf_model, hf_preset):
+    hf_inputs = build_text_inputs(hf_preset, TEXT_PROMPT)
+    with torch.no_grad():
+        hf_outputs = hf_model(**hf_inputs)
+    return {
+        "token_ids": hf_inputs["input_ids"].detach().cpu().numpy(),
+        "logits": hf_outputs.logits.detach().cpu().numpy(),
+    }
+
+
 def precompute_hf_text_outputs(hf_preset):
     hf_model = MistralForCausalLM.from_pretrained(
         hf_preset, device_map="cpu", torch_dtype=torch.float32
     )
     hf_model.eval()
-    hf_inputs = build_text_inputs(hf_preset, TEXT_PROMPT)
-    with torch.no_grad():
-        hf_outputs = hf_model(**hf_inputs)
     hf_results = {
         "multimodal": False,
-        "text": {
-            "token_ids": hf_inputs["input_ids"].detach().cpu().numpy(),
-            "logits": hf_outputs.logits.detach().cpu().numpy(),
-        },
+        "text": run_hf_text_forward(hf_model, hf_preset),
         "num_parameters": hf_model.num_parameters(),
     }
     del hf_model
@@ -195,13 +199,7 @@ def precompute_hf_multimodal_outputs(hf_preset, hf_config):
     )
     hf_model.eval()
 
-    hf_text_inputs = build_text_inputs(hf_preset, TEXT_PROMPT)
-    with torch.no_grad():
-        hf_text_outputs = hf_model(**hf_text_inputs)
-    text_results = {
-        "token_ids": hf_text_inputs["input_ids"].detach().cpu().numpy(),
-        "logits": hf_text_outputs.logits.detach().cpu().numpy(),
-    }
+    text_results = run_hf_text_forward(hf_model, hf_preset)
 
     image = load_reference_image()
     inputs = build_multimodal_inputs(hf_preset, hf_config, image)
@@ -235,6 +233,7 @@ def check_param_count(keras_model, hf_results):
     print(f"\nKerasHub params: {keras_params:,}")
     print(f"HF params:       {hf_params:,}")
     np.testing.assert_equal(keras_params, hf_params)
+    print("✅ Parameter count matches.")
 
 
 def test_numerics(label, keras_logits, hf_logits):
@@ -264,6 +263,24 @@ def test_numerics(label, keras_logits, hf_logits):
         )
 
 
+def run_kh_forward(backbone, backbone_inputs):
+    with torch.no_grad():
+        hidden_states = backbone(backbone_inputs)
+        return backbone.token_embedding(hidden_states, reverse=True)
+
+
+def test_token_ids(label, preprocessor, prompt, hf_token_ids, image=None):
+    x = {"prompts": [prompt]}
+    if image is not None:
+        x["images"] = [[image]]
+    keras_inputs = preprocessor.generate_preprocess(
+        x, sequence_length=hf_token_ids.shape[1]
+    )
+    keras_token_ids = ops.convert_to_numpy(keras_inputs["token_ids"])
+    np.testing.assert_array_equal(keras_token_ids, hf_token_ids)
+    print(f"✅ [{label}] Token IDs match.")
+
+
 def validate_output(keras_model, hf_results):
     check_param_count(keras_model, hf_results)
     backbone = keras_model.backbone
@@ -271,20 +288,20 @@ def validate_output(keras_model, hf_results):
     text_results = hf_results["text"]
 
     # === Text ===
-    hf_text_token_ids = text_results["token_ids"]
-    if not preprocessor.built:
-        preprocessor.build(None)
-    tokenized = preprocessor.tokenizer([TEXT_PROMPT])
-    keras_text_token_ids, _ = preprocessor.packer(
-        tokenized,
-        sequence_length=hf_text_token_ids.shape[1],
-        add_end_value=False,
-    )
-    keras_text_token_ids = ops.convert_to_numpy(keras_text_token_ids)
-    np.testing.assert_array_equal(keras_text_token_ids, hf_text_token_ids)
-    print("-> [text] Token IDs match.")
+    test_token_ids("text", preprocessor, TEXT_PROMPT, text_results["token_ids"])
 
-    token_ids = ops.convert_to_tensor(hf_text_token_ids.astype("int32"))
+    if not hf_results["multimodal"]:
+        return
+    image_results = hf_results["image"]
+    test_token_ids(
+        "image",
+        preprocessor,
+        image_results["prompt"],
+        image_results["token_ids"],
+        image=image_results["image"],
+    )
+
+    token_ids = ops.convert_to_tensor(text_results["token_ids"].astype("int32"))
     backbone_inputs = {
         "token_ids": token_ids,
         "padding_mask": ops.ones_like(token_ids),
@@ -302,27 +319,10 @@ def validate_output(keras_model, hf_results):
                 "placeholder_indices": ops.zeros((1, 0), dtype="int32"),
             }
         )
-    with torch.no_grad():
-        keras_hidden = backbone(backbone_inputs)
-        keras_logits = backbone.token_embedding(keras_hidden, reverse=True)
-
+    keras_logits = run_kh_forward(backbone, backbone_inputs)
     test_numerics("text", keras_logits, text_results["logits"])
 
     # === Image ===
-    if not hf_results["multimodal"]:
-        return
-    image_results = hf_results["image"]
-    hf_image_token_ids = image_results["token_ids"]
-    keras_inputs = preprocessor.generate_preprocess(
-        {
-            "prompts": [image_results["prompt"]],
-            "images": [[image_results["image"]]],
-        },
-        sequence_length=hf_image_token_ids.shape[1],
-    )
-    keras_image_token_ids = ops.convert_to_numpy(keras_inputs["token_ids"])
-    np.testing.assert_array_equal(keras_image_token_ids, hf_image_token_ids)
-    print("-> [image] Token IDs match.")
 
     # Build backbone inputs from HF's preprocessed data (mirrors
     # `_build_preprocessor_free_inputs` in `convert_gemma4_hf_checkpoints.py`):
@@ -343,10 +343,7 @@ def validate_output(keras_model, hf_results):
             image_results["placeholder_indices"].astype("int32")
         ),
     }
-    with torch.no_grad():
-        keras_hidden = backbone(backbone_inputs)
-        keras_logits = backbone.token_embedding(keras_hidden, reverse=True)
-
+    keras_logits = run_kh_forward(backbone, backbone_inputs)
     test_numerics("image", keras_logits, image_results["logits"])
 
 
@@ -378,7 +375,7 @@ def main(_):
     print("\n-> KerasHub model loaded")
 
     validate_output(keras_model, hf_results)
-    print("\n-> Tests passed!")
+    print("\n✅ Tests passed!")
 
     del keras_model
     gc.collect()
@@ -386,7 +383,7 @@ def main(_):
         f"hf://{hf_preset}", dtype="bfloat16"
     )
     keras_model.save_to_preset(f"./{preset}")
-    print("\n-> Saved the model preset in bfloat16")
+    print("\n✅ Saved the model preset in bfloat16")
 
 
 if __name__ == "__main__":

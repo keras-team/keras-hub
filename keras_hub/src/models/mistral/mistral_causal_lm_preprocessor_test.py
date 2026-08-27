@@ -6,9 +6,6 @@ import pytest
 from keras_hub.src.models.mistral.mistral_causal_lm_preprocessor import (
     MistralCausalLMPreprocessor,
 )
-from keras_hub.src.models.mistral.mistral_causal_lm_preprocessor import (
-    _expand_image_placeholders,
-)
 from keras_hub.src.models.mistral.mistral_image_converter import (
     Mistral3ImageConverter,
 )
@@ -66,6 +63,26 @@ class MistralCausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [1, 3, 8, 4, 6, 0, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
 
+    def test_generate_preprocess_dict_input(self):
+        # A text-only preprocessor also accepts the multimodal-style dict
+        # form, so callers don't need to special-case text-only presets.
+        preprocessor = MistralCausalLMPreprocessor(**self.init_kwargs)
+        x = preprocessor.generate_preprocess({"prompts": "the quick brown fox"})
+        self.assertAllEqual(x["token_ids"], [1, 3, 8, 4, 6, 0, 0, 0])
+        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
+
+    def test_generate_preprocess_dict_input_with_images_raises(self):
+        # `@preprocessing_function` eagerly converts every dict value to a
+        # tensor, so the placeholder image must be an actual array (`None`
+        # can't be staged by every backend, e.g. JAX) even though the
+        # `ValueError` fires before its content is ever used.
+        preprocessor = MistralCausalLMPreprocessor(**self.init_kwargs)
+        image = np.zeros((4, 4, 3), dtype="float32")
+        with self.assertRaises(ValueError):
+            preprocessor.generate_preprocess(
+                {"prompts": "the quick brown fox", "images": [image]}
+            )
+
     def test_generate_postprocess(self):
         input_data = {
             "token_ids": [1, 3, 8, 4, 6, 0, 0, 0],
@@ -108,53 +125,84 @@ class MistralCausalLMPreprocessorTest(TestCase):
         kwargs.setdefault("spatial_merge_size", 1)
         return MistralCausalLMPreprocessor(**kwargs)
 
-    def test_expand_image_placeholders_single_image(self):
-        # An 8x8 image with `patch_size=4`, `spatial_merge_size=1`: a 2x2
-        # grid of placeholder tokens, i.e. 2 rows of 2 `[IMG]` tokens each,
-        # each row terminated by `[IMG_BREAK]` except the final row, whose
-        # trailing break becomes `[IMG_END]`.
-        expanded = _expand_image_placeholders(
-            "look [IMG] please",
-            image_sizes=[(8, 8)],
-            patch_size=4,
-            spatial_merge_size=1,
-            image_token="[IMG]",
-            image_break_token="[IMG_BREAK]",
-            image_end_token="[IMG_END]",
-        )
-        expected_block = (
-            "[IMG][IMG][IMG_BREAK]"  # Row 1.
-            "[IMG][IMG][IMG_END]"  # Row 2, break swapped for end.
-        )
-        self.assertEqual(expanded, f"look {expected_block} please")
-        # Sanity check the counts.
-        self.assertEqual(expanded.count("[IMG]"), 4)
-        self.assertEqual(expanded.count("[IMG_BREAK]"), 1)
-        self.assertTrue(expanded.rstrip("please ").endswith("[IMG_END]"))
+    def test_multimodal_serialization(self):
+        self.run_serialization_test(self._multimodal_preprocessor())
 
-    def test_expand_image_placeholders_count_mismatch_raises(self):
+    def test_compute_image_block_ids(self):
+        # An 8x8 image with `patch_size=4`, `spatial_merge_size=1`: a 2x2
+        # grid of placeholder tokens, i.e. 2 rows of 2 tokens each, each row
+        # terminated by the break token, except the final row, whose
+        # trailing break becomes the end token.
+        preprocessor = self._multimodal_preprocessor()
+        placeholder_id = preprocessor.tokenizer.image_placeholder_token_id
+        break_id = preprocessor.tokenizer.image_break_token_id
+        end_id = preprocessor.tokenizer.image_end_token_id
+
+        block = preprocessor._compute_image_block_ids(height=8, width=8)
+        self.assertEqual(
+            block,
+            [
+                placeholder_id,
+                placeholder_id,
+                break_id,
+                placeholder_id,
+                placeholder_id,
+                end_id,
+            ],
+        )
+
+        # 8x12 -> 2 rows of 3. 12x8 -> 3 rows of 2.
+        block = preprocessor._compute_image_block_ids(height=8, width=12)
+        self.assertEqual(
+            block,
+            [placeholder_id] * 3 + [break_id] + [placeholder_id] * 3 + [end_id],
+        )
+        block = preprocessor._compute_image_block_ids(height=12, width=8)
+        self.assertEqual(
+            block,
+            [placeholder_id, placeholder_id, break_id] * 2
+            + [placeholder_id, placeholder_id, end_id],
+        )
+
+    def test_tokenize_with_image_blocks_count_mismatch_raises(self):
+        preprocessor = self._multimodal_preprocessor()
         with self.assertRaises(ValueError):
-            _expand_image_placeholders(
-                "one [IMG] two [IMG]",
-                image_sizes=[(8, 8)],
-                patch_size=4,
-                spatial_merge_size=1,
-                image_token="[IMG]",
-                image_break_token="[IMG_BREAK]",
-                image_end_token="[IMG_END]",
+            preprocessor._tokenize_with_image_blocks(
+                "one [IMG] two [IMG]", image_sizes=[(8, 8)]
             )
 
-    def test_expand_image_placeholders_no_images(self):
-        expanded = _expand_image_placeholders(
-            "just text, no images",
-            image_sizes=[],
-            patch_size=4,
-            spatial_merge_size=1,
-            image_token="[IMG]",
-            image_break_token="[IMG_BREAK]",
-            image_end_token="[IMG_END]",
+    def _tokenize_to_list(self, preprocessor, text):
+        ids = preprocessor.tokenizer(text)
+        return ids.numpy().tolist() if hasattr(ids, "numpy") else list(ids)
+
+    def test_tokenize_with_image_blocks_no_images(self):
+        preprocessor = self._multimodal_preprocessor()
+        token_ids = preprocessor._tokenize_with_image_blocks(
+            "just text, no images", image_sizes=[]
         )
-        self.assertEqual(expanded, "just text, no images")
+        self.assertEqual(
+            token_ids,
+            self._tokenize_to_list(preprocessor, "just text, no images"),
+        )
+
+    def test_tokenize_with_image_blocks_matches_whole_string_boundaries(self):
+        # `_tokenize_with_image_blocks` must tokenize the raw prompt as one
+        # whole string, then splice in the precomputed image block -- not
+        # tokenize text fragments split around the placeholder
+        # independently, which would not reproduce SentencePiece's
+        # whole-string boundary/whitespace handling.
+        preprocessor = self._multimodal_preprocessor()
+        prompt = "look [IMG] here"
+        token_ids = preprocessor._tokenize_with_image_blocks(
+            prompt, image_sizes=[(8, 8)]
+        )
+
+        placeholder_id = preprocessor.tokenizer.image_placeholder_token_id
+        base_ids = self._tokenize_to_list(preprocessor, prompt)
+        expected_block = preprocessor._compute_image_block_ids(8, 8)
+        idx = base_ids.index(placeholder_id)
+        expected = base_ids[:idx] + expected_block + base_ids[idx + 1 :]
+        self.assertEqual(token_ids, expected)
 
     def test_build_multimodal_inputs_ordering_and_expansion(self):
         preprocessor = self._multimodal_preprocessor()
@@ -170,7 +218,7 @@ class MistralCausalLMPreprocessorTest(TestCase):
         prompts = ["look [IMG] here", "two [IMG] and [IMG] here"]
         images_per_prompt = [[image_0], [image_1, image_2]]
 
-        expanded, pixel_values, image_sizes = (
+        tokenized, pixel_values, image_sizes = (
             preprocessor._build_multimodal_inputs(prompts, images_per_prompt)
         )
         pixel_values = np.array(pixel_values)
@@ -200,15 +248,20 @@ class MistralCausalLMPreprocessorTest(TestCase):
         )
 
         # === Expansion ===
-        block_a = "[IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]"
-        self.assertEqual(expanded[0], f"look {block_a} here")
-
-        # Image 1: 8x12 -> 2 rows of 3. Image 2: 12x8 -> 3 rows of 2.
-        block_b1 = "[IMG][IMG][IMG][IMG_BREAK][IMG][IMG][IMG][IMG_END]"
-        block_b2 = (
-            "[IMG][IMG][IMG_BREAK][IMG][IMG][IMG_BREAK][IMG][IMG][IMG_END]"
+        # Boundary-correctness of `_tokenize_with_image_blocks` itself is
+        # covered by `test_tokenize_with_image_blocks_matches_whole_string_
+        # boundaries`; this only needs to verify each prompt got tokenized
+        # with the right per-image block, in order.
+        self.assertEqual(
+            tokenized[0],
+            preprocessor._tokenize_with_image_blocks(prompts[0], [(8, 8)]),
         )
-        self.assertEqual(expanded[1], f"two {block_b1} and {block_b2} here")
+        self.assertEqual(
+            tokenized[1],
+            preprocessor._tokenize_with_image_blocks(
+                prompts[1], [(8, 12), (12, 8)]
+            ),
+        )
 
     def test_build_multimodal_inputs_zero_images_returns_none(self):
         preprocessor = self._multimodal_preprocessor()
