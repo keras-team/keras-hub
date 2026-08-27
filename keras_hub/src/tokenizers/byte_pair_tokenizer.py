@@ -184,7 +184,7 @@ class BytePairTokenizerCache(_base_class):
 
     def _get_key(self, keys):
         """Get the hash key for given inputs."""
-        # `tf.fingerprint` converts token to a array of uint8 of length 8, we
+        # `tf.fingerprint` converts token to an array of uint8 of length 8, we
         # need to convert it to a uint64.
         return tf.squeeze(
             tf.matmul(

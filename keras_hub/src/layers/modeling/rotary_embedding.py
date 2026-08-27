@@ -164,7 +164,7 @@ class RotaryEmbedding(keras.layers.Layer):
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
         x1, x2 = ops.split(tensor, 2, axis=-1)
-        # Avoid `ops.concatenate` for now, to avoid a obscure bug with XLA
+        # Avoid `ops.concatenate` for now, to avoid an obscure bug with XLA
         # compilation on jax. We should be able to remove this once the
         # following PR is in all jax releases we care about:
         # https://github.com/openxla/xla/pull/7875

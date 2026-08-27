@@ -358,8 +358,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                             val_list[i] = val_list[i].decode("utf-8")
                         elif not isinstance(val_list[i], str):
                             raise ValueError(
-                                "If a array is provided as input, all elements "
-                                f"must be strings. Received: {inputs}"
+                                "If an array is provided as input, all "
+                                f"elements must be strings. Received: {inputs}"
                             )
                     return val_list, True
                 else:

@@ -16,7 +16,7 @@ class DepthEstimatorPreprocessor(Preprocessor):
 
     All `DepthEstimatorPreprocessor` take inputs three inputs, `x`, `y`, and
     `sample_weight`. `x`, the first input, should always be included. It can
-    be a image or batch of images. See examples below. `y` and `sample_weight`
+    be an image or batch of images. See examples below. `y` and `sample_weight`
     are optional inputs that will be passed through unaltered. Usually, `y` will
     be the depths, and `sample_weight` will not be provided.
 
