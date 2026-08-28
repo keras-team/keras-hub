@@ -1,3 +1,5 @@
+import pytest
+
 from keras_hub.src.models.mistral3.mistral3_tokenizer import Mistral3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 
@@ -66,3 +68,13 @@ class Mistral3TokenizerTest(TestCase):
             input_data=["the tin", "in the"],
             expected_output=[[265, 40, 124, 266], [266, 40, 265]],
         )
+
+    @pytest.mark.kaggle_key_required
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in Mistral3Tokenizer.presets:
+            self.run_preset_test(
+                cls=Mistral3Tokenizer,
+                preset=preset,
+                input_data=["The quick brown fox jumped."],
+            )

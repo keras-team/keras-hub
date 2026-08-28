@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from keras import ops
 
 from keras_hub.src.models.mistral3.mistral3_backbone import Mistral3Backbone
@@ -70,9 +71,7 @@ class Mistral3BackboneTest(TestCase):
                 np.random.rand(2, 3, 8, 8).astype("float32")
             ),
             "image_sizes": ops.array([[8, 8], [8, 8]], dtype="int32"),
-            "placeholder_indices": ops.reshape(
-                ops.convert_to_tensor(placeholder_indices), (2, 4)
-            ),
+            "placeholder_indices": ops.convert_to_tensor(placeholder_indices),
         }
 
     def test_backbone_basics(self):
@@ -96,3 +95,62 @@ class Mistral3BackboneTest(TestCase):
             # its own vision-encoder-bearing backbone.
             run_quantization_check=False,
         )
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=Mistral3Backbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    def test_variable_images_per_prompt(self):
+        # One prompt with one image, one with two.
+        token_ids = ops.array(
+            [
+                [self.image_token_index] * 4 + [3, 0, 0, 0, 0],
+                [self.image_token_index] * 8 + [4],
+            ],
+            dtype="int32",
+        )
+        placeholder_indices = compute_image_placeholder_indices(
+            token_ids, image_token_index=self.image_token_index
+        )
+        input_data = {
+            "token_ids": token_ids,
+            "padding_mask": ops.ones((2, 9), dtype="int32"),
+            "pixel_values": ops.convert_to_tensor(
+                np.random.rand(3, 3, 8, 8).astype("float32")
+            ),
+            "image_sizes": ops.array([[8, 8], [8, 8], [8, 8]], dtype="int32"),
+            "placeholder_indices": ops.convert_to_tensor(placeholder_indices),
+        }
+        model = Mistral3Backbone(**self.init_kwargs)
+        output = model(input_data)
+        self.assertEqual(
+            ops.shape(output),
+            (2, 9, self.text_init_kwargs["hidden_dim"]),
+        )
+
+    def test_num_parameters(self):
+        model = Mistral3Backbone(**self.init_kwargs)
+        self.assertEqual(model.count_params(), 4016)
+        self.assertEqual(len(model.layers), 11)
+
+    @pytest.mark.kaggle_key_required
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        token_ids = ops.array([[1, 1824, 349, 524, 11234, 28804]])
+        input_data = {
+            "token_ids": token_ids,
+            "padding_mask": ops.ones_like(token_ids),
+            "pixel_values": ops.zeros((0, 3, 14, 14), dtype="float32"),
+            "image_sizes": ops.zeros((0, 2), dtype="int32"),
+            "placeholder_indices": ops.zeros((1, 0), dtype="int32"),
+        }
+        for preset in Mistral3Backbone.presets:
+            self.run_preset_test(
+                cls=Mistral3Backbone,
+                preset=preset,
+                input_data=input_data,
+            )
