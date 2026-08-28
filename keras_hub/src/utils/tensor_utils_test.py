@@ -117,17 +117,16 @@ class ConvertHelpers(TestCase):
         test(self, ([1, 2, 3], ["foo", "bar"], "foo"))
 
     def test_preprocessing_function_skips_output_conversion_in_grain(self):
+        import grain.python as grain
+
         @preprocessing_function
         def test(self, inputs):
             return [[1, 2, 3], [4, 5]]
 
         inputs = [[10, 20], [30]]
-
-        with patch(
-            "keras_hub.src.utils.tensor_utils.in_grain_data_pipeline",
-            return_value=True,
-        ):
-            outputs = test(self, inputs)
+        ds = grain.MapDataset.source([inputs])
+        ds = ds.map(lambda x: test(self, x))
+        outputs = next(iter(ds))
 
         self.assertIsInstance(outputs, list)
         self.assertIsInstance(outputs[0], list)
