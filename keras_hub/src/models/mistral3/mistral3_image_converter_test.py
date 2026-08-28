@@ -17,6 +17,16 @@ class Mistral3ImageConverterTest(TestCase):
         }
         self.converter = Mistral3ImageConverter(**self.init_kwargs)
 
+    def test_image_converter_basics(self):
+        image_a = np.full((8, 8, 3), 255.0, dtype="float32")
+        image_b = np.zeros((8, 8, 3), dtype="float32")
+        input_data = np.stack([image_a, image_b], axis=0)
+        self.run_preprocessing_layer_test(
+            cls=Mistral3ImageConverter,
+            init_kwargs=self.init_kwargs,
+            input_data=input_data,
+        )
+
     def test_single_image_already_patch_multiple(self):
         image = np.zeros((8, 8, 3), dtype="float32")
         pixel_values, image_sizes = self.converter([image])
@@ -57,9 +67,6 @@ class Mistral3ImageConverterTest(TestCase):
         std = np.array([0.26862954, 0.26130258, 0.27577711], dtype="float32")
         expected_pixel = (255.0 / 255.0 - mean) / std
         self.assertAllClose(pixel_values[0, :, 0, 0], expected_pixel, atol=1e-4)
-
-    def test_serialization(self):
-        self.run_serialization_test(self.converter)
 
     def test_spatial_merge_size_widens_rounding_multiple(self):
         converter = Mistral3ImageConverter(

@@ -43,6 +43,18 @@ class Mistral3ImageFeatureExtractor(keras.layers.Layer):
         self.multimodal_projector = multimodal_projector
         self.vision_feature_layer = vision_feature_layer
 
+    def build(self, input_shape):
+        # `vision_encoder` is a `keras.Model`, so it must build through its
+        # own `__call__` rather than an external `.build()`.
+        merge_size = self.multimodal_projector.spatial_merge_size
+        patch_size = self.multimodal_projector.patch_size
+        num_channels = self.vision_encoder.num_channels
+        side = patch_size * merge_size
+        dummy_pixel_values = ops.zeros((1, num_channels, side, side))
+        dummy_image_sizes = ops.convert_to_tensor([[side, side]], dtype="int32")
+        self.call(dummy_pixel_values, dummy_image_sizes)
+        self.built = True
+
     def call(self, pixel_values, image_sizes, training=None):
         image_features = self.vision_encoder(
             pixel_values,
@@ -72,13 +84,10 @@ class Mistral3ImageFeatureExtractor(keras.layers.Layer):
 
 
 def compute_image_placeholder_indices(token_ids, image_token_index):
-    """Compute flat image placeholder indices for `token_ids` on the host.
+    """Compute per-example image placeholder positions for `token_ids`.
 
-    Finding placeholder positions is a data-dependent (`nonzero`-style) op,
-    incompatible with `jax.jit` tracing. Run this eagerly with NumPy in
-    preprocessing, before `token_ids` reaches the model; the result is
-    passed in as a plain tensor input, so the model itself only needs a
-    static-shape `scatter_update`.
+    Runs eagerly with NumPy in preprocessing, before `token_ids` reaches
+    the model.
 
     Args:
         token_ids: int array `(batch, seq_length)`.
@@ -86,12 +95,24 @@ def compute_image_placeholder_indices(token_ids, image_token_index):
             positions.
 
     Returns:
-        int32 NumPy array `(num_placeholders,)` of flat indices into the
-        flattened `(batch * seq_length,)` sequence.
+        int32 NumPy array `(batch, max_placeholders)`: row `i` holds
+        example `i`'s own placeholder positions (local to its own
+        sequence), left-to-right, padded with `-1` up to the batch's max
+        count.
     """
     token_ids = np.asarray(token_ids)
-    flat_token_ids = np.reshape(token_ids, (-1,))
-    return np.nonzero(flat_token_ids == image_token_index)[0].astype("int32")
+    if token_ids.ndim == 1:
+        token_ids = token_ids[None, :]
+    rows = [
+        np.nonzero(row == image_token_index)[0].astype("int32")
+        for row in token_ids
+    ]
+    max_count = max((len(row) for row in rows), default=0)
+    max_count = max(max_count, 1)
+    padded = np.full((len(rows), max_count), -1, dtype="int32")
+    for i, row in enumerate(rows):
+        padded[i, : len(row)] = row
+    return padded
 
 
 def compute_resize_size(height, width, longest_edge, patch_size):
@@ -128,43 +149,70 @@ class Mistral3ImageTextEmbeddingMerger(keras.layers.Layer):
     concatenated, projected image features, matching HF's
     `masked_scatter` fusion in `Mistral3Model`.
 
-    `placeholder_indices` (the flat positions of image placeholder tokens)
-    must be precomputed outside this layer — see
+    `placeholder_indices` (each example's own local placeholder positions,
+    padded with `-1`) must be precomputed outside this layer — see
     `compute_image_placeholder_indices` — since deriving them here via a
     `nonzero`-style op would make the layer incompatible with `jax.jit`
-    tracing.
+    tracing. Converting local positions to flat scatter targets is done
+    here with static-shape ops only (`arange`/`cumsum`), not a
+    data-dependent lookup.
     """
 
     def call(self, token_embeddings, image_features, placeholder_indices):
         batch_size = ops.shape(token_embeddings)[0]
         seq_length = ops.shape(token_embeddings)[1]
         hidden_dim = ops.shape(token_embeddings)[2]
+        max_placeholders = ops.shape(placeholder_indices)[1]
 
         flat_embeddings = ops.reshape(
             token_embeddings,
             (batch_size * seq_length, hidden_dim),
         )
-
-        # `placeholder_indices` may arrive flat or batched `(batch, N)` —
-        # flatten to match `flat_embeddings`.
-        if len(ops.shape(placeholder_indices)) == 2:
-            placeholder_indices = ops.reshape(placeholder_indices, (-1,))
-        # Drop `image_features`' trailing zero padding (from
-        # `Mistral3MultiModalProjector`'s fixed-capacity output) down to the
-        # real prefix that fills every placeholder.
-        num_placeholders = ops.shape(placeholder_indices)[0]
-        image_features = image_features[:num_placeholders]
-        placeholder_indices = ops.expand_dims(
-            ops.cast(placeholder_indices, "int32"),
-            axis=-1,
+        # Scratch row absorbs `placeholder_indices == -1` padding entries;
+        # sliced off below.
+        scratch_row = ops.zeros((1, hidden_dim), dtype=flat_embeddings.dtype)
+        flat_embeddings = ops.concatenate(
+            [flat_embeddings, scratch_row], axis=0
         )
+
+        placeholder_indices = ops.cast(placeholder_indices, "int32")
+        is_valid = placeholder_indices >= 0
+
+        row_index = ops.reshape(
+            ops.arange(batch_size, dtype="int32"), (batch_size, 1)
+        )
+        scratch_row_index = batch_size * seq_length
+        global_indices = ops.where(
+            is_valid,
+            placeholder_indices + row_index * seq_length,
+            scratch_row_index,
+        )
+
+        # Row `i`'s own images sit in `image_features` at an offset equal
+        # to the number of real placeholders in preceding rows.
+        counts = ops.sum(ops.cast(is_valid, "int32"), axis=1)
+        row_starts = ops.cumsum(counts) - counts
+        local_positions = ops.reshape(
+            ops.arange(max_placeholders, dtype="int32"), (1, max_placeholders)
+        )
+        feature_index = ops.reshape(row_starts, (batch_size, 1)) + (
+            local_positions
+        )
+        feature_index = ops.where(is_valid, feature_index, 0)
 
         image_features = ops.cast(image_features, flat_embeddings.dtype)
+        gathered_features = ops.take(
+            image_features, ops.reshape(feature_index, (-1,)), axis=0
+        )
+
         merged_embeddings = ops.scatter_update(
             inputs=flat_embeddings,
-            indices=placeholder_indices,
-            updates=image_features,
+            indices=ops.expand_dims(
+                ops.reshape(global_indices, (-1,)), axis=-1
+            ),
+            updates=gathered_features,
         )
+        merged_embeddings = merged_embeddings[: batch_size * seq_length]
 
         return ops.reshape(
             merged_embeddings,
@@ -368,6 +416,13 @@ class Mistral3VisionAttention(keras.layers.Layer):
             dropout, dtype=self.dtype_policy
         )
 
+    def build(self, input_shape):
+        self.q_proj.build(input_shape)
+        self.k_proj.build(input_shape)
+        self.v_proj.build(input_shape)
+        self.o_proj.build(input_shape)
+        self.built = True
+
     def _reshape_to_heads(self, x):
         batch_size = ops.shape(x)[0]
         sequence_length = ops.shape(x)[1]
@@ -513,6 +568,12 @@ class Mistral3VisionMLP(keras.layers.Layer):
 
         self.activation_fn = keras.activations.get(activation)
 
+    def build(self, input_shape):
+        self.gate_proj.build(input_shape)
+        self.up_proj.build(input_shape)
+        self.down_proj.build(input_shape[:-1] + (self.intermediate_dim,))
+        self.built = True
+
     def call(self, inputs):
         gate = self.activation_fn(self.gate_proj(inputs))
         up = self.up_proj(inputs)
@@ -597,6 +658,13 @@ class Mistral3VisionEncoderLayer(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="feed_forward",
         )
+
+    def build(self, input_shape):
+        self.attention_norm.build(input_shape)
+        self.attention.build(input_shape)
+        self.ffn_norm.build(input_shape)
+        self.feed_forward.build(input_shape)
+        self.built = True
 
     def call(
         self,
@@ -733,6 +801,13 @@ class Mistral3VisionEncoder(keras.Model):
                     name=f"transformer_layer_{i}",
                 )
             )
+
+    def build(self, input_shape):
+        self.patch_conv.build((None, None, None, self.num_channels))
+        self.ln_pre.build((None, None, self.hidden_dim))
+        for layer in self.transformer_layers:
+            layer.build((None, None, self.hidden_dim))
+        self.built = True
 
     def _create_position_ids_for_images(
         self,
@@ -1031,6 +1106,11 @@ class Mistral3PatchMerger(keras.layers.Layer):
             name="merging_layer",
         )
 
+    def build(self, input_shape):
+        merge_input_dim = self.hidden_dim * self.spatial_merge_size**2
+        self.merging_layer.build((None, merge_input_dim))
+        self.built = True
+
     def _merge_image(
         self,
         image_features,
@@ -1281,6 +1361,13 @@ class Mistral3MultiModalProjector(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="linear_2",
         )
+
+    def build(self, input_shape):
+        self.norm.build((None, self.vision_hidden_dim))
+        self.patch_merger.build((None, self.vision_hidden_dim))
+        self.linear_1.build((None, self.vision_hidden_dim))
+        self.linear_2.build((None, self.text_hidden_dim))
+        self.built = True
 
     def call(
         self,
