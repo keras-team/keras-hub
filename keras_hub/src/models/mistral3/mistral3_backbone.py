@@ -182,11 +182,9 @@ class Mistral3Backbone(Backbone):
         image_sizes_input = keras.Input(
             shape=(2,), dtype="int32", name="image_sizes"
         )
-        # Flat positions of image placeholder tokens in the flattened
-        # `(batch * seq_length,)` sequence. Computed on the host (e.g. via
-        # `compute_image_placeholder_indices`) rather than derived in-graph,
-        # since a `nonzero`-style lookup has a data-dependent output shape
-        # that is incompatible with `jax.jit` tracing.
+        # Each example's own local image placeholder token positions,
+        # `-1`-padded to the batch's max count; see
+        # `compute_image_placeholder_indices`.
         placeholder_indices_input = keras.Input(
             shape=(None,),
             dtype="int32",

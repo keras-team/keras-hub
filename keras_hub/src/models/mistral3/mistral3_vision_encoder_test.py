@@ -268,7 +268,8 @@ class Mistral3VisionEncoderTest(TestCase):
         batch_size, seq_length, hidden_dim = 1, 5, 3
         token_embeddings = np.zeros((batch_size, seq_length, hidden_dim))
         image_features = np.array([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])
-        placeholder_indices = np.array([1, 3], dtype="int32")
+        # `(batch, max_placeholders)`: this example's own local positions.
+        placeholder_indices = np.array([[1, 3]], dtype="int32")
         output = self.embedding_merger(
             token_embeddings, image_features, placeholder_indices
         )
@@ -277,19 +278,23 @@ class Mistral3VisionEncoderTest(TestCase):
         expected[0, 3] = 2.0
         self.assertAllClose(output, expected)
 
-    def test_image_text_embedding_merger_flattens_batched_indices(self):
-        # A batched `(batch, N)` placeholder_indices tensor (as produced by
-        # a `keras.Input`) must be flattened before use, since values are
-        # global indices into the flattened `(batch * seq_length,)`
-        # sequence either way.
-        token_embeddings = np.zeros((1, 4, 2))
-        image_features = np.array([[9.0, 9.0]])
-        placeholder_indices_2d = np.array([[2]], dtype="int32")
-        output = self.embedding_merger(
-            token_embeddings, image_features, placeholder_indices_2d
+    def test_image_text_embedding_merger_batched_with_padding(self):
+        # Row 0 has two images (local positions 1, 3); row 1 has only one
+        # (local position 2, with a `-1`-padded second column) -- the case
+        # `placeholder_indices`' padding exists to support.
+        batch_size, seq_length, hidden_dim = 2, 5, 3
+        token_embeddings = np.zeros((batch_size, seq_length, hidden_dim))
+        image_features = np.array(
+            [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [3.0, 3.0, 3.0]]
         )
-        expected = np.zeros((1, 4, 2))
-        expected[0, 2] = 9.0
+        placeholder_indices = np.array([[1, 3], [2, -1]], dtype="int32")
+        output = self.embedding_merger(
+            token_embeddings, image_features, placeholder_indices
+        )
+        expected = np.zeros((batch_size, seq_length, hidden_dim))
+        expected[0, 1] = 1.0
+        expected[0, 3] = 2.0
+        expected[1, 2] = 3.0
         self.assertAllClose(output, expected)
 
     def test_image_text_embedding_merger_serialization(self):
@@ -302,15 +307,16 @@ class Mistral3VisionEncoderTest(TestCase):
         indices = compute_image_placeholder_indices(
             token_ids, image_token_index=10
         )
-        # Flat indices into the (batch * seq_length,) sequence.
-        self.assertAllEqual(indices, np.array([1, 3, 4]))
+        # `(batch, max_placeholders)`: each row's own local positions,
+        # padded with `-1` up to the batch's max count.
+        self.assertAllEqual(indices, np.array([[1, 3], [0, -1]]))
 
     def test_compute_image_placeholder_indices_none_present(self):
         token_ids = np.array([[1, 2, 3]])
         indices = compute_image_placeholder_indices(
             token_ids, image_token_index=10
         )
-        self.assertEqual(indices.shape, (0,))
+        self.assertAllEqual(indices, np.array([[-1]]))
 
     # === compute_resize_size ===
 
