@@ -517,7 +517,19 @@ from keras_hub.src.models.mistral.mistral_tokenizer import (
 from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_backbone import (
+    Mistral3Backbone as Mistral3Backbone,
+)
+from keras_hub.src.models.mistral3.mistral3_causal_lm import (
+    Mistral3CausalLM as Mistral3CausalLM,
+)
+from keras_hub.src.models.mistral3.mistral3_causal_lm_preprocessor import (
+    Mistral3CausalLMPreprocessor as Mistral3CausalLMPreprocessor,
+)
+from keras_hub.src.models.mistral3.mistral3_tokenizer import (
+    Mistral3Tokenizer as Mistral3Tokenizer,
+)
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     Mistral3VisionEncoder as Mistral3VisionEncoder,
 )
 from keras_hub.src.models.mit.mit_backbone import MiTBackbone as MiTBackbone

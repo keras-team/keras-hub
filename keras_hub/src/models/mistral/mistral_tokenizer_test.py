@@ -56,36 +56,6 @@ def _tekken_init_kwargs():
     }
 
 
-def _tekken_vision_init_kwargs():
-    """Like `_tekken_init_kwargs`, but with the Mistral image tokens."""
-    byte_encoder = _bytes_to_unicode()
-    special_tokens = [
-        "<unk>",
-        "<s>",
-        "</s>",
-        "<pad>",
-        "[INST]",
-        "[IMG]",
-        "[IMG_BREAK]",
-        "[IMG_END]",
-    ]
-    vocabulary = {token: i for i, token in enumerate(special_tokens)}
-    offset = len(special_tokens)
-    for i in range(256):
-        vocabulary[byte_encoder[i]] = offset + i
-    merges = []
-    next_id = offset + 256
-    for a, b in [("t", "h"), ("th", "e"), ("i", "n")]:
-        vocabulary[a + b] = next_id
-        merges.append(f"{a} {b}")
-        next_id += 1
-    return {
-        "vocabulary": vocabulary,
-        "merges": merges,
-        "split_pattern": _TEKKEN_SPLIT_PATTERN,
-    }
-
-
 class MistralTokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
@@ -95,13 +65,6 @@ class MistralTokenizerTest(TestCase):
             )
         }
         self.input_data = ["the quick brown fox", "the earth is round"]
-        self.vision_init_kwargs = {
-            # Generated using create_mistral_vision_test_proto.py
-            "proto": os.path.join(
-                self.get_test_data_dir(), "mistral_vision_test_vocab.spm"
-            ),
-            "has_vision_tokens": True,
-        }
 
     def test_tokenizer_basics(self):
         self.run_preprocessing_layer_test(
@@ -109,14 +72,6 @@ class MistralTokenizerTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output=[[3, 8, 4, 6], [3, 5, 7, 9]],
-        )
-
-    def test_tokenizer_basics_with_vision_tokens(self):
-        self.run_preprocessing_layer_test(
-            cls=MistralTokenizer,
-            init_kwargs=self.vision_init_kwargs,
-            input_data=["the quick", "quick"],
-            expected_output=[[9, 13, 28, 21, 19, 11], [13, 28, 21, 19, 11]],
         )
 
     def test_errors_missing_special_tokens(self):
@@ -151,24 +106,12 @@ class MistralTekkenTokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = _tekken_init_kwargs()
         self.input_data = ["the tin", "in the"]
-        self.vision_init_kwargs = {
-            "has_vision_tokens": True,
-            **_tekken_vision_init_kwargs(),
-        }
 
     def test_tokenizer_basics(self):
         self.run_preprocessing_layer_test(
             cls=MistralTekkenTokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-        )
-
-    def test_tokenizer_basics_with_vision_tokens(self):
-        self.run_preprocessing_layer_test(
-            cls=MistralTekkenTokenizer,
-            init_kwargs=self.vision_init_kwargs,
-            input_data=["the tin", "in the"],
-            expected_output=[[265, 40, 124, 266], [266, 40, 265]],
         )
 
     def test_special_tokens(self):

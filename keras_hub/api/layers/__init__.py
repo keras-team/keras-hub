@@ -129,7 +129,7 @@ from keras_hub.src.models.hgnetv2.hgnetv2_image_converter import (
 from keras_hub.src.models.metaclip_2.metaclip_2_image_converter import (
     MetaCLIP2ImageConverter as MetaCLIP2ImageConverter,
 )
-from keras_hub.src.models.mistral.mistral_image_converter import (
+from keras_hub.src.models.mistral3.mistral3_image_converter import (
     Mistral3ImageConverter as Mistral3ImageConverter,
 )
 from keras_hub.src.models.mit.mit_image_converter import (
