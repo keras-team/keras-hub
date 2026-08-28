@@ -10,6 +10,12 @@ from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
 from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     compute_resize_size,
 )
+from keras_hub.src.utils.tensor_utils import preprocessing_function
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 # CLIP normalization stats, in [0, 255] pixel-value units.
 _CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
@@ -75,7 +81,14 @@ class Mistral3ImageConverter(ImageConverter):
         self.patch_size = patch_size
         self.spatial_merge_size = spatial_merge_size
 
-    def call(self, inputs):
+    def _call_python(self, inputs):
+        unbatched = (
+            not isinstance(inputs, (list, tuple))
+            and len(ops.shape(inputs)) == 3
+        )
+        if unbatched:
+            inputs = [inputs]
+
         # HF's `PixtralProcessor` rounds resized dimensions to a multiple of
         # `patch_size * spatial_merge_size`, not `patch_size` alone, so that
         # the patch grid divides evenly into the merged patch-merger grid.
@@ -130,7 +143,41 @@ class Mistral3ImageConverter(ImageConverter):
 
         pixel_values = np.stack(padded_images, axis=0).astype("float32")
         image_sizes = np.array(image_sizes, dtype="int32")
+        if unbatched:
+            return pixel_values[0], image_sizes[0]
         return pixel_values, image_sizes
+
+    @preprocessing_function
+    def _call_tf(self, inputs):
+        images = tf.cast(inputs, "float32")
+        unbatched = len(images.shape) == 3
+        if unbatched:
+            images = tf.expand_dims(images, axis=0)
+
+        merge_patch_size = self.patch_size * self.spatial_merge_size
+        height, width = images.shape[1], images.shape[2]
+        resized_height, resized_width = compute_resize_size(
+            height, width, self.longest_edge, merge_patch_size
+        )
+        images = tf.image.resize(
+            images,
+            size=(resized_height, resized_width),
+            method="bicubic",
+            antialias=True,
+        )
+        images = tf.clip_by_value(tf.round(images), 0, 255)
+        scale = tf.constant(self.scale, dtype="float32")
+        offset = tf.constant(self.offset, dtype="float32")
+        images = images * scale + offset
+        images = tf.transpose(images, (0, 3, 1, 2))
+        num_images = tf.shape(images)[0]
+        image_sizes = tf.tile(
+            tf.constant([[resized_height, resized_width]], dtype="int32"),
+            (num_images, 1),
+        )
+        if unbatched:
+            return images[0], image_sizes[0]
+        return images, image_sizes
 
     def get_config(self):
         config = super().get_config()

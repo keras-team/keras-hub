@@ -282,7 +282,7 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
         placeholder_indices = compute_image_placeholder_indices(
             keras.ops.convert_to_numpy(model_token_ids),
             self.tokenizer.image_placeholder_token_id,
-        )[None, :]
+        )
 
         out_x = {
             "token_ids": model_token_ids,
@@ -351,7 +351,7 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
             placeholder_indices = compute_image_placeholder_indices(
                 keras.ops.convert_to_numpy(token_ids),
                 self.tokenizer.image_placeholder_token_id,
-            )[None, :]
+            )
             out_x["pixel_values"] = pixel_values
             out_x["image_sizes"] = image_sizes
             out_x["placeholder_indices"] = placeholder_indices
