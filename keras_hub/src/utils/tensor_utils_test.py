@@ -105,7 +105,6 @@ class ConvertHelpers(TestCase):
         self.assertAllEqual(outputs, inputs)
 
     def test_placement(self):
-        # Make sure we always place preprocessing on the CPU on all backends.
         @preprocessing_function
         def test(self, inputs):
             for x in inputs:
