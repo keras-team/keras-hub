@@ -71,7 +71,7 @@ def build_text_inputs(hf_preset, text):
     # class from; fall back to `mistral_common` reading it directly.
     try:
         hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
-        return hf_tokenizer([text], return_tensors="pt")
+        return hf_tokenizer([text], return_tensors="pt"), hf_tokenizer
     except OSError:
         pass
 
@@ -82,20 +82,38 @@ def build_text_inputs(hf_preset, text):
         tekken_path
     ).instruct_tokenizer.tokenizer
     token_ids = raw_tokenizer.encode(text, bos=True, eos=False)
-    return {
+    inputs = {
         "input_ids": torch.tensor([token_ids]),
         "attention_mask": torch.ones(1, len(token_ids), dtype=torch.long),
     }
+    return inputs, raw_tokenizer
 
 
-def run_hf_text_forward(hf_model, hf_preset):
-    hf_inputs = build_text_inputs(hf_preset, TEXT_PROMPT)
+def run_hf_text_forward(hf_model, hf_preset, skip_generate=False):
+    hf_inputs, hf_tokenizer = build_text_inputs(hf_preset, TEXT_PROMPT)
     with torch.no_grad():
         hf_outputs = hf_model(**hf_inputs)
-    return {
+    results = {
+        "prompt": TEXT_PROMPT,
         "token_ids": hf_inputs["input_ids"].detach().cpu().numpy(),
         "logits": hf_outputs.logits.detach().cpu().numpy(),
     }
+    if not skip_generate:
+        with torch.no_grad():
+            generated_ids = hf_model.generate(
+                **hf_inputs, max_new_tokens=MAX_NEW_TOKENS, do_sample=False
+            )
+        prompt_length = hf_inputs["input_ids"].shape[1]
+        generated_token_ids = generated_ids[0, prompt_length:].tolist()
+        try:
+            results["generated_text"] = hf_tokenizer.decode(
+                generated_token_ids, skip_special_tokens=True
+            )
+        except TypeError:
+            # `mistral_common`'s raw tokenizer (used in the fallback path
+            # above) doesn't accept `skip_special_tokens`.
+            results["generated_text"] = hf_tokenizer.decode(generated_token_ids)
+    return results
 
 
 def build_multimodal_inputs(hf_preset, hf_config, image):
@@ -177,7 +195,9 @@ def precompute_hf_outputs(hf_preset, hf_config, skip_generate=False):
     )
     hf_model.eval()
 
-    text_results = run_hf_text_forward(hf_model, hf_preset)
+    text_results = run_hf_text_forward(
+        hf_model, hf_preset, skip_generate=skip_generate
+    )
 
     image = load_reference_image()
     inputs = build_multimodal_inputs(hf_preset, hf_config, image)
@@ -260,9 +280,16 @@ def test_numerics(label, keras_logits, hf_logits):
 
 
 def test_generate(
-    label, keras_model, prompt, hf_generated_text, prompt_token_count, image
+    label,
+    keras_model,
+    prompt,
+    hf_generated_text,
+    prompt_token_count,
+    image=None,
 ):
-    x = {"prompts": [prompt], "images": [[image]]}
+    x = {"prompts": [prompt]}
+    if image is not None:
+        x["images"] = [[image]]
     max_length = prompt_token_count + MAX_NEW_TOKENS
     kh_output = keras_model.generate(x, max_length=max_length)
     kh_text = kh_output[0] if isinstance(kh_output, list) else kh_output
@@ -358,6 +385,13 @@ def validate_output(keras_model, hf_results, skip_generate=False):
 
     if not skip_generate:
         keras_model.compile(sampler="greedy")
+        test_generate(
+            "text",
+            keras_model,
+            text_results["prompt"],
+            text_results.get("generated_text"),
+            text_results["token_ids"].shape[1],
+        )
         test_generate(
             "image",
             keras_model,
