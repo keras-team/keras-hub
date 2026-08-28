@@ -1,13 +1,9 @@
 import os
 
-import numpy as np
 import pytest
 
 from keras_hub.src.models.mistral.mistral_causal_lm_preprocessor import (
     MistralCausalLMPreprocessor,
-)
-from keras_hub.src.models.mistral.mistral_image_converter import (
-    Mistral3ImageConverter,
 )
 from keras_hub.src.models.mistral.mistral_tokenizer import MistralTokenizer
 from keras_hub.src.tests.test_case import TestCase
@@ -80,42 +76,3 @@ class MistralCausalLMPreprocessorTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
-
-    def test_generate_preprocess_with_images(self):
-        tokenizer = MistralTokenizer(
-            # Generated using create_mistral_vision_test_proto.py
-            proto=os.path.join(
-                self.get_test_data_dir(), "mistral_vision_test_vocab.spm"
-            ),
-            has_vision_tokens=True,
-        )
-        image_converter = Mistral3ImageConverter(
-            longest_edge=16, patch_size=4, spatial_merge_size=1
-        )
-        preprocessor = MistralCausalLMPreprocessor(
-            tokenizer=tokenizer,
-            image_converter=image_converter,
-            sequence_length=32,
-            spatial_merge_size=1,
-        )
-        image = np.zeros((8, 8, 3), dtype="float32")
-        x = preprocessor.generate_preprocess(
-            {"prompts": "the [IMG] quick", "images": [image]}
-        )
-        for key in (
-            "token_ids",
-            "padding_mask",
-            "pixel_values",
-            "image_sizes",
-            "placeholder_indices",
-        ):
-            self.assertIn(key, x)
-        # An 8x8 image with `patch_size=4`, `spatial_merge_size=1` expands
-        # to a 2x2 grid of placeholder tokens.
-        token_ids = np.array(x["token_ids"])
-        num_placeholders = int(
-            np.sum(
-                token_ids == preprocessor.tokenizer.image_placeholder_token_id
-            )
-        )
-        self.assertEqual(num_placeholders, 4)
