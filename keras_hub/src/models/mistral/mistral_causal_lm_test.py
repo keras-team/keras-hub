@@ -1,7 +1,6 @@
 import os
 from unittest.mock import patch
 
-import numpy as np
 import pytest
 from keras import ops
 
@@ -11,15 +10,6 @@ from keras_hub.src.models.mistral.mistral_causal_lm_preprocessor import (
     MistralCausalLMPreprocessor,
 )
 from keras_hub.src.models.mistral.mistral_tokenizer import MistralTokenizer
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
-    Mistral3MultiModalProjector,
-)
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
-    Mistral3VisionEncoder,
-)
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
-    compute_image_placeholder_indices,
-)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -273,71 +263,3 @@ class MistralCausalLMTest(TestCase):
         )
 
         self.assertIsNone(causal_lm.get_quantization_layer_structure("int8"))
-
-    def test_multimodal_generate(self):
-        vision_encoder = Mistral3VisionEncoder(
-            image_size=8,
-            patch_size=4,
-            hidden_dim=8,
-            num_layers=1,
-            num_heads=2,
-            head_dim=4,
-            intermediate_dim=8,
-        )
-        multimodal_projector = Mistral3MultiModalProjector(
-            vision_hidden_dim=8,
-            text_hidden_dim=8,
-            spatial_merge_size=1,
-            patch_size=4,
-            image_size=8,
-        )
-        # `image_token_index` must stay inside `vocabulary_size`, since the
-        # token embedding lookup happens before the image-text merger
-        # overwrites those positions.
-        image_token_index = 9
-        backbone = MistralBackbone(
-            vocabulary_size=10,
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            hidden_dim=8,
-            intermediate_dim=16,
-            vision_encoder=vision_encoder,
-            multimodal_projector=multimodal_projector,
-            image_token_index=image_token_index,
-        )
-        causal_lm = MistralCausalLM(backbone=backbone, preprocessor=None)
-
-        # Two 8x8 images, each a 2x2 patch grid; `spatial_merge_size=1`
-        # makes every patch its own merge window (4 rows per image).
-        # Followed by one real token, then padding for incremental decoding.
-        token_ids = ops.array(
-            [
-                [image_token_index] * 4 + [3, 0, 0],
-                [image_token_index] * 4 + [4, 0, 0],
-            ],
-            dtype="int32",
-        )
-        padding_mask = ops.array(
-            [
-                [1, 1, 1, 1, 1, 0, 0],
-                [1, 1, 1, 1, 1, 0, 0],
-            ],
-        )
-        placeholder_indices = compute_image_placeholder_indices(
-            token_ids, image_token_index=image_token_index
-        )
-        input_data = {
-            "token_ids": token_ids,
-            "padding_mask": padding_mask,
-            "pixel_values": ops.convert_to_tensor(
-                np.random.rand(2, 3, 8, 8).astype("float32")
-            ),
-            "image_sizes": ops.array([[8, 8], [8, 8]], dtype="int32"),
-            "placeholder_indices": ops.convert_to_tensor(placeholder_indices)[
-                None, :
-            ],
-        }
-        output = causal_lm.generate(input_data, stop_token_ids=None)
-        self.assertEqual(ops.shape(output["token_ids"]), (2, 7))
-        self.assertEqual(ops.shape(output["padding_mask"]), (2, 7))

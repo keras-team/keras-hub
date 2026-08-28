@@ -3,11 +3,11 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
-from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_backbone import Mistral3Backbone
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     MISTRAL3_DEFAULT_SPATIAL_MERGE_SIZE,
 )
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     compute_resize_size,
 )
 
@@ -18,7 +18,7 @@ _CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
 
 @keras_hub_export("keras_hub.layers.Mistral3ImageConverter")
 class Mistral3ImageConverter(ImageConverter):
-    """Converts raw images into `MistralBackbone`'s multimodal inputs.
+    """Converts raw images into `Mistral3Backbone`'s multimodal inputs.
 
     Each image is resized so its longest edge is at most `longest_edge`
     pixels (aspect ratio preserved), then rounded up to a `patch_size`
@@ -42,7 +42,7 @@ class Mistral3ImageConverter(ImageConverter):
             offset.
     """
 
-    backbone_cls = MistralBackbone
+    backbone_cls = Mistral3Backbone
 
     def __init__(
         self,
@@ -107,7 +107,7 @@ class Mistral3ImageConverter(ImageConverter):
             offset = np.array(self.offset, dtype="float32")
             image = image * scale + offset
             # Channels-last `(H, W, 3)` -> channels-first `(3, H, W)`, to
-            # match `MistralBackbone`'s `pixel_values` input layout.
+            # match `Mistral3Backbone`'s `pixel_values` input layout.
             image = np.transpose(image, (2, 0, 1))
             resized_images.append(image)
             image_sizes.append((resized_height, resized_width))

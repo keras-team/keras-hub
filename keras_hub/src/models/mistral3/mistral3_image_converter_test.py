@@ -1,6 +1,6 @@
 import numpy as np
 
-from keras_hub.src.models.mistral.mistral_image_converter import (
+from keras_hub.src.models.mistral3.mistral3_image_converter import (
     Mistral3ImageConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
