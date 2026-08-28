@@ -4,11 +4,8 @@ except ImportError:
     tf = None
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
+from keras_hub.src.models.mistral3.mistral3_backbone import Mistral3Backbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
-from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
-    SentencePieceTokenizer,
-)
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -22,78 +19,28 @@ except ImportError:
 
 @keras_hub_export(
     [
-        "keras_hub.tokenizers.MistralTokenizer",
-        "keras_hub.models.MistralTokenizer",
+        "keras_hub.tokenizers.Mistral3Tokenizer",
+        "keras_hub.models.Mistral3Tokenizer",
     ]
 )
-class MistralTokenizer(SentencePieceTokenizer):
-    """Mistral tokenizer layer based on SentencePiece.
+class Mistral3Tokenizer(BytePairTokenizer):
+    """Mistral3 Tekken tokenizer layer based on byte-level BPE.
 
-    This tokenizer class will tokenize raw strings into integer sequences and
-    is based on `keras_hub.tokenizers.SentencePieceTokenizer`. Unlike the
-    underlying tokenizer, it will check for all special tokens needed by
-    Mistral models and provides a `from_preset()` method to automatically
-    download a matching vocabulary for a Mistral preset.
+    Handles Mistral3's Tekken (tiktoken-style byte-level BPE) vocabulary. It
+    is based on `keras_hub.tokenizers.BytePairTokenizer`, uses the Tekken
+    pre-tokenization regex instead of the GPT-2/Llama3 pattern hardcoded in
+    the base class, and registers the special image tokens (`"[IMG]"`,
+    `"[IMG_BREAK]"`, `"[IMG_END]"`) used by multimodal Mistral3/Pixtral
+    models to mark image placeholder positions in a prompt.
 
-    This tokenizer is used by SentencePiece-based Mistral presets. Presets that
-    ship a Tekken (byte-level BPE) vocabulary, such as Magistral, use
-    `keras_hub.tokenizers.MistralTekkenTokenizer` instead.
-
-    If input is a batch of strings (rank > 0), the layer will output a
-    `tf.RaggedTensor` where the last dimension of the output is ragged.
-
-    If input is a scalar string (rank == 0), the layer will output a dense
-    `tf.Tensor` with static shape `[None]`.
-
-    Args:
-        proto: Either a `string` path to a SentencePiece proto file, or a
-            `bytes` object with a serialized SentencePiece proto. See the
-            [SentencePiece repository](https://github.com/google/sentencepiece)
-            for more details on the format.
-
-    Examples:
-    ```python
-    # Unbatched input.
-    tokenizer = keras_hub.models.MistralTokenizer.from_preset(
-        "mistral_7b_en",
-    )
-    tokenizer("The quick brown fox jumped.")
-
-    # Batched input.
-    tokenizer(["The quick brown fox jumped.", "The fox slept."])
-
-    # Detokenization.
-    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
-    ```
-    """
-
-    backbone_cls = MistralBackbone
-
-    def __init__(self, proto, **kwargs):
-        self._add_special_token("<s>", "start_token")
-        self._add_special_token("</s>", "end_token")
-        self.pad_token_id = 0
-        super().__init__(proto=proto, **kwargs)
-
-
-@keras_hub_export(
-    [
-        "keras_hub.tokenizers.MistralTekkenTokenizer",
-        "keras_hub.models.MistralTekkenTokenizer",
-    ]
-)
-class MistralTekkenTokenizer(BytePairTokenizer):
-    """Mistral Tekken tokenizer layer based on byte-level BPE.
-
-    This tokenizer class handles Mistral's Tekken (tiktoken-style byte-level
-    BPE) vocabulary, used by presets such as Magistral. It is based on
-    `keras_hub.tokenizers.BytePairTokenizer`, but uses the Tekken
-    pre-tokenization regex instead of the GPT-2/Llama3 pattern hardcoded in the
-    base class, and checks for the special tokens needed by Mistral models.
+    Not a subclass of `keras_hub.models.MistralTekkenTokenizer`: that class
+    builds its `unsplittable_tokens` list inline in `__init__` before calling
+    the `BytePairTokenizer` constructor, which doesn't leave a clean
+    extension point for adding the vision tokens via inheritance.
 
     The `vocabulary` and `merges` are usually produced from a `tekken.json`
     file by the Hugging Face conversion path; see
-    `keras_hub.src.utils.transformers.convert_mistral`.
+    `keras_hub.src.utils.transformers.convert_mistral3`.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -106,30 +53,58 @@ class MistralTekkenTokenizer(BytePairTokenizer):
             vocabulary JSON file.
         merges: A list of BPE merge rules, or a path to a merges file.
         split_pattern: str. The Tekken pre-tokenization regex.
+        control_tokens: list of str, optional. Extra reserved control tokens
+            (e.g. `"[INST]"`) to register as unsplittable, in addition to the
+            start/end/vision tokens. Defaults to `None`.
 
     Examples:
     ```python
-    tokenizer = keras_hub.models.MistralTekkenTokenizer.from_preset(
-        "hf://mistralai/Magistral-Small-2506",
+    tokenizer = keras_hub.models.Mistral3Tokenizer.from_preset(
+        "hf://mistralai/Mistral-Small-3.2-24B-Instruct-2506",
     )
     tokenizer("The quick brown fox jumped.")
     tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
     ```
     """
 
-    backbone_cls = MistralBackbone
+    backbone_cls = Mistral3Backbone
 
     def __init__(
-        self, vocabulary=None, merges=None, split_pattern=None, **kwargs
+        self,
+        vocabulary=None,
+        merges=None,
+        split_pattern=None,
+        control_tokens=None,
+        **kwargs,
     ):
         self.split_pattern = split_pattern
+        self.control_tokens = list(control_tokens) if control_tokens else []
         self._add_special_token("<s>", "start_token")
         self._add_special_token("</s>", "end_token")
         self.pad_token_id = 0
+
+        # Tekken's control tokens (e.g. `"[INST]"`) occupy a reserved id
+        # block outside the BPE merges; register them as unsplittable, or
+        # literal occurrences in a prompt get shredded into byte-level
+        # tokens instead of mapping to their single reserved id.
+        unsplittable_tokens = [self.start_token, self.end_token]
+        for token in self.control_tokens:
+            if token not in unsplittable_tokens:
+                unsplittable_tokens.append(token)
+
+        self._add_special_token("[IMG]", "image_placeholder_token")
+        self._add_special_token("[IMG_BREAK]", "image_break_token")
+        self._add_special_token("[IMG_END]", "image_end_token")
+        unsplittable_tokens += [
+            self.image_placeholder_token,
+            self.image_break_token,
+            self.image_end_token,
+        ]
+
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            unsplittable_tokens=[self.start_token, self.end_token],
+            unsplittable_tokens=unsplittable_tokens,
             **kwargs,
         )
 
@@ -225,7 +200,12 @@ class MistralTekkenTokenizer(BytePairTokenizer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({"split_pattern": self.split_pattern})
+        config.update(
+            {
+                "split_pattern": self.split_pattern,
+                "control_tokens": self.control_tokens,
+            }
+        )
         # `unsplittable_tokens` is derived from the special tokens in the
         # constructor, so it is not a separate config argument.
         del config["unsplittable_tokens"]

@@ -1,14 +1,26 @@
 import keras
 from keras import ops
 from keras.layers import ReversibleEmbedding
+from keras.layers import RMSNormalization
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.mistral.mistral_layer_norm import (
-    MistralLayerNormalization,
+
+# `Mistral3Backbone`'s text tower is architecturally identical to
+# `MistralBackbone`'s. Reusing the layer classes directly here (rather than
+# duplicating them into this directory) is an intentional exception to this
+# repo's usual per-model self-containment, since there is no logic to fork.
+from keras_hub.src.models.mistral.mistral_attention import (  # noqa: F401
+    CachedMistralAttention,
 )
 from keras_hub.src.models.mistral.mistral_transformer_decoder import (
     MistralTransformerDecoder,
+)
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
+    Mistral3ImageFeatureExtractor,
+)
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
+    Mistral3ImageTextEmbeddingMerger,
 )
 
 
@@ -16,49 +28,53 @@ def _mistral_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-@keras_hub_export("keras_hub.models.MistralBackbone")
-class MistralBackbone(Backbone):
+@keras_hub_export("keras_hub.models.Mistral3Backbone")
+class Mistral3Backbone(Backbone):
     """
-    The Mistral Transformer core architecture with hyperparameters.
+    The Mistral3 (Pixtral vision + Mistral text) core architecture.
 
-    This network implements a Transformer-based decoder network,
-    Mistral, as described in
-    ["Mistral 7B"](https://arxiv.org/pdf/2310.06825.pdf).
-    It includes the embedding lookups and transformer layers.
+    This network implements a multimodal Transformer-based decoder network,
+    Mistral3, as used by models such as Mistral Small 3.1/3.2. It includes
+    the token embedding lookups, a Pixtral-style vision encoder, and
+    transformer decoder layers.
 
     The default constructor gives a fully customizable, randomly initialized
-    Mistral model with any number of layers, heads, and embedding
-    dimensions. To load preset architectures and weights, use the `from_preset`
-    constructor.
+    Mistral3 model with any number of layers, heads, and embedding
+    dimensions. To load preset architectures and weights, use the
+    `from_preset` constructor.
 
     Args:
-        vocabulary_size (int): The size of the token vocabulary.
-        num_layers (int): The number of transformer layers.
-        num_query_heads (int): The number of query attention heads for
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_query_heads: int. The number of query attention heads for
             each transformer.
-        hidden_dim (int): The size of the transformer encoding and pooling
+        hidden_dim: int. The size of the transformer encoding and pooling
             layers.
-        intermediate_dim (int): The output dimension of the first Dense layer
+        intermediate_dim: int. The output dimension of the first Dense layer
             in a three-layer feedforward network for each transformer.
-        num_key_value_heads (int): The number of key and value attention heads
+        num_key_value_heads: int. The number of key and value attention heads
             for each transformer.
-        rope_max_wavelength (int, optional): The maximum angular wavelength of
+        vision_encoder: A `keras_hub.models.Mistral3VisionEncoder` instance.
+        multimodal_projector: A `Mistral3MultiModalProjector` instance.
+        rope_max_wavelength: int, optional. The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
-        rope_scaling_factor (float, optional): The scaling factor for
+        rope_scaling_factor: float, optional. The scaling factor for
             calculation of roatary embedding. Defaults to `1.0`.
-        layer_norm_epsilon (float, optional): Epsilon for the layer
+        layer_norm_epsilon: float, optional. Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
-        sliding_window (int, optional): The sliding window for the mistral
+        sliding_window: int, optional. The sliding window for the mistral
             attention layers. This controls the maximum cache size for the
             attention layers in each transformer decoder. Only `sliding_window`
             number of tokens are saved in the cache and used to generate the
             next token. Defaults to `512`. Pass `None` to disable sliding
             window attention entirely (e.g. Magistral).
-        head_dim (int, optional): The size of each attention head. When
+        head_dim: int, optional. The size of each attention head. When
             `None` (the default), falls back to `hidden_dim // num_query_heads`.
             Set explicitly when the model's head size is not equal to
             `hidden_dim // num_query_heads` — e.g. Magistral uses
             `head_dim=128` with `hidden_dim=5120` and `num_query_heads=32`.
+        image_token_index: int, optional. The token ID in `token_ids` that
+            marks image placeholder positions. Defaults to `10`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -70,23 +86,14 @@ class MistralBackbone(Backbone):
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+        "pixel_values": np.ones(shape=(1, 3, 64, 64), dtype="float32"),
+        "image_sizes": np.array([[64, 64]], dtype="int32"),
+        "placeholder_indices": np.zeros(shape=(1, 16), dtype="int32"),
     }
 
-    # Pretrained Mistral decoder.
-    model = keras_hub.models.MistralBackbone.from_preset("mistral7b_base_en")
-    model(input_data)
-
-    # Randomly initialized Mistral decoder with custom config.
-    model = keras_hub.models.MistralBackbone(
-        vocabulary_size=10,
-        hidden_dim=512,
-        num_layers=2,
-        num_query_heads=32,
-        num_key_value_heads=8,
-        intermediate_dim=1024,
-        sliding_window=512,
-        layer_norm_epsilon=1e-6,
-        dtype="float32"
+    # Pretrained Mistral3 decoder.
+    model = keras_hub.models.Mistral3Backbone.from_preset(
+        "mistral_small_3.1_24b_instruct_2503_en"
     )
     model(input_data)
     ```
@@ -100,12 +107,15 @@ class MistralBackbone(Backbone):
         hidden_dim,
         intermediate_dim,
         num_key_value_heads,
+        vision_encoder,
+        multimodal_projector,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
         sliding_window=512,
         head_dim=None,
         dropout=0,
+        image_token_index=10,
         dtype=None,
         **kwargs,
     ):
@@ -136,10 +146,22 @@ class MistralBackbone(Backbone):
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = MistralLayerNormalization(
+        self.layer_norm = RMSNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="sequence_output_layernorm",
+        )
+        self.vision_encoder = vision_encoder
+        self.multimodal_projector = multimodal_projector
+        self.image_text_embedding_merger = Mistral3ImageTextEmbeddingMerger(
+            dtype=dtype,
+            name="image_text_embedding_merger",
+        )
+        self.image_feature_extractor = Mistral3ImageFeatureExtractor(
+            vision_encoder,
+            multimodal_projector,
+            dtype=dtype,
+            name="image_feature_extractor",
         )
 
         # === Functional Model ===
@@ -149,14 +171,48 @@ class MistralBackbone(Backbone):
         padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
+        # `None` spatial dims: HF's `PixtralImageProcessor` pads each batch
+        # to its own largest image, not to a fixed canvas, so the input
+        # canvas size varies per call. `image_sizes` carries each image's
+        # true (unpadded) `(height, width)` for cropping.
+        pixel_values_input = keras.Input(
+            shape=(vision_encoder.num_channels, None, None),
+            name="pixel_values",
+        )
+        image_sizes_input = keras.Input(
+            shape=(2,), dtype="int32", name="image_sizes"
+        )
+        # Flat positions of image placeholder tokens in the flattened
+        # `(batch * seq_length,)` sequence. Computed on the host (e.g. via
+        # `compute_image_placeholder_indices`) rather than derived in-graph,
+        # since a `nonzero`-style lookup has a data-dependent output shape
+        # that is incompatible with `jax.jit` tracing.
+        placeholder_indices_input = keras.Input(
+            shape=(None,),
+            dtype="int32",
+            name="placeholder_indices",
+        )
+
         x = self.token_embedding(token_id_input)
+        image_features = self.image_feature_extractor(
+            pixel_values_input,
+            image_sizes_input,
+        )
+        x = self.image_text_embedding_merger(
+            x, image_features, placeholder_indices_input
+        )
+
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
         sequence_output = self.layer_norm(x)
+
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
                 "padding_mask": padding_mask_input,
+                "pixel_values": pixel_values_input,
+                "image_sizes": image_sizes_input,
+                "placeholder_indices": placeholder_indices_input,
             },
             outputs=sequence_output,
             dtype=dtype,
@@ -176,6 +232,7 @@ class MistralBackbone(Backbone):
         self.head_dim = head_dim
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
+        self.image_token_index = image_token_index
 
     def get_config(self):
         config = super().get_config()
@@ -193,6 +250,26 @@ class MistralBackbone(Backbone):
                 "head_dim": self.head_dim,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
+                "image_token_index": self.image_token_index,
+                "vision_encoder": keras.layers.serialize(self.vision_encoder),
+                "multimodal_projector": keras.layers.serialize(
+                    self.multimodal_projector
+                ),
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        config = dict(config)
+        config.update(
+            {
+                "vision_encoder": keras.layers.deserialize(
+                    config["vision_encoder"]
+                ),
+                "multimodal_projector": keras.layers.deserialize(
+                    config["multimodal_projector"]
+                ),
+            }
+        )
+        return super().from_config(config)

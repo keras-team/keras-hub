@@ -1,36 +1,36 @@
 import numpy as np
 
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     Mistral3ImageFeatureExtractor,
 )
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     Mistral3ImageTextEmbeddingMerger,
 )
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     Mistral3MultiModalProjector,
 )
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     Mistral3PatchMerger,
 )
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     Mistral3VisionAttention,
 )
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     Mistral3VisionEncoder,
 )
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     Mistral3VisionEncoderLayer,
 )
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     Mistral3VisionMLP,
 )
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     Mistral3VisionRotaryEmbedding,
 )
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     compute_image_placeholder_indices,
 )
-from keras_hub.src.models.mistral.mistral_vision_encoder import (
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     compute_resize_size,
 )
 from keras_hub.src.tests.test_case import TestCase
