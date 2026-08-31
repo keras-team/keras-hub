@@ -1,14 +1,10 @@
 import pytest
 
+from keras_hub.src.models.mistral3.mistral3_tokenizer import (
+    MISTRAL3_TEKKEN_SPLIT_PATTERN as _TEKKEN_SPLIT_PATTERN,
+)
 from keras_hub.src.models.mistral3.mistral3_tokenizer import Mistral3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
-
-# A tiktoken-style split pattern, matching the Tekken format.
-_TEKKEN_SPLIT_PATTERN = (
-    r"[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*"
-    r"[\p{Ll}\p{Lm}\p{Lo}\p{M}]+|\p{N}| ?[^\s\p{L}\p{N}]+"
-    r"[\r\n/]*|\s*[\r\n]+|\s+(?!\S)|\s+"
-)
 
 
 def _bytes_to_unicode():

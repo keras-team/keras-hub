@@ -16,6 +16,15 @@ try:
 except ImportError:
     hf_tokenizers = None
 
+# Tekken's pre-tokenization regex, shared by known Mistral3 checkpoints
+# (mirrors `mistral_common`'s `Tekkenizer._pat_str`). Presets override this
+# with the pattern read from the checkpoint's `tekken.json`.
+MISTRAL3_TEKKEN_SPLIT_PATTERN = (
+    r"[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*"
+    r"[\p{Ll}\p{Lm}\p{Lo}\p{M}]+|\p{N}| ?[^\s\p{L}\p{N}]+"
+    r"[\r\n/]*|\s*[\r\n]+|\s+(?!\S)|\s+"
+)
+
 
 @keras_hub_export(
     [
@@ -52,7 +61,8 @@ class Mistral3Tokenizer(BytePairTokenizer):
         vocabulary: A dict mapping token strings to integer ids, or a path to a
             vocabulary JSON file.
         merges: A list of BPE merge rules, or a path to a merges file.
-        split_pattern: str. The Tekken pre-tokenization regex.
+        split_pattern: str, optional. The Tekken pre-tokenization regex.
+            Defaults to the pattern shared by known Mistral3 checkpoints.
         control_tokens: list of str, optional. Extra reserved control tokens
             (e.g. `"[INST]"`) to register as unsplittable, in addition to the
             start/end/vision tokens. Defaults to `None`.
@@ -77,7 +87,7 @@ class Mistral3Tokenizer(BytePairTokenizer):
         control_tokens=None,
         **kwargs,
     ):
-        self.split_pattern = split_pattern
+        self.split_pattern = split_pattern or MISTRAL3_TEKKEN_SPLIT_PATTERN
         self.control_tokens = list(control_tokens) if control_tokens else []
         self._add_special_token("<s>", "start_token")
         self._add_special_token("</s>", "end_token")
