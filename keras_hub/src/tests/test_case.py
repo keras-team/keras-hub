@@ -380,7 +380,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             data_source=source_data,
             sampler=grain.SequentialSampler(
                 num_records=len(source_data),
-                num_epochs=1,
             ),
             operations=[
                 grain.MapOperation(
