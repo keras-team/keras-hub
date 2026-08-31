@@ -57,10 +57,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install -U pip setuptools psutil
         pip install -r requirements-${{ matrix.backend }}-cuda.txt --progress-bar off --timeout 1000
         pip install huggingface_hub --progress-bar off
-        pip install pytest-split --progress-bar off
         pip install --no-deps -e "." --progress-bar off
 
     - name: Test with pytest
