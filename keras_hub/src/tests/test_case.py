@@ -302,10 +302,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         )
         # Convert NumPy scalar values (especially np.str_) to Python values.
         numpy_input_data = tree.map_structure(
-        lambda x: x.item()
-        if isinstance(x, np.ndarray) and x.ndim == 0
-        else x,
-        numpy_input_data,
+            lambda x: x.item()
+            if isinstance(x, np.ndarray) and x.ndim == 0
+            else x,
+            numpy_input_data,
         )
         if isinstance(numpy_input_data, tuple):
             source_data = list(zip(*numpy_input_data))
@@ -344,7 +344,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
             if not is_batched:
                 grain_ds = grain_ds.batch(
-                    len(source_data), batch_fn=lambda samples: samples
+                    len(source_data),
+                    batch_fn=lambda samples: tree.map_structure(
+                        lambda *values: np.stack(values),
+                        *samples,
+                    ),
                 )
 
             grain_output = grain_ds[0]
