@@ -173,18 +173,16 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
 
         # Patch embedding
         patch_embedding = image_encoder.vision_embeddings.patch_embedding
-        weights_dict[
-            "model.vision_tower.vision_model.embeddings.patch_embedding.weight"
-        ] = ops.transpose(
-            patch_embedding.weights[0], axes=(3, 2, 0, 1)
+        weights_dict["model.vision_tower.embeddings.patch_embedding.weight"] = (
+            ops.transpose(patch_embedding.weights[0], axes=(3, 2, 0, 1))
         )  # (H, W, C, out) -> (out, C, H, W)
-        weights_dict[
-            "model.vision_tower.vision_model.embeddings.patch_embedding.bias"
-        ] = patch_embedding.weights[1]
+        weights_dict["model.vision_tower.embeddings.patch_embedding.bias"] = (
+            patch_embedding.weights[1]
+        )
 
         # Position embedding
         weights_dict[
-            "model.vision_tower.vision_model.embeddings.position_embedding.weight"
+            "model.vision_tower.embeddings.position_embedding.weight"
         ] = image_encoder.vision_embeddings.position_embedding.weights[0]
 
         # Vision transformer layers
@@ -193,63 +191,63 @@ def get_gemma3_weights_map(backbone, include_lm_head=False):
 
             # Layer norms
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.layer_norm1.weight"
+                f"model.vision_tower.encoder.layers.{i}.layer_norm1.weight"
             ] = resblock.layer_norm_1.weights[0]  # gamma
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.layer_norm1.bias"
+                f"model.vision_tower.encoder.layers.{i}.layer_norm1.bias"
             ] = resblock.layer_norm_1.weights[1]  # beta
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.layer_norm2.weight"
+                f"model.vision_tower.encoder.layers.{i}.layer_norm2.weight"
             ] = resblock.layer_norm_2.weights[0]
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.layer_norm2.bias"
+                f"model.vision_tower.encoder.layers.{i}.layer_norm2.bias"
             ] = resblock.layer_norm_2.weights[1]
 
             # Attention projections
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.q_proj.weight"
+                f"model.vision_tower.encoder.layers.{i}.self_attn.q_proj.weight"
             ] = ops.transpose(resblock.attn.query_proj.weights[0])
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.q_proj.bias"
+                f"model.vision_tower.encoder.layers.{i}.self_attn.q_proj.bias"
             ] = resblock.attn.query_proj.weights[1]
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.k_proj.weight"
+                f"model.vision_tower.encoder.layers.{i}.self_attn.k_proj.weight"
             ] = ops.transpose(resblock.attn.key_proj.weights[0])
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.k_proj.bias"
+                f"model.vision_tower.encoder.layers.{i}.self_attn.k_proj.bias"
             ] = resblock.attn.key_proj.weights[1]
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.v_proj.weight"
+                f"model.vision_tower.encoder.layers.{i}.self_attn.v_proj.weight"
             ] = ops.transpose(resblock.attn.value_proj.weights[0])
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.v_proj.bias"
+                f"model.vision_tower.encoder.layers.{i}.self_attn.v_proj.bias"
             ] = resblock.attn.value_proj.weights[1]
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.out_proj.weight"
+                f"model.vision_tower.encoder.layers.{i}.self_attn.out_proj.weight"
             ] = ops.transpose(resblock.attn.out_proj.weights[0])
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.self_attn.out_proj.bias"
+                f"model.vision_tower.encoder.layers.{i}.self_attn.out_proj.bias"
             ] = resblock.attn.out_proj.weights[1]
 
             # MLP layers
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.mlp.fc1.weight"
+                f"model.vision_tower.encoder.layers.{i}.mlp.fc1.weight"
             ] = ops.transpose(resblock.mlp_dense_1.weights[0])
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.mlp.fc1.bias"
+                f"model.vision_tower.encoder.layers.{i}.mlp.fc1.bias"
             ] = resblock.mlp_dense_1.weights[1]
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.mlp.fc2.weight"
+                f"model.vision_tower.encoder.layers.{i}.mlp.fc2.weight"
             ] = ops.transpose(resblock.mlp_dense_2.weights[0])
             weights_dict[
-                f"model.vision_tower.vision_model.encoder.layers.{i}.mlp.fc2.bias"
+                f"model.vision_tower.encoder.layers.{i}.mlp.fc2.bias"
             ] = resblock.mlp_dense_2.weights[1]
 
         # Post-encoder layer norm
-        weights_dict[
-            "model.vision_tower.vision_model.post_layernorm.weight"
-        ] = image_encoder.encoder_layer_norm.weights[0]  # gamma
-        weights_dict["model.vision_tower.vision_model.post_layernorm.bias"] = (
+        weights_dict["model.vision_tower.post_layernorm.weight"] = (
+            image_encoder.encoder_layer_norm.weights[0]
+        )  # gamma
+        weights_dict["model.vision_tower.post_layernorm.bias"] = (
             image_encoder.encoder_layer_norm.weights[1]  # beta
         )
 
