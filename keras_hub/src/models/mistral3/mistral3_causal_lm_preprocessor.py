@@ -33,9 +33,12 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
 
     `x` for `call()`/`generate_preprocess()` should be a dict with
     `"prompts"` (and optionally `"responses"`) and, for multimodal inputs, an
-    `"images"` key: a list (one entry per prompt) of lists of raw images
-    (each `(height, width, 3)`). Omitting `"images"` (or passing `x` as a
-    plain string/list of strings) preprocesses as plain text, matching HF's
+    `"images"` key. Images are matched to prompts by their `"[IMG]"`
+    placeholder occurrences, consumed in order — `"images"` can be any
+    reasonable nesting (a single image, a batched array, flat or
+    per-prompt-grouped lists), as long as the total image count matches the
+    total placeholder count. Omitting `"images"` (or passing `x` as a plain
+    string/list of strings) preprocesses as plain text, matching HF's
     `Mistral3ForConditionalGeneration`, which also supports text-only calls.
 
     For use with generation, the layer also exposes two methods
@@ -115,38 +118,33 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
         block[-1] = self.tokenizer.image_end_token_id
         return block
 
-    def _tokenize_with_image_blocks(self, prompt, image_sizes):
-        """Tokenizes `prompt`, splicing in each image's block token ids.
-
-        Tokenizes the whole, unexpanded `prompt` in one call rather than
-        per-segment, since SentencePiece's leading-space handling differs
-        per call and wouldn't reproduce whole-string tokenization.
+    def _tokenize_base(self, prompt):
+        """Tokenizes `prompt` whole (not split around placeholders), since
+        SentencePiece's leading-space handling differs per call.
 
         Args:
-            prompt: str. The raw prompt, containing zero or more literal
-                occurrences of the image placeholder token.
-            image_sizes: list of `(height, width)` tuples, one per
-                occurrence of the placeholder token in `prompt`, in order.
+            prompt: str. The raw prompt text.
 
         Returns:
-            list of int. The complete token ID sequence for `prompt`.
+            list of int. `prompt`'s token IDs, placeholders not expanded.
         """
         base_ids = self.tokenizer(prompt)
         if hasattr(base_ids, "numpy"):
-            base_ids = base_ids.numpy().tolist()
-        else:
-            base_ids = list(base_ids)
+            return base_ids.numpy().tolist()
+        return list(base_ids)
 
+    def _expand_image_blocks(self, base_ids, image_sizes):
+        """Splices each image's block token ids into `base_ids`.
+
+        Args:
+            base_ids: list of int, from `_tokenize_base`.
+            image_sizes: list of `(height, width)` tuples, one per
+                placeholder occurrence in `base_ids`, in order.
+
+        Returns:
+            list of int. The complete token ID sequence.
+        """
         placeholder_id = self.tokenizer.image_placeholder_token_id
-        num_occurrences = base_ids.count(placeholder_id)
-        if num_occurrences != len(image_sizes):
-            raise ValueError(
-                "The number of image placeholder token occurrences in "
-                "`prompt` must match `len(image_sizes)`. Received: "
-                f"{num_occurrences} occurrences in {prompt!r}, but "
-                f"`image_sizes` has length {len(image_sizes)}."
-            )
-
         token_ids = []
         image_idx = 0
         for token_id in base_ids:
@@ -158,54 +156,72 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
                 token_ids.append(token_id)
         return token_ids
 
-    def _build_multimodal_inputs(self, prompts, images_per_prompt):
+    def _build_multimodal_inputs(self, prompts, flat_images):
         """Tokenizes prompts and produces vision model inputs.
 
+        Images are matched to prompts by consuming `flat_images`
+        left-to-right as placeholder tokens are encountered, not by any
+        caller-supplied grouping.
+
         Args:
-            prompts: list of str. One raw prompt per batch element, possibly
-                containing literal image-placeholder-token occurrences to
-                expand.
-            images_per_prompt: list of lists of raw images (each
-                `(height, width, 3)`), the same length as `prompts`. A
-                prompt with no images uses an empty list.
+            prompts: list of str. The raw prompts.
+            flat_images: list of raw images, in placeholder-occurrence
+                order across `prompts`.
 
         Returns:
-            A tuple `(tokenized, pixel_values, image_sizes)`. When the batch
-            has no images, `tokenized` is `prompts` unchanged and
-            `pixel_values`/`image_sizes` are `None` (matching HF, which
-            skips the vision tower entirely rather than passing it an
-            empty batch). Otherwise, `tokenized` is a list of per-example
-            token ID lists, with each image placeholder already expanded.
+            `(tokenized, pixel_values, image_sizes)`. For an image-free
+            batch, `tokenized` is `prompts` unchanged and
+            `pixel_values`/`image_sizes` are `None`.
         """
-        # Flatten into one ordered list, batch-row-major then per-prompt
-        # left-to-right. This order must match the order images are
-        # consumed while expanding placeholders, the order
-        # `Mistral3ImageConverter` processes them in, and the order
-        # features get scattered back into token positions.
-        flat_images = []
-        for images in images_per_prompt:
-            flat_images.extend(images)
-
         if len(flat_images) == 0:
             return list(prompts), None, None
 
         pixel_values, image_sizes = self.image_converter(flat_images)
 
+        placeholder_id = self.tokenizer.image_placeholder_token_id
+        base_ids_per_prompt = [
+            self._tokenize_base(prompt) for prompt in prompts
+        ]
+        occurrence_counts = [
+            base_ids.count(placeholder_id) for base_ids in base_ids_per_prompt
+        ]
+        total_occurrences = sum(occurrence_counts)
+        if total_occurrences != len(flat_images):
+            raise ValueError(
+                "The total number of image placeholder token occurrences "
+                "across `prompts` must match the number of images "
+                f"provided. Received: {total_occurrences} occurrence(s) "
+                f"across {len(prompts)} prompt(s), but {len(flat_images)} "
+                "image(s)."
+            )
+
         tokenized = []
         offset = 0
-        for prompt, images in zip(prompts, images_per_prompt):
-            num_images = len(images)
+        for base_ids, num_occurrences in zip(
+            base_ids_per_prompt, occurrence_counts
+        ):
             sizes_slice = [
-                tuple(image_sizes[offset + i]) for i in range(num_images)
+                tuple(image_sizes[offset + i]) for i in range(num_occurrences)
             ]
-            offset += num_images
-            tokenized.append(
-                self._tokenize_with_image_blocks(prompt, sizes_slice)
-            )
+            offset += num_occurrences
+            tokenized.append(self._expand_image_blocks(base_ids, sizes_slice))
         return tokenized, pixel_values, image_sizes
 
+    def _flatten_images(self, images):
+        """Flattens `images` into one ordered list of images."""
+        if images is None:
+            return []
+        if hasattr(images, "shape") and len(images.shape) == 3:
+            return [images]
+        if hasattr(images, "shape") and len(images.shape) == 4:
+            return list(images)
+        flat_images = []
+        for item in images:
+            flat_images.extend(self._flatten_images(item))
+        return flat_images
+
     def _extract_multimodal_inputs(self, x):
-        """Normalizes `x` into `(prompts, images_per_prompt, batched)`."""
+        """Normalizes `x` into `(prompts, flat_images, batched)`."""
         if isinstance(x, dict):
             prompts = x["prompts"]
             images = x.get("images", None)
@@ -217,8 +233,6 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
         if isinstance(prompts, str):
             batched = False
             prompts = [prompts]
-            if images is not None:
-                images = [images]
         elif tf is not None and isinstance(prompts, tf.Tensor):
             # `@preprocessing_function` converts raw inputs to `tf.Tensor`s
             # eagerly; decode back to Python strings, since image-placeholder
@@ -226,17 +240,9 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
             if prompts.shape.rank == 0:
                 batched = False
                 prompts = [prompts]
-                if images is not None:
-                    images = [images]
             prompts = [p.numpy().decode("utf-8") for p in prompts]
 
-        if images is None:
-            images_per_prompt = [[] for _ in prompts]
-        else:
-            images_per_prompt = [
-                list(per_prompt_images) for per_prompt_images in images
-            ]
-        return list(prompts), images_per_prompt, batched
+        return list(prompts), self._flatten_images(images), batched
 
     def call(
         self,
@@ -258,9 +264,9 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
             )
 
         sequence_length = sequence_length or self.sequence_length
-        prompts, images_per_prompt, batched = self._extract_multimodal_inputs(x)
+        prompts, flat_images, batched = self._extract_multimodal_inputs(x)
         tokenized, pixel_values, image_sizes = self._build_multimodal_inputs(
-            prompts, images_per_prompt
+            prompts, flat_images
         )
         if pixel_values is None:
             raise ValueError(
@@ -331,9 +337,9 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
         if not self.built:
             self.build(None)
 
-        prompts, images_per_prompt, batched = self._extract_multimodal_inputs(x)
+        prompts, flat_images, batched = self._extract_multimodal_inputs(x)
         tokenized, pixel_values, image_sizes = self._build_multimodal_inputs(
-            prompts, images_per_prompt
+            prompts, flat_images
         )
         if pixel_values is not None:
             tokenized = tf.ragged.constant(tokenized, dtype="int32")
