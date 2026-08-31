@@ -141,6 +141,9 @@ class FNetEncoder(keras.layers.Layer):
             input = ops.cast(input, "float32")
             real_in, imaginary_in = (input, ops.zeros_like(input))
             real_out, _ = ops.fft2((real_in, imaginary_in))
+            # Normalization to ensure the transform is orthonormal.
+            norm = ops.cast(ops.prod(ops.shape(input)[1:]), "float32")
+            real_out = real_out / ops.sqrt(norm)
             return ops.cast(real_out, input_dtype)
 
         def add_and_norm(input1, input2, norm_layer):

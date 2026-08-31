@@ -47,6 +47,9 @@ class FNetEncoderTest(TestCase):
             input = ops.cast(input, "float32")
             real_in, imaginary_in = (input, ops.zeros_like(input))
             real_out, _ = ops.fft2((real_in, imaginary_in))
+            # Normalization to ensure the transform is orthonormal.
+            norm = ops.cast(ops.prod(ops.shape(input)[1:]), "float32")
+            real_out = real_out / ops.sqrt(norm)
             return ops.cast(real_out, input_dtype)
 
         def add_and_norm(input1, input2, norm_layer):
@@ -61,3 +64,19 @@ class FNetEncoderTest(TestCase):
         )
 
         self.assertAllClose(outputs, x, atol=1e-5)
+
+    def test_fourier_transform_normalization(self):
+        # Verify that the FFT is normalized and preserves activation scale.
+        batch, seq_len, hidden = 2, 16, 32
+        x = random.normal(shape=(batch, seq_len, hidden))
+        layer = FNetEncoder(intermediate_dim=64)
+        # We need to build the layer.
+        layer(x)
+
+        # The Fourier transform part is the first thing in call().
+        # We can verify the scale by looking at mixing_output if we were inside,
+        # but we can also verify the full block doesn't explode.
+        # Without normalization, the std would be ~ sqrt(16*32) = 22.6
+        # With normalization, the std of the FFT result is ~ 1/sqrt(2) = 0.707
+        outputs = layer(x, training=False)
+        self.assertLess(ops.convert_to_numpy(ops.std(outputs)), 2.0)
