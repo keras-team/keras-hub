@@ -86,12 +86,6 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    # Pin each xdist worker to its own GPU (gw0→GPU 0, gw1→GPU 1, …).
-    worker_id = os.environ.get("PYTEST_XDIST_WORKER", None)
-    if worker_id is not None:
-        # worker_id is "gw0", "gw1", "gw2", ...
-        gpu_index = int(worker_id.replace("gw", ""))
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_index)
 
     # Monkey-patch training methods for OpenVINO backend
     if keras.config.backend() == "openvino":
