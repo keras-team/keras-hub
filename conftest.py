@@ -86,7 +86,6 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-
     # Monkey-patch training methods for OpenVINO backend
     if keras.config.backend() == "openvino":
         keras.Model.fit = lambda *args, **kwargs: pytest.skip(
