@@ -43,7 +43,7 @@ def convert_to_comparible_type(x):
     return x
 
 
-class _LayerWrapper:
+class _LayerWrapper(grain.MapTransform if grain is not None else object):
     """Pickleable wrapper to apply a layer to tuple or non-tuple inputs."""
 
     def __init__(self, layer, is_tuple):
@@ -54,6 +54,9 @@ class _LayerWrapper:
         if self.is_tuple:
             return self.layer(*x)
         return self.layer(x)
+
+    def map(self, x):
+        return self.__call__(x)
 
 
 class TestCase(tf.test.TestCase, parameterized.TestCase):
@@ -385,11 +388,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             sampler=grain.SequentialSampler(
                 num_records=len(source_data),
             ),
-            operations=[
-                grain.MapTransform(
-                    _LayerWrapper(layer, isinstance(input_data, tuple))
-                )
-            ],
+            operations=[_LayerWrapper(layer, isinstance(input_data, tuple))],
             worker_count=2,
         )
 
