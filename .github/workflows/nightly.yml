@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   run-test-for-nightly:
-    uses: ./.github/workflows/actions.yml  # zizmor: ignore[self-hosted-runner]
+    uses: ./.github/workflows/actions.yml  # zizmor: ignore[self-repository]
   nightly:
     name: Build Wheel file and upload
     needs: [run-test-for-nightly]
