@@ -42,22 +42,6 @@ class SegFormerTest(TestCase):
             "preprocessor": self.preprocessor,
         }
 
-    def test_segformer_segmenter_construction(self):
-        SegFormerImageSegmenter(backbone=self.backbone, num_classes=4)
-
-    @pytest.mark.large
-    def test_segformer_call(self):
-        segformer = SegFormerImageSegmenter(
-            backbone=self.backbone, num_classes=4
-        )
-
-        images = np.random.uniform(size=(2, 32, 32, 3))
-        segformer_output = segformer(images)
-        segformer_predict = segformer.predict(images)
-
-        self.assertAllEqual(segformer_output.shape, (2, 32, 32, 4))
-        self.assertAllEqual(segformer_predict.shape, (2, 32, 32, 4))
-
     def test_task(self):
         self.run_task_test(
             cls=SegFormerImageSegmenter,

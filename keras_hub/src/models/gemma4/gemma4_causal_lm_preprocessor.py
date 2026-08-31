@@ -3,7 +3,6 @@ import re
 
 import keras
 import numpy as np
-import tensorflow as tf
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
@@ -21,8 +20,14 @@ from keras_hub.src.models.gemma4.gemma4_tokenizer import Gemma4Tokenizer
 from keras_hub.src.models.gemma4.gemma4_video_converter import (
     Gemma4VideoConverter,
 )
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 def _get_num_vision_tokens(
@@ -171,6 +176,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         video_fps=24.0,
         **kwargs,
     ):
+        assert_tf_installed("Gemma4CausalLMPreprocessor")
         super().__init__(
             tokenizer=tokenizer,
             sequence_length=sequence_length,
