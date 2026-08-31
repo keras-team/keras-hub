@@ -1111,60 +1111,6 @@ class Mistral3PatchMerger(keras.layers.Layer):
         self.merging_layer.build((None, merge_input_dim))
         self.built = True
 
-    def _merge_image(
-        self,
-        image_features,
-        height,
-        width,
-    ):
-        """Merge one image's patch sequence spatially."""
-
-        merge_size = self.spatial_merge_size
-        hidden_dim = self.hidden_dim
-
-        # [tokens, hidden_dim] -> [H, W, D]
-        image_features = ops.reshape(
-            image_features,
-            (
-                height,
-                width,
-                hidden_dim,
-            ),
-        )
-
-        # [H, W, D] -> [H/2, 2, W/2, 2, D]: split each spatial dim into
-        # (windows, merge_size).
-        merged_height = height // merge_size
-        merged_width = width // merge_size
-
-        image_features = ops.reshape(
-            image_features,
-            (
-                merged_height,
-                merge_size,
-                merged_width,
-                merge_size,
-                hidden_dim,
-            ),
-        )
-
-        # [H/2, 2, W/2, 2, D] -> [H/2, W/2, D, 2, 2], matching the
-        # channel-major ordering of PyTorch's F.unfold (used by HF).
-        image_features = ops.transpose(
-            image_features,
-            (0, 2, 4, 1, 3),
-        )
-
-        image_features = ops.reshape(
-            image_features,
-            (
-                merged_height * merged_width,
-                hidden_dim * merge_size * merge_size,
-            ),
-        )
-
-        return image_features
-
     def call(
         self,
         image_features,
@@ -1243,8 +1189,9 @@ class Mistral3PatchMerger(keras.layers.Layer):
         )
 
         # The token itself is the window's top-left patch (floor-div/mod
-        # recombine exactly). Gather the `merge_size x merge_size` window
-        # in row-major order, matching `_merge_image`'s channel ordering.
+        # recombine exactly). Gather the `merge_size x merge_size` window in
+        # row-major order, matching the channel-major ordering of PyTorch's
+        # F.unfold (used by HF).
         max_index = num_tokens - 1
         patch_indices = ops.stack(
             [
