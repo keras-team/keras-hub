@@ -323,6 +323,50 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         return numpy_input_data, source_data
 
+    @staticmethod
+    def _grain_batch_fn(samples):
+        """Batch Grain samples while preserving ragged list outputs."""
+        if not samples:
+            return samples
+
+        def batch_values(values):
+            print("[DEBUG][Func:Batch_values] values:", values)
+            print("number of values:", len(values))
+            for i, value in enumerate(values):
+                print(
+                    f"  value[{i}] "
+                    f"type={type(value)}, "
+                    f"shape={np.shape(value)}"
+                )
+            first_shape = np.shape(values[0])
+            print("first_shape:", first_shape)
+            
+            if all(np.shape(value) == first_shape for value in values[1:]):
+                result = np.stack(values)
+
+                print("AFTER np.stack:")
+                print("  result shape:", result.shape)
+                return np.stack(values)
+
+            return list(values)
+
+        def traverse(values):
+            first = values[0]
+
+            if isinstance(first, dict):
+                return {
+                    key: traverse([value[key] for value in values])
+                    for key in first
+                }
+            if isinstance(first, tuple):
+                return tuple(
+                    traverse([value[i] for value in values])
+                    for i in range(len(first))
+                )
+            return batch_values(values)
+
+        return traverse(samples)
+
     def _run_grain_test(self, layer, input_data, output, unpack=False):
         if not grain:
             self.skipTest(
@@ -349,10 +393,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             if not is_batched:
                 grain_ds = grain_ds.batch(
                     len(source_data),
-                    batch_fn=lambda samples: tree.map_structure(
-                        lambda *values: np.stack(values),
-                        *samples,is_leaf=lambda x: isinstance(x, list),
-                    ),
+                    batch_fn=self._grain_batch_fn,
                 )
 
             grain_output = grain_ds[0]
