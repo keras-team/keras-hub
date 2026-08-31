@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 import tempfile
+from absl import flags
 
 import keras
 import numpy as np
@@ -376,13 +377,16 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 "PyGrain not installed - skipping PyGrain multiprocessing test."
             )
 
+        if not flags.FLAGS.is_parsed():
+            flags.FLAGS(["test"])
+
         loader = grain.DataLoader(
             data_source=source_data,
             sampler=grain.SequentialSampler(
                 num_records=len(source_data),
             ),
             operations=[
-                grain.MapOperation(
+                grain.MapTransform(
                     _LayerWrapper(layer, isinstance(input_data, tuple))
                 )
             ],
