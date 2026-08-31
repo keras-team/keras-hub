@@ -351,7 +351,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     len(source_data),
                     batch_fn=lambda samples: tree.map_structure(
                         lambda *values: np.stack(values),
-                        *samples,
+                        *samples,is_leaf=lambda x: isinstance(x, list),
                     ),
                 )
 
