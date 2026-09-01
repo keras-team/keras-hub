@@ -74,6 +74,18 @@ class Qwen3ASRCausalLM(CausalLM):
         if self.preprocessor is None:
             return [inputs], False
 
+        if not isinstance(inputs, dict):
+            raise ValueError(
+                "Qwen3ASRCausalLM.generate() expects a dictionary input "
+                "containing 'prompts' and 'audio' keys. "
+                f"Received: {type(inputs)}"
+            )
+        if "prompts" not in inputs or "audio" not in inputs:
+            raise ValueError(
+                "Qwen3ASRCausalLM.generate() expects the input dictionary to "
+                "contain both 'prompts' and 'audio' keys."
+            )
+
         def normalize(x):
             if isinstance(x, str):
                 return [x], True
@@ -81,21 +93,18 @@ class Qwen3ASRCausalLM(CausalLM):
                 return x[tf.newaxis], True
             return x, False
 
-        if isinstance(inputs, dict):
-            inputs = inputs.copy()
-            inputs["prompts"], input_is_scalar = normalize(inputs["prompts"])
+        inputs = inputs.copy()
+        inputs["prompts"], input_is_scalar = normalize(inputs["prompts"])
 
-            if input_is_scalar and "audio" in inputs:
-                x = inputs["audio"]
-                if isinstance(x, np.ndarray) and len(x.shape) == 1:
+        if input_is_scalar and "audio" in inputs:
+            x = inputs["audio"]
+            if isinstance(x, np.ndarray) and len(x.shape) == 1:
+                inputs["audio"] = [x]
+            elif tf and isinstance(x, tf.Tensor) and x.shape.rank == 1:
+                inputs["audio"] = x[tf.newaxis]
+            elif isinstance(x, list):
+                if len(x) > 0 and isinstance(x[0], (int, float)):
                     inputs["audio"] = [x]
-                elif tf and isinstance(x, tf.Tensor) and x.shape.rank == 1:
-                    inputs["audio"] = x[tf.newaxis]
-                elif isinstance(x, list):
-                    if len(x) > 0 and isinstance(x[0], (int, float)):
-                        inputs["audio"] = [x]
-        else:
-            inputs, input_is_scalar = normalize(inputs)
 
         return [inputs], input_is_scalar
 
@@ -179,6 +188,14 @@ class Qwen3ASRCausalLM(CausalLM):
             inputs["audio_mask"],
         )
 
+        # Clear padding tokens to prevent the sampler from stopping immediately.
+        # This is necessary because for Qwen, the pad token is often the same
+        # as a stop token.
+        # We use a token ID that is unlikely to be a stop token.
+        # We will restore the original padding after the sampler runs.
+        original_token_ids = token_ids
+        token_ids = ops.where(padding_mask, token_ids, 0)
+
         # Run audio encoder once
         audio_embeds = self.backbone.audio_encoder(audio_mel, audio_mask)
         audio_embeds = self.backbone.projector(audio_embeds)
@@ -227,13 +244,20 @@ class Qwen3ASRCausalLM(CausalLM):
             end_locations = ops.cast(end_locations, "int32")
             cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
             overflow = cumsum - end_locations
-            padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
+            new_padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
         else:
-            padding_mask = ops.ones_like(token_ids, dtype="bool")
+            new_padding_mask = ops.ones_like(token_ids, dtype="bool")
+
+        # Restore original padding tokens where the new padding mask is False.
+        # This ensures that detokenize(skip_special_tokens=True) works
+        # correctly.
+        token_ids = ops.where(
+            new_padding_mask, token_ids, ops.cast(original_token_ids, "int32")
+        )
 
         return {
             "token_ids": token_ids,
-            "padding_mask": padding_mask,
+            "padding_mask": new_padding_mask,
             "audio_mel": audio_mel,
             "audio_mask": audio_mask,
         }

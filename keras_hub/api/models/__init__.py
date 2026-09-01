@@ -902,6 +902,10 @@ from keras_hub.src.models.t5.t5_backbone import T5Backbone as T5Backbone
 from keras_hub.src.models.t5.t5_preprocessor import (
     T5Preprocessor as T5Preprocessor,
 )
+from keras_hub.src.models.t5.t5_seq_2_seq_lm import T5Seq2SeqLM as T5Seq2SeqLM
+from keras_hub.src.models.t5.t5_seq_2_seq_lm_preprocessor import (
+    T5Seq2SeqLMPreprocessor as T5Seq2SeqLMPreprocessor,
+)
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer as T5Tokenizer
 from keras_hub.src.models.t5gemma.t5gemma_backbone import (
     T5GemmaBackbone as T5GemmaBackbone,

@@ -406,21 +406,28 @@ class MultiSegmentPacker(PreprocessingLayer):
                     remaining_budget = 0
         return trimmed_segments
 
-    def _trim_inputs_python(self, inputs):
+    def _trim_inputs_python(
+        self,
+        inputs,
+        sequence_length=None,
+        add_start_value=True,
+        add_end_value=True,
+    ):
         """Trim inputs to desired length."""
+        sequence_length = sequence_length or self.sequence_length
         num_segments = len(inputs)
         num_special_tokens = (
-            len(self.start_value)
+            (len(self.start_value) if add_start_value else 0)
             + (num_segments - 1) * len(self.sep_value)
-            + len(self.end_value)
+            + (len(self.end_value) if add_end_value else 0)
         )
         if self.truncate == "round_robin":
             return self._trim_inputs_round_robin_python(
-                self.sequence_length - num_special_tokens, inputs
+                sequence_length - num_special_tokens, inputs
             )
         elif self.truncate == "waterfall":
             return self._trim_inputs_waterfall_python(
-                self.sequence_length - num_special_tokens, inputs
+                sequence_length - num_special_tokens, inputs
             )
         else:
             raise ValueError("Unsupported truncate: %s" % self.truncate)
@@ -467,6 +474,9 @@ class MultiSegmentPacker(PreprocessingLayer):
         add_start_value=True,
         add_end_value=True,
     ):
+        if sequence_length is not None:
+            sequence_length = int(sequence_length)
+
         def _get_type(inputs):
             if self.start_value:
                 return type(self.start_value[0])
@@ -503,7 +513,12 @@ class MultiSegmentPacker(PreprocessingLayer):
         inputs, batched = self._canonicalize_inputs_python(inputs)
         input_type = _get_type(inputs)
 
-        segments = self._trim_inputs_python(inputs)
+        segments = self._trim_inputs_python(
+            inputs,
+            sequence_length=sequence_length,
+            add_start_value=add_start_value,
+            add_end_value=add_end_value,
+        )
         token_ids, segment_ids = self._combine_inputs_python(
             segments,
             add_start_value=add_start_value,

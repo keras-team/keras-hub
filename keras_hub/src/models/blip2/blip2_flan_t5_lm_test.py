@@ -153,11 +153,11 @@ class BLIP2FlanT5Test(TestCase):
         out = self.model(data)
         self.assertNotAllClose(out[0], out[1])
 
-    def test_config_round_trip(self):
+    def test_config_contains_expected_keys(self):
         cfg = self.model.get_config()
         self.assertIn("language_projection", cfg)
         self.assertIn("lm_head", cfg)
-        self.assertEqual(BLIP2FlanT5.from_config(cfg).get_config(), cfg)
+        self.run_serialization_test(self.model)
 
     def test_weights_round_trip(self):
         import os
@@ -198,14 +198,10 @@ class BLIP2FlanT5Test(TestCase):
 
     @pytest.mark.large
     def test_saved_model(self):
-        import keras
-        from keras import ops
-
-        path = self.get_temp_dir() + "/flan_t5_lm.keras"
-        self.model.save(path)
-        loaded = keras.models.load_model(path)
-        self.assertAllClose(
-            ops.convert_to_numpy(self.model(self.data)),
-            ops.convert_to_numpy(loaded(self.data)),
+        self.run_model_saving_test(
+            cls=BLIP2FlanT5,
+            init_kwargs=_TINY,
+            input_data=self.data,
             atol=1e-5,
+            rtol=1e-5,
         )

@@ -35,8 +35,8 @@ class Qwen3ASRAudioEncoderTest(TestCase):
             },
             expected_output_shape=(batch_size, 26, 32),
             expected_num_trainable_weights=41,
-            expected_num_non_trainable_weights=1,
-            expected_num_non_trainable_variables=1,
+            expected_num_non_trainable_weights=0,
+            expected_num_non_trainable_variables=0,
         )
 
     def test_projector_call(self):

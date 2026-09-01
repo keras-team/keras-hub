@@ -218,9 +218,7 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
                 def prepend_fn():
                     return tf.cond(
                         num_tokens > 0,
-                        lambda: tf.strings.join(
-                            [a_str, prompt], separator="\n"
-                        ),
+                        lambda: tf.strings.join([a_str, prompt], separator=""),
                         lambda: prompt,
                     )
 
@@ -243,7 +241,7 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
                     if "<audio>" in prompt:
                         formatted_prompt = prompt.replace("<audio>", audio_str)
                     else:
-                        formatted_prompt = audio_str + "\n" + prompt
+                        formatted_prompt = audio_str + prompt
                 else:
                     formatted_prompt = prompt
                 formatted_prompts.append(formatted_prompt)
@@ -277,7 +275,7 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
             response_mask = ops.squeeze(response_mask, axis=0)
             if audio_mel is not None:
                 audio_mel = ops.squeeze(audio_mel, axis=0)
-                audio_mask = audio_mask[0]
+                audio_mask = ops.squeeze(audio_mask, axis=0)
 
         output = {
             "token_ids": token_ids,
@@ -285,7 +283,7 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
         }
         if audio_mel is not None:
             output["audio_mel"] = audio_mel
-            output["audio_mask"] = ops.convert_to_tensor(audio_mask)
+            output["audio_mask"] = audio_mask
 
         return output, response_mask
 

@@ -19,6 +19,7 @@ def convert_backbone_config(transformers_config):
         "num_heads": transformers_config["num_attention_heads"],
         "hidden_dim": transformers_config["hidden_size"],
         "intermediate_dim": transformers_config["intermediate_size"],
+        "max_sequence_length": transformers_config["max_position_embeddings"],
     }
 
 

@@ -1,4 +1,4 @@
-import numpy as np
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import Qwen3ASRBackbone
@@ -72,17 +72,18 @@ class Qwen3ASRTokenizer(BytePairTokenizer):
         """Convert a list of integer ids to a string."""
         if skip_special_tokens:
             self._maybe_initialized_tokenizers()
+            # Defensive conversion to list/numpy for Python execution path
+            inputs = ops.convert_to_numpy(inputs)
             # Tokenizers library decode supports skipping special tokens.
             # Handle both single sequence and batch
-            inputs_np = np.array(inputs)
-            if len(inputs_np.shape) == 1:
+            if len(inputs.shape) == 1:
                 res = self._tokenizer.decode(
-                    inputs_np.tolist(), skip_special_tokens=True
+                    inputs.tolist(), skip_special_tokens=True
                 )
                 return res
             else:
                 res = self._tokenizer.decode_batch(
-                    inputs_np.tolist(), skip_special_tokens=True
+                    inputs.tolist(), skip_special_tokens=True
                 )
                 return res
         return super().detokenize(inputs)

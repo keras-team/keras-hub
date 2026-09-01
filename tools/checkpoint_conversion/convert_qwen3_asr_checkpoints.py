@@ -41,45 +41,18 @@ def test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_processor):
         2 * np.pi * 440 * np.arange(sample_rate * 5) / sample_rate
     ).astype("float32")
 
-    # HF input
-    print("-> Running Huggingface generation...")
-    hf_prompt = "<|audio_start|><|audio_pad|><|audio_end|>\ntranscribe"
-    hf_inputs = hf_processor(
-        text=hf_prompt,
-        audio=audio_data,
-        sampling_rate=16000,
-        return_tensors="pt",
-    ).to(device)
-
-    # HF generate
-    outputs = hf_model.generate(
-        **hf_inputs,
-        max_new_tokens=20,
-        do_sample=False,
-    )
-    # Extract only new tokens for comparison
-    hf_new_tokens = outputs[0, hf_inputs.input_ids.shape[-1] :]
-    hf_output_text = hf_processor.tokenizer.decode(
-        hf_new_tokens, skip_special_tokens=True
-    ).strip()
-    print("-> Huggingface generation finished.")
-
-    # Free HF memory to avoid OOM/Hang during Keras compilation
-    del hf_model
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
     # Keras input
     print("-> Starting KerasHub generation...")
     keras_inputs = {"audio": audio_data, "prompts": "transcribe"}
 
     # Run inference
     print("   Running inference...")
-    # Get prompt length and stop tokens
+    # Get prompt tokens for HF parity
     preprocessed = keras_hub_model.preprocessor.generate_preprocess(
         keras_inputs, sequence_length=256
     )
     prompt_len = int(ops.sum(ops.cast(preprocessed["padding_mask"], "int32")))
+
     stop_ids = [keras_hub_tokenizer.end_token_id]
     if hasattr(keras_hub_tokenizer, "end_token2_id"):
         stop_ids.append(keras_hub_tokenizer.end_token2_id)
@@ -99,16 +72,72 @@ def test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_processor):
     )
 
     # Extract only new tokens and detokenize skipping special ones
-    keras_new_tokens = keras_outputs["token_ids"][0, prompt_len:]
+    # Truncate to 20 tokens to match HF max_new_tokens=20
+    keras_new_tokens = keras_outputs["token_ids"][
+        0, prompt_len : prompt_len + 20
+    ]
     keras_output_text = keras_hub_tokenizer.detokenize(
         keras_new_tokens, skip_special_tokens=True
-    ).strip()
+    )
+    if isinstance(keras_output_text, torch.Tensor):
+        keras_output_text = keras_output_text.cpu().numpy()
+    if isinstance(keras_output_text, np.ndarray):
+        keras_output_text = keras_output_text.item()
+    if isinstance(keras_output_text, bytes):
+        keras_output_text = keras_output_text.decode("utf-8")
+    keras_output_text = keras_output_text.strip()
 
     keras_hub_model.preprocessor = old_preprocessor
     print("-> KerasHub generation finished.")
 
+    # HF input
+    print("-> Running Huggingface generation...")
+    # Use the EXACT same token IDs as KerasHub to ensure prompt parity
+    hf_input_ids = torch.from_numpy(
+        ops.convert_to_numpy(batch["token_ids"])
+    ).to(device)
+    hf_input_ids = hf_input_ids[:, :prompt_len]  # Only the valid prompt part
+
+    hf_inputs = hf_processor(
+        text="dummy",
+        audio=audio_data,
+        sampling_rate=16000,
+        return_tensors="pt",
+        padding="max_length",
+    )
+    hf_audio_mel = hf_inputs.input_features.to(device)
+    hf_audio_mask = hf_inputs.input_features_mask.to(device)
+
+    # HF generate
+    outputs = hf_model.generate(
+        input_ids=hf_input_ids,
+        input_features=hf_audio_mel,
+        input_features_mask=hf_audio_mask,
+        max_new_tokens=20,
+        do_sample=False,
+    )
+    # Extract only new tokens for comparison
+    hf_new_tokens = outputs[
+        0, hf_input_ids.shape[-1] : hf_input_ids.shape[-1] + 20
+    ]
+    hf_output_text = hf_processor.tokenizer.decode(
+        hf_new_tokens, skip_special_tokens=True
+    ).strip()
+    print("-> Huggingface generation finished.")
+
     print(f"🔶 KerasHub output:    '{keras_output_text}'")
     print(f"🔶 Huggingface output: '{hf_output_text}'")
+
+    if keras_output_text != hf_output_text:
+        raise ValueError(
+            "KerasHub and Huggingface outputs do not match! "
+            f"KerasHub: {keras_output_text}, HF: {hf_output_text}"
+        )
+
+    # Free HF memory after comparison
+    del hf_model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def main(_):

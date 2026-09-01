@@ -16,19 +16,23 @@ concurrency:
 
 jobs:
   run_tests:
-    name: Test the code
+    name: Test the code (${{ matrix.backend }}, ${{ matrix.version }}, shard ${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
         backend: [tensorflow, jax, torch]
         version: [keras-stable]
+        shard: [1, 2, 3, 4]
         include:
           - backend: jax
-            version: keras-3.15
+            version: keras-3.14
+            shard: 1
           - backend: jax
             version: keras-nightly
+            shard: 1
           - backend: openvino
             version: keras-nightly
+            shard: 1
 
     container:
       image: python:3.11-slim
@@ -45,19 +49,19 @@ jobs:
         apt-get update
         apt-get -y install build-essential curl git gnupg
         git config --global --add safe.directory '*'
-    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
     - name: Install dependencies
       run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
-    - name: Pin Keras 3.15
-      if: ${{ matrix.version == 'keras-3.15'}}
+    - name: Pin Keras 3.14
+      if: ${{ matrix.version == 'keras-3.14'}}
       run: |
         pip uninstall -y keras jaxlib jax
-        pip install keras==3.15.0 --progress-bar off
-        pip install jax==0.6.0 --progress-bar off
+        pip install keras==3.14.0 --progress-bar off
+        pip install jax==0.10.0 --progress-bar off
     - name: Pin Keras Nightly
       if: ${{ matrix.version == 'keras-nightly'}}
       run: |
@@ -65,13 +69,14 @@ jobs:
         pip install keras-nightly --no-cache-dir --progress-bar off
     - name: Test with pytest
       run: |
-        pytest keras_hub/ -n auto --dist loadfile --durations=50
+        pytest keras_hub/ -n auto --dist loadfile --durations=50 --splits 4 --group ${{ matrix.shard }}
     - name: Run integration tests
+      if: ${{ matrix.shard == 1 }}
       run: |
         python pip_build.py --install
         cd integration_tests && pytest . -k "not NoTensorflow"
     - name: Run no tensorflow integration test
-      if: ${{ matrix.backend != 'tensorflow'}}
+      if: ${{ matrix.backend != 'tensorflow' && matrix.shard == 1 }}
       run: |
         pip uninstall -y tensorflow-text tensorflow
         cd integration_tests && pytest . -k "NoTensorflow"
@@ -79,11 +84,11 @@ jobs:
     name: Check the code format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Python 3.11
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
       - name: Get pip cache dir

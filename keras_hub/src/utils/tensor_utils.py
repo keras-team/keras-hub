@@ -88,6 +88,26 @@ def preprocessing_function(fn):
     return wrapper
 
 
+def convert_to_numpy(x):
+    """Convert `x` to a numpy array.
+
+    Unlike `keras.ops.convert_to_numpy`, this does not require `x` to be a
+    tensor of the current backend. Preprocessing layers, tokenizers and metrics
+    all work in TensorFlow regardless of the active backend, so they routinely
+    hold `tf.Tensor`s that the backend cannot convert. Only backend tensors are
+    handed to the backend; everything else is converted directly.
+    """
+    if isinstance(x, np.ndarray):
+        return x
+    if tf is not None and isinstance(x, tf.RaggedTensor):
+        return x.numpy()
+    if tf is not None and isinstance(x, tf.Tensor):
+        return np.asarray(x)
+    if ops.is_tensor(x):
+        return ops.convert_to_numpy(x)
+    return np.array(x)
+
+
 def convert_preprocessing_inputs(x):
     """Convert raw inputs for preprocessing.
 

@@ -99,9 +99,7 @@ class BeamSampler(Sampler):
             if stop_token_ids is None:
                 return ops.convert_to_tensor(True, dtype="bool")
             # Stop if all sequences have produced a *new* stop token.
-            # Only look for end tokens in the part we have generated so far.
-            search_mask = ops.logical_and(~mask, ops.arange(max_length) < index)
-            end_tokens = any_equal(prompt, stop_token_ids, search_mask)
+            end_tokens = any_equal(prompt, stop_token_ids, ~mask)
             prompt_done = ops.any(end_tokens, axis=-1)
             return ops.logical_not(ops.all(prompt_done))
 

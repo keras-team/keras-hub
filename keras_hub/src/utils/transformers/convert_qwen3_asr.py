@@ -71,6 +71,17 @@ def convert_weights(backbone, loader, transformers_config):
     def proj_hf_key(suffix):
         return f"model.multi_modal_projector.{suffix}"
 
+    # Ensure backbone is built with correct shapes
+    if not backbone.built:
+        backbone.build(
+            {
+                "token_ids": (None, 1),
+                "padding_mask": (None, 1),
+                "audio_mel": (None, 100, backbone.audio_num_mel_bins),
+                "audio_mask": (None, 100),
+            }
+        )
+
     # Text Backbone
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
@@ -96,15 +107,6 @@ def convert_weights(backbone, loader, transformers_config):
             np.reshape(x, (shape[2], shape[0], shape[1])),
             axes=(1, 2, 0),
         )
-
-    def transpose_conv_out_kernel(x, shape):
-        d_model = shape[1]
-        channels = backbone.audio_encoder.downsample_hidden_size
-        freq = shape[0] // channels
-        x = np.reshape(x, (d_model, channels, freq))
-        x = np.transpose(x, (0, 2, 1))
-        x = np.reshape(x, (d_model, shape[0]))
-        return np.transpose(x, (1, 0))
 
     for i in range(backbone.num_layers):
         decoder_layer = backbone.get_layer(f"transformer_layer_{i}")
@@ -216,11 +218,11 @@ def convert_weights(backbone, loader, transformers_config):
     loader.port_weight(
         keras_variable=audio_encoder.conv_out.kernel,
         hf_weight_key=audio_hf_key("conv_out.weight"),
-        hook_fn=transpose_conv_out_kernel,
+        hook_fn=lambda x, _: np.transpose(x, (1, 0)),
     )
 
     # Layers
-    for i in range(audio_encoder.num_layers):
+    for i in range(len(audio_encoder.transformer_layers)):
         block = audio_encoder.transformer_layers[i]
 
         # Self attention layernorm
@@ -236,47 +238,40 @@ def convert_weights(backbone, loader, transformers_config):
         )
 
         # Self attention
-        ## Query
         loader.port_weight(
-            keras_variable=block._self_attention_layer._query_dense.kernel,
+            keras_variable=block.q_proj.kernel,
             hf_weight_key=audio_hf_key(f"layers.{i}.self_attn.q_proj.weight"),
-            hook_fn=transpose_and_reshape,
+            hook_fn=lambda x, _: np.transpose(x, (1, 0)),
         )
         loader.port_weight(
-            keras_variable=block._self_attention_layer._query_dense.bias,
+            keras_variable=block.q_proj.bias,
             hf_weight_key=audio_hf_key(f"layers.{i}.self_attn.q_proj.bias"),
-            hook_fn=reshape_bias,
         )
-        ## Key
         loader.port_weight(
-            keras_variable=block._self_attention_layer._key_dense.kernel,
+            keras_variable=block.k_proj.kernel,
             hf_weight_key=audio_hf_key(f"layers.{i}.self_attn.k_proj.weight"),
-            hook_fn=transpose_and_reshape,
+            hook_fn=lambda x, _: np.transpose(x, (1, 0)),
         )
         loader.port_weight(
-            keras_variable=block._self_attention_layer._key_dense.bias,
+            keras_variable=block.k_proj.bias,
             hf_weight_key=audio_hf_key(f"layers.{i}.self_attn.k_proj.bias"),
-            hook_fn=reshape_bias,
         )
-        ## Value
         loader.port_weight(
-            keras_variable=block._self_attention_layer._value_dense.kernel,
+            keras_variable=block.v_proj.kernel,
             hf_weight_key=audio_hf_key(f"layers.{i}.self_attn.v_proj.weight"),
-            hook_fn=transpose_and_reshape,
+            hook_fn=lambda x, _: np.transpose(x, (1, 0)),
         )
         loader.port_weight(
-            keras_variable=block._self_attention_layer._value_dense.bias,
+            keras_variable=block.v_proj.bias,
             hf_weight_key=audio_hf_key(f"layers.{i}.self_attn.v_proj.bias"),
-            hook_fn=reshape_bias,
         )
-        ## Output
         loader.port_weight(
-            keras_variable=block._self_attention_layer._output_dense.kernel,
+            keras_variable=block.out_proj.kernel,
             hf_weight_key=audio_hf_key(f"layers.{i}.self_attn.out_proj.weight"),
-            hook_fn=transpose_output_kernel,
+            hook_fn=lambda x, _: np.transpose(x, (1, 0)),
         )
         loader.port_weight(
-            keras_variable=block._self_attention_layer._output_dense.bias,
+            keras_variable=block.out_proj.bias,
             hf_weight_key=audio_hf_key(f"layers.{i}.self_attn.out_proj.bias"),
         )
 

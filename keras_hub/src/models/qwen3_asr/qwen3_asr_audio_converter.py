@@ -30,6 +30,8 @@ class Qwen3ASRAudioConverter(AudioConverter):
         n_window: int. Half the mel-frame chunk size used for padding. The
             log-mel time axis is right-padded to a multiple of `2 * n_window`.
             Defaults to `50`.
+        min_length: int. Minimum number of samples for each audio clip.
+            Clips shorter than this are zero-padded. Defaults to `8000`.
     """
 
     def __init__(
@@ -40,6 +42,7 @@ class Qwen3ASRAudioConverter(AudioConverter):
         sampling_rate=16000,
         max_audio_length=30,
         n_window=50,
+        min_length=8000,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -60,6 +63,7 @@ class Qwen3ASRAudioConverter(AudioConverter):
         self.max_audio_length = max_audio_length
         self.num_samples = int(self.sampling_rate * self.max_audio_length)
         self.n_window = n_window
+        self.min_length = min_length
 
         # After transposition, `self.mel_filters`'s shape is
         # `(num_fft_bins // 2 + 1, num_mels).`
@@ -87,7 +91,9 @@ class Qwen3ASRAudioConverter(AudioConverter):
         )
 
         min_mel = 0.0
-        max_mel = 45.245640471924965
+        # hertz_to_mel(8000.0, mel_scale="slaney")
+        # = 15.0 + np.log(8000.0 / 1000.0) * (27.0 / np.log(6.4))
+        max_mel = 15.0 + np.log(8.0) * (27.0 / np.log(6.4))
 
         mels = np.linspace(min_mel, max_mel, self.num_mels + 2)
         mels = np.asanyarray(mels)
@@ -97,7 +103,7 @@ class Qwen3ASRAudioConverter(AudioConverter):
         freqs = f_min + f_sp * mels
 
         min_log_hz = 1000.0
-        min_log_mel = (min_log_hz - f_min) / f_sp
+        min_log_mel = 15.0
         logstep = np.log(6.4) / 27.0
 
         log_t = mels >= min_log_mel
@@ -142,34 +148,17 @@ class Qwen3ASRAudioConverter(AudioConverter):
         )
 
         def tf_log10(x):
-            numerator = tf.math.log(x)
-            denominator = tf.math.log(tf.constant(10, dtype=numerator.dtype))
-            return numerator / denominator
+            return tf.math.log(x) / np.log(10.0)
 
         mel_spec = tf.maximum(mel_spec, 1e-10)
         log_spec = tf_log10(mel_spec)
 
-        log_spec_shape = tf.shape(log_spec)
-        max_value_minus_eight = tf.math.subtract(
-            tf.math.reduce_max(log_spec, axis=[1, 2]),
-            tf.cast(8, dtype=log_spec.dtype),
-        )
-        max_value_minus_eight = tf.expand_dims(max_value_minus_eight, axis=1)
-        max_value_minus_eight = tf.repeat(
-            max_value_minus_eight,
-            repeats=log_spec_shape[1] * log_spec_shape[2],
-            axis=1,
-        )
-        max_value_minus_eight = tf.reshape(
-            max_value_minus_eight, shape=log_spec_shape
+        max_value_minus_eight = (
+            tf.math.reduce_max(log_spec, axis=[1, 2], keepdims=True) - 8.0
         )
         log_spec = tf.maximum(log_spec, max_value_minus_eight)
 
-        type_cast_four = tf.cast(4, dtype=log_spec.dtype)
-        log_spec = tf.math.divide(
-            tf.math.add(log_spec, type_cast_four),
-            type_cast_four,
-        )
+        log_spec = (log_spec + 4.0) / 4.0
 
         # Right-pad the mel time axis to a multiple of `2 * n_window`.
         multiple = self.n_window * 2
@@ -201,12 +190,17 @@ class Qwen3ASRAudioConverter(AudioConverter):
         if rank_1_input:
             audio = tf.expand_dims(audio, 0)
 
-        if isinstance(audio, tf.Tensor):
-            audio = tf.RaggedTensor.from_tensor(audio)
-
-        audio_shape = audio.shape.as_list()
-        audio_shape[-1] = self.num_samples
-        audio = audio.to_tensor(shape=audio_shape)
+        # Pad to force max_audio_length (self.num_samples).
+        # This matches audio_shape() and expected test behavior.
+        if isinstance(audio, tf.RaggedTensor):
+            audio = audio.to_tensor(
+                shape=[tf.shape(audio)[0], self.num_samples]
+            )
+        else:
+            curr_len = tf.shape(audio)[1]
+            pad_len = tf.maximum(0, self.num_samples - curr_len)
+            audio = tf.pad(audio, [[0, 0], [0, pad_len]])
+            audio = audio[:, : self.num_samples]
 
         log_spec = self._extract_audio_features(audio)
         if rank_1_input:
@@ -223,6 +217,7 @@ class Qwen3ASRAudioConverter(AudioConverter):
                 "sampling_rate": self.sampling_rate,
                 "max_audio_length": self.max_audio_length,
                 "n_window": self.n_window,
+                "min_length": self.min_length,
             }
         )
         return config

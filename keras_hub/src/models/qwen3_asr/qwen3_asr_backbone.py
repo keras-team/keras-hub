@@ -4,7 +4,6 @@ from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.qwen3.qwen3_attention import Qwen3Attention
 from keras_hub.src.models.qwen3.qwen3_decoder import Qwen3TransformerDecoder
 from keras_hub.src.models.qwen3.qwen3_layernorm import Qwen3LayerNorm
 from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_encoder import (
@@ -13,38 +12,10 @@ from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_encoder import (
 from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_encoder import (
     Qwen3ASRMultiModalProjector,
 )
-from keras_hub.src.utils.keras_utils import clone_initializer
 
 
 def _qwen3_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
-
-
-class Qwen3ASRTransformerDecoder(Qwen3TransformerDecoder):
-    """A Transformer decoder layer for the Qwen3 ASR backbone.
-
-    Fixes a bug in the base class where layer_norm_epsilon was not passed to
-    attention sub-layers.
-    """
-
-    def build(self, decoder_sequence_shape):
-        super().build(decoder_sequence_shape)
-
-        # Re-build self attention layer with the correct epsilon.
-        self._self_attention_layer = Qwen3Attention(
-            num_query_heads=self.num_query_heads,
-            num_key_value_heads=self.num_key_value_heads,
-            rope_max_wavelength=self.rope_max_wavelength,
-            head_dim=self.head_dim,
-            rope_scaling_factor=self.rope_scaling_factor,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-            dropout=self.dropout,
-            sliding_window_size=self.sliding_window_size,
-            layer_norm_epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
-            name="self_attention",
-        )
-        self._self_attention_layer.build(decoder_sequence_shape)
 
 
 class Qwen3ASRScatterAudio(keras.layers.Layer):
@@ -60,32 +31,32 @@ class Qwen3ASRScatterAudio(keras.layers.Layer):
     def call(self, inputs_embeds, audio_embeds, token_ids):
         batch_size = ops.shape(token_ids)[0]
         seq_len = ops.shape(token_ids)[1]
-        audio_seq_len = ops.shape(audio_embeds)[1]
-        hidden_dim = ops.shape(audio_embeds)[2]
+        hidden_dim = audio_embeds.shape[2]
 
         special_audio_mask = ops.equal(token_ids, self.audio_token_id)
-        mask_indices = ops.nonzero(special_audio_mask)
-        batch_indices = mask_indices[0]
-        seq_indices = mask_indices[1]
 
+        # Compute which audio feature belongs to which placeholder
         cum_mask = (
             ops.cumsum(ops.cast(special_audio_mask, "int32"), axis=-1) - 1
         )
+        max_index = ops.maximum(ops.shape(audio_embeds)[1] - 1, 0)
+        safe_cum_mask = ops.clip(cum_mask, 0, max_index)
 
-        flat_cum_mask = ops.reshape(cum_mask, (-1,))
-        flat_placeholder_idx = batch_indices * seq_len + seq_indices
-        src_indices = ops.take(flat_cum_mask, flat_placeholder_idx)
-
-        flat_audio_embeds = ops.reshape(audio_embeds, (-1, hidden_dim))
-        flat_src_idx = batch_indices * audio_seq_len + src_indices
-        updates = ops.take(flat_audio_embeds, flat_src_idx, axis=0)
-
-        flat_inputs_embeds = ops.reshape(inputs_embeds, (-1, hidden_dim))
-        flat_dest_indices = ops.expand_dims(flat_placeholder_idx, axis=-1)
-        flat_out = ops.scatter_update(
-            flat_inputs_embeds, flat_dest_indices, updates
+        # Expand and broadcast safe_cum_mask to match audio_embeds shape
+        safe_cum_mask = ops.expand_dims(safe_cum_mask, axis=-1)
+        safe_cum_mask = ops.broadcast_to(
+            safe_cum_mask, (batch_size, seq_len, hidden_dim)
         )
-        return ops.reshape(flat_out, (batch_size, seq_len, hidden_dim))
+
+        # Gather potential updates along axis 1 (sequence length)
+        potential_updates = ops.take_along_axis(
+            audio_embeds, safe_cum_mask, axis=1
+        )
+
+        # Use ops.where to scatter between potential updates and inputs_embeds
+        special_audio_mask_ex = ops.expand_dims(special_audio_mask, axis=-1)
+        out = ops.where(special_audio_mask_ex, potential_updates, inputs_embeds)
+        return out
 
     def compute_output_spec(self, inputs_embeds, audio_embeds, token_ids):
         return keras.KerasTensor(
@@ -148,23 +119,23 @@ class Qwen3ASRBackbone(Backbone):
     def __init__(
         self,
         vocabulary_size,
-        num_layers,
-        num_query_heads,
-        num_key_value_heads,
-        head_dim,
-        hidden_dim,
-        intermediate_dim,
-        rope_max_wavelength=10000,
+        num_layers=28,
+        num_query_heads=16,
+        num_key_value_heads=8,
+        head_dim=128,
+        hidden_dim=1024,
+        intermediate_dim=3072,
+        rope_max_wavelength=1000000,
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
         dropout=0.0,
         tie_word_embeddings=True,
         sliding_window_size=32768,
         audio_num_mel_bins=128,
-        audio_num_layers=24,
-        audio_num_attention_heads=16,
-        audio_intermediate_dim=4096,
-        audio_d_model=1024,
+        audio_num_layers=18,
+        audio_num_attention_heads=14,
+        audio_intermediate_dim=3584,
+        audio_d_model=896,
         audio_n_window=50,
         audio_n_window_infer=800,
         audio_downsample_hidden_size=480,
@@ -206,7 +177,7 @@ class Qwen3ASRBackbone(Backbone):
 
         self.transformer_layers = []
         for i in range(num_layers):
-            layer = Qwen3ASRTransformerDecoder(
+            layer = Qwen3TransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 head_dim=head_dim,
                 num_query_heads=num_query_heads,
