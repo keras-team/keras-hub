@@ -55,8 +55,8 @@ class PaliGemmaBackbone(Backbone):
             in a two-layer feedforward network for vision transformer. Defaults
             to `4304`.
         vit_pooling: `None` or string. The encoded vision embeddings are pooled
-            using the specified polling setting. The accepted values are
-            `"map"`, `"gap"`, `"0"` or `None`. Defaults to `None`.
+            using the specified pooling setting. The accepted values are
+            `"map"`, `"gap"`, `"zero"` or `None`. Defaults to `None`.
         vit_classifier_activation: activation function. The activation that
             is used for final output classification in the vision transformer.
             Defaults to `None`.
@@ -100,7 +100,7 @@ class PaliGemmaBackbone(Backbone):
     # Randomly initialized PaliGemma decoder with custom config.
     model = keras_hub.models.PaliGemmaBackbone(
         vocabulary_size=50257,
-        images_size=224,
+        image_size=224,
         num_layers=12,
         num_query_heads=12,
         num_key_value_heads=1,

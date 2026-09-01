@@ -20,9 +20,10 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
 
     The forward pass runs the frozen vision encoder and the Q-Former once to
     obtain visual query features, projects and prepends them to the T5 encoder
-    sequence, and decodes the answer. Because the underlying T5 stack does not
-    support a key/value cache, generation recomputes the decoder at each step;
-    the vision encoder and Q-Former are only run once per `generate()` call.
+    sequence, and decodes the answer. During generation the vision encoder,
+    Q-Former and T5 encoder are run once per `generate()` call, and the decoder
+    reuses cached self-attention and cross-attention key/value tensors so each
+    step only attends over a single new token.
 
     This model has a `generate()` method, which generates text based on the
     image and an optional encoder/decoder prompt. The generation strategy used
@@ -102,6 +103,86 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
             encoder_attention_mask,
         )
 
+    def call_decoder_with_cache(
+        self,
+        decoder_token_ids,
+        encoder_hidden_states,
+        encoder_attention_mask,
+        self_attention_cache,
+        self_attention_cache_update_index,
+        cross_attention_cache,
+        cross_attention_cache_update_index,
+    ):
+        """Run the T5 decoder with key/value caches and return its logits.
+
+        Returns a `(logits, hidden_states, self_attention_cache,
+        cross_attention_cache)` tuple.
+        """
+        language_model = self.backbone.language_model
+        hidden_states, self_attention_cache, cross_attention_cache = (
+            language_model.call_decoder_with_cache(
+                decoder_token_ids,
+                encoder_hidden_states,
+                encoder_attention_mask,
+                self_attention_cache,
+                self_attention_cache_update_index,
+                cross_attention_cache,
+                cross_attention_cache_update_index,
+            )
+        )
+        logits = language_model.lm_head(hidden_states)
+        return (
+            logits,
+            hidden_states,
+            self_attention_cache,
+            cross_attention_cache,
+        )
+
+    def _initialize_cache(self, encoder_hidden_states, decoder_token_ids):
+        """Initializes empty self-attention and cross-attention caches."""
+        language_model = self.backbone.language_model
+        batch_size = ops.shape(decoder_token_ids)[0]
+        decoder_max_length = ops.shape(decoder_token_ids)[1]
+        # The encoder sequence includes the prepended Q-Former query tokens,
+        # so its length is read off the encoder output rather than the inputs.
+        encoder_max_length = ops.shape(encoder_hidden_states)[1]
+
+        num_heads = language_model.num_heads
+        head_dim = language_model.key_value_dim or (
+            language_model.hidden_dim // num_heads
+        )
+        shape = [
+            batch_size,
+            language_model.num_layers,
+            2,
+            decoder_max_length,
+            num_heads,
+            head_dim,
+        ]
+        self_attention_cache = ops.zeros(shape, dtype=self.compute_dtype)
+        shape[3] = encoder_max_length
+        cross_attention_cache = ops.zeros(shape, dtype=self.compute_dtype)
+        return (self_attention_cache, cross_attention_cache)
+
+    def _build_cache(
+        self, encoder_hidden_states, encoder_attention_mask, decoder_token_ids
+    ):
+        """Seeds both caches with a single decoder forward pass."""
+        self_attention_cache, cross_attention_cache = self._initialize_cache(
+            encoder_hidden_states, decoder_token_ids
+        )
+        # Straight to the language model, skipping the `lm_head` projection —
+        # the seeding pass only needs hidden states and the caches.
+        return self.backbone.language_model.call_decoder_with_cache(
+            decoder_token_ids,
+            encoder_hidden_states,
+            encoder_attention_mask,
+            self_attention_cache,
+            0,
+            cross_attention_cache,
+            0,
+        )
+
     def generate_step(self, inputs, stop_token_ids=None):
         """A compilable generation function for a single batch of inputs.
 
@@ -118,7 +199,6 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
         decoder_token_ids = inputs["decoder_token_ids"]
         decoder_padding_mask = inputs["decoder_padding_mask"]
         images = inputs.get("images")
-        lm_head = self.backbone.language_model.lm_head
 
         # Encode the image + prompt once; reused for every decoding step.
         encoder_hidden_states, encoder_attention_mask = self.call_encoder(
@@ -127,12 +207,13 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
             images,
         )
 
-        # Seed the decoder hidden states for the sampler.
-        hidden_states = self.call_decoder(
-            decoder_token_ids,
-            decoder_padding_mask,
-            encoder_hidden_states,
-            encoder_attention_mask,
+        # Create and seed both decoder caches with a single forward pass.
+        (
+            hidden_states,
+            self_attention_cache,
+            cross_attention_cache,
+        ) = self._build_cache(
+            encoder_hidden_states, encoder_attention_mask, decoder_token_ids
         )
 
         batch_size = ops.shape(decoder_token_ids)[0]
@@ -142,7 +223,10 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
         index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
+            # The cache index is the index of our previous token.
+            cache_index = index - 1
             num_samples = ops.shape(prompt)[0]
+            prompt = ops.slice(prompt, [0, cache_index], [num_samples, 1])
 
             def repeat_for_beams(x):
                 """Repeats along the batch axis to match beam-search width."""
@@ -150,26 +234,25 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
                     return x
                 return ops.repeat(x, num_samples // batch_size, axis=0)
 
-            # T5 has no KV cache, so recompute the decoder over the full prompt.
-            # The causal mask ensures position `index - 1` only attends to real
-            # (already generated) tokens, so a constant decoder mask is safe.
-            decoder_mask = ops.ones_like(prompt)
-            hidden = self.call_decoder(
-                prompt,
-                decoder_mask,
-                repeat_for_beams(encoder_hidden_states),
-                repeat_for_beams(encoder_attention_mask),
+            logits, hidden, cache, _ = self.call_decoder_with_cache(
+                decoder_token_ids=prompt,
+                encoder_hidden_states=repeat_for_beams(encoder_hidden_states),
+                encoder_attention_mask=repeat_for_beams(encoder_attention_mask),
+                self_attention_cache=cache,
+                self_attention_cache_update_index=cache_index,
+                cross_attention_cache=repeat_for_beams(cross_attention_cache),
+                cross_attention_cache_update_index=None,
             )
-            logits = lm_head(hidden)
-            # Select the next-token logits/hidden states at position index - 1.
-            logits = ops.take(logits, index - 1, axis=1)
-            hidden = ops.take(hidden, index - 1, axis=1)
-            return logits, hidden, cache
+            return (
+                ops.squeeze(logits, axis=1),
+                ops.squeeze(hidden, axis=1),
+                cache,
+            )
 
         decoder_token_ids = self.sampler(
             next=next,
             prompt=decoder_token_ids,
-            cache=None,
+            cache=self_attention_cache,
             index=index,
             mask=decoder_padding_mask,
             stop_token_ids=stop_token_ids,

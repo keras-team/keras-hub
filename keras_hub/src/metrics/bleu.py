@@ -5,6 +5,7 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 from keras_hub.src.utils.tensor_utils import tensor_to_list
 
@@ -101,6 +102,7 @@ class Bleu(keras.metrics.Metric):
         name="bleu",
         **kwargs,
     ):
+        assert_tf_installed(self.__class__.__name__)
         super().__init__(name=name, dtype=dtype, **kwargs)
 
         if not is_float_dtype(dtype):
@@ -323,7 +325,7 @@ class Bleu(keras.metrics.Metric):
             elif inputs.shape.rank == base_rank + 2:
                 if tf.shape(inputs)[-1] != 1:
                     raise ValueError(
-                        f"{tensor_name} is of rank {input.shape.rank}. The "
+                        f"{tensor_name} is of rank {inputs.shape.rank}. The "
                         f"last dimension must be of size 1."
                     )
                 return tf.squeeze(inputs, axis=-1)
