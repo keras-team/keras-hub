@@ -42,7 +42,7 @@ def convert_backbone_config(transformers_config):
         vision_encoder = None
         image_size = None
     else:
-        text_cfg = transformers_config.get("text_config", transformers_config)
+        text_cfg = transformers_config["text_config"]
         # image_size is not present in the HF vision_config; 896 is the fixed
         # positional-embedding size used across all DiffusionGemma checkpoints.
         image_size = 896
@@ -56,21 +56,15 @@ def convert_backbone_config(transformers_config):
                 hidden_dim=vis_cfg["hidden_size"],
                 num_layers=vis_cfg["num_hidden_layers"],
                 intermediate_dim=vis_cfg["intermediate_size"],
-                head_dim=vis_cfg.get("head_dim", 64),
-                num_key_value_heads=vis_cfg.get(
-                    "num_key_value_heads", vis_cfg["num_attention_heads"]
-                ),
+                head_dim=vis_cfg["head_dim"],
+                num_key_value_heads=vis_cfg["num_key_value_heads"],
                 output_dim=text_cfg["hidden_size"],
-                pool_size=vis_cfg.get("pooling_kernel_size", 3),
-                position_embedding_size=vis_cfg.get(
-                    "position_embedding_size", 10240
-                ),
-                rope_max_wavelength=vis_cfg.get("rope_parameters", {}).get(
-                    "rope_theta", 100.0
-                ),
-                layer_norm_epsilon=vis_cfg.get("rms_norm_eps", 1e-6),
-                use_clipped_linears=vis_cfg.get("use_clipped_linears", True),
-                standardize=vis_cfg.get("standardize", False),
+                pool_size=vis_cfg["pooling_kernel_size"],
+                position_embedding_size=vis_cfg["position_embedding_size"],
+                rope_max_wavelength=vis_cfg["rope_parameters"]["rope_theta"],
+                layer_norm_epsilon=vis_cfg["rms_norm_eps"],
+                use_clipped_linears=vis_cfg["use_clipped_linears"],
+                standardize=vis_cfg["standardize"],
             )
         else:
             vision_encoder = None
@@ -94,7 +88,7 @@ def convert_backbone_config(transformers_config):
             or 6
         )
 
-    rope_params = text_cfg.get("rope_parameters") or {}
+    rope_params = text_cfg["rope_parameters"]
     global_rope_partial_rotary_factor = rope_params.get(
         "full_attention", {}
     ).get("partial_rotary_factor")
@@ -127,16 +121,14 @@ def convert_backbone_config(transformers_config):
         "attention_logit_soft_cap": text_cfg.get(
             "attn_logit_softcapping", None
         ),
-        "final_logit_soft_cap": text_cfg.get("final_logit_softcapping", None),
-        "use_sliding_window_attention": text_cfg.get("sliding_window", 0) > 0,
-        "sliding_window_size": text_cfg.get("sliding_window", 512) or 512,
+        "final_logit_soft_cap": text_cfg["final_logit_softcapping"],
+        "use_sliding_window_attention": text_cfg["sliding_window"] > 0,
+        "sliding_window_size": text_cfg["sliding_window"] or 512,
         "sliding_window_pattern": sliding_window_pattern,
-        "layer_norm_epsilon": text_cfg.get("rms_norm_eps", 1e-6),
+        "layer_norm_epsilon": text_cfg["rms_norm_eps"],
         "layer_types": text_cfg["layer_types"],
         "vision_encoder": vision_encoder,
-        "num_global_key_value_heads": text_cfg.get(
-            "num_global_key_value_heads", None
-        ),
+        "num_global_key_value_heads": text_cfg["num_global_key_value_heads"],
         "global_rope_partial_rotary_factor": global_rope_partial_rotary_factor,
         "global_rope_wavelength": global_rope_theta,
         "local_rope_wavelength": local_rope_theta,
