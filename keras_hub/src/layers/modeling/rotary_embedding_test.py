@@ -237,29 +237,11 @@ class RotaryEmbeddingTest(TestCase):
         )
 
     def test_yarn_rope_scaling(self):
-        # Reference values computed from the Huggingface mistral implementation
-        # from transformers import MistralConfig
-        # from transformers.models.mistral.modeling_mistral import (
-        #     MistralRotaryEmbedding, apply_rotary_pos_emb
-        # )
-        # import torch
-        # torch.set_printoptions(precision=9)
-        # config = MistralConfig(
-        #     hidden_size=16, num_attention_heads=2, num_key_value_heads=2,
-        #     head_dim=8, max_position_embeddings=128,
-        #     rope_parameters={
-        #         "rope_type": "yarn", "rope_theta": 100.0, "factor": 2.0,
-        #         "beta_fast": 32.0, "beta_slow": 1.0,
-        #         "original_max_position_embeddings": 64,
-        #     },
-        # )
-        # rotary_emb = MistralRotaryEmbedding(config)
-        # query = torch.ones((1, 2, 3, 8))
-        # cos, sin = rotary_emb(
-        #     query, torch.unsqueeze(torch.arange(3, dtype=torch.int32), 0)
-        # )
-        # query, _ = apply_rotary_pos_emb(query, query, cos, sin)
-        # print(query.transpose(1, 2))
+        # Reference values computed from the Huggingface mistral
+        # implementation, running `MistralRotaryEmbedding` and
+        # `apply_rotary_pos_emb` over `torch.ones((1, 2, 3, 8))` at positions
+        # `arange(3)`, with the YaRN parameters set below (`rope_theta` is
+        # `max_wavelength` and `factor` is `scaling_factor`).
         row0 = [1.069314718] * 8
         row1 = [
             -0.322044015,
