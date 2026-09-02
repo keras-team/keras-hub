@@ -76,21 +76,21 @@ def load_image_converter_config(preset, transformers_config):
     vision_config = transformers_config["vision_config"]
     if check_file_exists(preset, "preprocessor_config.json"):
         preprocessor_config = load_json(preset, "preprocessor_config.json")
-        mean = preprocessor_config.get("image_mean")
-        std = preprocessor_config.get("image_std")
-        rescale_factor = preprocessor_config.get("rescale_factor", 1 / 255)
-        patch_size = preprocessor_config.get("patch_size")
+        mean = preprocessor_config["image_mean"]
+        std = preprocessor_config["image_std"]
+        rescale_factor = preprocessor_config["rescale_factor"]
+        patch_size = preprocessor_config["patch_size"]
         if isinstance(patch_size, dict):
             patch_size = patch_size.get("height") or patch_size.get("width")
-        size = preprocessor_config.get("size")
+        size = preprocessor_config["size"]
         longest_edge = (
             size.get("longest_edge") if isinstance(size, dict) else None
         )
     else:
         mean, std = _load_pixtral_defaults_from_mistral_common()
         rescale_factor = _PIXTRAL_DEFAULT_RESCALE_FACTOR
-        patch_size = vision_config.get("patch_size")
-        longest_edge = vision_config.get("image_size")
+        patch_size = vision_config["patch_size"]
+        longest_edge = vision_config["image_size"]
 
     config = {}
     if mean is not None and std is not None:
@@ -100,9 +100,7 @@ def load_image_converter_config(preset, transformers_config):
         config["patch_size"] = patch_size
     if longest_edge is not None:
         config["longest_edge"] = longest_edge
-    config["spatial_merge_size"] = transformers_config.get(
-        "spatial_merge_size", 2
-    )
+    config["spatial_merge_size"] = transformers_config["spatial_merge_size"]
     return config
 
 
@@ -116,12 +114,12 @@ def convert_backbone_config(transformers_config):
     vision_head_dim = vision_config.get("head_dim") or (
         vision_hidden_dim // vision_num_heads
     )
-    vision_image_size = vision_config.get("image_size", 1540)
-    vision_patch_size = vision_config.get("patch_size", 14)
+    vision_image_size = vision_config["image_size"]
+    vision_patch_size = vision_config["patch_size"]
     vision_encoder = Mistral3VisionEncoder(
         image_size=vision_image_size,
         patch_size=vision_patch_size,
-        num_channels=vision_config.get("num_channels", 3),
+        num_channels=vision_config["num_channels"],
         hidden_dim=vision_hidden_dim,
         num_layers=vision_config["num_hidden_layers"],
         num_heads=vision_num_heads,
@@ -129,22 +127,20 @@ def convert_backbone_config(transformers_config):
         intermediate_dim=vision_config["intermediate_size"],
         rope_theta=_get_rope_theta(vision_config),
         layer_norm_epsilon=vision_config.get("rms_norm_eps", 1e-5),
-        activation=vision_config.get("hidden_act", "gelu"),
-        attention_dropout=vision_config.get("attention_dropout", 0.0),
+        activation=vision_config["hidden_act"],
+        attention_dropout=vision_config["attention_dropout"],
     )
 
     multimodal_projector = Mistral3MultiModalProjector(
         vision_hidden_dim=vision_hidden_dim,
         text_hidden_dim=text_config["hidden_size"],
-        spatial_merge_size=transformers_config.get("spatial_merge_size", 2),
+        spatial_merge_size=transformers_config["spatial_merge_size"],
         patch_size=vision_patch_size,
-        layer_norm_epsilon=text_config.get("rms_norm_eps", 1e-6),
-        projector_hidden_act=transformers_config.get(
-            "projector_hidden_act", "gelu"
-        ),
-        multimodal_projector_bias=transformers_config.get(
-            "multimodal_projector_bias", False
-        ),
+        layer_norm_epsilon=text_config["rms_norm_eps"],
+        projector_hidden_act=transformers_config["projector_hidden_act"],
+        multimodal_projector_bias=transformers_config[
+            "multimodal_projector_bias"
+        ],
         image_size=vision_image_size,
     )
 
