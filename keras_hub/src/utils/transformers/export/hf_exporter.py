@@ -65,6 +65,17 @@ from keras_hub.src.utils.transformers.export.qwen3_5 import (
     get_qwen3_5_weights_map,
 )
 
+# --- Qwen 3 MoE Utils ---
+from keras_hub.src.utils.transformers.export.qwen3_5_moe import (
+    get_qwen3_5_moe_config,
+)
+from keras_hub.src.utils.transformers.export.qwen3_5_moe import (
+    get_qwen3_5_moe_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.qwen3_5_moe import (
+    get_qwen3_5_moe_weights_map,
+)
+
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
     "Gemma3Backbone": get_gemma3_config,
@@ -72,6 +83,7 @@ MODEL_CONFIGS = {
     "MistralBackbone": get_mistral_config,
     "QwenBackbone": get_qwen_config,
     "Qwen3_5Backbone": get_qwen3_5_config,
+    "Qwen3_5MoeBackbone": get_qwen3_5_moe_config,
     "GPT2Backbone": get_gpt2_config,
 }
 
@@ -82,6 +94,7 @@ MODEL_EXPORTERS = {
     "MistralBackbone": get_mistral_weights_map,
     "QwenBackbone": get_qwen_weights_map,
     "Qwen3_5Backbone": get_qwen3_5_weights_map,
+    "Qwen3_5MoeBackbone": get_qwen3_5_moe_weights_map,
     "GPT2Backbone": get_gpt2_weights_map,
 }
 
@@ -92,6 +105,7 @@ MODEL_TOKENIZER_CONFIGS = {
     "MistralTokenizer": get_mistral_tokenizer_config,
     "QwenTokenizer": get_qwen_tokenizer_config,
     "Qwen3_5Tokenizer": get_qwen3_5_tokenizer_config,
+    "Qwen3_5MoeTokenizer": get_qwen3_5_moe_tokenizer_config,
     "GPT2Tokenizer": get_gpt2_tokenizer_config,
 }
 
