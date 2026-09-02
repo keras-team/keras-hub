@@ -19,7 +19,15 @@ class ConvertDiffusionGemmaTest(TestCase):
             "intermediate_size": 128,
             "head_dim": 16,
             "global_head_dim": 32,
+            "num_global_key_value_heads": 1,
             "attn_logit_softcapping": 50.0,
+            "final_logit_softcapping": None,
+            "sliding_window": 512,
+            "rms_norm_eps": 1e-6,
+            "rope_parameters": {
+                "full_attention": {"rope_theta": 1000000.0},
+                "sliding_attention": {"rope_theta": 10000.0},
+            },
             "layer_types": ["full_attention", "sliding_attention"],
         }
         kwargs = convert_diffusion_gemma.convert_backbone_config(
