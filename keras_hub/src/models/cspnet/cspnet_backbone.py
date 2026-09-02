@@ -109,7 +109,7 @@ class CSPNetBackbone(FeaturePyramidBackbone):
     model(input_data)
     ```
     """
-    #presets = backbone_presets
+    
 
     def __init__(
         self,
