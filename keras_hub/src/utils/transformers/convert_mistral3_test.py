@@ -123,10 +123,13 @@ class TestTask(TestCase):
                 "image_size": 32,
                 "patch_size": 8,
                 "hidden_act": "gelu",
+                "attention_dropout": 0.0,
                 "rope_parameters": {"rope_theta": 10000.0},
             },
             "image_token_index": 10,
             "spatial_merge_size": 2,
+            "projector_hidden_act": "gelu",
+            "multimodal_projector_bias": False,
         }
         keras_config = convert_mistral3.convert_backbone_config(
             transformers_config
