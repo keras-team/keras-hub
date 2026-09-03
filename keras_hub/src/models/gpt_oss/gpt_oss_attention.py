@@ -142,6 +142,9 @@ class GptOssAttention(keras.layers.Layer):
             beta_fast=32.0,
             beta_slow=1.0,
             original_max_position_embeddings=4096,
+            # GPT-OSS sets `truncate=False` in its `rope_parameters`, unlike
+            # the reference default.
+            truncate=False,
             dtype=self.dtype_policy,
         )
 
