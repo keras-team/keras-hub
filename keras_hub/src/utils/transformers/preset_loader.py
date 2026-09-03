@@ -121,7 +121,7 @@ class TransformersPresetLoader(PresetLoader):
         else:
             raise ValueError(
                 "KerasHub has no converter for huggingface/transformers models "
-                f"with model type `'{model_type}`."
+                f"with model type `'{model_type}'`."
             )
 
     def check_backbone_class(self):

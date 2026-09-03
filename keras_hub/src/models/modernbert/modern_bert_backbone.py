@@ -36,8 +36,10 @@ class ModernBertBackbone(Backbone):
             Defaults to `0.0`.
         rotary_max_wavelength: int. Max wavelength for RoPE.
             Defaults to `160000`.
+        local_rotary_max_wavelength: int or None. Max wavelength for local
+            RoPE. If `None`, uses `rotary_max_wavelength`.Defaults to `10000`.
         layer_norm_epsilon: float. Epsilon used by the Layer
-        Normalization layers.Defaults to `1e-5`.
+        Normalization layers.Defaults to `1e-5.
         dtype: string or `keras.DTypePolicy`. The dtype of the layers.
             Defaults to `None`.
 
@@ -93,7 +95,6 @@ class ModernBertBackbone(Backbone):
         self.global_attn_every_n_layers = global_attn_every_n_layers
         self.dropout = dropout
         self.rotary_max_wavelength = rotary_max_wavelength
-        self.local_rotary_max_wavelength = local_rotary_max_wavelength
         self.layer_norm_epsilon = layer_norm_epsilon
 
         # Dtype handling
@@ -134,6 +135,7 @@ class ModernBertBackbone(Backbone):
         # Local-attention RoPE
         if local_rotary_max_wavelength is None:
             local_rotary_max_wavelength = rotary_max_wavelength
+        self.local_rotary_max_wavelength = local_rotary_max_wavelength
 
         self.local_rotary_embedding = RotaryEmbedding(
             max_wavelength=local_rotary_max_wavelength,

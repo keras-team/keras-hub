@@ -603,6 +603,7 @@ class ModernBertEncoderLayer(layers.Layer):
                 "layer_idx": self.layer_idx,
                 "dropout": self.dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
+                "local_attention_window": self.local_attention_window,
                 "rotary_embedding": (
                     keras.saving.serialize_keras_object(self.rotary_embedding)
                     if self.rotary_embedding is not None

@@ -79,7 +79,6 @@ class ModernBertMaskedLMTest(TestCase):
         self.preprocessor = ModernBertMaskedLMPreprocessor(
             tokenizer=self.tokenizer,
             sequence_length=12,
-            # mask_selection_rate=0.2,
             mask_selection_rate=0.0,
             mask_selection_length=2,
         )
@@ -124,7 +123,7 @@ class ModernBertMaskedLMTest(TestCase):
         )
         self.assertEqual(restored.merges, self.tokenizer.merges)
 
-    @pytest.mark.extra_large
+    @pytest.mark.large
     def test_fit(self):
         """Validate training, output shape, and serialization."""
         self.run_task_test(

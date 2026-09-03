@@ -11,18 +11,16 @@ backbone_cls = ModernBertBackbone
 def convert_backbone_config(transformers_config):
     """Convert a Hugging Face ModernBERT config to KerasHub backbone params."""
 
-    rope_parameters = transformers_config.get("rope_parameters", {})
+    if "rope_parameters" in transformers_config:
+        rope_parameters = transformers_config["rope_parameters"]
+        global_rope = rope_parameters["full_attention"]
+        local_rope = rope_parameters["sliding_attention"]
 
-    global_rope = (
-        rope_parameters.get("full_attention")
-        or rope_parameters.get("global_attention")
-        or {}
-    )
-
-    rotary_max_wavelength = global_rope.get(
-        "rope_theta",
-        transformers_config.get("global_rope_theta", 160000.0),
-    )
+        rotary_max_wavelength = global_rope["rope_theta"]
+        local_rotary_max_wavelength = local_rope["rope_theta"]
+    else:
+        rotary_max_wavelength = transformers_config["global_rope_theta"]
+        local_rotary_max_wavelength = transformers_config["local_rope_theta"]
 
     return {
         "vocabulary_size": transformers_config["vocab_size"],
@@ -36,6 +34,7 @@ def convert_backbone_config(transformers_config):
             "global_attn_every_n_layers"
         ],
         "rotary_max_wavelength": float(rotary_max_wavelength),
+        "local_rotary_max_wavelength": float(local_rotary_max_wavelength),
         "layer_norm_epsilon": transformers_config["norm_eps"],
     }
 

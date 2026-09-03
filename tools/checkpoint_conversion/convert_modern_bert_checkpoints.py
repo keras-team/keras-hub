@@ -136,7 +136,7 @@ def verify_embeddings(
         rtol=1e-5,
     )
 
-    print("Embedding verification passed.")
+    print("✅ Embedding verification passed.")
 
     return max_diff
 
@@ -201,21 +201,6 @@ def verify_masked_lm(
 
     print("\nMaskedLM verification")
 
-    # Find [MASK] positions.
-    #
-    # get_mask_positions() returns:
-    #
-    #   [[batch_index, sequence_position], ...]
-    #
-    # Example:
-    #   [[0, 6]]
-    #   [[0, 6], [0, 11]]
-    #
-    # ModernBertMaskedLM expects:
-    #
-    #   [[6]]
-    #   [[6, 11]]
-
     mask_positions = get_mask_positions(
         input_ids,
         hf_tokenizer.mask_token_id,
@@ -247,16 +232,6 @@ def verify_masked_lm(
 
         hf_logits = hf_outputs.logits
 
-    # Extract only the HF logits corresponding to [MASK] tokens.
-    #
-    # Result:
-    #
-    #   (num_masks, vocabulary_size)
-    #
-    # NOT:
-    #
-    #   (batch, sequence_length, vocabulary_size)
-
     hf_mask_logits = []
 
     with torch.no_grad():
@@ -277,33 +252,6 @@ def verify_masked_lm(
         )
 
     hf_mask_logits = hf_mask_logits.detach().cpu().numpy().astype("float32")
-
-    # Convert mask positions to the format expected by
-    # ModernBertMaskedLM.
-    #
-    # Input:
-    #
-    #   [[0, 6]]
-    #
-    # becomes:
-    #
-    #   [[6]]
-    #
-    # Input:
-    #
-    #   [[0, 6], [0, 11]]
-    #
-    # becomes:
-    #
-    #   [[6, 11]]
-    #
-    # For multiple batch elements:
-    #
-    #   [[0, 6], [1, 4]]
-    #
-    # becomes:
-    #
-    #   [[6], [4]]
 
     batch_size = input_ids.shape[0]
 
@@ -338,12 +286,6 @@ def verify_masked_lm(
     print(f"Keras mask_positions shape: {batch_mask_positions.shape}")
     print(f"Keras mask_positions: {batch_mask_positions.tolist()}")
 
-    # Run Keras ModernBertMaskedLM.
-    #
-    # Expected output:
-    #
-    #   (batch, num_masks, vocabulary_size)
-
     keras_logits = keras_lm(
         {
             "token_ids": input_ids,
@@ -364,18 +306,6 @@ def verify_masked_lm(
     )
 
     print(f"Raw Keras logits shape: {keras_logits.shape}")
-
-    # Normalize Keras output shape.
-    #
-    # Expected:
-    #
-    #   (batch, num_masks, vocab_size)
-    #
-    # Convert to:
-    #
-    #   (total_masks, vocab_size)
-    #
-    # to match HF.
 
     if keras_logits.ndim == 3:
         keras_logits = keras_logits.reshape(
@@ -527,6 +457,13 @@ def verify_text(keras_lm, hf_model, hf_tokenizer, text):
     }
 
 
+def save_preset(keras_lm, preset_name):
+    """Save the verified ModernBERT model as a KerasHub preset."""
+    print(f"\nSaving to preset: ./{preset_name}")
+    keras_lm.save_to_preset(preset_name)
+    print(f"✅ Successfully saved and verified preset: ./{preset_name}\n")
+
+
 def main(preset):
     """Run numerical verification."""
     hf_repo = PRESET_MAP.get(preset, preset)
@@ -583,9 +520,9 @@ def main(preset):
         result["logits_max_diff"] for result in valid_logits_results
     )
 
-    print(f"Max embedding diff: {max_embedding_diff:.6e}")
-    print(f"Max backbone diff: {max_backbone_diff:.6e}")
-    print(f"Max MLM logits diff: {max_mlm_logits_diff:.6e}")
+    print(f"✅ Max embedding diff: {max_embedding_diff:.6e}")
+    print(f"✅ Max backbone diff: {max_backbone_diff:.6e}")
+    print(f"✅ Max MLM logits diff: {max_mlm_logits_diff:.6e}")
 
     # Count masks directly from the tokenizer inputs.
     total_masks = 0
@@ -596,9 +533,9 @@ def main(preset):
         )
         total_masks += np.sum(input_ids == hf_tokenizer.mask_token_id)
 
-    print(f"Top-1 prediction matches: {total_top1}/{total_masks}")
+    print(f"✅ Top-1 prediction matches: {total_top1}/{total_masks}")
 
-    print(f"Top-5 prediction matches: {total_top5}/{total_masks}")
+    print(f"✅ Top-5 prediction matches: {total_top5}/{total_masks}")
 
     assert total_top1 == total_masks, (
         "At least one top-1 prediction differs from Hugging Face."
@@ -607,8 +544,9 @@ def main(preset):
     assert total_top5 == total_masks, (
         "At least one top-5 prediction differs from Hugging Face."
     )
+    save_preset(keras_lm, preset)
 
-    print("\nAll numerical verification checks passed.")
+    print("✅ All numerical verification checks passed.")
 
 
 if __name__ == "__main__":

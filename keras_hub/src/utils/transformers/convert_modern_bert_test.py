@@ -15,7 +15,7 @@ from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
 
 class TestConvertModernBert(TestCase):
-    @pytest.mark.extra_large
+    @pytest.mark.large
     def test_convert_modern_bert_base(self):
         hf_model_id = "answerdotai/ModernBERT-base"
         preset = f"hf://{hf_model_id}"
