@@ -1140,8 +1140,11 @@ class Mistral3PatchMerger(keras.layers.Layer):
             ops.convert_to_tensor(image_sizes),
             "int32",
         )
-        patch_heights = image_sizes[:, 0] // self.patch_size
-        patch_widths = image_sizes[:, 1] // self.patch_size
+        # Clamped since Keras' torch auto-build traces this with all
+        # inputs filled with `1`s, which would otherwise divide by 0
+        # below (`local_indices // widths_per_token`).
+        patch_heights = ops.maximum(image_sizes[:, 0] // self.patch_size, 1)
+        patch_widths = ops.maximum(image_sizes[:, 1] // self.patch_size, 1)
         patch_counts = patch_heights * patch_widths
         num_images = ops.shape(image_sizes)[0]
         num_tokens = ops.shape(image_features)[0]

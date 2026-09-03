@@ -144,9 +144,7 @@ def convert_backbone_config(transformers_config):
         image_size=vision_image_size,
     )
 
-    image_token_index = transformers_config.get(
-        "image_token_index", transformers_config.get("image_token_id", 10)
-    )
+    image_token_index = transformers_config["image_token_index"]
 
     backbone_config.update(
         {

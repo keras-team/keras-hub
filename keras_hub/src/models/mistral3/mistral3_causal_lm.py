@@ -128,14 +128,13 @@ class Mistral3CausalLM(MistralCausalLM):
         """A compilable generation function for a single batch of inputs.
 
         This function represents the inner, XLA-compilable, generation function
-        for a single batch of inputs. Inputs should have the same structure as
-        model inputs, a dictionary with keys `"token_ids"` and `"padding_mask"`,
-        plus `"pixel_values"`/`"image_sizes"`/`"placeholder_indices"` when the
-        prompt includes images.
+        for a single batch of inputs.
 
         Args:
-            inputs: A dictionary with two keys `"token_ids"` and
-                `"padding_mask"` and batched tensor values.
+            inputs: A dictionary with keys `"token_ids"` and
+                `"padding_mask"`, and batched tensor values. When images are
+                present, also includes `"pixel_values"`, `"image_sizes"`,
+                and `"placeholder_indices"`.
             stop_token_ids: List of id's of end token's to stop on. If all
                 sequences have produced a new stop token, generation
                 will stop.
