@@ -132,6 +132,14 @@ class Mistral3CausalLMTest(TestCase):
             ops.convert_to_tensor, self.preprocessor(*self.train_data)[0]
         )
 
+    def test_causal_lm_basics(self):
+        self.run_task_test(
+            cls=Mistral3CausalLM,
+            init_kwargs=self.init_kwargs,
+            train_data=self.train_data,
+            expected_output_shape=(2, 16, self.tokenizer.vocabulary_size()),
+        )
+
     def test_multimodal_generate(self):
         vision_encoder = Mistral3VisionEncoder(
             image_size=8,
