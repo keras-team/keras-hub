@@ -5,14 +5,6 @@ from keras.layers import RMSNormalization
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-
-# `Mistral3Backbone`'s text tower is architecturally identical to
-# `MistralBackbone`'s. Reusing the layer classes directly here (rather than
-# duplicating them into this directory) is an intentional exception to this
-# repo's usual per-model self-containment, since there is no logic to fork.
-from keras_hub.src.models.mistral.mistral_attention import (  # noqa: F401
-    CachedMistralAttention,
-)
 from keras_hub.src.models.mistral.mistral_transformer_decoder import (
     MistralTransformerDecoder,
 )
