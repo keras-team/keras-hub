@@ -6,6 +6,7 @@ from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.timm import convert_cspnet
 from keras_hub.src.utils.timm import convert_densenet
 from keras_hub.src.utils.timm import convert_efficientnet
+from keras_hub.src.utils.timm import convert_hgnetv2
 from keras_hub.src.utils.timm import convert_mobilenet
 from keras_hub.src.utils.timm import convert_mobilenetv5
 from keras_hub.src.utils.timm import convert_resnet
@@ -31,6 +32,8 @@ class TimmPresetLoader(PresetLoader):
             self.converter = convert_vgg
         elif architecture.startswith("efficientnet"):
             self.converter = convert_efficientnet
+        elif architecture.startswith("hgnetv2"):
+            self.converter = convert_hgnetv2
         else:
             raise ValueError(
                 "KerasHub has no converter for timm models "
