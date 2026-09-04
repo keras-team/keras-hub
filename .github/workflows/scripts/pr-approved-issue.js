@@ -11,6 +11,7 @@
  *    sticky comment is kept up to date with the result.
  *
  *  Maintainers, collaborators and bots are skipped by the workflow `if:`.
+ *  Draft toggling needs a PAT (`PR_APPROVED_ISSUE_TOKEN`); GITHUB_TOKEN can't do it.
  */
 
 const SECTION_HEADING = "## Approved issue link";
@@ -22,6 +23,8 @@ const SECTION_TEMPLATE = `${SECTION_HEADING}
 `;
 const COMMENT_MARKER = "<!-- pr-approved-issue-check -->";
 const BYPASS_ASSOCIATIONS = ["OWNER", "MEMBER", "COLLABORATOR"];
+const TOKEN_HINT =
+  "GITHUB_TOKEN cannot change draft state; set the PR_APPROVED_ISSUE_TOKEN secret to a PAT.";
 
 module.exports = async ({ github, context, core }) => {
   const pr = context.payload.pull_request;
@@ -51,7 +54,7 @@ module.exports = async ({ github, context, core }) => {
       console.log(`Added "${SECTION_HEADING}" section to #${pr.number}.`);
     }
     if (!isDraft) {
-      isDraft = await convertToDraft(github, pr);
+      isDraft = await convertToDraft(github, core, pr);
     }
   }
 
@@ -73,9 +76,9 @@ module.exports = async ({ github, context, core }) => {
 
   // 3. Flip the draft state to match the result.
   if (passed && isDraft) {
-    isDraft = await markReadyForReview(github, pr);
+    isDraft = await markReadyForReview(github, core, pr);
   } else if (!passed && action === "ready_for_review") {
-    isDraft = await convertToDraft(github, pr);
+    isDraft = await convertToDraft(github, core, pr);
   }
 
   // 4. Report via a sticky comment and the job status.
@@ -126,7 +129,7 @@ function findIssueNumbers(body, owner, repo) {
   return [...numbers];
 }
 
-async function convertToDraft(github, pr) {
+async function convertToDraft(github, core, pr) {
   try {
     await github.graphql(
       `mutation($id: ID!) {
@@ -139,12 +142,12 @@ async function convertToDraft(github, pr) {
     console.log(`Converted #${pr.number} to draft.`);
     return true;
   } catch (err) {
-    console.log(`Could not convert #${pr.number} to draft: ${err.message}`);
+    warnDraftToggleFailed(core, `convert #${pr.number} to draft`, err);
     return pr.draft;
   }
 }
 
-async function markReadyForReview(github, pr) {
+async function markReadyForReview(github, core, pr) {
   try {
     await github.graphql(
       `mutation($id: ID!) {
@@ -157,9 +160,21 @@ async function markReadyForReview(github, pr) {
     console.log(`Marked #${pr.number} as ready for review.`);
     return false;
   } catch (err) {
-    console.log(`Could not mark #${pr.number} as ready for review: ${err.message}`);
+    warnDraftToggleFailed(core, `mark #${pr.number} as ready for review`, err);
     return true;
   }
+}
+
+function warnDraftToggleFailed(core, what, err) {
+  const hasToken = process.env.HAS_PR_APPROVED_ISSUE_TOKEN === "true";
+  const lines = [`Could not ${what}: ${err.message}`];
+  if (!hasToken) lines.push(TOKEN_HINT);
+  else if (/not accessible by integration/i.test(err.message)) {
+    lines.push(
+      "PR_APPROVED_ISSUE_TOKEN was rejected; check it has pull request write access and has not expired."
+    );
+  }
+  core.warning(lines.join("\n"));
 }
 
 async function upsertComment(github, owner, repo, issue_number, text) {
