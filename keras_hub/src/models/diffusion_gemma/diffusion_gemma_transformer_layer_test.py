@@ -76,16 +76,16 @@ class DiffusionGemmaTransformerLayerTest(TestCase):
         out_enc, _ = self.layer(x, is_encoder=True)
         out_dec, _ = self.layer(x, is_encoder=False)
         self.assertNotAllClose(
-            np.array(ops.stop_gradient(out_enc)),
-            np.array(ops.stop_gradient(out_dec)),
+            ops.convert_to_numpy(ops.stop_gradient(out_enc)),
+            ops.convert_to_numpy(ops.stop_gradient(out_dec)),
         )
 
         # Symmetry: equal scalars → matching outputs.
         self.layer.encoder_layer_scalar.assign(0.5)
         out_enc_equal, _ = self.layer(x, is_encoder=True)
         self.assertAllClose(
-            np.array(ops.stop_gradient(out_enc_equal)),
-            np.array(ops.stop_gradient(out_dec)),
+            ops.convert_to_numpy(ops.stop_gradient(out_enc_equal)),
+            ops.convert_to_numpy(ops.stop_gradient(out_dec)),
             atol=1e-5,
         )
 

@@ -1,4 +1,5 @@
 import numpy as np
+from keras import ops
 
 from keras_hub.src.models.block_diffusion_lm_preprocessor import (
     BlockDiffusionLMPreprocessor,
@@ -78,7 +79,7 @@ class TestBlockDiffusionLMPreprocessor(TestCase):
 
     def test_generate_preprocess_token_values(self):
         output = self.preprocessor.generate_preprocess("the quick brown fox")
-        token_ids = np.array(output["token_ids"])
+        token_ids = ops.convert_to_numpy(output["token_ids"])
         expected = [1, 9, 14, 10, 12, 0, 0, 0]
         self.assertAllEqual(token_ids, expected)
 

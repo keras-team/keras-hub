@@ -304,7 +304,7 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         for layer in backbone.transformer_layers:
             layer.layer_scalar.assign(1.0)
             layer.encoder_layer_scalar.assign(99.0)
-        out_decoder_scalar = np.array(
+        out_decoder_scalar = ops.convert_to_numpy(
             ops.stop_gradient(
                 model._decode_canvas_step(
                     canvas_embeds, encoder_kv_cache, prompt_length
@@ -315,7 +315,7 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         # Now set encoder_layer_scalar=1.0 too — decode output should match.
         for layer in backbone.transformer_layers:
             layer.encoder_layer_scalar.assign(1.0)
-        out_same_scalar = np.array(
+        out_same_scalar = ops.convert_to_numpy(
             ops.stop_gradient(
                 model._decode_canvas_step(
                     canvas_embeds, encoder_kv_cache, prompt_length
