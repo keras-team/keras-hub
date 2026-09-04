@@ -50,8 +50,8 @@ backbone_presets = {
     },
     "csp_darknet_tiny": {
         "metadata": {
-            "description": "A tiny CSP-DarkNet image classification model.",
-            "params": 2380416,  
+            "description": ("A tiny CSP-DarkNet image classification model."),
+            "params": 2380416,
             "path": "cspnet",
         },
         "kaggle_handle": "kaggle://keras/cspdarknet/keras/csp_darknet_tiny/1",
@@ -69,7 +69,7 @@ backbone_presets = {
     },
     "csp_darknet_s": {
         "metadata": {
-            "description": "A small CSP-DarkNet image classification model.",
+            "description": ("A small CSP-DarkNet image classification model."),
             "params": 4223488,
             "path": "cspnet",
         },
@@ -77,7 +77,7 @@ backbone_presets = {
     },
     "csp_darknet_m": {
         "metadata": {
-            "description": "A medium CSP-DarkNet image classification model.",
+            "description": ("A medium CSP-DarkNet image classification model."),
             "params": 12374400,
             "path": "cspnet",
         },
@@ -85,7 +85,7 @@ backbone_presets = {
     },
     "csp_darknet_l": {
         "metadata": {
-            "description": "A large CSP-DarkNet image classification model.",
+            "description": ("A large CSP-DarkNet image classification model."),
             "params": 27111424,
             "path": "cspnet",
         },
@@ -104,7 +104,9 @@ backbone_presets = {
     },
     "csp_darknet_xl": {
         "metadata": {
-            "description": "An extra-large CSP-DarkNet image classification model.",
+            "description": (
+                "An extra-large CSP-DarkNet image classification model."
+            ),
             "params": 56837970,
             "path": "cspnet",
         },

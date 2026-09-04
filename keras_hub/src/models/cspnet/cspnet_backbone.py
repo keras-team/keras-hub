@@ -5,7 +5,6 @@ from keras import ops
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.feature_pyramid_backbone import FeaturePyramidBackbone
 from keras_hub.src.utils.keras_utils import standardize_data_format
-from keras_hub.src.models.cspnet.cspnet_presets import backbone_presets
 
 
 @keras_hub_export("keras_hub.models.CSPNetBackbone")
@@ -109,7 +108,6 @@ class CSPNetBackbone(FeaturePyramidBackbone):
     model(input_data)
     ```
     """
-    
 
     def __init__(
         self,
@@ -255,52 +253,52 @@ class CSPNetBackbone(FeaturePyramidBackbone):
         )
         return config
 
-@classmethod
-def from_config(cls, config):
-    if "config" in config and isinstance(config["config"], dict):
-        config = config["config"]
+    @classmethod
+    def from_config(cls, config):
+        if "config" in config and isinstance(config["config"], dict):
+            config = config["config"]
 
-    config = dict(config)
+        config = dict(config)
 
-    if "stackwise_channels" in config:
-        config["stackwise_num_filters"] = config.pop("stackwise_channels")
+        if "stackwise_channels" in config:
+            config["stackwise_num_filters"] = config.pop("stackwise_channels")
 
-    depths = config.get("stackwise_depth", [])
-    num_stages = len(depths)
+        depths = config.get("stackwise_depth", [])
+        num_stages = len(depths)
 
-    if "stackwise_num_filters" not in config:
-        config["stackwise_num_filters"] = [64, 128, 256, 512]
+        if "stackwise_num_filters" not in config:
+            config["stackwise_num_filters"] = [64, 128, 256, 512]
 
-    if "stackwise_strides" not in config:
-        config["stackwise_strides"] = [2] * num_stages
+        if "stackwise_strides" not in config:
+            config["stackwise_strides"] = [2] * num_stages
 
-    if "stem_filters" not in config:
-        filters = config.get("stackwise_num_filters")
-        config["stem_filters"] = filters[0] // 2 if filters else 32
+        if "stem_filters" not in config:
+            filters = config.get("stackwise_num_filters")
+            config["stem_filters"] = filters[0] // 2 if filters else 32
 
-    config.setdefault("stem_kernel_size", 3)
-    config.setdefault("stem_strides", 2)
-    config.setdefault("block_type", "dark_block")
-    config.setdefault("stage_type", "cs3")
-    config.setdefault("expand_ratio", 0.5)
-    config.setdefault("bottle_ratio", 0.5)
+        config.setdefault("stem_kernel_size", 3)
+        config.setdefault("stem_strides", 2)
+        config.setdefault("block_type", "dark_block")
+        config.setdefault("stage_type", "cs3")
+        config.setdefault("expand_ratio", 1.0)
+        config.setdefault("bottle_ratio", 0.5)
 
-    valid_keys = [
-        "stackwise_num_filters",
-        "stackwise_depth",
-        "stackwise_strides",
-        "stem_filters",
-        "stem_kernel_size",
-        "stem_strides",
-        "block_type",
-        "stage_type",
-        "expand_ratio",
-        "bottle_ratio",
-        "name",
-        "trainable",
-    ]
+        valid_keys = [
+            "stackwise_num_filters",
+            "stackwise_depth",
+            "stackwise_strides",
+            "stem_filters",
+            "stem_kernel_size",
+            "stem_strides",
+            "block_type",
+            "stage_type",
+            "expand_ratio",
+            "bottle_ratio",
+            "name",
+            "trainable",
+        ]
 
-    return cls(**{k: v for k, v in config.items() if k in valid_keys})
+        return cls(**{k: v for k, v in config.items() if k in valid_keys})
 
 
 def bottleneck_block(
