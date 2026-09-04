@@ -128,9 +128,14 @@ class EditDistance(keras.metrics.Metric):
         y_pred = validate_and_fix_rank(y_pred, "y_pred")
 
         if self.normalize:
+            reference_values = (
+                y_true.flat_values
+                if isinstance(y_true, tf.RaggedTensor)
+                else y_true
+            )
             self._aggregate_reference_length.assign_add(
                 convert_to_numpy(
-                    tf.cast(tf.size(y_true.flat_values), dtype=self.dtype)
+                    tf.cast(tf.size(reference_values), dtype=self.dtype)
                 )
             )
 
