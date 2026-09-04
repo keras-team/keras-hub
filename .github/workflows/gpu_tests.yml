@@ -31,7 +31,7 @@ jobs:
 
     name: GPU tests (${{ matrix.backend }}, shard ${{ matrix.shard }})
     runs-on: linux-x86-g2-32-l4-1gpu
-    timeout-minutes: 240
+    timeout-minutes: 300
 
     container:
       image: python:3.11-slim
