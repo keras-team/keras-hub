@@ -1,0 +1,32 @@
+name: PR approved issue check
+# Every PR from an external contributor is converted to a draft when opened and
+# stays a draft until its description links an approved issue that is assigned
+# to the PR author. Once it does, the PR is marked "Ready for review"
+# automatically. Repository owners, org members, collaborators and bots bypass
+# this check.
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types: [opened, edited, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: write
+
+jobs:
+  approved-issue:
+    # Bypass maintainers, collaborators and bots (e.g. dependabot).
+    if: >-
+      github.event.pull_request.user.type != 'Bot' &&
+      !contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const script = require('./\.github/workflows/scripts/pr-approved-issue.js')
+            await script({github, context, core})
