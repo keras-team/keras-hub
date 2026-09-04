@@ -8,6 +8,7 @@ import threading
 import keras
 import numpy as np
 from keras import ops
+from keras.src.utils.backend_utils import in_grain_data_pipeline
 from packaging import version
 
 try:
@@ -63,6 +64,26 @@ def preprocessing_function(fn):
 
     params = inspect.signature(fn).parameters
     accepts_labels = all(k in params for k in ("x", "y", "sample_weight"))
+
+    def convert_outputs(x):
+        if in_grain_data_pipeline():
+
+            def convert_to_numpy_or_lists(t):
+                if t is None:
+                    return None
+                if tf is not None and isinstance(t, tf.RaggedTensor):
+                    return tensor_to_list(t)
+                if tf is not None and isinstance(t, tf.Tensor):
+                    if t.dtype == tf.string:
+                        return tensor_to_list(t)
+                    return t.numpy()
+                if keras.ops.is_tensor(t):
+                    return keras.ops.convert_to_numpy(t)
+                return t
+
+            return keras.tree.map_structure(convert_to_numpy_or_lists, x)
+        return convert_preprocessing_outputs(x)
+
     if not accepts_labels:
 
         @functools.wraps(fn)
@@ -71,7 +92,7 @@ def preprocessing_function(fn):
                 x = convert_preprocessing_inputs(x)
                 with no_convert_scope():
                     x = fn(self, x, **kwargs)
-                return convert_preprocessing_outputs(x)
+                return convert_outputs(x)
 
     else:
 
@@ -83,7 +104,7 @@ def preprocessing_function(fn):
                 )
                 with no_convert_scope():
                     x = fn(self, x, y=y, sample_weight=sample_weight, **kwargs)
-                return convert_preprocessing_outputs(x)
+                return convert_outputs(x)
 
     return wrapper
 
@@ -142,6 +163,8 @@ def convert_preprocessing_inputs(x):
     keras_hub.utils.convert_preprocessing_inputs(x)
     ```
     """
+    if in_grain_data_pipeline():
+        return x
     if not tf.executing_eagerly() or in_no_convert_scope():
         return x
 
@@ -155,21 +178,15 @@ def convert_preprocessing_inputs(x):
         try:
             numpy_x = np.array(x)
         except ValueError as e:
-            # If numpy conversion failed, try converting to a ragged array.
             try:
                 return tf.ragged.constant(x)
             except ValueError:
-                # If ragged conversion failed return to the numpy error.
                 raise e
-        # If we have a string input, use tf.tensor.
         if numpy_x.dtype.type is np.str_ or numpy_x.dtype.type is np.bytes_:
             return tf.convert_to_tensor(x)
-        # Numpy will default to int64, int32 works with more ops.
         if numpy_x.dtype == np.int64:
             numpy_x = numpy_x.astype(np.int32)
-        # We have non-ragged, non-string input. Use backbend type.
         x = ops.convert_to_tensor(numpy_x)
-        # Torch will complain about device placement for GPU tensors.
         if keras.config.backend() == "torch":
             x = x.cpu()
         return x
@@ -221,6 +238,23 @@ def convert_preprocessing_outputs(x):
     keras_hub.utils.convert_preprocessing_outputs(x)
     ```
     """
+    if in_grain_data_pipeline():
+
+        def convert_to_numpy_or_lists(t):
+            if t is None:
+                return None
+            if tf is not None and isinstance(t, tf.RaggedTensor):
+                return tensor_to_list(t)
+            if tf is not None and isinstance(t, tf.Tensor):
+                if t.dtype == tf.string:
+                    return tensor_to_list(t)
+                return t.numpy()
+            if keras.ops.is_tensor(t):
+                return keras.ops.convert_to_numpy(t)
+            return t
+
+        return keras.tree.map_structure(convert_to_numpy_or_lists, x)
+
     if not tf.executing_eagerly() or in_no_convert_scope():
         return x
 
@@ -267,6 +301,23 @@ def convert_preprocessing_outputs_python(x):
     keras_hub.utils.convert_preprocessing_outputs_python(x)
     ```
     """
+    if in_grain_data_pipeline():
+
+        def convert_to_numpy_or_lists(t):
+            if t is None:
+                return None
+            if tf is not None and isinstance(t, tf.RaggedTensor):
+                return tensor_to_list(t)
+            if tf is not None and isinstance(t, tf.Tensor):
+                if t.dtype == tf.string:
+                    return tensor_to_list(t)
+                return t.numpy()
+            if keras.ops.is_tensor(t):
+                return keras.ops.convert_to_numpy(t)
+            return t
+
+        return keras.tree.map_structure(convert_to_numpy_or_lists, x)
+
     if in_no_convert_scope():
         return x
 
@@ -275,8 +326,12 @@ def convert_preprocessing_outputs_python(x):
             return x
         if isinstance(x, (str, bytes)):
             return x
+        if tf is not None and isinstance(x, tf.RaggedTensor):
+            return tensor_to_list(x)
         dtype = None
         if hasattr(x, "dtype"):
+            if tf is not None and x.dtype == tf.string:
+                return tensor_to_list(x)
             dtype = keras.backend.standardize_dtype(x.dtype)
         return ops.convert_to_tensor(x, dtype=dtype)
 
@@ -473,8 +528,7 @@ def is_tensor_type(x):
 
 
 def is_float_dtype(dtype):
-    """
-    Checks if a dtype is a float type by using a regex.
+    """Checks if a dtype is a float type by using a regex.
 
     This function standardizes the input dtype and then uses a regular
     expression to perform an exact match. It identifies standard floats,

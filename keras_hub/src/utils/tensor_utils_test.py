@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import numpy as np
 import tensorflow as tf
 from keras import ops
@@ -103,7 +105,6 @@ class ConvertHelpers(TestCase):
         self.assertAllEqual(outputs, inputs)
 
     def test_placement(self):
-        # Make sure we always place preprocessing on the CPU on all backends.
         @preprocessing_function
         def test(self, inputs):
             for x in inputs:
@@ -113,6 +114,38 @@ class ConvertHelpers(TestCase):
             return inputs
 
         test(self, ([1, 2, 3], ["foo", "bar"], "foo"))
+
+    def test_preprocessing_function_skips_output_conversion_in_grain(self):
+        @preprocessing_function
+        def test(self, inputs):
+            return [[1, 2, 3], [4, 5]]
+
+        inputs = [[10, 20], [30]]
+        with patch(
+            "keras_hub.src.utils.tensor_utils.in_grain_data_pipeline",
+            return_value=True,
+        ):
+            outputs = test(self, inputs)
+
+        self.assertIsInstance(outputs, list)
+        self.assertIsInstance(outputs[0], list)
+        self.assertEqual(outputs, [[1, 2, 3], [4, 5]])
+
+    def test_preprocessing_function_converts_outputs_outside_grain(self):
+        @preprocessing_function
+        def test(self, inputs):
+            return inputs
+
+        inputs = [1, 2, 3]
+
+        with patch(
+            "keras_hub.src.utils.tensor_utils.in_grain_data_pipeline",
+            return_value=False,
+        ):
+            outputs = test(self, inputs)
+
+        self.assertTrue(is_tensor_type(outputs))
+        self.assertAllEqual(outputs, inputs)
 
 
 class TensorToListTest(TestCase):
