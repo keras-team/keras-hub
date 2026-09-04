@@ -7,11 +7,10 @@
  *    least one referenced issue exists in this repo and has the PR author as
  *    an assignee.
  *  - When the check passes, a draft PR is marked "Ready for review". When it
- *    fails on `ready_for_review`, the PR is converted back to a draft. A single
+ *    fails and the PR is not a draft, it is converted to a draft. A single
  *    sticky comment is kept up to date with the result.
  *
  *  Maintainers, collaborators and bots are skipped by the workflow `if:`.
- *  Draft toggling needs a PAT (`PR_APPROVED_ISSUE_TOKEN`); GITHUB_TOKEN can't do it.
  */
 
 const SECTION_HEADING = "## Approved issue link";
@@ -23,8 +22,6 @@ const SECTION_TEMPLATE = `${SECTION_HEADING}
 `;
 const COMMENT_MARKER = "<!-- pr-approved-issue-check -->";
 const BYPASS_ASSOCIATIONS = ["OWNER", "MEMBER", "COLLABORATOR"];
-const TOKEN_HINT =
-  "GITHUB_TOKEN cannot change draft state; set the PR_APPROVED_ISSUE_TOKEN secret to a PAT.";
 
 module.exports = async ({ github, context, core }) => {
   const pr = context.payload.pull_request;
@@ -77,7 +74,7 @@ module.exports = async ({ github, context, core }) => {
   // 3. Flip the draft state to match the result.
   if (passed && isDraft) {
     isDraft = await markReadyForReview(github, core, pr);
-  } else if (!passed && action === "ready_for_review") {
+  } else if (!passed && !isDraft) {
     isDraft = await convertToDraft(github, core, pr);
   }
 
@@ -166,13 +163,9 @@ async function markReadyForReview(github, core, pr) {
 }
 
 function warnDraftToggleFailed(core, what, err) {
-  const hasToken = process.env.HAS_PR_APPROVED_ISSUE_TOKEN === "true";
   const lines = [`Could not ${what}: ${err.message}`];
-  if (!hasToken) lines.push(TOKEN_HINT);
-  else if (/not accessible by integration/i.test(err.message)) {
-    lines.push(
-      "PR_APPROVED_ISSUE_TOKEN was rejected; check it has pull request write access and has not expired."
-    );
+  if (/not accessible by integration/i.test(err.message)) {
+    lines.push("Toggling draft state needs `contents: write` and `pull-requests: write`.");
   }
   core.warning(lines.join("\n"));
 }
