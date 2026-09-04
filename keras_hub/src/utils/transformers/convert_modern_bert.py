@@ -210,11 +210,7 @@ def convert_head(task, loader, transformers_config):
 
 def convert_tokenizer(cls, preset, **kwargs):
     """Convert a Hugging Face ModernBERT tokenizer."""
-
-    tokenizer_json = load_json(
-        preset,
-        "tokenizer.json",
-    )
+    tokenizer_json = load_json(preset, "tokenizer.json")
     tokenizer_model = tokenizer_json["model"]
 
     if tokenizer_model["type"] != "BPE":
@@ -223,9 +219,18 @@ def convert_tokenizer(cls, preset, **kwargs):
             f"{tokenizer_model['type']!r}."
         )
 
+    vocab = dict(tokenizer_model["vocab"])
+    merges = tokenizer_model["merges"]
+
+    special_tokens = set()
+    for token in tokenizer_json.get("added_tokens", []):
+        vocab[token["content"]] = token["id"]
+        special_tokens.add(token["content"])
+
     return cls(
-        vocabulary=tokenizer_model["vocab"],
-        merges=tokenizer_model["merges"],
+        vocabulary=vocab,
+        merges=merges,
+        unsplittable_tokens=list(special_tokens),
         sequence_length=kwargs.pop("sequence_length", None),
         add_prefix_space=tokenizer_json.get("pre_tokenizer", {}).get(
             "add_prefix_space",

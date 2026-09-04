@@ -10,8 +10,8 @@ porting is handled by `convert_modern_bert.py` through the standard
 
 To run:
 
-    python tools/checkpoint_conversion/convert_modern_bert_checkpoints.py
-    \  --preset modernbert_base_en
+    python tools/checkpoint_conversion/convert_modern_bert_checkpoints.py \
+        --preset modernbert_base_en
 """
 
 import argparse
