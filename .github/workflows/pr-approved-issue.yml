@@ -13,6 +13,12 @@ permissions:
   issues: read
   pull-requests: write
 
+# Edits made with the PAT re-trigger this workflow on `edited`; run one job per
+# PR at a time so the runs do not race on the sticky comment and draft state.
+concurrency:
+  group: pr-approved-issue-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   approved-issue:
     # Bypass maintainers, collaborators and bots (e.g. dependabot).
@@ -26,7 +32,11 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.repository.default_branch }}
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          # Lets the script explain why draft toggling failed if the PAT is unset.
+          HAS_PR_APPROVED_ISSUE_TOKEN: ${{ secrets.PR_APPROVED_ISSUE_TOKEN != '' }}
         with:
+          github-token: ${{ secrets.PR_APPROVED_ISSUE_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             const script = require('./\.github/workflows/scripts/pr-approved-issue.js')
             await script({github, context, core})
