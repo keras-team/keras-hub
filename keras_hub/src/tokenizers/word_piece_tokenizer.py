@@ -1,13 +1,17 @@
 import os
-import re
+import unicodedata
 from typing import Iterable
 
 import keras
+import numpy as np
+import regex as re
 from keras.src.saving import serialization_lib
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -23,15 +27,31 @@ except ImportError:
 
 VOCAB_FILENAME = "vocabulary.txt"
 
-# Matches whitespace and control characters.
-WHITESPACE_REGEX = r"|".join(
+# RE2-compatible whitespace pattern for
+# TensorFlow Text (ASCII-only)
+WHITESPACE_REGEX_TF = r"|".join(
     [
-        r"\s",
+        r"[ \t\n\r\f\v]",
         # Invisible control characters
         r"\p{Cc}",
         r"\p{Cf}",
     ]
 )
+
+# Python-compatible whitespace pattern using the
+# `regex` module's scoped ASCII flag
+WHITESPACE_REGEX_PYTHON = r"|".join(
+    [
+        r"(?a:\s)",
+        # Invisible control characters
+        r"\p{Cc}",
+        r"\p{Cf}",
+    ]
+)
+
+# Keep the original WHITESPACE_REGEX as the TF-compatible
+# one (or alias it) to avoid breaking TF regex compilation:
+WHITESPACE_REGEX = WHITESPACE_REGEX_TF
 
 # Matches punctuation compatible with the original bert implementation.
 PUNCTUATION_REGEX = r"|".join(
@@ -84,6 +104,40 @@ WHITESPACE_PUNCTUATION_AND_CJK_REGEX = r"|".join(
     [
         WHITESPACE_AND_PUNCTUATION_REGEX,
         CJK_REGEX,
+    ]
+)
+
+# `CJK_REGEX` above uses the `\x{HHHH}` escape syntax understood by RE2 (the
+# regex engine used by `tf_text.regex_split`). The pure python `regex`
+# package does not support that syntax, so we re-express the same code point
+# ranges with the `\uHHHH` / `\UHHHHHHHH` escapes it does understand. This is
+# only used by the python (non `tensorflow_text`) tokenization workflow.
+CJK_REGEX_PYTHON = r"|".join(
+    [
+        r"[\u4E00-\u9FFF]",
+        r"[\u3400-\u4DBF]",
+        r"[\U00020000-\U0002A6DF]",
+        r"[\U0002A700-\U0002B73F]",
+        r"[\U0002B740-\U0002B81F]",
+        r"[\U0002B820-\U0002CEAF]",
+        r"[\uF900-\uFAFF]",
+        r"[\U0002F800-\U0002FA1F]",
+    ]
+)
+
+# Matches punctuation and CJK characters (python-compatible).
+PUNCTUATION_AND_CJK_REGEX_PYTHON = r"|".join(
+    [
+        PUNCTUATION_REGEX,
+        CJK_REGEX_PYTHON,
+    ]
+)
+
+# Matches whitespace, punctuation, and CJK characters (python-compatible).
+WHITESPACE_PUNCTUATION_AND_CJK_REGEX_PYTHON = r"|".join(
+    [
+        WHITESPACE_AND_PUNCTUATION_REGEX,
+        CJK_REGEX_PYTHON,
     ]
 )
 
@@ -190,6 +244,145 @@ def pretokenize(
     return text
 
 
+def _strip_accents_python(text):
+    """Pure python equivalent of the `strip_accents` step in `pretokenize`.
+
+    Normalizes `text` to NFD form and drops unicode combining marks (the
+    `Mn` unicode category), matching
+    `tf_text.normalize_utf8(text, "NFD")` followed by
+    `tf.strings.regex_replace(text, r"\\p{Mn}", "")`.
+    """
+    text = unicodedata.normalize("NFD", text)
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
+
+
+def pretokenize_python(
+    text,
+    lowercase=False,
+    strip_accents=True,
+    split=True,
+    split_on_cjk=True,
+    special_tokens_pattern=None,
+):
+    """Pure python equivalent of `pretokenize()`.
+
+    This mirrors `pretokenize()` step for step, but operates on a single
+    python string (rather than a `tf.Tensor`/`tf.RaggedTensor`) and has no
+    dependency on `tensorflow_text`. Used by the python tokenization
+    workflow so `WordPieceTokenizer` can run without `tensorflow_text`
+    installed.
+
+    Args:
+        text: python string. Input to be pretokenized.
+        lowercase, strip_accents, split, split_on_cjk,
+        special_tokens_pattern: See `pretokenize()`.
+
+    Returns:
+        A list of pretokenized word strings.
+    """
+    if not isinstance(text, str):
+        text = text.decode("utf-8") if isinstance(text, bytes) else str(text)
+
+    if split_on_cjk and split:
+        text = re.sub(CJK_REGEX_PYTHON, lambda m: " " + m.group(0) + " ", text)
+    if strip_accents:
+        text = _strip_accents_python(text)
+
+    words = [text]
+    if split:
+        if split_on_cjk:
+            keep_split_pattern = PUNCTUATION_AND_CJK_REGEX_PYTHON
+        else:
+            keep_split_pattern = PUNCTUATION_REGEX
+        if special_tokens_pattern is not None:
+            # Special tokens are added as their own alternative so they are
+            # matched (and kept whole) ahead of the generic punctuation/CJK
+            # rules, mirroring the behavior in `pretokenize()`.
+            keep_split_pattern = r"|".join(
+                [special_tokens_pattern, keep_split_pattern]
+            )
+        # A single capturing group around `keep_split_pattern` means
+        # `regex.split` keeps those matches as list items, while matches of
+        # the non-capturing whitespace-only alternative are dropped, just
+        # like `tf_text.regex_split(..., keep_delim_regex_pattern=...)`.
+        split_regex = re.compile(
+            f"({keep_split_pattern})|(?:{WHITESPACE_REGEX_PYTHON})"
+        )
+        words = [piece for piece in split_regex.split(text) if piece]
+
+    if lowercase:
+        if special_tokens_pattern is not None:
+            # Do not lowercase special tokens, e.g. `"[CLS]"`.
+            special_tokens_regex = re.compile(f"^(?:{special_tokens_pattern})$")
+            words = [
+                word
+                if special_tokens_regex.match(word)
+                else unicodedata.normalize("NFKC", word.casefold())
+                for word in words
+            ]
+        else:
+            words = [
+                unicodedata.normalize("NFKC", word.casefold()) for word in words
+            ]
+
+    return words
+
+
+def word_piece_tokenize_word_python(
+    word,
+    vocabulary_set,
+    unknown_token,
+    suffix_indicator,
+    max_bytes_per_word=100,
+):
+    """Greedy longest-match-first WordPiece tokenization of a single word.
+
+    Pure python implementation of the WordPiece algorithm (the same
+    algorithm `tf_text.FastWordpieceTokenizer` implements), used by the
+    python tokenization workflow. Returns `[unknown_token]` if `word` cannot
+    be represented with the given vocabulary.
+    """
+    if len(word.encode("utf-8")) > max_bytes_per_word:
+        return [unknown_token]
+
+    output_tokens = []
+    start = 0
+    while start < len(word):
+        end = len(word)
+        matched_substr = None
+        while start < end:
+            substr = word[start:end]
+            if start > 0:
+                substr = suffix_indicator + substr
+            if substr in vocabulary_set:
+                matched_substr = substr
+                break
+            end -= 1
+        if matched_substr is None:
+            return [unknown_token]
+        output_tokens.append(matched_substr)
+        start = end
+    return output_tokens
+
+
+def join_word_piece_tokens_python(tokens, suffix_indicator):
+    """Pure python equivalent of `FastWordpieceTokenizer.detokenize()`.
+
+    Joins a list of WordPiece string tokens back into a single string,
+    concatenating suffix tokens (e.g. `"##ing"`) directly onto the previous
+    token, and separating all other tokens with a space.
+    """
+    words = []
+    for token in tokens:
+        if isinstance(token, bytes):
+            token = token.decode("utf-8")
+        if token.startswith(suffix_indicator) and words:
+            words[-1] = words[-1] + token[len(suffix_indicator) :]
+        else:
+            words.append(token)
+    return " ".join(words)
+
+
 @keras_hub_export("keras_hub.tokenizers.WordPieceTokenizer")
 class WordPieceTokenizer(tokenizer.Tokenizer):
     """A WordPiece tokenizer layer.
@@ -262,6 +455,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
      - [Song et al., 2020](https://arxiv.org/abs/2012.15524)
 
     Examples:
+    >>> import numpy as np
+    >>> import tensorflow as tf
+    >>> import keras_hub
 
     Ragged outputs.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -271,8 +467,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ...     lowercase=True,
     ... )
     >>> outputs = tokenizer(inputs)
-    >>> np.array(outputs)
-    array([1, 2, 3, 4, 5, 6, 7], dtype=int32)
+    >>> np.array(outputs).tolist()
+    [1, 2, 3, 4, 5, 6, 7]
 
     Dense outputs.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -342,7 +538,13 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 f"Received: dtype={dtype}"
             )
 
-        super().__init__(dtype=dtype, **kwargs)
+        # Allow a pure python tokenization workflow that does not require
+        # `tensorflow_text` to be installed. This matches the default
+        # behavior of `BytePairTokenizer`.
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            dtype=dtype, _allow_python_workflow=_allow_python_workflow, **kwargs
+        )
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
 
@@ -374,6 +576,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         if vocabulary is None:
             self.vocabulary = None
             self._fast_word_piece = None
+            self._vocabulary_set = None
+            self._token_to_id_python = None
             return
 
         if isinstance(vocabulary, str):
@@ -408,14 +612,29 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "the `oov_token` argument when creating the tokenizer."
             )
 
-        self._fast_word_piece = tf_text.FastWordpieceTokenizer(
-            vocab=self.vocabulary,
-            token_out_type=self.compute_dtype,
-            suffix_indicator=self.suffix_indicator,
-            unknown_token=self.oov_token,
-            no_pretokenization=True,
-            support_detokenization=True,
-        )
+        # Build the python-side vocabulary lookups unconditionally. These
+        # are cheap to build and are used by the python tokenization
+        # workflow (`_tokenize_python`/`_detokenize_python`), which does not
+        # require `tensorflow_text` to be installed.
+        self._vocabulary_set = set(self.vocabulary)
+        self._token_to_id_python = {}
+        for i, token in enumerate(self.vocabulary):
+            if token not in self._token_to_id_python:
+                self._token_to_id_python[token] = i
+
+        # `tensorflow_text` is an optional dependency. Only build the
+        # `tf_text`-backed tokenizer if it is installed; the python
+        # workflow above can be used otherwise.
+        self._fast_word_piece = None
+        if tf_text is not None:
+            self._fast_word_piece = tf_text.FastWordpieceTokenizer(
+                vocab=self.vocabulary,
+                token_out_type=self.compute_dtype,
+                suffix_indicator=self.suffix_indicator,
+                unknown_token=self.oov_token,
+                no_pretokenization=True,
+                support_detokenization=True,
+            )
         self._update_special_token_ids()
 
     def get_vocabulary(self):
@@ -440,10 +659,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
-        # This will be slow, but keep memory usage down compared to building a
-        # . Assuming the main use case is looking up a few special tokens
-        # early in the vocab, this should be fine.
         self._check_vocabulary()
+        if self._token_to_id_python is not None:
+            if token not in self._token_to_id_python:
+                raise ValueError(f"Token '{token}' is not in the vocabulary.")
+            return self._token_to_id_python[token]
         return self.vocabulary.index(token)
 
     def get_config(self):
@@ -470,9 +690,16 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "to pass a `vocabulary` argument when creating the layer."
             )
 
-    @preprocessing_function
     def tokenize(self, inputs):
         self._check_vocabulary()
+        if not self._allow_python_workflow or in_tf_function():
+            return self._tokenize_tf(inputs)
+        else:
+            return self._tokenize_python(inputs)
+
+    @preprocessing_function
+    def _tokenize_tf(self, inputs):
+        assert_tf_libs_installed(self.__class__.__name__)
         inputs = tf.convert_to_tensor(inputs)
         unbatched = inputs.shape.rank == 0
         pattern = None
@@ -516,13 +743,227 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         return tokens
 
-    @preprocessing_function
+    def _tokenize_python(self, inputs):
+        self._check_vocabulary()
+        sequences, unbatched = self._canonicalize_python_inputs(inputs)
+
+        pattern = None
+        if self.split and self.special_tokens_in_strings:
+            special_tokens = self.special_tokens
+            if self._init_special_tokens:
+                special_tokens = special_tokens + self._init_special_tokens
+            pattern = get_special_tokens_pattern(special_tokens)
+
+        output_is_int = is_int_dtype(self.compute_dtype)
+        unk_id = self._token_to_id_python.get(self.oov_token)
+
+        batched_tokens = []
+        for sequence in sequences:
+            if self.split:
+                words = pretokenize_python(
+                    sequence,
+                    self.lowercase,
+                    self.strip_accents,
+                    self.split,
+                    self.split_on_cjk,
+                    pattern,
+                )
+            else:
+                # Each element is already a whole word; still apply
+                # lowercase/strip_accents normalization to match `pretokenize`.
+                words = [
+                    pretokenize_python(
+                        word,
+                        self.lowercase,
+                        self.strip_accents,
+                        split=False,
+                        split_on_cjk=False,
+                        special_tokens_pattern=None,
+                    )[0]
+                    for word in sequence
+                ]
+
+            token_strs = []
+            for word in words:
+                token_strs.extend(
+                    word_piece_tokenize_word_python(
+                        word,
+                        self._vocabulary_set,
+                        self.oov_token,
+                        self.suffix_indicator,
+                    )
+                )
+
+            if output_is_int:
+                tokens = [
+                    self._token_to_id_python.get(t, unk_id) for t in token_strs
+                ]
+            else:
+                tokens = token_strs
+            batched_tokens.append(tokens)
+
+        if self.sequence_length:
+            pad_value = 0 if output_is_int else ""
+            batched_tokens = [
+                tokens[: self.sequence_length]
+                + [pad_value] * (self.sequence_length - len(tokens))
+                for tokens in batched_tokens
+            ]
+
+        if unbatched:
+            tokens = batched_tokens[0]
+        else:
+            tokens = batched_tokens
+        if output_is_int and self.sequence_length:
+            return keras.ops.convert_to_tensor(tokens, dtype=self.compute_dtype)
+        return tokens
+
     def detokenize(self, inputs):
         self._check_vocabulary()
+        if not self._allow_python_workflow or in_tf_function():
+            return self._detokenize_tf(inputs)
+        else:
+            return self._detokenize_python(inputs)
+
+    @preprocessing_function
+    def _detokenize_tf(self, inputs):
+        assert_tf_libs_installed(self.__class__.__name__)
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         outputs = self._fast_word_piece.detokenize(inputs)
         if unbatched:
             outputs = tf.squeeze(outputs, 0)
+        return outputs
+
+    def _canonicalize_python_inputs(self, inputs):
+        """Convert `inputs` into `(sequences, unbatched)`.
+
+        `sequences` is always a python list. For `split=True`, each
+        sequence is represented by a string. For `split=False`, each
+        sequence is a list of pre-tokenized word strings.
+        """
+        if tf is not None and isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            if isinstance(inputs, tf.RaggedTensor):
+                inputs = inputs.to_list()
+            else:
+                unbatched = inputs.shape.rank == 0
+                inputs = inputs.numpy()
+                if unbatched:
+                    if isinstance(inputs, bytes):
+                        inputs = inputs.decode("utf-8")
+                    elif isinstance(inputs, np.ndarray):
+                        inputs = inputs.item()
+                else:
+                    inputs = inputs.tolist()
+
+        if isinstance(inputs, np.ndarray):
+            if inputs.ndim == 0:
+                inputs = inputs.item()
+            else:
+                inputs = inputs.tolist()
+
+        if isinstance(inputs, bytes):
+            inputs = inputs.decode("utf-8")
+
+        if self.split:
+            if isinstance(inputs, str):
+                return [inputs], True
+
+            if isinstance(inputs, (list, tuple)):
+                if len(inputs) == 0:
+                    return [], False
+
+                if isinstance(inputs[0], (list, tuple, np.ndarray)):
+                    raise ValueError(
+                        "When `split=True`, `inputs` must be a string or a "
+                        "1D list/tuple of strings."
+                    )
+
+                return [
+                    x.decode("utf-8") if isinstance(x, bytes) else str(x)
+                    for x in inputs
+                ], False
+
+            raise ValueError(
+                "Input should be a string or a (possibly batched) list of "
+                f"strings. Received: {inputs}"
+            )
+
+        if isinstance(inputs, str):
+            return [inputs], True
+
+        if isinstance(inputs, (list, tuple)):
+            if len(inputs) == 0:
+                return [[]], True
+
+            if isinstance(inputs[0], (list, tuple, np.ndarray)):
+                return [list(x) for x in inputs], False
+
+            return [list(inputs)], True
+
+        raise ValueError(
+            "Input should be a string or a (possibly batched) list of strings. "
+            f"Received: {inputs}"
+        )
+
+    def _canonicalize_python_detokenize_inputs(self, inputs):
+        """Convert `inputs` into `(sequences_of_ids, unbatched)`."""
+        if tf is not None and isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            if isinstance(inputs, tf.RaggedTensor):
+                inputs = inputs.to_list()
+            else:
+                unbatched = inputs.shape.rank == 0
+                inputs = inputs.numpy()
+                if unbatched:
+                    if isinstance(inputs, np.ndarray):
+                        inputs = inputs.item()
+                else:
+                    inputs = inputs.tolist()
+
+        if isinstance(inputs, np.ndarray):
+            if inputs.ndim == 0:
+                inputs = inputs.item()
+            else:
+                inputs = inputs.tolist()
+
+        if isinstance(inputs, (int, np.integer)):
+            return [[int(inputs)]], True
+
+        if isinstance(inputs, (list, tuple)):
+            if len(inputs) == 0:
+                return [list(inputs)], True
+
+            if isinstance(inputs[0], (list, tuple, np.ndarray)):
+                return [list(x) for x in inputs], False
+
+            return [list(inputs)], True
+
+        raise ValueError(
+            "Input should be an integer id or a (possibly batched) "
+            f"list of integer ids. Received: {inputs}"
+        )
+
+    def _detokenize_python(self, inputs):
+        self._check_vocabulary()
+        sequences, unbatched = self._canonicalize_python_detokenize_inputs(
+            inputs
+        )
+
+        outputs = []
+        for sequence in sequences:
+            tokens = []
+            for item in sequence:
+                if isinstance(item, bytes):
+                    item = item.decode("utf-8")
+                if isinstance(item, str):
+                    tokens.append(item)
+                else:
+                    tokens.append(self.id_to_token(int(item)))
+            outputs.append(
+                join_word_piece_tokens_python(tokens, self.suffix_indicator)
+            )
+
+        if unbatched:
+            return outputs[0]
         return outputs
 
     def compute_output_spec(self, input_spec):
