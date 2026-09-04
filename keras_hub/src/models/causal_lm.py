@@ -123,7 +123,7 @@ class CausalLM(Task):
         # Clear the compiled generate function.
         self.generate_function = None
 
-    def generate_step(self):
+    def generate_step(self, *args, **kwargs):
         """Run generation on a single batch of input."""
         raise NotImplementedError
 
