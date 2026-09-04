@@ -35,6 +35,7 @@ device = torch.device("cpu")
 torch.set_default_device(device)
 
 PRESET_MAP = {
+    # Qwen3.5 series presets
     "qwen3_5_0.8b_base": "Qwen/Qwen3.5-0.8B-Base",
     "qwen3_5_0.8b": "Qwen/Qwen3.5-0.8B",
     "qwen3_5_2b_base": "Qwen/Qwen3.5-2B-Base",
@@ -44,7 +45,10 @@ PRESET_MAP = {
     "qwen3_5_9b_base": "Qwen/Qwen3.5-9B-Base",
     "qwen3_5_9b": "Qwen/Qwen3.5-9B",
     "qwen3_5_27b": "Qwen/Qwen3.5-27B",
+    # Qwen3.6 series presets
     "qwen3_6_27b": "Qwen/Qwen3.6-27B",
+    # Qwen3.8 series presets
+    "qwen3_8_27b": "Qwen/Qwen3.8-27B",
 }
 
 IMAGE_URL = "http://images.cocodataset.org/val2017/000000039769.jpg"

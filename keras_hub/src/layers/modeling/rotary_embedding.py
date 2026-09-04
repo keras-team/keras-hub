@@ -35,8 +35,9 @@ class RotaryEmbedding(keras.layers.Layer):
         original_max_position_embeddings: int. Original maximum position
             embeddings for YaRN scaling. Only used when rope_type="yarn".
             Defaults to 4096.
-        truncate: bool. Whether to apply truncation for YaRN scaling. Only used
-            when rope_type="yarn". Defaults to False.
+        truncate: bool. Whether to round the YaRN correction range to whole
+            dimensions. Only used when rope_type="yarn". Defaults to True,
+            matching the reference YaRN implementation.
         sequence_axis: int. Sequence axis in the input tensor.
         feature_axis: int. Feature axis in the input tensor.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
@@ -85,7 +86,7 @@ class RotaryEmbedding(keras.layers.Layer):
         beta_fast=32.0,
         beta_slow=1.0,
         original_max_position_embeddings=4096,
-        truncate=False,
+        truncate=True,
         sequence_axis=1,
         feature_axis=-1,
         denominator_dim=None,
@@ -198,16 +199,6 @@ class RotaryEmbedding(keras.layers.Layer):
             if len(ops.shape(positions)) == 1:
                 positions = ops.expand_dims(positions, axis=batch_axis)
 
-        if (
-            self.rope_type == "yarn"
-            and self.truncate
-            and self.original_max_position_embeddings is not None
-        ):
-            positions = ops.minimum(
-                positions,
-                ops.cast(self.original_max_position_embeddings, "float32"),
-            )
-
         freq = ops.einsum("bi,j->bij", positions, inverse_freq)
 
         embedding = ops.stack((freq, freq), axis=-2)
@@ -300,7 +291,7 @@ class RotaryEmbedding(keras.layers.Layer):
 
         # Clamp to valid range
         low = ops.maximum(low, ops.cast(0, "float32"))
-        high = ops.minimum(high, ops.cast(rotary_dim // 2 - 1, "float32"))
+        high = ops.minimum(high, ops.cast(rotary_dim - 1, "float32"))
 
         # Linear ramp function
         dim_half = rotary_dim // 2
