@@ -154,7 +154,7 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         inputs = [
             [id for id in seqs if id != self.mask_token_id] for seqs in inputs
         ]
-        outputs = self._sentence_piece_spm.Decode(inputs)
+        outputs = self._decode_with_special_tokens(inputs)
         if not batched:
             outputs = outputs[0]
         return outputs

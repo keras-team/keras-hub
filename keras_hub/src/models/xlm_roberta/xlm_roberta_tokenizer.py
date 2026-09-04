@@ -226,8 +226,17 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
                     new_ids.append(id)
             return new_ids
 
-        processed_inputs = [process(ids) for ids in inputs]
-        outputs = self._sentence_piece_spm.Decode(processed_inputs)
+        outputs = []
+        for seq in inputs:
+            words = []
+            for is_special, chunk in self._chunk_by_special_tokens(seq):
+                if is_special:
+                    words.append(self.id_to_token(chunk[0]))
+                else:
+                    spm_chunk = process(chunk)
+                    words.append(self._sentence_piece_spm.Decode(spm_chunk))
+            outputs.append("".join(words))
+
         if not batched:
             outputs = outputs[0]
         return outputs
