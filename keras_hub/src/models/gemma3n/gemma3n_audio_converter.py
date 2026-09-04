@@ -1,11 +1,10 @@
 import math
 
 import numpy as np
+from keras import KerasTensor
+from keras import ops
+from keras import random
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.models.gemma3n.gemma3n_backbone import Gemma3nBackbone
@@ -59,7 +58,7 @@ class Gemma3nAudioConverter(AudioConverter):
             array. Can be unbatched (1D) or batched (list of 1D arrays).
         padding: str or bool. Padding strategy for batches. Options are
             `"longest"` (pad to longest sequence in batch), `True` (same as
-            "longest"), or `False` (no padding). Defaults to `"longest"`.
+            `"longest"`), or `False` (no padding). Defaults to `"longest"`.
         max_length: int. Maximum length to truncate or pad to. Defaults to
             480000.
         truncation: bool. Whether to truncate sequences longer than
@@ -73,12 +72,10 @@ class Gemma3nAudioConverter(AudioConverter):
     ```python
     import numpy as np
 
-    # Create a simple audio signal (1 second of 440 Hz sine wave).
     audio = np.sin(
         2 * np.pi * 440 * np.linspace(0, 1, 16000, dtype=np.float32)
     )
 
-    # Initialize the audio converter
     converter = keras_hub.layers.Gemma3nAudioConverter(
         feature_size=128,
         sampling_rate=16000,
@@ -99,24 +96,9 @@ class Gemma3nAudioConverter(AudioConverter):
         padding_side="right",
     )
 
-    # Convert audio to log-mel spectrogram.
     features, mask = converter(audio)
-    print(features.shape)  # (num_frames, 128)
-    print(mask.shape)      # (num_frames,)
-
-    # Convert a batch of audio with padding.
-    audio_1 = np.sin(
-        2 * np.pi * 440 * np.linspace(0, 1, 16000, dtype=np.float32)
-    )
-    audio_2 = np.sin(
-        2 * np.pi * 880 * np.linspace(0, 0.5, 8000, dtype=np.float32)
-    )
-    features, mask = converter(
-        [audio_1, audio_2],
-        padding="longest",
-        pad_to_multiple_of=128,
-    )
-    print(features.shape)  # (2, num_frames, 128)
+    print(features.shape)
+    print(mask.shape)
     ```
     """
 
@@ -168,9 +150,10 @@ class Gemma3nAudioConverter(AudioConverter):
         if self.fft_overdrive:
             fft_length *= 2
         self.fft_length = fft_length
-        hann_arange = tf.range(self.frame_length, dtype=self.compute_dtype)
-        self.window = 0.5 * (
-            1 - tf.cos(2 * np.pi * hann_arange / self.frame_length)
+        hann_arange = np.arange(self.frame_length, dtype=np.float32)
+        self.window = ops.convert_to_tensor(
+            0.5 * (1.0 - np.cos(2.0 * np.pi * hann_arange / self.frame_length)),
+            dtype=self.compute_dtype,
         )
         self.mel_filters = self._create_filterbank_matrix(
             n_freqs=self.fft_length // 2 + 1,
@@ -180,6 +163,7 @@ class Gemma3nAudioConverter(AudioConverter):
             sample_rate=self.sampling_rate,
             fft_length=fft_length,
         )
+
         self._convert_input_args = False
         self._allow_non_tensor_positional_args = True
         self.built = True
@@ -193,7 +177,9 @@ class Gemma3nAudioConverter(AudioConverter):
         sample_rate,
         fft_length,
     ):
-        all_freqs = tf.cast(tf.range(n_freqs), dtype=self.compute_dtype) * (
+        # Construct the filterbank in float64 with NumPy at initialization
+        # time for numerical consistency with the reference implementation.
+        all_freqs = np.arange(n_freqs, dtype=np.float64) * (
             sample_rate / fft_length
         )
         # HTK mel-scale formula:
@@ -203,74 +189,111 @@ class Gemma3nAudioConverter(AudioConverter):
         # crossover that models human auditory perception. They are the
         # standard values used by HTK, Kaldi, and librosa.
         # Ref: https://en.wikipedia.org/wiki/Mel_scale#Formula
-        m_min = 2595.0 * math.log10(1.0 + (f_min / 700.0))
-        m_max = 2595.0 * math.log10(1.0 + (f_max / 700.0))
-        m_pts = np.linspace(m_min, m_max, n_mels + 2, dtype=np.float32)
-        f_pts = 700.0 * (10 ** (m_pts / 2595.0) - 1.0)
-        f_pts = tf.constant(f_pts, dtype=self.compute_dtype)
+        m_min = 2595.0 * math.log10(1.0 + f_min / 700.0)
+        m_max = 2595.0 * math.log10(1.0 + f_max / 700.0)
+        m_pts = np.linspace(m_min, m_max, n_mels + 2, dtype=np.float64)
+        f_pts = 700.0 * (10.0 ** (m_pts / 2595.0) - 1.0)
         f_diff = f_pts[1:] - f_pts[:-1]
-        slopes = tf.expand_dims(f_pts, 0) - tf.expand_dims(all_freqs, 1)
-        zero = tf.zeros(1, dtype=self.compute_dtype)
-        down_slopes = (-1.0 * slopes[:, :-2]) / f_diff[:-1]
+        slopes = f_pts[None, :] - all_freqs[:, None]
+        down_slopes = -slopes[:, :-2] / f_diff[:-1]
         up_slopes = slopes[:, 2:] / f_diff[1:]
-        fb = tf.maximum(zero, tf.minimum(down_slopes, up_slopes))
-        return tf.constant(fb, dtype=self.compute_dtype)
+        fb = np.maximum(0.0, np.minimum(down_slopes, up_slopes))
+        return ops.convert_to_tensor(fb, dtype=self.compute_dtype)
 
-    def _extract_spectrogram(self, waveform, attention_mask):
-        waveform = tf.cast(waveform, dtype=self.compute_dtype)
+    def _extract_spectrogram(self, waveform, attention_mask=None):
+        waveform = ops.cast(waveform, dtype=self.compute_dtype)
+        waveform_rank = ops.ndim(waveform)
+        if waveform_rank not in (1, 2):
+            raise ValueError(
+                "`waveform` must have rank 1 or 2. "
+                f"Received rank={waveform_rank}, "
+                f"shape={ops.shape(waveform)}."
+            )
         if self.dither > 0.0:
-            waveform = waveform + self.dither * tf.random.normal(
-                tf.shape(waveform), dtype=waveform.dtype
+            waveform = waveform + self.dither * random.normal(
+                ops.shape(waveform),
+                dtype=waveform.dtype,
             )
         if self.input_scale_factor != 1.0:
             waveform = waveform * self.input_scale_factor
+        frames_to_process = ops.extract_sequences(
+            waveform,
+            sequence_length=self.frame_length + 1,
+            sequence_stride=self.hop_length,
+        )
+        # Pre-emphasis
         if self.preemphasis > 0.0:
             if self.preemphasis_htk_flavor:
-                first_sample = waveform[:, :1] * (1.0 - self.preemphasis)
+                first_sample = frames_to_process[..., :1] * (
+                    1.0 - self.preemphasis
+                )
                 rest_of_samples = (
-                    waveform[:, 1:] - self.preemphasis * waveform[:, :-1]
+                    frames_to_process[..., 1:-1]
+                    - self.preemphasis * frames_to_process[..., :-2]
                 )
-                waveform = tf.concat([first_sample, rest_of_samples], axis=-1)
+                frames = ops.concatenate(
+                    [first_sample, rest_of_samples], axis=-1
+                )
             else:
-                waveform = tf.concat(
-                    [
-                        waveform[:, :1],
-                        waveform[:, 1:] - self.preemphasis * waveform[:, :-1],
-                    ],
-                    axis=-1,
+                frames = (
+                    frames_to_process[..., 1:]
+                    - self.preemphasis * frames_to_process[..., :-1]
                 )
-        frames = tf.signal.frame(
-            waveform,
-            frame_length=self.frame_length,
-            frame_step=self.hop_length,
-            pad_end=False,
-        )
+        else:
+            frames = frames_to_process[..., :-1]
         frames = frames * self.window
-        pad_length = self.fft_length - self.frame_length
-        paddings = [[0, 0], [0, 0], [0, pad_length]]
-        frames = tf.pad(frames, paddings)
-        stft = tf.signal.rfft(frames)
-        magnitude_spec = tf.abs(stft)
-        mel_spec = tf.matmul(magnitude_spec, self.mel_filters)
-        mel_floor_tensor = tf.constant(self.mel_floor, dtype=self.compute_dtype)
-        log_mel_spec = tf.math.log(tf.maximum(mel_spec, mel_floor_tensor))
+        fft_pad = self.fft_length - self.frame_length
+        if fft_pad > 0:
+            if waveform_rank == 1:
+                frames = ops.pad(frames, [[0, 0], [0, fft_pad]])
+            else:
+                frames = ops.pad(frames, [[0, 0], [0, 0], [0, fft_pad]])
+        stft = ops.rfft(frames, fft_length=self.fft_length)
+        if isinstance(stft, (tuple, list)):
+            real, imag = stft
+            magnitude_spec = ops.sqrt(ops.square(real) + ops.square(imag))
+        else:
+            magnitude_spec = ops.abs(stft)
+        mel_spec = ops.matmul(magnitude_spec, self.mel_filters)
+        mel_floor_tensor = ops.cast(self.mel_floor, dtype=self.compute_dtype)
+        log_mel_spec = ops.log(ops.maximum(mel_spec, mel_floor_tensor))
         if self.per_bin_mean is not None:
-            per_bin_mean_tensor = tf.constant(
-                self.per_bin_mean,
-                shape=(1, 1, self.feature_size),
-                dtype=self.compute_dtype,
+            mean = ops.convert_to_tensor(
+                self.per_bin_mean, dtype=self.compute_dtype
             )
-            log_mel_spec = log_mel_spec - per_bin_mean_tensor
+            mean = ops.reshape(mean, (1, self.feature_size))
+            log_mel_spec = log_mel_spec - mean
         if self.per_bin_stddev is not None:
-            per_bin_stddev_tensor = tf.constant(
-                self.per_bin_stddev,
-                shape=(1, 1, self.feature_size),
-                dtype=self.compute_dtype,
+            stddev = ops.convert_to_tensor(
+                self.per_bin_stddev, dtype=self.compute_dtype
             )
-            log_mel_spec = log_mel_spec / per_bin_stddev_tensor
-        mel_spectrogram = tf.squeeze(log_mel_spec, axis=0)
-        mask = tf.cast(attention_mask[:: self.hop_length], dtype=tf.bool)
-        return mel_spectrogram, mask[: tf.shape(mel_spectrogram)[0]]
+            stddev = ops.reshape(stddev, (1, self.feature_size))
+            log_mel_spec = log_mel_spec / stddev
+        mel_spectrogram = ops.cast(log_mel_spec, dtype=self.compute_dtype)
+        num_output_frames = ops.shape(mel_spectrogram)[-2]
+        if attention_mask is None:
+            mask = None
+        else:
+            # Compute valid frame counts based on unpadded lengths
+            # rather than sliding windows over padded areas
+            if waveform_rank == 2:
+                audio_lengths = ops.sum(
+                    ops.cast(attention_mask, dtype="int32"), axis=-1
+                )
+            else:
+                audio_lengths = ops.sum(ops.cast(attention_mask, dtype="int32"))
+            num_valid_frames = ops.maximum(
+                0, (audio_lengths - self.frame_length) // self.hop_length + 1
+            )
+            if waveform_rank == 2:
+                indices = ops.arange(num_output_frames, dtype="int32")
+                indices = ops.expand_dims(indices, axis=0)
+                valid_lengths = ops.expand_dims(num_valid_frames, axis=1)
+                mask = ops.cast(indices < valid_lengths, dtype="int32")
+            else:
+                indices = ops.arange(num_output_frames, dtype="int32")
+                mask = ops.cast(indices < num_valid_frames, dtype="int32")
+        return mel_spectrogram, mask
 
     def _get_padding_strategies(self, padding=False, max_length=None):
         if padding is not False:
@@ -280,13 +303,15 @@ class Gemma3nAudioConverter(AudioConverter):
                 padding_strategy = padding
         else:
             padding_strategy = "do_not_pad"
+
         if max_length is None:
             if padding_strategy == "max_length":
                 raise ValueError(
-                    "When setting padding='max_length', max_length must be "
-                    "defined"
+                    "When setting padding='max_length', max_length must "
+                    "be defined"
                 )
-        if padding_strategy != "do_not_pad" and (self.padding_value is None):
+
+        if padding_strategy != "do_not_pad" and self.padding_value is None:
             raise ValueError("Padding requested but no padding_value defined")
         return padding_strategy
 
@@ -300,16 +325,18 @@ class Gemma3nAudioConverter(AudioConverter):
         return_attention_mask=None,
     ):
         required_input = input_features
+
         if padding_strategy == "longest":
             max_length = len(required_input)
         if (
             max_length is not None
             and pad_to_multiple_of is not None
-            and (max_length % pad_to_multiple_of != 0)
+            and max_length % pad_to_multiple_of != 0
         ):
             max_length = (
                 (max_length // pad_to_multiple_of) + 1
             ) * pad_to_multiple_of
+
         needs_to_be_padded = (
             padding_strategy != "do_not_pad"
             and len(required_input) < max_length
@@ -320,7 +347,10 @@ class Gemma3nAudioConverter(AudioConverter):
             difference = max_length - len(required_input)
             if self.padding_side == "right":
                 if return_attention_mask:
-                    attention_mask = np.pad(attention_mask, (0, difference))
+                    attention_mask = np.pad(
+                        attention_mask,
+                        (0, difference),
+                    )
                 if required_input.ndim > 1:
                     padding_shape = ((0, difference), (0, 0))
                 else:
@@ -337,7 +367,7 @@ class Gemma3nAudioConverter(AudioConverter):
                 if required_input.ndim > 1:
                     padding_shape = ((difference, 0), (0, 0))
                 else:
-                    padding_shape = ((difference, 0),)
+                    padding_shape = (difference, 0)
                 input_features = np.pad(
                     required_input,
                     padding_shape,
@@ -356,7 +386,8 @@ class Gemma3nAudioConverter(AudioConverter):
     ):
         if not truncation:
             return input_features, attention_mask
-        elif truncation and max_length is None:
+
+        if truncation and max_length is None:
             raise ValueError(
                 "When setting truncation=True, max_length must be defined"
             )
@@ -364,11 +395,12 @@ class Gemma3nAudioConverter(AudioConverter):
         if (
             max_length is not None
             and pad_to_multiple_of is not None
-            and (max_length % pad_to_multiple_of != 0)
+            and max_length % pad_to_multiple_of != 0
         ):
             max_length = (
                 (max_length // pad_to_multiple_of) + 1
             ) * pad_to_multiple_of
+
         needs_to_be_truncated = len(required_input) > max_length
         if needs_to_be_truncated:
             input_features = input_features[:max_length]
@@ -392,7 +424,9 @@ class Gemma3nAudioConverter(AudioConverter):
             else self.return_attention_mask
         )
         if len(required_input) == 0:
-            return [], [] if return_attention_mask else None
+            if return_attention_mask:
+                return [], []
+            return [], None
         required_input = [np.asarray(v) for v in required_input]
         padding_strategy = self._get_padding_strategies(
             padding=padding, max_length=max_length
@@ -444,6 +478,35 @@ class Gemma3nAudioConverter(AudioConverter):
             return batch_outputs_features, None
         return batch_outputs_features, batch_outputs_masks
 
+    def compute_output_spec(
+        self, raw_speech, return_attention_mask=None, *args, **kwargs
+    ):
+        was_batched = len(raw_speech.shape) > 1
+        if was_batched:
+            features_shape = (
+                raw_speech.shape[0],
+                None,
+                self.feature_size,
+            )
+            mask_shape = (raw_speech.shape[0], None)
+        else:
+            features_shape = (None, self.feature_size)
+            mask_shape = (None,)
+
+        features_spec = KerasTensor(
+            shape=features_shape,
+            dtype=self.compute_dtype,
+        )
+        if return_attention_mask is None:
+            return_attention_mask = self.return_attention_mask
+
+        if return_attention_mask:
+            return (
+                features_spec,
+                KerasTensor(shape=mask_shape, dtype="int32"),
+            )
+        return features_spec, None
+
     def call(
         self,
         raw_speech,
@@ -453,60 +516,135 @@ class Gemma3nAudioConverter(AudioConverter):
         pad_to_multiple_of=128,
         return_attention_mask=True,
     ):
-        def _process_in_py(raw_speech_tensor):
-            raw_speech_np = raw_speech_tensor.numpy()
-            is_batched = raw_speech_np.ndim > 1
-            if is_batched:
-                speech_list = [rs.reshape(-1, 1) for rs in raw_speech_np]
-            else:
-                raw_speech_np = np.atleast_1d(raw_speech_np)
-                speech_list = [raw_speech_np.reshape(-1, 1)]
-            input_features_list, attention_mask_list = self.pad(
-                speech_list,
-                padding=padding,
-                max_length=max_length,
-                truncation=truncation,
-                pad_to_multiple_of=pad_to_multiple_of,
-                return_attention_mask=return_attention_mask,
+        if isinstance(raw_speech, KerasTensor):
+            return self.compute_output_spec(
+                raw_speech, return_attention_mask=return_attention_mask
             )
-            prepared_speech = []
-            prepared_speech_mask = []
-            for speech, mask in zip(input_features_list, attention_mask_list):
-                speech_tensor = tf.constant(speech.T, dtype=self.compute_dtype)
-                mask_tensor = tf.constant(mask, dtype=tf.int32)
-                features, feature_mask = self._extract_spectrogram(
-                    speech_tensor, mask_tensor
-                )
-                prepared_speech.append(features)
-                prepared_speech_mask.append(feature_mask)
-            input_features = tf.stack(prepared_speech)
-            input_features_mask = tf.stack(prepared_speech_mask)
-            if not is_batched:
-                input_features = tf.squeeze(input_features, axis=0)
-                input_features_mask = tf.squeeze(input_features_mask, axis=0)
-            return input_features, input_features_mask
 
-        if not isinstance(raw_speech, (tf.Tensor, tf.RaggedTensor)):
-            was_batched = isinstance(raw_speech, (list, tuple))
-            raw_speech = tf.convert_to_tensor(
-                raw_speech, dtype=self.compute_dtype
-            )
+        if ops.is_tensor(raw_speech):
+            waveform = ops.cast(raw_speech, dtype=self.compute_dtype)
+            waveform_rank = len(ops.shape(waveform))
+            if waveform_rank not in (1, 2):
+                raise ValueError(
+                    f"`raw_speech` must have rank 1 or 2. "
+                    f"Received shape: {ops.shape(raw_speech)}."
+                )
+            if (
+                max_length is not None
+                and pad_to_multiple_of is not None
+                and max_length % pad_to_multiple_of != 0
+            ):
+                max_length = (
+                    (max_length // pad_to_multiple_of) + 1
+                ) * pad_to_multiple_of
+
+            if truncation and max_length is not None:
+                waveform = waveform[..., :max_length]
+
+            if padding == "max_length" and max_length is not None:
+                current_len = ops.shape(waveform)[-1]
+                pad_len = ops.maximum(0, max_length - current_len)
+                paddings = (
+                    [[0, pad_len]]
+                    if waveform_rank == 1
+                    else [[0, 0], [0, pad_len]]
+                )
+                waveform = ops.pad(
+                    waveform, paddings, constant_values=self.padding_value
+                )
+            elif padding == "longest" and pad_to_multiple_of is not None:
+                current_len = ops.shape(waveform)[-1]
+                rem = current_len % pad_to_multiple_of
+                pad_len = (pad_to_multiple_of - rem) % pad_to_multiple_of
+                paddings = (
+                    [[0, pad_len]]
+                    if waveform_rank == 1
+                    else [[0, 0], [0, pad_len]]
+                )
+                waveform = ops.pad(
+                    waveform, paddings, constant_values=self.padding_value
+                )
+
+            if return_attention_mask:
+                current_len = ops.shape(waveform)[-1]
+                if waveform_rank == 1:
+                    mask = ops.ones((current_len,), dtype="int32")
+                else:
+                    batch_size = ops.shape(waveform)[0]
+                    mask = ops.ones((batch_size, current_len), dtype="int32")
+            else:
+                mask = None
+
+            features, feature_mask = self._extract_spectrogram(waveform, mask)
+            return features, feature_mask
+
+        # Handle NumPy inputs and determine whether input is batched
+        if isinstance(raw_speech, (list, tuple)):
+            is_batched = True
+            speech_list = [
+                ops.convert_to_numpy(s).reshape(-1) for s in raw_speech
+            ]
         else:
-            was_batched = raw_speech.shape.rank > 1
-        input_features, input_features_mask = tf.py_function(
-            _process_in_py,
-            inp=[raw_speech],
-            Tout=[self.compute_dtype, tf.bool],
+            speech_np = ops.convert_to_numpy(raw_speech)
+            if speech_np.ndim == 1:
+                is_batched = False
+                speech_list = [speech_np.reshape(-1)]
+            elif speech_np.ndim == 2:
+                is_batched = True
+                speech_list = [s.reshape(-1) for s in speech_np]
+            else:
+                raise ValueError(
+                    f"`raw_speech` must have rank 1 or 2. "
+                    f"Received shape: {speech_np.shape}."
+                )
+
+        # Pad or truncate using self.pad()
+        input_features_list, attention_mask_list = self.pad(
+            speech_list,
+            padding=padding,
+            max_length=max_length,
+            truncation=truncation,
+            pad_to_multiple_of=pad_to_multiple_of,
+            return_attention_mask=return_attention_mask,
         )
-        num_frames = None
-        if was_batched:
-            input_features.set_shape([None, num_frames, self.feature_size])
-            input_features_mask.set_shape([None, num_frames])
-        else:
-            input_features.set_shape([num_frames, self.feature_size])
-            input_features_mask.set_shape([num_frames])
-        input_features_mask = tf.cast(input_features_mask, dtype="int32")
-        return input_features, input_features_mask
+
+        if not input_features_list:
+            features = ops.zeros(
+                (0, 0, self.feature_size)
+                if is_batched
+                else (0, self.feature_size),
+                dtype=self.compute_dtype,
+            )
+            mask = (
+                ops.zeros((0, 0) if is_batched else (0,), dtype="int32")
+                if return_attention_mask
+                else None
+            )
+            return features, mask
+
+        # Stack into tensors
+        padded_speech = ops.convert_to_tensor(
+            np.stack(input_features_list, axis=0), dtype=self.compute_dtype
+        )
+        padded_mask = (
+            ops.convert_to_tensor(
+                np.stack(attention_mask_list, axis=0), dtype="int32"
+            )
+            if return_attention_mask
+            else None
+        )
+
+        # If unbatched (1D), squeeze the batch dimension
+        if not is_batched:
+            padded_speech = ops.squeeze(padded_speech, axis=0)
+            if padded_mask is not None:
+                padded_mask = ops.squeeze(padded_mask, axis=0)
+
+        # Extract spectrograms (natively supports 1D and 2D with Keras ops)
+        features, feature_mask = self._extract_spectrogram(
+            padded_speech, padded_mask
+        )
+        return features, feature_mask
 
     def get_config(self):
         config = super().get_config()
@@ -531,4 +669,5 @@ class Gemma3nAudioConverter(AudioConverter):
                 "padding_side": self.padding_side,
             }
         )
+
         return config
