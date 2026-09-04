@@ -77,6 +77,9 @@ from keras_hub.src.models.mistral.mistral_tokenizer import (
 from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
+from keras_hub.src.models.mistral3.mistral3_tokenizer import (
+    Mistral3Tokenizer as Mistral3Tokenizer,
+)
 from keras_hub.src.models.mixtral.mixtral_tokenizer import (
     MixtralTokenizer as MixtralTokenizer,
 )
