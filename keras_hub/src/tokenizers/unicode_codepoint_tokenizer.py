@@ -1,6 +1,9 @@
+import unicodedata
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -12,6 +15,21 @@ try:
     import tensorflow_text as tf_text
 except ImportError:
     tf_text = None
+
+import numpy as np
+
+
+def _decode_with_replacement(data, encoding, replacement):
+    """Decode bytes, substituting replacement only at invalid sequences."""
+    parts = []
+    while True:
+        try:
+            parts.append(data.decode(encoding))
+            return "".join(parts)
+        except UnicodeDecodeError as e:
+            parts.append(data[: e.start].decode(encoding))
+            parts.append(replacement)
+            data = data[max(e.end, e.start + 1) :]
 
 
 @keras_hub_export("keras_hub.tokenizers.UnicodeCodepointTokenizer")
@@ -65,7 +83,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         vocabulary_size: Set the vocabulary `vocabulary_size`,
             by clamping all codepoints to the range [0, vocabulary_size).
             Effectively this will make the `vocabulary_size - 1` id the
-            the OOV value.
+            OOV value.
 
     Examples:
 
@@ -75,7 +93,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     >>> outputs = tokenizer(inputs)
     >>> np.array(outputs)
     array([117, 110, 105,  99, 111, 100, 101,  32, 116, 111, 107, 101, 110,
-        105, 122, 101, 114], dtype=int32)
+           105, 122, 101, 114], dtype=int32)
 
     Ragged outputs.
     >>> inputs = ["पुस्तक", "کتاب"]
@@ -103,9 +121,8 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     >>> ds = ds.map(tokenizer)
     >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(3))
     >>> ds.take(1).get_single_element()
-    <tf.RaggedTensor [[98, 111, 111, 107],
-        [2346, 2369, 2360, 2381, 2340, 2325],
-        [1705, 1578, 1575, 1576]]>
+    <tf.RaggedTensor [[98, 111, 111, 107], [2346, 2369, 2360, 2381, 2340, 2325],
+     [1705, 1578, 1575, 1576]]>
 
     Batch, then tokenize for ragged outputs.
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
@@ -113,11 +130,10 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
     >>> ds = ds.batch(3).map(tokenizer)
     >>> ds.take(1).get_single_element()
-    <tf.RaggedTensor [[98, 111, 111, 107],
-        [2346, 2369, 2360, 2381, 2340, 2325],
-        [1705, 1578, 1575, 1576]]>
+    <tf.RaggedTensor [[98, 111, 111, 107], [2346, 2369, 2360, 2381, 2340, 2325],
+     [1705, 1578, 1575, 1576]]>
 
-    Tokenize, then batch for dense outputs (`sequence_length` provided).
+    Tokenize, then batch for dense outputs (sequence_length provided).
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_hub.tokenizers.UnicodeCodepointTokenizer(
     ...     sequence_length=5)
@@ -127,10 +143,10 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     >>> ds.take(1).get_single_element()
     <tf.Tensor: shape=(3, 5), dtype=int32, numpy=
     array([[  98,  111,  111,  107,    0],
-        [2346, 2369, 2360, 2381, 2340],
-        [1705, 1578, 1575, 1576,    0]], dtype=int32)>
+           [2346, 2369, 2360, 2381, 2340],
+           [1705, 1578, 1575, 1576,    0]], dtype=int32)>
 
-    Batch, then tokenize for dense outputs (`sequence_length` provided).
+    Batch, then tokenize for dense outputs (sequence_length provided).
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_hub.tokenizers.UnicodeCodepointTokenizer(
     ...     sequence_length=5)
@@ -139,8 +155,8 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     >>> ds.take(1).get_single_element()
     <tf.Tensor: shape=(3, 5), dtype=int32, numpy=
     array([[  98,  111,  111,  107,    0],
-        [2346, 2369, 2360, 2381, 2340],
-        [1705, 1578, 1575, 1576,    0]], dtype=int32)>
+           [2346, 2369, 2360, 2381, 2340],
+           [1705, 1578, 1575, 1576,    0]], dtype=int32)>
 
     Tokenization with truncation.
     >>> inputs = ["I Like to Travel a Lot", "मैं किताबें पढ़ना पसंद करता हूं"]
@@ -161,8 +177,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
           dtype=int32)
     >>> outputs = tokenizer("आप कैसे हैं")
     >>> np.array(outputs)
-    array([591, 591,  32, 591, 591, 591, 591,  32, 591, 591, 591],
-          dtype=int32)
+    array([591, 591,  32, 591, 591, 591, 591,  32, 591, 591, 591], dtype=int32)
 
     Detokenization.
     >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype="int32")
@@ -175,7 +190,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     ...     sequence_length=7)
     >>> dataset = tf.data.Dataset.from_tensor_slices(["a b c", "b c", "a"])
     >>> dataset = dataset.map(tokenizer)
-    >>> dataset.take(1).get_single_element()
+    >>> dataset.take(1).get_single_element()  # doctest: +NORMALIZE_WHITESPACE
     <tf.Tensor: shape=(7,), dtype=int32,
         numpy=array([97, 32, 98, 32, 99,  0,  0], dtype=int32)>
     >>> detokunbatched = dataset.map(tokenizer.detokenize)
@@ -189,6 +204,9 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     >>> tokenizer.detokenize(inputs)
     'niXnja'
     """
+
+    MAX_UNICODE_CODEPOINT = 0x110000
+    DEFAULT_REPLACEMENT_CHAR = 0xFFFD
 
     def __init__(
         self,
@@ -211,7 +229,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         # Check normalization_form.
         if normalization_form not in [None, "NFC", "NFKC", "NFD", "NFKD"]:
             raise ValueError(
-                '`normalization_form` must be one of None, "NFC", "NFKC", '
+                'normalization_form must be one of None, "NFC", "NFKC", '
                 '"NFD", "NFKD". Received: normalization_form='
                 f"{normalization_form}"
             )
@@ -219,7 +237,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         # Check errors.
         if errors not in ["strict", "replace", "ignore"]:
             raise ValueError(
-                '`errors` must be one of "strict", "replace", "ignore" '
+                'errors must be one of "strict", "replace", "ignore" '
                 f"Received: errors={errors}"
             )
 
@@ -232,7 +250,10 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
                     ""
                 )
 
-        super().__init__(dtype=dtype, **kwargs)
+        super().__init__(
+            dtype=dtype,
+            **kwargs,
+        )
 
         self.sequence_length = sequence_length
         self.lowercase = lowercase
@@ -262,18 +283,20 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
 
     def vocabulary_size(self):
         """Get the size of the tokenizer vocabulary.
-
         None implies no vocabulary size was provided"""
         return self._vocabulary_size
 
     def get_vocabulary(self):
+        vocab_size = self.vocabulary_size()
+        if vocab_size is None:
+            return {}
         vocab = {}
-        for i in range(self.vocabulary_size()):
+        for i in range(min(vocab_size, self.MAX_UNICODE_CODEPOINT)):
             vocab[chr(i)] = i
         return vocab
 
     @preprocessing_function
-    def tokenize(self, inputs):
+    def _tokenize_tf(self, inputs):
         unbatched = inputs.shape.rank == 0
         if unbatched:
             inputs = tf.expand_dims(inputs, 0)
@@ -310,7 +333,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         return tokens
 
     @preprocessing_function
-    def detokenize(self, inputs):
+    def _detokenize_tf(self, inputs):
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
         outputs = tf.strings.unicode_encode(
@@ -323,21 +346,183 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
             outputs = tf.squeeze(outputs, 0)
         return outputs
 
+    def tokenize(self, inputs):
+        if not self._allow_python_workflow or in_tf_function():
+            return self._tokenize_tf(inputs)
+        return self._tokenize_python(inputs)
+
+    def detokenize(self, inputs):
+        if not self._allow_python_workflow or in_tf_function():
+            return self._detokenize_tf(inputs)
+        return self._detokenize_python(inputs)
+
+    def _unwrap_inputs(self, inputs):
+        """Helper to safely unwrap Tensors and NumPy arrays to pure Python."""
+        if hasattr(inputs, "numpy"):
+            inputs = inputs.numpy()
+        if hasattr(inputs, "tolist"):
+            inputs = inputs.tolist()
+        return inputs
+
+    def _tokenize_python(self, inputs):
+        inputs = self._unwrap_inputs(inputs)
+
+        unbatched = isinstance(inputs, (str, bytes))
+        if unbatched:
+            inputs = [inputs]
+
+        batched_tokens = []
+        # Localize variables for performance in the hot loop
+        seq_len = self.sequence_length
+        vocab_size = self._vocabulary_size
+        max_id = vocab_size - 1 if vocab_size else None
+        errors = self.errors
+
+        for text in inputs:
+            if not isinstance(text, (str, bytes)):
+                raise ValueError(
+                    f"Expected a string or bytes, but received: {type(text)}. "
+                    "Multi-dimensional lists are not supported. "
+                    "Please flatten your input."
+                )
+
+            if isinstance(text, bytes):
+                if (
+                    errors == "replace"
+                    and self.replacement_char != self.DEFAULT_REPLACEMENT_CHAR
+                ):
+                    text = _decode_with_replacement(
+                        text, self.input_encoding, chr(self.replacement_char)
+                    )
+                else:
+                    text = text.decode(self.input_encoding, errors=errors)
+
+            if self.lowercase:
+                text = unicodedata.normalize("NFKC", text).casefold()
+            if self.normalization_form:
+                text = unicodedata.normalize(self.normalization_form, text)
+
+            # --- OPTIMIZATION: Truncate string BEFORE looping! ---
+            if seq_len:
+                text = text[:seq_len]
+
+            # Combine ord() and clipping into a single list allocation
+            if max_id is not None:
+                tokens = list(min(ord(c), max_id) for c in text)
+            else:
+                tokens = list(ord(c) for c in text)
+
+            # Pad remaining sequence if necessary
+            if seq_len:
+                pad_len = seq_len - len(tokens)
+                if pad_len > 0:
+                    tokens.extend([0] * pad_len)
+
+            batched_tokens.append(tokens)
+
+        if unbatched:
+            batched_tokens = batched_tokens[0]
+
+        if seq_len:
+            if not batched_tokens and not unbatched:
+                return np.empty((0, seq_len), dtype=self.compute_dtype)
+            return np.array(batched_tokens, dtype=self.compute_dtype)
+
+        return batched_tokens
+
+    def _detokenize_python(self, inputs):
+        inputs = self._unwrap_inputs(inputs)
+
+        unbatched = False
+        if isinstance(inputs, int):
+            unbatched = True
+            inputs = [[inputs]]
+        elif isinstance(inputs, (list, tuple)):
+            if not inputs or not isinstance(inputs[0], (list, tuple)):
+                unbatched = True
+                inputs = [inputs]
+
+        batched_strings = []
+        errors = self.errors
+        replace_char_str = (
+            chr(self.replacement_char)
+            if self.replacement_char is not None
+            else ""
+        )
+
+        for seq in inputs:
+            valid_tokens = (i for i in seq if i != 0)
+
+            if errors == "replace":
+                string_result = "".join(
+                    (
+                        chr(i)
+                        if 0 <= i < self.MAX_UNICODE_CODEPOINT
+                        and not (0xD800 <= i <= 0xDFFF)
+                        else replace_char_str
+                        for i in valid_tokens
+                    )
+                )
+            elif errors == "ignore":
+                string_result = "".join(
+                    (
+                        chr(i)
+                        for i in valid_tokens
+                        if 0 <= i < self.MAX_UNICODE_CODEPOINT
+                        and not (0xD800 <= i <= 0xDFFF)
+                    )
+                )
+            else:
+                result = []
+                for i in valid_tokens:
+                    if 0 <= i < self.MAX_UNICODE_CODEPOINT and not (
+                        0xD800 <= i <= 0xDFFF
+                    ):
+                        result.append(chr(i))
+                    else:
+                        raise ValueError(
+                            f"chr() arg not in range(0x110000). Received: {i}"
+                        )
+                string_result = "".join(result)
+
+            if self.output_encoding:
+                if self.output_encoding.upper() != "UTF-8":
+                    string_result = string_result.encode(
+                        self.output_encoding, errors=errors
+                    )
+
+            batched_strings.append(string_result)
+
+        if unbatched:
+            return batched_strings[0]
+        return batched_strings
+
     def id_to_token(self, id):
         """Convert an integer id to a string token."""
-        if id >= self.vocabulary_size() or id < 0:
+        vocab_size = self.vocabulary_size()
+        if vocab_size is not None and id >= vocab_size:
             raise ValueError(
-                f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
+                f"id must be in range [0, {vocab_size - 1}]. Received: {id}"
+            )
+        if id < 0 or id >= self.MAX_UNICODE_CODEPOINT:
+            raise ValueError(
+                "id must be a valid Unicode integer "
+                f"[0, {self.MAX_UNICODE_CODEPOINT - 1}]. "
                 f"Received: {id}"
             )
         return chr(id)
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
-        id = ord(token)
-        if id >= self.vocabulary_size():
+        if not isinstance(token, str) or len(token) != 1:
             raise ValueError(
-                f"Token {token} is not supported by "
-                "`UnicodeCodepointTokenizer`."
+                f"token must be a single character string. Received: {token}"
+            )
+        id = ord(token)
+        vocab_size = self.vocabulary_size()
+        if vocab_size is not None and id >= vocab_size:
+            raise ValueError(
+                f"Token '{token}' is not supported by "
+                "UnicodeCodepointTokenizer."
             )
         return id
