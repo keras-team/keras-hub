@@ -48,8 +48,6 @@ jobs:
       KERAS_BACKEND: ${{ matrix.backend }}
     steps:
     - name: Install binary dependencies
-      # build-essential for C extensions (tokenizers, torch)
-      # curl, git, gnupg for checkout and other actions
       run: |
         apt-get update
         apt-get -y install build-essential curl git gnupg
@@ -73,8 +71,11 @@ jobs:
         pip uninstall -y keras
         pip install keras-nightly --no-cache-dir --progress-bar off
     - name: Test with pytest
+      env:
+        SHARD_COUNT: ${{ inputs.shard_count }}
+        SHARD: ${{ matrix.shard }}
       run: |
-        pytest keras_hub/ -n auto --dist loadfile --durations=50 --splits ${{ inputs.shard_count }} --group ${{ matrix.shard }}
+        pytest keras_hub/ -n auto --dist loadfile --durations=50 --splits "$SHARD_COUNT" --group "$SHARD"
     - name: Run integration tests
       if: ${{ matrix.shard == 1 }}
       run: |
