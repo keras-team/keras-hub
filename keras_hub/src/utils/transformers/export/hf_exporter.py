@@ -283,6 +283,16 @@ def export_backbone(backbone, path, include_lm_head=False, tokenizer=None):
             weights_path,
             metadata={"format": "pt"},
         )
+    elif backend == "openvino":
+        # OpenVINO variables are numpy backed, so the numpy writer applies
+        # here too.
+        from safetensors.numpy import save_file
+
+        save_file(
+            _to_numpy_dict(weights_dict),
+            weights_path,
+            metadata={"format": "pt"},
+        )
     else:
         raise ValueError(f"Unsupported backend: {backend}")
 

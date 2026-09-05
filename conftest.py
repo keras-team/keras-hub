@@ -16,6 +16,7 @@ OPENVINO_SUPPORTED_PATHS = [
     "keras_hub/src/models/deberta_v3",
     "keras_hub/src/models/deeplab_v3",
     "keras_hub/src/models/densenet",
+    "keras_hub/src/models/depth_anything",
     "keras_hub/src/models/distil_bert",
     "keras_hub/src/models/efficientnet",
     "keras_hub/src/models/electra",
