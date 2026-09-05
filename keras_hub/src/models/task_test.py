@@ -354,3 +354,15 @@ class TestTask(TestCase):
         )
         with self.assertRaises(ValueError):
             causal_lm.export_to_transformers(export_path)
+
+    def test_no_unbuilt_state_warning_on_build(self):
+        import warnings
+
+        causal_lm, _ = self._create_gemma_for_export_tests()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            causal_lm.build()
+            unbuilt_warnings = [
+                w for w in caught if "unbuilt state" in str(w.message)
+            ]
+            self.assertEqual(len(unbuilt_warnings), 0)
