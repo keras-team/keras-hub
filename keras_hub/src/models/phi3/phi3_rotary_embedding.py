@@ -31,6 +31,9 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
         start_index: An integer or integer tensor. The starting position to
             compute the rotary embedding from. This is useful during cached
             decoding, where each position is predicted separately in a loop.
+        positions: Optional tensor of absolute positions, shaped
+            `(sequence_length,)` or `(batch_size, sequence_length)`, taking
+            precedence over `start_index`.
 
     References:
      - [Phi-3-mini-128k-instruct original implementation](https://huggingface.co/microsoft/Phi-3-mini-128k-instruct/blob/0693e0b867d29e7318280ddd3ff9d5e66698f488/modeling_phi3.py#L142)
@@ -65,40 +68,49 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
         self.inverese_freq_long_factor = inverese_freq_long_factor
 
     def _compute_cos_sin_embedding(self, inputs, start_index=0, positions=None):
-        feature_axis = len(inputs.shape) - 1
+        batch_axis = 0
         sequence_axis = 1
+        feature_axis = len(inputs.shape) - 1
 
         rotary_dim = ops.shape(inputs)[feature_axis]
         inverse_freq = self._get_inverse_freq(rotary_dim)
 
-        # Multiply inverse_freq by a factor.
-        if ops.shape(inputs)[sequence_axis] > self.pretraining_sequence_length:
-            inverse_freq = ops.divide(
-                inverse_freq,
-                ops.convert_to_tensor(self.inverese_freq_long_factor),
-            )
-        else:
-            inverse_freq = ops.divide(
-                inverse_freq,
-                ops.convert_to_tensor(self.inverese_freq_short_factor),
-            )
-
         if positions is None:
             positions = self._compute_positions(inputs, start_index)
+            positions = ops.expand_dims(positions, axis=batch_axis)
         else:
             positions = ops.cast(positions, "float32")
+            if ops.ndim(positions) == 1:
+                positions = ops.expand_dims(positions, axis=batch_axis)
 
-        freq = ops.einsum("i,j->ij", positions, inverse_freq)
+        # Multiply inverse_freq by a factor, chosen by how far into the
+        # sequence these positions sit rather than by how many tokens this
+        # call carries. Cached decoding passes one token at a time, so
+        # keying on the input's length would apply short-context
+        # frequencies at every generated position, however long the
+        # sequence has grown.
+        sequence_length = ops.max(positions) + 1.0
+        inverse_freq = ops.where(
+            sequence_length > self.pretraining_sequence_length,
+            ops.divide(
+                inverse_freq,
+                ops.convert_to_tensor(self.inverese_freq_long_factor),
+            ),
+            ops.divide(
+                inverse_freq,
+                ops.convert_to_tensor(self.inverese_freq_short_factor),
+            ),
+        )
+
+        freq = ops.einsum("bi,j->bij", positions, inverse_freq)
         embedding = ops.stack((freq, freq), axis=-2)
         embedding = ops.reshape(
             embedding, (*ops.shape(freq)[:-1], ops.shape(freq)[-1] * 2)
         )
 
         # Reshape the embedding to be broadcastable with input shape.
-        if feature_axis < sequence_axis:
-            embedding = ops.transpose(embedding)
         for axis in range(len(inputs.shape)):
-            if axis != sequence_axis and axis != feature_axis:
+            if axis not in (batch_axis, sequence_axis, feature_axis):
                 embedding = ops.expand_dims(embedding, axis)
 
         cos_emb = ops.cast(
