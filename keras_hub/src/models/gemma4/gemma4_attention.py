@@ -681,13 +681,22 @@ class Gemma4VisionAttention(keras.layers.Layer):
         def get_rope(part, ids):
             dim = half_head
             idx = ops.arange(0, dim, 2, dtype="float32")
-            inv_freq = ops.power(
-                ops.cast(self.rope_wavelength, "float32"), -idx / dim
+            # Match HuggingFace's construction exactly:
+            # `1.0 / (base ** (arange / dim))`.  Writing this as
+            # `base ** (-arange / dim)` can take a different floating-point
+            # path on Torch and accumulate a small vision-only drift across
+            # the encoder layers.
+            inv_freq = ops.divide(
+                1.0,
+                ops.power(
+                    ops.cast(self.rope_wavelength, "float32"),
+                    idx / dim,
+                ),
             )
-            # ids shape is (B, Tokens)
-            # inv_freq shape is (dim // 2,)
-            freqs = ops.einsum("bi,j->bij", ops.cast(ids, "float32"), inv_freq)
-            # freqs shape is (B, Tokens, dim // 2)
+            inv_freq = ops.reshape(inv_freq, (1, -1, 1))
+            ids = ops.expand_dims(ops.cast(ids, "float32"), axis=1)
+            # Match HF's `(inv_freq_expanded @ position_ids_expanded).T`.
+            freqs = ops.transpose(ops.matmul(inv_freq, ids), (0, 2, 1))
             # Concatenate freqs and freqs to get size dim
             emb = ops.concatenate([freqs, freqs], axis=-1)
             cos = ops.expand_dims(ops.cos(emb), axis=2)
@@ -707,25 +716,43 @@ class Gemma4VisionAttention(keras.layers.Layer):
         return out
 
     def _compute_attention(self, q, k, v, attention_mask, training=False):
-        q_shape = ops.shape(q)
-        q = ops.reshape(
-            q,
-            (
-                *q_shape[:-2],
-                self.num_key_value_heads,
-                self.num_query_heads // self.num_key_value_heads,
-                q_shape[-1],
-            ),
-        )
-        b, q_len, _, _, h = ops.shape(q)
+        # HuggingFace repeats K/V from `(B, kv_heads, S, H)` to
+        # `(B, query_heads, S, H)` before the attention matmul. Keep the same
+        # layout and operation order here instead of doing a grouped
+        # `(kv_heads, groups)` matmul. The two forms are mathematically
+        # equivalent, but can have different Torch reduction order and cause
+        # small vision-only drift after many encoder layers.
+        b, q_len, _, h = ops.shape(q)
+        num_groups = self.num_query_heads // self.num_key_value_heads
+        q = ops.transpose(q, (0, 2, 1, 3))  # (B, Q, T, H)
+        k = ops.transpose(k, (0, 2, 1, 3))  # (B, K, S, H)
+        v = ops.transpose(v, (0, 2, 1, 3))  # (B, K, S, H)
 
-        q_permuted = ops.transpose(q, (0, 2, 3, 1, 4))  # (B, K, G, T, H)
-        k_permuted = ops.transpose(k, (0, 2, 1, 3))  # (B, K, S, H)
-        k_transposed = ops.transpose(k_permuted, (0, 1, 3, 2))  # (B, K, H, S)
-        k_transposed = ops.expand_dims(k_transposed, axis=2)  # (B, K, 1, H, S)
+        k = ops.expand_dims(k, axis=2)  # (B, K, 1, S, H)
+        v = ops.expand_dims(v, axis=2)  # (B, K, 1, S, H)
+        repeated_shape = (
+            b,
+            self.num_key_value_heads,
+            num_groups,
+            q_len,
+            h,
+        )
+        # Do not infer the query-head dimension with ``-1`` here. For an
+        # empty batch or empty sequence, both ``b`` and ``q_len`` can be zero,
+        # so Torch cannot infer the unspecified dimension from a zero-element
+        # tensor. The repeated head count is known statically.
+        k = ops.reshape(
+            ops.broadcast_to(k, repeated_shape),
+            (b, self.num_query_heads, q_len, h),
+        )
+        v = ops.reshape(
+            ops.broadcast_to(v, repeated_shape),
+            (b, self.num_query_heads, q_len, h),
+        )
+
         attention_logits = ops.matmul(
-            q_permuted, k_transposed
-        )  # (B, K, G, T, S)
+            q, ops.transpose(k, (0, 1, 3, 2))
+        )  # (B, Q, T, S)
         if self.logit_soft_cap is not None:
             attention_logits = ops.divide(attention_logits, self.logit_soft_cap)
             attention_logits = ops.multiply(
@@ -733,7 +760,7 @@ class Gemma4VisionAttention(keras.layers.Layer):
             )
 
         if attention_mask is not None:
-            attention_mask = attention_mask[:, None, None, None, :]
+            attention_mask = attention_mask[:, None, None, :]
         attention_softmax = self.softmax(attention_logits, mask=attention_mask)
         attention_softmax = ops.cast(attention_softmax, v.dtype)
 
@@ -742,24 +769,82 @@ class Gemma4VisionAttention(keras.layers.Layer):
                 attention_softmax, training=training
             )
 
-        v_permuted = ops.transpose(v, (0, 2, 1, 3))  # (B, K, S, H)
-        v_permuted = ops.expand_dims(v_permuted, axis=2)  # (B, K, 1, S, H)
-        results = ops.matmul(attention_softmax, v_permuted)  # (B, K, G, T, H)
-        results = ops.transpose(results, (0, 3, 1, 2, 4))  # (B, T, K, G, H)
-        return ops.reshape(results, (b, q_len, self.num_query_heads, h))
+        results = ops.matmul(attention_softmax, v)  # (B, Q, T, H)
+        return ops.transpose(results, (0, 2, 1, 3))
+
+    def _project_attention_output(self, attention_vec):
+        """Project flattened heads using HuggingFace's linear ordering."""
+        dense = self.output_dense
+        x = attention_vec
+        if dense.use_clipped_linears:
+            x = ops.clip(
+                x,
+                ops.cast(dense.input_min, x.dtype),
+                ops.cast(dense.input_max, x.dtype),
+            )
+
+        shape = ops.shape(x)
+        # Keep the flattened feature size explicit so zero-sized inputs remain
+        # representable on the Torch backend.
+        x = ops.reshape(
+            x,
+            (shape[0], shape[1], self.num_query_heads * self.head_dim),
+        )
+        kernel = ops.reshape(
+            dense.dense.kernel,
+            (self.num_query_heads * self.head_dim, self.hidden_dim),
+        )
+        x = ops.matmul(x, kernel)
+
+        if dense.use_clipped_linears:
+            x = ops.clip(
+                x,
+                ops.cast(dense.output_min, x.dtype),
+                ops.cast(dense.output_max, x.dtype),
+            )
+        return x
+
+    def _project_qkv(self, x, dense, num_heads):
+        """Project Q/K/V with the same flattened linear as HuggingFace."""
+        if dense.use_clipped_linears:
+            x = ops.clip(
+                x,
+                ops.cast(dense.input_min, x.dtype),
+                ops.cast(dense.input_max, x.dtype),
+            )
+
+        shape = ops.shape(x)
+        kernel = ops.transpose(dense.dense.kernel, (1, 0, 2))
+        kernel = ops.reshape(
+            kernel,
+            (self.hidden_dim, num_heads * self.head_dim),
+        )
+        x = ops.matmul(x, kernel)
+        x = ops.reshape(
+            x,
+            (shape[0], shape[1], num_heads, self.head_dim),
+        )
+
+        if dense.use_clipped_linears:
+            x = ops.clip(
+                x,
+                ops.cast(dense.output_min, x.dtype),
+                ops.cast(dense.output_max, x.dtype),
+            )
+        return x
 
     def call(self, x, attention_mask=None, position_ids=None, training=False):
-        query = self.query_dense(x)
+        query = self._project_qkv(x, self.query_dense, self.num_query_heads)
         query = self.query_norm(query)
         if position_ids is not None:
             query = self._apply_rope(query, position_ids)
 
-        key = self.key_dense(x)
+        key = self._project_qkv(x, self.key_dense, self.num_key_value_heads)
         key = self.key_norm(key)
         if position_ids is not None:
             key = self._apply_rope(key, position_ids)
 
-        value = self.value_dense(x)
+        value = self._project_qkv(x, self.value_dense, self.num_key_value_heads)
         value = self.value_norm(value)
 
         # Vision doesn't utilize padding cache maps over generations
@@ -777,7 +862,7 @@ class Gemma4VisionAttention(keras.layers.Layer):
         # HF's behavior where padding patches accumulate meaningful hidden
         # states that contribute to pool bin 0 in the pooler.
 
-        attention_output = self.output_dense(attention_vec)
+        attention_output = self._project_attention_output(attention_vec)
         return attention_output, None
 
     def compute_output_shape(self, input_shape):
