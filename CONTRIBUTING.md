@@ -28,7 +28,7 @@ maintain two lists of github tags for contributors:
 If you would like propose a new symbol or feature, please first review our
 design guide and roadmap linked above, and open an issue to discuss. If you have
 a specific design in mind, please include a Colab notebook showing the proposed
-design in a end-to-end example. Keep in mind that design for a new feature or
+design in an end-to-end example. Keep in mind that design for a new feature or
 use case may take longer than contributing to an open issue with a
 vetted-design.
 

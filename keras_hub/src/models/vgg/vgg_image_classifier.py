@@ -19,7 +19,7 @@ class VGGImageClassifier(ImageClassifier):
     `num_classes` argument, controlling the number of predicted output classes.
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
-    labels where `x` is a string and `y` is a integer from `[0, num_classes)`.
+    labels where `x` is a string and `y` is an integer from `[0, num_classes)`.
 
     Note that unlike `keras_hub.model.ImageClassifier`, the `VGGImageClassifier`
     allows `pooling="flatten"`, where the backbone outputs are flattened and

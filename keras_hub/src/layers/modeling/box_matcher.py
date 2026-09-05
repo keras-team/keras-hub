@@ -38,7 +38,7 @@ class BoxMatcher(keras.layers.Layer):
     Args:
         thresholds: A sorted list of floats to classify the matches into
             different results (e.g. positive or negative or ignored match). The
-            list will be prepended with -Inf and and appended with +Inf.
+            list will be prepended with -Inf and appended with +Inf.
         match_values: A list of integers representing matched results (e.g.
             positive or negative or ignored match). len(`match_values`) must
             equal to len(`thresholds`) + 1.
