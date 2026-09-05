@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 
@@ -165,6 +166,10 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
                 },
             )
 
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        reason="torchvision::nms is not registered in the torch.export op set.",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=SAM3PromptableConceptImageSegmenter,

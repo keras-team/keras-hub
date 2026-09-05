@@ -112,8 +112,6 @@ class Perplexity(keras.metrics.Metric):
         if sample_weight is not None:
             sample_weight = ops.cast(sample_weight, self.dtype)
 
-        batch_size = ops.cast(ops.shape(y_true)[0], self.dtype)
-
         if self.mask_token_id is not None:
             mask = ops.cast(
                 ops.logical_not(ops.equal(y_true, self.mask_token_id)),
@@ -124,25 +122,20 @@ class Perplexity(keras.metrics.Metric):
             else:
                 sample_weight = ops.multiply(mask, sample_weight)
 
-        # Calculate the Cross Entropy Loss.
-        crossentropy_value = ops.cast(
+        # Calculate the Cross Entropy Loss sum.
+        crossentropy_sum = ops.cast(
             self._crossentropy(y_true, y_pred, sample_weight=sample_weight),
             self.dtype,
         )  # scalar
 
-        # Divide the loss by the number of non-masked tokens
+        # Total number of non-masked tokens
         if sample_weight is not None:
-            crossentropy_value = crossentropy_value / ops.sum(
-                sample_weight
-            )  # scalar
+            num_tokens = ops.sum(sample_weight)
         else:
-            crossentropy_value = crossentropy_value / (
-                ops.cast(ops.shape(y_true)[0], self.dtype)
-                * ops.cast(ops.shape(y_true)[1], self.dtype)
-            )  # scalar
+            num_tokens = ops.cast(ops.size(y_true), self.dtype)
 
-        self._aggregate_crossentropy.assign_add(batch_size * crossentropy_value)
-        self._number_of_samples.assign_add(batch_size)
+        self._aggregate_crossentropy.assign_add(crossentropy_sum)
+        self._number_of_samples.assign_add(num_tokens)
 
     def result(self):
         perplexity_score = ops.where(

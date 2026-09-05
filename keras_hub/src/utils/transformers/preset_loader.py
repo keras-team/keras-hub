@@ -8,6 +8,7 @@ from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
+from keras_hub.src.utils.transformers import convert_blip2
 from keras_hub.src.utils.transformers import convert_deit
 from keras_hub.src.utils.transformers import convert_dinov2
 from keras_hub.src.utils.transformers import convert_dinov3
@@ -17,6 +18,7 @@ from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gemma3
 from keras_hub.src.utils.transformers import convert_gemma3n
 from keras_hub.src.utils.transformers import convert_gemma4
+from keras_hub.src.utils.transformers import convert_gemma4_assistant
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
@@ -30,13 +32,16 @@ from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
 from keras_hub.src.utils.transformers import convert_qwen3_5
+from keras_hub.src.utils.transformers import convert_qwen3_5_moe
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_sam3
 from keras_hub.src.utils.transformers import convert_smollm3
+from keras_hub.src.utils.transformers import convert_swin_transformer
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_t5gemma2
 from keras_hub.src.utils.transformers import convert_vit
+from keras_hub.src.utils.transformers import convert_xlm_roberta
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
 
@@ -50,6 +55,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_bart
         elif model_type == "bert":
             self.converter = convert_bert
+        elif model_type == "blip-2":
+            self.converter = convert_blip2
         elif model_type == "deit":
             self.converter = convert_deit
         elif model_type == "distilbert":
@@ -68,6 +75,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma3n
         elif model_type in ("gemma4", "gemma4_text"):
             self.converter = convert_gemma4
+        elif model_type == "gemma4_assistant":
+            self.converter = convert_gemma4_assistant
         elif model_type == "gpt2":
             self.converter = convert_gpt2
         elif model_type == "gpt_oss":
@@ -95,12 +104,18 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen3_moe
         elif model_type == "qwen3":
             self.converter = convert_qwen3
+        elif model_type == "qwen3_5_moe":
+            self.converter = convert_qwen3_5_moe
         elif model_type == "qwen3_5":
             self.converter = convert_qwen3_5
         elif model_type == "sam3_video":
             self.converter = convert_sam3
+        elif model_type == "xlm-roberta":
+            self.converter = convert_xlm_roberta
         elif model_type == "smollm3":
             self.converter = convert_smollm3
+        elif model_type == "swin":
+            self.converter = convert_swin_transformer
         elif model_type == "t5gemma":
             self.converter = convert_t5gemma
         elif model_type == "t5gemma2":
@@ -152,6 +167,22 @@ class TransformersPresetLoader(PresetLoader):
             not load_task_weights
             or not issubclass(cls, ImageClassifier)
             or architecture == "ViTModel"
+        is_classifier = issubclass(cls, ImageClassifier)
+        is_assistant = architecture == "Gemma4AssistantForCausalLM"
+
+        if hasattr(self.converter, "convert_task_config"):
+            task_config = self.converter.convert_task_config(self.config)
+            kwargs = {**task_config, **kwargs}
+
+        if hasattr(self.converter, "load_task_config"):
+            extra = self.converter.load_task_config(self.preset, self.config)
+            if extra:
+                kwargs = {**extra, **kwargs}
+
+        if not load_task_weights or (
+            not is_classifier
+            and not is_assistant
+            and architecture != "ViTModel"
         ):
             return super().load_task(
                 cls, load_weights, load_task_weights, **kwargs

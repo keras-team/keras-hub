@@ -80,6 +80,7 @@ class Sampler:
         stop_token_ids=None,
         hidden_states=None,
         model=None,
+        **kwargs,
     ):
         max_length = ops.shape(prompt)[-1]
         # Make sure `max_length` and `index` are the same dtype.

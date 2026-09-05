@@ -52,7 +52,13 @@ class MistralBackbone(Backbone):
             attention layers. This controls the maximum cache size for the
             attention layers in each transformer decoder. Only `sliding_window`
             number of tokens are saved in the cache and used to generate the
-            next token. Defaults to `512`.
+            next token. Defaults to `512`. Pass `None` to disable sliding
+            window attention entirely (e.g. Magistral).
+        head_dim (int, optional): The size of each attention head. When
+            `None` (the default), falls back to `hidden_dim // num_query_heads`.
+            Set explicitly when the model's head size is not equal to
+            `hidden_dim // num_query_heads` — e.g. Magistral uses
+            `head_dim=128` with `hidden_dim=5120` and `num_query_heads=32`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -98,6 +104,7 @@ class MistralBackbone(Backbone):
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
         sliding_window=512,
+        head_dim=None,
         dropout=0,
         dtype=None,
         **kwargs,
@@ -123,6 +130,7 @@ class MistralBackbone(Backbone):
                 activation=ops.silu,
                 kernel_initializer=_mistral_kernel_initializer(stddev=0.02),
                 sliding_window=sliding_window,
+                head_dim=head_dim,
                 dropout=dropout,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
@@ -165,6 +173,7 @@ class MistralBackbone(Backbone):
         self.num_key_value_heads = num_key_value_heads
         self.rope_scaling_factor = rope_scaling_factor
         self.sliding_window = sliding_window
+        self.head_dim = head_dim
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
 
@@ -181,6 +190,7 @@ class MistralBackbone(Backbone):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "num_key_value_heads": self.num_key_value_heads,
                 "sliding_window": self.sliding_window,
+                "head_dim": self.head_dim,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
             }

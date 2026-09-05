@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 
 from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
@@ -9,6 +11,7 @@ from keras_hub.src.models.gemma3n.gemma3n_causal_lm_preprocessor import (
 from keras_hub.src.models.gemma3n.gemma3n_image_converter import (
     Gemma3nImageConverter,
 )
+from keras_hub.src.models.gemma3n.gemma3n_tokenizer import Gemma3nTokenizer
 from keras_hub.src.tests.mocks.mock_gemma3n_tokenizer import (
     MockGemma3nTokenizer,
 )
@@ -325,3 +328,51 @@ class Gemma3nCausalLMPreprocessorTest(TestCase):
                 "audios": [np.ones((16000,))],
             }
             self.text_preprocessor(input_data)
+
+    def test_generate_preprocess_with_python_only_tokenizer(self):
+        proto_path = os.path.join(
+            self.get_test_data_dir(), "gemma3n_test_vocab.spm"
+        )
+        tokenizer = Gemma3nTokenizer(proto=proto_path)
+        image_converter = Gemma3nImageConverter(image_size=(4, 4))
+        preprocessor = Gemma3nCausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=image_converter,
+            audio_converter=None,
+            sequence_length=20,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=5,
+            max_audios_per_prompt=0,
+            num_audio_tokens_per_audio=0,
+        )
+        # Prompts tokenize to different lengths -> non-rectangular list.
+        prompts = ["the quick brown fox", "the quick"]
+        output = preprocessor.generate_preprocess(prompts, sequence_length=20)
+        self.assertEqual(output["token_ids"].shape[0], 2)
+        self.assertEqual(output["padding_mask"].shape[0], 2)
+
+    def test_call_with_python_only_tokenizer(self):
+        proto_path = os.path.join(
+            self.get_test_data_dir(), "gemma3n_test_vocab.spm"
+        )
+        tokenizer = Gemma3nTokenizer(proto=proto_path)
+        # image_converter must be set: the text-only branch of `call()`
+        # returns before `token_ids` is used to compute `batch_size`.
+        image_converter = Gemma3nImageConverter(image_size=(4, 4))
+        preprocessor = Gemma3nCausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=image_converter,
+            audio_converter=None,
+            sequence_length=20,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=5,
+            max_audios_per_prompt=0,
+            num_audio_tokens_per_audio=0,
+        )
+        # Prompts tokenize to different lengths -> non-rectangular list.
+        input_data = {
+            "prompts": ["the quick brown fox", "the quick"],
+            "responses": ["round", "round"],
+        }
+        output = preprocessor(input_data)
+        self.assertEqual(output[0]["token_ids"].shape[0], 2)
