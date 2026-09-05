@@ -52,6 +52,15 @@ class TransformerDecoder(keras.layers.Layer):
         bias_initializer: string or `keras.initializers` initializer.
             The bias initializer for the dense and multiheaded
             attention layers. Defaults to `"zeros"`.
+        kernel_regularizer: string or `keras.regularizers` regularizer.
+            The kernel regularizer for the dense and multiheaded
+            attention layers. Defaults to `None`.
+        bias_regularizer: string or `keras.regularizers` regularizer.
+            The bias regularizer for the dense and multiheaded
+            attention layers. Defaults to `None`.
+        activity_regularizer: string or `keras.regularizers` regularizer.
+            The activity regularizer for the dense and multiheaded
+            attention layers. Defaults to `None`.
         normalize_first: bool. If True, the inputs to the
             attention layer(s) and the intermediate dense layer are normalized
             (similar to GPT-2). If set to False, outputs of attention layer and
@@ -61,7 +70,7 @@ class TransformerDecoder(keras.layers.Layer):
             including `name`, `trainable`, `dtype` etc.
 
     Example:
-    ```python
+```python
     # Create a single transformer decoder layer.
     decoder = keras_hub.layers.TransformerDecoder(
         intermediate_dim=64, num_heads=8)
@@ -79,7 +88,7 @@ class TransformerDecoder(keras.layers.Layer):
     decoder_input_data = np.random.uniform(size=(2, 10, 64))
     encoder_input_data = np.random.uniform(size=(2, 10, 64))
     decoder_output = model((decoder_input_data, encoder_input_data))
-    ```
+```
 
     References:
      - [Vaswani et al., 2017](https://arxiv.org/abs/1706.03762)
@@ -95,6 +104,9 @@ class TransformerDecoder(keras.layers.Layer):
         layer_norm_epsilon=1e-05,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
+        kernel_regularizer=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
         normalize_first=False,
         **kwargs,
     ):
@@ -111,6 +123,11 @@ class TransformerDecoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.kernel_regularizer = keras.regularizers.get(kernel_regularizer)
+        self.bias_regularizer = keras.regularizers.get(bias_regularizer)
+        self.activity_regularizer = keras.regularizers.get(
+            activity_regularizer
+        )
         self.normalize_first = normalize_first
         self.supports_masking = True
         self._decoder_sequence_shape = None
@@ -144,6 +161,9 @@ class TransformerDecoder(keras.layers.Layer):
             dropout=self.dropout,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            kernel_regularizer=self.kernel_regularizer,
+            bias_regularizer=self.bias_regularizer,
+            activity_regularizer=self.activity_regularizer,
             dtype=self.dtype_policy,
             name="self_attention",
         )
@@ -179,6 +199,9 @@ class TransformerDecoder(keras.layers.Layer):
                 dropout=self.dropout,
                 kernel_initializer=clone_initializer(self.kernel_initializer),
                 bias_initializer=clone_initializer(self.bias_initializer),
+                kernel_regularizer=self.kernel_regularizer,
+                bias_regularizer=self.bias_regularizer,
+                activity_regularizer=self.activity_regularizer,
                 dtype=self.dtype_policy,
                 name="cross_attention",
             )
@@ -210,6 +233,9 @@ class TransformerDecoder(keras.layers.Layer):
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            kernel_regularizer=self.kernel_regularizer,
+            bias_regularizer=self.bias_regularizer,
+            activity_regularizer=self.activity_regularizer,
             dtype=self.dtype_policy,
             name="feedforward_intermediate_dense",
         )
@@ -218,6 +244,9 @@ class TransformerDecoder(keras.layers.Layer):
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            kernel_regularizer=self.kernel_regularizer,
+            bias_regularizer=self.bias_regularizer,
+            activity_regularizer=self.activity_regularizer,
             dtype=self.dtype_policy,
             name="feedforward_output_dense",
         )
@@ -473,6 +502,12 @@ class TransformerDecoder(keras.layers.Layer):
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
                 ),
+                "kernel_regularizer": keras.regularizers.serialize(
+                    self.kernel_regularizer
+                ),
+                "bias_regularizer": keras.regularizers.serialize(
+                    self.bias_regularizer
+                ),
                 "normalize_first": self.normalize_first,
                 "decoder_sequence_shape": self._decoder_sequence_shape,
                 "encoder_sequence_shape": self._encoder_sequence_shape,
@@ -482,3 +517,4 @@ class TransformerDecoder(keras.layers.Layer):
 
     def compute_output_shape(self, decoder_sequence_shape):
         return decoder_sequence_shape
+        
