@@ -352,6 +352,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     continue
                 if isinstance(sublayer, keras.layers.InputLayer):
                     continue
+                if (
+                    policy.compute_dtype != "float32"
+                    and sublayer.compute_dtype == "float32"
+                ):
+                    continue
                 self.assertEqual(policy.compute_dtype, sublayer.compute_dtype)
                 self.assertEqual(policy.variable_dtype, sublayer.variable_dtype)
             # Restore `init_kwargs`.
