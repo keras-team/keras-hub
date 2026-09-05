@@ -439,6 +439,7 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         # (e.g. HF 2B has use_bidirectional_attention=None → purely causal.)
         if (
             vision_mask is not None
+            and cache is None
             and self.use_vision_bidirectional_attention
             and not self.is_global_attention
         ):

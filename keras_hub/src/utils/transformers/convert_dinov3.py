@@ -7,6 +7,12 @@ backbone_cls = DINOV3Backbone
 
 def convert_backbone_config(transformers_config):
     image_size = transformers_config["image_size"]
+    rope_theta = transformers_config.get("rope_parameters", {}).get(
+        "rope_theta"
+    )
+    if rope_theta is None:
+        rope_theta = transformers_config["rope_theta"]
+
     return {
         "patch_size": transformers_config["patch_size"],
         "num_layers": transformers_config["num_hidden_layers"],
@@ -27,7 +33,7 @@ def convert_backbone_config(transformers_config):
         "drop_path_rate": transformers_config["drop_path_rate"],
         "layer_norm_eps": transformers_config["layer_norm_eps"],
         "image_shape": (image_size, image_size, 3),
-        "rope_theta": transformers_config["rope_theta"],
+        "rope_theta": rope_theta,
         "apply_layernorm": False,
     }
 
