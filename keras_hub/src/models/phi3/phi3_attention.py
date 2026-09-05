@@ -3,6 +3,7 @@ import math
 import keras
 from keras import ops
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.models.phi3.phi3_rotary_embedding import (
     Phi3SuScaledRotaryEmbedding,
@@ -58,7 +59,7 @@ class Phi3Attention(keras.layers.Layer):
         head_dim = hidden_dim // self.num_query_heads
         self._inv_norm_factor = 1.0 / math.sqrt(head_dim)
 
-        self.query_dense = keras.layers.EinsumDense(
+        self.query_dense = EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, head_dim),
             kernel_initializer=self.kernel_initializer,
@@ -67,7 +68,7 @@ class Phi3Attention(keras.layers.Layer):
         )
         self.query_dense.build(inputs_shape)
 
-        self.key_dense = keras.layers.EinsumDense(
+        self.key_dense = EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
@@ -80,7 +81,7 @@ class Phi3Attention(keras.layers.Layer):
         )
         self.key_dense.build(inputs_shape)
 
-        self.value_dense = keras.layers.EinsumDense(
+        self.value_dense = EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
@@ -104,7 +105,7 @@ class Phi3Attention(keras.layers.Layer):
             dtype=self.dtype_policy,
         )
 
-        self.output_dense = keras.layers.EinsumDense(
+        self.output_dense = EinsumDense(
             equation="bquh,uhm->bqm",
             output_shape=(None, hidden_dim),
             kernel_initializer=self.kernel_initializer,

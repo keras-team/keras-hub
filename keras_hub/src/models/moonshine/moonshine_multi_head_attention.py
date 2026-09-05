@@ -3,6 +3,7 @@ import keras
 from keras_hub.src.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.models.whisper.whisper_cached_multi_head_attention import (
     _build_proj_equation,
 )
@@ -140,7 +141,7 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             free_dims=query_rank - 1, bound_dims=1, output_dims=2
         )
-        self._query_dense = keras.layers.EinsumDense(
+        self._query_dense = EinsumDense(
             einsum_equation,
             output_shape=_get_output_shape(
                 output_rank - 1, [self._num_heads, self._key_dim]
@@ -155,7 +156,7 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             free_dims=key_rank - 1, bound_dims=1, output_dims=2
         )
-        self._key_dense = keras.layers.EinsumDense(
+        self._key_dense = EinsumDense(
             einsum_equation,
             output_shape=_get_output_shape(
                 output_rank - 1, [self._num_heads, self._key_dim]
@@ -170,7 +171,7 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             free_dims=value_rank - 1, bound_dims=1, output_dims=2
         )
-        self._value_dense = keras.layers.EinsumDense(
+        self._value_dense = EinsumDense(
             einsum_equation,
             output_shape=_get_output_shape(
                 output_rank - 1, [self._num_heads, self._value_dim]
@@ -198,7 +199,7 @@ class MoonshineMultiHeadAttention(CachedMultiHeadAttention):
             bound_dims=2,
             output_dims=len(output_shape),
         )
-        self._output_dense = keras.layers.EinsumDense(
+        self._output_dense = EinsumDense(
             einsum_equation,
             output_shape=_get_output_shape(output_rank - 1, output_shape),
             bias_axes=bias_axes if self._use_bias else None,
