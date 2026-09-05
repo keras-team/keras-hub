@@ -8,9 +8,6 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
 from keras_hub.src.models.gpt_oss.gpt_oss_attention import GptOssAttention
-from keras_hub.src.models.gpt_oss.gpt_oss_layer_norm import (
-    GptOssLayerNormalization,
-)
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -314,14 +311,14 @@ class GptOssTransformerDecoder(keras.layers.Layer):
         )
         self.self_attention_layer.build(decoder_sequence_shape)
 
-        self.input_layernorm = GptOssLayerNormalization(
+        self.input_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="input_layernorm",
         )
         self.input_layernorm.build(decoder_sequence_shape)
 
-        self.post_attention_layernorm = GptOssLayerNormalization(
+        self.post_attention_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="post_attention_layernorm",
