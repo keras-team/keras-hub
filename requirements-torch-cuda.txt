@@ -1,6 +1,6 @@
 # Tensorflow cpu-only version.
 tensorflow-cpu
-tensorflow-text>=2.20.1
+tensorflow-text>=2.20.1,<2.21.0
 
 # Torch with cuda support.
 --extra-index-url https://download.pytorch.org/whl/cu126

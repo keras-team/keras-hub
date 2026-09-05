@@ -115,7 +115,10 @@ for preset in presets:
     cfg["intermediate_dim"] = pt_cfg["intermediate_size"]
     cfg["max_sequence_length"] = pt_cfg["max_position_embeddings"]
     cfg["partial_rotary_factor"] = pt_cfg["partial_rotary_factor"]
-    cfg["rope_theta"] = pt_cfg["rope_theta"]
+    rope_theta = pt_cfg.get("rope_parameters", {}).get("rope_theta")
+    if rope_theta is None:
+        rope_theta = pt_cfg["rope_theta"]
+    cfg["rope_theta"] = rope_theta
     cfg["encoder_num_layers"] = pt_cfg["encoder_num_hidden_layers"]
     cfg["decoder_num_layers"] = pt_cfg["decoder_num_hidden_layers"]
     cfg["encoder_num_heads"] = pt_cfg.get("encoder_num_attention_heads", 8)

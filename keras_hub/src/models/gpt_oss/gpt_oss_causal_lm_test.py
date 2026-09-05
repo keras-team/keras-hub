@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pytest
+from keras import backend
 from keras import ops
 
 from keras_hub.src.models.gpt_oss.gpt_oss_backbone import GptOssBackbone
@@ -113,6 +114,10 @@ class GptOssCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.xfail(
+        condition=backend.backend() == "torch",
+        reason="litert-torch NHWC rewriter has no lowering for aten.amax.",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=GptOssCausalLM,

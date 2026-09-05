@@ -12,6 +12,11 @@ backbone_cls = GptOssBackbone
 
 def convert_backbone_config(transformers_config):
     """Convert a Hugging Face Gpt-Oss config to a KerasHub config."""
+    rope_theta = transformers_config.get("rope_parameters", {}).get(
+        "rope_theta"
+    )
+    if rope_theta is None:
+        rope_theta = transformers_config["rope_theta"]
     config = {
         "vocabulary_size": transformers_config["vocab_size"],
         "num_layers": transformers_config["num_hidden_layers"],
@@ -21,7 +26,7 @@ def convert_backbone_config(transformers_config):
         "num_key_value_heads": transformers_config["num_key_value_heads"],
         "num_experts": transformers_config["num_local_experts"],
         "top_k": transformers_config["num_experts_per_tok"],
-        "rope_max_wavelength": transformers_config["rope_theta"],
+        "rope_max_wavelength": rope_theta,
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
         "sliding_window": transformers_config.get("sliding_window"),
         "output_router_logits": transformers_config.get(
