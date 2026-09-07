@@ -2,10 +2,11 @@ import keras
 
 # Patch: keras.ops.random not exported in Keras 3.15.1 (keras-team/keras#23575)
 import keras.src.ops as _src_ops
-if not hasattr(keras.ops, 'random'):
+
+if not hasattr(keras.ops, "random"):
     keras.ops.random = _src_ops.random
-import pytest
 import numpy as np
+import pytest
 from keras import ops
 
 from keras_hub.src.models.swin_transformer.swin_transformer_backbone import (
@@ -42,20 +43,22 @@ class SwinTransformerBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
     def test_drop_path_training_step(self):
         """DropPath should not corrupt tensor rank during training."""
         backbone = SwinTransformerBackbone(
             image_shape=(224, 224, 3),
-            embed_dim=96, depths=(2, 2, 6, 2),
-            num_heads=(3, 6, 12, 24), window_size=7,
+            embed_dim=96,
+            depths=(2, 2, 6, 2),
+            num_heads=(3, 6, 12, 24),
+            window_size=7,
         )
         inputs = keras.Input(shape=(224, 224, 3))
         feat = backbone(inputs)
         pooled = keras.layers.GlobalAveragePooling1D()(feat)
         outputs = keras.layers.Dense(10, activation="softmax")(pooled)
         model = keras.Model(inputs, outputs)
-        model.compile(optimizer="adam",
-                      loss="sparse_categorical_crossentropy")
+        model.compile(optimizer="adam", loss="sparse_categorical_crossentropy")
         x = np.random.randn(2, 224, 224, 3).astype(np.float32)
         y = np.random.randint(0, 10, size=(2,))
         # Before fix: ValueError: too many values to unpack (expected 3)
