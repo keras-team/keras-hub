@@ -137,8 +137,7 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     run_extra_large_tests = config.getoption("--run_extra_large")
-    # Run large tests for --run_extra_large or --run_large.
-    run_large_tests = config.getoption("--run_large") or run_extra_large_tests
+    run_large_tests = config.getoption("--run_large")
 
     # Messages to annotate skipped tests with.
     skip_large = pytest.mark.skipif(
