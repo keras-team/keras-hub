@@ -163,7 +163,7 @@ def pytest_collection_modifyitems(config, items):
         reason="tests only run with a kaggle api key",
     )
     for item in items:
-        if "large" in item.keywords:
+        if "large" in item.keywords and "extra_large" not in item.keywords:
             item.add_marker(skip_large)
         if "extra_large" in item.keywords:
             item.add_marker(skip_extra_large)
