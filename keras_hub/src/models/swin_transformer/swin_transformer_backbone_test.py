@@ -1,4 +1,5 @@
 import pytest
+import numpy as np
 from keras import ops
 
 from keras_hub.src.models.swin_transformer.swin_transformer_backbone import (
