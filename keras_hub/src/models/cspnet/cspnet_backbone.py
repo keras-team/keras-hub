@@ -252,43 +252,15 @@ class CSPNetBackbone(FeaturePyramidBackbone):
 
         if "stackwise_channels" in config:
             config["stackwise_num_filters"] = config.pop("stackwise_channels")
+            config.setdefault("expand_ratio", 1.0)
+            config.setdefault("bottle_ratio", 0.5)
+            config.setdefault("stage_type", "cs3")
 
-        depths = config.get("stackwise_depth", [])
-        num_stages = len(depths)
+        if "use_depthwise" in config:
+            if config.pop("use_depthwise"):
+                config["block_type"] = "depthwise_dark_block"
 
-        if "stackwise_num_filters" not in config:
-            config["stackwise_num_filters"] = [64, 128, 256, 512]
-
-        if "stackwise_strides" not in config:
-            config["stackwise_strides"] = [2] * num_stages
-
-        if "stem_filters" not in config:
-            filters = config.get("stackwise_num_filters")
-            config["stem_filters"] = filters[0] // 2 if filters else 32
-
-        config.setdefault("stem_kernel_size", 3)
-        config.setdefault("stem_strides", 2)
-        config.setdefault("block_type", "dark_block")
-        config.setdefault("stage_type", "cs3")
-        config.setdefault("expand_ratio", 1.0)
-        config.setdefault("bottle_ratio", 0.5)
-
-        valid_keys = [
-            "stackwise_num_filters",
-            "stackwise_depth",
-            "stackwise_strides",
-            "stem_filters",
-            "stem_kernel_size",
-            "stem_strides",
-            "block_type",
-            "stage_type",
-            "expand_ratio",
-            "bottle_ratio",
-            "name",
-            "trainable",
-        ]
-
-        return cls(**{k: v for k, v in config.items() if k in valid_keys})
+        return cls(**config)
 
 
 def bottleneck_block(
