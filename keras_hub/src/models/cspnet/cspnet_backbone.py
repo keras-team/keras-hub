@@ -82,16 +82,6 @@ class CSPNetBackbone(FeaturePyramidBackbone):
     # Pretrained backbone
     model = keras_hub.models.CSPNetBackbone.from_preset(
         "csp_darknet_53_ra_imagenet"
-        "csp_resnext_50_ra_imagenet"
-        "csp_resnet_50_ra_imagenet"
-        "darknet_53_imagenet"
-        "csp_darknet_tiny"
-        "csp_darknet_tiny_imagenet"
-        "csp_darknet_s"
-        "csp_darknet_m"
-        "csp_darknet_l"
-        "csp_darknet_l_imagenet"
-        "csp_darknet_xl"
     )
     model(input_data)
 
