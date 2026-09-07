@@ -125,7 +125,9 @@ class DropPath(layers.Layer):
         keep_prob = 1.0 - self.drop_prob
 
         batch_size = ops.shape(x)[0]
-        random_tensor = keep_prob + ops.random.uniform((batch_size, 1, 1, 1))
+        #random_tensor = keep_prob + ops.random.uniform((batch_size, 1, 1, 1))
+        mask_shape = (batch_size,) + (1,) * (len(x.shape) - 1)
+        random_tensor = keep_prob + ops.random.uniform(mask_shape)
         binary_mask = ops.floor(random_tensor)
         output = x / keep_prob * binary_mask
         return output
