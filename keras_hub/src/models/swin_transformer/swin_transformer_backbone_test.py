@@ -1,3 +1,9 @@
+import keras
+
+# Patch: keras.ops.random not exported in Keras 3.15.1 (keras-team/keras#23575)
+import keras.src.ops as _src_ops
+if not hasattr(keras.ops, 'random'):
+    keras.ops.random = _src_ops.random
 import pytest
 import numpy as np
 from keras import ops
@@ -39,9 +45,10 @@ class SwinTransformerBackboneTest(TestCase):
     def test_drop_path_training_step(self):
         """DropPath should not corrupt tensor rank during training."""
         backbone = SwinTransformerBackbone(
-                embed_dim=96, depths=(2, 2, 6, 2),
-                num_heads=(3, 6, 12, 24), window_size=7,
-                )
+            image_shape=(224, 224, 3),
+            embed_dim=96, depths=(2, 2, 6, 2),
+            num_heads=(3, 6, 12, 24), window_size=7,
+        )
         inputs = keras.Input(shape=(224, 224, 3))
         feat = backbone(inputs)
         pooled = keras.layers.GlobalAveragePooling1D()(feat)
