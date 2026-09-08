@@ -118,6 +118,7 @@ class DropPath(layers.Layer):
     def __init__(self, drop_prob=0.0, **kwargs):
         super().__init__(**kwargs)
         self.drop_prob = drop_prob
+        self.seed_generator = keras.random.SeedGenerator(seed=1337)
 
     def call(self, x, training=None):
         if self.drop_prob == 0.0 or not training:
@@ -127,7 +128,7 @@ class DropPath(layers.Layer):
         batch_size = ops.shape(x)[0]
         #random_tensor = keep_prob + ops.random.uniform((batch_size, 1, 1, 1))
         mask_shape = (batch_size,) + (1,) * (len(x.shape) - 1)
-        random_tensor = keep_prob + ops.random.uniform(mask_shape)
+        random_tensor = keep_prob + keras.random.uniform(mask_shape, seed=self.seed_generator)
         binary_mask = ops.floor(random_tensor)
         output = x / keep_prob * binary_mask
         return output
