@@ -35,7 +35,7 @@ dependencies = [
     "rich",
     "kagglehub!=1.0.1",
     "kagglesdk==0.1.28",
-    "sentencepiece<0.2.2",
+    "sentencepiece",
     "tokenizers",
     "tensorflow-text>=2.20.1,<2.21.0;platform_system != 'Windows'",
 ]
