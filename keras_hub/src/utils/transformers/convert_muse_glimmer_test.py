@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import keras
 import numpy as np
 
@@ -61,6 +63,67 @@ class TestMuseGlimmerConverter(TestCase):
             "sliding_window": 4,
             "rope_theta": 500000.0,
         }
+
+    def test_convert_tokenizer_loads_added_tokens(self):
+        tokenizer_json = {
+            "model": {
+                "vocab": {"a": 0, "b": 1},
+                "merges": [["a", "b"]],
+            },
+            "added_tokens": [
+                {
+                    "content": "<|begin_of_text|>",
+                    "id": 200000,
+                    "special": True,
+                },
+                {
+                    "content": "<|finetune_right_pad|>",
+                    "id": 200018,
+                    "special": True,
+                },
+                {
+                    "content": "<|reserved_special_token_2047|>",
+                    "id": 202047,
+                    "special": True,
+                },
+            ],
+        }
+        tokenizer_config = {
+            "bos_token": "<|begin_of_text|>",
+            "eos_token": "<|end_of_text|>",
+            "pad_token": "<|finetune_right_pad|>",
+        }
+        model_config = {
+            "image_token_id": 200092,
+            "video_token_id": 200091,
+        }
+
+        class FakeTokenizer:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        with patch.object(
+            convert_muse_glimmer,
+            "load_json",
+            side_effect=[tokenizer_json, tokenizer_config, model_config],
+        ):
+            tokenizer = convert_muse_glimmer.convert_tokenizer(
+                FakeTokenizer, "unused"
+            )
+
+        self.assertEqual(
+            tokenizer.kwargs["vocabulary"]["<|finetune_right_pad|>"],
+            200018,
+        )
+        self.assertEqual(
+            tokenizer.kwargs["vocabulary"]["<|reserved_special_token_2047|>"],
+            202047,
+        )
+        self.assertEqual(
+            tokenizer.kwargs["pad_token"], "<|finetune_right_pad|>"
+        )
+        self.assertEqual(tokenizer.kwargs["merges"], ["a b"])
+        self.assertEqual(len(tokenizer.kwargs["unsplittable_tokens"]), 3)
 
     def test_convert_backbone_config_text_only(self):
         transformers_config = {"text_config": self._text_config()}
