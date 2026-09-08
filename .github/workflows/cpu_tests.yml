@@ -1,0 +1,88 @@
+name: CPU Tests
+
+on:
+  workflow_call:
+    inputs:
+      shards:
+        description: 'JSON array of shard indices to run'
+        type: string
+        default: '[1, 2, 3, 4]'
+      shard_count:
+        description: 'Total number of shards for pytest-split'
+        type: number
+        default: 4
+      timeout:
+        description: 'Timeout in minutes for each test job'
+        type: number
+        default: 120
+
+permissions:
+  contents: read
+
+jobs:
+  cpu_tests:
+    name: CPU Tests (${{ matrix.backend }}, ${{ matrix.version }}, shard ${{ matrix.shard }})
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [tensorflow, jax, torch]
+        version: [keras-stable]
+        shard: ${{ fromJSON(inputs.shards) }}
+        include:
+          - backend: jax
+            version: keras-3.14
+            shard: 1
+          - backend: jax
+            version: keras-nightly
+            shard: 1
+          - backend: openvino
+            version: keras-nightly
+            shard: 1
+
+    container:
+      image: python:3.11-slim
+
+    runs-on: linux-x86-n2-16
+    timeout-minutes: ${{ inputs.timeout }}
+    env:
+      KERAS_BACKEND: ${{ matrix.backend }}
+    steps:
+    - name: Install binary dependencies
+      run: |
+        apt-get update
+        apt-get -y install build-essential curl git gnupg
+        git config --global --add safe.directory '*'
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - name: Install dependencies
+      run: |
+          pip install -r requirements.txt --progress-bar off
+          pip install --no-deps -e "." --progress-bar off
+    - name: Pin Keras 3.14
+      if: ${{ matrix.version == 'keras-3.14'}}
+      run: |
+        pip uninstall -y keras jaxlib jax
+        pip install keras==3.14.0 --progress-bar off
+        pip install jax==0.10.0 --progress-bar off
+    - name: Pin Keras Nightly
+      if: ${{ matrix.version == 'keras-nightly'}}
+      run: |
+        pip uninstall -y keras
+        pip install keras-nightly --no-cache-dir --progress-bar off
+    - name: Test with pytest
+      env:
+        SHARD_COUNT: ${{ inputs.shard_count }}
+        SHARD: ${{ matrix.shard }}
+      run: |
+        pytest keras_hub/ -n auto --dist loadfile --durations=50 --splits "$SHARD_COUNT" --group "$SHARD"
+    - name: Run integration tests
+      if: ${{ matrix.shard == 1 }}
+      run: |
+        python pip_build.py --install
+        cd integration_tests && pytest . -k "not NoTensorflow"
+    - name: Run no tensorflow integration test
+      if: ${{ matrix.backend != 'tensorflow' && matrix.shard == 1 }}
+      run: |
+        pip uninstall -y tensorflow-text tensorflow
+        cd integration_tests && pytest . -k "NoTensorflow"
