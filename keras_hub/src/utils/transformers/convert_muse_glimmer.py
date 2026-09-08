@@ -285,10 +285,28 @@ def convert_weights(backbone, loader, transformers_config):
 
 def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_config = load_json(preset, "tokenizer.json")
-    vocab = tokenizer_config["model"]["vocab"]
+    vocab = dict(tokenizer_config["model"]["vocab"])
     merges = tokenizer_config["model"]["merges"]
     if merges and isinstance(merges[0], list):
         merges = [" ".join(item) for item in merges]
+
+    # `tokenizer.json` keeps the 2,048 Muse Glimmer special tokens in
+    # `added_tokens`, rather than in `model.vocab`. They retain the IDs used
+    # by the model and must be added before constructing the KerasHub
+    # tokenizer.
+    special_tokens = []
+    for token in tokenizer_config.get("added_tokens", []):
+        content = token["content"]
+        vocab[content] = token["id"]
+        if token.get("special", False):
+            special_tokens.append(content)
+
+    hf_tokenizer_config = load_json(preset, "tokenizer_config.json")
+    for token_name in ("bos_token", "eos_token", "pad_token"):
+        token = hf_tokenizer_config.get(token_name)
+        if token is not None:
+            kwargs.setdefault(token_name, token)
+    kwargs.setdefault("unsplittable_tokens", special_tokens)
 
     config = load_json(preset, "config.json")
     kwargs.setdefault("image_token_id", config.get("image_token_id", 200092))
