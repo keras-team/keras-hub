@@ -14,6 +14,8 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.models.smollm3.smollm3_utils import apply_rotary_pos_emb
 from keras_hub.src.models.smollm3.smollm3_utils import rope_init
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.vllm.attention import vllm_paged_attention
+from keras_hub.src.vllm.context import get_vllm_context
 
 
 class SmolLM3Attention(layers.Layer):
@@ -80,21 +82,25 @@ class SmolLM3Attention(layers.Layer):
         self.q_proj = layers.Dense(
             self.num_attention_heads * self.head_dim,
             use_bias=self.attention_bias,
+            dtype=self.dtype_policy,
             name="q_proj",
         )
         self.k_proj = layers.Dense(
             self.num_key_value_heads * self.head_dim,
             use_bias=self.attention_bias,
+            dtype=self.dtype_policy,
             name="k_proj",
         )
         self.v_proj = layers.Dense(
             self.num_key_value_heads * self.head_dim,
             use_bias=self.attention_bias,
+            dtype=self.dtype_policy,
             name="v_proj",
         )
         self.o_proj = layers.EinsumDense(
             equation="bquh,uhm->bqm",
             output_shape=(None, self.hidden_size),
+            dtype=self.dtype_policy,
             name="o_proj",
         )
         self.o_proj.build((None, None, self.num_attention_heads, self.head_dim))
@@ -111,6 +117,7 @@ class SmolLM3Attention(layers.Layer):
             max_position_embeddings=self.max_position_embeddings,
             rope_theta=self.rope_theta,
             partial_rotary_factor=self.partial_rotary_factor,
+            dtype=self.dtype_policy,
             name="rotary_emb",
         )
 
@@ -136,6 +143,8 @@ class SmolLM3Attention(layers.Layer):
         self.q_proj.build(hidden_states_shape)
         self.k_proj.build(hidden_states_shape)
         self.v_proj.build(hidden_states_shape)
+        # Build the rotary embedding here as well.
+        self.rotary_embedding.build(hidden_states_shape)
         super().build(input_shape)
 
     def call(
@@ -154,7 +163,19 @@ class SmolLM3Attention(layers.Layer):
             attention_mask: Attention mask tensor.
             training: Whether the layer is in training mode.
         """
-        self.training = training
+        # Route to vLLM paged attention while serving on TPU; otherwise the
+        # original dense path below runs unchanged.
+        vllm_context = get_vllm_context()
+        if (
+            vllm_context is not None
+            and vllm_context.paged_attention_func is not None
+        ):
+            return self._compute_vllm_attention(
+                hidden_states,
+                kwargs.get("self_attention_cache", None),
+                vllm_context,
+            )
+
         self_attention_cache = kwargs.get("self_attention_cache", None)
         self_attention_cache_update_index = kwargs.get(
             "self_attention_cache_update_index", None
@@ -295,6 +316,48 @@ class SmolLM3Attention(layers.Layer):
             )
         return self._softmax(attention_scores)
 
+    def _compute_vllm_attention(self, hidden_states, cache, vllm_context):
+        """vLLM paged-attention route (serving on TPU only).
+
+        Projects Q/K/V, applies RoPE at the engine's per-token positions on
+        the layers that use it, and hands the (unexpanded) K/V to the shared
+        paged-attention bridge. SmolLM3 turns RoPE off on selected layers
+        via ``rope_layer_enabled_list``; those layers skip it here too.
+        """
+        input_shape = ops.shape(hidden_states)[:-1]
+        query = ops.reshape(
+            self.q_proj(hidden_states),
+            (*input_shape, self.num_attention_heads, self.head_dim),
+        )
+        kv_shape = (*input_shape, self.num_key_value_heads, self.head_dim)
+        key = ops.reshape(self.k_proj(hidden_states), kv_shape)
+        value = ops.reshape(self.v_proj(hidden_states), kv_shape)
+
+        if self.use_rope:
+            positions = ops.reshape(vllm_context.positions, input_shape)
+            cos, sin = self.rotary_embedding(query, positions=positions)
+            query, key = apply_rotary_pos_emb(
+                query, key, cos, sin, expansion_axis=2
+            )
+
+        # This rotary computes in float32, which promotes query and key
+        # past the KV cache's dtype. The kernel rejects the mismatch.
+        query = ops.cast(query, self.compute_dtype)
+        key = ops.cast(key, self.compute_dtype)
+        value = ops.cast(value, self.compute_dtype)
+
+        attention_output = vllm_paged_attention(
+            query,
+            key,
+            value,
+            self.scaling,
+            num_kv_heads=self.num_key_value_heads,
+        )
+        attention_output = self.o_proj(attention_output)
+        if cache is not None:
+            return attention_output, cache
+        return attention_output
+
     def _compute_attention(
         self, query, key, value, attention_mask=None, cache_update_index=None
     ):
@@ -357,13 +420,22 @@ class SmolLM3MLP(layers.Layer):
         self.mlp_bias = mlp_bias
 
         self.gate_proj = layers.Dense(
-            self.intermediate_size, use_bias=self.mlp_bias, name="gate_proj"
+            self.intermediate_size,
+            use_bias=self.mlp_bias,
+            dtype=self.dtype_policy,
+            name="gate_proj",
         )
         self.up_proj = layers.Dense(
-            self.intermediate_size, use_bias=self.mlp_bias, name="up_proj"
+            self.intermediate_size,
+            use_bias=self.mlp_bias,
+            dtype=self.dtype_policy,
+            name="up_proj",
         )
         self.down_proj = layers.Dense(
-            self.hidden_size, use_bias=self.mlp_bias, name="down_proj"
+            self.hidden_size,
+            use_bias=self.mlp_bias,
+            dtype=self.dtype_policy,
+            name="down_proj",
         )
 
     def build(self, input_shape):
@@ -469,6 +541,7 @@ class SmolLM3DecoderLayer(layers.Layer):
             max_position_embeddings=max_position_embeddings,
             rope_theta=rope_theta,
             partial_rotary_factor=partial_rotary_factor,
+            dtype=self.dtype_policy,
             name="self_attn",
         )
 
@@ -476,14 +549,21 @@ class SmolLM3DecoderLayer(layers.Layer):
             hidden_size=hidden_size,
             intermediate_size=intermediate_size,
             mlp_bias=mlp_bias,
+            dtype=self.dtype_policy,
             name="mlp",
         )
 
         self.input_layernorm = layers.RMSNormalization(
-            epsilon=layer_norm_epsilon, axis=-1, name="input_layernorm"
+            epsilon=layer_norm_epsilon,
+            axis=-1,
+            dtype=self.dtype_policy,
+            name="input_layernorm",
         )
         self.post_attention_layernorm = layers.RMSNormalization(
-            epsilon=layer_norm_epsilon, axis=-1, name="post_attention_layernorm"
+            epsilon=layer_norm_epsilon,
+            axis=-1,
+            dtype=self.dtype_policy,
+            name="post_attention_layernorm",
         )
 
         self.attention_type = layer_types[layer_idx]
@@ -691,6 +771,7 @@ class SmolLM3RotaryEmbedding(layers.Layer):
         self,
         x,
         start_index=0,
+        positions=None,
     ):
         """
         Forward pass for SmolLM3RotaryEmbedding.
@@ -698,12 +779,20 @@ class SmolLM3RotaryEmbedding(layers.Layer):
         Args:
             x: Input tensor, typically query or key states.
                Shape can vary, but the last dimension is head_dim.
-            position_ids: Tensor of position IDs of shape (batch_size, seq_len).
+            start_index: Position the sequence starts at, used during
+                cached decoding.
+            positions: Optional tensor of absolute positions, shaped
+                `(seq_len,)` or `(batch_size, seq_len)`. Takes precedence
+                over `start_index`, so tokens that are not contiguous can
+                each carry their own position.
         """
         batch_size = ops.shape(x)[0]
         seq_len = ops.shape(x)[1]
-        positions = ops.arange(seq_len, dtype="float32")
-        positions = positions + ops.cast(start_index, dtype="float32")
+        if positions is None:
+            positions = ops.arange(seq_len, dtype="float32")
+            positions = positions + ops.cast(start_index, dtype="float32")
+        else:
+            positions = ops.cast(positions, "float32")
 
         # inv_freq: (inv_freq_dim,) -> (1, inv_freq_dim, 1)
         # -> (batch, inv_freq_dim, 1)
@@ -714,14 +803,18 @@ class SmolLM3RotaryEmbedding(layers.Layer):
             inv_freq_expanded, (batch_size, ops.shape(self.inv_freq)[0], 1)
         )
 
-        # positions: (seq_len,) -> (1, 1, seq_len)
-        # -> (batch, 1, seq_len)
-        position_ids_expanded = ops.expand_dims(
-            ops.expand_dims(positions, axis=0), axis=0
-        )
-        position_ids_expanded = ops.broadcast_to(
-            position_ids_expanded, (batch_size, 1, seq_len)
-        )
+        if ops.ndim(positions) == 1:
+            # positions: (seq_len,) -> (1, 1, seq_len)
+            # -> (batch, 1, seq_len)
+            position_ids_expanded = ops.expand_dims(
+                ops.expand_dims(positions, axis=0), axis=0
+            )
+            position_ids_expanded = ops.broadcast_to(
+                position_ids_expanded, (batch_size, 1, seq_len)
+            )
+        else:
+            # positions: (batch, seq_len) -> (batch, 1, seq_len)
+            position_ids_expanded = ops.expand_dims(positions, axis=1)
 
         # matmul: (batch, inv_freq_dim, 1) @ (batch, 1, seq_len)
         # -> (batch, inv_freq_dim, seq_len)

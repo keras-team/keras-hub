@@ -54,6 +54,30 @@ class SmolLM3BackboneTest(TestCase):
             run_quantization_check=False,
         )
 
+    def test_dtype_reaches_sublayers(self):
+        # A layer built without an explicit `dtype` takes the global policy,
+        # not the policy of the layer constructing it, so `dtype` has to be
+        # handed down at every level. Left undone, `dtype="bfloat16"` sets
+        # only this model's own policy and the projections stay float32.
+        backbone = SmolLM3Backbone(**self.init_kwargs, dtype="bfloat16")
+        decoder = backbone.transformer_layers[0]
+        attention = decoder.self_attn
+
+        self.assertDTypeEqual(backbone(self.input_data), "bfloat16")
+        for layer in (
+            backbone.token_embedding,
+            backbone.norm,
+            decoder,
+            decoder.mlp,
+            decoder.input_layernorm,
+            attention,
+            attention.q_proj,
+            attention.k_proj,
+            attention.v_proj,
+            attention.o_proj,
+        ):
+            self.assertEqual(layer.compute_dtype, "bfloat16")
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
