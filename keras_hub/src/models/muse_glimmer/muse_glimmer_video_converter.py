@@ -118,15 +118,22 @@ class MuseGlimmerVideoConverter(VideoConverter):
 
         orig_h, orig_w = tf.shape(video)[1], tf.shape(video)[2]
         stride = tf.cast(self._patch_stride, "float32")
+        total_pixels = tf.cast(orig_h * orig_w, "float32")
+        max_pixels = tf.cast(self.max_pixels, "float32")
+        scale = tf.minimum(
+            1.0, tf.sqrt(max_pixels / tf.maximum(total_pixels, 1.0))
+        )
         target_h = tf.cast(
             tf.maximum(
-                tf.round(tf.cast(orig_h, "float32") / stride) * stride, stride
+                tf.round(tf.cast(orig_h, "float32") * scale / stride) * stride,
+                stride,
             ),
             "int32",
         )
         target_w = tf.cast(
             tf.maximum(
-                tf.round(tf.cast(orig_w, "float32") / stride) * stride, stride
+                tf.round(tf.cast(orig_w, "float32") * scale / stride) * stride,
+                stride,
             ),
             "int32",
         )
@@ -189,11 +196,15 @@ class MuseGlimmerVideoConverter(VideoConverter):
 
         orig_h, orig_w = int(ops.shape(video)[1]), int(ops.shape(video)[2])
         patch_stride = self._patch_stride
+        total_pixels = float(orig_h * orig_w)
+        scale = min(1.0, (self.max_pixels / total_pixels) ** 0.5)
         target_h = max(
-            round(orig_h / patch_stride) * patch_stride, patch_stride
+            round(orig_h * scale / patch_stride) * patch_stride,
+            patch_stride,
         )
         target_w = max(
-            round(orig_w / patch_stride) * patch_stride, patch_stride
+            round(orig_w * scale / patch_stride) * patch_stride,
+            patch_stride,
         )
         video = ops.image.resize(
             video,
