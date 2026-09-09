@@ -157,6 +157,66 @@ class TestMuseGlimmerConverter(TestCase):
         )
         self.assertEqual(keras_config["rope_max_wavelength"], 250000.0)
 
+    def test_load_image_converter_config(self):
+        processor_config = {
+            "image_processor": {
+                "image_mean": [0.5, 0.5, 0.5],
+                "image_std": [0.5, 0.5, 0.5],
+                "max_image_tokens": 4096,
+                "merge_size": 2,
+                "patch_size": 14,
+                "rescale_factor": 1.0 / 255.0,
+                "temporal_patch_size": 2,
+            }
+        }
+        with patch.object(
+            convert_muse_glimmer,
+            "load_json",
+            return_value=processor_config,
+        ):
+            config = convert_muse_glimmer.load_image_converter_config(
+                "unused", {"vision_config": {}}
+            )
+
+        self.assertEqual(config["patch_size"], 14)
+        self.assertEqual(config["patch_temporal"], 2)
+        self.assertEqual(config["merge_size"], 2)
+        self.assertEqual(config["max_image_tokens"], 4096)
+        self.assertEqual(config["scale"], [2.0 / 255.0] * 3)
+        self.assertEqual(config["offset"], [-1.0] * 3)
+
+    def test_load_video_converter_config(self):
+        processor_config = {
+            "video_processor": {
+                "fps": 2.0,
+                "image_mean": [0.5, 0.5, 0.5],
+                "image_std": [0.5, 0.5, 0.5],
+                "max_video_frame_tokens": 144,
+                "merge_size": 2,
+                "num_frames": 96,
+                "patch_size": 14,
+                "rescale_factor": 1.0 / 255.0,
+                "temporal_patch_size": 2,
+            }
+        }
+        with patch.object(
+            convert_muse_glimmer,
+            "load_json",
+            return_value=processor_config,
+        ):
+            config = convert_muse_glimmer.load_video_converter_config(
+                "unused", {"vision_config": {}}
+            )
+
+        self.assertEqual(config["patch_size"], 14)
+        self.assertEqual(config["patch_temporal"], 2)
+        self.assertEqual(config["merge_size"], 2)
+        self.assertEqual(config["fps"], 2.0)
+        self.assertEqual(config["num_frames"], 96)
+        self.assertEqual(config["max_video_frame_tokens"], 144)
+        self.assertEqual(config["scale"], [2.0 / 255.0] * 3)
+        self.assertEqual(config["offset"], [-1.0] * 3)
+
     def test_convert_backbone_config_with_vision(self):
         transformers_config = {
             "text_config": self._text_config(),

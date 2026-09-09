@@ -13,6 +13,64 @@ from keras_hub.src.utils.preset_utils import load_json
 backbone_cls = MuseGlimmerBackbone
 
 
+def _get_normalization(processor_config):
+    scale = [
+        processor_config["rescale_factor"] / value
+        for value in processor_config["image_std"]
+    ]
+    offset = [
+        -mean / std
+        for mean, std in zip(
+            processor_config["image_mean"], processor_config["image_std"]
+        )
+    ]
+    return scale, offset
+
+
+def load_image_converter_config(preset, transformers_config):
+    """Load image converter settings from the HuggingFace processor config."""
+    if "vision_config" not in transformers_config:
+        return None
+
+    processor_config = load_json(preset, "processor_config.json")[
+        "image_processor"
+    ]
+    scale, offset = _get_normalization(processor_config)
+    return {
+        "patch_size": processor_config["patch_size"],
+        "patch_temporal": processor_config["temporal_patch_size"],
+        "merge_size": processor_config["merge_size"],
+        "max_image_tokens": processor_config["max_image_tokens"],
+        "scale": scale,
+        "offset": offset,
+        "interpolation": "lanczos3",
+        "antialias": True,
+    }
+
+
+def load_video_converter_config(preset, transformers_config):
+    """Load video converter settings from the HuggingFace processor config."""
+    if "vision_config" not in transformers_config:
+        return None
+
+    processor_config = load_json(preset, "processor_config.json")[
+        "video_processor"
+    ]
+    scale, offset = _get_normalization(processor_config)
+    return {
+        "patch_size": processor_config["patch_size"],
+        "patch_temporal": processor_config["temporal_patch_size"],
+        "merge_size": processor_config["merge_size"],
+        "fps": processor_config["fps"],
+        "num_frames": processor_config["num_frames"],
+        "max_video_frame_tokens": processor_config["max_video_frame_tokens"],
+        "scale": scale,
+        "offset": offset,
+        "interpolation": "lanczos3",
+        "antialias": True,
+    }
+
+
 def _transpose(hf_tensor, _):
     return np.transpose(hf_tensor, axes=(1, 0))
 
