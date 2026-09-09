@@ -69,25 +69,20 @@ flags.DEFINE_bool(
 def _precompute_hf_outputs(hf_repo_id):
     """Load HF model, run all HF-side computations, return a data dict."""
 
-    print(f"-> Loading HF model from {hf_repo_id} (this may take a while) ...")
     hf_model = DiffusionGemmaForBlockDiffusion.from_pretrained(
         hf_repo_id,
         device_map="cpu",
         torch_dtype=torch.float32,
     )
     hf_model.eval()
-    print("-> HF model loaded. Loading processor ...")
     processor = AutoProcessor.from_pretrained(hf_repo_id)
-    print("-> HF processor loaded.")
 
     is_multimodal = (
         hasattr(hf_model.config, "vision_config")
         and hf_model.config.vision_config is not None
     )
 
-    print("-> Counting HF model parameters ...", flush=True)
     param_count = _count_hf_params(hf_model)
-    print(f"-> HF parameter count: {param_count:,}", flush=True)
 
     canvas_length = getattr(hf_model.config, "canvas_length", 256)
     vocab_size = len(processor.tokenizer)
@@ -129,10 +124,8 @@ def _precompute_hf_outputs(hf_repo_id):
         except Exception as e:
             print(f"⚠️  Image HF forward skipped: {e}")
 
-    print("-> Releasing HF model memory ...", flush=True)
     del hf_model, processor
     gc.collect()
-    print("-> HF model freed.")
 
     return {
         "param_count": param_count,
@@ -167,20 +160,11 @@ def _hf_forward(
     raw_image=None,
     decoder_input_ids=None,
 ):
-    """Run one HF forward pass and return decoder logits + optional generation.
+    """Run one HF forward pass and return decoder logits and generated text.
 
-    ``DiffusionGemmaForBlockDiffusion.forward()`` always runs both the encoder
-    (prompt → KV cache) and the decoder (canvas → logits via ``layer_scalar``).
-    ``hf_out.logits`` are decoder logits over ``decoder_input_ids``.  When
-    ``decoder_input_ids`` is None, the model auto-samples a *random* canvas —
-    always supply a fixed canvas so verification is deterministic.
-
-    When ``--skip_generate`` is not set, this function also runs
-    ``hf_model.generate(**hf_inputs)`` using the preset generation config and
-    returns the decoded generated tokens alongside the logits.
+    Always pass a fixed ``decoder_input_ids`` canvas. Without it, the model
+    samples a random canvas and breaks verification determinism.
     """
-    modality = "image" if raw_image is not None else "text"
-    print(f"   Preprocessing HF {modality} inputs ...", flush=True)
     proc_kwargs = {"text": prompt, "return_tensors": "pt"}
     if raw_image is not None:
         proc_kwargs["images"] = raw_image
@@ -190,10 +174,8 @@ def _hf_forward(
     if decoder_input_ids is not None:
         forward_inputs["decoder_input_ids"] = decoder_input_ids.cpu()
 
-    print(f"   Running HF {modality} forward pass ...", flush=True)
     with _no_grad():
         hf_out = hf_model(**forward_inputs, output_hidden_states=False)
-    print(f"   HF {modality} forward pass complete.", flush=True)
 
     logits = hf_out.logits.detach().cpu().float().numpy()
     input_ids = hf_inputs["input_ids"].numpy()
@@ -218,10 +200,6 @@ def _hf_forward(
         generated_text = "(skipped)"
     else:
         try:
-            print(
-                f"   Running HF {modality} generation ...",
-                flush=True,
-            )
             with _no_grad():
                 output = hf_model.generate(**hf_inputs)
             sequence = output[0]
@@ -231,7 +209,6 @@ def _hf_forward(
             generated_text = processor.decode(
                 sequence[prompt_length:], skip_special_tokens=True
             )
-            print(f"   HF {modality} generation complete.", flush=True)
         except Exception as e:
             print(f"⚠️  HF .generate() failed ({e}).")
 
@@ -257,25 +234,8 @@ def _kh_forward(
 ):
     """Run a full KH encoder + decoder forward pass and return canvas logits.
 
-    Mirrors ``DiffusionGemmaForBlockDiffusion.forward()``:
-      1. Encoder: causal attention over prompt → KV cache (uses
-         ``encoder_layer_scalar`` via ``_encode_prompt``).
-      2. Decoder: one bidirectional denoising step over ``canvas_token_ids``
-         using the encoder KV cache (uses ``layer_scalar`` via
-         ``_decode_canvas_step``).
-
-    Args:
-        diffusion_lm: ``DiffusionGemmaBlockDiffusionLM`` instance.
-        token_ids: int32 array ``(B, prompt_len)`` — encoder input.
-        padding_mask: int32 array ``(B, prompt_len)``.
-        canvas_token_ids: int32 array ``(B, canvas_len)`` — must match the
-            ``decoder_input_ids`` passed to the HF model.
-        pixel_values, pixel_position_ids, vision_indices, vision_mask:
-            Optional vision inputs.  When ``pixel_values`` is ``None`` the
-            vision encoder is skipped (text-only encoder path).
-
-    Returns:
-        float32 numpy array ``(B, canvas_len, vocab_size)``.
+    ``canvas_token_ids`` must match the ``decoder_input_ids`` passed to the
+    HF model.
     """
     inputs = {
         "token_ids": ops.convert_to_tensor(token_ids),
@@ -291,7 +251,6 @@ def _kh_forward(
 
     with torch.no_grad():
         # Step 1: encoder — builds KV cache over the prompt.
-        print("   Building KerasHub encoder KV cache ...", flush=True)
         encoder_kv_cache, prompt_length = diffusion_lm._encode_prompt(inputs)
 
         # Step 2: canvas embeddings (first step → self-conditioning is no-op).
@@ -300,7 +259,6 @@ def _kh_forward(
         )
 
         # Step 3: decoder — one bidirectional denoising step.
-        print("   Running KerasHub canvas decoder step ...", flush=True)
         prompt_padding_mask = inputs.get("padding_mask", None)
         hidden = diffusion_lm._decode_canvas_step(
             canvas_embeds,
@@ -390,12 +348,10 @@ def _test_generate(
             }
         else:
             kh_inputs = prompt
-        print(f"-> Running KerasHub {label} generation ...", flush=True)
         kh_output = diffusion_lm.generate(
             kh_inputs,
             **generate_kwargs,
         )
-        print(f"-> KerasHub {label} generation complete.", flush=True)
     except Exception as e:
         print(f"⚠️  [{label}] KH .generate() failed: {e}")
         return
@@ -482,16 +438,15 @@ def _verify(diffusion_lm, hf_data):
     """Compare KerasHub model against pre-computed HF outputs."""
     backbone = diffusion_lm.backbone
 
-    # --- Parameter count ---
+    # --- Parameter Count ---
     print("\n--- Parameter Count ---")
     hf_params = hf_data["param_count"]
-    print("   Counting KerasHub backbone parameters ...", flush=True)
     unique_weights = {id(w): w for w in backbone.trainable_weights}.values()
     kh_params = sum(int(np.prod(weight.shape)) for weight in unique_weights)
     print(f"   HF params: {hf_params:,}")
     print(f"   KH params: {kh_params:,}")
     np.testing.assert_equal(kh_params, hf_params)
-    print(f"✅ Parameter counts match: {kh_params:,}")
+    print(f"✓ Parameter counts match: {kh_params:,}")
 
     text_canvas_token_ids = hf_data["text_canvas_token_ids"]
     image_canvas_token_ids = hf_data["image_canvas_token_ids"]
@@ -535,8 +490,8 @@ def _verify(diffusion_lm, hf_data):
     else:
         print("⚠️  Preprocessor not available; skipping token ID check.")
 
-    # --- Text ---
-    print("\n--- Numerics Verification: text ---")
+    # --- Numerics Verification ---
+    print("\n--- Numerics Verification ---")
     kh_logits = _kh_forward(
         diffusion_lm,
         hf_data["text_input_ids"].astype(np.int32),
@@ -550,7 +505,6 @@ def _verify(diffusion_lm, hf_data):
     # exercise the vision encoder end-to-end.  Falls back to text-only encoder
     # if the image placeholder ID is unavailable.
     if hf_data["image"] is not None:
-        print("\n--- Numerics Verification: image ---")
         try:
             img = hf_data["image"]
 
@@ -639,20 +593,13 @@ def _save_preset(hf_preset, preset_name, save_dtype, diffusion_lm=None):
     print(f"\n-> Saving model in {save_dtype} to {save_path} …")
 
     if save_dtype == "bfloat16":
-        print(
-            "-> Reloading KerasHub model in bfloat16 "
-            "(this may take a while) ...",
-            flush=True,
-        )
         diffusion_lm_bf16 = (
             keras_hub.models.DiffusionGemmaBlockDiffusionLM.from_preset(
                 hf_preset, dtype="bfloat16"
             )
         )
-        print("-> bfloat16 model loaded. Writing preset files ...", flush=True)
         diffusion_lm_bf16.save_to_preset(save_path)
     else:
-        print("-> Writing preset files ...", flush=True)
         diffusion_lm.save_to_preset(save_path)
 
     print(f"-> Preset saved to {save_path}")
@@ -670,18 +617,12 @@ def main(_):
     hf_preset = f"hf://{hf_repo_id}"
 
     hf_data = _precompute_hf_outputs(hf_repo_id)
-    print(
-        f"-> Loading DiffusionGemmaBlockDiffusionLM from {hf_preset} "
-        "(this may take a while) ...",
-        flush=True,
-    )
     diffusion_lm = keras_hub.models.DiffusionGemmaBlockDiffusionLM.from_preset(
         hf_preset, dtype="float32"
     )
     print("✓ All weights loaded")
     _verify(diffusion_lm, hf_data)
 
-    print("-> Releasing verification data ...", flush=True)
     del hf_data
     gc.collect()
 
