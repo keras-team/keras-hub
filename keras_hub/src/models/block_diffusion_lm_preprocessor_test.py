@@ -99,6 +99,16 @@ class TestBlockDiffusionLMPreprocessor(TestCase):
         self.assertAllEqual(results[0], "the quick brown fox")
         self.assertAllEqual(results[1], "the quick")
 
+    def test_generate_postprocess_dict_uses_real_padding_mask(self):
+        # Positions 3-4 hold non-pad ids but are masked False, simulating
+        # tokens sampled after a stop token — must be stripped via the mask.
+        canvas = {
+            "token_ids": np.array([[9, 14, 10, 12]], dtype="int32"),
+            "padding_mask": np.array([[1, 1, 0, 0]], dtype="bool"),
+        }
+        result = self.preprocessor.generate_postprocess(canvas)
+        self.assertAllEqual(result[0], "the quick")
+
     def test_serialization(self):
         self.run_serialization_test(self.preprocessor)
 

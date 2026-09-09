@@ -10,30 +10,38 @@ from keras_hub.src.utils.transformers import convert_diffusion_gemma
 class ConvertDiffusionGemmaTest(TestCase):
     def test_convert_backbone_config(self):
         transformers_config = {
-            "model_type": "diffusion_gemma_text",
-            "vocab_size": 256,
-            "num_hidden_layers": 2,
-            "num_attention_heads": 4,
-            "num_key_value_heads": 2,
-            "hidden_size": 64,
-            "intermediate_size": 128,
-            "head_dim": 16,
-            "global_head_dim": 32,
-            "num_global_key_value_heads": 1,
-            "attn_logit_softcapping": 50.0,
-            "final_logit_softcapping": None,
-            "sliding_window": 512,
-            "rms_norm_eps": 1e-6,
-            "rope_parameters": {
-                "full_attention": {"rope_theta": 1000000.0},
-                "sliding_attention": {"rope_theta": 10000.0},
+            "model_type": "diffusion_gemma",
+            "text_config": {
+                "vocab_size": 256,
+                "num_hidden_layers": 4,
+                "num_attention_heads": 4,
+                "num_key_value_heads": 2,
+                "hidden_size": 64,
+                "intermediate_size": 128,
+                "head_dim": 16,
+                "global_head_dim": 32,
+                "num_global_key_value_heads": 1,
+                "attn_logit_softcapping": 50.0,
+                "final_logit_softcapping": None,
+                "sliding_window": 512,
+                "rms_norm_eps": 1e-6,
+                "rope_parameters": {
+                    "full_attention": {"rope_theta": 1000000.0},
+                    "sliding_attention": {"rope_theta": 10000.0},
+                },
+                "layer_types": [
+                    "sliding_attention",
+                    "full_attention",
+                    "sliding_attention",
+                    "full_attention",
+                ],
             },
-            "layer_types": ["full_attention", "sliding_attention"],
         }
         kwargs = convert_diffusion_gemma.convert_backbone_config(
             transformers_config
         )
-        self.assertEqual(kwargs["num_layers"], 2)
+        self.assertEqual(kwargs["num_layers"], 4)
+        self.assertEqual(kwargs["sliding_window_pattern"], 2)
         self.assertEqual(kwargs["hidden_dim"], 64)
         self.assertEqual(kwargs["vocabulary_size"], 256)
         self.assertEqual(kwargs["global_head_dim"], 32)

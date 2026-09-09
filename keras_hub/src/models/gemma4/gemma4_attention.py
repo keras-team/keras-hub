@@ -772,79 +772,18 @@ class Gemma4VisionAttention(keras.layers.Layer):
         results = ops.matmul(attention_softmax, v)  # (B, Q, T, H)
         return ops.transpose(results, (0, 2, 1, 3))
 
-    def _project_attention_output(self, attention_vec):
-        """Project flattened heads using HuggingFace's linear ordering."""
-        dense = self.output_dense
-        x = attention_vec
-        if dense.use_clipped_linears:
-            x = ops.clip(
-                x,
-                ops.cast(dense.input_min, x.dtype),
-                ops.cast(dense.input_max, x.dtype),
-            )
-
-        shape = ops.shape(x)
-        # Keep the flattened feature size explicit so zero-sized inputs remain
-        # representable on the Torch backend.
-        x = ops.reshape(
-            x,
-            (shape[0], shape[1], self.num_query_heads * self.head_dim),
-        )
-        kernel = ops.reshape(
-            dense.dense.kernel,
-            (self.num_query_heads * self.head_dim, self.hidden_dim),
-        )
-        x = ops.matmul(x, kernel)
-
-        if dense.use_clipped_linears:
-            x = ops.clip(
-                x,
-                ops.cast(dense.output_min, x.dtype),
-                ops.cast(dense.output_max, x.dtype),
-            )
-        return x
-
-    def _project_qkv(self, x, dense, num_heads):
-        """Project Q/K/V with the same flattened linear as HuggingFace."""
-        if dense.use_clipped_linears:
-            x = ops.clip(
-                x,
-                ops.cast(dense.input_min, x.dtype),
-                ops.cast(dense.input_max, x.dtype),
-            )
-
-        shape = ops.shape(x)
-        kernel = ops.transpose(dense.dense.kernel, (1, 0, 2))
-        kernel = ops.reshape(
-            kernel,
-            (self.hidden_dim, num_heads * self.head_dim),
-        )
-        x = ops.matmul(x, kernel)
-        x = ops.reshape(
-            x,
-            (shape[0], shape[1], num_heads, self.head_dim),
-        )
-
-        if dense.use_clipped_linears:
-            x = ops.clip(
-                x,
-                ops.cast(dense.output_min, x.dtype),
-                ops.cast(dense.output_max, x.dtype),
-            )
-        return x
-
     def call(self, x, attention_mask=None, position_ids=None, training=False):
-        query = self._project_qkv(x, self.query_dense, self.num_query_heads)
+        query = self.query_dense(x)
         query = self.query_norm(query)
         if position_ids is not None:
             query = self._apply_rope(query, position_ids)
 
-        key = self._project_qkv(x, self.key_dense, self.num_key_value_heads)
+        key = self.key_dense(x)
         key = self.key_norm(key)
         if position_ids is not None:
             key = self._apply_rope(key, position_ids)
 
-        value = self._project_qkv(x, self.value_dense, self.num_key_value_heads)
+        value = self.value_dense(x)
         value = self.value_norm(value)
 
         # Vision doesn't utilize padding cache maps over generations
@@ -862,7 +801,7 @@ class Gemma4VisionAttention(keras.layers.Layer):
         # HF's behavior where padding patches accumulate meaningful hidden
         # states that contribute to pool bin 0 in the pooler.
 
-        attention_output = self._project_attention_output(attention_vec)
+        attention_output = self.output_dense(attention_vec)
         return attention_output, None
 
     def compute_output_shape(self, input_shape):

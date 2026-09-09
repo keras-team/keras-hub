@@ -38,6 +38,44 @@ class EntropyBoundSamplerTest(TestCase):
             state = sampler.initialize_state(canvas)
         return sampler._sample_step(canvas, logits, step, state)
 
+    def test_raises_clear_error_on_autoregressive_call_signature(self):
+        # A CausalLM's generate_step calls its sampler with these keyword
+        # arguments, EntropyBoundSampler must reject this with a clear
+        # error.
+        with self.assertRaisesRegex(TypeError, "block-diffusion sampler"):
+            self.sampler(
+                next=lambda *a: None,
+                prompt=ops.zeros((1, 4), dtype="int32"),
+                cache=None,
+                index=0,
+                mask=None,
+                stop_token_ids=None,
+                hidden_states=None,
+                model=None,
+            )
+
+    def test_masked_logits_do_not_produce_nan_entropy(self):
+        # A -inf-masked vocab entry gives probs=0 with log_probs=-inf there.
+        # probs * log_probs must not become NaN and stall commitment for
+        # every step (the row would otherwise re-noise forever).
+        token_ids = np.ones(
+            (self.batch_size, self.canvas_length), dtype="int32"
+        )
+        canvas = ops.array(token_ids)
+        logits = self._make_peaked_logits(token_ids)
+        mask = np.zeros(ops.convert_to_numpy(logits).shape, dtype="float32")
+        mask[..., 0] = -np.inf
+        logits = logits + ops.convert_to_tensor(mask, dtype="float32")
+
+        new_canvas, _, _, _ = self._sample_step(
+            self.sampler, canvas, logits, step=0
+        )
+        new_canvas_np = ops.convert_to_numpy(new_canvas)
+
+        self.assertFalse(np.any(np.isnan(new_canvas_np)))
+        expected = ops.argmax(logits, axis=-1)
+        self.assertAllEqual(new_canvas, expected)
+
     def test_infers_vocabulary_size_from_logits(self):
         sampler = EntropyBoundSampler(seed=42)
         canvas = ops.zeros((self.batch_size, self.canvas_length), dtype="int32")

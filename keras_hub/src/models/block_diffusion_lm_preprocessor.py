@@ -29,8 +29,10 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
 
     Args:
         tokenizer: A `keras_hub.tokenizers.Tokenizer` instance.
-        sequence_length: int. Maximum total sequence length (prompt +
-            canvas). Defaults to `256`.
+        sequence_length: int. Maximum prompt sequence length. During
+            generation, the canvas is packed separately, so the total model
+            input length is then `sequence_length + canvas_length`.
+            Defaults to `256`.
         canvas_length: int. Number of canvas (mask) tokens appended after
             the prompt during generation preprocessing. Defaults to `256`.
         add_start_token: bool. Whether to prepend the start token to the
@@ -162,11 +164,17 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
         if not self.built:
             self.build(None)
         ids_to_strip = getattr(self.tokenizer, "special_token_ids", [])
-        was_1d = keras.ops.ndim(x) == 1
-        # All canvas positions are valid (no padding); mask=all-True strips
-        # only special tokens.
-        mask = keras.ops.ones_like(x, dtype="bool")
-        token_ids = strip_to_ragged_python(x, mask, ids_to_strip)
+        if isinstance(x, dict):
+            # From generate_step when stop_token_ids is set: mask out
+            # positions after the first stop token.
+            token_ids = x["token_ids"]
+            mask = keras.ops.cast(x["padding_mask"], "bool")
+        else:
+            # No stop tokens tracked — every position is valid.
+            token_ids = x
+            mask = keras.ops.ones_like(token_ids, dtype="bool")
+        was_1d = keras.ops.ndim(token_ids) == 1
+        token_ids = strip_to_ragged_python(token_ids, mask, ids_to_strip)
         if was_1d:
             return self.tokenizer.detokenize([token_ids])[0]
         return self.tokenizer.detokenize(token_ids)
@@ -176,16 +184,22 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
         if not self.built:
             self.build(None)
         ids_to_strip = self.tokenizer.special_token_ids
-        mask = keras.ops.ones_like(x, dtype="bool")
-        token_ids = strip_to_ragged(x, mask, ids_to_strip)
+        if isinstance(x, dict):
+            token_ids = x["token_ids"]
+            mask = keras.ops.cast(x["padding_mask"], "bool")
+        else:
+            token_ids = x
+            mask = keras.ops.ones_like(token_ids, dtype="bool")
+        token_ids = strip_to_ragged(token_ids, mask, ids_to_strip)
         return self.tokenizer.detokenize(token_ids)
 
     def generate_postprocess(self, x):
         """Convert denoised integer tokens back to strings.
 
         Args:
-            x: int tensor of shape `(B, canvas_length)` produced by the
-                denoising loop.
+            x: int tensor of shape `(B, canvas_length)` when
+                `stop_token_ids=None`, or a `{"token_ids", "padding_mask"}`
+                dict from `generate_step` otherwise.
 
         Returns:
             String or list of strings.

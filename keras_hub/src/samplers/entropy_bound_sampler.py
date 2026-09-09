@@ -3,11 +3,11 @@ from keras import ops
 from keras import random
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.samplers.sampler import Sampler
+from keras_hub.src.samplers.diffusion_sampler import DiffusionSampler
 
 
 @keras_hub_export("keras_hub.samplers.EntropyBoundSampler")
-class EntropyBoundSampler(Sampler):
+class EntropyBoundSampler(DiffusionSampler):
     """Entropy-bound sampler for discrete block-diffusion generation.
 
     This sampler implements an entropy-bound decoding algorithm for use with
@@ -89,8 +89,11 @@ class EntropyBoundSampler(Sampler):
         # Per-token entropy: H[i] = -sum(softmax(l) * log_softmax(l))
         log_probs = ops.log_softmax(logits, axis=-1)
         probs = ops.exp(log_probs)
+        # A masked vocab entry (logit=-inf) gives probs=0, log_probs=-inf,
+        # so probs * log_probs is 0 * -inf = NaN. By convention 0 * log(0)
+        # is 0 in entropy, so guard against that before summing.
         # H shape: (B, canvas_length)
-        H = -ops.sum(probs * log_probs, axis=-1)
+        H = -ops.sum(ops.where(probs > 0, probs * log_probs, 0.0), axis=-1)
 
         sorted_H = ops.sort(H, axis=-1)
         sort_idx = ops.argsort(H, axis=-1)
@@ -153,7 +156,17 @@ class EntropyBoundSampler(Sampler):
         )
         return new_canvas, stop, cur_argmax, state
 
-    def __call__(self, next, canvas, max_steps, model=None):
+    def __call__(self, next, canvas=None, max_steps=None, model=None, **kwargs):
+        if kwargs or canvas is None or max_steps is None:
+            raise TypeError(
+                "`EntropyBoundSampler` is a block-diffusion sampler (see "
+                "`keras_hub.samplers.DiffusionSampler`) and only supports "
+                "`BlockDiffusionLM`-style models — it cannot be used as "
+                "the `sampler` for a standard autoregressive `CausalLM` "
+                "model. Expected call arguments `(next, canvas, "
+                "max_steps, model=None)`. Received unexpected keyword "
+                f"arguments: {sorted(kwargs)}."
+            )
         state = self.initialize_state(canvas)
         logits = next(canvas, None, ops.convert_to_tensor(0, dtype="int32"))
         canvas, stop, argmax_canvas, state = self._sample_step(

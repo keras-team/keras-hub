@@ -34,59 +34,37 @@ backbone_cls = DiffusionGemmaBackbone
 def convert_backbone_config(transformers_config):
     """Map a DiffusionGemma Transformers config → DiffusionGemmaBackbone
     kwargs."""
-    model_type = transformers_config.get("model_type", "diffusion_gemma")
-    is_text_only = model_type == "diffusion_gemma_text"
+    text_cfg = transformers_config["text_config"]
+    # image_size is not present in the HF vision_config; 896 is the fixed
+    # positional-embedding size used across all DiffusionGemma checkpoints.
+    image_size = 896
 
-    if is_text_only:
-        text_cfg = transformers_config
-        vision_encoder = None
-        image_size = None
-    else:
-        text_cfg = transformers_config["text_config"]
-        # image_size is not present in the HF vision_config; 896 is the fixed
-        # positional-embedding size used across all DiffusionGemma checkpoints.
-        image_size = 896
-
-        if "vision_config" in transformers_config:
-            vis_cfg = transformers_config["vision_config"]
-            vision_encoder = Gemma4VisionEncoder(
-                image_size=image_size,
-                patch_size=vis_cfg["patch_size"],
-                num_heads=vis_cfg["num_attention_heads"],
-                hidden_dim=vis_cfg["hidden_size"],
-                num_layers=vis_cfg["num_hidden_layers"],
-                intermediate_dim=vis_cfg["intermediate_size"],
-                head_dim=vis_cfg["head_dim"],
-                num_key_value_heads=vis_cfg["num_key_value_heads"],
-                output_dim=text_cfg["hidden_size"],
-                pool_size=vis_cfg["pooling_kernel_size"],
-                position_embedding_size=vis_cfg["position_embedding_size"],
-                rope_max_wavelength=vis_cfg["rope_parameters"]["rope_theta"],
-                layer_norm_epsilon=vis_cfg["rms_norm_eps"],
-                use_clipped_linears=vis_cfg["use_clipped_linears"],
-                standardize=vis_cfg["standardize"],
-            )
-        else:
-            vision_encoder = None
-
-    if (
-        "layer_types" in text_cfg
-        and text_cfg["layer_types"]
-        and len(text_cfg["layer_types"]) > 1
-    ):
-        layer_types = text_cfg["layer_types"]
-        try:
-            first_idx = layer_types.index("full_attention")
-            second_idx = layer_types.index("full_attention", first_idx + 1)
-            sliding_window_pattern = second_idx - first_idx
-        except ValueError:
-            sliding_window_pattern = 6
-    else:
-        sliding_window_pattern = (
-            text_cfg.get("_sliding_window_pattern")
-            or text_cfg.get("sliding_window_pattern")
-            or 6
+    if "vision_config" in transformers_config:
+        vis_cfg = transformers_config["vision_config"]
+        vision_encoder = Gemma4VisionEncoder(
+            image_size=image_size,
+            patch_size=vis_cfg["patch_size"],
+            num_heads=vis_cfg["num_attention_heads"],
+            hidden_dim=vis_cfg["hidden_size"],
+            num_layers=vis_cfg["num_hidden_layers"],
+            intermediate_dim=vis_cfg["intermediate_size"],
+            head_dim=vis_cfg["head_dim"],
+            num_key_value_heads=vis_cfg["num_key_value_heads"],
+            output_dim=text_cfg["hidden_size"],
+            pool_size=vis_cfg["pooling_kernel_size"],
+            position_embedding_size=vis_cfg["position_embedding_size"],
+            rope_max_wavelength=vis_cfg["rope_parameters"]["rope_theta"],
+            layer_norm_epsilon=vis_cfg["rms_norm_eps"],
+            use_clipped_linears=vis_cfg["use_clipped_linears"],
+            standardize=vis_cfg["standardize"],
         )
+    else:
+        vision_encoder = None
+
+    layer_types = text_cfg["layer_types"]
+    first_idx = layer_types.index("full_attention")
+    second_idx = layer_types.index("full_attention", first_idx + 1)
+    sliding_window_pattern = second_idx - first_idx
 
     rope_params = text_cfg["rope_parameters"]
     global_rope_partial_rotary_factor = rope_params.get(
@@ -100,9 +78,6 @@ def convert_backbone_config(transformers_config):
         global_rope_theta = text_cfg.get("rope_theta")
     if local_rope_theta is None:
         local_rope_theta = text_cfg.get("rope_theta")
-
-    hf_bidir = text_cfg.get("use_bidirectional_attention")
-    use_vision_bidirectional_attention = hf_bidir == "vision"
 
     enable_moe_block = text_cfg.get("enable_moe_block") or bool(
         text_cfg.get("num_experts", 0)
@@ -139,9 +114,6 @@ def convert_backbone_config(transformers_config):
             or text_cfg.get("expert_intermediate_size")
         ),
         "num_experts_per_token": text_cfg.get("top_k_experts") or 8,
-        "use_vision_bidirectional_attention": (
-            use_vision_bidirectional_attention
-        ),
     }
 
 
@@ -167,27 +139,30 @@ def _convert_vision_encoder(vision_encoder, loader, transformers_config):
     image_encoder = vision_encoder.get_layer("image_encoder")
     patch_embedder = image_encoder.patch_embedder
 
-    vis_prefix = "model.encoder.vision_tower"
-
     loader.port_weight(
         keras_variable=patch_embedder.input_proj.kernel,
-        hf_weight_key=f"{vis_prefix}.patch_embedder.input_proj.weight",
+        hf_weight_key=(
+            "model.encoder.vision_tower.patch_embedder.input_proj.weight"
+        ),
         hook_fn=lambda x, _: np.transpose(x),
     )
     loader.port_weight(
         keras_variable=patch_embedder.position_embedding_table,
-        hf_weight_key=f"{vis_prefix}.patch_embedder.position_embedding_table",
+        hf_weight_key=(
+            "model.encoder.vision_tower.patch_embedder.position_embedding_table"
+        ),
     )
 
     for i, block in enumerate(image_encoder.encoder_blocks):
-        vis_layer_prefix = f"{vis_prefix}.encoder.layers.{i}"
+        vis_layer_prefix = f"model.encoder.vision_tower.encoder.layers.{i}"
         _convert_decoder_block_weights(block, vis_layer_prefix, loader)
 
-    projector_prefix = "model.encoder.embed_vision"
     vision_output = vision_encoder.get_layer("vision_output_encoder")
     loader.port_weight(
         keras_variable=vision_output.vision_input_projection.kernel,
-        hf_weight_key=f"{projector_prefix}.embedding_projection.weight",
+        hf_weight_key=(
+            "model.encoder.embed_vision.embedding_projection.weight"
+        ),
         hook_fn=lambda x, _: np.transpose(x),
     )
 
@@ -195,20 +170,20 @@ def _convert_vision_encoder(vision_encoder, loader, transformers_config):
     if vis_cfg.get("standardize", False):
         loader.port_weight(
             keras_variable=vision_output.std_bias,
-            hf_weight_key=f"{vis_prefix}.std_bias",
+            hf_weight_key="model.encoder.vision_tower.std_bias",
         )
         loader.port_weight(
             keras_variable=vision_output.std_scale,
-            hf_weight_key=f"{vis_prefix}.std_scale",
+            hf_weight_key="model.encoder.vision_tower.std_scale",
         )
 
 
-def _convert_decoder_block(decoder_layer, layer_idx, loader, hf_key_fn):
+def _convert_decoder_block(decoder_layer, layer_idx, loader):
     """Port a single DiffusionGemmaTransformerLayer from HF."""
-    layer_prefix = f"layers.{layer_idx}"
+    layer_prefix = f"model.decoder.layers.{layer_idx}"
 
     def layer_key(attr):
-        return hf_key_fn(f"{layer_prefix}.{attr}")
+        return f"{layer_prefix}.{attr}"
 
     # Layer norms
     loader.port_weight(
@@ -366,21 +341,9 @@ def _convert_decoder_block(decoder_layer, layer_idx, loader, hf_key_fn):
 
 
 def convert_weights(backbone, loader, transformers_config):
-    model_type = transformers_config.get("model_type", "diffusion_gemma")
-
-    # Text-only variant: weights live directly under "model.*".
-    # Full model: the decoder transformer is under "model.decoder.*".
-    if model_type == "diffusion_gemma_text":
-        text_prefix = "model"
-    else:
-        text_prefix = "model.decoder"
-
-    def hf_key(suffix):
-        return f"{text_prefix}.{suffix}"
-
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
-        hf_weight_key=hf_key("embed_tokens.weight"),
+        hf_weight_key="model.decoder.embed_tokens.weight",
     )
 
     vision_encoder = backbone.vision_encoder
@@ -389,7 +352,7 @@ def convert_weights(backbone, loader, transformers_config):
 
     for i in range(backbone.num_layers):
         decoder_layer = backbone.get_layer(f"decoder_block_{i}")
-        _convert_decoder_block(decoder_layer, i, loader, hf_key)
+        _convert_decoder_block(decoder_layer, i, loader)
 
     # Port encoder-pass per-layer scalars.
     for i in range(backbone.num_layers):
@@ -403,31 +366,30 @@ def convert_weights(backbone, loader, transformers_config):
         )
 
     sc = backbone.diffusion_self_conditioning
-    hf_sc_prefix = "model.decoder.self_conditioning"
     loader.port_weight(
         keras_variable=sc.pre_norm.scale,
-        hf_weight_key=f"{hf_sc_prefix}.pre_norm.weight",
+        hf_weight_key="model.decoder.self_conditioning.pre_norm.weight",
     )
     loader.port_weight(
         keras_variable=sc.gate_proj.kernel,
-        hf_weight_key=f"{hf_sc_prefix}.gate_proj.weight",
+        hf_weight_key="model.decoder.self_conditioning.gate_proj.weight",
         hook_fn=lambda x, _: np.transpose(x),
     )
     loader.port_weight(
         keras_variable=sc.up_proj.kernel,
-        hf_weight_key=f"{hf_sc_prefix}.up_proj.weight",
+        hf_weight_key="model.decoder.self_conditioning.up_proj.weight",
         hook_fn=lambda x, _: np.transpose(x),
     )
     loader.port_weight(
         keras_variable=sc.down_proj.kernel,
-        hf_weight_key=f"{hf_sc_prefix}.down_proj.weight",
+        hf_weight_key="model.decoder.self_conditioning.down_proj.weight",
         hook_fn=lambda x, _: np.transpose(x),
     )
     # post_norm has no learnable scale (Gemma4VNorm) — no weight to port.
 
     loader.port_weight(
         keras_variable=backbone.get_layer("final_normalization").scale,
-        hf_weight_key=hf_key("norm.weight"),
+        hf_weight_key="model.decoder.norm.weight",
     )
 
     return backbone

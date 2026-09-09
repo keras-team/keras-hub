@@ -64,7 +64,7 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_dinov3
         elif model_type == "esm":
             self.converter = convert_esm
-        elif model_type in ("diffusion_gemma", "diffusion_gemma_text"):
+        elif model_type == "diffusion_gemma":
             self.converter = convert_diffusion_gemma
         elif model_type in ("gemma", "gemma2"):
             self.converter = convert_gemma
