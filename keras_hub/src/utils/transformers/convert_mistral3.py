@@ -76,6 +76,18 @@ def load_image_converter_config(preset, transformers_config):
     vision_config = transformers_config["vision_config"]
     if check_file_exists(preset, "preprocessor_config.json"):
         preprocessor_config = load_json(preset, "preprocessor_config.json")
+    elif check_file_exists(preset, "processor_config.json"):
+        # Newer Mistral3 checkpoints (e.g. Ministral 3, Shieldstral) nest the
+        # image processor fields under `image_processor` in
+        # `processor_config.json` instead of a standalone
+        # `preprocessor_config.json`.
+        preprocessor_config = load_json(preset, "processor_config.json").get(
+            "image_processor"
+        )
+    else:
+        preprocessor_config = None
+
+    if preprocessor_config is not None:
         mean = preprocessor_config["image_mean"]
         std = preprocessor_config["image_std"]
         rescale_factor = preprocessor_config["rescale_factor"]
@@ -381,7 +393,13 @@ def _port_vision_weights(backbone, loader):
 
 
 def convert_weights(backbone, loader, transformers_config):
-    tie_word_embeddings = transformers_config.get("tie_word_embeddings", False)
+    # `tie_word_embeddings` is a text-model property; some checkpoints (e.g.
+    # Ministral 3) set it only in `text_config`, not at the top level.
+    text_config = transformers_config.get("text_config", {})
+    tie_word_embeddings = text_config.get(
+        "tie_word_embeddings",
+        transformers_config.get("tie_word_embeddings", False),
+    )
     _port_text_weights(
         backbone,
         loader,
