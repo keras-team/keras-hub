@@ -62,6 +62,9 @@ from keras_hub.src.models.gpt_neo_x.gpt_neo_x_tokenizer import (
 from keras_hub.src.models.gpt_oss.gpt_oss_tokenizer import (
     GptOssTokenizer as GptOssTokenizer,
 )
+from keras_hub.src.models.hrm_text.hrm_text_tokenizer import (
+    HrmTextTokenizer as HrmTextTokenizer,
+)
 from keras_hub.src.models.llama.llama_tokenizer import (
     LlamaTokenizer as LlamaTokenizer,
 )
