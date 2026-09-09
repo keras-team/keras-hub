@@ -148,6 +148,56 @@ class TestTask(TestCase):
             10000.0,
         )
 
+    def test_convert_backbone_config_yarn_rope(self):
+        # Ministral 3 style checkpoints (e.g. Ministral 3, Shieldstral,
+        # Devstral 2) scale the text model's rotary embeddings with YaRN.
+        transformers_config = {
+            "text_config": {
+                "vocab_size": 100,
+                "num_hidden_layers": 2,
+                "num_attention_heads": 4,
+                "hidden_size": 32,
+                "intermediate_size": 48,
+                "num_key_value_heads": 2,
+                "rope_parameters": {
+                    "rope_theta": 1_000_000.0,
+                    "rope_type": "yarn",
+                    "factor": 16.0,
+                    "beta_fast": 32.0,
+                    "beta_slow": 1.0,
+                    "original_max_position_embeddings": 16384,
+                },
+                "rms_norm_eps": 1e-5,
+                "sliding_window": None,
+            },
+            "vision_config": {
+                "hidden_size": 16,
+                "intermediate_size": 24,
+                "num_hidden_layers": 2,
+                "num_attention_heads": 4,
+                "num_channels": 3,
+                "image_size": 32,
+                "patch_size": 8,
+                "hidden_act": "gelu",
+                "attention_dropout": 0.0,
+                "rope_parameters": {"rope_theta": 10000.0},
+            },
+            "image_token_index": 10,
+            "spatial_merge_size": 2,
+            "projector_hidden_act": "gelu",
+            "multimodal_projector_bias": False,
+        }
+        keras_config = convert_mistral3.convert_backbone_config(
+            transformers_config
+        )
+        self.assertEqual(keras_config["rope_type"], "yarn")
+        self.assertEqual(keras_config["rope_scaling_factor"], 16.0)
+        self.assertEqual(keras_config["beta_fast"], 32.0)
+        self.assertEqual(keras_config["beta_slow"], 1.0)
+        self.assertEqual(
+            keras_config["original_max_position_embeddings"], 16384
+        )
+
     def test_load_image_converter_config_without_preprocessor_config(self):
         # Some checkpoints (e.g. Mistral Small 3.2) ship no
         # `preprocessor_config.json`; the image normalization mean/std
@@ -170,6 +220,39 @@ class TestTask(TestCase):
         expected_scale = [(1 / 255) / s for s in DATASET_STD]
         self.assertAllClose(config["offset"], expected_offset)
         self.assertAllClose(config["scale"], expected_scale)
+        self.assertEqual(config["patch_size"], 14)
+        self.assertEqual(config["longest_edge"], 1540)
+        self.assertEqual(config["spatial_merge_size"], 2)
+
+    def test_load_image_converter_config_from_processor_config(self):
+        # Newer checkpoints (e.g. Ministral 3, Shieldstral) ship a
+        # `processor_config.json` with the image processor fields nested
+        # under `image_processor`, instead of a standalone
+        # `preprocessor_config.json`.
+        transformers_config = {
+            "vision_config": {"patch_size": 14, "image_size": 1540},
+            "spatial_merge_size": 2,
+        }
+        processor_config = {
+            "image_processor": {
+                "image_mean": [0.5, 0.5, 0.5],
+                "image_std": [0.5, 0.5, 0.5],
+                "rescale_factor": 1 / 255,
+                "patch_size": 14,
+                "size": {"longest_edge": 1540},
+            }
+        }
+        with tempfile.TemporaryDirectory() as dir_path:
+            with open(os.path.join(dir_path, "config.json"), "w") as f:
+                json.dump(transformers_config, f)
+            with open(
+                os.path.join(dir_path, "processor_config.json"), "w"
+            ) as f:
+                json.dump(processor_config, f)
+            config = convert_mistral3.load_image_converter_config(
+                dir_path, transformers_config
+            )
+        self.assertAllClose(config["offset"], [-1.0, -1.0, -1.0])
         self.assertEqual(config["patch_size"], 14)
         self.assertEqual(config["longest_edge"], 1540)
         self.assertEqual(config["spatial_merge_size"], 2)

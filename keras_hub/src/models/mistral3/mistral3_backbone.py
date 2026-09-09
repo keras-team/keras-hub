@@ -52,6 +52,17 @@ class Mistral3Backbone(Backbone):
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_scaling_factor: float, optional. The scaling factor for
             calculation of rotary embedding. Defaults to `1.0`.
+        rope_type: str, optional. The type of RoPE scaling to apply.
+            Supports `"linear"` and `"yarn"`. Defaults to `"linear"`. Use
+            `"yarn"` for checkpoints with YaRN-scaled rotary embeddings
+            (e.g. Ministral 3).
+        beta_fast: float, optional. The YaRN beta fast parameter. Only
+            used when `rope_type="yarn"`. Defaults to `32.0`.
+        beta_slow: float, optional. The YaRN beta slow parameter. Only
+            used when `rope_type="yarn"`. Defaults to `1.0`.
+        original_max_position_embeddings: int, optional. The pretraining
+            context length before YaRN scaling. Only used when
+            `rope_type="yarn"`. Defaults to `4096`.
         layer_norm_epsilon: float, optional. Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
         sliding_window: int, optional. The sliding window for the mistral
@@ -103,6 +114,10 @@ class Mistral3Backbone(Backbone):
         multimodal_projector,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
+        rope_type="linear",
+        beta_fast=32.0,
+        beta_slow=1.0,
+        original_max_position_embeddings=4096,
         layer_norm_epsilon=1e-6,
         sliding_window=512,
         head_dim=None,
@@ -128,6 +143,12 @@ class Mistral3Backbone(Backbone):
                 num_key_value_heads=num_key_value_heads,
                 rope_max_wavelength=rope_max_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
+                rope_type=rope_type,
+                beta_fast=beta_fast,
+                beta_slow=beta_slow,
+                original_max_position_embeddings=(
+                    original_max_position_embeddings
+                ),
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
                 kernel_initializer=_mistral_kernel_initializer(stddev=0.02),
@@ -218,6 +239,10 @@ class Mistral3Backbone(Backbone):
         self.rope_max_wavelength = rope_max_wavelength
         self.num_key_value_heads = num_key_value_heads
         self.rope_scaling_factor = rope_scaling_factor
+        self.rope_type = rope_type
+        self.beta_fast = beta_fast
+        self.beta_slow = beta_slow
+        self.original_max_position_embeddings = original_max_position_embeddings
         self.sliding_window = sliding_window
         self.head_dim = head_dim
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -235,6 +260,12 @@ class Mistral3Backbone(Backbone):
                 "intermediate_dim": self.intermediate_dim,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_type": self.rope_type,
+                "beta_fast": self.beta_fast,
+                "beta_slow": self.beta_slow,
+                "original_max_position_embeddings": (
+                    self.original_max_position_embeddings
+                ),
                 "num_key_value_heads": self.num_key_value_heads,
                 "sliding_window": self.sliding_window,
                 "head_dim": self.head_dim,

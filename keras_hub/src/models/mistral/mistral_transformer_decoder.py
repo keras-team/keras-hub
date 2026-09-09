@@ -24,6 +24,10 @@ class MistralTransformerDecoder(keras.layers.Layer):
         num_key_value_heads,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
+        rope_type="linear",
+        beta_fast=32.0,
+        beta_slow=1.0,
+        original_max_position_embeddings=4096,
         activation="silu",
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
@@ -39,6 +43,10 @@ class MistralTransformerDecoder(keras.layers.Layer):
 
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.rope_type = rope_type
+        self.beta_fast = beta_fast
+        self.beta_slow = beta_slow
+        self.original_max_position_embeddings = original_max_position_embeddings
 
         self.dropout = dropout
 
@@ -60,6 +68,12 @@ class MistralTransformerDecoder(keras.layers.Layer):
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
             rope_scaling_factor=self.rope_scaling_factor,
+            rope_type=self.rope_type,
+            beta_fast=self.beta_fast,
+            beta_slow=self.beta_slow,
+            original_max_position_embeddings=(
+                self.original_max_position_embeddings
+            ),
             sliding_window=self.sliding_window,
             head_dim=self.head_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
@@ -241,6 +255,12 @@ class MistralTransformerDecoder(keras.layers.Layer):
                 "num_query_heads": self.num_query_heads,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_type": self.rope_type,
+                "beta_fast": self.beta_fast,
+                "beta_slow": self.beta_slow,
+                "original_max_position_embeddings": (
+                    self.original_max_position_embeddings
+                ),
                 "num_key_value_heads": self.num_key_value_heads,
                 "sliding_window": self.sliding_window,
                 "head_dim": self.head_dim,
