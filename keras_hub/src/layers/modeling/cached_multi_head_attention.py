@@ -50,7 +50,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             `[B, 2, S, num_heads, key_dims]`, where `S` must agree with the
             `attention_mask` shape. This argument is intended for use during
             generation to avoid recomputing intermediate state.
-        cache_update_index: a int or int Tensor, the index at which to update
+        cache_update_index: an int or int Tensor, the index at which to update
             `cache` (usually the index of the current token being processed
             when running generation). If `cache_update_index=None` while `cache`
             is set, the cache will not be updated.
