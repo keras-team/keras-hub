@@ -7,6 +7,8 @@ from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.vllm.attention import vllm_paged_attention
+from keras_hub.src.vllm.context import get_vllm_context
 
 
 class Qwen3MoeAttention(keras.layers.Layer):
@@ -183,6 +185,17 @@ class Qwen3MoeAttention(keras.layers.Layer):
             attention_output: Output tensor after applying attention.
             cache: Updated cache tensors (if cache is provided).
         """
+        # Route to vLLM paged attention while serving on TPU; otherwise the
+        # original dense path below runs unchanged.
+        vllm_context = get_vllm_context()
+        if (
+            vllm_context is not None
+            and vllm_context.paged_attention_func is not None
+        ):
+            return self._compute_vllm_attention(
+                hidden_states, cache, vllm_context
+            )
+
         start_index = (
             cache_update_index if cache_update_index is not None else 0
         )
@@ -261,6 +274,36 @@ class Qwen3MoeAttention(keras.layers.Layer):
                 attention_scores, attention_mask[:, None, :, :]
             )
         return self._softmax(attention_scores)
+
+    def _compute_vllm_attention(self, hidden_states, cache, vllm_context):
+        """vLLM paged-attention route (serving on TPU only).
+
+        Applies the query/key layer norms Qwen 3 MoE puts before RoPE, then
+        RoPE at the engine's per-token positions, and hands the (unexpanded)
+        K/V to the shared paged-attention bridge. The mixture-of-experts
+        block sits after attention and is untouched by this route.
+        """
+        positions = ops.reshape(vllm_context.positions, (-1, 1))
+        query = self._query_dense_layer_norm(self._query_dense(hidden_states))
+        query = self.rotary_embedding_layer(query, positions=positions)
+        key = self._key_dense_layer_norm(self._key_dense(hidden_states))
+        key = self.rotary_embedding_layer(key, positions=positions)
+        value = self._value_dense(hidden_states)
+
+        attention_output = vllm_paged_attention(
+            query,
+            key,
+            value,
+            self._inv_norm_factor,
+            num_kv_heads=self.num_key_value_heads,
+            sliding_window=self.sliding_window_size
+            if self.sliding_window_size
+            else None,
+        )
+        attention_output = self._output_dense(attention_output)
+        if cache is not None:
+            return attention_output, cache
+        return attention_output
 
     def _compute_attention(
         self, query, key, value, attention_mask=None, cache_update_index=None
