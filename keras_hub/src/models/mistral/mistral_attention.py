@@ -26,6 +26,10 @@ class CachedMistralAttention(keras.layers.Layer):
         num_key_value_heads,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
+        rope_type="linear",
+        beta_fast=32.0,
+        beta_slow=1.0,
+        original_max_position_embeddings=4096,
         kernel_initializer="glorot_uniform",
         sliding_window=512,
         dropout=0,
@@ -47,6 +51,12 @@ class CachedMistralAttention(keras.layers.Layer):
         )
 
         self._rope_scaling_factor = rope_scaling_factor
+        self._rope_type = rope_type
+        self._beta_fast = beta_fast
+        self._beta_slow = beta_slow
+        self._original_max_position_embeddings = (
+            original_max_position_embeddings
+        )
 
     def build(self, inputs_shape):
         # Einsum variables:
@@ -122,6 +132,12 @@ class CachedMistralAttention(keras.layers.Layer):
         self.rotary_embedding_layer = RotaryEmbedding(
             max_wavelength=self._rope_max_wavelength,
             scaling_factor=self._rope_scaling_factor,
+            rope_type=self._rope_type,
+            beta_fast=self._beta_fast,
+            beta_slow=self._beta_slow,
+            original_max_position_embeddings=(
+                self._original_max_position_embeddings
+            ),
             dtype=self.dtype_policy,
         )
 
@@ -281,6 +297,12 @@ class CachedMistralAttention(keras.layers.Layer):
                 "num_key_value_heads": self._num_key_value_heads,
                 "rope_max_wavelength": self._rope_max_wavelength,
                 "rope_scaling_factor": self._rope_scaling_factor,
+                "rope_type": self._rope_type,
+                "beta_fast": self._beta_fast,
+                "beta_slow": self._beta_slow,
+                "original_max_position_embeddings": (
+                    self._original_max_position_embeddings
+                ),
                 "kernel_initializer": keras.initializers.serialize(
                     self._kernel_initializer
                 ),
