@@ -315,12 +315,8 @@ class MoonshineAudioToText(AudioToText):
             batch_size = keras.ops.shape(encoder_input_values)[0]
 
             def repeat_tensor(x):
-                return keras.ops.cond(
-                    keras.ops.shape(x)[0] == num_samples,
-                    lambda: x,
-                    lambda: keras.ops.repeat(
-                        x, repeats=num_samples // batch_size, axis=0
-                    ),
+                return keras.ops.repeat(
+                    x, repeats=num_samples // batch_size, axis=0
                 )
 
             cross_attention_cache_repeated = repeat_tensor(

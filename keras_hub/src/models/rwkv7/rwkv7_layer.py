@@ -39,11 +39,7 @@ def rnn_generalized_delta_rule(
 
     if initial_state is not None:
         state = initial_state
-        state = ops.cond(
-            ops.shape(state)[0] == 1,
-            lambda: ops.broadcast_to(state, (B, H, N, N)),
-            lambda: state,
-        )
+        state = ops.broadcast_to(state, (B, H, N, N))
     else:
         state = ops.zeros((B, H, N, N))
     state = ops.cast(state, "float32")

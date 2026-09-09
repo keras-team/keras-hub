@@ -382,13 +382,7 @@ class T5Seq2SeqLM(Seq2SeqLM):
 
             def repeat_tensor(x):
                 """Repeats along batch axis to match dim for beam search."""
-                return ops.cond(
-                    ops.shape(x)[0] == num_samples,
-                    lambda: x,
-                    lambda: ops.repeat(
-                        x, repeats=num_samples // batch_size, axis=0
-                    ),
-                )
+                return ops.repeat(x, repeats=num_samples // batch_size, axis=0)
 
             logits, hidden_states, cache, _ = self.call_decoder_with_cache(
                 encoder_hidden_states=repeat_tensor(encoder_hidden_states),
