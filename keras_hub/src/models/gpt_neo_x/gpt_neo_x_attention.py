@@ -3,6 +3,7 @@ import math
 import keras
 from keras import ops
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
@@ -64,7 +65,7 @@ class GPTNeoXAttention(keras.layers.Layer):
         self._inv_norm_factor = 1.0 / math.sqrt(self.attn_head_size)
 
     def build(self, input_shape):
-        self._qkv_dense = keras.layers.EinsumDense(
+        self._qkv_dense = EinsumDense(
             equation="abc,cde->abde",
             output_shape=(None, self.num_heads, 3 * self.attn_head_size),
             bias_axes="de",
@@ -87,7 +88,7 @@ class GPTNeoXAttention(keras.layers.Layer):
         )
 
         # Output.
-        self._output_dense = keras.layers.EinsumDense(
+        self._output_dense = EinsumDense(
             equation="abc,cd->abd",
             output_shape=(None, self.hidden_dim),
             bias_axes="d",

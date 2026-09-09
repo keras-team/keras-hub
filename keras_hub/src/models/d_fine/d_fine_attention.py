@@ -2,6 +2,7 @@ import math
 
 import keras
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.models.d_fine.d_fine_utils import (
     multi_scale_deformable_attention_v2,
 )
@@ -77,7 +78,7 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
             sum(self.num_points),
             2,
         )
-        self.sampling_offsets = keras.layers.EinsumDense(
+        self.sampling_offsets = EinsumDense(
             "abc,cdef->abdef",
             output_shape=sampling_offsets_output_shape,
             bias_axes="def",
@@ -92,7 +93,7 @@ class DFineMultiscaleDeformableAttention(keras.layers.Layer):
             self.n_heads,
             sum(self.num_points),
         )
-        self.attention_weights = keras.layers.EinsumDense(
+        self.attention_weights = EinsumDense(
             "abc,cde->abde",
             output_shape=attention_weights_output_shape,
             bias_axes="de",
@@ -322,7 +323,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
         proj_bias_axes = "de"
         proj_output_shape = (None, self.num_heads, self.head_dim)
         proj_input_shape = (None, None, embedding_dim)
-        self.q_proj = keras.layers.EinsumDense(
+        self.q_proj = EinsumDense(
             proj_equation,
             output_shape=proj_output_shape,
             bias_axes=proj_bias_axes if self.bias else None,
@@ -332,7 +333,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
             name="q_proj",
         )
         self.q_proj.build(proj_input_shape)
-        self.k_proj = keras.layers.EinsumDense(
+        self.k_proj = EinsumDense(
             proj_equation,
             output_shape=proj_output_shape,
             bias_axes=proj_bias_axes if self.bias else None,
@@ -342,7 +343,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
             name="k_proj",
         )
         self.k_proj.build(proj_input_shape)
-        self.v_proj = keras.layers.EinsumDense(
+        self.v_proj = EinsumDense(
             proj_equation,
             output_shape=proj_output_shape,
             bias_axes=proj_bias_axes if self.bias else None,
@@ -354,7 +355,7 @@ class DFineMultiheadAttention(keras.layers.Layer):
         self.v_proj.build(proj_input_shape)
         out_proj_input_shape = (None, None, self.num_heads * self.head_dim)
         out_proj_output_shape = (None, self.embedding_dim)
-        self.out_proj = keras.layers.EinsumDense(
+        self.out_proj = EinsumDense(
             "abc,cd->abd",
             output_shape=out_proj_output_shape,
             bias_axes="d" if self.bias else None,
