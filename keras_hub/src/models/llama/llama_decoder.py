@@ -8,7 +8,6 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
 from keras_hub.src.models.llama.llama_attention import LlamaAttention
-from keras_hub.src.models.llama.llama_layernorm import LlamaLayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -73,7 +72,7 @@ class LlamaTransformerDecoder(keras.layers.Layer):
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
-        self._self_attention_layernorm = LlamaLayerNorm(
+        self._self_attention_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="self_attention_layernorm",
@@ -118,7 +117,7 @@ class LlamaTransformerDecoder(keras.layers.Layer):
             )
         )
 
-        self._feedforward_layernorm = LlamaLayerNorm(
+        self._feedforward_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="feedforward_layernorm",

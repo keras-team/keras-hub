@@ -10,9 +10,6 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.models.mixtral.mixtral_attention import (
     CachedMixtralAttention,
 )
-from keras_hub.src.models.mixtral.mixtral_layer_norm import (
-    MixtralLayerNormalization,
-)
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -337,7 +334,7 @@ class MixtralTransformerDecoder(keras.layers.Layer):
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
-        self._self_attention_layernorm = MixtralLayerNormalization(
+        self._self_attention_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="self_attention_layernorm",
@@ -360,7 +357,7 @@ class MixtralTransformerDecoder(keras.layers.Layer):
         )
         self._sparse_moe_block.build(decoder_sequence_shape)
 
-        self._feedforward_layernorm = MixtralLayerNormalization(
+        self._feedforward_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="feedforward_layernorm",
