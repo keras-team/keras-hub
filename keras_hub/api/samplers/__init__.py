@@ -8,6 +8,9 @@ from keras_hub.src.samplers.beam_sampler import BeamSampler as BeamSampler
 from keras_hub.src.samplers.contrastive_sampler import (
     ContrastiveSampler as ContrastiveSampler,
 )
+from keras_hub.src.samplers.diffusion_sampler import (
+    DiffusionSampler as DiffusionSampler,
+)
 from keras_hub.src.samplers.entropy_bound_sampler import (
     EntropyBoundSampler as EntropyBoundSampler,
 )

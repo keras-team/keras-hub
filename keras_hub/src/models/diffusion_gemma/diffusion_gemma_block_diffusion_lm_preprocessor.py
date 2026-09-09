@@ -24,6 +24,7 @@ from keras_hub.src.models.gemma4.gemma4_image_converter import (
 from keras_hub.src.models.gemma4.gemma4_tokenizer import Gemma4Tokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
+from keras_hub.src.utils.tensor_utils import strip_to_ragged_python
 
 
 @keras_hub_export("keras_hub.models.DiffusionGemmaBlockDiffusionLMPreprocessor")
@@ -59,7 +60,7 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
         image_converter: A `keras_hub.layers.Gemma4ImageConverter` instance.
             Defaults to `None`.
         sequence_length: int. Maximum prompt sequence length. Defaults to
-            `256`.
+            `1024`.
         canvas_length: int. Number of canvas tokens appended after the packed
             prompt during generation preprocessing. Defaults to `256`.
         add_start_token: bool. Whether to prepend the BOS token. Defaults to
@@ -250,19 +251,8 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
         pixel_values,
         pixel_position_ids,
         batched,
-        canvas_tokens=None,
-        canvas_mask=None,
     ):
-        """Assemble the output dict from processed tensors.
-
-        When ``canvas_tokens`` / ``canvas_mask`` are provided (generation path),
-        they are appended to ``token_ids`` / ``padding_mask`` before building
-        ``position_ids``.
-        """
-        if canvas_tokens is not None:
-            token_ids = tf.concat([token_ids, canvas_tokens], axis=1)
-            padding_mask = tf.concat([padding_mask, canvas_mask], axis=1)
-
+        """Assemble the output dict from processed tensors."""
         batch_size = tf.shape(token_ids)[0]
         seq_len = tf.shape(token_ids)[1]
         position_ids = tf.range(seq_len, dtype=tf.int32)
@@ -284,11 +274,7 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             )
 
         if pixel_values is None:
-            patch_dim = (
-                3 * self.image_converter.patch_size**2
-                if self.image_converter is not None
-                else 48
-            )
+            patch_dim = 3 * self.image_converter.patch_size**2
             pixel_values = tf.zeros(
                 (batch_size, 0, 1, patch_dim), dtype="float32"
             )
@@ -317,9 +303,6 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
                 vision_indices
                 if batched
                 else tf.squeeze(vision_indices, axis=0)
-            ),
-            "vision_mask": (
-                vision_mask if batched else tf.squeeze(vision_mask, axis=0)
             ),
         }
 
@@ -602,43 +585,47 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             batched=batched,
         )
 
-    @preprocessing_function
-    def generate_postprocess(self, x):
-        """Convert denoised integer token IDs back to strings.
-
-        Strips vision soft tokens in addition to the standard special
-        tokens before detokenization.
-
-        Args:
-            x: A dict with ``"token_ids"`` and ``"padding_mask"`` (or an int
-               tensor of shape ``(B, canvas_length)`` for the raw canvas).
-
-        Returns:
-            String or list of strings.
-        """
+    def _generate_postprocess_python(self, x):
         if not self.built:
             self.build(None)
-
-        if isinstance(x, dict):
-            token_ids = keras.ops.convert_to_numpy(x["token_ids"])
-            padding_mask = keras.ops.convert_to_numpy(x["padding_mask"])
-        else:
-            token_ids = keras.ops.convert_to_numpy(x).astype("int32")
-            # The canvas is a fixed-length denoised output buffer — every
-            # position is a valid generated token, there is no padding.
-            padding_mask = np.ones(token_ids.shape, dtype=bool)
-
+        # Keep the start-of-image marker in the detokenized output when
+        # images are enabled, unlike the standard special tokens.
         ids_to_strip = list(getattr(self.tokenizer, "special_token_ids", []))
-
         if self.image_converter is not None:
             soi_id = getattr(self.tokenizer, "start_of_image_token_id", None)
             if soi_id is not None and soi_id in ids_to_strip:
                 ids_to_strip.remove(soi_id)
+        if isinstance(x, dict):
+            token_ids = x["token_ids"]
+            mask = keras.ops.cast(x["padding_mask"], "bool")
+        else:
+            token_ids = x
+            mask = keras.ops.ones_like(token_ids, dtype="bool")
+        was_1d = keras.ops.ndim(token_ids) == 1
+        token_ids = strip_to_ragged_python(token_ids, mask, ids_to_strip)
+        if was_1d:
+            return self.tokenizer.detokenize([token_ids])[0]
+        return self.tokenizer.detokenize(token_ids)
 
-        token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
-        output = self.tokenizer.detokenize(token_ids)
-
-        return output
+    @preprocessing_function
+    def _generate_postprocess_tf(self, x):
+        if not self.built:
+            self.build(None)
+        # Keep the start-of-image marker in the detokenized output when
+        # images are enabled, unlike the standard special tokens.
+        ids_to_strip = list(getattr(self.tokenizer, "special_token_ids", []))
+        if self.image_converter is not None:
+            soi_id = getattr(self.tokenizer, "start_of_image_token_id", None)
+            if soi_id is not None and soi_id in ids_to_strip:
+                ids_to_strip.remove(soi_id)
+        if isinstance(x, dict):
+            token_ids = x["token_ids"]
+            mask = keras.ops.cast(x["padding_mask"], "bool")
+        else:
+            token_ids = x
+            mask = keras.ops.ones_like(token_ids, dtype="bool")
+        token_ids = strip_to_ragged(token_ids, mask, ids_to_strip)
+        return self.tokenizer.detokenize(token_ids)
 
     @property
     def max_images_per_prompt(self):

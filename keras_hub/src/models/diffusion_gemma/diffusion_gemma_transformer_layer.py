@@ -55,9 +55,6 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
             receive rotary embeddings. Defaults to `1.0`.
         use_bidirectional_attention: bool. Whether to enable bidirectional
             (non-causal) attention. Defaults to `False`.
-        use_vision_bidirectional_attention: bool. Whether to apply
-            bidirectional attention to vision token positions only. Defaults
-            to `False`.
         is_global_attention: bool. Whether this layer uses global (full-
             sequence) attention rather than sliding-window attention. Defaults
             to `False`.
@@ -99,7 +96,6 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         rope_scaling_factor=1.0,
         rope_partial_rotary_factor=1.0,
         use_bidirectional_attention=False,
-        use_vision_bidirectional_attention=False,
         is_global_attention=False,
         global_head_dim=None,
         dropout=0,
@@ -127,9 +123,6 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         self.rope_scaling_factor = rope_scaling_factor
         self.rope_partial_rotary_factor = rope_partial_rotary_factor
         self.use_bidirectional_attention = use_bidirectional_attention
-        self.use_vision_bidirectional_attention = (
-            use_vision_bidirectional_attention
-        )
         self.is_global_attention = is_global_attention
         self.global_head_dim = global_head_dim
         self.dropout = dropout
@@ -296,36 +289,17 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
 
         self.built = True
 
-    def _compute_image_bidirectional_attention_mask(self, vision_mask):
-        """Allow image tokens to attend to each other within the same image."""
-        bidirectional_mask = vision_mask
-
-        padded_mask = ops.cast(
-            ops.pad(bidirectional_mask, [(0, 0), (1, 0)], constant_values=0),
-            dtype="int32",
-        )
-
-        boundary = ops.cast(
-            ops.greater(padded_mask[..., 1:], padded_mask[..., :-1]),
-            dtype="int32",
-        )
-        numbered_boundary = ops.cumsum(boundary, -1)
-        indices = ops.multiply(bidirectional_mask, numbered_boundary)
-
-        indices_expanded_1 = ops.expand_dims(indices, 1)
-        indices_expanded_2 = ops.expand_dims(indices, -1)
-
-        mask = ops.logical_and(
-            ops.equal(indices_expanded_1, indices_expanded_2),
-            indices_expanded_2,
-        )
-        return mask
-
+    # This layer does not implement vision-bidirectional attention within
+    # image blocks. The HF reference (`DiffusionGemmaEncoderModel.forward`)
+    # computes it via `create_masks_for_generate`, but discards the result
+    # and reuses the plain causal mask, so `use_bidirectional_attention:
+    # "vision"` has no effect on the checkpoint's actual numerics. Matching
+    # that (rather than the intended-but-unreachable HF behavior) keeps
+    # parity with `from_preset()` output.
     def _compute_attention_mask(
         self,
         x,
         padding_mask,
-        vision_mask,
         cache,
         cache_update_index,
         is_encoder=False,
@@ -409,7 +383,6 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         self,
         x,
         padding_mask=None,
-        vision_mask=None,
         cache=None,
         cache_update_index=0,
         cache_update_mask=None,
@@ -428,7 +401,6 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         attention_mask = self._compute_attention_mask(
             normalized_x,
             padding_mask,
-            vision_mask,
             cache,
             cache_update_index,
             is_encoder=is_encoder,
@@ -565,9 +537,6 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "rope_partial_rotary_factor": self.rope_partial_rotary_factor,
                 "use_bidirectional_attention": self.use_bidirectional_attention,
-                "use_vision_bidirectional_attention": (
-                    self.use_vision_bidirectional_attention
-                ),
                 "is_global_attention": self.is_global_attention,
                 "global_head_dim": self.global_head_dim,
                 "attention_k_eq_v": self.attention_k_eq_v,

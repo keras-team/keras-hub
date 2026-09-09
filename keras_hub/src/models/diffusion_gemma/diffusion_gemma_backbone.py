@@ -89,9 +89,6 @@ class DiffusionGemmaBackbone(Backbone):
             `1e-6`.
         use_bidirectional_attention: bool. When `True` the model uses fully
             bidirectional attention for ALL tokens. Defaults to `False`.
-        use_vision_bidirectional_attention: bool. When `True`, vision tokens
-            within the same image attend to each other bidirectionally while
-            text tokens remain causal. Defaults to `False`.
         dropout: float. Dropout probability. Defaults to `0`.
         num_global_key_value_heads: int or `None`. When set, global attention
             layers use this many K/V heads instead of `num_key_value_heads`
@@ -155,7 +152,6 @@ class DiffusionGemmaBackbone(Backbone):
         vision_encoder=None,
         layer_norm_epsilon=1e-6,
         use_bidirectional_attention=False,
-        use_vision_bidirectional_attention=False,
         dropout=0,
         num_global_key_value_heads=None,
         global_rope_wavelength=None,
@@ -232,7 +228,6 @@ class DiffusionGemmaBackbone(Backbone):
                 rope_scaling_factor=rope_scaling_factor,
                 rope_partial_rotary_factor=layer_rope_partial,
                 use_bidirectional_attention=use_bidirectional_attention,
-                use_vision_bidirectional_attention=use_vision_bidirectional_attention,
                 is_global_attention=is_global,
                 global_head_dim=global_head_dim,
                 layer_norm_epsilon=layer_norm_epsilon,
@@ -309,9 +304,6 @@ class DiffusionGemmaBackbone(Backbone):
             vision_indices_input = keras.Input(
                 shape=(None,), dtype="int32", name="vision_indices"
             )
-            vision_mask_input = keras.Input(
-                shape=(None,), dtype="int32", name="vision_mask"
-            )
 
         # Text embeddings.
         text_embeddings = self.token_embedding(token_id_input)
@@ -341,20 +333,19 @@ class DiffusionGemmaBackbone(Backbone):
             x, _ = transformer_layer(
                 x,
                 padding_mask=padding_mask_input,
-                vision_mask=(
-                    None if vision_encoder is None else vision_mask_input
-                ),
                 positions=position_ids_input,
             )
 
-        # Wire diffusion_self_conditioning into the functional graph so Keras
-        # tracks its weights. The zero-multiply makes this a no-op at runtime;
-        # the layer is called with real inputs in _prepare_canvas_embeds()
-        # during generation.
-        _zero_prev = ops.tile(
-            ops.zeros_like(x[:, :1, :1]), [1, 1, vocabulary_size]
-        )
-        _sc_out = self.diffusion_self_conditioning(x[:, :1], _zero_prev)
+        # Dummy call so Keras tracks diffusion_self_conditioning's weights
+        # (zero-multiplied below, so a no-op here). Calls sub-layers
+        # directly to skip the vocab-sized softmax + matmul, which owns no
+        # weights of its own.
+        sc = self.diffusion_self_conditioning
+        _sc_dummy = ops.zeros_like(x[:, :1])
+        _sc_x = sc.pre_norm(_sc_dummy)
+        _sc_gate = keras.activations.gelu(sc.gate_proj(_sc_x), approximate=True)
+        _sc_out = sc.down_proj(_sc_gate * sc.up_proj(_sc_x))
+        _sc_out = sc.post_norm(_sc_dummy + _sc_out)
         x = x + ops.zeros_like(x[:, :1]) * _sc_out
 
         sequence_output = self.layer_norm(x)
@@ -372,7 +363,6 @@ class DiffusionGemmaBackbone(Backbone):
                     "pixel_position_ids": pixel_position_ids_input,
                     "pixel_values": pixel_values_input,
                     "vision_indices": vision_indices_input,
-                    "vision_mask": vision_mask_input,
                 }
             )
         super().__init__(
@@ -401,9 +391,6 @@ class DiffusionGemmaBackbone(Backbone):
         self.local_rope_scaling_factor = local_rope_scaling_factor
         self.global_rope_scaling_factor = global_rope_scaling_factor
         self.use_bidirectional_attention = use_bidirectional_attention
-        self.use_vision_bidirectional_attention = (
-            use_vision_bidirectional_attention
-        )
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.num_global_key_value_heads = num_global_key_value_heads
@@ -451,9 +438,6 @@ class DiffusionGemmaBackbone(Backbone):
                 if self.vision_encoder is None
                 else keras.layers.serialize(self.vision_encoder),
                 "use_bidirectional_attention": self.use_bidirectional_attention,
-                "use_vision_bidirectional_attention": (
-                    self.use_vision_bidirectional_attention
-                ),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
                 "num_global_key_value_heads": self.num_global_key_value_heads,

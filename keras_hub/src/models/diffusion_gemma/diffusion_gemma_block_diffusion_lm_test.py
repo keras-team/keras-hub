@@ -1,4 +1,3 @@
-import os
 from unittest.mock import patch
 
 import numpy as np
@@ -14,6 +13,12 @@ from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm imp
 )
 from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm_preprocessor import (  # noqa: E501
     DiffusionGemmaBlockDiffusionLMPreprocessor,
+)
+from keras_hub.src.models.gemma4.gemma4_image_converter import (
+    Gemma4ImageConverter,
+)
+from keras_hub.src.models.gemma4.gemma4_vision_encoder import (
+    Gemma4VisionEncoder,
 )
 from keras_hub.src.samplers.entropy_bound_sampler import EntropyBoundSampler
 from keras_hub.src.tests.mocks.mock_gemma4_tokenizer import MockGemma4Tokenizer
@@ -61,18 +66,81 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         )
         self.input_data = self.preprocessor(*self.train_data)[0]
 
+        # === Vision-enabled model (image_converter + vision_encoder) ===
+        self.image_converter = Gemma4ImageConverter(
+            image_size=(16, 16),
+            patch_size=4,
+        )
+        self.vision_preprocessor = DiffusionGemmaBlockDiffusionLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self.image_converter,
+            sequence_length=24,
+            canvas_length=4,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=4,
+        )
+        vision_encoder = Gemma4VisionEncoder(
+            image_size=16,
+            patch_size=4,
+            pool_size=2,
+            num_layers=2,
+            num_heads=2,
+            head_dim=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            output_dim=8,
+        )
+        vision_backbone_kwargs = dict(backbone_kwargs)
+        vision_backbone_kwargs["vision_encoder"] = vision_encoder
+        self.vision_backbone = DiffusionGemmaBackbone(**vision_backbone_kwargs)
+        self.vision_init_kwargs = {
+            "backbone": self.vision_backbone,
+            "preprocessor": self.vision_preprocessor,
+        }
+        self.vision_train_data = (
+            {
+                "prompts": [
+                    "the <|image|> fox",
+                    "the <|image|> fox",
+                ],
+                "responses": ["the earth is round", "the earth is round"],
+                "pixel_values": np.ones([2, 1, 16, 3 * 4 * 4], dtype="float32"),
+                "pixel_position_ids": np.ones([2, 1, 16, 2], dtype="int32"),
+            },
+        )
+        self.vision_input_data = self.vision_preprocessor(
+            *self.vision_train_data
+        )[0]
+
     def test_call_shape(self):
         model = DiffusionGemmaBlockDiffusionLM(**self.init_kwargs)
         logits = model(self.input_data)
         # (batch=2, seq_len=8, vocab_size)
         self.assertEqual(logits.shape, (2, 8, self.tokenizer.vocabulary_size()))
 
-    def test_task_basics(self):
+    @parameterized.named_parameters(
+        ("text_only", "text_only"), ("text_and_vision", "text_and_vision")
+    )
+    def test_task_basics(self, modality_type):
+        if modality_type == "text_and_vision":
+            init_kwargs = self.vision_init_kwargs
+            train_data = self.vision_train_data
+            seq_len = self.vision_preprocessor.sequence_length
+        else:
+            init_kwargs = self.init_kwargs
+            train_data = self.train_data
+            seq_len = self.preprocessor.sequence_length
+
         self.run_task_test(
             cls=DiffusionGemmaBlockDiffusionLM,
-            init_kwargs=self.init_kwargs,
-            train_data=self.train_data,
-            expected_output_shape=(2, 8, self.tokenizer.vocabulary_size()),
+            init_kwargs=init_kwargs,
+            train_data=train_data,
+            expected_output_shape=(
+                2,
+                seq_len,
+                self.tokenizer.vocabulary_size(),
+            ),
         )
 
     def test_generate_single_string(self):
@@ -88,6 +156,20 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         self.assertEqual(len(outputs), 2)
         for out in outputs:
             self.assertIsInstance(out, str)
+
+    def test_generate_with_image(self):
+        # Exercises the vision-interleaving branch of _encode_prompt, which
+        # is only reachable through generate()/generate_step(), not through
+        # a plain functional model(...) call.
+        model = DiffusionGemmaBlockDiffusionLM(**self.vision_init_kwargs)
+        model.compile(sampler=self.sampler)
+        output = model.generate(
+            {
+                "prompts": "the <|image|> fox",
+                "images": np.ones((16, 16, 3), dtype="float32"),
+            }
+        )
+        self.assertIsInstance(output, str)
 
     def test_generate_without_preprocessor(self):
         model = DiffusionGemmaBlockDiffusionLM(
@@ -224,64 +306,59 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
 
         self.assertIs(model.sampler, sampler)
 
-    @parameterized.named_parameters(
-        ("default_generation_config", {}),
-        (
-            "custom_generation_config",
-            {
-                "canvas_length": 8,
-                "max_denoising_steps": 2,
-                "t_min": 0.2,
-                "t_max": 0.7,
-                "sampler": EntropyBoundSampler(entropy_bound=0.2),
-            },
-        ),
-    )
-    def test_serialization(self, extra_kwargs):
+    def test_compile_without_sampler_preserves_constructor_sampler(self):
+        # A plain compile() call (e.g. before fine-tuning) must not silently
+        # reset a sampler configured via the constructor or from_config().
+        sampler = EntropyBoundSampler(entropy_bound=0.2)
         model = DiffusionGemmaBlockDiffusionLM(
-            **self.init_kwargs, **extra_kwargs
+            **self.init_kwargs,
+            sampler=sampler,
+        )
+        model.compile(optimizer="adam")
+        self.assertIs(model.sampler, sampler)
+
+    def test_constructor_rejects_non_diffusion_sampler(self):
+        # Constructing (not just compiling) with a standard autoregressive
+        # sampler must fail clearly, since the sampler is resolved directly
+        # in __init__, not only in compile().
+        with self.assertRaisesRegex(ValueError, "DiffusionSampler"):
+            DiffusionGemmaBlockDiffusionLM(
+                **self.init_kwargs,
+                sampler="greedy",
+            )
+
+    def test_serialization_custom_generation_config(self):
+        model = DiffusionGemmaBlockDiffusionLM(
+            **self.init_kwargs,
+            canvas_length=8,
+            max_denoising_steps=2,
+            t_min=0.2,
+            t_max=0.7,
+            sampler=EntropyBoundSampler(entropy_bound=0.2),
         )
         self.run_serialization_test(model)
 
-    def test_saved_model(self):
-        model = DiffusionGemmaBlockDiffusionLM(**self.init_kwargs)
-        model_output = model(self.input_data)
+    @parameterized.named_parameters(
+        ("text_only", "text_only"), ("text_and_vision", "text_and_vision")
+    )
+    def test_saved_model(self, modality_type):
+        if modality_type == "text_and_vision":
+            init_kwargs = self.vision_init_kwargs
+            input_data = self.vision_input_data
+        else:
+            init_kwargs = self.init_kwargs
+            input_data = self.input_data
 
-        path = os.path.join(self.get_temp_dir(), "model.weights.h5")
-        model.save_weights(path)
-
-        restored_model = DiffusionGemmaBlockDiffusionLM(**self.init_kwargs)
-        # Build the restored model before loading weights.
-        _ = restored_model(self.input_data)
-        restored_model.load_weights(path)
-
-        # Verify weight count matches.
-        self.assertEqual(len(model.weights), len(restored_model.weights))
-        for w1, w2 in zip(model.get_weights(), restored_model.get_weights()):
-            self.assertAllClose(w1, w2, atol=1e-5, rtol=1e-5)
-
-        # Verify outputs match after weight restore.
-        restored_output = restored_model(self.input_data)
-        self.assertAllClose(model_output, restored_output, atol=1e-5, rtol=1e-5)
+        self.run_model_saving_test(
+            cls=DiffusionGemmaBlockDiffusionLM,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+        )
 
     def test_encoder_scalar_not_applied_in_decode_step(self):
         """_decode_canvas_step always uses layer_scalar (decoder scalar)."""
-        backbone = DiffusionGemmaBackbone(
-            vocabulary_size=self.tokenizer.vocabulary_size(),
-            image_size=16,
-            num_layers=2,
-            num_query_heads=2,
-            num_key_value_heads=1,
-            hidden_dim=8,
-            intermediate_dim=16,
-            head_dim=4,
-            use_sliding_window_attention=True,
-            sliding_window_size=16,
-            vision_encoder=None,
-        )
         model = DiffusionGemmaBlockDiffusionLM(
-            backbone=backbone,
-            preprocessor=self.preprocessor,
+            **self.init_kwargs,
             canvas_length=self.preprocessor.canvas_length,
         )
         model.compile(sampler=self.sampler)
@@ -301,7 +378,7 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         canvas_embeds = model._prepare_canvas_embeds(canvas, None)
 
         # Run decode step with layer_scalar=1.0, encoder_layer_scalar=99.0
-        for layer in backbone.transformer_layers:
+        for layer in self.backbone.transformer_layers:
             layer.layer_scalar.assign(1.0)
             layer.encoder_layer_scalar.assign(99.0)
         out_decoder_scalar = ops.convert_to_numpy(
@@ -313,7 +390,7 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         )
 
         # Now set encoder_layer_scalar=1.0 too — decode output should match.
-        for layer in backbone.transformer_layers:
+        for layer in self.backbone.transformer_layers:
             layer.encoder_layer_scalar.assign(1.0)
         out_same_scalar = ops.convert_to_numpy(
             ops.stop_gradient(

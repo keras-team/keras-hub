@@ -3,10 +3,26 @@ import itertools
 import keras
 from keras import ops
 from keras import tree
+from keras.src.distribution import distribution_lib
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
+from keras_hub.src.samplers.diffusion_sampler import DiffusionSampler
 from keras_hub.src.samplers.serialization import get as get_sampler
+
+
+def get_diffusion_sampler(sampler):
+    """Resolve `sampler` and validate it's a `DiffusionSampler`."""
+    resolved = get_sampler(sampler)
+    if not isinstance(resolved, DiffusionSampler):
+        raise ValueError(
+            "`sampler` must be a `keras_hub.samplers.DiffusionSampler` "
+            "(e.g. `EntropyBoundSampler`) for block-diffusion generation. "
+            f"Received: sampler={sampler!r}, which resolved to a "
+            f"`{type(resolved).__name__}`."
+        )
+    return resolved
+
 
 try:
     import tensorflow as tf
@@ -53,7 +69,7 @@ class BlockDiffusionLM(Task):
         loss="auto",
         *,
         weighted_metrics="auto",
-        sampler="entropy_bound",
+        sampler=None,
         **kwargs,
     ):
         """Configures the `BlockDiffusionLM` task for training and generation.
@@ -73,8 +89,11 @@ class BlockDiffusionLM(Task):
                 Defaults to `"auto"`.
             weighted_metrics: `"auto"`, or a list of metrics. Defaults to
                 `"auto"`.
-            sampler: A sampler name or a `keras_hub.samplers.Sampler` instance.
-                Defaults to `"entropy_bound"`.
+            sampler: A sampler name or a `keras_hub.samplers.Sampler`
+                instance. Defaults to `None`, which leaves the sampler set
+                on the model (via the constructor, or a previous `compile()`
+                call) unchanged, falling back to `"entropy_bound"` only if
+                no sampler has been set yet.
             **kwargs: Additional arguments passed to `keras.Model.compile`.
         """
         if optimizer == "auto":
@@ -89,7 +108,10 @@ class BlockDiffusionLM(Task):
             weighted_metrics=weighted_metrics,
             **kwargs,
         )
-        self.sampler = get_sampler(sampler)
+        if sampler is not None:
+            self.sampler = get_diffusion_sampler(sampler)
+        elif getattr(self, "sampler", None) is None:
+            self.sampler = get_diffusion_sampler("entropy_bound")
         self.generate_function = None
 
     def make_generate_function(self):
@@ -305,28 +327,59 @@ class BlockDiffusionLM(Task):
                         'required if `stop_token_ids="auto"`. Pass '
                         "`stop_token_ids=None` to generate until `max_length`."
                     )
-                stop_token_ids = (self.preprocessor.tokenizer.end_token_id,)
+                stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
+                # Some models like Llama3 use two end tokens: <|eot_id|> in
+                # "instruct" versions and <|end_of_text|> in others.
+                if hasattr(self.preprocessor.tokenizer, "end_token2_id"):
+                    stop_token_ids.append(
+                        self.preprocessor.tokenizer.end_token2_id
+                    )
+                stop_token_ids = tuple(stop_token_ids)
 
         generate_function = self.make_generate_function()
+
+        def preprocess(x):
+            return self.preprocessor.generate_preprocess(x)
+
+        def distribute(x):
+            """Distribute tensors according to the distribution library."""
+            distribution = distribution_lib.distribution()
+            if distribution is None:
+                return x
+
+            def _distribute_tensor(value):
+                if value is None:
+                    return None
+                if not ops.is_tensor(value):
+                    value = ops.convert_to_tensor(value)
+                layout = distribution.get_data_layout(value.shape)
+                return (
+                    distribution_lib.distribute_tensor(value, layout)
+                    if layout
+                    else value
+                )
+
+            return tree.map_structure(_distribute_tensor, x)
+
+        def generate(x):
+            return generate_function(
+                x, max_length=max_length, stop_token_ids=stop_token_ids
+            )
+
+        def postprocess(x):
+            return self.preprocessor.generate_postprocess(x)
 
         inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
 
         if self.preprocessor is not None:
-            inputs = [self.preprocessor.generate_preprocess(x) for x in inputs]
+            inputs = [preprocess(x) for x in inputs]
 
-        outputs = [
-            generate_function(
-                x,
-                max_length=max_length,
-                stop_token_ids=stop_token_ids,
-            )
-            for x in inputs
-        ]
+        inputs = [distribute(x) for x in inputs]
+
+        outputs = [generate(x) for x in inputs]
 
         if self.preprocessor is not None:
-            outputs = [
-                self.preprocessor.generate_postprocess(x) for x in outputs
-            ]
+            outputs = [postprocess(x) for x in outputs]
 
         return self._normalize_generate_outputs(outputs, input_is_scalar)
 

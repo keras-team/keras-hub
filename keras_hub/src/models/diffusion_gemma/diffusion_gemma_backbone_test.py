@@ -132,6 +132,16 @@ class DiffusionGemmaBackboneTest(TestCase, parameterized.TestCase):
             restored.token_embedding,
         )
 
+    def test_self_conditioning_weights_are_tracked(self):
+        # Never called in this backbone's own forward pass, so its weights
+        # only appear in backbone.weights via the dummy graph-wiring call.
+        backbone = DiffusionGemmaBackbone(**self.init_kwargs)
+        sc = backbone.diffusion_self_conditioning
+        tracked_weight_ids = {id(w) for w in backbone.weights}
+        for layer in (sc.pre_norm, sc.gate_proj, sc.up_proj, sc.down_proj):
+            for w in layer.weights:
+                self.assertIn(id(w), tracked_weight_ids)
+
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=DiffusionGemmaBackbone,

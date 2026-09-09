@@ -499,6 +499,7 @@ def _verify(diffusion_lm, hf_data):
     # Patch preprocessor's num_vision_tokens_per_image if image data exists in
     # HF output
     preprocessor = diffusion_lm.preprocessor
+    original_num_vision_tokens = None
     if preprocessor is not None and hf_data["image"] is not None:
         img = hf_data["image"]
         image_placeholder_id = getattr(
@@ -507,6 +508,9 @@ def _verify(diffusion_lm, hf_data):
         if image_placeholder_id is not None:
             actual_num_tokens = int(
                 np.sum(img["input_ids"][0] == image_placeholder_id)
+            )
+            original_num_vision_tokens = (
+                preprocessor.num_vision_tokens_per_image
             )
             preprocessor.num_vision_tokens_per_image = actual_num_tokens
 
@@ -618,6 +622,9 @@ def _verify(diffusion_lm, hf_data):
                     img.get("generated_text"),
                     images=raw_image,
                 )
+
+    if original_num_vision_tokens is not None:
+        preprocessor.num_vision_tokens_per_image = original_num_vision_tokens
 
     print("-> HF verification complete.")
 

@@ -9,13 +9,13 @@ except ImportError:
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.block_diffusion_lm import BlockDiffusionLM
+from keras_hub.src.models.block_diffusion_lm import get_diffusion_sampler
 from keras_hub.src.models.diffusion_gemma.diffusion_gemma_backbone import (
     DiffusionGemmaBackbone,
 )
 from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm_preprocessor import (  # noqa: E501
     DiffusionGemmaBlockDiffusionLMPreprocessor,
 )
-from keras_hub.src.samplers.serialization import get as get_sampler
 
 
 @keras_hub_export("keras_hub.models.DiffusionGemmaBlockDiffusionLM")
@@ -78,6 +78,37 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
     backbone_cls = DiffusionGemmaBackbone
     preprocessor_cls = DiffusionGemmaBlockDiffusionLMPreprocessor
 
+    def generate(self, inputs, max_length=None, stop_token_ids="auto"):
+        """Generate a denoised canvas given prompt inputs.
+
+        Args:
+            inputs: python data, tensor data, or a `tf.data.Dataset`. If a
+                `preprocessor` is attached to the model, `inputs` should
+                match the structure expected by the `preprocessor` layer. If
+                a `preprocessor` is not attached, `inputs` should match the
+                structure expected by the `backbone` model.
+            max_length: Optional int. Maximum length of the generated
+                sequence. Defaults to the model's configured canvas length.
+            stop_token_ids: Optional. `None`, `"auto"`, or tuple of token
+                IDs. Defaults to `"auto"`, which uses stop IDs configured on
+                the model, or the preprocessor tokenizer's end token plus
+                `<turn|>` (DiffusionGemma's end-of-turn token). `None`
+                generates until `max_length`.
+
+        Returns:
+            Decoded string(s) or integer token arrays, depending on whether
+            a `preprocessor` is attached.
+        """
+        if stop_token_ids == "auto" and self.preprocessor is not None:
+            if getattr(self, "stop_token_ids", None) is None:
+                stop_token_ids = (
+                    self.preprocessor.tokenizer.end_token_id,
+                    self.preprocessor.tokenizer.token_to_id("<turn|>"),
+                )
+        return super().generate(
+            inputs, max_length=max_length, stop_token_ids=stop_token_ids
+        )
+
     def __init__(
         self,
         preprocessor,
@@ -115,7 +146,7 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
         if pad_token_id is None and preprocessor is not None:
             pad_token_id = preprocessor.tokenizer.pad_token_id
         self.pad_token_id = pad_token_id
-        self.sampler = get_sampler(sampler)
+        self.sampler = get_diffusion_sampler(sampler)
         self.generate_function = None
 
     def _normalize_generate_inputs(self, inputs):
@@ -344,7 +375,6 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
         pixel_values = inputs.get("pixel_values", None)
         pixel_position_ids = inputs.get("pixel_position_ids", None)
         vision_indices = inputs.get("vision_indices", None)
-        vision_mask = inputs.get("vision_mask", None)
 
         # Text embeddings are unscaled until after vision interleaving.
         x = self.backbone.token_embedding(token_ids)
@@ -376,9 +406,6 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
                 text_embeddings=x,
                 vision_indices=vision_indices,
             )
-            vision_mask = ops.cast(vision_mask, "bool")
-        else:
-            vision_mask = None
 
         # Global scale applied after interleaving: text positions get
         # sqrt(hidden_dim), vision positions keep their pre-scaled magnitude.
@@ -413,7 +440,6 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
                 cache=cache[:, i, ...],
                 cache_update_index=0,
                 padding_mask=padding_mask,
-                vision_mask=vision_mask,
                 is_encoder=True,
             )
             caches.append(next_cache)
@@ -547,7 +573,6 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
             (batch_size, canvas_length),
         )
 
-        caches = []
         for i, layer in enumerate(self.backbone.transformer_layers):
             current_cache = combined_cache[:, i, ...]
             current_padding_mask = combined_padding_mask
@@ -586,7 +611,7 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
                 cache_update_index = prefix_length
                 positions = canvas_positions
 
-            x, next_cache = layer(
+            x, _ = layer(
                 x,
                 cache=current_cache,
                 cache_update_index=cache_update_index,
@@ -594,7 +619,6 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
                 padding_mask=current_padding_mask,
                 positions=positions,
             )
-            caches.append(next_cache)
 
         return self.backbone.layer_norm(x)
 
