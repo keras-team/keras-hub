@@ -230,9 +230,11 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
 
             def repeat_for_beams(x):
                 """Repeats along the batch axis to match beam-search width."""
-                if ops.shape(x)[0] == num_samples:
-                    return x
-                return ops.repeat(x, num_samples // batch_size, axis=0)
+                return ops.cond(
+                    ops.shape(x)[0] == num_samples,
+                    lambda: x,
+                    lambda: ops.repeat(x, num_samples // batch_size, axis=0),
+                )
 
             logits, hidden, cache, _ = self.call_decoder_with_cache(
                 decoder_token_ids=prompt,

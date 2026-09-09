@@ -233,9 +233,14 @@ class EdRecSeq2SeqLM(Seq2SeqLM):
 
             # If the backbone returns the full sequence, we only need the last
             # token.
-            if ops.shape(logits)[1] != 1:
-                logits = ops.take(logits, [cache_index], axis=1)
-                h_states = ops.take(h_states, [cache_index], axis=1)
+            logits, h_states = ops.cond(
+                ops.shape(logits)[1] != 1,
+                lambda: (
+                    ops.take(logits, [cache_index], axis=1),
+                    ops.take(h_states, [cache_index], axis=1),
+                ),
+                lambda: (logits, h_states),
+            )
 
             return (
                 ops.squeeze(logits, axis=1),
