@@ -319,9 +319,6 @@ class MoonshineAudioToText(AudioToText):
                     x, repeats=num_samples // batch_size, axis=0
                 )
 
-            cross_attention_cache_repeated = repeat_tensor(
-                current_cross_attention_cache
-            )
             logits, hidden_states, new_self_attention_cache, _ = (
                 self.call_decoder_with_cache(
                     encoder_hidden_states=repeat_tensor(encoder_hidden_states),
@@ -331,7 +328,7 @@ class MoonshineAudioToText(AudioToText):
                     decoder_token_ids=next_token_input,
                     self_attention_cache=current_self_attention_cache,
                     self_attention_cache_update_index=cache_index,
-                    cross_attention_cache=cross_attention_cache_repeated,
+                    cross_attention_cache=current_cross_attention_cache,
                 )
             )
             return (
