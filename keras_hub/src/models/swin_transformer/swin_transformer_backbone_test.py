@@ -1,5 +1,3 @@
-import keras
-import numpy as np
 import pytest
 from keras import ops
 
@@ -40,20 +38,7 @@ class SwinTransformerBackboneTest(TestCase):
 
     def test_drop_path_training_step(self):
         """DropPath should not corrupt tensor rank during training."""
-        backbone = SwinTransformerBackbone(
-            image_shape=(224, 224, 3),
-            embed_dim=96,
-            depths=(2, 2, 6, 2),
-            num_heads=(3, 6, 12, 24),
-            window_size=7,
-        )
-        inputs = keras.Input(shape=(224, 224, 3))
-        feat = backbone(inputs)
-        pooled = keras.layers.GlobalAveragePooling1D()(feat)
-        outputs = keras.layers.Dense(10, activation="softmax")(pooled)
-        model = keras.Model(inputs, outputs)
-        model.compile(optimizer="adam", loss="sparse_categorical_crossentropy")
-        x = np.random.randn(2, 224, 224, 3).astype(np.float32)
-        y = np.random.randint(0, 10, size=(2,))
+        backbone = SwinTransformerBackbone(**self.init_kwargs)
         # Before fix: ValueError: too many values to unpack (expected 3)
-        model.train_on_batch(x, y)
+        # because DropPath's 4D mask broadcasts with 3D token sequence
+        backbone(self.input_data, training=True)
