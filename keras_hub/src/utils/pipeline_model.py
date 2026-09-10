@@ -2,6 +2,7 @@ import functools
 import math
 
 import keras
+import numpy as np
 from keras import ops
 from keras import tree
 
@@ -11,6 +12,24 @@ try:
     import tensorflow as tf
 except ImportError:
     tf = None
+
+
+def _contains_string_data(inputs):
+    """Check if any leaf in a nested structure contains string data."""
+    for x in tree.flatten(inputs):
+        if isinstance(x, (str, bytes)):
+            return True
+        if isinstance(x, np.ndarray):
+            if x.dtype.kind in ("U", "S"):
+                return True
+            if x.dtype.kind == "O" and x.size:
+                if any(isinstance(item, (str, bytes)) for item in x.flat):
+                    return True
+            continue
+        dtype = getattr(x, "dtype", None)
+        if dtype is not None and "string" in str(dtype).lower():
+            return True
+    return False
 
 
 def _convert_inputs_to_dataset(
@@ -145,6 +164,24 @@ class PipelineModel(keras.Model):
     # ========================================================================
     # Below are overrides to keras.Model methods to apply the functions above.
     # ========================================================================
+    def __call__(self, *args, **kwargs):
+        inputs = args[0] if args else kwargs.get("inputs")
+        if _contains_string_data(inputs):
+            message = (
+                "Calling a model directly, e.g. `model(x)`, does not apply "
+                "preprocessing, but the model received string input. Use "
+                "`model.predict(x)`, `model.fit(x, y)` or "
+                "`model.evaluate(x, y)` instead, which will preprocess "
+                "string input before running the model."
+            )
+            if getattr(self, "preprocessor", None) is not None:
+                message += (
+                    " Alternatively, preprocess the input first, e.g. "
+                    "`model(model.preprocessor(x))`."
+                )
+            raise ValueError(message)
+        return super().__call__(*args, **kwargs)
+
     def fit(
         self,
         x=None,

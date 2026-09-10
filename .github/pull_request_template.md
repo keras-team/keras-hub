@@ -1,7 +1,12 @@
+<!--- Before opening a PR, please read the updated Keras PR contribution
+      policy: https://github.com/keras-team/keras/issues/23601
+      PRs that do not follow this policy may be closed without review. -->
+
 ## Approved issue link
 <!--- Link the approved issue that is assigned to you, e.g. "Fixes #123".
       An issue must be assigned to you and linked here before this PR can be
-      marked "Ready for review". -->
+      marked "Ready for review". See the PR contribution policy:
+      https://github.com/keras-team/keras/issues/23601 -->
 
 
 ## Description of the change
@@ -17,6 +22,7 @@
 ## Checklist
 <!--- Please make sure all checkboxes are ticked before submitting this PR for review. -->
 
+- [ ] I have read and followed the [PR contribution policy](https://github.com/keras-team/keras/issues/23601).
 - [ ] I have added all the necessary unit tests for my change.
 - [ ] I have verified that my change does not break existing code and works with all backends (TensorFlow, JAX, and PyTorch).
 - [ ] My PR is based on the latest changes of the main branch (if unsure, rebase the code).
