@@ -23,7 +23,7 @@ def _contains_string_data(inputs):
             if x.dtype.kind in ("U", "S"):
                 return True
             if x.dtype.kind == "O" and x.size:
-                if isinstance(x.flat[0], (str, bytes)):
+                if any(isinstance(item, (str, bytes)) for item in x.flat):
                     return True
             continue
         dtype = getattr(x, "dtype", None)
