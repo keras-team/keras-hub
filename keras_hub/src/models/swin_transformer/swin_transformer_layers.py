@@ -113,6 +113,8 @@ class DropPath(layers.Layer):
 
     Args:
         drop_prob: float, probability of dropping path.
+        seed: optional integer, random seed for reproducibility.
+                    Defaults to None (independent random seed per instance).
     """
 
     def __init__(self, drop_prob=0.0, seed=None, **kwargs):
@@ -136,7 +138,7 @@ class DropPath(layers.Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({"drop_prob": self.drop_prob})
+        config.update({"drop_prob": self.drop_prob, "seed":self.seed})
         return config
 
 
