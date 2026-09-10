@@ -6,6 +6,8 @@ from keras import ops
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.vllm.attention import vllm_paged_attention
+from keras_hub.src.vllm.context import get_vllm_context
 
 
 class GPTNeoXAttention(keras.layers.Layer):
@@ -122,6 +124,54 @@ class GPTNeoXAttention(keras.layers.Layer):
                 )
         return self._softmax(attention_scores, attention_mask)
 
+    def _compute_vllm_attention(self, hidden_states, cache, vllm_context):
+        """vLLM paged-attention route (serving on TPU only).
+
+        Splits the fused QKV projection, rotates only the first
+        ``rotary_dim`` features at the engine's per-token positions and
+        passes the rest through, exactly as the dense path does, then hands
+        Q/K/V to the shared paged-attention bridge. GPT-NeoX has no
+        grouped-query attention, so key/value head count equals
+        ``num_heads``.
+        """
+        positions = ops.reshape(vllm_context.positions, (-1, 1))
+        query_key_value = self._qkv_dense(hidden_states)
+        query = query_key_value[..., : self.attn_head_size]
+        key = query_key_value[
+            ..., self.attn_head_size : 2 * self.attn_head_size
+        ]
+        value = query_key_value[..., 2 * self.attn_head_size :]
+
+        query_rot, query_pass = (
+            query[..., : self.rotary_dim],
+            query[..., self.rotary_dim :],
+        )
+        key_rot, key_pass = (
+            key[..., : self.rotary_dim],
+            key[..., self.rotary_dim :],
+        )
+        query_rot = self.rotary_embedding_layer(query_rot, positions=positions)
+        key_rot = self.rotary_embedding_layer(key_rot, positions=positions)
+        query = ops.concatenate((query_rot, query_pass), axis=-1)
+        key = ops.concatenate((key_rot, key_pass), axis=-1)
+
+        attention_output = vllm_paged_attention(
+            query,
+            key,
+            value,
+            self._inv_norm_factor,
+            num_kv_heads=self.num_heads,
+        )
+        attention_output = ops.reshape(
+            attention_output,
+            [
+                ops.shape(attention_output)[0],
+                ops.shape(attention_output)[1],
+                self.hidden_dim,
+            ],
+        )
+        return self._output_dense(attention_output), cache
+
     def _compute_attention(
         self, query, key, value, attention_mask=None, training=None
     ):
@@ -165,6 +215,17 @@ class GPTNeoXAttention(keras.layers.Layer):
         cache_update_index=None,
         training=None,
     ):
+        # Route to vLLM paged attention while serving on TPU; otherwise the
+        # original dense path below runs unchanged.
+        vllm_context = get_vllm_context()
+        if (
+            vllm_context is not None
+            and vllm_context.paged_attention_func is not None
+        ):
+            return self._compute_vllm_attention(
+                hidden_states, cache, vllm_context
+            )
+
         query_key_value = self._qkv_dense(hidden_states)
 
         query = query_key_value[..., : self.attn_head_size]
@@ -205,7 +266,16 @@ class GPTNeoXAttention(keras.layers.Layer):
             key[..., self.rotary_dim :],
         )
 
-        query_rot = self.rotary_embedding_layer(query_rot)
+        # The query holds only the tokens being decoded now, so it has to
+        # be rotated at their absolute positions. The cache stores keys
+        # unrotated and `key_rot` spans it from the start, so keys keep
+        # rotating from position 0.
+        start_index = (
+            cache_update_index if cache_update_index is not None else 0
+        )
+        query_rot = self.rotary_embedding_layer(
+            query_rot, start_index=start_index
+        )
         key_rot = self.rotary_embedding_layer(key_rot)
 
         query = ops.concatenate((query_rot, query_pass), axis=-1)
