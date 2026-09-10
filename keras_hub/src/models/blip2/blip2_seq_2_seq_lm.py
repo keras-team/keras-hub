@@ -7,6 +7,7 @@ from keras_hub.src.models.blip2.blip2_seq_2_seq_lm_preprocessor import (
 )
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.utils.tensor_utils import any_equal
+from keras_hub.src.utils.tensor_utils import repeat_for_beam_search
 
 
 @keras_hub_export("keras_hub.models.BLIP2Seq2SeqLM")
@@ -228,17 +229,19 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
             num_samples = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_index], [num_samples, 1])
 
-            def repeat_for_beams(x):
-                """Repeats along the batch axis to match beam-search width."""
-                return ops.repeat(x, num_samples // batch_size, axis=0)
-
             logits, hidden, cache, _ = self.call_decoder_with_cache(
                 decoder_token_ids=prompt,
-                encoder_hidden_states=repeat_for_beams(encoder_hidden_states),
-                encoder_attention_mask=repeat_for_beams(encoder_attention_mask),
+                encoder_hidden_states=repeat_for_beam_search(
+                    encoder_hidden_states, num_samples, batch_size
+                ),
+                encoder_attention_mask=repeat_for_beam_search(
+                    encoder_attention_mask, num_samples, batch_size
+                ),
                 self_attention_cache=cache,
                 self_attention_cache_update_index=cache_index,
-                cross_attention_cache=repeat_for_beams(cross_attention_cache),
+                cross_attention_cache=repeat_for_beam_search(
+                    cross_attention_cache, num_samples, batch_size
+                ),
                 cross_attention_cache_update_index=None,
             )
             return (

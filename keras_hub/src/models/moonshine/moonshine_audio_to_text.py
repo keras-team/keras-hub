@@ -11,6 +11,7 @@ from keras_hub.src.models.moonshine.moonshine_backbone import (
     compute_output_lengths,
 )
 from keras_hub.src.utils.tensor_utils import any_equal
+from keras_hub.src.utils.tensor_utils import repeat_for_beam_search
 
 
 @keras_hub_export("keras_hub.models.MoonshineAudioToText")
@@ -298,14 +299,7 @@ class MoonshineAudioToText(AudioToText):
         index = keras.ops.min(row_lengths)
 
         def next(prompt, cache, index):
-            if isinstance(cache, tuple) and len(cache) == 2:
-                current_self_attention_cache = cache[0]
-                current_cross_attention_cache = cache[1]
-            elif cache is not None and not isinstance(cache, tuple):
-                current_self_attention_cache = cache
-                current_cross_attention_cache = cross_attention_cache
-            else:
-                cache = None
+            current_self_attention_cache, current_cross_attention_cache = cache
             cache_index = index - 1
             num_samples = keras.ops.shape(prompt)[0]
             next_token_input = keras.ops.slice(
@@ -314,16 +308,15 @@ class MoonshineAudioToText(AudioToText):
 
             batch_size = keras.ops.shape(encoder_input_values)[0]
 
-            def repeat_tensor(x):
-                return keras.ops.repeat(
-                    x, repeats=num_samples // batch_size, axis=0
-                )
-
             logits, hidden_states, new_self_attention_cache, _ = (
                 self.call_decoder_with_cache(
-                    encoder_hidden_states=repeat_tensor(encoder_hidden_states),
-                    encoder_padding_mask=repeat_tensor(
-                        encoder_attention_mask_for_decoder
+                    encoder_hidden_states=repeat_for_beam_search(
+                        encoder_hidden_states, num_samples, batch_size
+                    ),
+                    encoder_padding_mask=repeat_for_beam_search(
+                        encoder_attention_mask_for_decoder,
+                        num_samples,
+                        batch_size,
                     ),
                     decoder_token_ids=next_token_input,
                     self_attention_cache=current_self_attention_cache,

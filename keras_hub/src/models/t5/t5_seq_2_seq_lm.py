@@ -7,6 +7,7 @@ from keras_hub.src.models.t5.t5_seq_2_seq_lm_preprocessor import (
     T5Seq2SeqLMPreprocessor,
 )
 from keras_hub.src.utils.tensor_utils import any_equal
+from keras_hub.src.utils.tensor_utils import repeat_for_beam_search
 
 
 @keras_hub_export("keras_hub.models.T5Seq2SeqLM")
@@ -380,17 +381,19 @@ class T5Seq2SeqLM(Seq2SeqLM):
             num_samples = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_index], [num_samples, 1])
 
-            def repeat_tensor(x):
-                """Repeats along batch axis to match dim for beam search."""
-                return ops.repeat(x, repeats=num_samples // batch_size, axis=0)
-
             logits, hidden_states, cache, _ = self.call_decoder_with_cache(
-                encoder_hidden_states=repeat_tensor(encoder_hidden_states),
-                encoder_padding_mask=repeat_tensor(encoder_padding_mask),
+                encoder_hidden_states=repeat_for_beam_search(
+                    encoder_hidden_states, num_samples, batch_size
+                ),
+                encoder_padding_mask=repeat_for_beam_search(
+                    encoder_padding_mask, num_samples, batch_size
+                ),
                 decoder_token_ids=prompt,
                 self_attention_cache=cache,
                 self_attention_cache_update_index=cache_index,
-                cross_attention_cache=repeat_tensor(cross_attention_cache),
+                cross_attention_cache=repeat_for_beam_search(
+                    cross_attention_cache, num_samples, batch_size
+                ),
                 cross_attention_cache_update_index=None,
             )
             return (
