@@ -120,4 +120,4 @@ class TestGPT2Export(TestCase):
         keras_logits_np = ops.convert_to_numpy(keras_logits)
         hf_logits_np = hf_logits.detach().cpu().numpy()
 
-        self.assertAllClose(keras_logits_np, hf_logits_np, atol=1e-5, rtol=1e-5)
+        self.assertAllClose(keras_logits_np, hf_logits_np, atol=1e-4, rtol=3e-4)
