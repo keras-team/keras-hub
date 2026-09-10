@@ -1,5 +1,6 @@
 import pytest
 from keras import ops
+import torch
 
 from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_hub.src.tests.test_case import TestCase
@@ -23,15 +24,21 @@ class WhisperBackboneTest(TestCase):
         }
 
     def test_backbone_basics(self):
-        self.run_backbone_test(
-            cls=WhisperBackbone,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-            expected_output_shape={
-                "encoder_sequence_output": (2, 3, 2),
-                "decoder_sequence_output": (2, 5, 2),
-            },
-        )
+        with torch.nn.attention.sdpa_kernel(
+        backends=[
+            torch.nn.attention.SDPBackend.EFFICIENT_ATTENTION,
+            torch.nn.attention.SDPBackend.MATH,
+        ]
+    ):
+            self.run_backbone_test(
+                cls=WhisperBackbone,
+                init_kwargs=self.init_kwargs,
+                input_data=self.input_data,
+                expected_output_shape={
+                    "encoder_sequence_output": (2, 3, 2),
+                    "decoder_sequence_output": (2, 5, 2),
+                },
+            )
 
     def test_key_projection_bias_absence(self):
         backbone = WhisperBackbone(**self.init_kwargs)
