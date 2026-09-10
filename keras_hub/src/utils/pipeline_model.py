@@ -165,22 +165,22 @@ class PipelineModel(keras.Model):
     # Below are overrides to keras.Model methods to apply the functions above.
     # ========================================================================
     def __call__(self, *args, **kwargs):
-    inputs = args[0] if args else kwargs.get("inputs")
-    if _contains_string_data(inputs):
-        message = (
-            "Calling a model directly, e.g. `model(x)`, does not apply "
-            "preprocessing, but the model received string input. Use "
-            "`model.predict(x)`, `model.fit(x, y)` or "
-            "`model.evaluate(x, y)` instead, which will preprocess "
-            "string input before running the model."
-        )
-        if getattr(self, "preprocessor", None) is not None:
-            message += (
-                " Alternatively, preprocess the input first, e.g. "
-                "`model(model.preprocessor(x))`."
+        inputs = args[0] if args else kwargs.get("inputs")
+        if _contains_string_data(inputs):
+            message = (
+                "Calling a model directly, e.g. `model(x)`, does not apply "
+                "preprocessing, but the model received string input. Use "
+                "`model.predict(x)`, `model.fit(x, y)` or "
+                "`model.evaluate(x, y)` instead, which will preprocess "
+                "string input before running the model."
             )
-        raise ValueError(message)
-    return super().__call__(*args, **kwargs)
+            if getattr(self, "preprocessor", None) is not None:
+                message += (
+                    " Alternatively, preprocess the input first, e.g. "
+                    "`model(model.preprocessor(x))`."
+                )
+            raise ValueError(message)
+        return super().__call__(*args, **kwargs)
 
     def fit(
         self,
