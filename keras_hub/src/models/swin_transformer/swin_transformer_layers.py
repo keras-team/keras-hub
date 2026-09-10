@@ -115,10 +115,11 @@ class DropPath(layers.Layer):
         drop_prob: float, probability of dropping path.
     """
 
-    def __init__(self, drop_prob=0.0, **kwargs):
+    def __init__(self, drop_prob=0.0, seed=None, **kwargs):
         super().__init__(**kwargs)
         self.drop_prob = drop_prob
-        self.seed_generator = keras.random.SeedGenerator(seed=1337)
+        self.seed = seed
+        self.seed_generator = keras.random.SeedGenerator(seed=seed)
 
     def call(self, x, training=None):
         if self.drop_prob == 0.0 or not training:
@@ -128,11 +129,10 @@ class DropPath(layers.Layer):
         batch_size = ops.shape(x)[0]
         mask_shape = (batch_size,) + (1,) * (len(x.shape) - 1)
         random_tensor = keep_prob + keras.random.uniform(
-            mask_shape, seed=self.seed_generator
+            mask_shape, dtype=x.dtype, seed=self.seed_generator
         )
         binary_mask = ops.floor(random_tensor)
-        output = x / keep_prob * binary_mask
-        return output
+        return x / keep_prob * binary_mask
 
     def get_config(self):
         config = super().get_config()
