@@ -1,5 +1,6 @@
 import functools
 import math
+import warnings
 
 import keras
 from keras import ops
@@ -145,6 +146,25 @@ class PipelineModel(keras.Model):
     # ========================================================================
     # Below are overrides to keras.Model methods to apply the functions above.
     # ========================================================================
+    def _has_preprocessing(self):
+        preprocessor = getattr(self, "preprocessor", None)
+        if preprocessor is not None:
+            return True
+        return type(self).preprocess_samples != PipelineModel.preprocess_samples
+
+    def __call__(self, *args, **kwargs):
+        if self._has_preprocessing() and not getattr(
+            self, "_in_pipeline_execution", False
+        ):
+            warnings.warn(
+                "Calling `PipelineModel` (or a `Task` subclass) directly "
+                "will not automatically apply preprocessing. "
+                "To automatically preprocess inputs, use `predict()` or `fit()`.",
+                UserWarning,
+                stacklevel=2,
+            )
+        return super().__call__(*args, **kwargs)
+
     def fit(
         self,
         x=None,
@@ -155,33 +175,37 @@ class PipelineModel(keras.Model):
         validation_split=None,
         **kwargs,
     ):
-        if validation_split and validation_data is None:
-            (x, y, sample_weight), validation_data = _train_validation_split(
-                (x, y, sample_weight), validation_split=validation_split
+        self._in_pipeline_execution = True
+        try:
+            if validation_split and validation_data is None:
+                (x, y, sample_weight), validation_data = _train_validation_split(
+                    (x, y, sample_weight), validation_split=validation_split
+                )
+
+            x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
+            x = x.map(
+                self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
+            ).prefetch(tf.data.AUTOTUNE)
+
+            if validation_data is not None:
+                if not isinstance(validation_data, tf.data.Dataset):
+                    (vx, vy, vsw) = keras.utils.unpack_x_y_sample_weight(
+                        validation_data
+                    )
+                    validation_data = _convert_inputs_to_dataset(
+                        vx, vy, vsw, batch_size
+                    )
+
+            return super().fit(
+                x=x,
+                y=None,
+                batch_size=None,
+                sample_weight=None,
+                validation_data=validation_data,
+                **kwargs,
             )
-
-        x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
-        x = x.map(
-            self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
-        ).prefetch(tf.data.AUTOTUNE)
-
-        if validation_data is not None:
-            if not isinstance(validation_data, tf.data.Dataset):
-                (vx, vy, vsw) = keras.utils.unpack_x_y_sample_weight(
-                    validation_data
-                )
-                validation_data = _convert_inputs_to_dataset(
-                    vx, vy, vsw, batch_size
-                )
-
-        return super().fit(
-            x=x,
-            y=None,
-            batch_size=None,
-            sample_weight=None,
-            validation_data=validation_data,
-            **kwargs,
-        )
+        finally:
+            self._in_pipeline_execution = False
 
     def evaluate(
         self,
@@ -191,21 +215,25 @@ class PipelineModel(keras.Model):
         sample_weight=None,
         **kwargs,
     ):
-        # During `fit()`, `keras.Model` attempts to cache the validation
-        # dataset and ignores the values for `x`, `y`, and `sample_weight`.
-        # We don't want that behavior here, as the validation dataset still
-        # needs preprocessing.
-        kwargs.pop("_use_cached_eval_dataset", None)
-        x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
-        x = x.map(
-            self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
-        ).prefetch(tf.data.AUTOTUNE)
-        return super().evaluate(
-            x=x,
-            y=None,
-            batch_size=None,
-            **kwargs,
-        )
+        self._in_pipeline_execution = True
+        try:
+            # During `fit()`, `keras.Model` attempts to cache the validation
+            # dataset and ignores the values for `x`, `y`, and `sample_weight`.
+            # We don't want that behavior here, as the validation dataset still
+            # needs preprocessing.
+            kwargs.pop("_use_cached_eval_dataset", None)
+            x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
+            x = x.map(
+                self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
+            ).prefetch(tf.data.AUTOTUNE)
+            return super().evaluate(
+                x=x,
+                y=None,
+                batch_size=None,
+                **kwargs,
+            )
+        finally:
+            self._in_pipeline_execution = False
 
     def predict(
         self,
@@ -213,15 +241,19 @@ class PipelineModel(keras.Model):
         batch_size=None,
         **kwargs,
     ):
-        x = _convert_inputs_to_dataset(x, None, None, batch_size)
-        x = x.map(
-            self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
-        ).prefetch(tf.data.AUTOTUNE)
-        return super().predict(
-            x=x,
-            batch_size=None,
-            **kwargs,
-        )
+        self._in_pipeline_execution = True
+        try:
+            x = _convert_inputs_to_dataset(x, None, None, batch_size)
+            x = x.map(
+                self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
+            ).prefetch(tf.data.AUTOTUNE)
+            return super().predict(
+                x=x,
+                batch_size=None,
+                **kwargs,
+            )
+        finally:
+            self._in_pipeline_execution = False
 
     def train_on_batch(
         self,
@@ -230,19 +262,23 @@ class PipelineModel(keras.Model):
         sample_weight=None,
         **kwargs,
     ):
-        data = self.preprocess_samples(x, y, sample_weight)
-        x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
-        x = tree.map_structure(ops.convert_to_tensor, x)
-        if y is not None:
-            y = ops.convert_to_tensor(y)
-        if sample_weight is not None:
-            sample_weight = ops.convert_to_tensor(sample_weight)
-        return super().train_on_batch(
-            x=x,
-            y=y,
-            sample_weight=sample_weight,
-            **kwargs,
-        )
+        self._in_pipeline_execution = True
+        try:
+            data = self.preprocess_samples(x, y, sample_weight)
+            x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
+            x = tree.map_structure(ops.convert_to_tensor, x)
+            if y is not None:
+                y = ops.convert_to_tensor(y)
+            if sample_weight is not None:
+                sample_weight = ops.convert_to_tensor(sample_weight)
+            return super().train_on_batch(
+                x=x,
+                y=y,
+                sample_weight=sample_weight,
+                **kwargs,
+            )
+        finally:
+            self._in_pipeline_execution = False
 
     def test_on_batch(
         self,
@@ -251,29 +287,37 @@ class PipelineModel(keras.Model):
         sample_weight=None,
         **kwargs,
     ):
-        data = self.preprocess_samples(x, y, sample_weight)
-        x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
-        x = tree.map_structure(ops.convert_to_tensor, x)
-        if y is not None:
-            y = ops.convert_to_tensor(y)
-        if sample_weight is not None:
-            sample_weight = ops.convert_to_tensor(sample_weight)
-        return super().test_on_batch(
-            x=x,
-            y=y,
-            sample_weight=sample_weight,
-            **kwargs,
-        )
+        self._in_pipeline_execution = True
+        try:
+            data = self.preprocess_samples(x, y, sample_weight)
+            x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
+            x = tree.map_structure(ops.convert_to_tensor, x)
+            if y is not None:
+                y = ops.convert_to_tensor(y)
+            if sample_weight is not None:
+                sample_weight = ops.convert_to_tensor(sample_weight)
+            return super().test_on_batch(
+                x=x,
+                y=y,
+                sample_weight=sample_weight,
+                **kwargs,
+            )
+        finally:
+            self._in_pipeline_execution = False
 
     def predict_on_batch(
         self,
         x,
         **kwargs,
     ):
-        data = self.preprocess_samples(x)
-        x, _, _ = keras.utils.unpack_x_y_sample_weight(data)
-        x = tree.map_structure(ops.convert_to_tensor, x)
-        return super().predict_on_batch(
-            x=x,
-            **kwargs,
-        )
+        self._in_pipeline_execution = True
+        try:
+            data = self.preprocess_samples(x)
+            x, _, _ = keras.utils.unpack_x_y_sample_weight(data)
+            x = tree.map_structure(ops.convert_to_tensor, x)
+            return super().predict_on_batch(
+                x=x,
+                **kwargs,
+            )
+        finally:
+            self._in_pipeline_execution = False

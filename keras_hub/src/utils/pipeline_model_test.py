@@ -1,4 +1,5 @@
 import os
+import warnings
 
 import keras
 import numpy as np
@@ -413,3 +414,54 @@ class TestInputErrors(TestCase):
             )
         with self.assertRaisesRegex(ValueError, "must have a batch dimension"):
             model.fit(x="test")
+
+
+class TestPipelineModelCallWarning(TestCase):
+    def test_call_warning_raised_when_preprocessing_present(self):
+        model = FeaturePipeline()
+        model.compile(loss="mse")
+        x = tf.constant([[1.0, 2.0, 3.0, 4.0, 5.0]])
+        y = np.random.uniform(size=(1, 1))
+
+        # Direct __call__ should warn
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            model(x)
+            pipeline_warnings = [
+                item
+                for item in w
+                if issubclass(item.category, UserWarning)
+                and "will not automatically apply preprocessing" in str(item.message)
+            ]
+            self.assertEqual(len(pipeline_warnings), 1)
+
+        # Pipeline methods should NOT warn
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            model.predict(tf.strings.as_string(x))
+            model.fit(tf.strings.as_string(x), y)
+            model.evaluate(tf.strings.as_string(x), y)
+            model.predict_on_batch(tf.strings.as_string(x))
+            pipeline_warnings = [
+                item
+                for item in w
+                if issubclass(item.category, UserWarning)
+                and "will not automatically apply preprocessing" in str(item.message)
+            ]
+            self.assertEqual(len(pipeline_warnings), 0)
+
+    def test_call_warning_not_raised_when_no_preprocessing(self):
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        x = np.random.uniform(size=(1, 5))
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            model(x)
+            pipeline_warnings = [
+                item
+                for item in w
+                if issubclass(item.category, UserWarning)
+                and "will not automatically apply preprocessing" in str(item.message)
+            ]
+            self.assertEqual(len(pipeline_warnings), 0)
