@@ -12,6 +12,20 @@ class RegisterKerasHubTest(TestCase):
         # TPU backend installed. It must be a no-op there, not an error.
         register_keras_hub()
 
+    def test_backend_decides_when_vllm_cannot_say(self):
+        # The tie-breaker exists for GPU boxes with tpu-inference
+        # installed. Where vLLM cannot answer it falls back to whether the
+        # TPU backend is installed, so neither path ends up unregistered.
+        from keras_hub.src.vllm.plugin import serves_on_tpu
+
+        try:
+            import tpu_inference  # noqa: F401
+
+            installed = True
+        except ImportError:
+            installed = False
+        self.assertEqual(serves_on_tpu(), installed)
+
     def test_entry_point_is_exposed(self):
         # vLLM reads entry points from the installed package metadata, so a
         # line in pyproject.toml only counts once it lands there.
