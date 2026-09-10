@@ -431,7 +431,8 @@ class TestPipelineModelCallWarning(TestCase):
                 item
                 for item in w
                 if issubclass(item.category, UserWarning)
-                and "will not automatically apply preprocessing" in str(item.message)
+                and "will not automatically apply preprocessing"
+                in str(item.message)
             ]
             self.assertEqual(len(pipeline_warnings), 1)
 
@@ -446,7 +447,8 @@ class TestPipelineModelCallWarning(TestCase):
                 item
                 for item in w
                 if issubclass(item.category, UserWarning)
-                and "will not automatically apply preprocessing" in str(item.message)
+                and "will not automatically apply preprocessing"
+                in str(item.message)
             ]
             self.assertEqual(len(pipeline_warnings), 0)
 
@@ -462,6 +464,7 @@ class TestPipelineModelCallWarning(TestCase):
                 item
                 for item in w
                 if issubclass(item.category, UserWarning)
-                and "will not automatically apply preprocessing" in str(item.message)
+                and "will not automatically apply preprocessing"
+                in str(item.message)
             ]
             self.assertEqual(len(pipeline_warnings), 0)
