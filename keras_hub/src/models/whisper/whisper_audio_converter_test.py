@@ -1,5 +1,15 @@
 import tensorflow as tf
 
+libdevice = glob.glob(
+    "/usr/local/cuda*/nvvm/libdevice/libdevice.10.bc"
+)
+
+if libdevice:
+    cuda_root = libdevice[0].split("/nvvm/")[0]
+    os.environ["XLA_FLAGS"] = (
+        f"--xla_gpu_cuda_data_dir={cuda_root}"
+    )
+
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
 )
@@ -23,15 +33,17 @@ class WhisperAudioConverterTest(TestCase):
         )
 
     def test_feature_extractor_basics(self):
-        self.run_preprocessing_layer_test(
-            cls=WhisperAudioConverter,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-        )
+        with tf.device("/CPU:0"):
+            self.run_preprocessing_layer_test(
+                cls=WhisperAudioConverter,
+                init_kwargs=self.init_kwargs,
+                input_data=self.input_data,
+            )
 
     def test_correctness(self):
-        audio_tensor = tf.ones((2,), dtype="float32")
-        outputs = WhisperAudioConverter(**self.init_kwargs)(audio_tensor)
+        with tf.device("/CPU:0"):
+            audio_tensor = tf.ones((2,), dtype="float32")
+            outputs = WhisperAudioConverter(**self.init_kwargs)(audio_tensor)
 
         # Verify shape.
         self.assertEqual(outputs.shape, (5, 80))
