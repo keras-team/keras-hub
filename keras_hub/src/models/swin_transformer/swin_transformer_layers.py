@@ -138,7 +138,7 @@ class DropPath(layers.Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({"drop_prob": self.drop_prob, "seed":self.seed})
+        config.update({"drop_prob": self.drop_prob, "seed": self.seed})
         return config
 
 
