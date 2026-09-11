@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 import tempfile
+from absl import flags
 
 import keras
 import numpy as np
@@ -16,6 +17,11 @@ from keras.layers import ReversibleEmbedding
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.tensor_utils import is_float_dtype
+
+try:
+    import grain.python as grain
+except ImportError:
+    grain = None
 
 
 def convert_to_comparible_type(x):
@@ -35,6 +41,47 @@ def convert_to_comparible_type(x):
     if hasattr(x, "__array__"):
         return ops.convert_to_numpy(x)
     return x
+
+
+class _LayerWrapper(grain.MapTransform if grain is not None else object):
+    """Pickleable wrapper to apply a layer to tuple or non-tuple inputs."""
+
+    def __init__(self, layer, is_tuple):
+        self.layer = layer
+        self.is_tuple = is_tuple
+
+    def __call__(self, x):
+        print("\n========== _LayerWrapper.__call__ ==========")
+        print("x type:", type(x))
+        print("x:", x)
+        print("is_tuple:", self.is_tuple)
+
+        if self.is_tuple:
+            result = self.layer(*x)
+        else:
+            result = self.layer(x)
+
+        print("result type:", type(result))
+        print("result:", result)
+
+        return result
+
+
+    def map(self, x):
+        print("\n!!!!!!!!!!!! GRAIN MAP CALLED !!!!!!!!!!!!")
+        print("x type:", type(x))
+        print("x:", x)
+
+        if isinstance(x, np.ndarray):
+            x = x.tolist()
+
+        print("[DEBUG] AFTER NUMPY CONVERSION")
+        print("x type:", type(x))
+        print("x:", x)
+
+        result = self.__call__(x)
+
+        return result
 
 
 class TestCase(tf.test.TestCase, parameterized.TestCase):
@@ -228,6 +275,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         output_ds = ds.batch(1_000).map(layer)
         self.assertAllClose(output, output_ds.get_single_element())
 
+        # Run with PyGrain datasets if available
+        self._run_grain_test(layer, input_data, output)
+
         if expected_output:
             self.assertAllClose(output, expected_output)
 
@@ -269,6 +319,268 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         output, _, _ = keras.utils.unpack_x_y_sample_weight(output)
         shape = ops.shape(output[token_id_key])
         self.assertEqual(shape[-1], 17)
+
+        # Grain parity for sequence length update
+        self._run_grain_test(layer, input_data, output, unpack=True)
+
+    def _prepare_grain_source_data(self, input_data):
+        """Convert input data to NumPy and prepare unbatched Grain samples."""
+        print("\n" + "=" * 80)
+        print("DEBUG: _prepare_grain_source_data()")
+        print("=" * 80)
+        print("\n========== PREPARE GRAIN SOURCE ==========")
+        print("input_data type:", type(input_data))
+        print("input_data:", input_data)
+        if isinstance(input_data, tf.RaggedTensor):
+            print("[DEBUG] input_data IS RAGGED TENSOR")
+            numpy_input_data = [np.asarray(row) for row in input_data.to_list()]
+        else:
+            print("[DEBUG] input_data IS NOT A RAGGED TENSOR")
+            numpy_input_data = tree.map_structure(
+                ops.convert_to_numpy,
+                input_data,
+            )
+        print("[3] AFTER ops.convert_to_numpy")
+        print("    type:", type(numpy_input_data))
+        print("    repr:", repr(numpy_input_data))
+
+        # Print complete tree structure.
+        print("[4] TREE STRUCTURE")
+        try:
+            print(tree.structure(numpy_input_data))
+        except Exception as e:
+            print("    Could not print tree structure:", e)
+
+        # Convert NumPy scalar values (especially np.str_) to Python values.
+        numpy_input_data = tree.map_structure(
+            lambda x: x.item()
+            if isinstance(x, np.ndarray) and x.ndim == 0
+            else x,
+            numpy_input_data,
+        )
+
+        print("[5] AFTER NumPy scalar conversion")
+        print("    type:", type(numpy_input_data))
+        print("    repr:", repr(numpy_input_data))
+        
+        if isinstance(numpy_input_data, tuple):
+            print("[6] numpy_input_data IS TUPLE")
+            print("    tuple len:", len(numpy_input_data))
+            for i, value in enumerate(numpy_input_data):
+                print(f"    tuple[{i}] type:", type(value))
+                print(f"    tuple[{i}] repr:", repr(value))
+
+            if len(numpy_input_data) == 1 and isinstance(
+                numpy_input_data[0], dict
+            ):
+                print("[7] CASE: tuple -> one dict")
+                source_data = [
+                    dict(zip(numpy_input_data[0].keys(), values))
+                    for values in zip(*numpy_input_data[0].values())
+                ]
+            elif len(numpy_input_data) == 1:
+                print("[7] CASE: tuple -> one positional argument")
+                print("    numpy_input_data[0] type:",
+                      type(numpy_input_data[0]))
+                print("    numpy_input_data[0] repr:",
+                      repr(numpy_input_data[0]))
+                # Single positional argument that is not a dict.
+                source_data = [numpy_input_data[0]]
+            else:
+                print("[7] CASE: tuple -> multiple positional arguments")
+                # Multiple positional arguments.
+                source_data = list(zip(*numpy_input_data))
+
+        elif isinstance(numpy_input_data, dict):
+            print("[6] numpy_input_data IS DICT")
+            source_data = [
+                dict(zip(numpy_input_data.keys(), values))
+                for values in zip(*numpy_input_data.values())
+            ]
+        else:
+            print("[6] numpy_input_data IS OTHER or lIST")
+            source_data = list(numpy_input_data)
+        
+        print("\n[8] FINAL source_data")
+        print("    type:", type(source_data))
+        print("    len:", len(source_data))
+        print("    repr:", repr(source_data))
+
+        for i, sample in enumerate(source_data):
+            print(f"\n    source_data[{i}]")
+            print("        type:", type(sample))
+            print("        repr:", repr(sample))
+
+        print("=" * 80)
+
+        return numpy_input_data, source_data
+
+    @staticmethod
+    def _grain_batch_fn(samples):
+        """Batch Grain samples while preserving ragged list outputs."""
+        if not samples:
+            return samples
+
+        def batch_values(values):
+            print("[DEBUG][Func:Batch_values] values:", values)
+            print("number of values:", len(values))
+
+            first_shape = np.shape(values[0])
+
+            # Grain batch_fn is called for the unbatched-source path.
+            # Even when there is only one sample, we must add the batch dimension.
+            if len(values) == 1:
+                result = np.stack(values)
+                print("[DEBUG][batch_values] single value stacked:", result.shape)
+                return result
+
+            # Multiple samples with identical shapes -> normal dense batch.
+            if all(np.shape(value) == first_shape for value in values):
+                result = np.stack(values)
+                print("[DEBUG][batch_values] stacked shape:", result.shape)
+                return result
+
+            # Variable-length values -> preserve as a list.
+            print("[DEBUG][batch_values] Shapes differ")
+            print(
+                "[DEBUG][batch_values] shapes:",
+                [np.shape(value) for value in values],
+            )
+            return list(values)
+
+        def traverse(values):
+            print("\n[DEBUG][traverse] INPUT")
+            first = values[0]
+
+            # For Dict
+            if isinstance(first, dict):
+                result = {}
+
+                for key in first:
+                    key_values = [value[key] for value in values]
+
+                    result[key] = traverse(key_values)
+
+                return result
+
+            """return {
+                    key: traverse([value[key] for value in values])
+                    for key in first
+                }"""
+            # For Tuple
+            if isinstance(first, tuple):
+                """return tuple(
+                    traverse([value[i] for value in values])
+                    for i in range(len(first))
+                )"""
+
+                result = tuple(
+                    traverse([value[i] for value in values])
+                    for i in range(len(first))
+                )
+
+                return result
+
+            # For simple values / NumPy arrays
+            print("[DEBUG][traverse] SIMPLE VALUE")
+            return batch_values(values)
+
+        print("\n[DEBUG] Starting traverse")
+
+        result = traverse(samples)
+
+        return result
+
+    def _run_grain_test(self, layer, input_data, output, unpack=False):
+        if not grain:
+            self.skipTest(
+                "PyGrain not installed - skipping PyGrain parity checks."
+            )
+
+        # Convert input data to NumPy/Python data.
+        # Keeps the Grain pipeline independent of tf.data
+        numpy_input_data, source_data = self._prepare_grain_source_data(
+            input_data
+        )
+        print("\n========== GRAIN SOURCE DATA ==========")
+
+        def process_and_compare(source_data, is_batched):
+            """Run the layer with Grain and compare the output with Keras."""
+            grain_ds = grain.MapDataset.source(source_data)
+
+            print("========== SOURCE DATA ==========")
+            print("source_data type:", type(source_data))
+            print("source_data:", source_data)
+
+
+            grain_ds = grain_ds.map(
+            _LayerWrapper(
+            layer,is_tuple=isinstance(input_data, tuple) and len(input_data) > 1,)
+            )
+            
+            if not is_batched:
+                print("\n========== BEFORE GRAIN BATCH ==========")
+                print("batch function:", self._grain_batch_fn)
+                print("batch function type:", type(self._grain_batch_fn))
+
+                grain_ds = grain_ds.batch(
+                    len(source_data),
+                    batch_fn=self._grain_batch_fn,
+                )
+
+            grain_output = grain_ds[0]
+            print("\n========== AFTER GRAIN ds[0] ==========")
+            print("grain_output type:", type(grain_output))
+
+            if unpack:
+                print("\n========== UNPACKING GRAIN OUTPUT ==========")
+                grain_output, _, _ = keras.utils.unpack_x_y_sample_weight(
+                    grain_output
+                )
+
+                self.assertAllClose(output, grain_output)
+                print("\n========== MATCHING WITH ORIGINAL OUTPUT ==========")
+                
+
+        # Unbatched grain dataset
+        process_and_compare(source_data, is_batched=False)
+
+        # Batched grain dataset
+        if isinstance(numpy_input_data, tuple) and len(numpy_input_data) == 1:
+            batched_source_data = [numpy_input_data[0]]
+        else:
+            batched_source_data = [numpy_input_data]
+
+        print("\n========== GRAIN BATched SOURCE DATA ==========")
+        print("batched_source_data:", batched_source_data)
+        print("batched_source_data type:", type(batched_source_data))
+
+        process_and_compare(batched_source_data, is_batched=True)
+        
+        # Multiprocessing smoke test.
+        self._run_grain_multiprocessing_test(layer, input_data, source_data)
+
+    def _run_grain_multiprocessing_test(self, layer, input_data, source_data):
+        """Smoke test Grain layer mapping with multiple worker processes."""
+        if not grain:
+            self.skipTest(
+                "PyGrain not installed - skipping PyGrain multiprocessing test."
+            )
+
+        if not flags.FLAGS.is_parsed():
+            flags.FLAGS(["test"])
+
+        loader = grain.DataLoader(
+            data_source=source_data,
+            sampler=grain.SequentialSampler(
+                num_records=len(source_data),
+            ),
+            operations=[_LayerWrapper(layer, isinstance(input_data, tuple) and len(input_data) > 1,)],
+            worker_count=2,
+        )
+
+        for _ in loader:
+            pass
 
     def run_serialization_test(self, instance):
         """Check idempotency of serialize/deserialize.
