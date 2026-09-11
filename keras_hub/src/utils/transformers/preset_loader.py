@@ -38,6 +38,7 @@ from keras_hub.src.utils.transformers import convert_swin_transformer
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_t5gemma2
 from keras_hub.src.utils.transformers import convert_vit
+from keras_hub.src.utils.transformers import convert_whisper
 from keras_hub.src.utils.transformers import convert_xlm_roberta
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
@@ -115,6 +116,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_t5gemma
         elif model_type == "t5gemma2":
             self.converter = convert_t5gemma2
+        elif model_type == "whisper":
+            self.converter = convert_whisper
         else:
             raise ValueError(
                 "KerasHub has no converter for huggingface/transformers models "

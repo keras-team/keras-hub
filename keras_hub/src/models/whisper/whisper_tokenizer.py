@@ -88,6 +88,11 @@ class WhisperTokenizer(BytePairTokenizer):
         self.translate_token_id = special_tokens[self.translate_token]
         self.transcribe_token_id = special_tokens[self.transcribe_token]
 
+        # Aliases matching the naming convention used elsewhere in the library
+        # (e.g. `Seq2SeqLMPreprocessor`, `CausalLM.generate`).
+        self.start_token_id = self.bos_token_id
+        self.end_token_id = self.eos_token_id
+
         self._special_token_dict = special_tokens
         self.language_tokens = language_tokens
         super().__init__(
