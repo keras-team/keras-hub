@@ -1,57 +1,104 @@
 # Model Contribution Guide
 
-KerasHub has a plethora of pre-trained large language models
-ranging from BERT to OPT. We are always looking for more models and are always
-open to contributions!
+KerasHub has a plethora of pre-trained large language models ranging from BERT
+to OPT. We are always looking for more models and are always open to
+contributions!
 
-In this guide, we will walk you through the steps one needs to take in order to
-contribute a new pre-trained model to KerasHub. For illustration purposes, let's
-assume that you want to contribute the DistilBERT model. Before we dive in, we encourage you to go through
-[our getting started guide](https://keras.io/guides/keras_nlp/getting_started/)
-for an introduction to the library, and our
-[contribution guide](https://github.com/keras-team/keras-hub/blob/master/CONTRIBUTING.md).
+In this guide, we will walk you through the steps needed to contribute a new
+pre-trained model to KerasHub. For illustration purposes, let's assume that you
+want to contribute the DistilBERT model. Before we dive in, we encourage you to
+go through our [Getting Started Guide](https://keras.io/guides/keras_nlp/getting_started/)
+for an introduction to the library, and our [Contribution Guide](https://github.com/keras-team/keras-hub/blob/master/CONTRIBUTING.md).
+
+---
 
 ## Checklist
 
 This to-do list is a brief outline of how a model can be contributed.
 Keep this checklist handy!
 
-### Step 1: Open an issue/find an issue
+### Step 1: Open an Issue or Find an Issue
 
 - [ ] Open an issue or find an issue to contribute a backbone model.
 
-### Step 2: PR #1 - Add XXBackbone
+### Step 2: Model Folder
 
-- [ ] An `xx/xx_backbone.py` file which has the model graph \[[Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_backbone.py)\].
-- [ ] An `xx/xx_backbone_test.py` file which has unit tests for the backbone \[[Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_backbone_test.py)\].
-- [ ] A Colab notebook link in the PR description which matches the outputs of the implemented backbone model with the original source \[[Example](https://colab.research.google.com/drive/1SeZWJorKWmwWJax8ORSdxKrxE25BfhHa?usp=sharing)\].
+- [ ] Create your model folder `xx` in [`keras_hub/src/models`](https://github.com/keras-team/keras-hub/tree/master/keras_hub/src/models)
 
-### Step 3: PR #2 - Add XXTokenizer
+### Step 3: Add `XXBackbone`
 
-- [ ] An `xx/xx_tokenizer.py` file which has the tokenizer for the model \[[Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_tokenizer.py)\].
-- [ ] An `xx/xx_tokenizer_test.py` file which has unit tests for the model tokenizer \[[Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_tokenizer_test.py)\].
-- [ ] A Colab notebook link in the PR description, demonstrating that the output of the tokenizer matches the original tokenizer \[[Example](https://colab.research.google.com/drive/1MH_rpuFB1Nz_NkKIAvVtVae2HFLjXZDA?usp=sharing)].
+- [ ] An `xx/xx_backbone.py` file which has the model graph
+      [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_backbone.py)
 
-### Step 4: PR #3 - Add XX Presets
+- [ ] An `xx/xx_backbone_test.py` file which has unit tests for the backbone
+      [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_backbone_test.py)
 
-- [ ] An `xx/xx_presets.py` file with links to weights uploaded to a personal GCP bucket/Google Drive \[[Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_presets.py)\].
-- [ ] A `tools/checkpoint_conversion/convert_xx_checkpoints.py` which is reusable script for converting checkpoints \[[Example](https://github.com/keras-team/keras-hub/blob/master/tools/checkpoint_conversion/convert_distilbert_checkpoints.py)\].
-- [ ] A Colab notebook link in the PR description, showing an end-to-end task such as text classification, etc. The task model can be built using the backbone model, with the task head on top \[[Example](https://gist.github.com/mattdangerw/bf0ca07fb66b6738150c8b56ee5bab4e)\].
+- [ ] A Colab notebook link in the PR description that matches the outputs of
+the implemented backbone model with the original source
+      [Example](https://colab.sandbox.google.com/drive/1R99yFJCbxTEpcxFHa2RtlwQWahUIPCJC?usp=sharing)
 
-### Step 5: PR #4 and Beyond - Add XX Tasks and Preprocessors
+### Step 4: Data Converter - Add `XXTokenizer` or `XXImageConverter` or `XXAudioConverter`
 
-This PR is optional.
+- [ ] If contributing a language model, add an `xx/xx_tokenizer.py` file
+      [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_tokenizer.py)
 
-- [ ] An `xx/xx_<task>.py` file for adding a task model like classifier, masked LM, etc. \[[Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_classifier.py)\]
-- [ ] An `xx/xx_<task>_preprocessor.py` file which has the preprocessor and can be used to get inputs suitable for the task model \[[Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_preprocessor.py)\].
-- [ ] `xx/xx_<task>_test.py` file and `xx/xx_<task>_preprocessor_test.py` files which have unit tests for the above two modules \[[Example 1](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_classifier_test.py) and [Example 2](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_preprocessor_test.py)\].
-- [ ] A Colab notebook link in the PR description, demonstrating that the output of the preprocessor matches the output of the original preprocessor \[[Example](https://colab.research.google.com/drive/1GFFC7Y1I_2PtYlWDToqKvzYhHWv1b3nC?usp=sharing)].
+- [ ] Add `xx/xx_tokenizer_test.py` file with unit tests
+      [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_tokenizer_test.py)
+
+- [ ] A Colab notebook link in the PR description demonstrating that the
+      tokenizer output matches the original
+      [Example](https://colab.research.google.com/drive/1MH_rpuFB1Nz_NkKIAvVtVae2HFLjXZDA?usp=sharing)
+
+- [ ] For image models: Add `xx/xx_image_converter.py` file with image
+      transformations
+      [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/clip/clip_image_converter.py)
+
+- [ ] For audio models: Add `xx/xx_audio_converter.py` file with audio
+      transformations
+      [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/moonshine/moonshine_audio_converter.py)
+
+### Step 5: Add `XX` Tasks and Preprocessors (Optional)
+
+- [ ] Add `xx/xx_<task>.py` for adding task models (e.g., classifier, masked LM)
+      [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_classifier.py)
+
+- [ ] Add `xx/xx_<task>_preprocessor.py` for preprocessing inputs to the task
+      model
+      [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_preprocessor.py)
+
+- [ ] Add unit tests: `xx/xx_<task>_test.py` and `xx/xx_<task>_preprocessor_test.py`
+      [Example 1](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_classifier_test.py),
+      [Example 2](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_preprocessor_test.py)
+
+- [ ] Colab notebook link in the PR description to validate that the
+      preprocessor output matches the original
+      [Example](https://colab.research.google.com/drive/1GFFC7Y1I_2PtYlWDToqKvzYhHWv1b3nC?usp=sharing)
+
+- [ ] Add a Colab notebook demonstrating end-to-end usage of the task model,
+      showing matching outputs and a fine-tuning demo
+
+### Step 6: Add `XXPresets`, Weights, and End-to-End Validation
+
+- [ ] Add `xx/xx_presets.py` with links to weights uploaded to Kaggle KerasHub
+      [Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_presets.py)
+
+- [ ] Stage the model presets on your Kaggle account
+
+- [ ] Add `tools/checkpoint_conversion/convert_xx_checkpoints.py`, a reusable
+      script for converting checkpoints
+      [Example](https://github.com/keras-team/keras-hub/blob/master/tools/checkpoint_conversion/convert_distilbert_checkpoints.py)
+
+- [ ]  A Colab notebook link in the PR description, showing an end-to-end task
+      such as text classification, etc. The task model can be built using the
+      backbone model, with the task head on top \[[Example](https://gist.github.com/mattdangerw/bf0ca07fb66b6738150c8b56ee5bab4e)\]. Show that the numerics
+      and outputs are matching
+
+---
 
 ## Detailed Instructions
 
 This section discusses, in details, every necessary step.
-
-### Step 1: Open an issue/Find an open issue
+### Step 1: Open an Issue / Find an Open Issue
 
 Before getting started with the code, it's important to check if there are any
 [open issues](https://github.com/keras-team/keras-hub/issues?q=is%3Aissue+is%3Aopen+label%3Amodel-contribution)
@@ -68,172 +115,169 @@ workings of the model at the time of opening the issue. But it is appreciated if
 you can furnish as much detail as possible to enable us to help you with the
 contribution! 🙂
 
-### Step 2: PR #1 - Add XXBackbone
+### Step 2: Add XXBackbone
 
 #### Add the backbone class
 
-Once you are done identifying all the required layers, you should implement the
-model backbone class.
+Once you've identified the required layers, implement the backbone using [Keras’ functional API](https://keras.io/guides/functional_api/) wrapped in a class.
 
-To keep the code simple and readable, we follow
-[Keras' functional style model](https://keras.io/guides/functional_api/) wrapped
-around by a class to implement our models.
+Compare your code with [`DistilBertBackbone`](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_backbone.py) for structure.
 
-A model is typically split into three/four sections. We would recommend you to
-compare this side-by-side with the
-[`keras_hub.layers.DistilBertBackbone` source code](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_backbone.py)!
+##### Implementation
 
-**Inputs to the model**
+- Use standard inputs (`token_ids`, `padding_mask`, `pixel_values`, `audio_features`)
+- Use `keras.layers` and `keras_nlp.layers` when possible
+- For architectural deviations, implement custom layers
 
-Generally, the standard inputs to any text model are:
-  - `token_ids`: tokenised inputs (An integer representation of the text sequence).
-  - `padding_mask`: Masks the padding tokens.
+Examples:
+- Major changes: [`DebertaV3`](https://github.com/keras-team/keras-hub/tree/master/keras_hub/models/deberta_v3)
+- Minor tweaks: [Whisper attention layer](https://github.com/keras-team/keras-hub/pull/801/files#diff-8533ae3a7755c0dbe95ccbb71f85c677297f687bf3884fadefc64f1d0fdce51aR22)
 
-**Embedding layer(s)**
+Do **not** include `from_presets()` in this PR.
 
-Standard layers used: `keras.layers.Embedding`,
-`keras_hub.layers.PositionEmbedding`, `keras_hub.layers.TokenAndPositionEmbedding`.
+##### Validation Colab
 
-**Encoder layers**
+- Load original model weights
+- Manually set weights in your KerasHub model
+- Compare outputs on sample input for closeness
 
-Standard layers used: `keras_hub.layers.TransformerEncoder`, `keras_hub.layers.FNetEncoder`.
+##### Unit Tests (`xx_backbone_test.py`)
 
-**Decoder layers (possibly)**
+- Check forward pass, output shapes
+- Ensure model can be saved and loaded correctly
 
-Standard layers used: `keras_hub.layers.TransformerDecoder`.
+---
 
-**Other layers which might be used**
+### Step 3: Data Converter
 
-`keras.layers.LayerNorm`, `keras.layers.Dropout`, `keras.layers.Conv1D`, etc.
+#### Tokenizer / ImageConverter / AudioConverter
 
-<br/>
+The converter transforms raw input into numerical tensors suitable for
+preprocessing.
 
-The standard layers provided in Keras and KerasHub are generally enough for
-most of the usecases and it is recommended to do a thorough search
-[here](https://keras.io/api/layers/) and [here](https://keras.io/api/keras_nlp/layers/).
-However, sometimes, models have small tweaks/paradigm changes in their architecture.
-This is when things might slightly get complicated.
+##### Implementation
 
-If the model introduces a paradigm shift, such as using relative attention instead
-of vanilla attention, the contributor will have to implement complete custom layers. A case
-in point is `keras_hub.models.DebertaV3Backbone` where we had to [implement layers
-from scratch](https://github.com/keras-team/keras-hub/tree/master/keras_hub/models/deberta_v3).
+- **Text**: `XXTokenizer`, subclassing from KerasHub tokenizers
+- **Image**: `XXImageConverter`, subclassing from KerasHub ImageConverter - for
+  resizing, normalization, augmentation
+- **Audio**: `XXAudioConverter`, subclassing from KerasHub AudioConverter for
+  extracting features like spectrograms
 
-On the other hand, if the model has a small tweak, something simpler can be done.
-For instance, in the Whisper model, the self-attention and cross-attention mechanism
-is exactly the same as vanilla attention, with the exception that the key projection
-layer does not have a bias term. In this case, we can inherit the custom layer
-from one of the standard layers and make minor modifications. See [this PR](https://github.com/keras-team/keras-hub/pull/801/files#diff-8533ae3a7755c0dbe95ccbb71f85c677297f687bf3884fadefc64f1d0fdce51aR22) for
-more details.
+Include asset loading (e.g., vocab files, normalization stats).
 
-Since the first PR is only to add the model backbone class, you should omit the
-`from_presets()` function; this will be added at a later stage when you open a PR
-for adding presets.
+##### Validation Colab
 
-#### Convert weights from the original source and check output!
+- Show that converted output (tokens, pixels, features) match original behavior
 
-Before you open a PR for adding the model backbone class, it is essential to check
-whether the model has been implemented exactly as the source implementation. This
-also helps in adding model "presets" at a later stage.
+##### Unit Tests
 
-The preferred way of doing this is to add a Colab link in the PR description, which
-1) converts the original preset weights to our format, and
-2) checks whether the outputs of the original model and your implemented model are close enough.
+- Validate core logic, asset loading, and consistency
 
-It is okay if you demonstrate it for one preset at this stage; you can do the conversion
-for the other presets when you officially add presets to the library at a later stage.
+---
 
-#### Add Unit Tests
+### Step 4: Tasks and Preprocessors
 
-It is essential to add units tests. These unit tests are basic and mostly check
-whether the forward pass goes through successfully, whether the model can be saved
-and loaded correctly, etc.
+#### Preprocessor (`xx_<task>_preprocessor.py`)
 
-### Step 3: PR #2 - Add XXTokenizer
+Transforms raw input into model-ready format.
 
-#### Tokenizer
+##### Implementation
 
-Most text models nowadays use subword tokenizers such as WordPiece, SentencePiece
-and BPE Tokenizer. Since KerasHub has implementations of most of the popular
-subword tokenizers, the model tokenizer layer typically inherits from a base
-tokenizer class.
+- Class: `XX<Task>Preprocessor`
+- Internally uses the relevant `XX<Converter>`
+- Handles padding, attention masks, batching, formatting
 
-For example, DistilBERT uses the WordPiece tokenizer. So, we can introduce a new
-class, `DistilBertTokenizer`, which inherits from `keras_hub.tokenizers.WordPieceTokenizer`.
-All the underlying actual tokenization will be taken care of by the superclass.
+##### Inputs
 
-The important thing here is adding "special tokens". Most models have
-special tokens such as beginning-of-sequence token, end-of-sequence token,
-mask token, pad token, etc. These have to be
-[added as member attributes](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_tokenizer.py#L91-L105)
-to the tokenizer class. These member attributes are then accessed by the
-preprocessor layers.
+- Accept strings, paths, or tensors
 
-For a full list of the tokenizers KerasHub offers, please visit
-[this link](https://keras.io/api/keras_nlp/tokenizers/) and make use of the
-tokenizer your model uses!
+##### Outputs
 
-#### Unit Tests
+- Dictionary of tensors compatible with the Backbone
 
-The last step here is to add unit tests for the tokenizer. A dummy vocabulary is
-created, and the output of both these layers is verified including tokenization,
-detokenization, etc.
+##### Validation Colab
 
-### Step 4: PR #3 - Add XX Presets
+- Show that your preprocessor, given raw input, produces the same tensor inputs
+(e.g., token_ids, padding_mask, pixel_values) as the original model's complete
+preprocessing pipeline.
 
-Once the backbone and tokenizer PRs have been merged, you can open a PR for
-adding presets. For every model, we have a separate file where we mention our
-preset configurations. This preset configuration has model-specific arguments
-such as number of layers, number of attention heads; preprocessor-specific
-arguments such as whether we want to lowercase the input text; checkpoint and
-vocabulary file URLs, etc. In the PR description, you can add
-Google Drive/personal GCP bucket links to the checkpoint and the vocabulary
-files. These files will then be uploaded to GCP by us!
+##### Unit Tests
 
-After wrapping up the preset configuration file, you need to
-add the `from_preset` function to all three classes, i.e., `DistilBertBackbone`,
-and `DistilBertTokenizer`. Here is an
-[example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_backbone.py#L187-L189).
+- Test with various inputs, ensuring correct output shapes and values.
 
-The testing for presets is divided into two: "large" and "extra large".
-For "large" tests, we pick the smallest preset (in terms of number of parameters)
-and verify whether the output is correct. For "extra large tests", we loop over
-all the presets and just check whether the backbone and the tokenizer can
-be called without any error.
+---
 
-Additionally, a checkpoint conversion script should be added. This script
-demonstrates that the outputs of our backbone model and outputs of the source
-model match. This should be done for all presets.
+#### Task Model (`xx_<task>.py`)
 
-### Step 5: PR #4 and Beyond: Add XXTasks and XXPreprocessors
+Wraps the backbone and preprocessor with a task head.
 
-Once you are finished with Steps 1-4, you can add "task" models and
-preprocessors.
+##### Implementation
 
-### Task model
+- Class: `XX<Task>`
+- Instantiate backbone and preprocessor
+- Add a task-specific head (e.g., classifier head, LM head)
 
-Task models are essentially models which have "task heads" on top of the backbone
-models. For instance, for the text classification task, you can have a
-feedforward layer on top of a backbone model like DistilBERT. Task models are
-very essential since pretrained models are used extensively for downstream tasks
-like text classification, token classification, text summarization, neural
-machine translation, etc.
+##### API
 
-#### Preprocessor
+- It should offer simple methods like predict(), fit(), generate() (for
+  generative models), detect() (for detection models)
 
-The preprocessor class is responsible for making the inputs suitable for
-consumption by the model - it packs multiple inputs together, i.e., given
-multiple input texts, it will add appropriate special tokens, pad the inputs
-and return the dictionary in the form expected by the model.
+##### Unit Tests
 
-The preprocessor class might have a few intricacies depending on the model. For example,
-the DeBERTaV3 tokenizer does not have the `[MASK]` in the provided sentencepiece
-proto file, and we had to make some modifications [here](https://github.com/keras-team/keras-hub/blob/master/keras_hub/models/deberta_v3/deberta_v3_preprocessor.py). Secondly, we have
-a separate preprocessor class for every task. This is because different tasks
-might require different input formats. For instance, we have a [separate preprocessor](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_masked_lm_preprocessor.py)
-for masked language modeling (MLM) for DistilBERT.
+- Test basic usage: instantiation, forward pass with dummy data from the
+  preprocessor, and model compilation.
+
+---
+
+### Step 5: Presets and End-to-End Validation
+
+
+#### Preset Configuration
+
+- Add `xx_presets.py`
+- Include model args, checkpoint URLs, vocabulary paths
+
+Use the [Kaggle org page](https://www.kaggle.com/organizations/keras/models)
+to stage and test.
+
+#### Preset Tests
+The testing for presets is divided into two:
+- "Large" tests: validate smallest preset numerics
+- "Extra large" tests: loop over all presets, check for successful load/inference
+
+#### Checkpoint Conversion Script (tools/checkpoint_conversion/convert_your_model_checkpoints.py)
+
+- Provide a script that converts weights from their original format (e.g.,
+PyTorch .bin, TensorFlow SavedModel) to the Keras H5 format expected by KerasHub.
+- This script should be reusable and clearly documented.
+- It's crucial for verifying weight conversion accuracy and for future updates.
+End-to-End Validation Colab
+- This is the most important validation step.
+
+#### End-to-End Colab
+
+- Load task model using `from_preset()`
+- Run task (e.g., classification, generation)
+- Compare output with original model
+
+#### Numerics Test
+
+- Add a test that loads a preset and compares outputs on fixed inputs
+
+---
+
+### Step 6: Advanced Features (Optional)
+
+Extend utility:
+
+- New Task Models (e.g., TokenClassifier, ImageSegmentation)
+- Parameter-Efficient Fine-Tuning (LoRA support)
+- Quantization (QLoRA support)
+- Model Parallelism (for large models)
+
+---
 
 ## Conclusion
 
-Once all three PRs (and optionally, the fourth PR) have been merged, you have
+Once your PR is merged, you've
 successfully contributed a model to KerasHub. Congratulations! 🔥
