@@ -3,6 +3,7 @@ import numpy as np
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
@@ -208,6 +209,7 @@ class WhisperAudioConverter(AudioConverter):
 
         return log_spec
 
+    @preprocessing_function
     def call(self, audio):
         if not isinstance(audio, (tf.Tensor, tf.RaggedTensor)):
             audio = tf.convert_to_tensor(audio)
