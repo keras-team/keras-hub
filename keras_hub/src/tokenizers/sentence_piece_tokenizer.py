@@ -402,6 +402,12 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 tokens + [pad_token_id] * (self.sequence_length - len(tokens))
                 for tokens in batched_tokens
             ]
+            if is_int_dtype(self.compute_dtype):
+                # Dense int outputs are arrays, so that direct calls return
+                # backend tensors and Grain pipelines return NumPy.
+                batched_tokens = np.array(
+                    batched_tokens, dtype=self.compute_dtype
+                )
 
         if not batched:
             batched_tokens = batched_tokens[0]

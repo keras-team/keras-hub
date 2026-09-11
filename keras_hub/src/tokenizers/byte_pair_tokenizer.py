@@ -280,9 +280,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     ...     vocab, merge, sequence_length=2)
     >>> seq1, seq2 = tokenizer(["butterfly", "butter"])
     >>> np.array(seq1)
-    array([3, 8])
+    array([3, 8], dtype=int32)
     >>> np.array(seq2)
-    array([3, 0])
+    array([3, 0], dtype=int32)
 
     Detokenize
     >>> tokenizer = keras_hub.tokenizers.BytePairTokenizer(vocab, merge)
@@ -817,6 +817,12 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 tokens + [pad_token_id] * (self.sequence_length - len(tokens))
                 for tokens in batched_tokens
             ]
+            if is_int_dtype(self.compute_dtype):
+                # Dense int outputs are arrays, so that direct calls return
+                # backend tensors and Grain pipelines return NumPy.
+                batched_tokens = np.array(
+                    batched_tokens, dtype=self.compute_dtype
+                )
 
         if not batched:
             batched_tokens = batched_tokens[0]

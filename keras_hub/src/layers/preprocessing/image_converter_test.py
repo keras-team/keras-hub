@@ -1,6 +1,7 @@
 import os
 import pathlib
 
+import grain
 import keras
 import numpy as np
 import pytest
@@ -174,6 +175,28 @@ class ImageConverterTest(TestCase):
         restored = ImageConverter.from_preset(save_dir)
         test_image = np.random.rand(100, 100, 3) * 255
         self.assertAllClose(restored(test_image), converter(test_image))
+
+    def test_grain_outputs_numpy(self):
+        converter = ImageConverter(
+            image_size=(4, 4),
+            scale=1 / 255.0,
+        )
+        images = [
+            np.random.randint(0, 255, size=(6, 6, 3)).astype("uint8"),
+            np.random.randint(0, 255, size=(8, 8, 3)).astype("uint8"),
+        ]
+        # Direct call returns backend tensors.
+        self.assertNotIsInstance(converter(images[0]), np.ndarray)
+        # Grain returns numpy arrays.
+        ds = grain.MapDataset.source(images).map(converter)
+        for output in ds:
+            self.assertIsInstance(output, np.ndarray)
+            self.assertEqual(output.shape, (4, 4, 3))
+        (batch,) = list(ds.batch(2))
+        self.assertIsInstance(batch, np.ndarray)
+        self.assertEqual(batch.shape, (2, 4, 4, 3))
+        # Numerics match the direct call.
+        self.assertAllClose(batch[0], converter(images[0]))
 
     def test_inhomogeneous_batch(self):
         if not self._allow_python_workflow:

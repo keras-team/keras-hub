@@ -2,6 +2,8 @@ import os
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+import grain
+import numpy as np
 from keras.src.saving import serialization_lib
 
 from keras_hub.src.tests.test_case import TestCase
@@ -104,6 +106,28 @@ class SentencePieceTokenizerTest(TestCase):
         self.assertAllEqual(
             output_data, [["<s>", "▁the", "▁quick", "▁brown", "▁fox.", "</s>"]]
         )
+
+    def test_grain_outputs_numpy(self):
+        input_data = ["the quick brown fox.", "the quick"]
+        # Ragged outputs are python lists.
+        (outputs,) = list(
+            grain.MapDataset.source([input_data]).map(self.tokenizer)
+        )
+        self.assertIsInstance(outputs, list)
+        self.assertEqual(outputs, [[6, 5, 3, 4], [6, 5]])
+        # Dense outputs are numpy arrays.
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+            sequence_length=5,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        outputs = list(grain.MapDataset.source(input_data).map(tokenizer))
+        for output in outputs:
+            self.assertIsInstance(output, np.ndarray)
+        (batch,) = list(
+            grain.MapDataset.source(input_data).map(tokenizer).batch(2)
+        )
+        self.assertAllEqual(batch, [[6, 5, 3, 4, 0], [6, 5, 0, 0, 0]])
 
     def test_detokenize(self):
         outputs = self.tokenizer.detokenize([6, 5, 3, 4])

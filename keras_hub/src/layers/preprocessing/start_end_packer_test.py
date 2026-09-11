@@ -1,3 +1,5 @@
+import grain
+import numpy as np
 import tensorflow as tf
 from absl.testing import parameterized
 
@@ -433,3 +435,30 @@ class StartEndPackerTest(TestCase):
         ]
         self.assertAllEqual(output, expected_output)
         self.assertAllEqual(padding_mask, expected_padding_mask)
+
+    @parameterized.named_parameters(
+        ("allow_python_workflow", True),
+        ("disallow_python_workflow", False),
+    )
+    def test_grain_outputs_numpy(self, allow_python_workflow):
+        layer = StartEndPacker(
+            sequence_length=5,
+            start_value=1,
+            end_value=2,
+            return_padding_mask=True,
+            _allow_python_workflow=allow_python_workflow,
+        )
+        # Direct call returns backend tensors.
+        token_ids, padding_mask = layer([5, 6, 7])
+        self.assertNotIsInstance(token_ids, np.ndarray)
+        # Grain returns numpy arrays.
+        ds = grain.MapDataset.source([[5, 6, 7], [8, 9]]).map(layer)
+        for token_ids, padding_mask in ds:
+            self.assertIsInstance(token_ids, np.ndarray)
+            self.assertIsInstance(padding_mask, np.ndarray)
+        (token_ids, padding_mask) = list(ds.batch(2))[0]
+        self.assertAllEqual(token_ids, [[1, 5, 6, 7, 2], [1, 8, 9, 2, 0]])
+        self.assertAllEqual(
+            padding_mask,
+            [[1, 1, 1, 1, 1], [1, 1, 1, 1, 0]],
+        )

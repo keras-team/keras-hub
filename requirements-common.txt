@@ -18,6 +18,7 @@ pytest-split
 build
 namex
 # Optional deps.
+grain
 rouge-score
 tensorflow-datasets
 safetensors
