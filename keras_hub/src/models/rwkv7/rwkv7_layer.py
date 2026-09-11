@@ -39,6 +39,8 @@ def rnn_generalized_delta_rule(
 
     if initial_state is not None:
         state = initial_state
+        # No-op when the state is already `(B, H, N, N)`; broadcasts a shared
+        # `(1, H, N, N)` state across the batch otherwise.
         state = ops.broadcast_to(state, (B, H, N, N))
     else:
         state = ops.zeros((B, H, N, N))

@@ -225,9 +225,8 @@ class EdRecSeq2SeqLM(Seq2SeqLM):
                 None,  # Cross cache re-use
             )
 
-            logits = logits[:, -1:, :]
-            h_states = h_states[:, -1:, :]
-
+            # `prompt_slice` is a single token, so `logits` and `h_states`
+            # already have a sequence dim of 1.
             return (
                 ops.squeeze(logits, axis=1),
                 ops.squeeze(h_states, axis=1),

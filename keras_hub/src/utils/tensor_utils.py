@@ -676,34 +676,23 @@ def convert_to_list(inputs):
 def repeat_for_beam_search(x, num_samples, batch_size):
     """Repeat a tensor along the batch axis for beam search.
 
-    Encoder-side tensors (e.g. encoder hidden states, encoder padding masks,
-    and cross-attention caches that are captured as closures) are computed once
-    at ``batch_size`` and must be tiled to ``num_samples`` (= batch_size *
-    num_beams) before being passed to each decoder step.
+    Encoder-side tensors captured as closures by a `generate_step` are computed
+    once at `batch_size` and must be tiled to `num_samples` before each decoder
+    step. The repeat is unconditional rather than guarded by a Python `if` on
+    `ops.shape(x)[0]`, which is not traceable when the batch dimension is
+    symbolic. `repeats` is `1` when not beam searching, so ordering matches
+    `BeamSampler.create_beams`, which also uses `ops.repeat`.
 
-    This helper is backend-agnostic and safe under graph-tracing backends
-    (JAX ``lax.while_loop``, OpenVINO ``ov_infer``).  It uses
-    ``ops.repeat`` unconditionally rather than a Python ``if``, which would
-    fail when the batch dimension is a symbolic tensor:
-
-    * When **not** using beam search ``num_samples == batch_size``, so
-      ``repeats = 1`` and this is a strict no-op (all backends optimise it
-      away).
-    * When using beam search ``repeats = num_beams > 1`` and the tensor is
-      correctly tiled.
-
-    .. note::
-        Do **not** pass tensors that are already at ``num_samples`` shape
-        (e.g. cache state that the ``BeamSampler`` pre-expands via
-        ``create_beams()``).  Those should be forwarded as-is.
+    Do not pass state the sampler already expanded (anything routed through
+    `cache`), it would be tiled a second time.
 
     Args:
         x: Tensor whose first axis is the batch dimension.
-        num_samples: Total number of samples after beam expansion
-            (``batch_size * num_beams``).
-        batch_size: Original batch size before beam expansion.
+        num_samples: int. Batch size after beam expansion, i.e.
+            `batch_size * num_beams`.
+        batch_size: int. Batch size before beam expansion.
 
     Returns:
-        Tensor with the batch dimension repeated to ``num_samples``.
+        `x` with its batch dimension repeated to `num_samples`.
     """
     return ops.repeat(x, repeats=num_samples // batch_size, axis=0)

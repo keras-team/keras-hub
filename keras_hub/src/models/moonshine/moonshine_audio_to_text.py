@@ -321,6 +321,7 @@ class MoonshineAudioToText(AudioToText):
                     decoder_token_ids=next_token_input,
                     self_attention_cache=current_self_attention_cache,
                     self_attention_cache_update_index=cache_index,
+                    # Not repeated: the sampler's `cache` already expanded it.
                     cross_attention_cache=current_cross_attention_cache,
                 )
             )
