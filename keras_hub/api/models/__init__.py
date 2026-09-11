@@ -554,6 +554,30 @@ from keras_hub.src.models.mobilenetv5.mobilenetv5_image_classifier import (
 from keras_hub.src.models.mobilenetv5.mobilenetv5_image_classifier_preprocessor import (
     MobileNetV5ImageClassifierPreprocessor as MobileNetV5ImageClassifierPreprocessor,
 )
+from keras_hub.src.models.modernbert.modern_bert_backbone import (
+    ModernBertBackbone as ModernBertBackbone,
+)
+from keras_hub.src.models.modernbert.modern_bert_masked_lm import (
+    ModernBertMaskedLM as ModernBertMaskedLM,
+)
+from keras_hub.src.models.modernbert.modern_bert_masked_lm_preprocessor import (
+    ModernBertMaskedLMPreprocessor as ModernBertMaskedLMPreprocessor,
+)
+from keras_hub.src.models.modernbert.modern_bert_text_classifier import (
+    ModernBertTextClassifier as ModernBertClassifier,
+)
+from keras_hub.src.models.modernbert.modern_bert_text_classifier import (
+    ModernBertTextClassifier as ModernBertTextClassifier,
+)
+from keras_hub.src.models.modernbert.modern_bert_text_classifier_preprocessor import (
+    ModernBertTextClassifierPreprocessor as ModernBertPreprocessor,
+)
+from keras_hub.src.models.modernbert.modern_bert_text_classifier_preprocessor import (
+    ModernBertTextClassifierPreprocessor as ModernBertTextClassifierPreprocessor,
+)
+from keras_hub.src.models.modernbert.modern_bert_tokenizer import (
+    ModernBertTokenizer as ModernBertTokenizer,
+)
 from keras_hub.src.models.moonshine.moonshine_audio_to_text import (
     MoonshineAudioToText as MoonshineAudioToText,
 )

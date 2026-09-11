@@ -1,0 +1,158 @@
+import keras
+from keras import layers
+from keras import ops
+
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.masked_lm import MaskedLM
+from keras_hub.src.models.modernbert.modern_bert_backbone import (
+    ModernBertBackbone,
+)
+from keras_hub.src.models.modernbert.modern_bert_masked_lm_preprocessor import (
+    ModernBertMaskedLMPreprocessor,
+)
+
+
+@keras_hub_export("keras_hub.models.ModernBertMaskedLM")
+class ModernBertMaskedLM(MaskedLM):
+    """ModernBERT Masked LM task model.
+
+    The Masked LM model provides a prediction head for the Masked Language
+    Modeling task. It is composed of a `keras_hub.models.ModernBertBackbone`
+    and a prediction head which projects the backbone's hidden states back
+    to the vocabulary space.
+
+    This model can be used for pre-training or fine-tuning on a specific
+    corpus.
+
+    Args:
+        backbone: A `keras_hub.models.ModernBertBackbone` instance.
+        preprocessor: A `keras_hub.models.ModernBertMaskedLMPreprocessor`
+            instance or `None`. If `None`, this model will not handle input
+            preprocessing automatically during `fit()`, `predict()`, or
+            `evaluate()`.
+        dtype: string or `keras.DTypePolicy`. The precision policy used
+            for the model's computations and weights.
+
+    Examples:
+    ```python
+    import keras_hub
+    import numpy as np
+
+    # Pre-trained backbone and preprocessor
+    tokenizer = keras_hub.models.ModernBertTokenizer(
+        vocabulary="vocab.json",
+        merges="merges.txt",
+    )
+    preprocessor = keras_hub.models.ModernBertMaskedLMPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=128,
+    )
+    backbone = keras_hub.models.ModernBertBackbone(
+        vocabulary_size=50368,
+        hidden_dim=768,
+        intermediate_dim=1152,
+        num_layers=22,
+        num_heads=12,
+    )
+
+    # Instantiate the MaskedLM task model
+    masked_lm = keras_hub.models.ModernBertMaskedLM(
+        backbone=backbone,
+        preprocessor=preprocessor,
+    )
+
+    # Predict on raw text strings
+    raw_data = ["The quick brown fox [MASK] over the lazy dog."]
+    predictions = masked_lm.predict(raw_data)
+    ```
+    """
+
+    backbone_cls = ModernBertBackbone
+    preprocessor_cls = ModernBertMaskedLMPreprocessor
+
+    def __init__(
+        self,
+        backbone,
+        preprocessor=None,
+        **kwargs,
+    ):
+        self.backbone = backbone
+        self.preprocessor = preprocessor
+
+        # HF ModernBERT prediction head:
+        #
+        # hidden
+        #   -> Dense(hidden)
+        #   -> GELU
+        #   -> LayerNorm
+        #   -> tied decoder
+        self.mlm_head_dense = layers.Dense(
+            backbone.hidden_dim,
+            use_bias=False,
+            name="mlm_head_dense",
+        )
+
+        self.mlm_head_activation = layers.Activation(
+            "gelu",
+            name="mlm_head_activation",
+        )
+
+        self.mlm_head_norm = layers.LayerNormalization(
+            epsilon=backbone.layer_norm_epsilon,
+            center=False,
+            scale=True,
+            name="mlm_head_norm",
+        )
+
+        self.mlm_head_decoder_bias = keras.Variable(
+            initializer=keras.initializers.Zeros(),
+            shape=(backbone.vocabulary_size,),
+            dtype=backbone.compute_dtype,
+            trainable=True,
+            name="mlm_head_decoder_bias",
+        )
+
+        # Inputs
+        inputs = backbone.input
+        mask_positions = keras.Input(
+            shape=(None,),
+            dtype="int32",
+            name="mask_positions",
+        )
+
+        sequence_output = backbone(inputs)
+
+        masked_sequence_output = ops.take_along_axis(
+            sequence_output,
+            mask_positions[:, :, None],
+            axis=1,
+        )
+
+        # HF prediction head:
+        # hidden -> dense -> GELU -> layer norm -> tied decoder + bias.
+        masked_sequence_output = self.mlm_head_dense(masked_sequence_output)
+
+        masked_sequence_output = self.mlm_head_activation(
+            masked_sequence_output
+        )
+
+        masked_sequence_output = self.mlm_head_norm(masked_sequence_output)
+
+        # Tied decoder: reuse the backbone token embedding weights.
+        logits = backbone.token_embedding(
+            masked_sequence_output,
+            reverse=True,
+        )
+
+        logits = logits + self.mlm_head_decoder_bias
+
+        super().__init__(
+            inputs={
+                **inputs,
+                "mask_positions": mask_positions,
+            },
+            outputs=logits,
+            backbone=backbone,
+            preprocessor=preprocessor,
+            **kwargs,
+        )
