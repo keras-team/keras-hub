@@ -280,9 +280,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     ...     vocab, merge, sequence_length=2)
     >>> seq1, seq2 = tokenizer(["butterfly", "butter"])
     >>> np.array(seq1)
-    array([3, 8])
+    array([3, 8], dtype=int32)
     >>> np.array(seq2)
-    array([3, 0])
+    array([3, 0], dtype=int32)
 
     Detokenize
     >>> tokenizer = keras_hub.tokenizers.BytePairTokenizer(vocab, merge)

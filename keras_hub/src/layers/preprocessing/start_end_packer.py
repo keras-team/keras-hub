@@ -263,7 +263,7 @@ class StartEndPacker(PreprocessingLayer):
                 else:
                     inputs = inputs.to_list()
                 return inputs, not unbatched
-            elif keras.ops.is_tensor(inputs):
+            elif isinstance(inputs, np.ndarray) or keras.ops.is_tensor(inputs):
                 inputs = convert_to_list(inputs)
                 if inputs and isinstance(inputs[0], (tuple, list)):
                     return inputs, True
