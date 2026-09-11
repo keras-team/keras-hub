@@ -5,7 +5,6 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.edrec.edrec_backbone import EdRecBackbone
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.utils.tensor_utils import any_equal
-from keras_hub.src.utils.tensor_utils import repeat_for_beam_search
 
 
 @keras_hub_export("keras_hub.models.EdRecSeq2SeqLM")
@@ -198,25 +197,23 @@ class EdRecSeq2SeqLM(Seq2SeqLM):
             0,
         )
 
-        # We define cache as tuple
-        cache = (s_cache, c_cache)
+        # We define cache as tuple. The encoder tensors ride along so the
+        # sampler body closes over nothing: OpenVINO requires a `while_loop`
+        # body to reference only its own loop variables, and `BeamSampler`
+        # expands every cache leaf to `num_samples` for us.
+        cache = (s_cache, c_cache, encoder_hidden_states, encoder_padding_mask)
         hidden_states = ops.zeros_like(token_0, dtype="float32")
 
         def next(prompt, cache, index):
-            s_c, c_c = cache
+            s_c, c_c, encoder_hidden_states, encoder_padding_mask = cache
 
             cache_index = index - 1
             num_samples = ops.shape(prompt)[0]
-            batch_size = ops.shape(encoder_hidden_states)[0]
             prompt_slice = ops.slice(prompt, [0, cache_index], [num_samples, 1])
 
             logits, h_states, next_s, next_c = self.call_decoder_with_cache(
-                repeat_for_beam_search(
-                    encoder_hidden_states, num_samples, batch_size
-                ),
-                repeat_for_beam_search(
-                    encoder_padding_mask, num_samples, batch_size
-                ),
+                encoder_hidden_states,
+                encoder_padding_mask,
                 prompt_slice,
                 None,
                 s_c,
@@ -230,7 +227,7 @@ class EdRecSeq2SeqLM(Seq2SeqLM):
             return (
                 ops.squeeze(logits, axis=1),
                 ops.squeeze(h_states, axis=1),
-                (next_s, next_c),
+                (next_s, next_c, encoder_hidden_states, encoder_padding_mask),
             )
 
         new_tokens = self.sampler(

@@ -11,7 +11,6 @@ from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 from keras_hub.src.utils.tensor_utils import is_tensor_type
 from keras_hub.src.utils.tensor_utils import preprocessing_function
-from keras_hub.src.utils.tensor_utils import repeat_for_beam_search
 from keras_hub.src.utils.tensor_utils import target_gather
 from keras_hub.src.utils.tensor_utils import tensor_to_list
 
@@ -339,37 +338,3 @@ class IsFloatDtypeTest(TestCase):
         ]
         for dtype in non_float_dtypes:
             self.assertFalse(is_float_dtype(dtype))
-
-
-class RepeatForBeamSearchTest(TestCase):
-    def test_no_beams_is_a_noop(self):
-        x = ops.array([[1.0, 2.0], [3.0, 4.0]])
-        self.assertAllClose(repeat_for_beam_search(x, 2, 2), x)
-
-    def test_repeats_match_create_beams_ordering(self):
-        # Beam `i` of batch element `n` must land at row `n * num_beams + i`.
-        x = ops.array([[1.0, 2.0], [3.0, 4.0]])
-        output = repeat_for_beam_search(x, 6, 2)
-        self.assertAllClose(
-            output,
-            ops.array(
-                [
-                    [1.0, 2.0],
-                    [1.0, 2.0],
-                    [1.0, 2.0],
-                    [3.0, 4.0],
-                    [3.0, 4.0],
-                    [3.0, 4.0],
-                ]
-            ),
-        )
-
-    def test_higher_rank_and_bool_inputs(self):
-        mask = ops.array([[True, False], [False, True]])
-        output = repeat_for_beam_search(mask, 4, 2)
-        self.assertAllEqual(
-            output,
-            ops.array(
-                [[True, False], [True, False], [False, True], [False, True]]
-            ),
-        )

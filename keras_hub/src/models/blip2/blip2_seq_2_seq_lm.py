@@ -7,7 +7,6 @@ from keras_hub.src.models.blip2.blip2_seq_2_seq_lm_preprocessor import (
 )
 from keras_hub.src.models.seq_2_seq_lm import Seq2SeqLM
 from keras_hub.src.utils.tensor_utils import any_equal
-from keras_hub.src.utils.tensor_utils import repeat_for_beam_search
 
 
 @keras_hub_export("keras_hub.models.BLIP2Seq2SeqLM")
@@ -217,7 +216,6 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
             encoder_hidden_states, encoder_attention_mask, decoder_token_ids
         )
 
-        batch_size = ops.shape(decoder_token_ids)[0]
         # Compute the lengths of all user inputted decoder token ids.
         row_lengths = ops.sum(ops.cast(decoder_padding_mask, "int32"), axis=-1)
         # Start at the first index that has no user inputted id.
@@ -228,32 +226,49 @@ class BLIP2Seq2SeqLM(Seq2SeqLM):
             cache_index = index - 1
             num_samples = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_index], [num_samples, 1])
-
-            logits, hidden, cache, _ = self.call_decoder_with_cache(
-                decoder_token_ids=prompt,
-                encoder_hidden_states=repeat_for_beam_search(
-                    encoder_hidden_states, num_samples, batch_size
-                ),
-                encoder_attention_mask=repeat_for_beam_search(
-                    encoder_attention_mask, num_samples, batch_size
-                ),
-                self_attention_cache=cache,
-                self_attention_cache_update_index=cache_index,
-                cross_attention_cache=repeat_for_beam_search(
-                    cross_attention_cache, num_samples, batch_size
-                ),
-                cross_attention_cache_update_index=None,
+            # The encoder tensors ride along in `cache` rather than being
+            # captured from the enclosing scope. They are read-only here, but
+            # routing them through the sampler keeps them out of the closure,
+            # which OpenVINO requires: a `while_loop` body may only reference
+            # its own loop variables. It also lets `BeamSampler` expand them
+            # to `num_samples` for us, since it maps over every cache leaf.
+            (
+                self_attention_cache,
+                encoder_hidden_states,
+                encoder_attention_mask,
+                cross_attention_cache,
+            ) = cache
+            logits, hidden, self_attention_cache, _ = (
+                self.call_decoder_with_cache(
+                    decoder_token_ids=prompt,
+                    encoder_hidden_states=encoder_hidden_states,
+                    encoder_attention_mask=encoder_attention_mask,
+                    self_attention_cache=self_attention_cache,
+                    self_attention_cache_update_index=cache_index,
+                    cross_attention_cache=cross_attention_cache,
+                    cross_attention_cache_update_index=None,
+                )
             )
             return (
                 ops.squeeze(logits, axis=1),
                 ops.squeeze(hidden, axis=1),
-                cache,
+                (
+                    self_attention_cache,
+                    encoder_hidden_states,
+                    encoder_attention_mask,
+                    cross_attention_cache,
+                ),
             )
 
         decoder_token_ids = self.sampler(
             next=next,
             prompt=decoder_token_ids,
-            cache=self_attention_cache,
+            cache=(
+                self_attention_cache,
+                encoder_hidden_states,
+                encoder_attention_mask,
+                cross_attention_cache,
+            ),
             index=index,
             mask=decoder_padding_mask,
             stop_token_ids=stop_token_ids,

@@ -671,28 +671,3 @@ def convert_to_list(inputs):
     elif keras.ops.is_tensor(inputs):
         return keras.ops.convert_to_numpy(inputs).tolist()
     return inputs
-
-
-def repeat_for_beam_search(x, num_samples, batch_size):
-    """Repeat a tensor along the batch axis for beam search.
-
-    Encoder-side tensors captured as closures by a `generate_step` are computed
-    once at `batch_size` and must be tiled to `num_samples` before each decoder
-    step. The repeat is unconditional rather than guarded by a Python `if` on
-    `ops.shape(x)[0]`, which is not traceable when the batch dimension is
-    symbolic. `repeats` is `1` when not beam searching, so ordering matches
-    `BeamSampler.create_beams`, which also uses `ops.repeat`.
-
-    Do not pass state the sampler already expanded (anything routed through
-    `cache`), it would be tiled a second time.
-
-    Args:
-        x: Tensor whose first axis is the batch dimension.
-        num_samples: int. Batch size after beam expansion, i.e.
-            `batch_size * num_beams`.
-        batch_size: int. Batch size before beam expansion.
-
-    Returns:
-        `x` with its batch dimension repeated to `num_samples`.
-    """
-    return ops.repeat(x, repeats=num_samples // batch_size, axis=0)
