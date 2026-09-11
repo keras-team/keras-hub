@@ -1,5 +1,6 @@
 import keras
 from keras import ops
+from keras.layers import RMSNormalization
 
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
@@ -9,9 +10,6 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 )
 from keras_hub.src.models.mistral.mistral_attention import (
     CachedMistralAttention,
-)
-from keras_hub.src.models.mistral.mistral_layer_norm import (
-    MistralLayerNormalization,
 )
 from keras_hub.src.utils.keras_utils import clone_initializer
 
@@ -26,6 +24,10 @@ class MistralTransformerDecoder(keras.layers.Layer):
         num_key_value_heads,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
+        rope_type="linear",
+        beta_fast=32.0,
+        beta_slow=1.0,
+        original_max_position_embeddings=4096,
         activation="silu",
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
@@ -41,6 +43,10 @@ class MistralTransformerDecoder(keras.layers.Layer):
 
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.rope_type = rope_type
+        self.beta_fast = beta_fast
+        self.beta_slow = beta_slow
+        self.original_max_position_embeddings = original_max_position_embeddings
 
         self.dropout = dropout
 
@@ -62,6 +68,12 @@ class MistralTransformerDecoder(keras.layers.Layer):
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
             rope_scaling_factor=self.rope_scaling_factor,
+            rope_type=self.rope_type,
+            beta_fast=self.beta_fast,
+            beta_slow=self.beta_slow,
+            original_max_position_embeddings=(
+                self.original_max_position_embeddings
+            ),
             sliding_window=self.sliding_window,
             head_dim=self.head_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
@@ -71,7 +83,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
-        self._self_attention_layernorm = MistralLayerNormalization(
+        self._self_attention_layernorm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="self_attention_layernorm",
@@ -116,7 +128,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
             )
         )
 
-        self._feedforward_layernorm = MistralLayerNormalization(
+        self._feedforward_layernorm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="feedforward_layernorm",
@@ -243,6 +255,12 @@ class MistralTransformerDecoder(keras.layers.Layer):
                 "num_query_heads": self.num_query_heads,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_type": self.rope_type,
+                "beta_fast": self.beta_fast,
+                "beta_slow": self.beta_slow,
+                "original_max_position_embeddings": (
+                    self.original_max_position_embeddings
+                ),
                 "num_key_value_heads": self.num_key_value_heads,
                 "sliding_window": self.sliding_window,
                 "head_dim": self.head_dim,
