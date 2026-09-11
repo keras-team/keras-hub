@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 
 from keras_hub.src.tests.test_case import TestCase
@@ -152,7 +153,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
     def test_detokenize_strict_error(self):
         input_data = tf.ragged.constant([[110, 105, 10000000, 110, 106, 97]])
         tokenizer = UnicodeCodepointTokenizer(errors="strict")
-        with self.assertRaises(tf.errors.InvalidArgumentError):
+        with self.assertRaises((ValueError, tf.errors.InvalidArgumentError)):
             _ = tokenizer.detokenize(input_data)
 
     def test_normalization_without_UTF8_valueerror(self):
@@ -194,3 +195,38 @@ class UnicodeCodepointTokenizerTest(TestCase):
         tokenizer = UnicodeCodepointTokenizer(vocabulary_size=2000)
         tokens = [tokenizer.id_to_token(i) for i in input_ids]
         self.assertAllEqual(tokens, expected_tokens)
+
+    def test_tokenize_tf(self):
+        input_data = [
+            "Hello World!",  # ASCII
+            "¡Hola, señor!",  # Latin-1
+            "Привет",  # Cyrillic
+            "你好，世界",  # CJK
+            "🚀🌟",  # Emoji (surrogate pairs in narrow builds, SMP in wide)
+            b"Invalid \xff bytes".decode(
+                "utf-8", "replace"
+            ),  # Error replacement chars
+            "Straße",  # German sharp S for casefolding
+        ]
+
+        tokenizer = UnicodeCodepointTokenizer(
+            sequence_length=15, vocabulary_size=100000, errors="replace"
+        )
+
+        # Test Tokenization Parity
+        tf_tokens = np.array(tokenizer._tokenize_tf(tf.constant(input_data)))
+        py_tokens = tokenizer._tokenize_python(input_data)
+        self.assertAllEqual(tf_tokens, py_tokens)
+
+        # Test Detokenization Parity
+        tf_detokenized = tokenizer._detokenize_tf(tf.constant(tf_tokens))
+        py_detokenized = tokenizer._detokenize_python(py_tokens)
+        self.assertAllEqual(tf_detokenized, py_detokenized)
+
+        # Test empty batch parity and shape
+        empty_tf = np.array(
+            tokenizer._tokenize_tf(tf.constant([], dtype=tf.string))
+        )
+        empty_py = tokenizer._tokenize_python([])
+        self.assertAllEqual(empty_tf, empty_py)
+        self.assertEqual(empty_py.shape, (0, 15))
