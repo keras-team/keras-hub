@@ -230,7 +230,7 @@ class MixtralSparseMoeBlock(keras.layers.Layer):
 
         # Apply jitter noise during training if specified
         if training and self.router_jitter_noise > 0:
-            random_factors = ops.random.uniform(
+            random_factors = keras.random.uniform(
                 shape=ops.shape(hidden_states_flattened),
                 minval=1.0 - self.router_jitter_noise,
                 maxval=1.0 + self.router_jitter_noise,
