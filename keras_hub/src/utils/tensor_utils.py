@@ -8,6 +8,7 @@ import threading
 import keras
 import numpy as np
 from keras import ops
+from keras.src.utils.backend_utils import in_grain_data_pipeline
 from packaging import version
 
 try:
@@ -188,6 +189,41 @@ def convert_preprocessing_inputs(x):
     return x
 
 
+def convert_preprocessing_outputs_grain(x):
+    """Convert outputs after preprocessing to NumPy arrays and Python objects.
+
+    Grain executes preprocessing in Python worker processes and pickles every
+    element across process boundaries. Backend tensors (`jax.Array`,
+    `torch.Tensor`, ...) pickle poorly and would initialize device state in
+    each worker, so inside a Grain pipeline preprocessing outputs are:
+
+    - `np.ndarray`s for dense numeric data.
+    - Python lists (of lists) for ragged and string data.
+    - Unchanged for Python scalars, strings, and `None`.
+
+    This is used automatically by `convert_preprocessing_outputs` and
+    `convert_preprocessing_outputs_python` when executing inside a Grain
+    pipeline.
+    """
+
+    def convert(x):
+        if x is None or isinstance(x, (str, bytes)):
+            return x
+        if tf is not None and isinstance(x, tf.RaggedTensor):
+            return tensor_to_list(x)
+        if tf is not None and isinstance(x, tf.Tensor):
+            if x.dtype == tf.string:
+                return tensor_to_list(x)
+            return x.numpy()
+        if isinstance(x, np.ndarray):
+            return x
+        if ops.is_tensor(x):
+            return ops.convert_to_numpy(x)
+        return x
+
+    return keras.tree.map_structure(convert, x)
+
+
 def convert_preprocessing_outputs(x):
     """Convert outputs after preprocessing to a backend agnostic format.
 
@@ -196,6 +232,10 @@ def convert_preprocessing_outputs(x):
 
     - The correct tensor type for the Keras backend framework.
     - Python lists, in the case of ragged and string data.
+
+    When called inside a Grain pipeline (e.g. `grain.MapDataset.map(layer)`),
+    dense outputs are instead returned as `np.ndarray`s so they can be pickled
+    across Grain worker processes. See `convert_preprocessing_outputs_grain`.
 
     This will automatically be called when on the output of preprocessing
     layers or `keras_hub.models.Task`s with preprocessing included. It could be
@@ -223,6 +263,8 @@ def convert_preprocessing_outputs(x):
     """
     if not tf.executing_eagerly() or in_no_convert_scope():
         return x
+    if in_grain_data_pipeline():
+        return convert_preprocessing_outputs_grain(x)
 
     def convert(x):
         if x is None:
@@ -252,6 +294,10 @@ def convert_preprocessing_outputs_python(x):
     - The correct tensor type for the Keras backend framework.
     - Python lists, in the case of string data.
 
+    When called inside a Grain pipeline (e.g. `grain.MapDataset.map(layer)`),
+    dense outputs are instead returned as `np.ndarray`s so they can be pickled
+    across Grain worker processes. See `convert_preprocessing_outputs_grain`.
+
     Examples:
     ```python
     # A batch of three samples each with two string segments.
@@ -269,6 +315,8 @@ def convert_preprocessing_outputs_python(x):
     """
     if in_no_convert_scope():
         return x
+    if in_grain_data_pipeline():
+        return convert_preprocessing_outputs_grain(x)
 
     def convert(x):
         if x is None:
