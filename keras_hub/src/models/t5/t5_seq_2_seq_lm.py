@@ -358,8 +358,6 @@ class T5Seq2SeqLM(Seq2SeqLM):
             inputs["decoder_padding_mask"],
         )
 
-        batch_size = ops.shape(encoder_token_ids)[0]
-
         # Create and seed cache with a single forward pass.
         (
             hidden_states,
@@ -379,32 +377,49 @@ class T5Seq2SeqLM(Seq2SeqLM):
             cache_index = index - 1
             num_samples = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_index], [num_samples, 1])
-
-            def repeat_tensor(x):
-                """Repeats along batch axis to match dim for beam search."""
-                if ops.shape(x)[0] == num_samples:
-                    return x
-                return ops.repeat(x, repeats=num_samples // batch_size, axis=0)
-
-            logits, hidden_states, cache, _ = self.call_decoder_with_cache(
-                encoder_hidden_states=repeat_tensor(encoder_hidden_states),
-                encoder_padding_mask=repeat_tensor(encoder_padding_mask),
-                decoder_token_ids=prompt,
-                self_attention_cache=cache,
-                self_attention_cache_update_index=cache_index,
-                cross_attention_cache=repeat_tensor(cross_attention_cache),
-                cross_attention_cache_update_index=None,
+            # The encoder tensors ride along in `cache` rather than being
+            # captured from the enclosing scope. They are read-only here, but
+            # routing them through the sampler keeps them out of the closure,
+            # which OpenVINO requires: a `while_loop` body may only reference
+            # its own loop variables. It also lets `BeamSampler` expand them
+            # to `num_samples` for us, since it maps over every cache leaf.
+            (
+                self_attention_cache,
+                encoder_hidden_states,
+                encoder_padding_mask,
+                cross_attention_cache,
+            ) = cache
+            logits, hidden_states, self_attention_cache, _ = (
+                self.call_decoder_with_cache(
+                    encoder_hidden_states=encoder_hidden_states,
+                    encoder_padding_mask=encoder_padding_mask,
+                    decoder_token_ids=prompt,
+                    self_attention_cache=self_attention_cache,
+                    self_attention_cache_update_index=cache_index,
+                    cross_attention_cache=cross_attention_cache,
+                    cross_attention_cache_update_index=None,
+                )
             )
             return (
                 ops.squeeze(logits, axis=1),
                 ops.squeeze(hidden_states, axis=1),
-                cache,
+                (
+                    self_attention_cache,
+                    encoder_hidden_states,
+                    encoder_padding_mask,
+                    cross_attention_cache,
+                ),
             )
 
         decoder_token_ids = self.sampler(
             next=next,
             prompt=decoder_token_ids,
-            cache=self_attention_cache,
+            cache=(
+                self_attention_cache,
+                encoder_hidden_states,
+                encoder_padding_mask,
+                cross_attention_cache,
+            ),
             index=index,
             mask=decoder_padding_mask,
             stop_token_ids=stop_token_ids,
