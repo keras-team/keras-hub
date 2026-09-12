@@ -120,6 +120,13 @@ class MoonshineAudioConverter(AudioConverter):
                 f"{sampling_rate}"
             )
 
+        # The body below is written in `keras.ops`, but `preprocessing_function`
+        # hands us a `tf.Tensor`. On a non-TF backend `keras.ops` results are
+        # placed on the accelerator while the `tf.Tensor` converts to CPU, so
+        # mixing the two raises "Expected all tensors to be on the same
+        # device". Normalize once here so the whole body stays consistent.
+        inputs = keras.ops.convert_to_tensor(inputs)
+
         # Ensure inputs are (batch_size, time_steps, 1).
         input_shape = keras.ops.shape(inputs)
         input_rank = len(input_shape)

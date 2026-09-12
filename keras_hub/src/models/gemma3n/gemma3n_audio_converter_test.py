@@ -1,4 +1,5 @@
 import grain
+import keras
 import numpy as np
 
 from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
@@ -113,7 +114,10 @@ class Gemma3nAudioConverterTest(TestCase):
         features_norm, _ = outputs_norm
         # We would want outputs to be different.
         self.assertNotAllClose(features_no_norm, features_norm)
-        # Manually normalize and check for closeness.
+        # Manually normalize and check for closeness. The layer returns
+        # backend tensors, which on an accelerator cannot be mixed with NumPy
+        # arrays directly, so bring them to NumPy first.
+        features_no_norm = keras.ops.convert_to_numpy(features_no_norm)
         manual_norm_features = (features_no_norm - np.array(mean)) / np.array(
             stddev
         )
