@@ -1,4 +1,3 @@
-import grain
 import pytest
 
 from keras_hub.src.models.bert.bert_text_classifier_preprocessor import (
@@ -6,6 +5,11 @@ from keras_hub.src.models.bert.bert_text_classifier_preprocessor import (
 )
 from keras_hub.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_hub.src.tests.test_case import TestCase
+
+try:
+    import grain
+except ImportError:
+    grain = None
 
 
 class BertTextClassifierPreprocessorTest(TestCase):
@@ -40,6 +44,7 @@ class BertTextClassifierPreprocessorTest(TestCase):
             ),
         )
 
+    @pytest.mark.skipif(grain is None, reason="grain is not installed")
     def test_grain_unpacks_tuple_elements(self):
         preprocessor = BertTextClassifierPreprocessor(**self.init_kwargs)
         expected = preprocessor(*self.input_data)

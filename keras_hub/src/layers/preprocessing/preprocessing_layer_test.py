@@ -1,10 +1,15 @@
-import grain
 import numpy as np
+import pytest
 
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_hub.src.tests.test_case import TestCase
+
+try:
+    import grain
+except ImportError:
+    grain = None
 
 
 class LabelsLayer(PreprocessingLayer):
@@ -95,6 +100,7 @@ class PreprocessingLayerTest(TestCase):
         self.assertIs(output["x"], x)
         self.assertIsNone(output["y"])
 
+    @pytest.mark.skipif(grain is None, reason="grain is not installed")
     def test_grain_map_over_tuple_elements(self):
         elements = [
             ("the quick brown fox", 1, 0.5),

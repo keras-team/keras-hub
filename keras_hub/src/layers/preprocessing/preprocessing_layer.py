@@ -20,6 +20,12 @@ class PreprocessingLayer(keras.layers.Layer):
         # Allow Python workflow. Historically, KerasHub preprocessing layers
         # required TF and TF text libraries.
         self._allow_python_workflow = _allow_python_workflow
+        # Whether `call` has the `(x, y, sample_weight)` signature. Keras has
+        # already inspected `self.call` in `Layer.__init__`, so this is safe.
+        params = inspect.signature(self.call).parameters
+        self._call_accepts_labels = all(
+            k in params for k in ("x", "y", "sample_weight")
+        )
         # Most pre-preprocessing has no build.
         if not hasattr(self, "build"):
             self.built = True
@@ -40,18 +46,6 @@ class PreprocessingLayer(keras.layers.Layer):
         ):
             args = args[0]
         return super().__call__(*args, **kwargs)
-
-    @property
-    def _call_accepts_labels(self):
-        """Whether `call` has the `(x, y, sample_weight)` signature."""
-        accepts_labels = getattr(self, "_call_accepts_labels_cache", None)
-        if accepts_labels is None:
-            params = inspect.signature(self.call).parameters
-            accepts_labels = all(
-                k in params for k in ("x", "y", "sample_weight")
-            )
-            self._call_accepts_labels_cache = accepts_labels
-        return accepts_labels
 
     def get_build_config(self):
         return None
