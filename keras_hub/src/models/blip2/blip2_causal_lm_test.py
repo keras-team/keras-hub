@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
 from keras_hub.src.models.blip2.blip2_causal_lm import BLIP2CausalLM
@@ -152,11 +153,16 @@ class BLIP2CausalLMTest(TestCase):
     def test_early_stopping(self):
         causal_lm = BLIP2CausalLM(**self.init_kwargs)
 
-        def wrapper(token_ids, cache, cache_update_index, **kwargs):
-            batch_size = token_ids.shape[0]
-            logits = np.zeros((batch_size, 1, 9))
-            logits[:, :, 2] = 1.0  # EOS
-            return logits, token_ids, cache
+        call_with_cache = causal_lm.call_with_cache
+
+        def wrapper(*args, **kwargs):
+            """Modify output logits to always favor end_token_id"""
+            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
+            index = self.preprocessor.tokenizer.end_token_id
+            update = ops.ones_like(logits)[:, :, index] * 1.0e9
+            update = ops.expand_dims(update, axis=-1)
+            logits = ops.slice_update(logits, (0, 0, index), update)
+            return logits, hidden_states, cache
 
         with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
             prompt = {"text": ["t", "t"], "images": self.input_data["images"]}
@@ -166,11 +172,16 @@ class BLIP2CausalLMTest(TestCase):
     def test_text_early_stopping(self):
         causal_lm = BLIP2CausalLM(**self.text_init_kwargs)
 
-        def wrapper(token_ids, cache, cache_update_index, **kwargs):
-            batch_size = token_ids.shape[0]
-            logits = np.zeros((batch_size, 1, 9))
-            logits[:, :, 2] = 1.0  # EOS
-            return logits, token_ids, cache
+        call_with_cache = causal_lm.call_with_cache
+
+        def wrapper(*args, **kwargs):
+            """Modify output logits to always favor end_token_id"""
+            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
+            index = self.text_preprocessor.tokenizer.end_token_id
+            update = ops.ones_like(logits)[:, :, index] * 1.0e9
+            update = ops.expand_dims(update, axis=-1)
+            logits = ops.slice_update(logits, (0, 0, index), update)
+            return logits, hidden_states, cache
 
         with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
             prompt = ["t", "t"]
