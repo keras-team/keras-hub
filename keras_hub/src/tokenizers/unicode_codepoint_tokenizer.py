@@ -383,6 +383,14 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
 
         if not batched:
             batched_tokens = batched_tokens[0]
+            if not self.sequence_length:
+                # An unbatched sequence is dense even without
+                # `sequence_length`, so return an array here too. Without
+                # this, the output would fall back to NumPy's default int64
+                # rather than the `compute_dtype` the TF path returns.
+                batched_tokens = np.array(
+                    batched_tokens, dtype=self.compute_dtype
+                )
         return batched_tokens
 
     def tokenize(self, inputs):

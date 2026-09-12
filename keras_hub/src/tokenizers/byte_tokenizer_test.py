@@ -68,6 +68,16 @@ class ByteTokenizerTest(TestCase):
         self.assertAllEqual(call_output, [104, 101, 108, 108, 111])
         self.assertAllEqual(tokenize_output, [104, 101, 108, 108, 111])
 
+    def test_tokenize_scalar_dtype(self):
+        # An unbatched sequence is dense, so it must come back with the
+        # layer's `compute_dtype` rather than NumPy's default int64. This
+        # also runs on the TF path via `ByteTokenizerTFTest`, pinning the
+        # two paths to the same dtype.
+        tokenizer = self.make_tokenizer()
+        output = np.array(tokenizer("hello"))
+        self.assertEqual(output.ndim, 1)
+        self.assertEqual(output.dtype, np.int32)
+
     def test_dense_output(self):
         input_data = ["hello", "fun", "▀▁▂▃"]
         tokenizer = self.make_tokenizer(sequence_length=10)

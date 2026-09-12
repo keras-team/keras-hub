@@ -618,9 +618,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     def _special_tokens_for_splitting(self):
         if not (self.split and self.special_tokens_in_strings):
             return None
-        special_tokens = self.special_tokens
+        special_tokens = list(self.special_tokens)
         if self._init_special_tokens:
-            special_tokens += self._init_special_tokens
+            special_tokens.extend(self._init_special_tokens)
         return special_tokens
 
     @preprocessing_function
@@ -767,6 +767,15 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         if not batched:
             batched_tokens = batched_tokens[0]
+            if not self.sequence_length and is_int_dtype(self.compute_dtype):
+                # An unbatched sequence is dense even without
+                # `sequence_length`, so return an array here too. Without
+                # this, the output would fall back to NumPy's default int64
+                # rather than the `compute_dtype` the TF path returns. String
+                # outputs stay a Python list, matching the TF path.
+                batched_tokens = np.array(
+                    batched_tokens, dtype=self.compute_dtype
+                )
         return batched_tokens
 
     def tokenize(self, inputs):

@@ -68,6 +68,27 @@ class WordPieceTokenizerTest(TestCase):
             expected_detokenize_output=["quick brown @UNK@ @MASK@"],
         )
 
+    def test_tokenize_scalar_dtype(self):
+        # An unbatched sequence is dense, so it must come back with the
+        # layer's `compute_dtype` rather than NumPy's default int64. This
+        # also runs on the TF path via `WordPieceTokenizerTFTest`, pinning
+        # the two paths to the same dtype.
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        tokenizer = self.make_tokenizer(vocabulary=vocab_data)
+        output = np.array(tokenizer("the quick brown fox."))
+        self.assertEqual(output.ndim, 1)
+        self.assertEqual(output.dtype, np.int32)
+
+    def test_tokenize_scalar_string_dtype(self):
+        # With a string `dtype` the output is a list of tokens, not an array,
+        # so the dtype handling above must not apply.
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        tokenizer = self.make_tokenizer(vocabulary=vocab_data, dtype="string")
+        output = tokenizer("the quick brown fox.")
+        self.assertAllEqual(
+            output, ["the", "qu", "##ick", "br", "##own", "fox", "."]
+        )
+
     def test_dense_output(self):
         input_data = ["the quick brown fox."]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]

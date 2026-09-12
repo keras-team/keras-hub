@@ -18,9 +18,14 @@ class NoTensorflow(unittest.TestCase):
             }
         )
 
-    def test_tokenizer_errors(self):
-        with self.assertRaises(Exception) as e:
-            keras_hub.models.BertTokenizer.from_preset(
-                "bert_tiny_en_uncased",
-            )
-            self.assertTrue("pip install tensorflow-text" in e.exception)
+    def test_tokenizer_works(self):
+        # `WordPieceTokenizer` has a pure Python path, so `BertTokenizer` no
+        # longer requires tensorflow-text. This previously asserted that
+        # `from_preset` raised "pip install tensorflow-text".
+        tokenizer = keras_hub.models.BertTokenizer.from_preset(
+            "bert_tiny_en_uncased",
+        )
+        outputs = np.array(tokenizer("the quick brown fox"))
+        self.assertEqual(outputs.ndim, 1)
+        self.assertGreater(outputs.shape[0], 0)
+        self.assertEqual(outputs.dtype, np.int32)
