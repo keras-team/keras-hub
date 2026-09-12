@@ -135,6 +135,7 @@ class LlamaAttention(keras.layers.Layer):
         attention_mask=None,
         cache=None,
         cache_update_index=None,
+        rotary_start_index=None,
         training=None,
     ):
         # Route to vLLM paged attention while serving on TPU; otherwise the
@@ -148,9 +149,12 @@ class LlamaAttention(keras.layers.Layer):
                 hidden_states, cache, vllm_context
             )
 
-        start_index = (
-            cache_update_index if cache_update_index is not None else 0
-        )
+        if rotary_start_index is not None:
+            start_index = rotary_start_index
+        elif cache_update_index is not None:
+            start_index = cache_update_index
+        else:
+            start_index = 0
 
         query = self._query_dense(hidden_states)
 

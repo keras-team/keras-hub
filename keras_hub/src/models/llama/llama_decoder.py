@@ -134,6 +134,7 @@ class LlamaTransformerDecoder(keras.layers.Layer):
         decoder_attention_mask=None,
         self_attention_cache=None,
         self_attention_cache_update_index=None,
+        self_attention_rotary_index=None,
         training=None,
     ):
         self_attention_mask = self._compute_self_attention_mask(
@@ -153,6 +154,7 @@ class LlamaTransformerDecoder(keras.layers.Layer):
             attention_mask=self_attention_mask,
             cache=self_attention_cache,
             cache_update_index=self_attention_cache_update_index,
+            rotary_start_index=self_attention_rotary_index,
         )
 
         if self_attention_cache is not None:

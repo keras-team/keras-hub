@@ -7,6 +7,7 @@ from keras import tree
 from keras.src.distribution import distribution_lib
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.kv_press.serialization import get as get_press
 from keras_hub.src.models.task import Task
 from keras_hub.src.samplers.serialization import get as get_sampler
 
@@ -67,6 +68,7 @@ class CausalLM(Task):
         *,
         weighted_metrics="auto",
         sampler="top_k",
+        press=None,
         **kwargs,
     ):
         """Configures the `CausalLM` task for training and generation.
@@ -104,6 +106,12 @@ class CausalLM(Task):
                 Configures the sampling method used during `generate()` calls.
                 See `keras_hub.samplers` for a full list of built-in sampling
                 strategies.
+            press: A press name, or a `keras_hub.press.KVCachePress` instance.
+                If set, the KV cache is compressed right after the prompt is
+                prefilled, evicting less important tokens to reduce memory
+                usage during `generate()`. Defaults to `None`, which disables
+                compression. Not every `CausalLM` subclass supports cache
+                compression yet; unsupported subclasses ignore this setting.
             **kwargs: See `keras.Model.compile` for a full list of arguments
                 supported by the compile method.
         """
@@ -120,12 +128,51 @@ class CausalLM(Task):
             **kwargs,
         )
         self.sampler = get_sampler(sampler)
+        self.press = get_press(press)
         # Clear the compiled generate function.
         self.generate_function = None
 
     def generate_step(self):
         """Run generation on a single batch of input."""
         raise NotImplementedError
+
+    def _compress_layer_cache(self, layer_cache, padding_mask=None):
+        """Compress one layer's cache slice with `self.press`, if configured.
+
+        Called from inside a model's per-layer `call_with_cache` loop, right
+        after that layer's key/value cache is produced and before it joins
+        the other layers' caches. Compressing here -- one layer at a time --
+        rather than once on the fully assembled, all-layers cache, bounds
+        the transient memory overlap between a layer's old and compressed
+        cache to a single layer, matching the reference
+        [KVPress](https://github.com/NVIDIA/kvpress) library's per-layer
+        forward-hook design instead of paying that overlap for every layer
+        at once.
+
+        Args:
+            layer_cache: a dense float Tensor of shape
+                `(batch_size, 2, seq_len, num_heads, head_dim)`, one layer's
+                freshly-seeded key/value cache for the prompt.
+            padding_mask: an optional boolean tensor, forwarded to
+                `self.press.compress()`.
+
+        Returns:
+            `layer_cache`, unchanged if `self.press` is `None`, otherwise
+            compressed to a (possibly) smaller `seq_len`.
+        """
+        if self.press is None:
+            return layer_cache
+        # `KVCachePress.compress()` expects the `(batch, num_layers, 2,
+        # seq_len, num_heads, head_dim)` shape it was designed against;
+        # slot this one layer in as a size-1 `num_layers` axis and drop it
+        # again on the way out. None of the built-in presses' `score()`
+        # implementations have any cross-layer dependency, so a size-1 axis
+        # here is equivalent to compressing that layer as part of a larger
+        # stack.
+        layer_cache = self.press.compress(
+            layer_cache[:, None, ...], padding_mask=padding_mask
+        )
+        return layer_cache[:, 0, ...]
 
     def make_generate_function(self):
         """Create or return the compiled generation function."""

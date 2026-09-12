@@ -63,6 +63,13 @@ class GPT2CausalLM(CausalLM):
     gpt2_lm.generate("I want to say", max_length=30)
     ```
 
+    Compile the `generate()` function with KV cache compression.
+    ```python
+    gpt2_lm = keras_hub.models.GPT2CausalLM.from_preset("gpt2_base_en")
+    gpt2_lm.compile(press=keras_hub.press.KnormPress(compression_ratio=0.5))
+    gpt2_lm.generate("I want to say", max_length=30)
+    ```
+
     Use `generate()` without preprocessing.
     ```python
     # Prompt the model with `5338, 318` (the token ids for `"Who is"`).
@@ -161,6 +168,9 @@ class GPT2CausalLM(CausalLM):
         token_ids,
         cache,
         cache_update_index,
+        position_index=None,
+        compress_cache=False,
+        padding_mask=None,
     ):
         """Forward pass of `GPT2CausalLM` with cache.
 
@@ -172,8 +182,20 @@ class GPT2CausalLM(CausalLM):
         Args:
             token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
             cache: a dense float Tensor, the cache of key and value.
-            cache_update_index: int, or int Tensor. The index of current inputs
-                in the whole sequence.
+            cache_update_index: int, or int Tensor. The index at which to
+                address the (possibly `press`-shrunk) physical cache buffer.
+            position_index: int, or int Tensor. The true position of the
+                current inputs in the original, uncompressed sequence, used
+                for position embeddings. Defaults to `cache_update_index`,
+                which is correct whenever the cache hasn't been compressed.
+            compress_cache: bool. If `True` and `self.press` is configured,
+                each layer's cache is compressed with `self.press` right
+                after that layer's forward pass, before the next layer
+                runs. Only `_build_cache()`'s single seed call sets this;
+                decode steps leave it `False` so compression runs once, on
+                the prompt only.
+            padding_mask: an optional boolean tensor, forwarded to
+                `self.press.compress()` when `compress_cache` is `True`.
 
         Returns:
             A (logits, hidden_states, cache) tuple. Where `logits` is the
@@ -181,9 +203,11 @@ class GPT2CausalLM(CausalLM):
             the final hidden representation of the input tokens, and `cache` is
             the decoding cache.
         """
+        if position_index is None:
+            position_index = cache_update_index
         tokens = self.backbone.token_embedding(token_ids)
         positions = self.backbone.position_embedding(
-            tokens, start_index=cache_update_index
+            tokens, start_index=position_index
         )
         x = self.backbone.embeddings_add((tokens, positions))
         x = self.backbone.embeddings_dropout(x)
@@ -196,13 +220,17 @@ class GPT2CausalLM(CausalLM):
                 self_attention_cache=current_cache,
                 self_attention_cache_update_index=cache_update_index,
             )
+            if compress_cache:
+                next_cache = self._compress_layer_cache(
+                    next_cache, padding_mask=padding_mask
+                )
             caches.append(next_cache)
         cache = ops.stack(caches, axis=1)
         hidden_states = x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
-    def _build_cache(self, token_ids):
+    def _build_cache(self, token_ids, padding_mask=None):
         """Build an empty cache for use with `call_with_cache()`."""
         batch_size = ops.shape(token_ids)[0]
         max_length = ops.shape(token_ids)[1]
@@ -211,9 +239,17 @@ class GPT2CausalLM(CausalLM):
         head_dim = self.backbone.hidden_dim // self.backbone.num_heads
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
-        # Seed the cache.
-        _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
-        return hidden_states, cache
+        # Seed the cache. Each layer's cache is compressed (if `self.press`
+        # is set) as soon as that layer's forward pass produces it.
+        _, hidden_states, cache = self.call_with_cache(
+            token_ids,
+            cache,
+            0,
+            compress_cache=True,
+            padding_mask=padding_mask,
+        )
+        cache_index_offset = max_length - cache.shape[3]
+        return hidden_states, cache, cache_index_offset
 
     def generate_step(
         self,
@@ -235,21 +271,37 @@ class GPT2CausalLM(CausalLM):
         """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
         # Create and seed cache with a single forward pass.
-        hidden_states, cache = self._build_cache(token_ids)
+        hidden_states, cache, cache_index_offset = self._build_cache(
+            token_ids, padding_mask
+        )
         # Compute the lengths of all user inputted tokens ids.
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         # Start at the first index that has no user inputted id.
         index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
-            # The cache index is the index of our previous token.
-            cache_update_index = index - 1
+            # `position_index` is the logical index of the previous token in
+            # the original, uncompressed sequence -- used to slice `prompt`
+            # (which is always full-length) and for position embeddings.
+            # `cache_update_index` addresses the physical cache buffer, which
+            # `press` may have shrunk relative to the logical sequence; the
+            # two are only equal when compression is disabled.
+            position_index = index - 1
+            # Clamped to 0: for a mixed-length batch, `cache_index_offset`
+            # is sized for the batch overall and can exceed a short row's
+            # own real length, which would otherwise address a negative
+            # (silently wrapped-around, or out-of-bounds) physical slot for
+            # that row at its first decode step.
+            cache_update_index = ops.maximum(
+                position_index - cache_index_offset, 0
+            )
             batch_size = ops.shape(prompt)[0]
-            prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
+            prompt = ops.slice(prompt, [0, position_index], [batch_size, 1])
             logits, hidden_states, cache = self.call_with_cache(
                 prompt,
                 cache,
                 cache_update_index,
+                position_index=position_index,
             )
             return (
                 ops.squeeze(logits, axis=1),
