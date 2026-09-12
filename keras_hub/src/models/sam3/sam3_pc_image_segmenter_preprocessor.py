@@ -270,9 +270,7 @@ class SAM3PromptableConceptImageSegmenterPreprocessor(Preprocessor):
 
         # Resize and normalize the images.
         pixel_values = self.image_converter(images)
-        if keras.config.backend() == "torch" and not isinstance(
-            images, tf.Tensor
-        ):
+        if keras.config.backend() == "torch" and keras.ops.is_tensor(images):
             images = images.cpu()
 
         # Normalize the boxes.
