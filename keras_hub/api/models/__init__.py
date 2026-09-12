@@ -109,6 +109,12 @@ from keras_hub.src.models.blip2.blip2_seq_2_seq_lm_preprocessor import (
 from keras_hub.src.models.blip2.blip2_vision_encoder import (
     BLIP2VisionEncoder as BLIP2VisionEncoder,
 )
+from keras_hub.src.models.block_diffusion_lm import (
+    BlockDiffusionLM as BlockDiffusionLM,
+)
+from keras_hub.src.models.block_diffusion_lm_preprocessor import (
+    BlockDiffusionLMPreprocessor as BlockDiffusionLMPreprocessor,
+)
 from keras_hub.src.models.bloom.bloom_backbone import (
     BloomBackbone as BloomBackbone,
 )
@@ -219,6 +225,15 @@ from keras_hub.src.models.depth_estimator import (
 )
 from keras_hub.src.models.depth_estimator_preprocessor import (
     DepthEstimatorPreprocessor as DepthEstimatorPreprocessor,
+)
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_backbone import (
+    DiffusionGemmaBackbone as DiffusionGemmaBackbone,
+)
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm import (
+    DiffusionGemmaBlockDiffusionLM as DiffusionGemmaBlockDiffusionLM,
+)
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm_preprocessor import (
+    DiffusionGemmaBlockDiffusionLMPreprocessor as DiffusionGemmaBlockDiffusionLMPreprocessor,
 )
 from keras_hub.src.models.dinov2.dinov2_backbone import (
     DINOV2Backbone as DINOV2Backbone,
