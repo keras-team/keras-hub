@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 
 try:
     import tensorflow as tf
@@ -8,6 +9,12 @@ except ImportError:
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
+from keras_hub.src.utils.tensor_utils import (
+    convert_preprocessing_outputs_python,
+)
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
+from keras_hub.src.utils.tensor_utils import in_tf_function
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_hub_export("keras_hub.layers.MoonshineAudioConverter")
@@ -87,14 +94,18 @@ class MoonshineAudioConverter(AudioConverter):
         do_normalize=False,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            _allow_python_workflow=_allow_python_workflow, **kwargs
+        )
         self._convert_input_args = False
         self._allow_non_tensor_positional_args = True
         self.sampling_rate = sampling_rate
         self.padding_value = padding_value
         self.do_normalize = do_normalize
 
-    def call(
+    @preprocessing_function
+    def _call_tf(
         self,
         inputs,
         sampling_rate=None,
@@ -281,6 +292,93 @@ class MoonshineAudioConverter(AudioConverter):
             )
 
         return processed_inputs
+
+    def _call_python(
+        self,
+        inputs,
+        sampling_rate=None,
+        padding=None,
+        max_length=None,
+        pad_to_multiple_of=None,
+    ):
+        # Validate sampling rate.
+        if sampling_rate is not None and sampling_rate != self.sampling_rate:
+            raise ValueError(
+                f"Expected sampling_rate {self.sampling_rate}, got "
+                f"{sampling_rate}"
+            )
+
+        processed_inputs = np.asarray(convert_to_numpy(inputs))
+        # Ensure inputs are (batch_size, time_steps, 1).
+        if processed_inputs.ndim == 2:
+            processed_inputs = np.expand_dims(processed_inputs, axis=-1)
+        elif processed_inputs.ndim != 3:
+            raise ValueError(
+                "Inputs must be mono audio: (batch_size, time_steps, 1)"
+            )
+
+        # Get original length and validate duration.
+        original_length = processed_inputs.shape[1]
+        duration = original_length / self.sampling_rate
+        # Source: https://github.com/usefulsensors/moonshine/blob/4a000427bd36a1c2c6d20a86c672dbd850b44c88/moonshine/transcribe.py#L20
+        if duration < 0.1 or duration > 64.0:
+            import warnings
+
+            warnings.warn(
+                "Audio duration must be between 0.1 and 64 seconds. For "
+                "transcribing longer segments, pre-segment your audio and "
+                "provide shorter segments."
+            )
+
+        # Handle padding.
+        target_length = None
+        if padding == "longest":
+            target_length = original_length
+        elif padding == "max_length" and max_length is not None:
+            target_length = max_length
+        if target_length is not None and pad_to_multiple_of:
+            target_length = (
+                (target_length + pad_to_multiple_of - 1) // pad_to_multiple_of
+            ) * pad_to_multiple_of
+        if target_length is not None:
+            if original_length < target_length:
+                padding_amount = target_length - original_length
+                processed_inputs = np.pad(
+                    processed_inputs,
+                    ((0, 0), (0, padding_amount), (0, 0)),
+                    mode="constant",
+                    constant_values=self.padding_value,
+                )
+            elif original_length > target_length and padding == "max_length":
+                processed_inputs = processed_inputs[:, :target_length, :]
+
+        # Normalize if enabled.
+        if self.do_normalize:
+            mean = np.mean(processed_inputs, axis=1, keepdims=True)
+            var = np.var(processed_inputs, axis=1, keepdims=True)
+            processed_inputs = (processed_inputs - mean) / np.sqrt(var + 1e-7)
+
+        processed_inputs = processed_inputs.astype(self.compute_dtype)
+        return convert_preprocessing_outputs_python(processed_inputs)
+
+    def call(
+        self,
+        inputs,
+        sampling_rate=None,
+        padding=None,
+        max_length=None,
+        pad_to_multiple_of=None,
+    ):
+        kwargs = {
+            "sampling_rate": sampling_rate,
+            "padding": padding,
+            "max_length": max_length,
+            "pad_to_multiple_of": pad_to_multiple_of,
+        }
+        if not self._allow_python_workflow or in_tf_function():
+            return self._call_tf(inputs, **kwargs)
+        else:
+            return self._call_python(inputs, **kwargs)
 
     def compute_output_shape(self, input_shape):
         # [batch_size, time_steps] → [batch_size, time_steps, 1].
