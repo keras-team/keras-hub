@@ -86,6 +86,7 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
             sliding_window_size=self.sliding_window_size,
+            layer_norm_epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="self_attention",
         )
@@ -295,15 +296,17 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
             {
                 "intermediate_dim": self.intermediate_dim,
                 "num_query_heads": self.num_query_heads,
+                "num_key_value_heads": self.num_key_value_heads,
+                "head_dim": self.head_dim,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
-                "num_key_value_heads": self.num_key_value_heads,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
                 "dropout": self.dropout,
+                "sliding_window_size": self.sliding_window_size,
             }
         )
         return config
