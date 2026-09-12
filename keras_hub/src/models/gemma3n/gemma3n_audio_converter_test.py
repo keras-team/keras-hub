@@ -1,3 +1,4 @@
+import grain
 import numpy as np
 
 from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
@@ -121,3 +122,26 @@ class Gemma3nAudioConverterTest(TestCase):
     def test_serialization(self):
         instance = Gemma3nAudioConverter(**self.init_kwargs)
         self.run_serialization_test(instance=instance)
+
+    def test_python_matches_tf(self):
+        converter = Gemma3nAudioConverter(**self.init_kwargs)
+        audio = self.input_data[0][:4000]
+        py_features, py_mask = converter._call_python(audio)
+        tf_features, tf_mask = converter._call_tf(audio)
+        self.assertAllClose(py_features, tf_features)
+        self.assertAllEqual(py_mask, tf_mask)
+
+    def test_grain_outputs_numpy(self):
+        converter = Gemma3nAudioConverter(**self.init_kwargs)
+        samples = [self.input_data[0][:4000], self.input_data[0][:8000]]
+        ds = grain.MapDataset.source(samples).map(converter)
+        for sample, output in zip(samples, ds):
+            self.assertIsInstance(output, tuple)
+            features, mask = output
+            self.assertIsInstance(features, np.ndarray)
+            self.assertIsInstance(mask, np.ndarray)
+            self.assertEqual(features.shape[-1], self.feature_size)
+            self.assertEqual(features.shape[0], mask.shape[0])
+            expected_features, expected_mask = converter(sample)
+            self.assertAllClose(features, expected_features)
+            self.assertAllEqual(mask, expected_mask)

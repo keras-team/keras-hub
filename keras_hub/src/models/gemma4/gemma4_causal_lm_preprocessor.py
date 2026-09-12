@@ -597,9 +597,10 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
 
         # The audio converter runs as a Keras layer and may return a CUDA
         # torch tensor on GPU. Move to CPU so subsequent TF ops can accept it
-        # (mirrors the same guard in _preprocess_images).
+        # (mirrors the same guard in _preprocess_images). The Python path
+        # already returns NumPy, which has no `.cpu()`.
         if keras.config.backend() == "torch":
-            if not isinstance(mel, tf.Tensor):
+            if hasattr(mel, "cpu"):
                 mel = mel.cpu()
 
         # Expand dims to model expectation of Clips step: (B, 1, Seq, Feat)
