@@ -6,6 +6,9 @@ from keras import tree
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.tensor_utils import any_equal
+from keras_hub.src.utils.tensor_utils import canonicalize_python_string_inputs
+from keras_hub.src.utils.tensor_utils import canonicalize_python_token_inputs
+from keras_hub.src.utils.tensor_utils import casefold_utf8
 from keras_hub.src.utils.tensor_utils import convert_preprocessing_inputs
 from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs
 from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs_grain
@@ -13,6 +16,7 @@ from keras_hub.src.utils.tensor_utils import (
     convert_preprocessing_outputs_python,
 )
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import get_decode_errors_name
 from keras_hub.src.utils.tensor_utils import in_grain_data_pipeline
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 from keras_hub.src.utils.tensor_utils import is_tensor_type
@@ -484,3 +488,111 @@ class IsFloatDtypeTest(TestCase):
         ]
         for dtype in non_float_dtypes:
             self.assertFalse(is_float_dtype(dtype))
+
+
+class CanonicalizePythonInputsTest(TestCase):
+    def test_string_inputs(self):
+        self.assertEqual(canonicalize_python_string_inputs("a"), (["a"], False))
+        self.assertEqual(
+            canonicalize_python_string_inputs(b"a"), (["a"], False)
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(np.str_("a")), (["a"], False)
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(["a", b"b"]), (["a", "b"], True)
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(("a", "b")), (["a", "b"], True)
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(np.array(["a", "b"])),
+            (["a", "b"], True),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(np.array("a")), (["a"], False)
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(tf.constant(["a", "b"])),
+            (["a", "b"], True),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(tf.constant("a")), (["a"], False)
+        )
+        # Decoding options for bytes.
+        self.assertEqual(
+            canonicalize_python_string_inputs(b"a\xffb", errors="ignore"),
+            (["ab"], False),
+        )
+        with self.assertRaises(ValueError):
+            canonicalize_python_string_inputs(b"a\xffb")
+        with self.assertRaises(ValueError):
+            canonicalize_python_string_inputs([1, 2])
+        with self.assertRaises(ValueError):
+            canonicalize_python_string_inputs(np.array([["a"], ["b"]]))
+
+    def test_token_inputs(self):
+        self.assertEqual(canonicalize_python_token_inputs(1), ([[1]], False))
+        self.assertEqual(
+            canonicalize_python_token_inputs([1, 2]), ([[1, 2]], False)
+        )
+        self.assertEqual(canonicalize_python_token_inputs([]), ([[]], False))
+        self.assertEqual(
+            canonicalize_python_token_inputs([[1, 2], [3]]),
+            ([[1, 2], [3]], True),
+        )
+        self.assertEqual(
+            canonicalize_python_token_inputs(np.array(1)), ([[1]], False)
+        )
+        self.assertEqual(
+            canonicalize_python_token_inputs(np.array([1, 2])),
+            ([[1, 2]], False),
+        )
+        self.assertEqual(
+            canonicalize_python_token_inputs(np.array([[1, 2], [3, 4]])),
+            ([[1, 2], [3, 4]], True),
+        )
+        self.assertEqual(
+            canonicalize_python_token_inputs(ops.array([[1, 2], [3, 4]])),
+            ([[1, 2], [3, 4]], True),
+        )
+        self.assertEqual(
+            canonicalize_python_token_inputs(tf.constant([1, 2])),
+            ([[1, 2]], False),
+        )
+        self.assertEqual(
+            canonicalize_python_token_inputs(tf.ragged.constant([[1, 2], [3]])),
+            ([[1, 2], [3]], True),
+        )
+        with self.assertRaises(ValueError):
+            canonicalize_python_token_inputs(np.zeros((1, 1, 1)))
+        with self.assertRaises(ValueError):
+            canonicalize_python_token_inputs("a")
+
+
+class CasefoldUtf8Test(TestCase):
+    def test_matches_nfkc_casefold(self):
+        # NFKC normalization plus full case folding.
+        self.assertEqual(casefold_utf8("HeLlO"), "hello")
+        self.assertEqual(casefold_utf8("ß ẞ"), "ss ss")
+        self.assertEqual(casefold_utf8("ﬁsh ǅ"), "fish dž")
+        self.assertEqual(casefold_utf8("ΣΑΣ"), "σασ")
+        self.assertEqual(casefold_utf8("Ａ①"), "a1")
+        # Default ignorable code points are removed.
+        self.assertEqual(casefold_utf8("a\u200bb\u00adc\u200d d"), "abc d")
+        self.assertEqual(casefold_utf8("é"), "é")
+
+
+class GetDecodeErrorsNameTest(TestCase):
+    def test_builtin_handlers(self):
+        self.assertEqual(get_decode_errors_name("strict"), "strict")
+        self.assertEqual(get_decode_errors_name("ignore"), "ignore")
+        self.assertEqual(get_decode_errors_name("replace"), "replace")
+        self.assertEqual(get_decode_errors_name("replace", 65533), "replace")
+
+    def test_custom_replacement_char(self):
+        errors = get_decode_errors_name("replace", 88)
+        self.assertEqual(b"he\xe2\x96llo".decode("utf-8", errors), "heXllo")
+        self.assertEqual(b"\xff\xff".decode("utf-8", errors), "XX")
+        # The handler is registered once and reused.
+        self.assertEqual(get_decode_errors_name("replace", 88), errors)
