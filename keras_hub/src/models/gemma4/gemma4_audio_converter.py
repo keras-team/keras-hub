@@ -4,6 +4,7 @@ from keras import ops
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
+from keras_hub.src.utils.audio_utils import hann_window
 from keras_hub.src.utils.tensor_utils import (
     convert_preprocessing_outputs_python,
 )
@@ -132,9 +133,9 @@ class Gemma4AudioConverter(AudioConverter):
 
         # Periodic Hann window matching HF. Kept as NumPy so the layer holds
         # no backend tensors (Grain pickles layers into worker processes).
-        length = self.frame_length + 1
-        window = np.hanning(length)
-        self.window = window[:-1].astype("float32")
+        self.window = hann_window(
+            self.frame_length, periodic=True, dtype="float32"
+        )
 
         # Precompute indices for manual framing
         num_frames = self.num_samples // self.stride

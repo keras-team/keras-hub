@@ -10,6 +10,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.models.gemma3n.gemma3n_backbone import Gemma3nBackbone
 from keras_hub.src.utils.audio_utils import frame_signal
+from keras_hub.src.utils.audio_utils import hann_window
 from keras_hub.src.utils.tensor_utils import (
     convert_preprocessing_outputs_python,
 )
@@ -178,9 +179,8 @@ class Gemma3nAudioConverter(AudioConverter):
         if self.fft_overdrive:
             fft_length *= 2
         self.fft_length = fft_length
-        hann_arange = np.arange(self.frame_length, dtype=self.compute_dtype)
-        self.window = 0.5 * (
-            1 - np.cos(2 * np.pi * hann_arange / self.frame_length)
+        self.window = hann_window(
+            self.frame_length, periodic=True, dtype=self.compute_dtype
         )
         self.mel_filters = self._create_filterbank_matrix(
             n_freqs=self.fft_length // 2 + 1,
