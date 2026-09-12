@@ -1,6 +1,15 @@
+import codecs
+import unicodedata
+
+import numpy as np
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
+from keras_hub.src.utils.tensor_utils import canonicalize_python_string_inputs
+from keras_hub.src.utils.tensor_utils import canonicalize_python_token_inputs
+from keras_hub.src.utils.tensor_utils import casefold_utf8
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -12,6 +21,22 @@ try:
     import tensorflow_text as tf_text
 except ImportError:
     tf_text = None
+
+
+# When decoding `bytes` inputs on the Python path, each invalid sequence is
+# first replaced by this sentinel (a lone surrogate, which never occurs in
+# valid text and is untouched by case folding and normalization). It is then
+# mapped to `replacement_char` or dropped after lowercasing and normalization,
+# matching the TF path where `tf.strings.unicode_decode` runs last.
+_INVALID_SENTINEL = "\udc00"
+_INVALID_SENTINEL_ERRORS = "keras_hub_unicode_invalid_sentinel"
+
+
+def _invalid_sentinel_handler(exception):
+    return _INVALID_SENTINEL, exception.end
+
+
+codecs.register_error(_INVALID_SENTINEL_ERRORS, _invalid_sentinel_handler)
 
 
 @keras_hub_export("keras_hub.tokenizers.UnicodeCodepointTokenizer")
@@ -47,10 +72,11 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         normalization_form: One of the following string values (None, 'NFC',
             'NFKC', 'NFD', 'NFKD'). If set will normalize unicode to the given
             form before tokenizing.
-        errors: One of ('replace', 'remove', 'strict'). Specifies the
+        errors: One of ('replace', 'ignore', 'strict'). Specifies the
             `detokenize()` behavior when an invalid codepoint is encountered.
             The value of `'strict'` will cause the tokenizer to produce a
-            `InvalidArgument` error on any invalid input formatting. A value of
+            `InvalidArgument` error (or a `ValueError` when running without
+            TensorFlow) on any invalid input formatting. A value of
             `'replace'` will cause the tokenizer to replace any invalid
             formatting in the input with the replacement_char codepoint.
             A value of `'ignore'` will cause the tokenizer to skip any invalid
@@ -232,7 +258,10 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
                     ""
                 )
 
-        super().__init__(dtype=dtype, **kwargs)
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            dtype=dtype, _allow_python_workflow=_allow_python_workflow, **kwargs
+        )
 
         self.sequence_length = sequence_length
         self.lowercase = lowercase
@@ -273,7 +302,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         return vocab
 
     @preprocessing_function
-    def tokenize(self, inputs):
+    def _tokenize_tf(self, inputs):
         unbatched = inputs.shape.rank == 0
         if unbatched:
             inputs = tf.expand_dims(inputs, 0)
@@ -309,8 +338,61 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
 
         return tokens
 
+    def _tokenize_python(self, inputs):
+        errors = _INVALID_SENTINEL_ERRORS
+        if self.errors == "strict":
+            errors = "strict"
+        inputs, batched = canonicalize_python_string_inputs(
+            inputs, encoding=self.input_encoding, errors=errors
+        )
+
+        batched_tokens = []
+        for text in inputs:
+            # Optionally lowercase the text
+            if self.lowercase:
+                text = casefold_utf8(text)
+            # Optionally normalize the text to a given form
+            if self.normalization_form:
+                text = unicodedata.normalize(self.normalization_form, text)
+            tokens = []
+            for c in text:
+                if c == _INVALID_SENTINEL:
+                    # Handle errors from decoding invalid `bytes` inputs.
+                    if self.errors == "replace":
+                        tokens.append(self.replacement_char)
+                else:
+                    tokens.append(ord(c))
+            # Optionally clamps the output code point values to be in the
+            # range [0, vocabulary_size)
+            if self._vocabulary_size:
+                tokens = [
+                    min(max(t, 0), self._vocabulary_size - 1) for t in tokens
+                ]
+            batched_tokens.append(tokens)
+
+        # Convert to a dense output if `sequence_length` is set.
+        if self.sequence_length:
+            batched_tokens = [
+                tokens[: self.sequence_length]
+                + [0] * (self.sequence_length - len(tokens))
+                for tokens in batched_tokens
+            ]
+            # Dense outputs are arrays, so that direct calls return backend
+            # tensors and Grain pipelines return NumPy.
+            batched_tokens = np.array(batched_tokens, dtype=self.compute_dtype)
+
+        if not batched:
+            batched_tokens = batched_tokens[0]
+        return batched_tokens
+
+    def tokenize(self, inputs):
+        if not self._allow_python_workflow or in_tf_function():
+            return self._tokenize_tf(inputs)
+        else:
+            return self._tokenize_python(inputs)
+
     @preprocessing_function
-    def detokenize(self, inputs):
+    def _detokenize_tf(self, inputs):
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
         outputs = tf.strings.unicode_encode(
@@ -322,6 +404,41 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         if unbatched:
             outputs = tf.squeeze(outputs, 0)
         return outputs
+
+    def _detokenize_python(self, inputs):
+        inputs, batched = canonicalize_python_token_inputs(inputs)
+        outputs = []
+        for token_ids in inputs:
+            chars = []
+            for token_id in token_ids:
+                # Remove padding tokens.
+                if token_id == 0:
+                    continue
+                is_valid = 0 <= token_id <= 0x10FFFF and not (
+                    0xD800 <= token_id <= 0xDFFF
+                )
+                if is_valid:
+                    chars.append(chr(token_id))
+                elif self.errors == "replace":
+                    chars.append(chr(self.replacement_char))
+                elif self.errors == "strict":
+                    raise ValueError(
+                        f"Invalid unicode codepoint: {token_id}. Received "
+                        f"token ids: {token_ids}"
+                    )
+            outputs.append("".join(chars))
+        if not batched:
+            outputs = outputs[0]
+        return outputs
+
+    def detokenize(self, inputs):
+        if not self._allow_python_workflow or in_tf_function():
+            return self._detokenize_tf(inputs)
+        else:
+            return self._detokenize_python(inputs)
+
+    def call(self, inputs, *args, training=None, **kwargs):
+        return self.tokenize(inputs, *args, **kwargs)
 
     def id_to_token(self, id):
         """Convert an integer id to a string token."""

@@ -1,8 +1,15 @@
+import unicodedata
+
 import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
+from keras_hub.src.utils.tensor_utils import canonicalize_python_string_inputs
+from keras_hub.src.utils.tensor_utils import canonicalize_python_token_inputs
+from keras_hub.src.utils.tensor_utils import casefold_utf8
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import get_decode_errors_name
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -50,10 +57,11 @@ class ByteTokenizer(tokenizer.Tokenizer):
         normalization_form: string. One of the following values: (None, "NFC",
             "NFKC", "NFD", "NFKD"). If set, every UTF-8 string in the input
             tensor text will be normalized to the given form before tokenizing.
-        errors: One of ('replace', 'remove', 'strict'). Specifies the
+        errors: One of ('replace', 'ignore', 'strict'). Specifies the
             `detokenize()` behavior when an invalid tokenizer is encountered.
             The value of `'strict'` will cause the operation to produce a
-            `InvalidArgument` error on any invalid input formatting. A value of
+            `InvalidArgument` error (or a `ValueError` when running without
+            TensorFlow) on any invalid input formatting. A value of
             `'replace'` will cause the tokenizer to replace any invalid
             formatting in the input with the `replacement_char` codepoint.
             A value of `'ignore'` will cause the tokenizer to skip any invalid
@@ -170,7 +178,10 @@ class ByteTokenizer(tokenizer.Tokenizer):
                 f"Received: errors={errors}"
             )
 
-        super().__init__(dtype=dtype, **kwargs)
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            dtype=dtype, _allow_python_workflow=_allow_python_workflow, **kwargs
+        )
 
         self.lowercase = lowercase
         self.sequence_length = sequence_length
@@ -178,10 +189,14 @@ class ByteTokenizer(tokenizer.Tokenizer):
         self.errors = errors
         self.replacement_char = replacement_char
 
-        self._char_lst = tf.constant(
-            [i.tobytes() for i in np.arange(256, dtype=np.uint8)]
-        )
+        self._char_lst = None
         self._update_special_token_ids()
+
+    def _maybe_initialized_tf(self):
+        if self._char_lst is None:
+            self._char_lst = tf.constant(
+                [i.tobytes() for i in np.arange(256, dtype=np.uint8)]
+            )
 
     def vocabulary_size(self):
         """Get the integer size of the tokenizer vocabulary."""
@@ -194,7 +209,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
         return vocab
 
     @preprocessing_function
-    def tokenize(self, inputs):
+    def _tokenize_tf(self, inputs):
         unbatched = inputs.shape.rank == 0
         if unbatched:
             inputs = tf.expand_dims(inputs, 0)
@@ -224,8 +239,50 @@ class ByteTokenizer(tokenizer.Tokenizer):
             tokens = tf.squeeze(tokens, 0)
         return tokens
 
+    def _tokenize_python(self, inputs):
+        # Invalid UTF-8 in `bytes` inputs is passed through untouched, as in
+        # the TF path. `surrogateescape` round trips such bytes exactly.
+        inputs, batched = canonicalize_python_string_inputs(
+            inputs, errors="surrogateescape"
+        )
+
+        batched_tokens = []
+        for text in inputs:
+            # Optional: Lowercase the input.
+            if self.lowercase:
+                text = casefold_utf8(text)
+            # Optional: Normalize unicode.
+            if self.normalization_form is not None:
+                text = unicodedata.normalize(self.normalization_form, text)
+            # Tokenize input strings.
+            batched_tokens.append(
+                list(text.encode("utf-8", errors="surrogateescape"))
+            )
+
+        # Convert to a dense output if `sequence_length` is set.
+        if self.sequence_length:
+            batched_tokens = [
+                tokens[: self.sequence_length]
+                + [0] * (self.sequence_length - len(tokens))
+                for tokens in batched_tokens
+            ]
+            # Dense outputs are arrays, so that direct calls return backend
+            # tensors and Grain pipelines return NumPy.
+            batched_tokens = np.array(batched_tokens, dtype=self.compute_dtype)
+
+        if not batched:
+            batched_tokens = batched_tokens[0]
+        return batched_tokens
+
+    def tokenize(self, inputs):
+        if not self._allow_python_workflow or in_tf_function():
+            return self._tokenize_tf(inputs)
+        else:
+            return self._tokenize_python(inputs)
+
     @preprocessing_function
-    def detokenize(self, inputs):
+    def _detokenize_tf(self, inputs):
+        self._maybe_initialized_tf()
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         # Remove trailing padding tokens, so that trailing "\x00" bytes don't
         # show up in the detokenized output.
@@ -246,6 +303,34 @@ class ByteTokenizer(tokenizer.Tokenizer):
         if unbatched:
             outputs = tf.squeeze(outputs, 0)
         return outputs
+
+    def _detokenize_python(self, inputs):
+        inputs, batched = canonicalize_python_token_inputs(inputs)
+        errors = get_decode_errors_name(self.errors, self.replacement_char)
+        outputs = []
+        for token_ids in inputs:
+            # Remove padding tokens, so that "\x00" bytes don't show up in
+            # the detokenized output.
+            token_ids = [i for i in token_ids if i != 0]
+            if any(i < 0 or i >= 256 for i in token_ids):
+                raise ValueError(
+                    "All token ids must be in range [0, 256). "
+                    f"Received: {token_ids}"
+                )
+            # Handle errors if an invalid byte sequence is encountered.
+            outputs.append(bytes(token_ids).decode("utf-8", errors=errors))
+        if not batched:
+            outputs = outputs[0]
+        return outputs
+
+    def detokenize(self, inputs):
+        if not self._allow_python_workflow or in_tf_function():
+            return self._detokenize_tf(inputs)
+        else:
+            return self._detokenize_python(inputs)
+
+    def call(self, inputs, *args, training=None, **kwargs):
+        return self.tokenize(inputs, *args, **kwargs)
 
     def id_to_token(self, id):
         """Convert an integer id to a string token."""

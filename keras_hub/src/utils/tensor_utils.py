@@ -1,9 +1,11 @@
+import codecs
 import contextlib
 import functools
 import inspect
 import math
 import re
 import threading
+import unicodedata
 
 import keras
 import numpy as np
@@ -419,6 +421,163 @@ def canonicalize_python_inputs(inputs):
         raise ValueError(
             f"Input should be a list or a list of lists. Received: {inputs}"
         )
+
+
+def canonicalize_python_string_inputs(
+    inputs, encoding="utf-8", errors="strict"
+):
+    """Canonicalize string inputs for the Python path of a tokenizer.
+
+    Accepts a single string, a list/tuple of strings, or a rank 0 or rank 1
+    string tensor/array (backend, NumPy or TensorFlow). `bytes` are decoded
+    with `encoding` and `errors`.
+
+    Returns:
+        A tuple `(inputs, batched)`, where `inputs` is a list of Python
+        strings and `batched` is whether the input was a batch.
+    """
+
+    def to_str(x):
+        if isinstance(x, bytes):
+            return x.decode(encoding, errors=errors)
+        if isinstance(x, np.str_):
+            return str(x)
+        if isinstance(x, str):
+            return x
+        raise ValueError(
+            "If a list, tuple or array is provided as input, all elements "
+            f"must be strings. Received: {inputs}"
+        )
+
+    if isinstance(inputs, (str, bytes, np.str_)):
+        return [to_str(inputs)], False
+    if isinstance(inputs, (tuple, list)):
+        return [to_str(x) for x in inputs], True
+    if (
+        isinstance(inputs, np.ndarray)
+        or keras.ops.is_tensor(inputs)
+        or (tf is not None and isinstance(inputs, tf.Tensor))
+    ):
+        inputs = convert_to_numpy(inputs)
+        if inputs.ndim == 0:
+            return [to_str(inputs.item())], False
+        if inputs.ndim == 1:
+            return [to_str(x) for x in inputs.tolist()], True
+        raise ValueError(
+            f"Array must be 0 or 1 dimensional, got {inputs.shape}."
+        )
+    raise ValueError(
+        f"Input should be a string or a list of strings. Received: {inputs}"
+    )
+
+
+def canonicalize_python_token_inputs(inputs):
+    """Canonicalize token id inputs for the Python path of a tokenizer.
+
+    Accepts a single integer, a list of integers, a list of lists of integers,
+    or a rank 0, 1 or 2 integer tensor/array (backend, NumPy or TensorFlow,
+    ragged or dense).
+
+    Returns:
+        A tuple `(inputs, batched)`, where `inputs` is a list of lists of
+        Python integers and `batched` is whether the input was a batch.
+    """
+    if tf is not None and isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+        if isinstance(inputs, tf.RaggedTensor):
+            inputs = inputs.to_list()
+        else:
+            inputs = np.array(inputs)
+    if isinstance(inputs, (int, np.integer)):
+        return [[int(inputs)]], False
+    if isinstance(inputs, (tuple, list)):
+        if not inputs or isinstance(inputs[0], (int, np.integer)):
+            # Unbatched list of ints.
+            return [[int(x) for x in inputs]], False
+        # Batched list of lists of ints.
+        return [[int(x) for x in convert_to_list(seq)] for seq in inputs], True
+    if isinstance(inputs, np.ndarray) or keras.ops.is_tensor(inputs):
+        inputs = convert_to_numpy(inputs)
+        if inputs.ndim == 0:
+            return [[inputs.item()]], False
+        if inputs.ndim == 1:
+            return [inputs.tolist()], False
+        if inputs.ndim == 2:
+            return inputs.tolist(), True
+        raise ValueError(
+            f"Array must be 0, 1 or 2 dimensional, got {inputs.shape}."
+        )
+    raise ValueError(
+        "Input should be an integer, a list of integers, backend "
+        f"tensor or numpy array. Received: {inputs}"
+    )
+
+
+# Unicode "Default_Ignorable_Code_Point" ranges. These are removed by
+# `tf_text.case_fold_utf8` (which applies NFKC_Casefold), so the Python case
+# folding below removes them too.
+_DEFAULT_IGNORABLE_RANGES = (
+    (0x00AD, 0x00AD),
+    (0x034F, 0x034F),
+    (0x061C, 0x061C),
+    (0x115F, 0x1160),
+    (0x17B4, 0x17B5),
+    (0x180B, 0x180F),
+    (0x200B, 0x200F),
+    (0x202A, 0x202E),
+    (0x2060, 0x206F),
+    (0x3164, 0x3164),
+    (0xFE00, 0xFE0F),
+    (0xFEFF, 0xFEFF),
+    (0xFFA0, 0xFFA0),
+    (0xFFF0, 0xFFF8),
+    (0x1BCA0, 0x1BCA3),
+    (0x1D173, 0x1D17A),
+    (0xE0000, 0xE0FFF),
+)
+
+
+def _is_default_ignorable(char):
+    cp = ord(char)
+    return any(lo <= cp <= hi for lo, hi in _DEFAULT_IGNORABLE_RANGES)
+
+
+def casefold_utf8(text):
+    """Python equivalent of `tf_text.case_fold_utf8`.
+
+    `tf_text.case_fold_utf8` applies the Unicode NFKC_Casefold mapping, which
+    is NFKC normalization plus full case folding, and drops default ignorable
+    code points (e.g. zero width spaces and soft hyphens).
+    """
+    text = unicodedata.normalize("NFKC", text).casefold()
+    if any(_is_default_ignorable(c) for c in text):
+        text = "".join(c for c in text if not _is_default_ignorable(c))
+    return text
+
+
+_REGISTERED_ERROR_HANDLERS = {}
+
+
+def get_decode_errors_name(errors, replacement_char=65533):
+    """Return a codecs error handler name for `str.encode`/`bytes.decode`.
+
+    Python equivalent of the `errors` and `replacement_char` arguments of
+    `tf.strings.unicode_decode`/`tf.strings.unicode_transcode`. `errors` is
+    one of `"strict"`, `"ignore"` or `"replace"`. For `"replace"`, a custom
+    handler replacing each invalid sequence with `chr(replacement_char)` is
+    registered with the `codecs` module and returned.
+    """
+    if errors != "replace" or replacement_char == 65533:
+        return errors
+    name = f"keras_hub_replace_{replacement_char}"
+    if name not in _REGISTERED_ERROR_HANDLERS:
+        replacement = chr(replacement_char)
+
+        def handler(exception):
+            return replacement, exception.end
+
+        codecs.register_error(name, handler)
+        _REGISTERED_ERROR_HANDLERS[name] = handler
+    return name
 
 
 def compute_padding_mask(token_ids, pad_token_id):
