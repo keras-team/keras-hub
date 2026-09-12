@@ -14,6 +14,7 @@ from keras_hub.src.utils.transformers import convert_dinov2
 from keras_hub.src.utils.transformers import convert_dinov3
 from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_esm
+from keras_hub.src.utils.transformers import convert_flux
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gemma3
 from keras_hub.src.utils.transformers import convert_gemma3n
@@ -115,6 +116,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_t5gemma
         elif model_type == "t5gemma2":
             self.converter = convert_t5gemma2
+        elif model_type in ("flux", "flux_text_to_image"):
+            self.converter = convert_flux
         else:
             raise ValueError(
                 "KerasHub has no converter for huggingface/transformers models "
