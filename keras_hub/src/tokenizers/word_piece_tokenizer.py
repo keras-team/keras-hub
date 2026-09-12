@@ -20,6 +20,7 @@ from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import restore_outer_shape
 
 try:
     import tensorflow as tf
@@ -718,19 +719,22 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         ):
             samples = []
             for sample in inputs:
-                words, _ = canonicalize_python_string_inputs(list(sample))
+                words, _, _ = canonicalize_python_string_inputs(list(sample))
                 samples.append(words)
             return samples, True
-        words, _ = canonicalize_python_string_inputs(inputs)
+        words, _, _ = canonicalize_python_string_inputs(inputs)
         return [words], False
 
     def _tokenize_python(self, inputs):
         special_tokens = self._special_tokens_for_splitting()
         if self.split:
-            inputs, batched = canonicalize_python_string_inputs(inputs)
+            inputs, batched, outer_shape = canonicalize_python_string_inputs(
+                inputs
+            )
             samples = [[text] for text in inputs]
         else:
             samples, batched = self._canonicalize_presplit_inputs(inputs)
+            outer_shape = None
 
         batched_tokens = []
         for sample in samples:
@@ -764,6 +768,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 batched_tokens = np.array(
                     batched_tokens, dtype=self.compute_dtype
                 )
+
+        if outer_shape is not None:
+            return restore_outer_shape(batched_tokens, outer_shape)
 
         if not batched:
             batched_tokens = batched_tokens[0]

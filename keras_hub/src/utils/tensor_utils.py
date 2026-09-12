@@ -428,13 +428,16 @@ def canonicalize_python_string_inputs(
 ):
     """Canonicalize string inputs for the Python path of a tokenizer.
 
-    Accepts a single string, a list/tuple of strings, or a rank 0 or rank 1
-    string tensor/array (backend, NumPy or TensorFlow). `bytes` are decoded
-    with `encoding` and `errors`.
+    Accepts a single string, a list/tuple of strings, or a string
+    tensor/array (backend, NumPy or TensorFlow) of any rank. `bytes` are
+    decoded with `encoding` and `errors`.
 
     Returns:
-        A tuple `(inputs, batched)`, where `inputs` is a list of Python
-        strings and `batched` is whether the input was a batch.
+        A tuple `(inputs, batched, outer_shape)`, where `inputs` is a flat
+        list of Python strings, `batched` is whether the input was a batch,
+        and `outer_shape` is the leading shape of a rank >= 2 input, or
+        `None` for rank 0 and rank 1 inputs. Callers should pass
+        `outer_shape` to `restore_outer_shape` to regroup their results.
     """
 
     def to_str(x):
@@ -450,9 +453,14 @@ def canonicalize_python_string_inputs(
         )
 
     if isinstance(inputs, (str, bytes, np.str_)):
-        return [to_str(inputs)], False
+        return [to_str(inputs)], False, None
     if isinstance(inputs, (tuple, list)):
-        return [to_str(x) for x in inputs], True
+        if len(inputs) and isinstance(inputs[0], (tuple, list, np.ndarray)):
+            # A nested batch such as `[["a"], ["b"]]`. Fall through to the
+            # array branch below so the leading dimensions are preserved.
+            inputs = np.array(inputs)
+        else:
+            return [to_str(x) for x in inputs], True, None
     if (
         isinstance(inputs, np.ndarray)
         or keras.ops.is_tensor(inputs)
@@ -460,15 +468,35 @@ def canonicalize_python_string_inputs(
     ):
         inputs = convert_to_numpy(inputs)
         if inputs.ndim == 0:
-            return [to_str(inputs.item())], False
+            return [to_str(inputs.item())], False, None
         if inputs.ndim == 1:
-            return [to_str(x) for x in inputs.tolist()], True
-        raise ValueError(
-            f"Array must be 0 or 1 dimensional, got {inputs.shape}."
+            return [to_str(x) for x in inputs.tolist()], True, None
+        # Rank >= 2. The TF path handles this (`keras_hub.metrics.Bleu`
+        # tokenizes a `(batch, num_references)` tensor), so flatten here and
+        # let the caller restore the leading dimensions.
+        return (
+            [to_str(x) for x in inputs.ravel().tolist()],
+            True,
+            inputs.shape,
         )
     raise ValueError(
         f"Input should be a string or a list of strings. Received: {inputs}"
     )
+
+
+def restore_outer_shape(outputs, outer_shape):
+    """Regroup flat per-string tokenizer outputs into `outer_shape`.
+
+    `canonicalize_python_string_inputs` flattens rank >= 2 string inputs, so
+    the Python tokenizer paths produce one result per string. This restores
+    the leading dimensions, matching the TF path for the same input.
+    """
+    if isinstance(outputs, np.ndarray):
+        # Dense output, e.g. when `sequence_length` is set.
+        return outputs.reshape(tuple(outer_shape) + outputs.shape[1:])
+    for dim in reversed(tuple(outer_shape)[1:]):
+        outputs = [outputs[i : i + dim] for i in range(0, len(outputs), dim)]
+    return outputs
 
 
 def canonicalize_python_token_inputs(inputs):

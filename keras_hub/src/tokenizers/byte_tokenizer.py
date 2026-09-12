@@ -12,6 +12,7 @@ from keras_hub.src.utils.tensor_utils import get_decode_errors_name
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import restore_outer_shape
 
 try:
     import tensorflow as tf
@@ -242,7 +243,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
     def _tokenize_python(self, inputs):
         # Invalid UTF-8 in `bytes` inputs is passed through untouched, as in
         # the TF path. `surrogateescape` round trips such bytes exactly.
-        inputs, batched = canonicalize_python_string_inputs(
+        inputs, batched, outer_shape = canonicalize_python_string_inputs(
             inputs, errors="surrogateescape"
         )
 
@@ -269,6 +270,9 @@ class ByteTokenizer(tokenizer.Tokenizer):
             # Dense outputs are arrays, so that direct calls return backend
             # tensors and Grain pipelines return NumPy.
             batched_tokens = np.array(batched_tokens, dtype=self.compute_dtype)
+
+        if outer_shape is not None:
+            return restore_outer_shape(batched_tokens, outer_shape)
 
         if not batched:
             batched_tokens = batched_tokens[0]

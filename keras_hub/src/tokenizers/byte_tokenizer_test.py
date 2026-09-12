@@ -78,6 +78,28 @@ class ByteTokenizerTest(TestCase):
         self.assertEqual(output.ndim, 1)
         self.assertEqual(output.dtype, np.int32)
 
+    def test_tokenize_rank_2(self):
+        # `keras_hub.metrics.Bleu` tokenizes a `(batch, num_references)`
+        # input, so rank 2 must keep its leading dimensions. Runs on the TF
+        # path too via `ByteTokenizerTFTest`, pinning the two to each other.
+        tokenizer = self.make_tokenizer()
+        output = tokenizer([["hello"], ["fun"]])
+        self.assertAllEqual(
+            output, [[[104, 101, 108, 108, 111]], [[102, 117, 110]]]
+        )
+
+    def test_tokenize_rank_2_dense(self):
+        tokenizer = self.make_tokenizer(sequence_length=5)
+        output = tokenizer([["hello", "fun"], ["haha", "hello"]])
+        self.assertEqual(np.array(output).shape, (2, 2, 5))
+        self.assertAllEqual(
+            output,
+            [
+                [[104, 101, 108, 108, 111], [102, 117, 110, 0, 0]],
+                [[104, 97, 104, 97, 0], [104, 101, 108, 108, 111]],
+            ],
+        )
+
     def test_dense_output(self):
         input_data = ["hello", "fun", "▀▁▂▃"]
         tokenizer = self.make_tokenizer(sequence_length=10)

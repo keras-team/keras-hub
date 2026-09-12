@@ -21,6 +21,7 @@ from keras_hub.src.utils.tensor_utils import in_grain_data_pipeline
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 from keras_hub.src.utils.tensor_utils import is_tensor_type
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import restore_outer_shape
 from keras_hub.src.utils.tensor_utils import target_gather
 from keras_hub.src.utils.tensor_utils import tensor_to_list
 
@@ -492,44 +493,89 @@ class IsFloatDtypeTest(TestCase):
 
 class CanonicalizePythonInputsTest(TestCase):
     def test_string_inputs(self):
-        self.assertEqual(canonicalize_python_string_inputs("a"), (["a"], False))
         self.assertEqual(
-            canonicalize_python_string_inputs(b"a"), (["a"], False)
+            canonicalize_python_string_inputs("a"), (["a"], False, None)
         )
         self.assertEqual(
-            canonicalize_python_string_inputs(np.str_("a")), (["a"], False)
+            canonicalize_python_string_inputs(b"a"), (["a"], False, None)
         )
         self.assertEqual(
-            canonicalize_python_string_inputs(["a", b"b"]), (["a", "b"], True)
+            canonicalize_python_string_inputs(np.str_("a")),
+            (["a"], False, None),
         )
         self.assertEqual(
-            canonicalize_python_string_inputs(("a", "b")), (["a", "b"], True)
+            canonicalize_python_string_inputs(["a", b"b"]),
+            (["a", "b"], True, None),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(("a", "b")),
+            (["a", "b"], True, None),
         )
         self.assertEqual(
             canonicalize_python_string_inputs(np.array(["a", "b"])),
-            (["a", "b"], True),
+            (["a", "b"], True, None),
         )
         self.assertEqual(
-            canonicalize_python_string_inputs(np.array("a")), (["a"], False)
+            canonicalize_python_string_inputs(np.array("a")),
+            (["a"], False, None),
         )
         self.assertEqual(
             canonicalize_python_string_inputs(tf.constant(["a", "b"])),
-            (["a", "b"], True),
+            (["a", "b"], True, None),
         )
         self.assertEqual(
-            canonicalize_python_string_inputs(tf.constant("a")), (["a"], False)
+            canonicalize_python_string_inputs(tf.constant("a")),
+            (["a"], False, None),
         )
         # Decoding options for bytes.
         self.assertEqual(
             canonicalize_python_string_inputs(b"a\xffb", errors="ignore"),
-            (["ab"], False),
+            (["ab"], False, None),
         )
         with self.assertRaises(ValueError):
             canonicalize_python_string_inputs(b"a\xffb")
         with self.assertRaises(ValueError):
             canonicalize_python_string_inputs([1, 2])
-        with self.assertRaises(ValueError):
-            canonicalize_python_string_inputs(np.array([["a"], ["b"]]))
+
+    def test_rank_2_string_inputs(self):
+        # Rank >= 2 inputs are flattened, with the leading dimensions
+        # returned so callers can regroup their results.
+        self.assertEqual(
+            canonicalize_python_string_inputs(np.array([["a"], ["b"]])),
+            (["a", "b"], True, (2, 1)),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(
+                tf.constant([["a", "b"], ["c", "d"]])
+            ),
+            (["a", "b", "c", "d"], True, (2, 2)),
+        )
+        # Nested Python lists are routed through the same path.
+        self.assertEqual(
+            canonicalize_python_string_inputs([["a"], ["b"]]),
+            (["a", "b"], True, (2, 1)),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(
+                np.array([[["a"], ["b"]], [["c"], ["d"]]])
+            ),
+            (["a", "b", "c", "d"], True, (2, 2, 1)),
+        )
+
+    def test_restore_outer_shape(self):
+        # Ragged outputs stay nested lists.
+        self.assertEqual(
+            restore_outer_shape([[1], [2, 3], [4], [5]], (2, 2)),
+            [[[1], [2, 3]], [[4], [5]]],
+        )
+        self.assertEqual(
+            restore_outer_shape([[1], [2], [3], [4]], (2, 2, 1)),
+            [[[[1]], [[2]]], [[[3]], [[4]]]],
+        )
+        # Dense outputs are reshaped, preserving the trailing token axis.
+        restored = restore_outer_shape(np.arange(8).reshape(4, 2), (2, 2))
+        self.assertEqual(restored.shape, (2, 2, 2))
+        self.assertAllEqual(restored, np.arange(8).reshape(2, 2, 2))
 
     def test_token_inputs(self):
         self.assertEqual(canonicalize_python_token_inputs(1), ([[1]], False))
