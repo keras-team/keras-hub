@@ -4,7 +4,10 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_hub.src.utils.random_utils import record_rng
+from keras_hub.src.utils.tensor_utils import canonicalize_python_inputs
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -31,6 +34,15 @@ class RandomDeletion(PreprocessingLayer):
     batched input, inputs should be a list of lists or a rank two tensor. For
     unbatched inputs, each element should be a list or a rank one tensor.
 
+    This layer runs on a pure Python/NumPy code path by default, so it works
+    inside a Grain pipeline and does not require TensorFlow. Randomness is
+    derived from `seed` together with a stable hash of the record being
+    augmented, so the output does not depend on how many Grain workers are
+    running or on the order records are seen in. The tradeoff is that an
+    identical record is augmented identically on every epoch. To vary the
+    augmentation per epoch, pass your own generator as `rng`, for example from
+    `grain.RandomMapTransform`, which derives one from the element index.
+
     Args:
         rate: The probability of a token being chosen for deletion.
         max_deletions: The maximum number of tokens to delete.
@@ -40,7 +52,9 @@ class RandomDeletion(PreprocessingLayer):
             returns as output a scalar tensor True/False value. A value of
             True indicates that the token should not be considered a
             candidate for deletion. This function must be tracable--it
-            should consist of tensorflow operations.
+            should consist of tensorflow operations. Setting this forces the
+            layer onto the TensorFlow code path, which cannot run in a Grain
+            worker; prefer `skip_py_fn`.
         skip_py_fn: A function that takes as input a python token value and
             returns as output `True` or `False`. A value of True
             indicates that should not be considered a candidate for deletion.
@@ -48,32 +62,38 @@ class RandomDeletion(PreprocessingLayer):
             tracable--it can be any python function.
         seed: A seed for the random number generator.
 
+    Call arguments:
+        inputs: The tokens to augment.
+        rng: Optional `np.random.Generator` used instead of the per record
+            generator derived from `seed`. Only supported on the pure Python
+            code path.
+
     Examples:
 
     Word level usage.
     >>> keras.utils.set_random_seed(1337)
     >>> x = ["Hey I like", "Keras and Tensorflow"]
     >>> x = list(map(lambda x: x.split(), x))
-    >>> augmenter = keras_hub.layers.RandomDeletion(rate=0.4, seed=42)
+    >>> augmenter = keras_hub.layers.RandomDeletion(rate=0.4, seed=1)
     >>> y = augmenter(x)
     >>> list(map(lambda y: " ".join(y), y))
-    ['I like', 'and']
+    ['Hey like', 'and Tensorflow']
 
     Character level usage.
     >>> keras.utils.set_random_seed(1337)
     >>> x = ["Hey Dude", "Speed Up"]
     >>> x = list(map(lambda x: list(x), x))
-    >>> augmenter = keras_hub.layers.RandomDeletion(rate=0.4, seed=42)
+    >>> augmenter = keras_hub.layers.RandomDeletion(rate=0.4, seed=3)
     >>> y = augmenter(x)
     >>> list(map(lambda y: "".join(y), y))
-    ['H Dude', 'pedUp']
+    ['HeyDue', 'ee Up']
 
     Usage with skip_list.
     >>> keras.utils.set_random_seed(1337)
     >>> x = ["Hey I like", "Keras and Tensorflow"]
     >>> x = list(map(lambda x: x.split(), x))
     >>> augmenter = keras_hub.layers.RandomDeletion(rate=0.4,
-    ...     skip_list=["Keras", "Tensorflow"], seed=42)
+    ...     skip_list=["Keras", "Tensorflow"], seed=9)
     >>> y = augmenter(x)
     >>> list(map(lambda y: " ".join(y), y))
     ['I like', 'Keras Tensorflow']
@@ -97,7 +117,7 @@ class RandomDeletion(PreprocessingLayer):
     >>> x = ["Hey I like", "Keras and Tensorflow"]
     >>> x = list(map(lambda x: x.split(), x))
     >>> augmenter = RandomDeletion(rate=0.4,
-    ...     skip_py_fn=skip_py_fn, seed=42)
+    ...     skip_py_fn=skip_py_fn, seed=14)
     >>> y = augmenter(x)
     >>> list(map(lambda y: " ".join(y), y))
     ['Hey I', 'and Tensorflow']
@@ -121,12 +141,22 @@ class RandomDeletion(PreprocessingLayer):
                 f"Received: dtype={dtype}"
             )
 
-        super().__init__(dtype=dtype, name=name, **kwargs)
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            dtype=dtype,
+            name=name,
+            _allow_python_workflow=_allow_python_workflow,
+            **kwargs,
+        )
 
         self.rate = rate
         self.max_deletions = max_deletions
         self.seed = random.randint(1, int(1e9)) if seed is None else seed
-        self._generator = tf.random.Generator.from_seed(self.seed)
+        # `tf.random.Generator` is only built on demand by `_call_tf`. Building
+        # it here would require TensorFlow at construction time, and the
+        # generator would be pickled into every Grain worker, making all
+        # workers replay the same stream.
+        self._generator = None
         self.skip_list = skip_list
         self.skip_fn = skip_fn
         self.skip_py_fn = skip_py_fn
@@ -148,22 +178,33 @@ class RandomDeletion(PreprocessingLayer):
                 "provided."
             )
 
-        if self.skip_list:
-            self.StaticHashTable = tf.lookup.StaticHashTable(
+        self._skip_set = set(self.skip_list) if self.skip_list else None
+        # Built on demand by `_call_tf`; see the `_generator` comment above.
+        self._skip_table = None
+
+    def _tf_generator(self):
+        if self._generator is None:
+            self._generator = tf.random.Generator.from_seed(self.seed)
+        return self._generator
+
+    def _tf_skip_table(self):
+        if self._skip_table is None:
+            self._skip_table = tf.lookup.StaticHashTable(
                 tf.lookup.KeyValueTensorInitializer(
                     tf.convert_to_tensor(self.skip_list),
                     tf.convert_to_tensor([True] * len(self.skip_list)),
                 ),
                 default_value=False,
             )
+        return self._skip_table
 
     @preprocessing_function
-    def call(self, inputs):
+    def _call_tf(self, inputs):
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
 
         skip_masks = None
         if self.skip_list:
-            skip_masks = self.StaticHashTable.lookup(inputs.flat_values)
+            skip_masks = self._tf_skip_table().lookup(inputs.flat_values)
         elif self.skip_fn:
             skip_masks = tf.map_fn(
                 self.skip_fn, inputs.flat_values, fn_output_signature="bool"
@@ -197,7 +238,7 @@ class RandomDeletion(PreprocessingLayer):
         token_counts = tf.cast(positions.row_lengths(), "float32")
         num_to_select = tf.random.stateless_binomial(
             shape=tf.shape(token_counts),
-            seed=self._generator.make_seeds()[:, 0],
+            seed=self._tf_generator().make_seeds()[:, 0],
             counts=token_counts,
             probs=self.rate,
         )
@@ -238,6 +279,68 @@ class RandomDeletion(PreprocessingLayer):
             inputs = tf.squeeze(inputs, axis=0)
 
         return inputs
+
+    def _skip_mask_python(self, tokens):
+        """Return a bool per token, `True` if it cannot be deleted."""
+        if self._skip_set is not None:
+            return [token in self._skip_set for token in tokens]
+        if self.skip_py_fn is not None:
+            return [bool(self.skip_py_fn(token)) for token in tokens]
+        return [False] * len(tokens)
+
+    def _call_python(self, inputs, rng=None):
+        inputs, batched = canonicalize_python_inputs(inputs)
+
+        outputs = []
+        for row in inputs:
+            # `tf.RaggedTensor.to_list()` yields `bytes` for string data.
+            row = [
+                token.decode("utf-8") if isinstance(token, bytes) else token
+                for token in row
+            ]
+            row_rng = rng if rng is not None else record_rng(self.seed, row)
+            candidates = [
+                index
+                for index, skip in enumerate(self._skip_mask_python(row))
+                if not skip
+            ]
+            num_to_select = int(row_rng.binomial(len(candidates), self.rate))
+            if self.max_deletions is not None:
+                num_to_select = min(num_to_select, self.max_deletions)
+            deleted = set()
+            if num_to_select:
+                shuffled = row_rng.permutation(candidates)
+                deleted = set(shuffled[:num_to_select].tolist())
+            outputs.append(
+                [token for i, token in enumerate(row) if i not in deleted]
+            )
+
+        if not batched:
+            outputs = outputs[0]
+        # Deletion always produces ragged output, which the TensorFlow path
+        # also returns as nested python lists.
+        return outputs
+
+    def call(self, inputs, rng=None):
+        # `skip_fn` is documented to consist of TensorFlow ops, so a layer
+        # configured with it can only run on the TensorFlow path.
+        use_tf = (
+            not self._allow_python_workflow
+            or self.skip_fn is not None
+            or in_tf_function()
+        )
+        if use_tf:
+            if rng is not None:
+                raise ValueError(
+                    "`rng` is only supported on the pure python code path, "
+                    "but this layer is running on the TensorFlow code path. "
+                    "This happens when `skip_fn` is set or when the layer is "
+                    "called inside a `tf.function` such as `tf.data.Dataset."
+                    "map`. Use `skip_py_fn` instead of `skip_fn`, and Grain "
+                    "instead of `tf.data`, to pass an `rng`."
+                )
+            return self._call_tf(inputs)
+        return self._call_python(inputs, rng=rng)
 
     def get_config(self):
         config = super().get_config()
