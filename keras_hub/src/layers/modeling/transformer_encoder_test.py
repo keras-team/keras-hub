@@ -33,6 +33,21 @@ class TransformerEncoderTest(TestCase):
             expected_num_non_trainable_variables=3,  # dropout rng seeds
         )
 
+    def test_regularizer_serialization(self):
+        init_kwargs = {
+            "intermediate_dim": 4,
+            "num_heads": 2,
+            "kernel_regularizer": "l2",
+            "bias_regularizer": "l1",
+            "activity_regularizer": "l2",
+        }
+        self.run_layer_test(
+            cls=TransformerEncoder,
+            init_kwargs=init_kwargs,
+            input_data=random.uniform(shape=(2, 4, 6)),
+            expected_output_shape=(2, 4, 6),
+        )
+
     @parameterized.named_parameters(
         ("without_norm_first", False),
         ("with_norm_first", True),
@@ -109,3 +124,4 @@ class TransformerEncoderTest(TestCase):
         # attention scores shape
         # (batch_size, num_of_attn_heads, seq_length, seq_length)
         self.assertAllEqual(attention_scores.shape, [1, 2, 4, 4])
+        
