@@ -1,6 +1,5 @@
 import random
 
-import keras
 import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
@@ -8,6 +7,9 @@ from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_hub.src.utils.tensor_utils import canonicalize_python_inputs
+from keras_hub.src.utils.tensor_utils import (
+    convert_preprocessing_outputs_python,
+)
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -300,11 +302,14 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
             out_mask_weights = out_mask_weights[0]
 
         def _canonicalize_outputs(outputs, dtype=None):
+            # Ragged outputs stay as (lists of) python lists. Rectangular
+            # outputs are converted to backend tensors, or NumPy arrays inside
+            # a Grain pipeline.
             try:
                 arr = np.array(outputs, dtype=dtype or "int32")
                 if arr.dtype == object:
                     return outputs
-                return keras.ops.convert_to_tensor(arr)
+                return convert_preprocessing_outputs_python(arr)
             except (ValueError, TypeError):
                 return outputs
 

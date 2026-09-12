@@ -5,6 +5,7 @@ import pathlib
 import re
 import tempfile
 
+import grain
 import keras
 import numpy as np
 import tensorflow as tf
@@ -35,6 +36,112 @@ def convert_to_comparible_type(x):
     if hasattr(x, "__array__"):
         return ops.convert_to_numpy(x)
     return x
+
+
+def _to_grain_leaf(x):
+    """Convert a single data leaf to a Grain friendly Python/NumPy object."""
+    if isinstance(x, tf.RaggedTensor):
+        x = x.to_list()
+    elif isinstance(x, tf.Tensor):
+        x = x.numpy()
+    elif not isinstance(x, (list, np.ndarray)) and ops.is_tensor(x):
+        x = ops.convert_to_numpy(x)
+    if isinstance(x, np.ndarray) and x.dtype.kind in ("S", "U", "O"):
+        x = x.tolist()
+    if isinstance(x, list):
+        x = tree.map_structure(
+            lambda e: e.decode("utf-8") if isinstance(e, bytes) else e, x
+        )
+    return x
+
+
+def _map_leaves(fn, *structures):
+    """Like `tree.map_structure`, but only dicts and tuples are structures.
+
+    This mirrors `tf.data.Dataset.from_tensor_slices`, where lists, arrays and
+    tensors are data leaves. Treating lists as leaves also allows zipping
+    ragged lists of differing lengths across `structures`.
+    """
+    x = structures[0]
+    if isinstance(x, dict):
+        return {
+            k: _map_leaves(fn, *(s[k] for s in structures)) for k in x.keys()
+        }
+    if isinstance(x, tuple):
+        return tuple(_map_leaves(fn, *vs) for vs in zip(*structures))
+    return fn(*structures)
+
+
+def _flatten_leaves(x):
+    """Like `tree.flatten`, but only dicts and tuples are structures."""
+    if isinstance(x, dict):
+        return [e for v in x.values() for e in _flatten_leaves(v)]
+    if isinstance(x, tuple):
+        return [e for v in x for e in _flatten_leaves(v)]
+    return [x]
+
+
+def grain_source_from_tensor_slices(input_data):
+    """`grain.MapDataset` analog of `tf.data.Dataset.from_tensor_slices`.
+
+    Every data leaf in `input_data` is sliced along its first axis, and each
+    element of the returned dataset has the same nested structure as
+    `input_data` with one slice per leaf. Elements are plain Python objects and
+    NumPy arrays, never tf or backend tensors.
+    """
+    input_data = _map_leaves(_to_grain_leaf, input_data)
+    lengths = set(len(x) for x in _flatten_leaves(input_data))
+    if len(lengths) != 1:
+        raise ValueError(
+            "All leaves of `input_data` must have the same first dimension. "
+            f"Received lengths: {sorted(lengths)}"
+        )
+    records = [
+        _map_leaves(lambda x: x[i], input_data) for i in range(lengths.pop())
+    ]
+    return grain.MapDataset.source(records)
+
+
+def grain_ragged_batch(elements):
+    """A Grain `batch_fn` that stacks dense leaves and lists ragged ones.
+
+    This is the Grain analog of `tf.data.Dataset.ragged_batch`. Leaves whose
+    shapes agree across elements are stacked into a NumPy array. All other
+    leaves (ragged lists, strings) are collected in a Python list, matching the
+    lists-of-lists convention of the Python preprocessing path.
+    """
+
+    def batch(*leaves):
+        if all(isinstance(x, np.ndarray) for x in leaves):
+            if len(set(x.shape for x in leaves)) == 1:
+                return np.stack(leaves)
+            return [x.tolist() for x in leaves]
+        if all(isinstance(x, (int, float, bool, np.generic)) for x in leaves):
+            return np.array(leaves)
+        return list(leaves)
+
+    return _map_leaves(batch, *elements)
+
+
+def assert_grain_safe_types(x):
+    """Assert `x` only contains NumPy arrays and plain Python objects.
+
+    Grain pickles every element across worker process boundaries, so
+    preprocessing outputs inside a Grain pipeline must never be tf or backend
+    tensors.
+    """
+
+    def check(leaf):
+        if leaf is None or isinstance(leaf, (str, bytes, int, float, bool)):
+            return
+        if isinstance(leaf, (np.ndarray, np.generic)):
+            return
+        raise AssertionError(
+            "Preprocessing outputs inside a Grain pipeline must be NumPy "
+            f"arrays or plain Python objects. Received: {type(leaf)}"
+        )
+
+    tree.map_structure(check, x)
 
 
 class TestCase(tf.test.TestCase, parameterized.TestCase):
@@ -228,11 +335,45 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         output_ds = ds.batch(1_000).map(layer)
         self.assertAllClose(output, output_ds.get_single_element())
 
+        # Check Grain parity with the direct call and the tf.data path.
+        self.run_grain_preprocessing_test(layer, input_data, output)
+
         if expected_output:
             self.assertAllClose(output, expected_output)
 
         if return_output:
             return output
+
+    def run_grain_preprocessing_test(self, layer, input_data, expected_output):
+        """Check a preprocessing layer runs in Grain and matches direct calls.
+
+        Runs the layer inside a `grain.MapDataset` both on an unbatched source
+        (one record per sample, followed by a ragged-aware batch) and on a
+        batched source (the full `input_data` as a single record). Both must
+        match `expected_output`, and every Grain output must be a NumPy array
+        or plain Python object so it can be pickled across Grain workers.
+        """
+        if isinstance(input_data, tuple):
+            # Mimic tf.data unpacking behavior for preprocessing layers.
+            def map_fn(x):
+                return layer(*x)
+        else:
+            map_fn = layer
+
+        # Run with an unbatched dataset.
+        ds = grain_source_from_tensor_slices(input_data)
+        output_ds = ds.map(map_fn)
+        for element in output_ds:
+            assert_grain_safe_types(element)
+        output_ds = output_ds.batch(len(ds), batch_fn=grain_ragged_batch)
+        (grain_output,) = list(output_ds)
+        self.assertAllClose(expected_output, grain_output)
+
+        # Run with a batched dataset.
+        ds = grain.MapDataset.source([_map_leaves(_to_grain_leaf, input_data)])
+        (grain_output,) = list(ds.map(map_fn))
+        assert_grain_safe_types(grain_output)
+        self.assertAllClose(expected_output, grain_output)
 
     def run_preprocessor_test(
         self,
@@ -269,6 +410,21 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         output, _, _ = keras.utils.unpack_x_y_sample_weight(output)
         shape = ops.shape(output[token_id_key])
         self.assertEqual(shape[-1], 17)
+
+        # Check the updated sequence length is respected inside Grain, and that
+        # (x, y, sample_weight) outputs come back as Grain safe NumPy/Python
+        # types after batching.
+        if isinstance(input_data, tuple):
+
+            def map_fn(x):
+                return layer(*x)
+        else:
+            map_fn = layer
+        ds = grain_source_from_tensor_slices(input_data).map(map_fn)
+        (grain_output,) = list(ds.batch(len(ds), batch_fn=grain_ragged_batch))
+        assert_grain_safe_types(grain_output)
+        grain_output, _, _ = keras.utils.unpack_x_y_sample_weight(grain_output)
+        self.assertEqual(np.shape(grain_output[token_id_key])[-1], 17)
 
     def run_serialization_test(self, instance):
         """Check idempotency of serialize/deserialize.

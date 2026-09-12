@@ -546,10 +546,12 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         pixel_values = images_dict["pixel_values"]
         pixel_position_ids = images_dict["pixel_position_ids"]
 
+        # Inside a Grain pipeline the image converter returns NumPy arrays,
+        # otherwise torch tensors which may live on an accelerator.
         if keras.config.backend() == "torch":
-            if not isinstance(pixel_values, tf.Tensor):
+            if keras.ops.is_tensor(pixel_values):
                 pixel_values = pixel_values.cpu()
-            if not isinstance(pixel_position_ids, tf.Tensor):
+            if keras.ops.is_tensor(pixel_position_ids):
                 pixel_position_ids = pixel_position_ids.cpu()
 
         pixel_values = tf.reshape(
@@ -598,9 +600,8 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         # The audio converter runs as a Keras layer and may return a CUDA
         # torch tensor on GPU. Move to CPU so subsequent TF ops can accept it
         # (mirrors the same guard in _preprocess_images).
-        if keras.config.backend() == "torch":
-            if not isinstance(mel, tf.Tensor):
-                mel = mel.cpu()
+        if keras.config.backend() == "torch" and keras.ops.is_tensor(mel):
+            mel = mel.cpu()
 
         # Expand dims to model expectation of Clips step: (B, 1, Seq, Feat)
         mel = tf.expand_dims(mel, axis=1)
@@ -645,10 +646,12 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         pixel_values = videos_dict["pixel_values"]
         pixel_position_ids = videos_dict["pixel_position_ids"]
 
+        # Inside a Grain pipeline the image converter returns NumPy arrays,
+        # otherwise torch tensors which may live on an accelerator.
         if keras.config.backend() == "torch":
-            if not isinstance(pixel_values, tf.Tensor):
+            if keras.ops.is_tensor(pixel_values):
                 pixel_values = pixel_values.cpu()
-            if not isinstance(pixel_position_ids, tf.Tensor):
+            if keras.ops.is_tensor(pixel_position_ids):
                 pixel_position_ids = pixel_position_ids.cpu()
 
         return {
