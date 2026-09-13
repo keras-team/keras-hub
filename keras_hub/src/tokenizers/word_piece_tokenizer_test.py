@@ -75,8 +75,11 @@ class WordPieceTokenizerTest(TestCase):
         # the two paths to the same dtype.
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
         tokenizer = self.make_tokenizer(vocabulary=vocab_data)
-        output = np.array(tokenizer("the quick brown fox."))
-        self.assertEqual(output.ndim, 1)
+        # Do not call `np.array()` on the output. On the TF path the output
+        # is a backend tensor, which on an accelerator lives off-host and
+        # cannot be converted to NumPy directly.
+        output = tokenizer("the quick brown fox.")
+        self.assertLen(output.shape, 1)
         self.assertDTypeEqual(output, "int32")
 
     def test_tokenize_scalar_string_dtype(self):

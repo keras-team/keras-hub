@@ -74,8 +74,11 @@ class ByteTokenizerTest(TestCase):
         # also runs on the TF path via `ByteTokenizerTFTest`, pinning the
         # two paths to the same dtype.
         tokenizer = self.make_tokenizer()
-        output = np.array(tokenizer("hello"))
-        self.assertEqual(output.ndim, 1)
+        # Do not call `np.array()` on the output. On the TF path the output
+        # is a backend tensor, which on an accelerator lives off-host and
+        # cannot be converted to NumPy directly.
+        output = tokenizer("hello")
+        self.assertLen(output.shape, 1)
         self.assertDTypeEqual(output, "int32")
 
     def test_tokenize_rank_2(self):
@@ -91,7 +94,7 @@ class ByteTokenizerTest(TestCase):
     def test_tokenize_rank_2_dense(self):
         tokenizer = self.make_tokenizer(sequence_length=5)
         output = tokenizer([["hello", "fun"], ["haha", "hello"]])
-        self.assertEqual(np.array(output).shape, (2, 2, 5))
+        self.assertEqual(tuple(output.shape), (2, 2, 5))
         self.assertAllEqual(
             output,
             [

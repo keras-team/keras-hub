@@ -98,8 +98,11 @@ class UnicodeCodepointTokenizerTest(TestCase):
         # also runs on the TF path via `UnicodeCodepointTokenizerTFTest`,
         # pinning the two paths to the same dtype.
         tokenizer = self.make_tokenizer()
-        output = np.array(tokenizer("ninja"))
-        self.assertEqual(output.ndim, 1)
+        # Do not call `np.array()` on the output. On the TF path the output
+        # is a backend tensor, which on an accelerator lives off-host and
+        # cannot be converted to NumPy directly.
+        output = tokenizer("ninja")
+        self.assertLen(output.shape, 1)
         self.assertDTypeEqual(output, "int32")
 
     def test_dense_output(self):
