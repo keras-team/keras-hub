@@ -77,7 +77,7 @@ class WordPieceTokenizerTest(TestCase):
         tokenizer = self.make_tokenizer(vocabulary=vocab_data)
         output = np.array(tokenizer("the quick brown fox."))
         self.assertEqual(output.ndim, 1)
-        self.assertEqual(output.dtype, np.int32)
+        self.assertDTypeEqual(output, "int32")
 
     def test_tokenize_scalar_string_dtype(self):
         # With a string `dtype` the output is a list of tokens, not an array,

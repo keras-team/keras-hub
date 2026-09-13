@@ -76,7 +76,7 @@ class ByteTokenizerTest(TestCase):
         tokenizer = self.make_tokenizer()
         output = np.array(tokenizer("hello"))
         self.assertEqual(output.ndim, 1)
-        self.assertEqual(output.dtype, np.int32)
+        self.assertDTypeEqual(output, "int32")
 
     def test_tokenize_rank_2(self):
         # `keras_hub.metrics.Bleu` tokenizes a `(batch, num_references)`

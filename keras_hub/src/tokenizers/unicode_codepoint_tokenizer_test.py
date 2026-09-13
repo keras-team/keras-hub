@@ -100,7 +100,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
         tokenizer = self.make_tokenizer()
         output = np.array(tokenizer("ninja"))
         self.assertEqual(output.ndim, 1)
-        self.assertEqual(output.dtype, np.int32)
+        self.assertDTypeEqual(output, "int32")
 
     def test_dense_output(self):
         input_data = ["ninja", "samurai", "▀▁▂▃"]
