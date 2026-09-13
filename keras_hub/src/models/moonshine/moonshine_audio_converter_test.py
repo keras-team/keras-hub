@@ -1,6 +1,7 @@
 import grain
 import keras
 import numpy as np
+import tensorflow as tf
 
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter,
@@ -129,3 +130,19 @@ class MoonshineAudioConverterTest(TestCase):
         (batch,) = list(ds.batch(2))
         self.assertIsInstance(batch, np.ndarray)
         self.assertEqual(batch.shape, (2, 1, self.sampling_rate, 1))
+
+    def test_tf_data_pipeline(self):
+        # Inside `tf.data` the converter runs in graph mode, where its input
+        # is a *symbolic* `tf.Tensor` that cannot be converted to a jax or
+        # torch tensor. This mirrors what `MoonshineAudioToTextPreprocessor`
+        # does during `fit()`: rank 3 input with `padding="longest"`.
+        converter = MoonshineAudioConverter(**self.init_kwargs)
+        audio = np.random.rand(2, self.sampling_rate, 1).astype("float32")
+        ds = (
+            tf.data.Dataset.from_tensor_slices(audio)
+            .batch(2)
+            .map(lambda x: converter(x, padding="longest"))
+        )
+        (output,) = list(ds)
+        self.assertEqual(tuple(output.shape), (2, self.sampling_rate, 1))
+        self.assertAllClose(output, converter(audio, padding="longest"))

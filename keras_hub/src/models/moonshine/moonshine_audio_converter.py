@@ -121,11 +121,17 @@ class MoonshineAudioConverter(AudioConverter):
             )
 
         # The body below is written in `keras.ops`, but `preprocessing_function`
-        # hands us a `tf.Tensor`. On a non-TF backend `keras.ops` results are
-        # placed on the accelerator while the `tf.Tensor` converts to CPU, so
-        # mixing the two raises "Expected all tensors to be on the same
-        # device". Normalize once here so the whole body stays consistent.
-        inputs = keras.ops.convert_to_tensor(inputs)
+        # hands us a `tf.Tensor`. When eager on a non-TF backend, `keras.ops`
+        # results are placed on the accelerator while the `tf.Tensor` converts
+        # to CPU, so mixing the two raises "Expected all tensors to be on the
+        # same device". Normalize once here so the whole body stays consistent.
+        #
+        # In graph mode (inside a `tf.data` pipeline) `inputs` is a *symbolic*
+        # `tf.Tensor`, which cannot be converted to a jax/torch tensor at all.
+        # There the body stays on TF ops via `use_tf_graph_ops` below, so leave
+        # the input untouched.
+        if not in_tf_function():
+            inputs = keras.ops.convert_to_tensor(inputs)
 
         # Ensure inputs are (batch_size, time_steps, 1).
         input_shape = keras.ops.shape(inputs)
