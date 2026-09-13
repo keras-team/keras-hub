@@ -1,4 +1,5 @@
 import os
+import warnings
 
 import keras
 import numpy as np
@@ -6,7 +7,9 @@ import tensorflow as tf
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.pipeline_model import PipelineModel
+from keras_hub.src.utils.pipeline_model import _apply_preprocessing
 from keras_hub.src.utils.pipeline_model import _convert_inputs_to_dataset
+from keras_hub.src.utils.pipeline_model import _silence_unknown_length_warning
 
 try:
     import grain
@@ -423,6 +426,42 @@ class NumpyPipeline(PipelineModel):
         return self.dense(inputs)
 
 
+class TfOutputPipeline(PipelineModel):
+    """This model preprocesses to the tf types a tokenizer can emit."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dense = keras.layers.Dense(1)
+
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        batch_size = np.asarray(x).shape[0]
+        x = {
+            "dense": tf.ones((batch_size, 3)),
+            "ragged": tf.ragged.constant([[1.0, 2.0], [3.0]] * batch_size),
+            "strings": tf.constant(["hi"] * batch_size),
+        }
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def call(self, inputs):
+        return self.dense(inputs["dense"])
+
+
+class _ConstantSource:
+    """A random access source of constant samples, for `grain.DataLoader`."""
+
+    def __init__(self, length):
+        self.length = length
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, index):
+        return {
+            "x": np.ones((5,), dtype="float32"),
+            "y": np.ones((1,), dtype="float32"),
+        }
+
+
 class TestGrainPipeline(TestCase):
     def setUp(self):
         super().setUp()
@@ -513,6 +552,81 @@ class TestGrainPipeline(TestCase):
         x = tf.ragged.constant([[1, 2, 3], [4, 5]])
         ds = _convert_inputs_to_dataset(x, None, None, batch_size=2)
         self.assertIsInstance(ds, tf.data.Dataset)
+
+    def test_preprocessing_output_holds_no_tf_tensors(self):
+        # Only `GrainDatasetAdapter.get_numpy_iterator` converts tf tensors,
+        # so the jax and torch iterators would be handed these as they are.
+        # Ragged and string tensors are the ones a preprocessor with no
+        # `sequence_length` emits.
+        ds = _convert_inputs_to_dataset(
+            np.random.uniform(size=(8, 5)), None, None, batch_size=4
+        )
+        ds = _apply_preprocessing(ds, TfOutputPipeline().preprocess_samples)
+        for leaf in keras.tree.flatten(next(iter(ds))):
+            self.assertNotIsInstance(leaf, (tf.Tensor, tf.RaggedTensor))
+
+    def test_error_grain_data_loader(self):
+        # `grain.DataLoader` has no `map`, so preprocessing cannot be applied.
+        loader = grain.DataLoader(
+            data_source=_ConstantSource(8),
+            sampler=grain.samplers.IndexSampler(
+                num_records=8, shuffle=False, num_epochs=1
+            ),
+            operations=[grain.transforms.Batch(4)],
+        )
+        model = FeaturePipeline()
+        model.compile(loss="mse")
+        with self.assertRaisesRegex(ValueError, "grain.MapDataset"):
+            model.fit(loader)
+        with self.assertRaisesRegex(ValueError, "grain.MapDataset"):
+            model.evaluate(loader)
+        with self.assertRaisesRegex(ValueError, "grain.MapDataset"):
+            model.predict(loader)
+        with self.assertRaisesRegex(ValueError, "grain.MapDataset"):
+            model.fit(
+                x=np.random.uniform(size=(8, 5)),
+                y=np.random.uniform(size=(8, 1)),
+                batch_size=4,
+                validation_data=loader,
+            )
+
+    def test_no_spurious_ran_out_of_data_warning(self):
+        # `GrainDatasetAdapter.num_batches` is `None`, so Keras finds the
+        # epoch size by running the iterator dry. Before
+        # keras-team/keras#23360 that warned as if training was cut short.
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            model.fit(x=x, y=y, batch_size=4, epochs=2)
+            model.evaluate(x=x, y=y, batch_size=4)
+            model.predict(x=x, batch_size=4)
+        messages = [str(w.message) for w in caught]
+        self.assertFalse([m for m in messages if "ran out of data" in m])
+
+    def test_ran_out_of_data_warning_with_declared_steps(self):
+        # The warning does carry information when the caller said how many
+        # steps to expect, so it is left alone in that case.
+        ds = _convert_inputs_to_dataset(
+            np.random.uniform(size=(8, 5)), None, None, batch_size=4
+        )
+
+        def warn():
+            warnings.warn("Your input ran out of data", UserWarning)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with _silence_unknown_length_warning(ds, steps=10):
+                warn()
+        self.assertLen(caught, 1)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with _silence_unknown_length_warning(ds, steps=None):
+                warn()
+        self.assertLen(caught, 0)
 
 
 class TestInputErrors(TestCase):

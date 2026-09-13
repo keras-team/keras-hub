@@ -1,11 +1,15 @@
+import contextlib
 import functools
 import math
+import warnings
 
 import keras
 import numpy as np
 from keras import ops
 from keras import tree
 
+from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs_grain
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import is_tensor_type
 
 try:
@@ -43,17 +47,28 @@ UNBATCHED_INPUT_ERROR = (
     "Please add an outer dimension to your input, e.g., wrap it in a list."
 )
 
+GRAIN_DATA_LOADER_ERROR = (
+    "`PipelineModel` maps preprocessing over the dataset it is given, which "
+    "a `grain.DataLoader` does not support. Pass a `grain.MapDataset` or a "
+    "`grain.IterDataset` instead, e.g. "
+    "`grain.MapDataset.source(source).batch(batch_size)`."
+)
+
 
 def _is_tf_dataset(x):
     return tf is not None and isinstance(x, tf.data.Dataset)
 
 
 def _is_grain_dataset(x):
+    # `grain.DataLoader` is deliberately not included. It has no `map`, so
+    # preprocessing cannot be applied to one. See `_is_grain_data_loader`.
     if grain is None:
         return False
-    return isinstance(
-        x, (grain.MapDataset, grain.IterDataset, grain.DataLoader)
-    )
+    return isinstance(x, (grain.MapDataset, grain.IterDataset))
+
+
+def _is_grain_data_loader(x):
+    return grain is not None and isinstance(x, grain.DataLoader)
 
 
 def _map_leaves(inputs, fn):
@@ -115,34 +130,13 @@ class _TensorLikeSource:
 
 
 def _convert_to_numpy(inputs):
-    """Convert every leaf of `inputs` to a numpy array."""
+    """Convert every leaf of `inputs` to a numpy array.
 
-    def convert(leaf):
-        if isinstance(leaf, np.ndarray):
-            return leaf
-        if is_tensor_type(leaf):
-            return ops.convert_to_numpy(leaf)
-        return np.asarray(leaf)
-
-    return _map_leaves(inputs, convert)
-
-
-def _convert_outputs_to_numpy(outputs):
-    """Convert tensor leaves of a preprocessed batch to numpy arrays.
-
-    `preprocess_samples` can return tf tensors, which jax rejects since
-    `GrainDatasetAdapter.get_jax_iterator` does not convert dense tensors.
-    Leaves that are not tensor like are passed through untouched.
+    `tensor_utils.convert_to_numpy` handles the tf tensors that preprocessing
+    layers hold regardless of the active backend, which
+    `keras.ops.convert_to_numpy` cannot.
     """
-
-    def convert(leaf):
-        if isinstance(leaf, np.ndarray):
-            return leaf
-        if is_tensor_type(leaf):
-            return ops.convert_to_numpy(leaf)
-        return leaf
-
-    return _map_leaves(outputs, convert)
+    return _map_leaves(inputs, convert_to_numpy)
 
 
 def _convert_strings_to_python(inputs):
@@ -180,6 +174,9 @@ def _convert_inputs_to_dataset(
     and feeds `fit()` on all Keras backends. A dataset passed in directly by
     the caller is validated and returned as is.
     """
+    if _is_grain_data_loader(x):
+        raise ValueError(GRAIN_DATA_LOADER_ERROR)
+
     if _is_tf_dataset(x) or _is_grain_dataset(x):
         kind = "tf.data.Dataset" if _is_tf_dataset(x) else "grain dataset"
         if y is not None:
@@ -263,11 +260,41 @@ def _apply_preprocessing(ds, preprocess_samples):
         y = _convert_strings_to_python(y)
         sample_weight = _convert_strings_to_python(sample_weight)
         outputs = preprocess_samples(x, y, sample_weight)
-        return _convert_outputs_to_numpy(outputs)
+        # `preprocess_samples` can return tf tensors, which jax rejects since
+        # `GrainDatasetAdapter.get_jax_iterator` does not convert them. This
+        # is the same conversion preprocessing layers apply to their own
+        # outputs inside a grain pipeline, ragged and string data included.
+        return convert_preprocessing_outputs_grain(outputs)
 
     # `MapDataset.__iter__` already calls `to_iter_dataset()`, which reads
     # ahead on a thread pool. Calling it here would only discard `__len__`.
     return ds.map(preprocess)
+
+
+@contextlib.contextmanager
+def _silence_unknown_length_warning(ds, steps):
+    """Hide the spurious "ran out of data" warning for grain datasets.
+
+    `GrainDatasetAdapter.num_batches` is always `None`, so Keras finds the
+    epoch size by running the iterator dry. Before keras-team/keras#23360 that
+    warned as if training had been cut short, once per epoch and again for
+    `evaluate()` and `predict()`. The warning only carries information when
+    the caller declared how many steps to expect, which is the condition
+    reproduced here.
+
+    TODO: drop this once the minimum supported Keras includes that fix, which
+    is unreleased as of Keras 3.15.1.
+    """
+    if steps is not None or not _is_grain_dataset(ds):
+        yield
+        return
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="Your input ran out of data",
+            category=UserWarning,
+        )
+        yield
 
 
 def _train_validation_split(arrays, validation_split):
@@ -396,14 +423,15 @@ class PipelineModel(keras.Model):
                     self.preprocess_samples,
                 )
 
-        return super().fit(
-            x=x,
-            y=None,
-            batch_size=None,
-            sample_weight=None,
-            validation_data=validation_data,
-            **kwargs,
-        )
+        with _silence_unknown_length_warning(x, kwargs.get("steps_per_epoch")):
+            return super().fit(
+                x=x,
+                y=None,
+                batch_size=None,
+                sample_weight=None,
+                validation_data=validation_data,
+                **kwargs,
+            )
 
     def evaluate(
         self,
@@ -425,12 +453,13 @@ class PipelineModel(keras.Model):
             )
         x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
         x = _apply_preprocessing(x, self.preprocess_samples)
-        return super().evaluate(
-            x=x,
-            y=None,
-            batch_size=None,
-            **kwargs,
-        )
+        with _silence_unknown_length_warning(x, kwargs.get("steps")):
+            return super().evaluate(
+                x=x,
+                y=None,
+                batch_size=None,
+                **kwargs,
+            )
 
     def predict(
         self,
@@ -440,11 +469,12 @@ class PipelineModel(keras.Model):
     ):
         x = _convert_inputs_to_dataset(x, None, None, batch_size)
         x = _apply_preprocessing(x, self.preprocess_samples)
-        return super().predict(
-            x=x,
-            batch_size=None,
-            **kwargs,
-        )
+        with _silence_unknown_length_warning(x, kwargs.get("steps")):
+            return super().predict(
+                x=x,
+                batch_size=None,
+                **kwargs,
+            )
 
     def train_on_batch(
         self,
