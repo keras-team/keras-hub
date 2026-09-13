@@ -17,6 +17,13 @@ try:
     import tensorflow as tf
 except ImportError:
     tf = None
+# `pip uninstall tensorflow` can leave an empty `tensorflow/` directory behind,
+# which Python then imports as a namespace package: the import succeeds but the
+# module has no attributes, so `except ImportError` above never fires and the
+# first `tf.<attr>` raises `AttributeError` instead. Treat that as no
+# tensorflow, so the pure Python paths are used.
+if tf is not None and not hasattr(tf, "executing_eagerly"):
+    tf = None
 try:
     import tensorflow_text as tf_text
 except ImportError:

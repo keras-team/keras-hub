@@ -26,6 +26,11 @@ try:
     import tensorflow as tf
 except ImportError:
     tf = None
+# A partially uninstalled tensorflow imports as an empty namespace package
+# rather than raising, so treat it as absent. See `tensor_utils` for details.
+# `_canonicalize_presplit_inputs` touches `tf` on the pure Python path.
+if tf is not None and not hasattr(tf, "executing_eagerly"):
+    tf = None
 try:
     import tensorflow_text as tf_text
 except ImportError:
