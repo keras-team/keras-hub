@@ -7,18 +7,55 @@ from keras_hub.src.tokenizers.unicode_codepoint_tokenizer import (
 
 
 class UnicodeCodepointTokenizerTest(TestCase):
-    def test_tokenize(self):
-        input_data = ["ninja", "samurai", "▀▁▂▃"]
-        tokenizer = UnicodeCodepointTokenizer()
-        call_output = tokenizer(input_data)
-        tokenize_output = tokenizer.tokenize(input_data)
-        exp_outputs = [
-            [110, 105, 110, 106, 97],
-            [115, 97, 109, 117, 114, 97, 105],
-            [9600, 9601, 9602, 9603],
-        ]
-        self.assertAllEqual(call_output, exp_outputs)
-        self.assertAllEqual(tokenize_output, exp_outputs)
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=UnicodeCodepointTokenizer,
+            init_kwargs={},
+            input_data=["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"],
+            expected_output=[
+                [110, 105, 110, 106, 97],
+                [115, 97, 109, 117, 114, 97, 105],
+                [9600, 9601, 9602, 9603],
+                [107, 101, 114, 97, 115],
+                [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
+            ],
+        )
+
+    def test_tokenizer_basics_with_sequence_length(self):
+        # None of the inputs below get truncated at `sequence_length=10`, so
+        # the dense, padded output round-trips cleanly through `detokenize`.
+        self.run_preprocessing_layer_test(
+            cls=UnicodeCodepointTokenizer,
+            init_kwargs={"sequence_length": 10},
+            input_data=["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"],
+            expected_output=[
+                [110, 105, 110, 106, 97, 0, 0, 0, 0, 0],
+                [115, 97, 109, 117, 114, 97, 105, 0, 0, 0],
+                [9600, 9601, 9602, 9603, 0, 0, 0, 0, 0, 0],
+                [107, 101, 114, 97, 115, 0, 0, 0, 0, 0],
+                [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
+            ],
+        )
+
+    def test_tokenizer_basics_with_non_default_config(self):
+        self.run_preprocessing_layer_test(
+            cls=UnicodeCodepointTokenizer,
+            init_kwargs={
+                "lowercase": False,
+                "sequence_length": 8,
+                "normalization_form": "NFC",
+                "errors": "ignore",
+                "replacement_char": 0,
+                "vocabulary_size": 100,
+            },
+            input_data=["ninja", "samurai", "▀▁▂▃"],
+            expected_output=[
+                [99, 99, 99, 99, 97, 0, 0, 0],
+                [99, 97, 99, 99, 99, 97, 99, 0],
+                [99, 99, 99, 99, 0, 0, 0, 0],
+            ],
+            expected_detokenize_output=[b"cccca", b"cacccac", b"cccc"],
+        )
 
     def test_tokenize_scalar(self):
         input_data = "ninja"
@@ -142,123 +179,6 @@ class UnicodeCodepointTokenizerTest(TestCase):
         self.assertAllEqual(
             call_output,
             [[78, 105, 78, 74, 97, 83]],
-        )
-
-    def test_tokenize_first_batch_second(self):
-        tokenizer = UnicodeCodepointTokenizer()
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
-        )
-        ds = ds.map(tokenizer)
-        ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(5))
-        output = ds.take(1).get_single_element()
-
-        exp_output = [
-            [110, 105, 110, 106, 97],
-            [115, 97, 109, 117, 114, 97, 105],
-            [9600, 9601, 9602, 9603],
-            [107, 101, 114, 97, 115],
-            [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
-        ]
-        self.assertAllEqual(output, exp_output)
-
-    def test_tokenize_first_batch_second_with_sequence_length(self):
-        tokenizer = UnicodeCodepointTokenizer(sequence_length=10)
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
-        )
-        ds = ds.map(tokenizer)
-        ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(5))
-        output = ds.take(1).get_single_element()
-
-        exp_output = [
-            [110, 105, 110, 106, 97, 0, 0, 0, 0, 0],
-            [115, 97, 109, 117, 114, 97, 105, 0, 0, 0],
-            [9600, 9601, 9602, 9603, 0, 0, 0, 0, 0, 0],
-            [107, 101, 114, 97, 115, 0, 0, 0, 0, 0],
-            [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
-        ]
-        self.assertAllEqual(output, exp_output)
-
-    def test_batch_first_tokenize_second(self):
-        tokenizer = UnicodeCodepointTokenizer()
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
-        )
-        ds = ds.batch(5).map(tokenizer)
-        output = ds.take(1).get_single_element()
-
-        exp_output = [
-            [110, 105, 110, 106, 97],
-            [115, 97, 109, 117, 114, 97, 105],
-            [9600, 9601, 9602, 9603],
-            [107, 101, 114, 97, 115],
-            [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
-        ]
-        self.assertAllEqual(output, exp_output)
-
-    def test_batch_first_tokenize_second_with_sequence_length(self):
-        tokenizer = UnicodeCodepointTokenizer(sequence_length=10)
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
-        )
-        ds = ds.batch(5).map(tokenizer)
-        output = ds.take(1).get_single_element()
-
-        exp_output = [
-            [110, 105, 110, 106, 97, 0, 0, 0, 0, 0],
-            [115, 97, 109, 117, 114, 97, 105, 0, 0, 0],
-            [9600, 9601, 9602, 9603, 0, 0, 0, 0, 0, 0],
-            [107, 101, 114, 97, 115, 0, 0, 0, 0, 0],
-            [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
-        ]
-        self.assertAllEqual(output, exp_output)
-
-    def test_load_model_with_config(self):
-        input_data = tf.constant(["hello"])
-
-        original_tokenizer = UnicodeCodepointTokenizer(
-            lowercase=False,
-            sequence_length=11,
-            normalization_form="NFC",
-            errors="strict",
-            vocabulary_size=None,
-        )
-        cloned_tokenizer = UnicodeCodepointTokenizer.from_config(
-            original_tokenizer.get_config()
-        )
-        self.assertAllEqual(
-            original_tokenizer(input_data),
-            cloned_tokenizer(input_data),
-        )
-
-        decoded_input = [107, 101, 114, 97, 115]
-        self.assertAllEqual(
-            original_tokenizer.detokenize(decoded_input),
-            cloned_tokenizer.detokenize(decoded_input),
-        )
-
-    def test_config(self):
-        input_data = ["ninja", "samurai", "▀▁▂▃"]
-        tokenizer = UnicodeCodepointTokenizer(
-            name="unicode_character_tokenizer_config_gen",
-            lowercase=False,
-            sequence_length=8,
-            normalization_form="NFC",
-            errors="ignore",
-            replacement_char=0,
-            vocabulary_size=100,
-        )
-        cloned_tokenizer = UnicodeCodepointTokenizer.from_config(
-            tokenizer.get_config()
-        )
-        self.assertAllEqual(
-            tokenizer(input_data),
-            cloned_tokenizer(input_data),
         )
 
     def test_token_to_id(self):

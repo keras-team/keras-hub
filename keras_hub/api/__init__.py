@@ -10,6 +10,7 @@ from keras_hub import models as models
 from keras_hub import samplers as samplers
 from keras_hub import tokenizers as tokenizers
 from keras_hub import utils as utils
+from keras_hub import vllm as vllm
 from keras_hub.src.utils.preset_utils import upload_preset as upload_preset
 from keras_hub.src.version import __version__ as __version__
 from keras_hub.src.version import version as version

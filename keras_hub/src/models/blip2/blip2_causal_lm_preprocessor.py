@@ -1,5 +1,4 @@
 import keras
-import tensorflow as tf
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.blip2.blip2_backbone import BLIP2Backbone
@@ -7,7 +6,13 @@ from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 @keras_hub_export("keras_hub.models.BLIP2CausalLMPreprocessor")
@@ -195,6 +200,7 @@ class BLIP2CausalLMPreprocessor(CausalLMPreprocessor):
         if token_ids.ndim == 1:
             stripped = token_ids[mask].tolist()
         else:
+            assert_tf_installed("BLIP2CausalLMPreprocessor with batched inputs")
             stripped = tf.ragged.constant(
                 [
                     token_ids[i][mask[i]].tolist()

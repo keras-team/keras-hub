@@ -5,18 +5,34 @@ from keras_hub.src.tokenizers.byte_tokenizer import ByteTokenizer
 
 
 class ByteTokenizerTest(TestCase):
-    def test_tokenize(self):
-        input_data = ["hello", "fun", "▀▁▂▃"]
-        tokenizer = ByteTokenizer()
-        call_output = tokenizer(input_data)
-        tokenize_output = tokenizer.tokenize(input_data)
-        exp_outputs = [
-            [104, 101, 108, 108, 111],
-            [102, 117, 110],
-            [226, 150, 128, 226, 150, 129, 226, 150, 130, 226, 150, 131],
-        ]
-        self.assertAllEqual(call_output, exp_outputs)
-        self.assertAllEqual(tokenize_output, exp_outputs)
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=ByteTokenizer,
+            init_kwargs={},
+            input_data=["hello", "fun", "▀▁▂▃", "haha"],
+            expected_output=[
+                [104, 101, 108, 108, 111],
+                [102, 117, 110],
+                [226, 150, 128, 226, 150, 129, 226, 150, 130, 226, 150, 131],
+                [104, 97, 104, 97],
+            ],
+        )
+
+    def test_tokenizer_basics_with_sequence_length(self):
+        # `sequence_length=12` is long enough that none of the inputs below
+        # get truncated, so the dense, padded output round-trips cleanly
+        # through `detokenize`.
+        self.run_preprocessing_layer_test(
+            cls=ByteTokenizer,
+            init_kwargs={"sequence_length": 12},
+            input_data=["hello", "fun", "▀▁▂▃", "haha"],
+            expected_output=[
+                [104, 101, 108, 108, 111, 0, 0, 0, 0, 0, 0, 0],
+                [102, 117, 110, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [226, 150, 128, 226, 150, 129, 226, 150, 130, 226, 150, 131],
+                [104, 97, 104, 97, 0, 0, 0, 0, 0, 0, 0, 0],
+            ],
+        )
 
     def test_tokenize_scalar(self):
         input_data = "hello"
@@ -92,115 +108,6 @@ class ByteTokenizerTest(TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(
             call_output, [[72, 101, 76, 108, 79, 32, 119, 79, 114, 76, 100]]
-        )
-
-    def test_tokenize_first_batch_second(self):
-        tokenizer = ByteTokenizer()
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["hello", "fun", "▀▁▂▃", "haha"]
-        )
-        ds = ds.map(tokenizer)
-        ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(4))
-        output = ds.take(1).get_single_element()
-
-        exp_output = [
-            [104, 101, 108, 108, 111],
-            [102, 117, 110],
-            [226, 150, 128, 226, 150, 129, 226, 150, 130, 226, 150, 131],
-            [104, 97, 104, 97],
-        ]
-        self.assertAllEqual(output, exp_output)
-
-    def test_tokenize_first_batch_second_with_sequence_length(self):
-        tokenizer = ByteTokenizer(sequence_length=10)
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["hello", "fun", "▀▁▂▃", "haha"]
-        )
-        ds = ds.map(tokenizer)
-        ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(4))
-        output = ds.take(1).get_single_element()
-
-        exp_output = [
-            [104, 101, 108, 108, 111, 0, 0, 0, 0, 0],
-            [102, 117, 110, 0, 0, 0, 0, 0, 0, 0],
-            [226, 150, 128, 226, 150, 129, 226, 150, 130, 226],
-            [104, 97, 104, 97, 0, 0, 0, 0, 0, 0],
-        ]
-        self.assertAllEqual(output, exp_output)
-
-    def test_batch_first_tokenize_second(self):
-        tokenizer = ByteTokenizer()
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["hello", "fun", "▀▁▂▃", "haha"]
-        )
-        ds = ds.batch(4).map(tokenizer)
-        output = ds.take(1).get_single_element()
-
-        exp_output = [
-            [104, 101, 108, 108, 111],
-            [102, 117, 110],
-            [226, 150, 128, 226, 150, 129, 226, 150, 130, 226, 150, 131],
-            [104, 97, 104, 97],
-        ]
-        self.assertAllEqual(output, exp_output)
-
-    def test_batch_first_tokenize_second_with_sequence_length(self):
-        tokenizer = ByteTokenizer(sequence_length=10)
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["hello", "fun", "▀▁▂▃", "haha"]
-        )
-        ds = ds.batch(4).map(tokenizer)
-        output = ds.take(1).get_single_element()
-
-        exp_output = [
-            [104, 101, 108, 108, 111, 0, 0, 0, 0, 0],
-            [102, 117, 110, 0, 0, 0, 0, 0, 0, 0],
-            [226, 150, 128, 226, 150, 129, 226, 150, 130, 226],
-            [104, 97, 104, 97, 0, 0, 0, 0, 0, 0],
-        ]
-        self.assertAllEqual(output, exp_output)
-
-    def test_load_model_with_config(self):
-        input_data = ["hello"]
-
-        original_tokenizer = ByteTokenizer(
-            lowercase=False,
-            sequence_length=8,
-            normalization_form="NFC",
-            errors="ignore",
-        )
-        cloned_tokenizer = ByteTokenizer.from_config(
-            original_tokenizer.get_config()
-        )
-        self.assertAllEqual(
-            original_tokenizer(input_data),
-            cloned_tokenizer(input_data),
-        )
-
-        decoded_input = [[104, 101, 226, 150, 108, 108, 111]]
-        self.assertAllEqual(
-            original_tokenizer.detokenize(decoded_input),
-            cloned_tokenizer.detokenize(decoded_input),
-        )
-
-    def test_config(self):
-        input_data = ["hello", "fun", "▀▁▂▃", "haha"]
-        tokenizer = ByteTokenizer(
-            name="byte_tokenizer_config_test",
-            lowercase=False,
-            sequence_length=8,
-            normalization_form="NFC",
-            errors="ignore",
-            replacement_char=0,
-        )
-        cloned_tokenizer = ByteTokenizer.from_config(tokenizer.get_config())
-        self.assertAllEqual(
-            tokenizer(input_data),
-            cloned_tokenizer(input_data),
         )
 
     def test_token_to_id(self):

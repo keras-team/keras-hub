@@ -64,8 +64,8 @@ class RWKVTokenizerTest(TestCase):
             self.tokenizer.id_to_token(-1)
 
     def test_config(self):
-        config = self.tokenizer.get_config()
-        cloned = RWKVTokenizer.from_config(config)
+        self.run_serialization_test(self.tokenizer)
+        cloned = RWKVTokenizer.from_config(self.tokenizer.get_config())
         cloned.set_vocabulary(self.vocab)
         inputs = ["hello world"]
         self.assertAllEqual(self.tokenizer(inputs), cloned(inputs))

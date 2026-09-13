@@ -175,14 +175,12 @@ class BLIP2FlanT5(keras.Model):
         enc_attn_mask = full_enc_mask[:, None, :]
         position_bias = None
         for layer in t5.encoder_transformer_layers:
-            out = layer(
+            x, position_bias = layer(
                 x,
                 attention_mask=enc_attn_mask,
                 position_bias=position_bias,
                 use_causal_mask=False,
             )
-            if isinstance(out, tuple):
-                x, position_bias = out
         x = t5.encoder_layer_norm(x)
         x = t5.encoder_dropout(x)
         return x, enc_attn_mask
@@ -194,25 +192,56 @@ class BLIP2FlanT5(keras.Model):
         decoder_padding_mask,
         encoder_hidden_states,
         encoder_attention_mask,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
+        cross_attention_cache=None,
+        cross_attention_cache_update_index=None,
     ):
         dec_emb = t5.token_embedding(decoder_token_ids)
         x = t5.decoder_embedding_dropout(dec_emb)
-        dec_attn_mask = decoder_padding_mask[:, None, :]
+        dec_attn_mask = (
+            None
+            if decoder_padding_mask is None
+            else decoder_padding_mask[:, None, :]
+        )
+        cached = self_attention_cache is not None
         position_bias = None
-        for layer in t5.decoder_transformer_layers:
-            out = layer(
+        self_attention_caches = []
+        cross_attention_caches = []
+        for i, layer in enumerate(t5.decoder_transformer_layers):
+            outputs = layer(
                 x,
                 attention_mask=dec_attn_mask,
                 position_bias=position_bias,
                 encoder_hidden_states=encoder_hidden_states,
                 encoder_attention_mask=encoder_attention_mask,
                 use_causal_mask=True,
+                self_attention_cache=(
+                    self_attention_cache[:, i, ...] if cached else None
+                ),
+                self_attention_cache_update_index=self_attention_cache_update_index,
+                cross_attention_cache=(
+                    cross_attention_cache[:, i, ...] if cached else None
+                ),
+                cross_attention_cache_update_index=cross_attention_cache_update_index,
             )
-            if isinstance(out, tuple):
-                x, position_bias = out
+            if not cached:
+                x, position_bias = outputs
+                continue
+            x, position_bias, next_self, next_cross = outputs
+            if self_attention_cache_update_index is not None:
+                self_attention_caches.append(next_self)
+            if cross_attention_cache_update_index is not None:
+                cross_attention_caches.append(next_cross)
         x = t5.decoder_layer_norm(x)
         x = t5.decoder_dropout(x)
-        return x
+        if not cached:
+            return x
+        if self_attention_cache_update_index is not None:
+            self_attention_cache = ops.stack(self_attention_caches, axis=1)
+        if cross_attention_cache_update_index is not None:
+            cross_attention_cache = ops.stack(cross_attention_caches, axis=1)
+        return x, self_attention_cache, cross_attention_cache
 
     def call_encoder(self, token_ids, padding_mask, qformer_features=None):
         return self._run_encoder(
@@ -236,6 +265,34 @@ class BLIP2FlanT5(keras.Model):
             decoder_padding_mask,
             encoder_hidden_states,
             encoder_attention_mask,
+        )
+
+    def call_decoder_with_cache(
+        self,
+        decoder_token_ids,
+        encoder_hidden_states,
+        encoder_attention_mask,
+        self_attention_cache,
+        self_attention_cache_update_index,
+        cross_attention_cache,
+        cross_attention_cache_update_index,
+    ):
+        """Runs the T5 decoder with key/value caches for generative decoding.
+
+        Returns a `(hidden_states, self_attention_cache,
+        cross_attention_cache)` tuple. No decoder padding mask is taken, as the
+        causal mask alone is correct during cached decoding.
+        """
+        return self._run_decoder(
+            self.t5,
+            decoder_token_ids,
+            None,
+            encoder_hidden_states,
+            encoder_attention_mask,
+            self_attention_cache=self_attention_cache,
+            self_attention_cache_update_index=self_attention_cache_update_index,
+            cross_attention_cache=cross_attention_cache,
+            cross_attention_cache_update_index=cross_attention_cache_update_index,
         )
 
     @property

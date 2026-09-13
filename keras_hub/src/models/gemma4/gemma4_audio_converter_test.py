@@ -131,8 +131,8 @@ class Gemma4AudioConverterTest(TestCase):
     def test_get_config_round_trip(self):
         """get_config / from_config should reproduce identical parameters."""
         converter = Gemma4AudioConverter(**self.init_kwargs)
-        config = converter.get_config()
-        restored = Gemma4AudioConverter.from_config(config)
+        self.run_serialization_test(converter)
+        restored = Gemma4AudioConverter.from_config(converter.get_config())
         for key, val in self.init_kwargs.items():
             self.assertEqual(getattr(restored, key), val)
 

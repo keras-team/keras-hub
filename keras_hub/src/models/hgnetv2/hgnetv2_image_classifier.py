@@ -157,7 +157,7 @@ class HGNetV2ImageClassifier(ImageClassifier):
         # Check valid pooling.
         else:
             raise ValueError(
-                "Unknown `pooling` type. Polling should be either `'avg'` or "
+                "Unknown `pooling` type. Pooling should be either `'avg'` or "
                 f"`'max'`. Received: pooling={pooling}."
             )
 

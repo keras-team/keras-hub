@@ -48,4 +48,16 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/qwen3-6-moe/keras/qwen3_6_moe_35b_a3b/1",
     },
+    "qwen_agent_world_35b_a3b": {
+        "metadata": {
+            "description": (
+                "35 billion total parameter Qwen AgentWorld model "
+                "with ~3 billion active parameters per token. "
+                "Optimized for agentic applications and tool use."
+            ),
+            "params": 34660610688,
+            "path": "qwen3_5_moe",
+        },
+        "kaggle_handle": "kaggle://keras/qwen-agentworld/keras/qwen_agent_world_35b_a3b/1",
+    },
 }

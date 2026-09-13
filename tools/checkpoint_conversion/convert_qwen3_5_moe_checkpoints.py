@@ -25,6 +25,8 @@ from absl import app
 from absl import flags
 from keras import ops
 from PIL import Image
+from transformers import AutoConfig
+from transformers import AutoModelForCausalLM
 from transformers import AutoModelForImageTextToText
 from transformers import AutoProcessor
 from transformers import AutoTokenizer
@@ -42,6 +44,7 @@ PRESET_MAP = {
     "qwen3_5_moe_35b_a3b_base": "Qwen/Qwen3.5-35B-A3B-Base",
     "qwen3_5_moe_35b_a3b": "Qwen/Qwen3.5-35B-A3B",
     "qwen3_6_moe_35b_a3b": "Qwen/Qwen3.6-35B-A3B",
+    "qwen_agent_world_35b_a3b": "Qwen/Qwen-AgentWorld-35B-A3B",
 }
 
 IMAGE_URL = "http://images.cocodataset.org/val2017/000000039769.jpg"
@@ -101,7 +104,37 @@ def _count_keras_params(backbone):
 
 
 # ---------------------------------------------------------------
-# 1. Precompute HF outputs (before freeing HF model)
+# 1a. Precompute text-only HF outputs (for language_model_only models)
+# ---------------------------------------------------------------
+def precompute_text_only_outputs(hf_model, hf_tokenizer):
+    """Precompute text-only HF outputs (no vision components)."""
+    results = {}
+
+    hf_ids = hf_tokenizer(TEXT_PROMPT, return_tensors="np")["input_ids"]
+    results["text_token_ids"] = hf_ids
+
+    with torch.no_grad():
+        hf_out = hf_model(
+            input_ids=torch.tensor(hf_ids, dtype=torch.long).to(device),
+        )
+    results["text_logits"] = hf_out.logits.detach().cpu().float().numpy()
+
+    if not FLAGS.skip_generation:
+        with torch.no_grad():
+            hf_gen = hf_model.generate(
+                input_ids=torch.tensor(hf_ids, dtype=torch.long).to(device),
+                max_new_tokens=32,
+                do_sample=False,
+            )
+        results["text_generated"] = hf_tokenizer.decode(
+            hf_gen[0], skip_special_tokens=True
+        )
+
+    return results
+
+
+# ---------------------------------------------------------------
+# 1b. Precompute HF outputs (multimodal, before freeing HF model)
 # ---------------------------------------------------------------
 def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
     """Precompute all HF outputs needed for validation.
@@ -565,6 +598,12 @@ def save_preset(keras_model, preset_name):
 # ---------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------
+def _is_text_only(hf_preset):
+    """Check if a HuggingFace preset is text-only (no vision weights)."""
+    config = AutoConfig.from_pretrained(hf_preset)
+    return getattr(config, "language_model_only", False)
+
+
 def main(_):
     preset = FLAGS.preset
     if preset not in PRESET_MAP:
@@ -574,21 +613,33 @@ def main(_):
         )
 
     hf_preset = PRESET_MAP[preset]
+    text_only = _is_text_only(hf_preset)
 
     # --- Phase 1: Load HF model and precompute all outputs ---
     print("-> Loading HF model...")
-    hf_model = AutoModelForImageTextToText.from_pretrained(
-        hf_preset,
-        device_map="cpu",
-        torch_dtype=torch.float32,
-    )
+    if text_only:
+        print("   (text-only model detected, using AutoModelForCausalLM)")
+        hf_model = AutoModelForCausalLM.from_pretrained(
+            hf_preset,
+            device_map="cpu",
+            torch_dtype=torch.float32,
+        )
+    else:
+        hf_model = AutoModelForImageTextToText.from_pretrained(
+            hf_preset,
+            device_map="cpu",
+            torch_dtype=torch.float32,
+        )
     hf_model.eval()
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
     hf_params = sum(p.numel() for p in hf_model.parameters())
     print(f"   HF model loaded: {hf_params:,} params")
 
     print("\n-> Precomputing all HF outputs...")
-    hf_results = precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset)
+    if text_only:
+        hf_results = precompute_text_only_outputs(hf_model, hf_tokenizer)
+    else:
+        hf_results = precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset)
     hf_results["hf_param_count"] = hf_params
     print("   HF outputs precomputed!")
 

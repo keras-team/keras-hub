@@ -1,10 +1,10 @@
 import os
 import pathlib
 
+import grain
 import keras
 import numpy as np
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 
@@ -21,6 +21,18 @@ class ImageConverterTest(TestCase):
         super().setUp()
         self._allow_python_workflow = True
 
+    def test_layer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=ImageConverter,
+            init_kwargs={
+                "image_size": (4, 4),
+                "scale": 1 / 255.0,
+                "_allow_python_workflow": self._allow_python_workflow,
+            },
+            input_data=np.ones((2, 10, 10, 3)) * 255.0,
+            expected_output=np.ones((2, 4, 4, 3)).tolist(),
+        )
+
     def test_resize_simple(self):
         converter = ImageConverter(
             height=4,
@@ -31,16 +43,6 @@ class ImageConverterTest(TestCase):
         inputs = np.ones((10, 10, 3)) * 255.0
         outputs = converter(inputs)
         self.assertAllClose(outputs, ops.ones((4, 4, 3)))
-
-    def test_resize_dataset(self):
-        converter = ImageConverter(
-            image_size=(4, 4),
-            scale=1 / 255.0,
-            _allow_python_workflow=self._allow_python_workflow,
-        )
-        ds = tf.data.Dataset.from_tensor_slices(tf.zeros((8, 10, 10, 3)))
-        batch = ds.batch(2).map(converter).take(1).get_single_element()
-        self.assertAllClose(batch, tf.zeros((2, 4, 4, 3)))
 
     def test_resize_in_model(self):
         converter = ImageConverter(
@@ -122,19 +124,6 @@ class ImageConverterTest(TestCase):
                 _allow_python_workflow=self._allow_python_workflow,
             )
 
-    def test_config(self):
-        converter = ImageConverter(
-            image_size=(12, 20),
-            scale=(0.25 / 255.0, 0.1 / 255.0, 0.5 / 255.0),
-            offset=(0.2, -0.1, 0.25),
-            crop_to_aspect_ratio=False,
-            interpolation="nearest",
-            _allow_python_workflow=self._allow_python_workflow,
-        )
-        clone = ImageConverter.from_config(converter.get_config())
-        test_batch = np.random.rand(4, 10, 20, 3) * 255
-        self.assertAllClose(converter(test_batch), clone(test_batch))
-
     def test_preset_accessors(self):
         resnet_presets = set(ResNetImageConverter.presets.keys())
         all_presets = set(ImageConverter.presets.keys())
@@ -186,6 +175,28 @@ class ImageConverterTest(TestCase):
         restored = ImageConverter.from_preset(save_dir)
         test_image = np.random.rand(100, 100, 3) * 255
         self.assertAllClose(restored(test_image), converter(test_image))
+
+    def test_grain_outputs_numpy(self):
+        converter = ImageConverter(
+            image_size=(4, 4),
+            scale=1 / 255.0,
+        )
+        images = [
+            np.random.randint(0, 255, size=(6, 6, 3)).astype("uint8"),
+            np.random.randint(0, 255, size=(8, 8, 3)).astype("uint8"),
+        ]
+        # Direct call returns backend tensors.
+        self.assertNotIsInstance(converter(images[0]), np.ndarray)
+        # Grain returns numpy arrays.
+        ds = grain.MapDataset.source(images).map(converter)
+        for output in ds:
+            self.assertIsInstance(output, np.ndarray)
+            self.assertEqual(output.shape, (4, 4, 3))
+        (batch,) = list(ds.batch(2))
+        self.assertIsInstance(batch, np.ndarray)
+        self.assertEqual(batch.shape, (2, 4, 4, 3))
+        # Numerics match the direct call.
+        self.assertAllClose(batch[0], converter(images[0]))
 
     def test_inhomogeneous_batch(self):
         if not self._allow_python_workflow:

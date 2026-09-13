@@ -29,12 +29,11 @@ class BLIP2QFormerTest(TestCase):
     def test_serialization(self):
         qformer = BLIP2QFormer(**self.init_kwargs)
         qformer(self.vision_features)
+        self.run_serialization_test(qformer)
 
         restored = BLIP2QFormer.from_config(qformer.get_config())
         restored(self.vision_features)
         restored.set_weights(qformer.get_weights())
-
-        self.assertEqual(qformer.get_config(), restored.get_config())
         self.assertAllClose(
             qformer(self.vision_features), restored(self.vision_features)
         )

@@ -298,54 +298,52 @@ class MoonshineAudioToText(AudioToText):
         index = keras.ops.min(row_lengths)
 
         def next(prompt, cache, index):
-            if isinstance(cache, tuple) and len(cache) == 2:
-                current_self_attention_cache = cache[0]
-                current_cross_attention_cache = cache[1]
-            elif cache is not None and not isinstance(cache, tuple):
-                current_self_attention_cache = cache
-                current_cross_attention_cache = cross_attention_cache
-            else:
-                cache = None
+            # Everything the decoder needs rides in `cache`, so this body
+            # closes over nothing. OpenVINO requires that: a `while_loop` body
+            # may only reference its own loop variables. `BeamSampler` also
+            # expands every cache leaf to `num_samples`, so no manual repeat.
+            (
+                current_self_attention_cache,
+                current_cross_attention_cache,
+                encoder_hidden_states,
+                encoder_attention_mask_for_decoder,
+            ) = cache
             cache_index = index - 1
             num_samples = keras.ops.shape(prompt)[0]
             next_token_input = keras.ops.slice(
                 prompt, [0, cache_index], [num_samples, 1]
             )
 
-            batch_size = keras.ops.shape(encoder_input_values)[0]
-
-            def repeat_tensor(x):
-                if keras.ops.shape(x)[0] == num_samples:
-                    return x
-                return keras.ops.repeat(
-                    x, repeats=num_samples // batch_size, axis=0
-                )
-
-            cross_attention_cache_repeated = repeat_tensor(
-                current_cross_attention_cache
-            )
             logits, hidden_states, new_self_attention_cache, _ = (
                 self.call_decoder_with_cache(
-                    encoder_hidden_states=repeat_tensor(encoder_hidden_states),
-                    encoder_padding_mask=repeat_tensor(
-                        encoder_attention_mask_for_decoder
-                    ),
+                    encoder_hidden_states=encoder_hidden_states,
+                    encoder_padding_mask=encoder_attention_mask_for_decoder,
                     decoder_token_ids=next_token_input,
                     self_attention_cache=current_self_attention_cache,
                     self_attention_cache_update_index=cache_index,
-                    cross_attention_cache=cross_attention_cache_repeated,
+                    cross_attention_cache=current_cross_attention_cache,
                 )
             )
             return (
                 logits[:, 0, :],
                 hidden_states[:, 0, :],
-                (new_self_attention_cache, current_cross_attention_cache),
+                (
+                    new_self_attention_cache,
+                    current_cross_attention_cache,
+                    encoder_hidden_states,
+                    encoder_attention_mask_for_decoder,
+                ),
             )
 
         decoder_token_ids = self.sampler(
             next=next,
             prompt=decoder_token_ids,
-            cache=(self_attention_cache, cross_attention_cache),
+            cache=(
+                self_attention_cache,
+                cross_attention_cache,
+                encoder_hidden_states,
+                encoder_attention_mask_for_decoder,
+            ),
             index=index,
             mask=keras.ops.cast(
                 decoder_token_ids != self.preprocessor.tokenizer.pad_token_id

@@ -168,14 +168,12 @@ class T5Backbone(Backbone):
         encoder_attention_mask = encoder_padding_mask_input[:, None, :]
         position_bias = None
         for transformer_layer in self.encoder_transformer_layers:
-            output = transformer_layer(
+            x, position_bias = transformer_layer(
                 x,
                 attention_mask=encoder_attention_mask,
                 position_bias=position_bias,
                 use_causal_mask=False,
             )
-            if isinstance(output, tuple):
-                x, position_bias = output
         x = self.encoder_layer_norm(x)
         x = self.encoder_dropout(x)
         encoder_output = x
@@ -185,7 +183,7 @@ class T5Backbone(Backbone):
         decoder_attention_mask = decoder_padding_mask_input[:, None, :]
         position_bias = None
         for transformer_layer in self.decoder_transformer_layers:
-            output = transformer_layer(
+            x, position_bias = transformer_layer(
                 x,
                 attention_mask=decoder_attention_mask,
                 position_bias=position_bias,
@@ -193,8 +191,6 @@ class T5Backbone(Backbone):
                 encoder_attention_mask=encoder_attention_mask,
                 use_causal_mask=True,
             )
-            if isinstance(output, tuple):
-                x, position_bias = output
         x = self.decoder_layer_norm(x)
         x = self.decoder_dropout(x)
         decoder_output = x

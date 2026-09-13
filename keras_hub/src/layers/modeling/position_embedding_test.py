@@ -162,3 +162,46 @@ class PositionEmbeddingTest(TestCase):
             np.array(expected_output), (batch_size, seq_length, feature_size)
         )
         self.assertAllClose(output, expected_output, rtol=1e-5, atol=1e-5)
+
+    def test_no_serving_context_matches_slice_path(self):
+        """Off the vLLM serving path the layer must be bitwise unchanged.
+
+        `call` consults a vLLM serving context when `positions` is not given.
+        With no context active that lookup returns `None`, so the original
+        `ops.slice` of `0..sequence_length` has to run and produce exactly
+        what it produced before that lookup existed.
+        """
+        batch_size, seq_length, feature_size = 2, 4, 5
+        data = random.uniform(shape=(batch_size, seq_length, feature_size))
+        layer = PositionEmbedding(seq_length)
+        output = layer(data)
+
+        # What the slice path is defined to produce: rows 0..seq_length of the
+        # embedding table, broadcast over the batch.
+        table = ops.convert_to_numpy(layer.position_embeddings)
+        expected = np.broadcast_to(
+            table[:seq_length], (batch_size, seq_length, feature_size)
+        )
+        self.assertAllEqual(output, expected)
+
+        # Same for a mid-sequence `start_index`, the cached-decoding path.
+        step = layer(data[:, :1, :], start_index=2)
+        self.assertAllEqual(
+            step, np.broadcast_to(table[2:3], (batch_size, 1, feature_size))
+        )
+
+    def test_explicit_positions_take_precedence(self):
+        """An explicit `positions` argument must win over any context lookup.
+
+        Callers that pass `positions` themselves have to keep getting exactly
+        those rows, so the serving lookup can never override them.
+        """
+        batch_size, seq_length, feature_size = 2, 4, 5
+        data = random.uniform(shape=(batch_size, seq_length, feature_size))
+        positions = np.array([[3, 1, 0, 2], [0, 0, 2, 3]])
+
+        layer = PositionEmbedding(seq_length)
+        output = layer(data, positions=positions)
+
+        table = ops.convert_to_numpy(layer.position_embeddings)
+        self.assertAllEqual(output, table[positions])

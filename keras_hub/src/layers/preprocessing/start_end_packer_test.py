@@ -1,3 +1,5 @@
+import grain
+import numpy as np
 import tensorflow as tf
 from absl.testing import parameterized
 
@@ -6,6 +8,24 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class StartEndPackerTest(TestCase):
+    @parameterized.named_parameters(
+        ("allow_python_workflow", True),
+        ("disallow_python_workflow", False),
+    )
+    def test_layer_basics(self, allow_python_workflow):
+        self.run_preprocessing_layer_test(
+            cls=StartEndPacker,
+            init_kwargs={
+                "sequence_length": 7,
+                "start_value": 1,
+                "end_value": 2,
+                "pad_value": 3,
+                "_allow_python_workflow": allow_python_workflow,
+            },
+            input_data=tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]]),
+            expected_output=[[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 11, 2, 3]],
+        )
+
     @parameterized.named_parameters(
         ("allow_python_workflow", True),
         ("disallow_python_workflow", False),
@@ -334,20 +354,6 @@ class StartEndPackerTest(TestCase):
         with self.assertRaises(ValueError):
             StartEndPacker(sequence_length=5, start_value=1.0)
 
-    def test_batch(self):
-        start_end_packer = StartEndPacker(
-            sequence_length=7, start_value=1, end_value=2, pad_value=3
-        )
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
-        )
-        ds = ds.batch(2).map(start_end_packer)
-        output = ds.take(1).get_single_element()
-
-        exp_output = [[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 11, 2, 3]]
-        self.assertAllEqual(output, exp_output)
-
     @parameterized.named_parameters(
         ("allow_python_workflow", True),
         ("disallow_python_workflow", False),
@@ -429,3 +435,30 @@ class StartEndPackerTest(TestCase):
         ]
         self.assertAllEqual(output, expected_output)
         self.assertAllEqual(padding_mask, expected_padding_mask)
+
+    @parameterized.named_parameters(
+        ("allow_python_workflow", True),
+        ("disallow_python_workflow", False),
+    )
+    def test_grain_outputs_numpy(self, allow_python_workflow):
+        layer = StartEndPacker(
+            sequence_length=5,
+            start_value=1,
+            end_value=2,
+            return_padding_mask=True,
+            _allow_python_workflow=allow_python_workflow,
+        )
+        # Direct call returns backend tensors.
+        token_ids, padding_mask = layer([5, 6, 7])
+        self.assertNotIsInstance(token_ids, np.ndarray)
+        # Grain returns numpy arrays.
+        ds = grain.MapDataset.source([[5, 6, 7], [8, 9]]).map(layer)
+        for token_ids, padding_mask in ds:
+            self.assertIsInstance(token_ids, np.ndarray)
+            self.assertIsInstance(padding_mask, np.ndarray)
+        (token_ids, padding_mask) = list(ds.batch(2))[0]
+        self.assertAllEqual(token_ids, [[1, 5, 6, 7, 2], [1, 8, 9, 2, 0]])
+        self.assertAllEqual(
+            padding_mask,
+            [[1, 1, 1, 1, 1], [1, 1, 1, 1, 0]],
+        )
