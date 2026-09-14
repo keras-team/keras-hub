@@ -444,6 +444,25 @@ class RaggedOutputPipeline(PipelineModel):
         return self.dense(inputs)
 
 
+class StringOutputPipeline(PipelineModel):
+    """This model preprocesses to a string tensor alongside its features."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dense = keras.layers.Dense(1)
+
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        x = tf.convert_to_tensor(x)
+        x = {
+            "features": tf.cast(x, "float32"),
+            "text": tf.fill([tf.shape(x)[0]], "hi"),
+        }
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def call(self, inputs):
+        return self.dense(inputs["features"])
+
+
 class _BatchCounter(keras.callbacks.Callback):
     """Records how many batches each epoch actually trained on."""
 
@@ -587,6 +606,21 @@ class TestGrainPipeline(TestCase):
         model.fit(x=x, y=y, batch_size=4)
         model.evaluate(x=x, y=y, batch_size=4)
         model.predict(x=x, batch_size=4)
+
+    def test_string_preprocessing_falls_back_to_tf_data(self):
+        # The routing is not about ragged in particular. Grain hands back a
+        # list for string output too, and it fails the same rank 0 way, so
+        # the same test decides for both. Feeding a string tensor to a model
+        # is not supported on any backend, on `tf.data` included, so this
+        # only pins where the pipeline is built.
+        ds = _build_dataset(
+            np.random.uniform(size=(8, 5)),
+            np.random.uniform(size=(8, 1)),
+            None,
+            4,
+            StringOutputPipeline().preprocess_samples,
+        )
+        self.assertIsInstance(ds, tf.data.Dataset)
 
     def test_dense_preprocessing_stays_on_grain(self):
         ds = _build_dataset(
