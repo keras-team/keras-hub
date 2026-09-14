@@ -31,7 +31,8 @@ class ModernBertMaskedLM(MaskedLM):
             preprocessing automatically during `fit()`, `predict()`, or
             `evaluate()`.
         dtype: string or `keras.DTypePolicy`. The precision policy used
-            for the model's computations and weights.
+            for the model's computations and weights. If `None`, defaults
+            to the backbone's dtype policy.
 
     Examples:
     ```python
@@ -74,10 +75,13 @@ class ModernBertMaskedLM(MaskedLM):
         self,
         backbone,
         preprocessor=None,
+        dtype=None,
         **kwargs,
     ):
         self.backbone = backbone
         self.preprocessor = preprocessor
+
+        head_dtype = dtype if dtype is not None else backbone.dtype_policy
 
         # HF ModernBERT prediction head:
         #
@@ -89,11 +93,13 @@ class ModernBertMaskedLM(MaskedLM):
         self.mlm_head_dense = layers.Dense(
             backbone.hidden_dim,
             use_bias=False,
+            dtype=head_dtype,
             name="mlm_head_dense",
         )
 
         self.mlm_head_activation = layers.Activation(
             "gelu",
+            dtype=head_dtype,
             name="mlm_head_activation",
         )
 
@@ -101,13 +107,13 @@ class ModernBertMaskedLM(MaskedLM):
             epsilon=backbone.layer_norm_epsilon,
             center=False,
             scale=True,
+            dtype=head_dtype,
             name="mlm_head_norm",
         )
-
         self.mlm_head_decoder_bias = keras.Variable(
             initializer=keras.initializers.Zeros(),
             shape=(backbone.vocabulary_size,),
-            dtype=backbone.compute_dtype,
+            dtype=keras.dtype_policies.get(head_dtype).variable_dtype,
             trainable=True,
             name="mlm_head_decoder_bias",
         )
@@ -154,5 +160,6 @@ class ModernBertMaskedLM(MaskedLM):
             outputs=logits,
             backbone=backbone,
             preprocessor=preprocessor,
+            dtype=dtype,
             **kwargs,
         )

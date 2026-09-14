@@ -14,7 +14,7 @@ class ModernBertMLP(layers.Layer):
         hidden_dim: int. The input and output dimensionality of the layer.
         intermediate_dim: int. The inner gated projection dimensionality.
         activation: string or callable. The activation function configuration
-            to apply to the gating projection. Defaults to `gelu_approximate`.
+            to apply to the gating projection. Defaults to `gelu`.
         dtype: string or `keras.DTypePolicy`. The precision policy used for the
             layer's computations and weights. Defaults to `None`.
 
@@ -173,12 +173,6 @@ class ModernBertAttention(layers.Layer):
             name="output_dense",
         )
 
-        self.attn_dropout = layers.Dropout(
-            dropout,
-            dtype=self.dtype_policy,
-            name="attention_dropout",
-        )
-
     def build(self, input_shape):
         self.qkv.build(input_shape)
 
@@ -192,45 +186,24 @@ class ModernBertAttention(layers.Layer):
 
         super().build(input_shape)
 
-    def _get_sliding_window_mask(self, seq_len, dtype):
-        """Return the bidirectional local-attention mask."""
+    def _get_sliding_window_mask(self, seq_len, dtype=None):
+        """Return the bidirectional local-attention mask.
+
+        `True` marks positions that are allowed to attend to each other.
+        Returned as `dtype` (defaults to the layer's compute dtype) so it can
+        be combined with `padding_mask` and passed directly to
+        `ops.dot_product_attention`.
+        """
         half_window = self.local_attention_window // 2
 
         positions = ops.arange(seq_len)
         distance = ops.abs(positions[:, None] - positions[None, :])
         mask = distance <= half_window
 
-        return ops.cast(mask, dtype)
+        if dtype is not None:
+            mask = ops.cast(mask, dtype)
 
-    def _apply_rope(self, x):
-        """Apply RotaryEmbedding while preserving [B, H, T, D]."""
-        batch_size = ops.shape(x)[0]
-        num_heads = ops.shape(x)[1]
-        seq_len = ops.shape(x)[2]
-
-        x = ops.reshape(
-            x,
-            (
-                batch_size * num_heads,
-                seq_len,
-                self.head_dim,
-            ),
-        )
-
-        x = self.rotary_embedding(x)
-
-        x = ops.reshape(
-            x,
-            (
-                batch_size,
-                num_heads,
-                seq_len,
-                self.head_dim,
-            ),
-        )
-
-        # Ensure RoPE output adheres to the layer's compute_dtype
-        return ops.cast(x, self.compute_dtype)
+        return mask
 
     def compute_output_spec(self, x, *args, **kwargs):
         output_shape = list(x.shape)
@@ -289,92 +262,55 @@ class ModernBertAttention(layers.Layer):
             ),
         )
 
-        # [B, T, H, D] -> [B, H, T, D]
-        q = ops.transpose(
-            q,
-            (0, 2, 1, 3),
-        )
-
-        k = ops.transpose(
-            k,
-            (0, 2, 1, 3),
-        )
-
-        v = ops.transpose(
-            v,
-            (0, 2, 1, 3),
-        )
-
-        # Rotary position embedding
+        # Rotary position embedding, applied on [B, T, H, D]. KerasHub's
+        # `RotaryEmbedding` defaults to `sequence_axis=1`, so it can be
+        # applied directly here (as llama/mistral/qwen do) without the
+        # reshape-to-[B*H, T, D]-and-back round trip.
         if self.rotary_embedding is not None:
-            q = self._apply_rope(q)
-            k = self._apply_rope(k)
+            q = ops.cast(self.rotary_embedding(q), self.compute_dtype)
+            k = ops.cast(self.rotary_embedding(k), self.compute_dtype)
 
-        # Attention scores
+        # `ops.dot_product_attention` doesn't expose an attention-dropout
+        # argument (mirroring `jax.nn.dot_product_attention`), so attention
+        # weight dropout isn't supported through this path. keras_hub's
+        # Gemma attention hits the same limitation and handles it the same
+        # way: fail loudly at train time instead of silently no-op'ing the
+        # dropout.
+        if training and self.dropout > 0.0:
+            raise ValueError(
+                "`ops.dot_product_attention` does not support attention "
+                "dropout. Please set `dropout` to 0.0."
+            )
+
+        # Build a boolean attention mask broadcastable to (B, N, T, S),
+        # where `True` marks positions that are allowed to attend.
+        mask = None
+
+        if self.local_attention_window is not None:
+            local_mask = self._get_sliding_window_mask(seq_len)
+            mask = local_mask[None, None, :, :]
+
+        if padding_mask is not None:
+            padding_mask_bool = ops.cast(padding_mask, "bool")
+            padding_mask_bool = padding_mask_bool[:, None, None, :]
+
+            mask = (
+                padding_mask_bool
+                if mask is None
+                else ops.logical_and(mask, padding_mask_bool)
+            )
+
+        # `ops.dot_product_attention` takes query/key/value in [B, T, H, D]
+        # layout (no manual transpose to [B, H, T, D] needed) and gets
+        # flash/fused attention on backends that support it.
         scale = self.head_dim**-0.5
 
-        scores = ops.matmul(
-            q,
-            ops.transpose(
-                k,
-                (0, 1, 3, 2),
-            ),
-        )
-
-        scores = scores * scale
-
-        # Local sliding-window attention
-        if self.local_attention_window is not None:
-            local_mask = self._get_sliding_window_mask(
-                seq_len,
-                scores.dtype,
-            )
-
-            local_mask = local_mask[None, None, :, :]
-
-            scores = scores + (1.0 - local_mask) * ops.cast(
-                -1e9,
-                scores.dtype,
-            )
-
-        # Padding mask
-        if padding_mask is not None:
-            padding_mask = ops.cast(
-                padding_mask,
-                scores.dtype,
-            )
-
-            padding_mask = padding_mask[:, None, None, :]
-
-            scores = scores + (1.0 - padding_mask) * ops.cast(
-                -1e9,
-                scores.dtype,
-            )
-
-        # Softmax
-        probabilities = ops.softmax(
-            ops.cast(
-                scores,
-                "float32",
-            ),
-            axis=-1,
-        )
-
-        probabilities = ops.cast(probabilities, self.compute_dtype)
-
-        probabilities = self.attn_dropout(
-            probabilities,
-            training=training,
-        )
-
-        # Attention output
-        v = ops.cast(v, self.compute_dtype)
-        output = ops.matmul(probabilities, v)
-
-        # [B, H, T, D] -> [B, T, H, D]
-        output = ops.transpose(
-            output,
-            (0, 2, 1, 3),
+        output = ops.dot_product_attention(
+            query=q,
+            key=k,
+            value=ops.cast(v, self.compute_dtype),
+            mask=mask,
+            scale=scale,
         )
 
         # [B, T, H, D] -> [B, T, hidden_dim]
@@ -435,6 +371,9 @@ class ModernBertEncoderLayer(layers.Layer):
         intermediate_dim: int. Gated linear unit intermediate projection
         dimension.
         num_heads: int. The number of self-attention heads.
+        layer_idx: int. The index of this layer within the encoder stack.
+        Layer 0 uses `keras.layers.Identity` in place of the attention
+        `LayerNormalization`, matching ModernBERT's architecture.
         rotary_embedding: `keras.layers.Layer` or callable. An instance of a
         rotary position embedding layer passed to the underlying
         attention object.
@@ -446,7 +385,8 @@ class ModernBertEncoderLayer(layers.Layer):
         dropout: float. Attention map and feature output dropout probability.
             Defaults to `0.0`.
         layer_norm_epsilon: float. Small value applied inside the
-        `RMSNormalization` layers to avoid zero division.
+        `LayerNormalization` layers (bias-free, `center=False`) to avoid
+        zero division.
             Defaults to `1e-5`.
         dtype: string or `keras.DTypePolicy`. The precision policy used for the
             layer's computations and weights. Defaults to `None`.

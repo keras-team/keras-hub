@@ -10,12 +10,7 @@ from keras_hub.src.models.modernbert.modern_bert_text_classifier_preprocessor im
 from keras_hub.src.models.text_classifier import TextClassifier
 
 
-@keras_hub_export(
-    [
-        "keras_hub.models.ModernBertTextClassifier",
-        "keras_hub.models.ModernBertClassifier",
-    ]
-)
+@keras_hub_export("keras_hub.models.ModernBertTextClassifier")
 class ModernBertTextClassifier(TextClassifier):
     """An end-to-end ModernBERT model for classification tasks.
 

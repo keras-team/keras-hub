@@ -50,13 +50,14 @@ class ModernBertTextClassifierTest(TestCase):
                 ]
             )
 
-        self.vocab += [
-            "<|endoftext|>",
-            "<|padding|>",
-            "[MASK]",
-        ]
-
         self.vocab = sorted(set(self.vocab))
+        self.vocab += [
+            "[CLS]",
+            "[SEP]",
+            "[PAD]",
+            "[MASK]",
+            "[UNK]",
+        ]
         self.vocab = {token: i for i, token in enumerate(self.vocab)}
 
         self.tokenizer = ModernBertTokenizer(

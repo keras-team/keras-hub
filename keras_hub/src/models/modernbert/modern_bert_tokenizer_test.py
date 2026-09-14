@@ -44,8 +44,9 @@ class ModernBertTokenizerTest(TestCase):
 
         self.vocab = sorted(set(self.vocab))
         self.vocab += [
-            "<|endoftext|>",
-            "<|padding|>",
+            "[CLS]",
+            "[SEP]",
+            "[PAD]",
             "[MASK]",
             "[UNK]",
         ]
@@ -57,7 +58,7 @@ class ModernBertTokenizerTest(TestCase):
         }
 
         self.input_data = [
-            "<|endoftext|> airplane at airport",
+            "[CLS] airplane at airport",
             " airplane airport",
         ]
 
@@ -71,7 +72,7 @@ class ModernBertTokenizerTest(TestCase):
                 [23, 14, 23, 16],
             ],
             expected_detokenize_output=[
-                "<|endoftext|> airplane at airport",
+                "[CLS] airplane at airport",
                 " airplane airport",
             ],
         )
@@ -94,10 +95,75 @@ class ModernBertTokenizerTest(TestCase):
             tokenizer.end_token_id,
             tokenizer.sep_token_id,
         )
-        self.assertEqual(
+
+        self.assertNotEqual(
             tokenizer.start_token_id,
             tokenizer.end_token_id,
         )
+        self.assertEqual(tokenizer.cls_token_id, self.vocab["[CLS]"])
+        self.assertEqual(tokenizer.sep_token_id, self.vocab["[SEP]"])
+        self.assertEqual(tokenizer.pad_token_id, self.vocab["[PAD]"])
+        self.assertEqual(tokenizer.mask_token_id, self.vocab["[MASK]"])
+
+    @pytest.mark.extra_large
+    def test_tokenizer_matches_hf_autotokenizer(self):
+        """End-to-end parity check against HF's AutoTokenizer.
+
+        Verifies ModernBertTokenizer produces identical ids to HF's
+        released tokenizer on the same strings, including the [CLS]/[SEP]
+        boundary ids , the numerical-verification path in
+        convert_modern_bert_checkpoints.py never exercises this tokenizer
+        class directly (it tokenizes with AutoTokenizer, and the
+        converter test only feeds random ids), so this is the only check
+        that would catch a special-token mismatch like this one.
+        """
+        from transformers import AutoTokenizer
+
+        hf_tokenizer = AutoTokenizer.from_pretrained(
+            "answerdotai/ModernBERT-base"
+        )
+        keras_tokenizer = ModernBertTokenizer.from_preset("modernbert_base_en")
+
+        test_strings = [
+            "The quick brown fox jumps over the lazy dog.",
+            "ModernBERT uses local-global alternating attention.",
+            "",
+        ]
+
+        for text in test_strings:
+            hf_ids = hf_tokenizer(text)["input_ids"]
+            keras_ids = [int(i) for i in keras_tokenizer([text])[0]]
+
+            # keras_tokenizer does not add [CLS]/[SEP] itself (that's the
+            # preprocessor's job); compare the raw BPE ids, then check the
+            # special ids separately.
+            self.assertEqual(
+                keras_tokenizer.cls_token_id,
+                hf_tokenizer.cls_token_id,
+            )
+            self.assertEqual(
+                keras_tokenizer.sep_token_id,
+                hf_tokenizer.sep_token_id,
+            )
+            self.assertEqual(
+                keras_tokenizer.pad_token_id,
+                hf_tokenizer.pad_token_id,
+            )
+            self.assertEqual(
+                keras_tokenizer.mask_token_id,
+                hf_tokenizer.mask_token_id,
+            )
+
+            hf_body_ids = [
+                i
+                for i in hf_ids
+                if i
+                not in (
+                    hf_tokenizer.cls_token_id,
+                    hf_tokenizer.sep_token_id,
+                )
+            ]
+            self.assertAllEqual(keras_ids, hf_body_ids)
 
     @pytest.mark.extra_large
     def test_smallest_preset(self):

@@ -143,8 +143,6 @@ class ModernBertBackbone(Backbone):
             name="local_rotary_embedding",
         )
 
-        self.rotary_embedding = self.global_rotary_embedding
-
         # Transformer layers
         self.transformer_layers = []
 
@@ -235,7 +233,6 @@ class ModernBertBackbone(Backbone):
                 "rotary_max_wavelength": self.rotary_max_wavelength,
                 "local_rotary_max_wavelength": self.local_rotary_max_wavelength,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "dtype": keras.saving.serialize_keras_object(self.dtype_policy),
             }
         )
 

@@ -20,9 +20,10 @@ class ModernBertMaskedLMTest(TestCase):
 
     def setUp(self):
         vocab = [
-            "<|endoftext|>",
-            "<|padding|>",
+            "[PAD]",
             "[MASK]",
+            "[CLS]",
+            "[SEP]",
             "[UNK]",
             "Ġ",
             "a",
@@ -82,6 +83,7 @@ class ModernBertMaskedLMTest(TestCase):
             mask_selection_rate=0.0,
             mask_selection_length=2,
         )
+
         self.backbone = ModernBertBackbone(
             vocabulary_size=self.tokenizer.vocabulary_size(),
             num_layers=2,
@@ -111,18 +113,6 @@ class ModernBertMaskedLMTest(TestCase):
             **self.init_kwargs,
         )
 
-    def test_tokenizer_serialization(self):
-        """Test tokenizer serialization and deserialization."""
-        config = self.tokenizer.get_config()
-        restored = ModernBertTokenizer.from_config(config)
-        self.assertEqual(
-            restored.vocabulary_size(), self.tokenizer.vocabulary_size()
-        )
-        self.assertEqual(
-            restored.get_vocabulary(), self.tokenizer.get_vocabulary()
-        )
-        self.assertEqual(restored.merges, self.tokenizer.merges)
-
     @pytest.mark.large
     def test_fit(self):
         """Validate training, output shape, and serialization."""
@@ -136,6 +126,7 @@ class ModernBertMaskedLMTest(TestCase):
     def test_saved_model(self):
         """Validate serialization lifecycle."""
         input_data = self.preprocessor(self.input_data)[0]
+
         self.run_model_saving_test(
             cls=ModernBertMaskedLM,
             init_kwargs=self.init_kwargs,

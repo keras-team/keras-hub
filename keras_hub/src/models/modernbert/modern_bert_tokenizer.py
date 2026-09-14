@@ -54,19 +54,14 @@ class ModernBertTokenizer(BytePairTokenizer):
         merges=None,
         **kwargs,
     ):
-        pad_token = "<|padding|>"
+        pad_token = "[PAD]"
         mask_token = "[MASK]"
-        cls_token = "<|endoftext|>"
-        sep_token = "<|endoftext|>"
+        cls_token = "[CLS]"
+        sep_token = "[SEP]"
 
         unsplittable_tokens = list(kwargs.pop("unsplittable_tokens", []))
 
-        for token in (
-            pad_token,
-            mask_token,
-            cls_token,
-            sep_token,
-        ):
+        for token in (pad_token, mask_token, cls_token, sep_token):
             if token not in unsplittable_tokens:
                 unsplittable_tokens.append(token)
 
@@ -81,8 +76,7 @@ class ModernBertTokenizer(BytePairTokenizer):
             merges=merges,
             **kwargs,
         )
-
-        # Register special tokens using KerasHub pattern.
+        # ModernBERT uses EOS token for CLS and SEP.
         self._add_special_token(
             pad_token,
             "pad_token",
@@ -93,7 +87,6 @@ class ModernBertTokenizer(BytePairTokenizer):
             "mask_token",
         )
 
-        # ModernBERT uses EOS token for CLS and SEP.
         self._add_special_token(
             cls_token,
             "cls_token",
@@ -111,34 +104,3 @@ class ModernBertTokenizer(BytePairTokenizer):
     @property
     def end_token_id(self):
         return self.sep_token_id
-
-    def get_config(self):
-        config = super().get_config()
-
-        config.update(
-            {
-                "vocabulary": self.vocabulary,
-                "merges": self.merges,
-            }
-        )
-
-        return config
-
-    @classmethod
-    def from_config(cls, config):
-        config = config.copy()
-
-        dtype = config.get("dtype")
-        if isinstance(dtype, dict):
-            dtype_config = dtype.get("config", {})
-            if isinstance(dtype_config, dict):
-                config["dtype"] = dtype_config.get("name", "int32")
-
-        vocabulary = config.pop("vocabulary", None)
-        merges = config.pop("merges", None)
-
-        return cls(
-            vocabulary=vocabulary,
-            merges=merges,
-            **config,
-        )
