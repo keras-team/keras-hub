@@ -18,7 +18,6 @@ from keras_hub.src.models.text_classifier_preprocessor import (
 @keras_hub_export(
     [
         "keras_hub.models.ModernBertTextClassifierPreprocessor",
-        "keras_hub.models.ModernBertPreprocessor",
     ]
 )
 class ModernBertTextClassifierPreprocessor(TextClassifierPreprocessor):
