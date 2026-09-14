@@ -112,6 +112,7 @@ class Bleu(keras.metrics.Metric):
             )
 
         self.tokenizer = tokenizer
+        self._tf_tokenizer = None
         self.max_order = max_order
         self.smooth = smooth
 
@@ -152,7 +153,14 @@ class Bleu(keras.metrics.Metric):
         SacreBLEU's default tokenizer, namely, `tokenizer_13a`.
         """
         if self.tokenizer:
-            return self.tokenizer(inputs)
+            # This metric is implemented with TensorFlow ops, but KerasHub
+            # tokenizers run TensorFlow free by default when called eagerly
+            # (returning Python lists and NumPy arrays). Run the tokenizer
+            # inside a `tf.function`, so tokenizers take their TensorFlow
+            # path and return `tf.RaggedTensor`s.
+            if self._tf_tokenizer is None:
+                self._tf_tokenizer = tf.function(self.tokenizer)
+            return self._tf_tokenizer(inputs)
 
         for pattern, replacement in REPLACE_SUBSTRINGS + REGEX_PATTERNS:
             inputs = tf.strings.regex_replace(

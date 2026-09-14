@@ -101,7 +101,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     >>> outputs = tokenizer(inputs)
     >>> np.array(outputs)
     array([117, 110, 105,  99, 111, 100, 101,  32, 116, 111, 107, 101, 110,
-        105, 122, 101, 114], dtype=int32)
+        105, 122, 101, 114])
 
     Ragged outputs.
     >>> inputs = ["पुस्तक", "کتاب"]
@@ -183,12 +183,10 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     ...     vocabulary_size=latin_ext_cutoff)
     >>> outputs = tokenizer("¿Cómo estás?")
     >>> np.array(outputs)
-    array([191,  99, 243, 109, 111,  32, 101, 115, 116, 225, 115,  63],
-          dtype=int32)
+    array([191,  99, 243, 109, 111,  32, 101, 115, 116, 225, 115,  63])
     >>> outputs = tokenizer("आप कैसे हैं")
     >>> np.array(outputs)
-    array([591, 591,  32, 591, 591, 591, 591,  32, 591, 591, 591],
-          dtype=int32)
+    array([591, 591,  32, 591, 591, 591, 591,  32, 591, 591, 591])
 
     Detokenization.
     >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype="int32")

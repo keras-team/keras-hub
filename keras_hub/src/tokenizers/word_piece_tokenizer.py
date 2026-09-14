@@ -399,7 +399,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ... )
     >>> outputs = tokenizer(inputs)
     >>> np.array(outputs)
-    array([1, 2, 3, 4, 5, 6, 7], dtype=int32)
+    array([1, 2, 3, 4, 5, 6, 7])
 
     Dense outputs.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -618,9 +618,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     def _special_tokens_for_splitting(self):
         if not (self.split and self.special_tokens_in_strings):
             return None
-        special_tokens = self.special_tokens
+        special_tokens = list(self.special_tokens)
         if self._init_special_tokens:
-            special_tokens += self._init_special_tokens
+            special_tokens.extend(self._init_special_tokens)
         return special_tokens
 
     @preprocessing_function

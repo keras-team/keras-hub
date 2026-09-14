@@ -79,7 +79,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
     >>> tokenizer = keras_hub.tokenizers.ByteTokenizer()
     >>> outputs = tokenizer("hello")
     >>> np.array(outputs)
-    array([104, 101, 108, 108, 111], dtype=int32)
+    array([104, 101, 108, 108, 111])
 
     Ragged outputs.
     >>> inputs = ["hello", "hi"]
