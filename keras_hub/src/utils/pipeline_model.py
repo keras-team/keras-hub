@@ -7,6 +7,9 @@ import keras
 import numpy as np
 from keras import ops
 from keras import tree
+from keras.src.trainers.data_adapters.data_adapter_utils import (
+    class_weight_to_sample_weights,
+)
 
 from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs_grain
 from keras_hub.src.utils.tensor_utils import convert_to_numpy
@@ -135,8 +138,24 @@ def _convert_to_numpy(inputs):
     `tensor_utils.convert_to_numpy` handles the tf tensors that preprocessing
     layers hold regardless of the active backend, which
     `keras.ops.convert_to_numpy` cannot.
+
+    Leaves that arrive as python numbers are narrowed to the dtypes
+    `from_tensor_slices` reads them as. Numpy widens them to 64 bit, and torch
+    picks MPS on Apple Silicon, which has no float64. An array that arrives
+    with a dtype of its own is left alone, as `tf.data` leaves it.
     """
-    return _map_leaves(inputs, convert_to_numpy)
+
+    def convert(leaf):
+        narrow = not hasattr(leaf, "dtype")
+        leaf = convert_to_numpy(leaf)
+        if narrow:
+            if leaf.dtype == np.float64:
+                return leaf.astype("float32")
+            if leaf.dtype == np.int64:
+                return leaf.astype("int32")
+        return leaf
+
+    return _map_leaves(inputs, convert)
 
 
 def _convert_strings_to_python(inputs):
@@ -251,24 +270,69 @@ def _apply_preprocessing(ds, preprocess_samples):
             f"`type(x)={type(ds)}`."
         )
 
-    def preprocess(element):
-        # Grain passes the whole element as one argument, unlike `tf.data`.
-        x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(element)
-        # Convert strings after unpacking, or `unpack_x_y_sample_weight` would
-        # read the samples of a single string input as separate fields.
-        x = _convert_strings_to_python(x)
-        y = _convert_strings_to_python(y)
-        sample_weight = _convert_strings_to_python(sample_weight)
-        outputs = preprocess_samples(x, y, sample_weight)
-        # `preprocess_samples` can return tf tensors, which jax rejects since
-        # `GrainDatasetAdapter.get_jax_iterator` does not convert them. This
-        # is the same conversion preprocessing layers apply to their own
-        # outputs inside a grain pipeline, ragged and string data included.
-        return convert_preprocessing_outputs_grain(outputs)
-
     # `MapDataset.__iter__` already calls `to_iter_dataset()`, which reads
     # ahead on a thread pool. Calling it here would only discard `__len__`.
-    return ds.map(preprocess)
+    return ds.map(functools.partial(_grain_preprocess, preprocess_samples))
+
+
+def _grain_preprocess(preprocess_samples, element):
+    """Run `preprocess_samples` over one batch of a grain dataset."""
+    # Grain passes the whole element as one argument, unlike `tf.data`.
+    x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(element)
+    # Convert strings after unpacking, or `unpack_x_y_sample_weight` would
+    # read the samples of a single string input as separate fields.
+    x = _convert_strings_to_python(x)
+    y = _convert_strings_to_python(y)
+    sample_weight = _convert_strings_to_python(sample_weight)
+    outputs = preprocess_samples(x, y, sample_weight)
+    # `preprocess_samples` can return tf tensors, which jax rejects since
+    # `GrainDatasetAdapter.get_jax_iterator` does not convert them. This is
+    # the same conversion preprocessing layers apply to their own outputs
+    # inside a grain pipeline, ragged and string data included.
+    return convert_preprocessing_outputs_grain(outputs)
+
+
+def _grain_can_carry_preprocessing(ds, preprocess_samples):
+    """Whether grain can feed what `preprocess_samples` produces.
+
+    Grain has no ragged type, so ragged and string outputs come back as nested
+    python lists, which `GrainDatasetAdapter` flattens down to scalars and then
+    rejects as rank 0. `tf.data` carries both end to end, so a pipeline that
+    preprocesses into either belongs there instead. Deciding needs the answer,
+    so this runs `preprocess_samples` over the first batch.
+    """
+    try:
+        outputs = _grain_preprocess(preprocess_samples, ds[0])
+    except Exception:
+        # Let the real pass raise, where the traceback is the user's own.
+        return True
+    return all(
+        leaf is None or hasattr(leaf, "shape") for leaf in tree.flatten(outputs)
+    )
+
+
+def _apply_class_weight(class_weight, element):
+    """Fold `class_weight` into the batch's `sample_weight`.
+
+    `GrainDatasetAdapter` takes no `class_weight`, where `TFDatasetAdapter`
+    applies it for us, so do here what `make_class_weight_map_fn` does there.
+    """
+    x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(element)
+    if y is None:
+        raise ValueError(
+            "`class_weight` needs `y` to weight, but this dataset has none."
+        )
+    if sample_weight is not None:
+        raise ValueError(
+            "You cannot `class_weight` and `sample_weight` at the same time."
+        )
+    if tree.is_nested(y):
+        raise ValueError(
+            "`class_weight` is only supported for a single output. Received: "
+            f"`y={y}`."
+        )
+    sample_weight = class_weight_to_sample_weights(y, class_weight)
+    return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
 
 @contextlib.contextmanager
@@ -279,13 +343,14 @@ def _silence_unknown_length_warning(ds, steps):
     epoch size by running the iterator dry. Before keras-team/keras#23360 that
     warned as if training had been cut short, once per epoch and again for
     `evaluate()` and `predict()`. The warning only carries information when
-    the caller declared how many steps to expect, which is the condition
-    reproduced here.
+    the caller declared how many steps to expect, so any declared count in
+    `steps` keeps it, including a `validation_steps` the training data knows
+    nothing about.
 
     TODO: drop this once the minimum supported Keras includes that fix, which
     is unreleased as of Keras 3.15.1.
     """
-    if steps is not None or not _is_grain_dataset(ds):
+    if any(s is not None for s in steps) or not _is_grain_dataset(ds):
         yield
         return
     with warnings.catch_warnings():
@@ -295,6 +360,18 @@ def _silence_unknown_length_warning(ds, steps):
             category=UserWarning,
         )
         yield
+
+
+def _build_dataset(x, y, sample_weight, batch_size, preprocess_samples):
+    """Batch `x`, `y` and `sample_weight`, then map preprocessing over them."""
+    ds = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
+    built_here = _is_grain_dataset(ds) and ds is not x
+    if built_here and not _grain_can_carry_preprocessing(
+        ds, preprocess_samples
+    ):
+        inputs = keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+        ds = _convert_inputs_to_tf_dataset(inputs, batch_size)
+    return _apply_preprocessing(ds, preprocess_samples)
 
 
 def _train_validation_split(arrays, validation_split):
@@ -404,8 +481,9 @@ class PipelineModel(keras.Model):
                 (x, y, sample_weight), validation_split=validation_split
             )
 
-        x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
-        x = _apply_preprocessing(x, self.preprocess_samples)
+        x = _build_dataset(
+            x, y, sample_weight, batch_size, self.preprocess_samples
+        )
 
         if validation_data is not None:
             if _is_tf_dataset(validation_data) or _is_grain_dataset(
@@ -418,12 +496,30 @@ class PipelineModel(keras.Model):
                 (vx, vy, vsw) = keras.utils.unpack_x_y_sample_weight(
                     validation_data
                 )
-                validation_data = _apply_preprocessing(
-                    _convert_inputs_to_dataset(vx, vy, vsw, batch_size),
-                    self.preprocess_samples,
+                validation_data = _build_dataset(
+                    vx, vy, vsw, batch_size, self.preprocess_samples
                 )
 
-        with _silence_unknown_length_warning(x, kwargs.get("steps_per_epoch")):
+        # `TFDatasetAdapter` applies `class_weight` itself and
+        # `GrainDatasetAdapter` rejects it. Fold it into the training samples
+        # and keep it off both.
+        class_weight = kwargs.pop("class_weight", None)
+        if class_weight is not None and _is_grain_dataset(x):
+            x = x.map(functools.partial(_apply_class_weight, class_weight))
+        elif class_weight is not None:
+            kwargs["class_weight"] = class_weight
+
+        steps_per_epoch = kwargs.get("steps_per_epoch")
+        if steps_per_epoch and _is_grain_dataset(x):
+            # `num_batches` is `None` for a grain dataset, so `EpochIterator`
+            # holds one iterator across every epoch and the second epoch would
+            # train on a drained one. Cycling gives it the batches that the
+            # `tf.data` reset gives it today.
+            x = x.repeat()
+
+        with _silence_unknown_length_warning(
+            x, (steps_per_epoch, kwargs.get("validation_steps"))
+        ):
             return super().fit(
                 x=x,
                 y=None,
@@ -451,9 +547,10 @@ class PipelineModel(keras.Model):
                 sample_weight=sample_weight,
                 **kwargs,
             )
-        x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
-        x = _apply_preprocessing(x, self.preprocess_samples)
-        with _silence_unknown_length_warning(x, kwargs.get("steps")):
+        x = _build_dataset(
+            x, y, sample_weight, batch_size, self.preprocess_samples
+        )
+        with _silence_unknown_length_warning(x, (kwargs.get("steps"),)):
             return super().evaluate(
                 x=x,
                 y=None,
@@ -467,9 +564,8 @@ class PipelineModel(keras.Model):
         batch_size=None,
         **kwargs,
     ):
-        x = _convert_inputs_to_dataset(x, None, None, batch_size)
-        x = _apply_preprocessing(x, self.preprocess_samples)
-        with _silence_unknown_length_warning(x, kwargs.get("steps")):
+        x = _build_dataset(x, None, None, batch_size, self.preprocess_samples)
+        with _silence_unknown_length_warning(x, (kwargs.get("steps"),)):
             return super().predict(
                 x=x,
                 batch_size=None,
