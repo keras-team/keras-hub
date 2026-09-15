@@ -6,8 +6,9 @@ class MuseGlimmerRMSNorm(keras.layers.Layer):
     """Scaleless (or optionally scaled) RMSNorm.
 
     Matches HF's `MuseGlimmerRMSNorm`: used, with `with_scale=False`, for
-    QK-norm, the normed token embedding, and the final sequence norm; and,
-    with `with_scale=True`, as a plain scaled RMSNorm elsewhere.
+    QK-norm and the normed token embedding; and, with `with_scale=True`
+    (the default), as a plain scaled RMSNorm elsewhere, including the
+    final sequence norm.
 
     Args:
         eps: float. Epsilon added inside the reciprocal sqrt.
@@ -31,13 +32,13 @@ class MuseGlimmerRMSNorm(keras.layers.Layer):
         self.built = True
 
     def call(self, x):
-        input_dtype = x.dtype
-        x = ops.cast(x, "float32")
-        mean_squared = ops.mean(ops.square(x), axis=-1, keepdims=True)
-        x = x * ops.power(mean_squared + self.eps, -0.5)
-        if self.with_scale:
-            x = x * ops.cast(self.scale, "float32")
-        return ops.cast(x, input_dtype)
+        scale = self.scale if self.with_scale else None
+        return ops.rms_normalization(
+            x,
+            scale=scale,
+            axis=-1,
+            epsilon=self.eps,
+        )
 
     def get_config(self):
         config = super().get_config()
