@@ -1,5 +1,3 @@
-"""HF -> KerasHub weight converter for MuseGlimmer."""
-
 import numpy as np
 
 from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (

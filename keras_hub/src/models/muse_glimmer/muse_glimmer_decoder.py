@@ -25,6 +25,22 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
     "centered" `(1 + weight)` RMSNorm variant. See
     `modeling_muse_glimmer.py`, `MuseGlimmerTextDecoderLayer.forward`.
 
+    The assistant/drafter configuration (see
+    `modeling_muse_glimmer_assistant.py`) differs in three ways, each
+    controlled by an opt-in flag that defaults to the main model's current
+    behavior:
+    - `use_bidirectional_attention=True` replaces the causal mask with a
+      mask that only accounts for padding (`MuseGlimmerAssistantAttention`
+      hardcodes `is_causal = False`).
+    - `use_sandwich_norm=False` skips `post_attention_layernorm`/
+      `post_feedforward_layernorm` entirely — the assistant's decoder
+      layer is a plain two-norm pre-norm block, not a sandwich.
+    - `enable_qk_scale_and_gate=False` is threaded into
+      `MuseGlimmerTextAttention` (see that layer's docstring).
+
+    `context_hidden_states`, when passed to `call()`, is threaded into
+    the self-attention layer unchanged (assistant/drafter only).
+
     Args:
         intermediate_dim: int. SwiGLU MLP intermediate dimension.
         num_query_heads: int. Number of query attention heads.
@@ -38,6 +54,14 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         rope_max_wavelength: float. RoPE base theta.
         sliding_window_size: int or None. Sliding window size, or `None`
             for full attention.
+        use_bidirectional_attention: bool. If `True`, replaces the causal
+            self-attention mask with a padding-only mask. Defaults to
+            `False`.
+        enable_qk_scale_and_gate: bool. Passed through to
+            `MuseGlimmerTextAttention`. Defaults to `True`.
+        use_sandwich_norm: bool. If `False`, skips
+            `post_attention_layernorm`/`post_feedforward_layernorm`.
+            Defaults to `True`.
         kernel_initializer: initializer for the dense projections.
         dropout: float. Dropout rate.
     """
@@ -55,6 +79,9 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         use_rope=True,
         rope_max_wavelength=500000.0,
         sliding_window_size=None,
+        use_bidirectional_attention=False,
+        enable_qk_scale_and_gate=True,
+        use_sandwich_norm=True,
         kernel_initializer="glorot_uniform",
         dropout=0.0,
         **kwargs,
@@ -71,6 +98,9 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         self.use_rope = use_rope
         self.rope_max_wavelength = rope_max_wavelength
         self.sliding_window_size = sliding_window_size
+        self.use_bidirectional_attention = use_bidirectional_attention
+        self.enable_qk_scale_and_gate = enable_qk_scale_and_gate
+        self.use_sandwich_norm = use_sandwich_norm
         self.dropout = dropout
         self.activation = keras.activations.get(hidden_activation)
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
@@ -95,6 +125,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
             use_rope=self.use_rope,
             rope_max_wavelength=self.rope_max_wavelength,
             sliding_window_size=self.sliding_window_size,
+            enable_qk_scale_and_gate=self.enable_qk_scale_and_gate,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
             dtype=self.dtype_policy,
@@ -102,12 +133,13 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
-        self._post_attention_layernorm = MuseGlimmerCenteredRMSNorm(
-            eps=self.post_norm_eps,
-            dtype=self.dtype_policy,
-            name="post_attention_layernorm",
-        )
-        self._post_attention_layernorm.build(decoder_sequence_shape)
+        if self.use_sandwich_norm:
+            self._post_attention_layernorm = MuseGlimmerCenteredRMSNorm(
+                eps=self.post_norm_eps,
+                dtype=self.dtype_policy,
+                name="post_attention_layernorm",
+            )
+            self._post_attention_layernorm.build(decoder_sequence_shape)
 
         self._pre_feedforward_layernorm = MuseGlimmerCenteredRMSNorm(
             eps=self.rms_norm_eps,
@@ -147,12 +179,13 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
             )
         )
 
-        self._post_feedforward_layernorm = MuseGlimmerCenteredRMSNorm(
-            eps=self.post_norm_eps,
-            dtype=self.dtype_policy,
-            name="post_feedforward_layernorm",
-        )
-        self._post_feedforward_layernorm.build(decoder_sequence_shape)
+        if self.use_sandwich_norm:
+            self._post_feedforward_layernorm = MuseGlimmerCenteredRMSNorm(
+                eps=self.post_norm_eps,
+                dtype=self.dtype_policy,
+                name="post_feedforward_layernorm",
+            )
+            self._post_feedforward_layernorm.build(decoder_sequence_shape)
 
         self._dropout_layer = keras.layers.Dropout(
             rate=self.dropout, dtype=self.dtype_policy
@@ -162,11 +195,96 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
     def _compute_self_attention_mask(
         self,
         decoder_sequence,
+        context_hidden_states,
         decoder_padding_mask,
         decoder_attention_mask,
         self_attention_cache,
         self_attention_cache_update_index,
     ):
+        if self.use_bidirectional_attention:
+            # Assistant/drafter configuration: queries attend
+            # bi-directionally to each other and to the (unmasked) context
+            # key/value positions — no causal component at all. See
+            # `MuseGlimmerAssistantModel.forward`'s
+            # `create_bidirectional_mask` usage.
+            batch_size = ops.shape(decoder_sequence)[0]
+            q_len = ops.shape(decoder_sequence)[1]
+
+            if context_hidden_states is not None and (
+                self_attention_cache is not None
+            ):
+                # DFlash context caching (see `MuseGlimmerTextAttention`'s
+                # docstring): keys span the persisted context-cache buffer
+                # (one real target position per cycle, growing over the
+                # whole generation) followed by this cycle's fresh block.
+                # Built directly over absolute positions rather than
+                # `compute_causal_mask`/`_mask_sliding_window`, which both
+                # assume a single contiguous, non-persisted key range.
+                max_length = ops.shape(self_attention_cache)[2]
+                anchor_pos = ops.cast(
+                    0
+                    if self_attention_cache_update_index is None
+                    else self_attention_cache_update_index,
+                    "int32",
+                )
+                context_positions = ops.arange(max_length, dtype="int32")
+                block_positions = (
+                    anchor_pos + 1 + ops.arange(q_len, dtype="int32")
+                )
+                key_positions = ops.concatenate(
+                    [context_positions, block_positions], axis=0
+                )
+                position_diff = ops.abs(
+                    block_positions[:, None] - key_positions[None, :]
+                )
+                if self.sliding_window_size:
+                    mask_2d = position_diff <= (self.sliding_window_size - 1)
+                else:
+                    mask_2d = ops.ones_like(position_diff, dtype="bool")
+                # Cache slots at or before `anchor_pos` hold real,
+                # already-written context; later slots are unwritten.
+                context_valid = context_positions <= anchor_pos
+                block_valid = ops.ones((q_len,), dtype="bool")
+                key_valid = ops.concatenate(
+                    [context_valid, block_valid], axis=0
+                )
+                mask_2d = ops.logical_and(mask_2d, key_valid[None, :])
+                mask = ops.broadcast_to(
+                    mask_2d[None, :, :],
+                    (batch_size, q_len, max_length + q_len),
+                )
+                if decoder_padding_mask is not None:
+                    # `decoder_padding_mask` covers the block only — the
+                    # cached context slot is always a single real,
+                    # unpadded position written by the caller.
+                    padding = ops.cast(decoder_padding_mask, "bool")
+                    context_padding = ops.ones(
+                        (batch_size, max_length), dtype="bool"
+                    )
+                    padding = ops.concatenate(
+                        [context_padding, padding], axis=1
+                    )
+                    mask = ops.logical_and(mask, padding[:, None, :])
+                return mask
+
+            if context_hidden_states is not None:
+                context_len = ops.shape(context_hidden_states)[1]
+                kv_len = context_len + q_len
+            else:
+                kv_len = q_len
+            mask = ops.ones((batch_size, q_len, kv_len), dtype="bool")
+            if decoder_padding_mask is not None:
+                padding = ops.cast(decoder_padding_mask, "bool")
+                if context_hidden_states is not None:
+                    context_padding = ops.ones(
+                        (batch_size, context_len), dtype="bool"
+                    )
+                    padding = ops.concatenate(
+                        [context_padding, padding], axis=1
+                    )
+                mask = ops.logical_and(mask, padding[:, None, :])
+            return mask
+
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
@@ -192,6 +310,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
     def call(
         self,
         decoder_sequence,
+        context_hidden_states=None,
         decoder_padding_mask=None,
         decoder_attention_mask=None,
         self_attention_cache=None,
@@ -200,6 +319,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
     ):
         self_attention_mask = self._compute_self_attention_mask(
             decoder_sequence=decoder_sequence,
+            context_hidden_states=context_hidden_states,
             decoder_padding_mask=decoder_padding_mask,
             decoder_attention_mask=decoder_attention_mask,
             self_attention_cache=self_attention_cache,
@@ -212,6 +332,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         x = self._input_layernorm(decoder_sequence)
         x = self._self_attention_layer(
             x,
+            context_hidden_states=context_hidden_states,
             attention_mask=self_attention_mask,
             cache=self_attention_cache,
             cache_update_index=self_attention_cache_update_index,
@@ -219,7 +340,8 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         )
         if self_attention_cache is not None:
             x, self_attention_cache = x
-        x = self._post_attention_layernorm(x)
+        if self.use_sandwich_norm:
+            x = self._post_attention_layernorm(x)
         x = residual + x
 
         residual = x
@@ -230,7 +352,8 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         gate_output = ops.cast(gate_output, self.compute_dtype)
         up_output = self._feedforward_up_dense(x)
         x = self._feedforward_down_dense(gate_output * up_output)
-        x = self._post_feedforward_layernorm(x)
+        if self.use_sandwich_norm:
+            x = self._post_feedforward_layernorm(x)
         decoder_output = residual + x
 
         if self_attention_cache is not None:
@@ -255,6 +378,11 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
                 "use_rope": self.use_rope,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "sliding_window_size": self.sliding_window_size,
+                "use_bidirectional_attention": (
+                    self.use_bidirectional_attention
+                ),
+                "enable_qk_scale_and_gate": self.enable_qk_scale_and_gate,
+                "use_sandwich_norm": self.use_sandwich_norm,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),

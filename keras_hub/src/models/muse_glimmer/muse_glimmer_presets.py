@@ -1,25 +1,39 @@
-"""MuseGlimmer model preset configurations.
+"""MuseGlimmer model preset configurations."""
 
-No presets are registered yet. Per CONTRIBUTING.md's post-merge process,
-the Keras team uploads converted weights and registers the real preset
-entry after this PR merges — the block below documents the expected shape
-only and must stay commented out until then.
-"""
-
-# TODO: Fill in after weight conversion is complete and validated.
-# backbone_cls = MuseGlimmerBackbone
-# muse_glimmer_30b = {
-#     "metadata": {
-#         "description": (
-#             "30B-parameter dense causal decoder with an attached "
-#             "windowed-attention perception encoder, distilled from "
-#             "Muse Spark for local agentic use."
-#         ),
-#         "params": 29_600_000_000,
-#         "official_name": "MuseGlimmer",
-#         "path": "muse_glimmer",
-#     },
-#     "kaggle_handle": "kaggle://keras/muse-glimmer/keras/muse_glimmer_30b/1",
-# }
-
-backbone_presets = {}
+# Metadata for loading pretrained model weights.
+backbone_presets = {
+    "muse_glimmer_30b": {
+        "metadata": {
+            "description": (
+                "30B-parameter dense causal decoder with an attached "
+                "windowed-attention perception encoder, distilled from "
+                "Muse Spark for local agentic use."
+            ),
+            "params": 29600000000,
+            "official_name": "MuseGlimmer",
+            "path": "muse_glimmer",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/muse-glimmer/keras/muse_glimmer_30b/1"
+        ),
+    },
+    "muse_glimmer_30b_assistant": {
+        "metadata": {
+            "description": (
+                "MuseGlimmer 30B DFlash Assistant model: 5-layer "
+                "speculative-decoding drafter for the 30B model. Drafts a "
+                "16-token block-diffusion denoised block per forward pass, "
+                "conditioned on the target model's hidden states. This "
+                "model must NOT be used standalone. It is designed "
+                "exclusively as a draft model used from the target "
+                "model's generation loop."
+            ),
+            "params": 2200000000,
+            "official_name": "MuseGlimmer",
+            "path": "muse_glimmer",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/muse-glimmer/keras/muse_glimmer_30b_assistant/1"
+        ),
+    },
+}

@@ -178,6 +178,72 @@ class SpeculativeSamplerTest(TestCase):
         output_str = self.join_as_string(output)
         self.assertEqual(output_str, ["aaaaaaaa", "aaaaaaaa"])
 
+    def test_one_shot_block_draft_next(self):
+        # Some draft models (e.g. a bidirectional block-diffusion drafter)
+        # produce every candidate from a single forward pass rather than
+        # autoregressively. `draft_next` is still called once per candidate
+        # by this sampler, so such a model can compute the whole block on
+        # its first call within a cycle and serve cached slices on the
+        # rest of that cycle's calls (a plain Python-level memo, safe
+        # because a cycle's `for i in range(k)` calls happen within one
+        # `body()` invocation) — this is the pattern
+        # `MuseGlimmerCausalLM.generate_step` uses for its DFlash
+        # assistant. Verify correctness of that pattern here with a plain
+        # (non-model-specific) closure; per-cycle call-count savings are
+        # only observable once `generate_step` runs inside a compiled
+        # `generate_function` trace, not via a bare `sampler(...)` call
+        # like this test makes, so this test checks output correctness
+        # only.
+        target_chars = list("abcdefghijkl")
+        draft_chars = list("abcdefghijkl")
+        target_next = self._next_fn(target_chars)
+        block_logits = ops.one_hot(
+            ops.array([self.char_lookup[c] for c in draft_chars[:3]]),
+            self.vocab_size,
+        )
+
+        def one_shot_draft_next(prompt, draft_cache, index):
+            anchor_pos = draft_cache
+            position = ops.minimum(ops.maximum(index - anchor_pos - 1, 0), 2)
+            logits = ops.take(block_logits, position, axis=0) * 1e9
+            hidden_states = ops.ones([self.batch_size, 5])
+            return logits, hidden_states, draft_cache
+
+        sampler = SpeculativeSampler(num_speculative_tokens=3, temperature=1.0)
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
+        output = sampler(
+            next=target_next,
+            prompt=prompt,
+            index=0,
+            draft_next=one_shot_draft_next,
+            draft_cache=-1,
+        )
+        self.assertEqual(self.join_as_string(output), ["abcdefghijkl"])
+
+    def test_generic_draft_cache_continuation(self):
+        # The 3-tuple `(draft_state, target_cache, anchor_pos)` convention
+        # for refreshing `draft_cache` after each cycle is generic — it
+        # must not require the model passed via `model=` to be any
+        # particular class.
+        target_chars = list("abcdefghijkl")
+        target_next = self._next_fn(target_chars)
+        draft_next = self._next_fn(target_chars)
+
+        sampler = SpeculativeSampler(num_speculative_tokens=3, temperature=1.0)
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
+        initial_hidden = ops.zeros((self.batch_size, 1, 4))
+        initial_target_cache = ops.zeros((self.batch_size, 1))
+        output = sampler(
+            next=target_next,
+            prompt=prompt,
+            cache=initial_target_cache,
+            index=0,
+            draft_next=draft_next,
+            draft_cache=(initial_hidden, initial_target_cache, 0),
+            model=object(),
+        )
+        self.assertEqual(self.join_as_string(output), ["abcdefghijkl"])
+
     def test_short_circuit_rejection(self):
         # If token 2 is wrong, tokens 3+ should be rejected even if correct.
         target_chars = list("abcdefghijkl")
