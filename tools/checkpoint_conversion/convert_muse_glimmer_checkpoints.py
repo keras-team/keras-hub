@@ -1,12 +1,7 @@
 """Convert Muse Glimmer HuggingFace checkpoints to KerasHub preset format.
 
 Also handles the `-assistant` DFlash speculative-decoding drafter preset
-(`muse_glimmer_30b_assistant`), mirroring `convert_gemma4_hf_checkpoints.py`'s
-target/assistant branch: the drafter has no vocabulary or LM head, so its
-own numerics are verified directly against `context_hidden_states`
-(Sections 1-2), while Section 3 covers the full text/image/video
-speculative-generation comparison through the separate (multimodal)
-target model, exactly like the base flow's own generation checks.
+(`muse_glimmer_30b_assistant`).
 
 Usage:
     python tools/checkpoint_conversion/convert_muse_glimmer_checkpoints.py \
@@ -451,6 +446,7 @@ def _load_hf_assistant_models(hf_preset):
         target_preset,
         device_map="cpu",
         torch_dtype=torch.float32,
+        attn_implementation="eager",
         force_download=False,
     )
     hf_target_model.eval()
@@ -550,6 +546,7 @@ def _precompute_assistant_generation_hf_data(
         hf_spec_ids = hf_target_model.generate(
             **hf_text_inputs,
             assistant_model=hf_assistant_model,
+            speculation_type="dflash",
             max_new_tokens=MAX_NEW_TOKENS,
         )
     results["TEXT"] = {
@@ -584,6 +581,7 @@ def _precompute_assistant_generation_hf_data(
         hf_spec_ids = hf_target_model.generate(
             **hf_image_inputs,
             assistant_model=hf_assistant_model,
+            speculation_type="dflash",
             max_new_tokens=MAX_NEW_TOKENS,
         )
     results["IMAGE"] = {
@@ -623,6 +621,7 @@ def _precompute_assistant_generation_hf_data(
         hf_spec_ids = hf_target_model.generate(
             **hf_video_inputs,
             assistant_model=hf_assistant_model,
+            speculation_type="dflash",
             max_new_tokens=MAX_NEW_TOKENS,
         )
     results["VIDEO"] = {

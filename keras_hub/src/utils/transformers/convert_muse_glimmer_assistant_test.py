@@ -9,13 +9,7 @@ from keras_hub.src.utils.transformers import convert_muse_glimmer_assistant
 
 
 class FakeLoader:
-    """Minimal stand-in for `SafetensorLoader.port_weight`.
-
-    Generates a random tensor shaped like the real on-disk HF weight (a 2D
-    `nn.Linear`-style `(out, in)` shape when `hook_fn` is given) and lets
-    `hook_fn` reshape it into KerasHub's convention, then assigns it and
-    records which HF keys were requested.
-    """
+    """Minimal stand-in for `SafetensorLoader.port_weight`."""
 
     def __init__(self):
         self.ported_keys = []
@@ -66,6 +60,7 @@ class TestMuseGlimmerAssistantConverter(TestCase):
         self.assertTrue(keras_config["use_bidirectional_attention"])
         self.assertTrue(keras_config["use_external_embeddings"])
         self.assertFalse(keras_config["enable_qk_scale_and_gate"])
+        self.assertTrue(keras_config["qk_norm_with_scale"])
         self.assertFalse(keras_config["use_sandwich_norm"])
 
     def test_convert_backbone_config_rope_theta_fallback(self):
@@ -93,14 +88,13 @@ class TestMuseGlimmerAssistantConverter(TestCase):
         convert_muse_glimmer_assistant.convert_weights(
             backbone, loader, transformers_config
         )
-        self.assertIn("model.norm.weight", loader.ported_keys)
-        self.assertIn("model.encoder.fc.weight", loader.ported_keys)
-        self.assertIn(
-            "model.layers.0.self_attn.q_proj.weight", loader.ported_keys
-        )
-        # HF's `post_attention_layernorm` maps to `_pre_feedforward_layernorm`
-        # (this checkpoint's plain two-norm pre-norm block), not the
-        # unbuilt sandwich `_post_attention_layernorm`.
+        self.assertIn("norm.weight", loader.ported_keys)
+        self.assertIn("encoder.fc.weight", loader.ported_keys)
+        self.assertIn("encoder.output_norm_enc.weight", loader.ported_keys)
+        self.assertIn("layers.0.self_attn.q_proj.weight", loader.ported_keys)
+        self.assertIn("layers.0.self_attn.q_norm.weight", loader.ported_keys)
+        self.assertIn("layers.0.self_attn.k_norm.weight", loader.ported_keys)
+        # HF's `post_attention_layernorm` maps to `_pre_feedforward_layernorm`.
         ported_scale = keras.ops.convert_to_numpy(
             backbone.transformer_layers[0]._pre_feedforward_layernorm.scale
         )
