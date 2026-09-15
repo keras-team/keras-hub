@@ -1,3 +1,4 @@
+import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -12,6 +13,90 @@ try:
     import tensorflow as tf
 except ImportError:
     tf = None
+
+
+def _smart_resize(height, width, patch_size, merge_size, max_tokens):
+    """Select a patch grid that preserves the input aspect ratio."""
+    resize_patch_size = patch_size * merge_size
+    ideal_grid = ops.array(
+        [height / resize_patch_size, width / resize_patch_size],
+        dtype="float32",
+    )
+    ratio = ideal_grid[1] / ideal_grid[0]
+    limited_height = ops.sqrt(max_tokens / ratio)
+    limited_grid = ops.stack([limited_height, limited_height * ratio], axis=0)
+    ideal_grid = ops.where(
+        ideal_grid[0] * ideal_grid[1] > max_tokens,
+        limited_grid,
+        ideal_grid,
+    )
+
+    lower_grid = ops.floor(ideal_grid)
+    upper_grid = ops.ceil(ideal_grid)
+    candidates = ops.stack(
+        [
+            ops.stack([lower_grid[0], lower_grid[1]]),
+            ops.stack([lower_grid[0], upper_grid[1]]),
+            ops.stack([upper_grid[0], lower_grid[1]]),
+            ops.stack([upper_grid[0], upper_grid[1]]),
+        ]
+    )
+    valid = (
+        (candidates[:, 0] >= 1)
+        & (candidates[:, 1] >= 1)
+        & (candidates[:, 0] * candidates[:, 1] <= max_tokens)
+    )
+    aspect_error = ops.abs(candidates[:, 0] / candidates[:, 1] - height / width)
+    aspect_error = ops.where(valid, aspect_error, 1e9)
+    selected = ops.take(candidates, ops.argmin(aspect_error), axis=0)
+    fallback = ops.maximum(ops.round(ideal_grid), 1)
+    selected = ops.where(ops.any(valid), selected, fallback)
+    selected = ops.convert_to_numpy(selected)
+    return (
+        int(selected[0]) * resize_patch_size,
+        int(selected[1]) * resize_patch_size,
+    )
+
+
+def _smart_resize_tf(height, width, patch_size, merge_size, max_tokens):
+    """Select a patch grid inside a TensorFlow graph."""
+    resize_patch_size = tf.cast(patch_size * merge_size, "float32")
+    ideal_grid = tf.cast(tf.stack([height, width]), "float32")
+    ideal_grid = ideal_grid / resize_patch_size
+    ratio = ideal_grid[1] / ideal_grid[0]
+    limited_height = tf.sqrt(tf.cast(max_tokens, "float32") / ratio)
+    limited_grid = tf.stack([limited_height, limited_height * ratio], axis=0)
+    ideal_grid = tf.where(
+        ideal_grid[0] * ideal_grid[1] > max_tokens,
+        limited_grid,
+        ideal_grid,
+    )
+
+    lower_grid = tf.floor(ideal_grid)
+    upper_grid = tf.ceil(ideal_grid)
+    candidates = tf.stack(
+        [
+            tf.stack([lower_grid[0], lower_grid[1]]),
+            tf.stack([lower_grid[0], upper_grid[1]]),
+            tf.stack([upper_grid[0], lower_grid[1]]),
+            tf.stack([upper_grid[0], upper_grid[1]]),
+        ]
+    )
+    valid = (
+        (candidates[:, 0] >= 1)
+        & (candidates[:, 1] >= 1)
+        & (candidates[:, 0] * candidates[:, 1] <= max_tokens)
+    )
+    aspect_error = tf.abs(
+        candidates[:, 0] / candidates[:, 1]
+        - tf.cast(height, "float32") / tf.cast(width, "float32")
+    )
+    aspect_error = tf.where(valid, aspect_error, 1e9)
+    selected = tf.gather(candidates, tf.argmin(aspect_error))
+    fallback = tf.maximum(tf.round(ideal_grid), 1)
+    selected = tf.where(tf.reduce_any(valid), selected, fallback)
+    selected = tf.cast(selected * resize_patch_size, "int32")
+    return selected[0], selected[1]
 
 
 @keras_hub_export("keras_hub.layers.MuseGlimmerImageConverter")
@@ -73,42 +158,40 @@ class MuseGlimmerImageConverter(ImageConverter):
         return image
 
     def _call_tf(self, inputs):
+        input_is_integer = tf.as_dtype(inputs.dtype).is_integer
         image = tf.cast(inputs, "float32")
         orig_h, orig_w = tf.shape(image)[0], tf.shape(image)[1]
-        total_pixels = tf.cast(orig_h * orig_w, "float32")
-        stride = tf.cast(self._patch_stride, "float32")
-        min_pix = tf.cast(self.min_pixels, "float32")
-        max_pix = tf.cast(self.max_pixels, "float32")
-
-        scale = tf.cond(
-            total_pixels < min_pix,
-            lambda: tf.sqrt(min_pix / total_pixels),
-            lambda: tf.cond(
-                total_pixels > max_pix,
-                lambda: tf.sqrt(max_pix / total_pixels),
-                lambda: tf.constant(1.0),
-            ),
+        target_h, target_w = _smart_resize_tf(
+            orig_h,
+            orig_w,
+            self.patch_size,
+            self.merge_size,
+            self.max_image_tokens,
         )
-        target_h = tf.cast(
-            tf.maximum(
-                tf.round(tf.cast(orig_h, "float32") * scale / stride) * stride,
-                stride,
-            ),
-            "int32",
-        )
-        target_w = tf.cast(
-            tf.maximum(
-                tf.round(tf.cast(orig_w, "float32") * scale / stride) * stride,
-                stride,
-            ),
-            "int32",
-        )
-        image = tf.image.resize(
-            image[tf.newaxis],
-            (target_h, target_w),
-            method=self.interpolation,
-            antialias=self.antialias,
-        )[0]
+        if input_is_integer:
+            # Matches torchvision's separable uint8 resize: width pass,
+            # round to uint8 range, then height pass, round again.
+            image = tf.image.resize(
+                image[tf.newaxis],
+                (orig_h, target_w),
+                method=self.interpolation,
+                antialias=self.antialias,
+            )[0]
+            image = tf.round(tf.clip_by_value(image, 0.0, 255.0))
+            image = tf.image.resize(
+                image[tf.newaxis],
+                (target_h, target_w),
+                method=self.interpolation,
+                antialias=self.antialias,
+            )[0]
+            image = tf.round(tf.clip_by_value(image, 0.0, 255.0))
+        else:
+            image = tf.image.resize(
+                image[tf.newaxis],
+                (target_h, target_w),
+                method=self.interpolation,
+                antialias=self.antialias,
+            )[0]
         image = tf.clip_by_value(image, 0.0, 255.0)
         image = self._normalize(image)
 
@@ -119,7 +202,7 @@ class MuseGlimmerImageConverter(ImageConverter):
         image = tf.reshape(
             image, (grid_h, self.patch_size, grid_w, self.patch_size, 3)
         )
-        image = tf.transpose(image, (0, 2, 1, 3, 4))
+        image = tf.transpose(image, (0, 2, 4, 1, 3))
         num_patches = grid_h * grid_w
         image = tf.reshape(
             image, (num_patches, self.patch_size * self.patch_size * 3)
@@ -135,33 +218,57 @@ class MuseGlimmerImageConverter(ImageConverter):
         grid_thw = tf.stack([tf.constant(1, dtype="int32"), grid_h, grid_w])
         return {"patches": image, "grid_thw": grid_thw}
 
-    def _call_ops(self, inputs):
-        image = ops.cast(inputs, "float32")
-        orig_h, orig_w = ops.shape(image)[0], ops.shape(image)[1]
-        total_pixels = float(ops.cast(orig_h * orig_w, "float32"))
-        stride = float(self._patch_stride)
-
-        if total_pixels < self.min_pixels:
-            scale = (self.min_pixels / total_pixels) ** 0.5
-        elif total_pixels > self.max_pixels:
-            scale = (self.max_pixels / total_pixels) ** 0.5
-        else:
-            scale = 1.0
-
-        target_h = max(
-            round(int(orig_h) * scale / stride) * self._patch_stride,
-            self._patch_stride,
-        )
-        target_w = max(
-            round(int(orig_w) * scale / stride) * self._patch_stride,
-            self._patch_stride,
-        )
-        image = ops.image.resize(
+    def _resize(self, image, orig_h, orig_w, target_h, target_w):
+        # The PyTorch backend does not support Lanczos interpolation in
+        # `ops.image.resize`. Fall back to `scale_and_translate`, the
+        # primitive `resize` itself uses on other backends for this case.
+        if keras.backend.backend() == "torch" and self.interpolation in (
+            "lanczos3",
+            "lanczos5",
+        ):
+            scale = ops.array(
+                [target_h / orig_h, target_w / orig_w], dtype="float32"
+            )
+            return ops.image.scale_and_translate(
+                image,
+                (target_h, target_w, 3),
+                scale=scale,
+                translation=ops.zeros((2,), dtype="float32"),
+                spatial_dims=(0, 1),
+                method=self.interpolation,
+                antialias=self.antialias,
+            )
+        return ops.image.resize(
             ops.expand_dims(image, 0),
             size=(target_h, target_w),
             interpolation=self.interpolation,
             antialias=self.antialias,
         )[0]
+
+    def _call_ops(self, inputs):
+        input_is_integer = keras.backend.is_int_dtype(inputs.dtype)
+        image = inputs
+        orig_h, orig_w = int(ops.shape(image)[0]), int(ops.shape(image)[1])
+        target_h, target_w = _smart_resize(
+            orig_h,
+            orig_w,
+            self.patch_size,
+            self.merge_size,
+            self.max_image_tokens,
+        )
+        if input_is_integer:
+            # Matches torchvision's separable uint8 resize: width pass,
+            # round to uint8 range, then height pass, round again.
+            image = self._resize(image, orig_h, orig_w, orig_h, target_w)
+            # The TF backend's `ops.image.resize` preserves integer
+            # dtypes, so clip/round need a float cast first.
+            image = ops.cast(image, "float32")
+            image = ops.round(ops.clip(image, 0.0, 255.0))
+            image = self._resize(image, orig_h, target_w, target_h, target_w)
+            image = ops.round(ops.clip(image, 0.0, 255.0))
+        else:
+            image = self._resize(image, orig_h, orig_w, target_h, target_w)
+        image = ops.cast(image, "float32")
         image = ops.clip(image, 0.0, 255.0)
         image = self._normalize(image)
 
@@ -172,7 +279,7 @@ class MuseGlimmerImageConverter(ImageConverter):
         image = ops.reshape(
             image, (grid_h, self.patch_size, grid_w, self.patch_size, 3)
         )
-        image = ops.transpose(image, (0, 2, 1, 3, 4))
+        image = ops.transpose(image, (0, 2, 4, 1, 3))
         num_patches = grid_h * grid_w
         image = ops.reshape(
             image, (num_patches, self.patch_size * self.patch_size * 3)

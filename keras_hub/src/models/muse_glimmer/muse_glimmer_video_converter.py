@@ -1,9 +1,16 @@
+import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.video_converter import VideoConverter
 from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
     MuseGlimmerBackbone,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    _smart_resize,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    _smart_resize_tf,
 )
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -106,6 +113,7 @@ class MuseGlimmerVideoConverter(VideoConverter):
         return indices
 
     def _call_tf(self, inputs):
+        input_is_integer = tf.as_dtype(inputs.dtype).is_integer
         video = tf.cast(inputs, "float32")
         frame_count = tf.shape(video)[0]
         # Assume the source is already at `self.fps`-equivalent sampling
@@ -117,32 +125,37 @@ class MuseGlimmerVideoConverter(VideoConverter):
         video = tf.gather(video, indices, axis=0)
 
         orig_h, orig_w = tf.shape(video)[1], tf.shape(video)[2]
-        stride = tf.cast(self._patch_stride, "float32")
-        total_pixels = tf.cast(orig_h * orig_w, "float32")
-        max_pixels = tf.cast(self.max_pixels, "float32")
-        scale = tf.minimum(
-            1.0, tf.sqrt(max_pixels / tf.maximum(total_pixels, 1.0))
+        target_h, target_w = _smart_resize_tf(
+            orig_h,
+            orig_w,
+            self.patch_size,
+            self.merge_size,
+            self.max_video_frame_tokens,
         )
-        target_h = tf.cast(
-            tf.maximum(
-                tf.round(tf.cast(orig_h, "float32") * scale / stride) * stride,
-                stride,
-            ),
-            "int32",
-        )
-        target_w = tf.cast(
-            tf.maximum(
-                tf.round(tf.cast(orig_w, "float32") * scale / stride) * stride,
-                stride,
-            ),
-            "int32",
-        )
-        video = tf.image.resize(
-            video,
-            (target_h, target_w),
-            method=self.interpolation,
-            antialias=self.antialias,
-        )
+        if input_is_integer:
+            # Matches torchvision's separable uint8 resize: width pass,
+            # round to uint8 range, then height pass, round again.
+            video = tf.image.resize(
+                video,
+                (orig_h, target_w),
+                method=self.interpolation,
+                antialias=self.antialias,
+            )
+            video = tf.round(tf.clip_by_value(video, 0.0, 255.0))
+            video = tf.image.resize(
+                video,
+                (target_h, target_w),
+                method=self.interpolation,
+                antialias=self.antialias,
+            )
+            video = tf.round(tf.clip_by_value(video, 0.0, 255.0))
+        else:
+            video = tf.image.resize(
+                video,
+                (target_h, target_w),
+                method=self.interpolation,
+                antialias=self.antialias,
+            )
         video = tf.clip_by_value(video, 0.0, 255.0)
         video = self._normalize(video)
 
@@ -174,7 +187,7 @@ class MuseGlimmerVideoConverter(VideoConverter):
                 3,
             ),
         )
-        video = tf.transpose(video, (0, 2, 4, 1, 3, 5, 6))
+        video = tf.transpose(video, (0, 2, 4, 1, 6, 3, 5))
         num_patches = grid_t * grid_h * grid_w
         patches = tf.reshape(
             video,
@@ -186,8 +199,37 @@ class MuseGlimmerVideoConverter(VideoConverter):
         grid_thw = tf.stack([grid_t, grid_h, grid_w])
         return {"patches": patches, "grid_thw": grid_thw}
 
+    def _resize(self, video, orig_h, orig_w, target_h, target_w):
+        # The PyTorch backend does not support Lanczos interpolation in
+        # `ops.image.resize`. Fall back to `scale_and_translate`, the
+        # primitive `resize` itself uses on other backends for this case.
+        if keras.backend.backend() == "torch" and self.interpolation in (
+            "lanczos3",
+            "lanczos5",
+        ):
+            frame_count = int(ops.shape(video)[0])
+            scale = ops.array(
+                [target_h / orig_h, target_w / orig_w], dtype="float32"
+            )
+            return ops.image.scale_and_translate(
+                video,
+                (frame_count, target_h, target_w, 3),
+                scale=scale,
+                translation=ops.zeros((2,), dtype="float32"),
+                spatial_dims=(1, 2),
+                method=self.interpolation,
+                antialias=self.antialias,
+            )
+        return ops.image.resize(
+            video,
+            size=(target_h, target_w),
+            interpolation=self.interpolation,
+            antialias=self.antialias,
+        )
+
     def _call_ops(self, inputs):
-        video = ops.cast(inputs, "float32")
+        input_is_integer = keras.backend.is_int_dtype(inputs.dtype)
+        video = inputs
         frame_count = int(ops.shape(video)[0])
         # Assumes a same-rate source (see `_call_tf` docstring note on
         # pre-sampling); simply caps the frame count at `num_frames`.
@@ -195,23 +237,26 @@ class MuseGlimmerVideoConverter(VideoConverter):
         video = ops.take(video, indices, axis=0)
 
         orig_h, orig_w = int(ops.shape(video)[1]), int(ops.shape(video)[2])
-        patch_stride = self._patch_stride
-        total_pixels = float(orig_h * orig_w)
-        scale = min(1.0, (self.max_pixels / total_pixels) ** 0.5)
-        target_h = max(
-            round(orig_h * scale / patch_stride) * patch_stride,
-            patch_stride,
+        target_h, target_w = _smart_resize(
+            orig_h,
+            orig_w,
+            self.patch_size,
+            self.merge_size,
+            self.max_video_frame_tokens,
         )
-        target_w = max(
-            round(orig_w * scale / patch_stride) * patch_stride,
-            patch_stride,
-        )
-        video = ops.image.resize(
-            video,
-            size=(target_h, target_w),
-            interpolation=self.interpolation,
-            antialias=self.antialias,
-        )
+        if input_is_integer:
+            # Matches torchvision's separable uint8 resize: width pass,
+            # round to uint8 range, then height pass, round again.
+            video = self._resize(video, orig_h, orig_w, orig_h, target_w)
+            # The TF backend's `ops.image.resize` preserves integer
+            # dtypes, so clip/round need a float cast first.
+            video = ops.cast(video, "float32")
+            video = ops.round(ops.clip(video, 0.0, 255.0))
+            video = self._resize(video, orig_h, target_w, target_h, target_w)
+            video = ops.round(ops.clip(video, 0.0, 255.0))
+        else:
+            video = self._resize(video, orig_h, orig_w, target_h, target_w)
+        video = ops.cast(video, "float32")
         video = ops.clip(video, 0.0, 255.0)
         video = self._normalize(video)
 
@@ -240,7 +285,7 @@ class MuseGlimmerVideoConverter(VideoConverter):
                 3,
             ),
         )
-        video = ops.transpose(video, (0, 2, 4, 1, 3, 5, 6))
+        video = ops.transpose(video, (0, 2, 4, 1, 6, 3, 5))
         num_patches = grid_t * grid_h * grid_w
         patches = ops.reshape(
             video,
