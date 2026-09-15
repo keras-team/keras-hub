@@ -51,7 +51,7 @@ class MuseGlimmerLayersTest(TestCase):
                 np.random.randn(2, 4, 6).astype("float32")
             ),
             expected_output_shape=(2, 4, 8),
-            expected_num_trainable_weights=1,
+            expected_num_trainable_weights=2,
         )
 
     def test_interleave_embeddings(self):

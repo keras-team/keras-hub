@@ -180,7 +180,7 @@ class TransformersPresetLoader(PresetLoader):
         if "ForImageClassification" in architecture:
             kwargs["num_classes"] = len(self.config["id2label"])
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
-        if load_task_weights:
+        if load_task_weights and hasattr(self.converter, "convert_head"):
             with SafetensorLoader(self.preset, prefix="") as loader:
                 self.converter.convert_head(task, loader, self.config)
         return task
