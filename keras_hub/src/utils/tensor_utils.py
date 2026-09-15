@@ -493,7 +493,15 @@ def canonicalize_python_string_inputs(
             # A nested batch. Check whether all rows have the same
             # length (homogeneous) before paying for np.array().
             def _row_len(r):
-                return len(r) if isinstance(r, (list, tuple)) else r.shape[0]
+                if isinstance(r, (list, tuple)):
+                    return len(r)
+                if isinstance(r, np.ndarray):
+                    return r.shape[0]
+                raise ValueError(
+                    "If a nested list is provided, all elements must "
+                    "be lists, tuples or arrays. "
+                    f"Received: {inputs}"
+                )
 
             first_len = _row_len(inputs[0])
             is_ragged = any(_row_len(r) != first_len for r in inputs[1:])
@@ -563,7 +571,15 @@ def restore_outer_shape(outputs, outer_shape):
         # Dense output, e.g. when `sequence_length` is set.
         return outputs.reshape(tuple(outer_shape) + outputs.shape[1:])
     for dim in reversed(tuple(outer_shape)[1:]):
-        outputs = [outputs[i : i + dim] for i in range(0, len(outputs), dim)]
+        if dim == 0:
+            # Empty inner dimension (e.g. shape (N, 0)). Each group is
+            # empty, so produce len(outputs) or outer_shape[0] empties.
+            n_groups = outer_shape[0] if len(outputs) == 0 else len(outputs)
+            outputs = [[] for _ in range(n_groups)]
+        else:
+            outputs = [
+                outputs[i : i + dim] for i in range(0, len(outputs), dim)
+            ]
     return outputs
 
 
@@ -645,6 +661,10 @@ def casefold_utf8(text):
     code points (e.g. zero width spaces and soft hyphens).
     """
     text = unicodedata.normalize("NFKC", text).casefold()
+    # NFKC_Casefold is NFKC(casefold(NFKC(x))). The casefold() above can
+    # produce decomposed sequences, so a final NFKC pass recomposes them
+    # to match tf_text.case_fold_utf8.
+    text = unicodedata.normalize("NFKC", text)
     if any(_is_default_ignorable(c) for c in text):
         text = "".join(c for c in text if not _is_default_ignorable(c))
     return text
