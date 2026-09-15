@@ -187,7 +187,14 @@ class RandomDeletion(PreprocessingLayer):
                 "provided."
             )
 
-        self._skip_set = set(self.skip_list) if self.skip_list else None
+        self._skip_set = (
+            {
+                item.decode("utf-8") if isinstance(item, bytes) else item
+                for item in self.skip_list
+            }
+            if self.skip_list
+            else None
+        )
         # Built on demand by `_call_tf`; see the `_generator` comment above.
         self._skip_table = None
 
