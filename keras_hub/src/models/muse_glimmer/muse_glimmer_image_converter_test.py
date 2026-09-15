@@ -7,6 +7,56 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class MuseGlimmerImageConverterTest(TestCase):
+    def test_integer_inputs_round_after_resize(self):
+        converter = MuseGlimmerImageConverter(
+            patch_size=2,
+            patch_temporal=2,
+            merge_size=1,
+            max_image_tokens=1,
+            scale=2 / 255.0,
+            offset=-1.0,
+            interpolation="bilinear",
+            antialias=True,
+        )
+        image = np.arange(4 * 4 * 3, dtype="uint8").reshape(4, 4, 3)
+
+        output = converter(image)
+        normalized = (output["patches"] + 1.0) / (2.0 / 255.0)
+
+        self.assertAllClose(normalized, np.round(normalized))
+
+    def test_patch_layout_is_channel_first(self):
+        converter = MuseGlimmerImageConverter(
+            patch_size=2,
+            patch_temporal=2,
+            merge_size=1,
+            max_image_tokens=16,
+            interpolation="nearest",
+        )
+        image = np.arange(4 * 4 * 3, dtype="float32").reshape(4, 4, 3)
+
+        output = converter(image)
+
+        expected_patch = np.array(
+            [
+                0,
+                3,
+                12,
+                15,
+                1,
+                4,
+                13,
+                16,
+                2,
+                5,
+                14,
+                17,
+            ]
+            * 2,
+            dtype="float32",
+        )
+        self.assertAllClose(output["patches"][0], expected_patch)
+
     def test_convert(self):
         converter = MuseGlimmerImageConverter(
             patch_size=4,

@@ -63,3 +63,22 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase):
             [preprocessor.tokenizer.image_token_id] * num_merged_tokens
             + [5, 6],
         )
+
+    def test_image_generate_preprocess_stacks_media_grids(self):
+        image_converter = MuseGlimmerImageConverter(
+            patch_size=4,
+            patch_temporal=2,
+            merge_size=2,
+            max_image_tokens=64,
+            scale=1 / 255.0,
+        )
+        preprocessor = MuseGlimmerCausalLMPreprocessor(
+            **self.init_kwargs, image_converter=image_converter
+        )
+        image = np.random.randint(0, 255, (8, 8, 3)).astype("float32")
+
+        output = preprocessor.generate_preprocess(
+            {"prompts": ["test"], "images": [image, image]}
+        )
+
+        self.assertEqual(output["image_grid_thw"].shape, (2, 3))

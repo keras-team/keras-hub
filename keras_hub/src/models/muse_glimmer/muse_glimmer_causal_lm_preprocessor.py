@@ -144,9 +144,20 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
         num_image_tokens, num_video_tokens = [], []
 
         if images is not None and self.image_converter is not None:
-            flat_images = (
-                images if isinstance(images, (list, tuple)) else [images]
-            )
+            # `convert_preprocessing_inputs` (run by `@preprocessing_function`
+            # before this method's body) stacks a Python list of images into
+            # one dense tensor, so a list no longer looks like a
+            # `list`/`tuple` by the time it gets here. Un-stack it back into
+            # per-image entries by rank instead (single image is rank 3).
+            if isinstance(images, (list, tuple)):
+                flat_images = list(images)
+            else:
+                images = tf.convert_to_tensor(images)
+                flat_images = (
+                    tf.unstack(images, axis=0)
+                    if images.shape.rank == 4
+                    else [images]
+                )
             for img in flat_images:
                 result = self.image_converter(img)
                 pixel_values_list.append(tf.constant(result["patches"]))
@@ -159,9 +170,17 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
             )
 
         if videos is not None and self.video_converter is not None:
-            flat_videos = (
-                videos if isinstance(videos, (list, tuple)) else [videos]
-            )
+            # Same stacking issue as `images` above; a single video is
+            # rank 4 (frames, height, width, channels).
+            if isinstance(videos, (list, tuple)):
+                flat_videos = list(videos)
+            else:
+                videos = tf.convert_to_tensor(videos)
+                flat_videos = (
+                    tf.unstack(videos, axis=0)
+                    if videos.shape.rank == 5
+                    else [videos]
+                )
             video_grid_start = len(grid_list)
             for vid in flat_videos:
                 result = self.video_converter(vid)
@@ -202,7 +221,7 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
         vision_indices = self._compute_vision_indices(token_ids)
         if pixel_values_list:
             combined_pixel_values = tf.concat(pixel_values_list, axis=0)
-            combined_grid_thw = tf.concat(grid_list, axis=0)
+            combined_grid_thw = tf.stack(grid_list, axis=0)
         else:
             combined_pixel_values = tf.zeros((0, 0), dtype="float32")
             combined_grid_thw = tf.zeros((0, 3), dtype="int32")

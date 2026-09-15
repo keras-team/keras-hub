@@ -23,6 +23,7 @@ from PIL import Image
 from transformers import AutoModelForImageTextToText
 from transformers import AutoProcessor
 from transformers import AutoTokenizer
+from transformers.video_utils import VideoMetadata
 
 import keras_hub
 
@@ -43,8 +44,8 @@ VIDEO_URL = (
     "Big_Buck_Bunny_360_10s_1MB.mp4"
 )
 TEXT_PROMPT = "What is Keras?"
-IMAGE_PROMPT = "Describe this image: <|image_start|><|patch|><|image_end|>"
-VIDEO_PROMPT = "Describe this video: <|vid_start|><|video|><|vid_end|>"
+
+MAX_NEW_TOKENS = 64
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -65,7 +66,13 @@ def _load_test_image():
 
 
 def _load_test_video():
-    """Load a short video and return two frames for video validation."""
+    """Load a short video and return two frames plus metadata.
+
+    Returns `(frames, video_metadata)` — `video_metadata` carries the real
+    fps/frame-count read from the source container, so the HF video
+    processor doesn't have to guess (it otherwise defaults to `fps=24`
+    with a warning when this isn't provided).
+    """
     try:
         import av
     except ImportError as error:
@@ -77,6 +84,8 @@ def _load_test_video():
         response = requests.get(VIDEO_URL, timeout=60)
         response.raise_for_status()
         container = av.open(BytesIO(response.content))
+        video_stream = container.streams.video[0]
+        fps = float(video_stream.average_rate)
         frames = [
             frame.to_ndarray(format="rgb24")
             for frame in container.decode(video=0)
@@ -91,7 +100,15 @@ def _load_test_video():
             "The Muse Glimmer test video has fewer than two frames."
         )
 
-    return np.stack([frames[0], frames[-1]])
+    total_num_frames = len(frames)
+    video_metadata = VideoMetadata(
+        total_num_frames=total_num_frames,
+        fps=fps,
+        height=frames[0].shape[0],
+        width=frames[0].shape[1],
+        frames_indices=[0, total_num_frames - 1],
+    )
+    return np.stack([frames[0], frames[-1]]), video_metadata
 
 
 def _count_keras_params(backbone):
@@ -110,6 +127,7 @@ def _precompute_multimodal_outputs(
     prompt,
     media,
     modality,
+    video_metadata=None,
 ):
     if modality == "image":
         visual_inputs = processor.image_processor([media], return_tensors="pt")
@@ -118,7 +136,12 @@ def _precompute_multimodal_outputs(
         merge_size = processor.image_processor.merge_size
         placeholder = "<|patch|>"
     else:
-        visual_inputs = processor.video_processor([media], return_tensors="pt")
+        visual_inputs = processor.video_processor(
+            [media],
+            video_metadata=[video_metadata],
+            do_sample_frames=False,
+            return_tensors="pt",
+        )
         visual_key = "pixel_values_videos"
         grid_key = "video_grid_thw"
         merge_size = processor.video_processor.merge_size
@@ -152,7 +175,7 @@ def _precompute_multimodal_outputs(
         with torch.no_grad():
             hf_generated = hf_model.generate(
                 **hf_inputs,
-                max_new_tokens=32,
+                max_new_tokens=MAX_NEW_TOKENS,
                 do_sample=False,
             )
         prompt_length = hf_inputs["input_ids"].shape[1]
@@ -180,7 +203,7 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         with torch.no_grad():
             hf_gen = hf_model.generate(
                 input_ids=torch.tensor(hf_ids, dtype=torch.long).to(device),
-                max_new_tokens=32,
+                max_new_tokens=MAX_NEW_TOKENS,
                 do_sample=False,
             )
         results["text_generated"] = hf_tokenizer.decode(
@@ -189,32 +212,65 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
 
     processor = AutoProcessor.from_pretrained(hf_preset)
     raw_image = _load_test_image()
+    image_prompt = processor.apply_chat_template(
+        [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": "Describe this image."},
+                ],
+            }
+        ],
+        tokenize=False,
+        add_generation_prompt=True,
+        reasoning_strength="low",
+    )
+    # The rendered template already spells out the BOS text; strip it so
+    # the tokenizer's own default BOS-adding behavior adds it exactly
+    # once, on both the HF and KerasHub sides.
+    image_prompt = image_prompt.removeprefix(hf_tokenizer.bos_token)
     results["image"] = _precompute_multimodal_outputs(
         hf_model,
         hf_tokenizer,
         processor,
-        IMAGE_PROMPT,
+        image_prompt,
         raw_image,
         "image",
     )
 
-    raw_video = _load_test_video()
+    raw_video, video_metadata = _load_test_video()
+    video_prompt = processor.apply_chat_template(
+        [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "video"},
+                    {"type": "text", "text": "Describe this video."},
+                ],
+            }
+        ],
+        tokenize=False,
+        add_generation_prompt=True,
+        reasoning_strength="low",
+    )
+    video_prompt = video_prompt.removeprefix(hf_tokenizer.bos_token)
     results["video"] = _precompute_multimodal_outputs(
         hf_model,
         hf_tokenizer,
         processor,
-        VIDEO_PROMPT,
+        video_prompt,
         raw_video,
         "video",
+        video_metadata=video_metadata,
     )
 
     return results
 
 
 def test_parameter_count(keras_backbone, hf_param_count):
-    print("\n" + "=" * 50)
-    print("PARAMETER COUNT COMPARISON")
-    print("=" * 50)
+    print("\n--- Parameter Count ---")
+
     keras_params = _count_keras_params(keras_backbone)
     print(f"\n  KerasHub params: {keras_params:,}")
     print(f"  HF params:       {hf_param_count:,}")
@@ -249,9 +305,7 @@ def _build_keras_multimodal_inputs(keras_model, result):
 
 
 def test_token_ids(keras_model, hf_results, label):
-    print("\n" + "=" * 50)
-    print(f"{label} TOKEN ID VALIDATION")
-    print("=" * 50)
+    print(f"\n--- [{label}] Token ID Verification ---")
 
     if label == "TEXT":
         hf_ids = hf_results["text_token_ids"]
@@ -298,18 +352,20 @@ def test_numerics(keras_model, hf_results, label):
                 "vision_indices": ops.zeros((batch_size, 0), dtype="int32"),
             }
         )
-        keras_logits = ops.convert_to_numpy(keras_model(model_inputs)).astype(
-            np.float32
-        )
-        _report_numerics({label}, keras_logits, hf_results["text_logits"])
+        with torch.no_grad():
+            keras_logits = ops.convert_to_numpy(
+                keras_model(model_inputs)
+            ).astype(np.float32)
+        _report_numerics(label, keras_logits, hf_results["text_logits"])
         return
 
     result = hf_results[label.lower()]
     keras_inputs = _build_keras_multimodal_inputs(keras_model, result)
-    keras_logits = ops.convert_to_numpy(keras_model(keras_inputs)).astype(
-        np.float32
-    )
-    _report_numerics({label}, keras_logits, result["logits"])
+    with torch.no_grad():
+        keras_logits = ops.convert_to_numpy(keras_model(keras_inputs)).astype(
+            np.float32
+        )
+    _report_numerics(label, keras_logits, result["logits"])
 
 
 def _report_numerics(label, keras_logits, hf_logits):
@@ -321,13 +377,20 @@ def _report_numerics(label, keras_logits, hf_logits):
             keras_logits, hf_logits, atol=1e-3, rtol=1e-3
         )
         print(f" ✓ [{label}] logits match within atol=1e-3, rtol=1e-3.")
-    except AssertionError as error:
-        print(f"  [{label}] logits differ beyond tolerance: {error}")
+    except AssertionError:
+        tol = 1e-3 + 1e-3 * np.abs(hf_logits)
+        mismatched = int(np.sum(abs_diff > tol))
+        total = hf_logits.size
+        pct = 100.0 * (1.0 - mismatched / total)
+        print(
+            f"  [{label}] logits differ beyond tolerance — "
+            f"matching={pct:.2f}% ({total - mismatched}/{total})."
+        )
 
 
 def test_generation(keras_model, hf_results, label):
     if label == "TEXT":
-        max_length = hf_results["text_token_ids"].shape[1] + 32
+        max_length = hf_results["text_token_ids"].shape[1] + MAX_NEW_TOKENS
         keras_output = keras_model.generate(TEXT_PROMPT, max_length=max_length)
         hf_output = hf_results.get("text_generated", "N/A")
     else:
@@ -338,12 +401,14 @@ def test_generation(keras_model, hf_results, label):
                 "prompts": [result["prompt"]],
                 media_key: result["media"],
             },
-            max_length=result["input_ids"].shape[1] + 32,
+            max_length=result["input_ids"].shape[1] + MAX_NEW_TOKENS,
             strip_prompt=True,
         )
         if isinstance(keras_output, (list, tuple)):
             keras_output = keras_output[0]
         hf_output = result.get("generated", "N/A")
+
+    keras_output = keras_output.replace("<|message|>", "")
 
     print(f"\n  {label} KerasHub: {keras_output}")
     print(f"  {label} HF:       {hf_output}")
@@ -353,9 +418,6 @@ def test_generation(keras_model, hf_results, label):
 def validate_output(keras_model, hf_results):
     labels = ("TEXT", "IMAGE", "VIDEO")
 
-    print("\n" + "=" * 50)
-    print("VALIDATION")
-    print("=" * 50)
     for label in labels:
         test_token_ids(keras_model, hf_results, label)
         test_numerics(keras_model, hf_results, label)
