@@ -1,5 +1,13 @@
 """Convert Muse Glimmer HuggingFace checkpoints to KerasHub preset format.
 
+Also handles the `-assistant` DFlash speculative-decoding drafter preset
+(`muse_glimmer_30b_assistant`), mirroring `convert_gemma4_hf_checkpoints.py`'s
+target/assistant branch: the drafter has no vocabulary or LM head, so its
+own numerics are verified directly against `context_hidden_states`
+(Sections 1-2), while Section 3 covers the full text/image/video
+speculative-generation comparison through the separate (multimodal)
+target model, exactly like the base flow's own generation checks.
+
 Usage:
     python tools/checkpoint_conversion/convert_muse_glimmer_checkpoints.py \
         --preset muse_glimmer_30b
@@ -20,6 +28,7 @@ from absl import app
 from absl import flags
 from keras import ops
 from PIL import Image
+from transformers import AutoModel
 from transformers import AutoModelForImageTextToText
 from transformers import AutoProcessor
 from transformers import AutoTokenizer
@@ -36,7 +45,15 @@ torch.set_default_device(device)
 
 PRESET_MAP = {
     "muse_glimmer_30b": "meta-models/Muse-Glimmer-30B",
+    "muse_glimmer_30b_assistant": "meta-models/Muse-Glimmer-30B-assistant",
 }
+
+# The assistant/drafter has no vocabulary or tokenizer of its own — it
+# consumes `noise_embeds`/`context_hidden_states` built from the separate
+# target model. A short random target-length sequence is enough to
+# exercise every weight and mask branch (block-diffusion window + cross-
+# model context).
+ASSISTANT_TARGET_SEQUENCE_LENGTH = 24
 
 IMAGE_URL = "http://images.cocodataset.org/val2017/000000039769.jpg"
 VIDEO_URL = (
@@ -129,30 +146,19 @@ def _precompute_multimodal_outputs(
     modality,
     video_metadata=None,
 ):
-    if modality == "image":
-        visual_inputs = processor.image_processor([media], return_tensors="pt")
-        visual_key = "pixel_values"
-        grid_key = "image_grid_thw"
-        merge_size = processor.image_processor.merge_size
-        placeholder = "<|patch|>"
-    else:
-        visual_inputs = processor.video_processor(
-            [media],
-            video_metadata=[video_metadata],
-            do_sample_frames=False,
-            return_tensors="pt",
-        )
-        visual_key = "pixel_values_videos"
-        grid_key = "video_grid_thw"
-        merge_size = processor.video_processor.merge_size
-        placeholder = "<|video|>"
+    visual_key = (
+        "pixel_values" if modality == "image" else "pixel_values_videos"
+    )
+    grid_key = "image_grid_thw" if modality == "image" else "video_grid_thw"
 
-    grid = visual_inputs[grid_key]
-    num_tokens = int(grid[0].prod().item()) // merge_size**2
-    expanded_prompt = _expand_vision_prompt(prompt, placeholder, num_tokens)
-    text_inputs = hf_tokenizer([expanded_prompt], return_tensors="pt")
-    hf_inputs = {**text_inputs, **visual_inputs}
-    hf_inputs.pop("video_metadata", None)
+    hf_inputs = _build_hf_multimodal_inputs(
+        hf_tokenizer,
+        processor,
+        prompt,
+        media,
+        modality,
+        video_metadata=video_metadata,
+    )
 
     with torch.no_grad():
         hf_outputs = hf_model(**hf_inputs, use_cache=False)
@@ -165,8 +171,8 @@ def _precompute_multimodal_outputs(
         .numpy()
         .astype(np.int32),
         "logits": hf_outputs.logits.detach().cpu().float().numpy(),
-        "grid_thw": grid.cpu().numpy().astype(np.int32),
-        "pixel_values": visual_inputs[visual_key].cpu().float().numpy(),
+        "grid_thw": hf_inputs[grid_key].cpu().numpy().astype(np.int32),
+        "pixel_values": hf_inputs[visual_key].cpu().float().numpy(),
         "media": np.asarray(media) if modality == "image" else media,
         "modality": modality,
     }
@@ -436,6 +442,330 @@ def save_preset(keras_model, preset_name):
     print(f"  ✓ Preset saved to ./{preset_name}")
 
 
+def _load_hf_assistant_models(hf_preset):
+    """The target model id is the assistant repo id with `-assistant`
+    removed.
+    """
+    target_preset = hf_preset.replace("-assistant", "")
+    hf_target_model = AutoModelForImageTextToText.from_pretrained(
+        target_preset,
+        device_map="cpu",
+        torch_dtype=torch.float32,
+        force_download=False,
+    )
+    hf_target_model.eval()
+    hf_tokenizer = AutoTokenizer.from_pretrained(
+        target_preset, force_download=False
+    )
+    processor = AutoProcessor.from_pretrained(target_preset)
+    hf_assistant_model = AutoModel.from_pretrained(
+        hf_preset,
+        device_map="cpu",
+        torch_dtype=torch.float32,
+        force_download=False,
+    )
+    hf_assistant_model.eval()
+    print("-> HuggingFace target + assistant models loaded.")
+    return hf_target_model, hf_tokenizer, processor, hf_assistant_model
+
+
+def _build_assistant_target_context(
+    hf_target_model, target_layer_ids, hidden_dim
+):
+    """Run the target model on a random token sequence and concatenate its
+    hidden states at `target_layer_ids` into `context_hidden_states`.
+
+    Returns:
+        A tuple `(input_ids, context_hidden_states)`, the latter shaped
+        `(1, sequence_length, len(target_layer_ids) * hidden_dim)`.
+    """
+    vocab_size = hf_target_model.config.get_text_config().vocab_size
+    input_ids = torch.randint(
+        0,
+        vocab_size,
+        (1, ASSISTANT_TARGET_SEQUENCE_LENGTH),
+        dtype=torch.long,
+    )
+    with torch.no_grad():
+        target_out = hf_target_model(
+            input_ids=input_ids, output_hidden_states=True
+        )
+    # `hidden_states` is a tuple of length num_layers + 1 (index 0 is the
+    # embedding output); `target_layer_ids` indexes directly into it, per
+    # the migration report's reading of
+    # `MuseGlimmerAssistantContextProjection`.
+    hidden_states = target_out.hidden_states
+    selected = [hidden_states[i] for i in target_layer_ids]
+    context_hidden_states = torch.cat(selected, dim=-1)
+    assert context_hidden_states.shape[-1] == len(target_layer_ids) * hidden_dim
+    return input_ids, context_hidden_states
+
+
+def _build_hf_multimodal_inputs(
+    hf_tokenizer, processor, prompt, media, modality, video_metadata=None
+):
+    """Build HF generate() inputs for an image/video prompt.
+
+    Shared by `_precompute_multimodal_outputs` (numerics) and
+    `_precompute_assistant_generation_hf_data` (speculative generation).
+    """
+    if modality == "image":
+        visual_inputs = processor.image_processor([media], return_tensors="pt")
+        grid_key, merge_size, placeholder = (
+            "image_grid_thw",
+            processor.image_processor.merge_size,
+            "<|patch|>",
+        )
+    else:
+        visual_inputs = processor.video_processor(
+            [media],
+            video_metadata=[video_metadata],
+            do_sample_frames=False,
+            return_tensors="pt",
+        )
+        grid_key, merge_size, placeholder = (
+            "video_grid_thw",
+            processor.video_processor.merge_size,
+            "<|video|>",
+        )
+    grid = visual_inputs[grid_key]
+    num_tokens = int(grid[0].prod().item()) // merge_size**2
+    expanded_prompt = _expand_vision_prompt(prompt, placeholder, num_tokens)
+    text_inputs = hf_tokenizer([expanded_prompt], return_tensors="pt")
+    hf_inputs = {**text_inputs, **visual_inputs}
+    hf_inputs.pop("video_metadata", None)
+    return hf_inputs
+
+
+def _precompute_assistant_generation_hf_data(
+    hf_target_model, hf_assistant_model, hf_tokenizer, processor
+):
+    """Runs up front so the HF models can be freed before loading
+    KerasHub models — the two never need to coexist in memory.
+    """
+    results = {}
+
+    hf_text_inputs = hf_tokenizer(TEXT_PROMPT, return_tensors="pt")
+    with torch.no_grad():
+        hf_spec_ids = hf_target_model.generate(
+            **hf_text_inputs,
+            assistant_model=hf_assistant_model,
+            max_new_tokens=MAX_NEW_TOKENS,
+        )
+    results["TEXT"] = {
+        "hf_generated": hf_tokenizer.decode(
+            hf_spec_ids[0, hf_text_inputs["input_ids"].shape[1] :],
+            skip_special_tokens=True,
+        ),
+        "kh_inputs": TEXT_PROMPT,
+        "max_length": hf_text_inputs["input_ids"].shape[1] + MAX_NEW_TOKENS,
+    }
+
+    raw_image = _load_test_image()
+    image_prompt = processor.apply_chat_template(
+        [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": "Describe this image."},
+                ],
+            }
+        ],
+        tokenize=False,
+        add_generation_prompt=True,
+        reasoning_strength="low",
+    )
+    image_prompt = image_prompt.removeprefix(hf_tokenizer.bos_token)
+    hf_image_inputs = _build_hf_multimodal_inputs(
+        hf_tokenizer, processor, image_prompt, raw_image, "image"
+    )
+    with torch.no_grad():
+        hf_spec_ids = hf_target_model.generate(
+            **hf_image_inputs,
+            assistant_model=hf_assistant_model,
+            max_new_tokens=MAX_NEW_TOKENS,
+        )
+    results["IMAGE"] = {
+        "hf_generated": hf_tokenizer.decode(
+            hf_spec_ids[0, hf_image_inputs["input_ids"].shape[1] :],
+            skip_special_tokens=True,
+        ),
+        "kh_inputs": {"prompts": [image_prompt], "images": raw_image},
+        "max_length": (hf_image_inputs["input_ids"].shape[1] + MAX_NEW_TOKENS),
+    }
+
+    raw_video, video_metadata = _load_test_video()
+    video_prompt = processor.apply_chat_template(
+        [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "video"},
+                    {"type": "text", "text": "Describe this video."},
+                ],
+            }
+        ],
+        tokenize=False,
+        add_generation_prompt=True,
+        reasoning_strength="low",
+    )
+    video_prompt = video_prompt.removeprefix(hf_tokenizer.bos_token)
+    hf_video_inputs = _build_hf_multimodal_inputs(
+        hf_tokenizer,
+        processor,
+        video_prompt,
+        raw_video,
+        "video",
+        video_metadata=video_metadata,
+    )
+    with torch.no_grad():
+        hf_spec_ids = hf_target_model.generate(
+            **hf_video_inputs,
+            assistant_model=hf_assistant_model,
+            max_new_tokens=MAX_NEW_TOKENS,
+        )
+    results["VIDEO"] = {
+        "hf_generated": hf_tokenizer.decode(
+            hf_spec_ids[0, hf_video_inputs["input_ids"].shape[1] :],
+            skip_special_tokens=True,
+        ),
+        "kh_inputs": {"prompts": [video_prompt], "videos": raw_video},
+        "max_length": (hf_video_inputs["input_ids"].shape[1] + MAX_NEW_TOKENS),
+    }
+
+    return results
+
+
+def _verify_assistant_generation(target_preset, kh_assistant, hf_gen_data):
+    print("\n--- Section 3: Speculative generation ---")
+    print("-> Loading KerasHub target model via from_preset(...)...")
+    kh_target = keras_hub.models.MuseGlimmerCausalLM.from_preset(
+        f"hf://{target_preset}", dtype="float32"
+    )
+    kh_target.compile(sampler="greedy")
+
+    for label, data in hf_gen_data.items():
+        kh_output = kh_target.generate(
+            data["kh_inputs"],
+            max_length=data["max_length"],
+            strip_prompt=(label != "TEXT"),
+            assistant_model=kh_assistant,
+        )
+        if isinstance(kh_output, (list, tuple)):
+            kh_output = kh_output[0]
+        print(f"\n  [{label}] HF speculative:  {data['hf_generated']}")
+        print(f"  [{label}] KH speculative:  {kh_output}")
+
+    del kh_target
+    gc.collect()
+
+
+def _run_assistant_preset(preset, hf_preset):
+    target_preset = hf_preset.replace("-assistant", "")
+    hf_target_model, hf_tokenizer, processor, hf_assistant_model = (
+        _load_hf_assistant_models(hf_preset)
+    )
+    config = hf_assistant_model.config
+    target_layer_ids = config.target_layer_ids
+    hidden_dim = config.hidden_size
+    block_size = getattr(config, "block_size", 16)
+
+    print("-> Building target context from a random token sequence...")
+    _, context_hidden_states = _build_assistant_target_context(
+        hf_target_model, target_layer_ids, hidden_dim
+    )
+    noise_embeds = torch.randn(1, block_size, hidden_dim)
+
+    print("-> Running HF assistant forward pass...")
+    with torch.no_grad():
+        hf_out = hf_assistant_model(
+            noise_embeds=noise_embeds,
+            context_hidden_states=context_hidden_states,
+        )
+    hf_hidden_states = hf_out.last_hidden_state.detach().cpu().numpy()
+    hf_params = sum(p.numel() for p in hf_assistant_model.parameters())
+
+    hf_gen_data = None
+    if not FLAGS.skip_generation:
+        print("-> Precomputing HF speculative-generation outputs...")
+        hf_gen_data = _precompute_assistant_generation_hf_data(
+            hf_target_model, hf_assistant_model, hf_tokenizer, processor
+        )
+
+    del hf_target_model, hf_assistant_model
+    gc.collect()
+
+    print("-> Loading KerasHub model via from_preset(...)...")
+    kh_assistant = keras_hub.models.MuseGlimmerAssistantCausalLM.from_preset(
+        f"hf://{hf_preset}", dtype="float32"
+    )
+
+    print("\n--- Section 1: Parameter count ---")
+    kh_params = _count_keras_params(kh_assistant.backbone)
+    print(f"   KH params: {kh_params:,}")
+    print(f"   HF params: {hf_params:,}")
+    np.testing.assert_equal(kh_params, hf_params)
+    print("✓ Parameter counts match.")
+
+    print("\n--- Section 2: Logit numerics ---")
+    # call_with_cache requires a real cache; write the whole synthetic
+    # context sequence in one cache_update_index=0 call.
+    assistant_cache = ops.zeros(
+        [
+            1,
+            config.num_hidden_layers,
+            2,
+            ASSISTANT_TARGET_SEQUENCE_LENGTH,
+            config.num_key_value_heads,
+            config.head_dim,
+        ],
+        dtype="float32",
+    )
+    kh_out, _ = kh_assistant.call_with_cache(
+        noise_embeds=ops.convert_to_tensor(
+            noise_embeds.numpy(), dtype="float32"
+        ),
+        context_hidden_states=ops.convert_to_tensor(
+            context_hidden_states.numpy(), dtype="float32"
+        ),
+        cache=assistant_cache,
+        cache_update_index=0,
+    )
+    kh_hidden_states = ops.convert_to_numpy(kh_out)
+
+    abs_diff = np.abs(kh_hidden_states - hf_hidden_states)
+    max_diff = float(np.max(abs_diff))
+    mean_diff = float(np.mean(abs_diff))
+    print(f"   max |Δ| = {max_diff:.6f},  mean |Δ| = {mean_diff:.6f}")
+    np.testing.assert_allclose(
+        kh_hidden_states,
+        hf_hidden_states,
+        atol=1e-3,
+        rtol=1e-3,
+        err_msg="Assistant hidden states differ from HF beyond tolerance.",
+    )
+    print("✓ Hidden states within tolerance (atol=1e-3, rtol=1e-3).")
+
+    if FLAGS.skip_generation:
+        print(
+            "\n--- Section 3: Speculative generation: SKIPPED "
+            "(--skip_generation) ---"
+        )
+    else:
+        _verify_assistant_generation(target_preset, kh_assistant, hf_gen_data)
+
+    # Parity was just verified in float32; always save in bfloat16.
+    print(f"\n-> Saving model in bfloat16 to ./{preset} ...")
+    del kh_assistant
+    gc.collect()
+    kh_save = keras_hub.models.MuseGlimmerAssistantCausalLM.from_preset(
+        f"hf://{hf_preset}", dtype="bfloat16"
+    )
+    kh_save.save_to_preset(f"./{preset}")
+    print(f"-> Saved bfloat16 preset to ./{preset}")
+
+
 def main(_):
     preset = FLAGS.preset
     if preset not in PRESET_MAP:
@@ -444,6 +774,10 @@ def main(_):
             f"{', '.join(PRESET_MAP.keys())}"
         )
     hf_preset = PRESET_MAP[preset]
+
+    if "assistant" in preset:
+        _run_assistant_preset(preset, hf_preset)
+        return
 
     print("-> Loading HF model...")
     hf_model = AutoModelForImageTextToText.from_pretrained(
@@ -477,7 +811,17 @@ def main(_):
     test_parameter_count(keras_model.backbone, hf_results["hf_param_count"])
     validate_output(keras_model, hf_results)
 
-    save_preset(keras_model, preset)
+    # Parity was just verified in float32; always save in bfloat16.
+    preprocessor_ref = keras_model.preprocessor
+    del keras_model
+    gc.collect()
+    backbone_bf16 = keras_hub.models.MuseGlimmerBackbone.from_preset(
+        f"hf://{hf_preset}", dtype="bfloat16"
+    )
+    keras_model_bf16 = keras_hub.models.MuseGlimmerCausalLM(
+        backbone=backbone_bf16, preprocessor=preprocessor_ref
+    )
+    save_preset(keras_model_bf16, preset)
     print("\n=== Done! ===")
 
 

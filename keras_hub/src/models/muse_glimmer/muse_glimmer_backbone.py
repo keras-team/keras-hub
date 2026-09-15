@@ -8,6 +8,9 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_decoder import (
     MuseGlimmerTextDecoder,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
+    MuseGlimmerContextProjection,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
     MuseGlimmerInterleaveEmbeddings,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
@@ -34,8 +37,21 @@ class MuseGlimmerBackbone(Backbone):
     scattered into the text embedding sequence — see `modeling_muse_glimmer.py`,
     `MuseGlimmerModel.get_image_features`.
 
+    This class also supports the DFlash speculative-decoding assistant/
+    drafter configuration (`meta-models/Muse-Glimmer-30B-assistant`, see
+    `modeling_muse_glimmer_assistant.py`) via four opt-in flags, each
+    defaulting to the main model's current behavior:
+    `use_bidirectional_attention`, `context_projection_layer_ids`,
+    `use_external_embeddings`, and `enable_qk_scale_and_gate=False`. The
+    assistant configuration has no vocabulary/token embedding of its own;
+    it consumes `noise_embeds` (a denoising-block hidden-state window) and
+    `context_hidden_states` (concatenated hidden states pulled from
+    several layers of a separate, larger main model) instead of
+    `token_ids`.
+
     Args:
-        vocabulary_size: int. The size of the token vocabulary.
+        vocabulary_size: int. The size of the token vocabulary. Unused
+            when `use_external_embeddings=True`.
         num_layers: int. The number of transformer decoder layers.
         num_query_heads: int. The number of query attention heads.
         num_key_value_heads: int. The number of key/value attention heads.
@@ -68,6 +84,31 @@ class MuseGlimmerBackbone(Backbone):
         projector_hidden_act: str. Activation for the adapter and the
             top-level projection. Defaults to `"gelu"`.
         dropout: float. Dropout probability. Defaults to `0`.
+        use_bidirectional_attention: bool. Assistant/drafter configuration
+            only. If `True`, every decoder layer attends bi-directionally
+            (plus to unmasked context) instead of causally. Defaults to
+            `False`.
+        context_projection_layer_ids: list of int or `None`. Assistant/
+            drafter configuration only. When set, builds a
+            `MuseGlimmerContextProjection` sub-layer and accepts a
+            `context_hidden_states` input of shape
+            `(batch, sequence, len(context_projection_layer_ids) *
+            hidden_dim)`, projected to `hidden_dim` and passed to every
+            decoder layer as cross-model context for K/V. Defaults to
+            `None`.
+        use_external_embeddings: bool. Assistant/drafter configuration
+            only. If `True`, skips `ReversibleEmbedding` and the
+            `token_ids` input entirely; the model instead accepts a
+            `noise_embeds` float input of shape
+            `(batch, sequence, hidden_dim)`, fed directly into the
+            transformer stack. Defaults to `False`.
+        enable_qk_scale_and_gate: bool. Passed through to every decoder
+            layer's `MuseGlimmerTextAttention`. Defaults to `True`. The
+            assistant/drafter configuration sets this to `False`.
+        use_sandwich_norm: bool. Passed through to every decoder layer.
+            If `False`, skips the two post-sublayer sandwich norms.
+            Defaults to `True`. The assistant/drafter configuration sets
+            this to `False`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to
             use for model computations and weights.
     """
@@ -93,6 +134,11 @@ class MuseGlimmerBackbone(Backbone):
         projector_hidden_dim=None,
         projector_hidden_act="gelu",
         dropout=0,
+        use_bidirectional_attention=False,
+        context_projection_layer_ids=None,
+        use_external_embeddings=False,
+        enable_qk_scale_and_gate=True,
+        use_sandwich_norm=True,
         dtype=None,
         **kwargs,
     ):
@@ -105,20 +151,27 @@ class MuseGlimmerBackbone(Backbone):
             ]
 
         # === Layers ===
-        # The normed-embedding scaleless RMSNorm is folded into the
-        # embedding lookup itself (`MuseGlimmerTextNormedEmbedding` in HF),
-        # applied right after `token_embedding` in the functional graph
-        # below.
-        self.token_embedding = ReversibleEmbedding(
-            input_dim=vocabulary_size,
-            output_dim=hidden_dim,
-            tie_weights=False,
-            dtype=dtype,
-            name="token_embedding",
-        )
-        self.embed_norm = MuseGlimmerRMSNorm(
-            eps=rms_norm_eps, with_scale=False, dtype=dtype, name="embed_norm"
-        )
+        if not use_external_embeddings:
+            # The normed-embedding scaleless RMSNorm is folded into the
+            # embedding lookup itself (`MuseGlimmerTextNormedEmbedding` in
+            # HF), applied right after `token_embedding` in the functional
+            # graph below.
+            self.token_embedding = ReversibleEmbedding(
+                input_dim=vocabulary_size,
+                output_dim=hidden_dim,
+                tie_weights=False,
+                dtype=dtype,
+                name="token_embedding",
+            )
+            self.embed_norm = MuseGlimmerRMSNorm(
+                eps=rms_norm_eps,
+                with_scale=False,
+                dtype=dtype,
+                name="embed_norm",
+            )
+        else:
+            self.token_embedding = None
+            self.embed_norm = None
 
         self.vision_encoder = vision_encoder
         text_only_model = vision_encoder is None
@@ -158,6 +211,14 @@ class MuseGlimmerBackbone(Backbone):
                 projector_hidden_act
             )
 
+        if context_projection_layer_ids is not None:
+            self.context_projection = MuseGlimmerContextProjection(
+                hidden_dim=hidden_dim,
+                eps=rms_norm_eps,
+                dtype=dtype,
+                name="context_projection",
+            )
+
         self.transformer_layers = []
         for i in range(num_layers):
             is_full_attention = layer_types[i] == "full_attention"
@@ -175,6 +236,9 @@ class MuseGlimmerBackbone(Backbone):
                 sliding_window_size=(
                     None if is_full_attention else sliding_window_size
                 ),
+                use_bidirectional_attention=use_bidirectional_attention,
+                enable_qk_scale_and_gate=enable_qk_scale_and_gate,
+                use_sandwich_norm=use_sandwich_norm,
                 dropout=dropout,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
@@ -199,15 +263,24 @@ class MuseGlimmerBackbone(Backbone):
                 shape=(None,), dtype="int32", name="vision_indices"
             )
 
-        token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
-        )
         padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
 
-        x = self.token_embedding(token_id_input)
-        x = self.embed_norm(x)
+        if use_external_embeddings:
+            # Assistant/drafter configuration: no vocabulary, so there is
+            # no `token_ids` input at all. `main_input_name = "noise_embeds"`
+            # in `MuseGlimmerAssistantPreTrainedModel`.
+            noise_embeds_input = keras.Input(
+                shape=(None, hidden_dim), name="noise_embeds"
+            )
+            x = noise_embeds_input
+        else:
+            token_id_input = keras.Input(
+                shape=(None,), dtype="int32", name="token_ids"
+            )
+            x = self.token_embedding(token_id_input)
+            x = self.embed_norm(x)
 
         if not text_only_model:
             img_embeddings = self.vision_encoder(
@@ -227,15 +300,31 @@ class MuseGlimmerBackbone(Backbone):
                 vision_indices=vision_indices_input,
             )
 
+        if context_projection_layer_ids is not None:
+            context_hidden_states_input = keras.Input(
+                shape=(None, len(context_projection_layer_ids) * hidden_dim),
+                name="context_hidden_states",
+            )
+            context_hidden_states = self.context_projection(
+                context_hidden_states_input
+            )
+        else:
+            context_hidden_states = None
+
         for transformer_layer in self.transformer_layers:
-            x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
+            x = transformer_layer(
+                x,
+                context_hidden_states=context_hidden_states,
+                decoder_padding_mask=padding_mask_input,
+            )
 
         sequence_output = self.layer_norm(x)
 
-        inputs = {
-            "token_ids": token_id_input,
-            "padding_mask": padding_mask_input,
-        }
+        inputs = {"padding_mask": padding_mask_input}
+        if use_external_embeddings:
+            inputs["noise_embeds"] = noise_embeds_input
+        else:
+            inputs["token_ids"] = token_id_input
         if not text_only_model:
             inputs.update(
                 {
@@ -244,6 +333,8 @@ class MuseGlimmerBackbone(Backbone):
                     "vision_indices": vision_indices_input,
                 }
             )
+        if context_projection_layer_ids is not None:
+            inputs["context_hidden_states"] = context_hidden_states_input
 
         super().__init__(
             inputs=inputs, outputs=sequence_output, dtype=dtype, **kwargs
@@ -269,6 +360,11 @@ class MuseGlimmerBackbone(Backbone):
         self.projector_hidden_act = projector_hidden_act
         self.dropout = dropout
         self.text_only_model = text_only_model
+        self.use_bidirectional_attention = use_bidirectional_attention
+        self.context_projection_layer_ids = context_projection_layer_ids
+        self.use_external_embeddings = use_external_embeddings
+        self.enable_qk_scale_and_gate = enable_qk_scale_and_gate
+        self.use_sandwich_norm = use_sandwich_norm
 
     def __call__(self, inputs, *args, **kwargs):
         """Inject empty vision inputs for text-only calls on a VLM backbone."""
@@ -277,7 +373,10 @@ class MuseGlimmerBackbone(Backbone):
                 key: ops.convert_to_tensor(value)
                 for key, value in inputs.items()
             }
-            batch_size = ops.shape(inputs["token_ids"])[0]
+            main_input_key = (
+                "noise_embeds" if self.use_external_embeddings else "token_ids"
+            )
+            batch_size = ops.shape(inputs[main_input_key])[0]
             if "pixel_values" not in inputs:
                 patch_dim = (
                     self.vision_encoder.patch_temporal
@@ -322,6 +421,15 @@ class MuseGlimmerBackbone(Backbone):
                 "vision_encoder": None
                 if self.vision_encoder is None
                 else keras.layers.serialize(self.vision_encoder),
+                "use_bidirectional_attention": (
+                    self.use_bidirectional_attention
+                ),
+                "context_projection_layer_ids": (
+                    self.context_projection_layer_ids
+                ),
+                "use_external_embeddings": self.use_external_embeddings,
+                "enable_qk_scale_and_gate": self.enable_qk_scale_and_gate,
+                "use_sandwich_norm": self.use_sandwich_norm,
             }
         )
         return config
