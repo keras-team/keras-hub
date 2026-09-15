@@ -1,3 +1,5 @@
+import numpy as np
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.metaclip_2.metaclip_2_backbone import (
     MetaCLIP2Backbone,
@@ -161,7 +163,11 @@ class MetaCLIP2Tokenizer(SentencePieceTokenizer):
                 (id if id != 0 else self.unk_token_id - 1) + 1 for id in ids
             ]
 
-        if tokens and isinstance(tokens[0], list):
+        if isinstance(tokens, np.ndarray):
+            return np.array(process(tokens.tolist()), dtype=tokens.dtype)
+        elif (
+            isinstance(tokens, list) and tokens and isinstance(tokens[0], list)
+        ):
             return [process(ids) for ids in tokens]
         else:
             return process(tokens)
