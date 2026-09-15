@@ -5,6 +5,9 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
     MuseGlimmerCenteredRMSNorm,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
+    MuseGlimmerContextProjection,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
     MuseGlimmerInterleaveEmbeddings,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
@@ -39,6 +42,17 @@ class MuseGlimmerLayersTest(TestCase):
             ops.mean(ops.square(x), axis=-1, keepdims=True) + 1e-6
         )
         self.assertAllClose(output, expected, atol=1e-5)
+
+    def test_context_projection(self):
+        self.run_layer_test(
+            cls=MuseGlimmerContextProjection,
+            init_kwargs={"hidden_dim": 8, "eps": 1e-5},
+            input_data=ops.convert_to_tensor(
+                np.random.randn(2, 4, 6).astype("float32")
+            ),
+            expected_output_shape=(2, 4, 8),
+            expected_num_trainable_weights=1,
+        )
 
     def test_interleave_embeddings(self):
         self.run_serialization_test(

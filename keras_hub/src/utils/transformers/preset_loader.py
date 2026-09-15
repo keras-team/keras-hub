@@ -28,6 +28,7 @@ from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_modern_bert
 from keras_hub.src.utils.transformers import convert_muse_glimmer
+from keras_hub.src.utils.transformers import convert_muse_glimmer_assistant
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
@@ -93,6 +94,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_mistral
         elif model_type == "muse_glimmer":
             self.converter = convert_muse_glimmer
+        elif model_type == "muse_glimmer_assistant":
+            self.converter = convert_muse_glimmer_assistant
         elif model_type == "paligemma":
             self.converter = convert_pali_gemma
         elif model_type == "vit":

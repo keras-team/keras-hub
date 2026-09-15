@@ -1,8 +1,12 @@
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 from keras import ops
 
+from keras_hub.src.models.muse_glimmer.muse_glimmer_assistant_causal_lm import (  # noqa: E501
+    MuseGlimmerAssistantCausalLM,
+)
 from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
     MuseGlimmerBackbone,
 )
@@ -101,6 +105,112 @@ class MuseGlimmerCausalLMTest(TestCase):
             prompt = [" airplane at airport", " airplane"]
             output = causal_lm.generate(prompt)
             self.assertEqual(prompt, output)
+
+    def test_generate_with_assistant(self):
+        # DFlash speculative decoding: a tiny assistant backbone reusing
+        # the target's hidden_dim (noise_embeds come from the target's own
+        # token_embedding) and target_layer_ids=[1, 2] (valid against the
+        # target's num_layers=4).
+        target_layer_ids = [1, 2]
+        assistant_backbone = MuseGlimmerBackbone(
+            vocabulary_size=1,
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            sliding_window_size=None,
+            layer_types=["full_attention", "full_attention"],
+            use_bidirectional_attention=True,
+            context_projection_layer_ids=target_layer_ids,
+            use_external_embeddings=True,
+            enable_qk_scale_and_gate=False,
+            use_sandwich_norm=False,
+        )
+        assistant = MuseGlimmerAssistantCausalLM(
+            backbone=assistant_backbone,
+            block_size=3,
+            mask_token_id=0,
+        )
+        causal_lm = MuseGlimmerCausalLM(**self.init_kwargs)
+        # Greedy on both sides: speculative decoding's accept/reject step
+        # is only guaranteed to reproduce the target model's own output
+        # exactly under matching (here, greedy) acceptance semantics.
+        causal_lm.compile(sampler="greedy")
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"]
+        )
+        causal_lm.preprocessor = None
+        reference_output = causal_lm.generate(prompt_ids, stop_token_ids=None)
+
+        output = causal_lm.generate(
+            prompt_ids,
+            stop_token_ids=None,
+            assistant_model=assistant,
+        )
+        # The core speculative-decoding guarantee: regardless of the
+        # drafter's own quality, verified/accepted output must exactly
+        # match plain autoregressive decoding of the target model.
+        self.assertAllEqual(output["token_ids"], reference_output["token_ids"])
+        self.assertAllEqual(
+            output["padding_mask"], reference_output["padding_mask"]
+        )
+        # Assistant wiring must not leak into the model's state afterward.
+        self.assertIsNone(getattr(causal_lm, "_assistant_model", None))
+
+    def test_generate_with_assistant_multi_cycle(self):
+        # block_size=2 (1 candidate per cycle) over a long sequence forces
+        # several drafting cycles, exercising the assistant's persistent
+        # context cache actually growing across cycles (not just a single
+        # write) — see MuseGlimmerTextAttention's docstring.
+        target_layer_ids = [1, 2]
+        assistant_backbone = MuseGlimmerBackbone(
+            vocabulary_size=1,
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            sliding_window_size=None,
+            layer_types=["full_attention", "full_attention"],
+            use_bidirectional_attention=True,
+            context_projection_layer_ids=target_layer_ids,
+            use_external_embeddings=True,
+            enable_qk_scale_and_gate=False,
+            use_sandwich_norm=False,
+        )
+        assistant = MuseGlimmerAssistantCausalLM(
+            backbone=assistant_backbone,
+            block_size=2,
+            mask_token_id=0,
+        )
+        causal_lm = MuseGlimmerCausalLM(**self.init_kwargs)
+        causal_lm.compile(sampler="greedy")
+        causal_lm.preprocessor = None
+
+        vocab_size = self.preprocessor.tokenizer.vocabulary_size()
+        seq_len, prompt_len = 16, 4
+        token_ids = ops.convert_to_tensor(
+            np.random.randint(0, vocab_size, size=(1, seq_len)).astype("int32")
+        )
+        padding_mask = ops.convert_to_tensor(
+            np.array(
+                [[1] * prompt_len + [0] * (seq_len - prompt_len)],
+                dtype="int32",
+            )
+        )
+        prompt_ids = {"token_ids": token_ids, "padding_mask": padding_mask}
+
+        reference_output = causal_lm.generate(prompt_ids, stop_token_ids=None)
+        output = causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        self.assertAllEqual(output["token_ids"], reference_output["token_ids"])
+        self.assertAllEqual(
+            output["padding_mask"], reference_output["padding_mask"]
+        )
 
     @pytest.mark.large
     def test_saved_model(self):

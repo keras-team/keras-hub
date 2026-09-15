@@ -130,3 +130,47 @@ class MuseGlimmerInterleaveEmbeddings(keras.layers.Layer):
         config = super().get_config()
         config.update({"hidden_dim": self.hidden_dim})
         return config
+
+
+class MuseGlimmerContextProjection(keras.layers.Layer):
+    """Projects cross-model context hidden states into the hidden dimension.
+
+    Matches HF's `MuseGlimmerAssistantContextProjection`: a bias-free dense
+    projection (`fc`) followed by a scaleless RMSNorm (`output_norm_enc`).
+    Used only by the assistant/drafter configuration of
+    `MuseGlimmerBackbone`, which concatenates hidden states pulled from
+    several layers of the separate main model before calling this layer.
+
+    Args:
+        hidden_dim: int. Output dimension.
+        eps: float. Epsilon for the RMSNorm.
+    """
+
+    def __init__(self, hidden_dim, eps=1e-5, **kwargs):
+        super().__init__(**kwargs)
+        self.hidden_dim = hidden_dim
+        self.eps = eps
+
+    def build(self, input_shape):
+        self.dense = keras.layers.Dense(
+            self.hidden_dim,
+            use_bias=False,
+            dtype=self.dtype_policy,
+            name="fc",
+        )
+        self.dense.build(input_shape)
+        self.norm = MuseGlimmerRMSNorm(
+            eps=self.eps,
+            with_scale=False,
+            dtype=self.dtype_policy,
+            name="output_norm_enc",
+        )
+        self.built = True
+
+    def call(self, x):
+        return self.norm(self.dense(x))
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"hidden_dim": self.hidden_dim, "eps": self.eps})
+        return config
