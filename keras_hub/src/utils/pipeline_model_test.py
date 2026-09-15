@@ -619,7 +619,10 @@ class TestGrainPipeline(TestCase):
             # this test owns.
             self.skipTest("The torch iterator does not take ragged batches.")
         model = RaggedOutputPipeline()
-        model.compile(loss="mse")
+        # XLA has no `RaggedTensorToTensor` kernel, and `jit_compile="auto"`
+        # picks XLA on a GPU, so `Dense` on a ragged batch fails to compile
+        # there. Nothing to do with which pipeline built the batch.
+        model.compile(loss="mse", jit_compile=False)
         model.fit(x=x, y=y, batch_size=4)
         model.evaluate(x=x, y=y, batch_size=4)
         model.predict(x=x, batch_size=4)
