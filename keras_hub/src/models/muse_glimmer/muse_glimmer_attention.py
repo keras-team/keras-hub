@@ -62,6 +62,10 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
             Defaults to `True`. The assistant/drafter configuration sets
             this to `False`, since `MuseGlimmerAssistantAttention` has
             neither.
+        qk_norm_with_scale: bool. If `True`, builds separate learned-scale
+            RMSNorms for Q and K (`MuseGlimmerAssistantAttention`'s
+            `q_norm`/`k_norm`) instead of one shared scaleless QK-norm.
+            Defaults to `False`.
         kernel_initializer: initializer for the dense projections.
         dropout: float. Attention dropout rate.
     """
@@ -77,6 +81,7 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
         rope_max_wavelength=500000.0,
         sliding_window_size=None,
         enable_qk_scale_and_gate=True,
+        qk_norm_with_scale=False,
         kernel_initializer="glorot_uniform",
         dropout=0.0,
         **kwargs,
@@ -91,6 +96,7 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
         self.rope_max_wavelength = rope_max_wavelength
         self.sliding_window_size = sliding_window_size
         self.enable_qk_scale_and_gate = enable_qk_scale_and_gate
+        self.qk_norm_with_scale = qk_norm_with_scale
         self.dropout = dropout
         self.num_key_value_groups = num_query_heads // num_key_value_heads
         self.kernel_initializer = keras.initializers.get(
@@ -128,12 +134,26 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
         )
         self._value_dense.build(inputs_shape)
 
-        self._qk_norm = MuseGlimmerRMSNorm(
-            eps=self.rms_norm_eps,
-            with_scale=False,
-            dtype=self.dtype_policy,
-            name="qk_norm",
-        )
+        if self.qk_norm_with_scale:
+            self._query_norm = MuseGlimmerRMSNorm(
+                eps=self.rms_norm_eps,
+                dtype=self.dtype_policy,
+                name="q_norm",
+            )
+            self._query_norm.build((None, None, self.head_dim))
+            self._key_norm = MuseGlimmerRMSNorm(
+                eps=self.rms_norm_eps,
+                dtype=self.dtype_policy,
+                name="k_norm",
+            )
+            self._key_norm.build((None, None, self.head_dim))
+        else:
+            self._qk_norm = MuseGlimmerRMSNorm(
+                eps=self.rms_norm_eps,
+                with_scale=False,
+                dtype=self.dtype_policy,
+                name="qk_norm",
+            )
 
         if self.enable_qk_scale_and_gate:
             # Per-token, head-agnostic sigmoid gate computed from the same
@@ -184,7 +204,11 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
         )
 
         query = self._query_dense(hidden_states)
-        query = self._qk_norm(query)
+        query = (
+            self._query_norm(query)
+            if self.qk_norm_with_scale
+            else self._qk_norm(query)
+        )
         if self.enable_qk_scale_and_gate:
             query = query * self.qk_scale_factor
 
@@ -224,7 +248,11 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
 
         def _compute_key_value(x, position_start):
             key = self._key_dense(x)
-            key = self._qk_norm(key)
+            key = (
+                self._key_norm(key)
+                if self.qk_norm_with_scale
+                else self._qk_norm(key)
+            )
             if self.use_rope:
                 key = self.rotary_embedding_layer(
                     key, start_index=position_start
@@ -380,6 +408,7 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "sliding_window_size": self.sliding_window_size,
                 "enable_qk_scale_and_gate": self.enable_qk_scale_and_gate,
+                "qk_norm_with_scale": self.qk_norm_with_scale,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
