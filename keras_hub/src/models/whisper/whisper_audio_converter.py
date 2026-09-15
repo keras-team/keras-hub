@@ -233,7 +233,7 @@ class WhisperAudioConverter(AudioConverter):
 
         # Compute the mel spectrogram.
         frames = frame_signal(audio, self.num_fft_bins, self.stride)
-        frames = frames * hann_window(self.num_fft_bins, dtype="float64")
+        frames = frames * hann_window(self.num_fft_bins, dtype=dtype)
         stft = np.fft.rfft(frames, n=self.num_fft_bins, axis=-1)
         magnitudes = np.square(np.abs(stft[:, :-1, :]))
 
