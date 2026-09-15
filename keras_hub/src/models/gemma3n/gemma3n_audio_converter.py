@@ -1,4 +1,6 @@
+import hashlib
 import math
+import random
 
 import numpy as np
 
@@ -61,6 +63,13 @@ class Gemma3nAudioConverter(AudioConverter):
             for each mel bin, used for normalization.
         padding_side: str. Which side to pad the audio on ('right' or
             'left').
+        seed: int or None. A base seed for the dither random number
+            generator. It is not used as the generator seed directly:
+            each record's seed is derived by combining this value with a
+            hash of that record's unpadded samples, so dithering is
+            deterministic per record and independent of how records are
+            batched. Only used when `dither > 0.0`. If `None`, a base
+            seed is drawn at random.
 
     Call arguments:
         raw_speech: A raw audio waveform tensor, list of waveforms, or numpy
@@ -149,6 +158,7 @@ class Gemma3nAudioConverter(AudioConverter):
         per_bin_mean,
         per_bin_stddev,
         padding_side,
+        seed=None,
         **kwargs,
     ):
         # === Config ===
@@ -156,6 +166,7 @@ class Gemma3nAudioConverter(AudioConverter):
         super().__init__(
             _allow_python_workflow=_allow_python_workflow, **kwargs
         )
+        self.seed = random.randint(1, int(1e9)) if seed is None else seed
         self.feature_size = feature_size
         self.sampling_rate = sampling_rate
         self.padding_value = padding_value
@@ -228,8 +239,17 @@ class Gemma3nAudioConverter(AudioConverter):
     def _extract_spectrogram(self, waveform, attention_mask):
         waveform = np.asarray(waveform, dtype=self.compute_dtype)
         if self.dither > 0.0:
+            if attention_mask is not None:
+                valid_waveform = waveform[0, attention_mask == 1]
+            else:
+                valid_waveform = waveform
+            hash_bytes = hashlib.sha256(valid_waveform.tobytes()).digest()
+            record_hash = int.from_bytes(hash_bytes[:4], "little")
+            # `default_rng` rejects negative seeds, and `self.seed` may be
+            # any integer, so wrap the sum into the unsigned 32-bit range.
+            record_seed = (self.seed + record_hash) % 2**32
             waveform = waveform + self.dither * np.random.default_rng(
-                None
+                record_seed
             ).standard_normal(waveform.shape).astype(waveform.dtype)
         if self.input_scale_factor != 1.0:
             waveform = waveform * self.input_scale_factor
@@ -600,6 +620,7 @@ class Gemma3nAudioConverter(AudioConverter):
                 "per_bin_mean": self.per_bin_mean,
                 "per_bin_stddev": self.per_bin_stddev,
                 "padding_side": self.padding_side,
+                "seed": self.seed,
             }
         )
         return config
