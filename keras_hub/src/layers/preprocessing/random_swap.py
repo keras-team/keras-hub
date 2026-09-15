@@ -67,13 +67,14 @@ class RandomSwap(PreprocessingLayer):
         inputs: The tokens to augment.
         rng: Optional `np.random.Generator` used instead of the per record
             generator derived from `seed`. Only supported on the pure Python
-            code path.
+            code path. With a batched input, every row draws from this one
+            generator in order, so a row's augmentation depends on where it
+            sits in the batch.
 
 
     Examples:
 
     Word level usage.
-    >>> keras.utils.set_random_seed(1337)
     >>> x = ["Hey I like", "Keras and Tensorflow"]
     >>> x = list(map(lambda x: x.split(), x))
     >>> augmenter = keras_hub.layers.RandomSwap(rate=0.4, seed=9)
@@ -82,7 +83,6 @@ class RandomSwap(PreprocessingLayer):
     ['I Hey like', 'and Tensorflow Keras']
 
     Character level usage.
-    >>> keras.utils.set_random_seed(1337)
     >>> x = ["Hey Dude", "Speed Up"]
     >>> x = list(map(lambda x: list(x), x))
     >>> augmenter = keras_hub.layers.RandomSwap(rate=0.4, seed=42)
@@ -91,7 +91,6 @@ class RandomSwap(PreprocessingLayer):
     ['Heyu edD', ' eedpUpS']
 
     Usage with skip_list.
-    >>> keras.utils.set_random_seed(1337)
     >>> x = ["Hey I like", "Keras and Tensorflow"]
     >>> x = list(map(lambda x: x.split(), x))
     >>> augmenter = keras_hub.layers.RandomSwap(rate=0.4,
@@ -115,7 +114,6 @@ class RandomSwap(PreprocessingLayer):
     Usage with skip_py_fn.
     >>> def skip_py_fn(word):
     ...     return len(word) < 4
-    >>> keras.utils.set_random_seed(1337)
     >>> x = ["He was drifting along", "With the wind"]
     >>> x = list(map(lambda x: x.split(), x))
     >>> augmenter = keras_hub.layers.RandomSwap(rate=0.8, max_swaps=2,
@@ -123,6 +121,17 @@ class RandomSwap(PreprocessingLayer):
     >>> y = augmenter(x)
     >>> list(map(lambda y: " ".join(y), y))
     ['He was along drifting', 'wind the With']
+
+    Usage in a Grain pipeline, with per epoch variation. Grain derives the
+    generator from its own seed and the element index, so a record that comes
+    round again on the next epoch is augmented differently.
+    >>> import grain
+    >>> x = [["Hey", "I", "like"], ["Keras", "and", "Tensorflow"]]
+    >>> augmenter = keras_hub.layers.RandomSwap(rate=0.4, seed=9)
+    >>> ds = grain.MapDataset.source(x).repeat(2).random_map(
+    ...     lambda row, rng: augmenter(row, rng=rng), seed=1)
+    >>> len(list(ds))
+    4
     """
 
     def __init__(

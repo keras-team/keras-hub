@@ -217,6 +217,27 @@ class RandomSwapTest(TestCase):
         self.assertGreater(len(set(first)), 1)
         self.assertEqual(first, second)
 
+    def test_negative_seed(self):
+        # `np.random.SeedSequence` rejects negative entropy, so a negative
+        # seed used to raise `ValueError: expected non-negative integer`
+        # instead of augmenting.
+        augmenter = RandomSwap(rate=0.5, seed=-7)
+        row = ["a", "b", "c", "d", "e", "f", "g", "h"]
+        output = augmenter(row)
+        self.assertEqual(output, augmenter(row))
+        self.assertEqual(sorted(output), sorted(row))
+
+    def test_output_is_independent_of_number_container(self):
+        # The same numbers must be augmented the same way whether they
+        # arrive as python ints, as a numpy array, or as numpy scalars.
+        values = [1, 2, 3, 4, 5, 6, 7, 8]
+        augmenter = RandomSwap(rate=0.5, seed=7)
+        expected = augmenter(list(values))
+        self.assertAllEqual(augmenter(np.array(values)), expected)
+        self.assertAllEqual(
+            augmenter([np.int64(value) for value in values]), expected
+        )
+
     def test_rng_rejected_on_tf_path(self):
         def skip_fn(word):
             return tf.strings.regex_full_match(word, r"\pP")
