@@ -182,6 +182,8 @@ class TestMuseGlimmerConverter(TestCase):
         self.assertEqual(config["patch_temporal"], 2)
         self.assertEqual(config["merge_size"], 2)
         self.assertEqual(config["max_image_tokens"], 4096)
+        self.assertEqual(config["interpolation"], "lanczos3")
+        self.assertTrue(config["antialias"])
         self.assertEqual(config["scale"], [2.0 / 255.0] * 3)
         self.assertEqual(config["offset"], [-1.0] * 3)
 
@@ -214,6 +216,8 @@ class TestMuseGlimmerConverter(TestCase):
         self.assertEqual(config["fps"], 2.0)
         self.assertEqual(config["num_frames"], 96)
         self.assertEqual(config["max_video_frame_tokens"], 144)
+        self.assertEqual(config["interpolation"], "lanczos3")
+        self.assertTrue(config["antialias"])
         self.assertEqual(config["scale"], [2.0 / 255.0] * 3)
         self.assertEqual(config["offset"], [-1.0] * 3)
 
