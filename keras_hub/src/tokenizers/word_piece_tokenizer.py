@@ -16,7 +16,6 @@ from keras_hub.src.utils.tensor_utils import canonicalize_python_token_inputs
 from keras_hub.src.utils.tensor_utils import casefold_utf8
 from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -467,10 +466,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 f"Received: dtype={dtype}"
             )
 
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            dtype=dtype, _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(dtype=dtype, **kwargs)
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
 
@@ -786,7 +782,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def tokenize(self, inputs):
         self._check_vocabulary()
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._tokenize_tf(inputs)
         else:
             return self._tokenize_python(inputs)
@@ -826,7 +822,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def detokenize(self, inputs):
         self._check_vocabulary()
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._detokenize_tf(inputs)
         else:
             return self._detokenize_python(inputs)

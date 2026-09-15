@@ -22,7 +22,6 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
 from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -303,10 +302,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 f"Received: dtype={dtype}"
             )
 
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            dtype=dtype, _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(dtype=dtype, **kwargs)
         self.sequence_length = sequence_length
         self.add_prefix_space = add_prefix_space
         if unsplittable_tokens is None:
@@ -558,7 +554,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     def id_to_token(self, id):
         """Convert an integer id to a string token."""
         self._check_vocabulary()
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._id_to_token_tf(id)
         else:
             return self._id_to_token_tokenizers(id)
@@ -577,7 +573,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
         self._check_vocabulary()
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._token_to_id_tf(token)
         else:
             return self._token_to_id_tokenizers(token)
@@ -835,7 +831,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
     def tokenize(self, inputs):
         self._check_vocabulary()
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._tokenize_tf(inputs)
         else:
             return self._tokenize_tokenizers(inputs)
@@ -912,7 +908,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
     def detokenize(self, inputs):
         self._check_vocabulary()
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._detokenize_tf(inputs)
         else:
             return self._detokenize_tokenizers(inputs)

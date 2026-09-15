@@ -4,6 +4,7 @@ from keras import ops
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -134,6 +135,8 @@ class Gemma4ImageConverter(ImageConverter):
         pooling_kernel_size=3,
         **kwargs,
     ):
+        # `call` is implemented with TensorFlow ops only.
+        assert_tf_installed("Gemma4ImageConverter")
         # Always do image preprocessing in float32.
         kwargs.pop("dtype", None)
         dtype = "float32"

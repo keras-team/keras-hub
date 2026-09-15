@@ -10,7 +10,6 @@ from keras_hub.src.utils.tensor_utils import (
 )
 from keras_hub.src.utils.tensor_utils import convert_to_list
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import pad
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -125,10 +124,7 @@ class StartEndPacker(PreprocessingLayer):
         padding_side="right",
         **kwargs,
     ):
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            name=name, _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(name=name, **kwargs)
 
         self.sequence_length = sequence_length
 
@@ -369,7 +365,7 @@ class StartEndPacker(PreprocessingLayer):
         add_start_value=True,
         add_end_value=True,
     ):
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(
                 inputs,
                 sequence_length=sequence_length,

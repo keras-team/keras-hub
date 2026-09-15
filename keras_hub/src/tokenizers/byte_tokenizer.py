@@ -9,7 +9,6 @@ from keras_hub.src.utils.tensor_utils import canonicalize_python_token_inputs
 from keras_hub.src.utils.tensor_utils import casefold_utf8
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import get_decode_errors_name
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import restore_outer_shape
@@ -176,10 +175,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
                 f"Received: errors={errors}"
             )
 
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            dtype=dtype, _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(dtype=dtype, **kwargs)
 
         self.lowercase = lowercase
         self.sequence_length = sequence_length
@@ -284,7 +280,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
         return batched_tokens
 
     def tokenize(self, inputs):
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._tokenize_tf(inputs)
         else:
             return self._tokenize_python(inputs)
@@ -333,7 +329,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
         return outputs
 
     def detokenize(self, inputs):
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._detokenize_tf(inputs)
         else:
             return self._detokenize_python(inputs)

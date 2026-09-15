@@ -14,7 +14,6 @@ from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer,
 )
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -105,7 +104,7 @@ class PaliGemmaCausalLMPreprocessor(CausalLMPreprocessor):
         sample_weight=None,
         sequence_length=None,
     ):
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(
                 x,
                 y=y,
@@ -179,7 +178,7 @@ class PaliGemmaCausalLMPreprocessor(CausalLMPreprocessor):
         the sequence (as generation is expected to continue at the end of the
         inputted prompt).
         """
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._generate_preprocess_tf(
                 x,
                 sequence_length=sequence_length,

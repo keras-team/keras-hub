@@ -1,3 +1,5 @@
+from unittest import mock
+
 import pytest
 
 from keras_hub.src.models.bart.bart_seq_2_seq_lm_preprocessor import (
@@ -5,6 +7,7 @@ from keras_hub.src.models.bart.bart_seq_2_seq_lm_preprocessor import (
 )
 from keras_hub.src.models.bart.bart_tokenizer import BartTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils import tensor_utils
 
 
 class BartSeq2SeqLMPreprocessorTest(TestCase):
@@ -86,3 +89,12 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+    def test_generate_preprocess_without_decoder_text_requires_tf(self):
+        preprocessor = BartSeq2SeqLMPreprocessor(**self.init_kwargs)
+        # Without TensorFlow, `preprocessing_function` returns the undecorated
+        # method, which is what `__wrapped__` gives us here.
+        generate_preprocess = type(preprocessor).generate_preprocess.__wrapped__
+        with mock.patch.object(tensor_utils, "tf", None):
+            with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
+                generate_preprocess(preprocessor, [" airplane at airport"])

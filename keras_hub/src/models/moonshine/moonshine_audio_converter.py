@@ -94,10 +94,7 @@ class MoonshineAudioConverter(AudioConverter):
         do_normalize=False,
         **kwargs,
     ):
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(**kwargs)
         self._convert_input_args = False
         self._allow_non_tensor_positional_args = True
         self.sampling_rate = sampling_rate
@@ -388,7 +385,7 @@ class MoonshineAudioConverter(AudioConverter):
             "max_length": max_length,
             "pad_to_multiple_of": pad_to_multiple_of,
         }
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(inputs, **kwargs)
         else:
             return self._call_python(inputs, **kwargs)

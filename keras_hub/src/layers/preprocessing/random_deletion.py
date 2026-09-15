@@ -5,17 +5,13 @@ from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_hub.src.utils.random_utils import record_rng
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import canonicalize_python_inputs
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.layers.RandomDeletion")
@@ -150,11 +146,9 @@ class RandomDeletion(PreprocessingLayer):
                 f"Received: dtype={dtype}"
             )
 
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
         super().__init__(
             dtype=dtype,
             name=name,
-            _allow_python_workflow=_allow_python_workflow,
             **kwargs,
         )
 
@@ -186,6 +180,11 @@ class RandomDeletion(PreprocessingLayer):
                 "Exactly one of `skip_list`, `skip_fn`, `skip_py_fn` must be "
                 "provided."
             )
+        if self.skip_fn is not None:
+            # `skip_fn` consists of TensorFlow ops, so the layer can only run
+            # on the TensorFlow path. Check up front rather than failing
+            # cryptically on first call.
+            assert_tf_installed(f"{self.__class__.__name__} with `skip_fn`")
 
         self._skip_set = (
             {
@@ -340,11 +339,7 @@ class RandomDeletion(PreprocessingLayer):
     def call(self, inputs, rng=None):
         # `skip_fn` is documented to consist of TensorFlow ops, so a layer
         # configured with it can only run on the TensorFlow path.
-        use_tf = (
-            not self._allow_python_workflow
-            or self.skip_fn is not None
-            or in_tf_function()
-        )
+        use_tf = self._use_tf_workflow() or self.skip_fn is not None
         if use_tf:
             if rng is not None:
                 raise ValueError(

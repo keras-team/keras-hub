@@ -9,7 +9,6 @@ from keras_hub.src.utils.tensor_utils import (
     convert_preprocessing_outputs_python,
 )
 from keras_hub.src.utils.tensor_utils import convert_to_numpy
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -71,10 +70,7 @@ class WhisperAudioConverter(AudioConverter):
         max_audio_length=30,
         **kwargs,
     ):
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(**kwargs)
 
         self._convert_input_args = False
         self._allow_non_tensor_positional_args = True
@@ -317,7 +313,7 @@ class WhisperAudioConverter(AudioConverter):
         return log_spec
 
     def call(self, audio):
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(audio)
         else:
             return self._call_python(audio)

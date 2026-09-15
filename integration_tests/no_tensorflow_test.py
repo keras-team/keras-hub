@@ -32,3 +32,28 @@ class NoTensorflow(unittest.TestCase):
         # Round trip: detokenize and verify we recover the original text.
         decoded = tokenizer.detokenize(outputs)
         self.assertEqual(decoded, "the quick brown fox")
+
+    def test_preprocessor_works(self):
+        # Preprocessing layers default to the pure Python path, so model
+        # preprocessors can be built and run without tensorflow-text.
+        preprocessor = (
+            keras_hub.models.BertTextClassifierPreprocessor.from_preset(
+                "bert_tiny_en_uncased",
+                sequence_length=8,
+            )
+        )
+        x, y = preprocessor(["the quick brown fox"], [1])
+        self.assertEqual(np.shape(x["token_ids"]), (1, 8))
+        self.assertEqual(np.shape(x["padding_mask"]), (1, 8))
+        self.assertEqual(np.shape(x["segment_ids"]), (1, 8))
+        self.assertEqual(np.asarray(y).tolist(), [1])
+
+    def test_tf_workflow_errors(self):
+        # Explicitly requesting the TensorFlow path raises an informative
+        # error on first use rather than at construction time.
+        tokenizer = keras_hub.models.BertTokenizer.from_preset(
+            "bert_tiny_en_uncased",
+            _allow_python_workflow=False,
+        )
+        with self.assertRaisesRegex(ImportError, "pip install tensorflow-text"):
+            tokenizer("the quick brown fox")

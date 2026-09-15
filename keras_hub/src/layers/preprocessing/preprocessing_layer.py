@@ -3,22 +3,25 @@ import inspect
 import keras
 
 from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
+from keras_hub.src.utils.tensor_utils import in_tf_function
 
 
 class PreprocessingLayer(keras.layers.Layer):
     """Preprocessing layer base class."""
 
     def __init__(self, **kwargs):
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", False)
-        if not _allow_python_workflow:
-            assert_tf_libs_installed(self.__class__.__name__)
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
         super().__init__(**kwargs)
         # Don't convert inputs (we want tf tensors not backend tensors).
         self._convert_input_args = False
         # Allow raw inputs like python strings.
         self._allow_non_tensor_positional_args = True
-        # Allow Python workflow. Historically, KerasHub preprocessing layers
-        # required TF and TF text libraries.
+        # Whether eager calls run the pure Python path (the default) or the
+        # TensorFlow path. Historically, KerasHub preprocessing layers required
+        # TF and TF text libraries. Now they are only required when tracing a
+        # `tf.function` or `tf.data` pipeline, or when this is set to `False`,
+        # and the check happens on the first TF path use rather than here. See
+        # `_use_tf_workflow()`.
         self._allow_python_workflow = _allow_python_workflow
         # Whether `call` has the `(x, y, sample_weight)` signature. Keras has
         # already inspected `self.call` in `Layer.__init__`, so this is safe.
@@ -46,6 +49,23 @@ class PreprocessingLayer(keras.layers.Layer):
         ):
             args = args[0]
         return super().__call__(*args, **kwargs)
+
+    def _use_tf_workflow(self):
+        """Whether to run the TensorFlow path instead of the pure Python path.
+
+        The TensorFlow path is always used when tracing a `tf.function` or a
+        `tf.data` pipeline. Outside of that, it is only used when the layer was
+        constructed with `_allow_python_workflow=False`, in which case
+        TensorFlow and TensorFlow Text must be installed. This is where that
+        requirement is checked, so that layers can be constructed (and run on
+        the Python path, e.g. inside a Grain pipeline) without TensorFlow.
+        """
+        if in_tf_function():
+            return True
+        if self._allow_python_workflow:
+            return False
+        assert_tf_libs_installed(self.__class__.__name__)
+        return True
 
     def get_build_config(self):
         return None

@@ -13,6 +13,7 @@ from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer,
 )
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -88,6 +89,9 @@ class MoonshineAudioToTextPreprocessor(AudioToTextPreprocessor):
         decoder_sequence_length=1024,
         **kwargs,
     ):
+        # `call` and the generate methods are implemented with TensorFlow ops
+        # only.
+        assert_tf_installed("MoonshineAudioToTextPreprocessor")
         super().__init__(tokenizer=tokenizer, **kwargs)
         self.audio_converter = audio_converter
         self.decoder_sequence_length = decoder_sequence_length
