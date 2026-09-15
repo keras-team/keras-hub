@@ -566,6 +566,9 @@ from keras_hub.src.models.moonshine.moonshine_backbone import (
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer as MoonshineTokenizer,
 )
+from keras_hub.src.models.muse_glimmer.muse_glimmer_assistant_causal_lm import (
+    MuseGlimmerAssistantCausalLM as MuseGlimmerAssistantCausalLM,
+)
 from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
     MuseGlimmerBackbone as MuseGlimmerBackbone,
 )
