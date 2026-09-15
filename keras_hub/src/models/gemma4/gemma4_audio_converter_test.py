@@ -1,3 +1,4 @@
+import grain
 import numpy as np
 from keras import ops
 
@@ -183,3 +184,36 @@ class Gemma4AudioConverterTest(TestCase):
         # num_frames = (16000 * 30) // 160 = 3000
         self.assertEqual(out.shape[-1], 128)
         self.assertEqual(out.shape[-2], 3000)
+
+    def test_python_matches_tf(self):
+        converter = Gemma4AudioConverter(**self.init_kwargs)
+        waveform = (
+            np.random.default_rng(42)
+            .standard_normal((2, self.num_samples))
+            .astype("float32")
+        )
+        # Silent mel bins sit exactly at the log floor, where the float32 TF
+        # FFT and the float64 NumPy FFT differ in the last digits, so compare
+        # with a relaxed tolerance.
+        self.assertAllClose(
+            converter._call_python(waveform),
+            converter._call_tf(waveform),
+            atol=1e-2,
+        )
+
+    def test_grain_outputs_numpy(self):
+        converter = Gemma4AudioConverter(**self.init_kwargs)
+        rng = np.random.default_rng(42)
+        samples = [
+            rng.standard_normal(self.num_samples).astype("float32")
+            for _ in range(2)
+        ]
+        ds = grain.MapDataset.source(samples).map(converter)
+        for sample, output in zip(samples, ds):
+            self.assertIsInstance(output, np.ndarray)
+            self.assertEqual(output.shape, (self.num_frames, 8))
+            self.assertAllClose(output, converter(sample))
+        (batch,) = list(ds.batch(2))
+        self.assertIsInstance(batch, np.ndarray)
+        self.assertEqual(batch.shape, (2, self.num_frames, 8))
+        self.assertAllClose(batch, converter(np.stack(samples)))
