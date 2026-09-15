@@ -105,6 +105,9 @@ class MuseGlimmerBackbone(Backbone):
         enable_qk_scale_and_gate: bool. Passed through to every decoder
             layer's `MuseGlimmerTextAttention`. Defaults to `True`. The
             assistant/drafter configuration sets this to `False`.
+        qk_norm_with_scale: bool. Passed through to every decoder layer's
+            `MuseGlimmerTextAttention`. Defaults to `False`. The
+            assistant/drafter configuration sets this to `True`.
         use_sandwich_norm: bool. Passed through to every decoder layer.
             If `False`, skips the two post-sublayer sandwich norms.
             Defaults to `True`. The assistant/drafter configuration sets
@@ -138,6 +141,7 @@ class MuseGlimmerBackbone(Backbone):
         context_projection_layer_ids=None,
         use_external_embeddings=False,
         enable_qk_scale_and_gate=True,
+        qk_norm_with_scale=False,
         use_sandwich_norm=True,
         dtype=None,
         **kwargs,
@@ -238,6 +242,7 @@ class MuseGlimmerBackbone(Backbone):
                 ),
                 use_bidirectional_attention=use_bidirectional_attention,
                 enable_qk_scale_and_gate=enable_qk_scale_and_gate,
+                qk_norm_with_scale=qk_norm_with_scale,
                 use_sandwich_norm=use_sandwich_norm,
                 dropout=dropout,
                 dtype=dtype,
@@ -364,6 +369,7 @@ class MuseGlimmerBackbone(Backbone):
         self.context_projection_layer_ids = context_projection_layer_ids
         self.use_external_embeddings = use_external_embeddings
         self.enable_qk_scale_and_gate = enable_qk_scale_and_gate
+        self.qk_norm_with_scale = qk_norm_with_scale
         self.use_sandwich_norm = use_sandwich_norm
 
     def __call__(self, inputs, *args, **kwargs):
@@ -429,6 +435,7 @@ class MuseGlimmerBackbone(Backbone):
                 ),
                 "use_external_embeddings": self.use_external_embeddings,
                 "enable_qk_scale_and_gate": self.enable_qk_scale_and_gate,
+                "qk_norm_with_scale": self.qk_norm_with_scale,
                 "use_sandwich_norm": self.use_sandwich_norm,
             }
         )

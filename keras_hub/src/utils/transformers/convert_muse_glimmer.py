@@ -69,24 +69,6 @@ def load_video_converter_config(preset, transformers_config):
     }
 
 
-def _transpose(hf_tensor, _):
-    return np.transpose(hf_tensor, axes=(1, 0))
-
-
-def _multi_head_transpose(hf_tensor, keras_shape):
-    """HF `nn.Linear` (out_features, in_features) -> a 3D EinsumDense kernel.
-
-    Works for both `MuseGlimmerTextAttention`'s Q/K/V/gate projections
-    (kernel shape `(in_dim, heads, head_dim)`) and its output projection
-    (kernel shape `(heads, head_dim, out_dim)`): transposing to
-    `(in_features, out_features)` always leaves the untouched dimension at
-    one edge and the `heads * head_dim` block, contiguous and head-major,
-    at the other — so a plain reshape into `keras_shape` splits or merges
-    it correctly without further axis permutation.
-    """
-    return np.transpose(hf_tensor, axes=(1, 0)).reshape(keras_shape)
-
-
 def convert_backbone_config(transformers_config):
     text_config = transformers_config["text_config"]
     vision_config = transformers_config.get("vision_config", None)
@@ -173,71 +155,81 @@ def convert_weights(backbone, loader, transformers_config):
     loader.port_weight(
         backbone.token_embedding.reverse_embeddings,
         "lm_head.weight",
-        hook_fn=_transpose,
+        hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
     )
 
     for i in range(backbone.num_layers):
         layer = backbone.transformer_layers[i]
-        prefix = f"model.language_model.layers.{i}"
         attn = layer._self_attention_layer
 
         loader.port_weight(
             layer._input_layernorm.scale,
-            f"{prefix}.input_layernorm.weight",
+            f"model.language_model.layers.{i}.input_layernorm.weight",
         )
         loader.port_weight(
             layer._post_attention_layernorm.scale,
-            f"{prefix}.post_attention_layernorm.weight",
+            f"model.language_model.layers.{i}.post_attention_layernorm.weight",
         )
         loader.port_weight(
             layer._pre_feedforward_layernorm.scale,
-            f"{prefix}.pre_feedforward_layernorm.weight",
+            f"model.language_model.layers.{i}.pre_feedforward_layernorm.weight",
         )
         loader.port_weight(
             layer._post_feedforward_layernorm.scale,
-            f"{prefix}.post_feedforward_layernorm.weight",
+            f"model.language_model.layers.{i}"
+            ".post_feedforward_layernorm.weight",
         )
 
         loader.port_weight(
             attn._query_dense.kernel,
-            f"{prefix}.self_attn.q_proj.weight",
-            hook_fn=_multi_head_transpose,
+            f"model.language_model.layers.{i}.self_attn.q_proj.weight",
+            hook_fn=lambda x, shape: np.transpose(x, axes=(1, 0)).reshape(
+                shape
+            ),
         )
         loader.port_weight(
             attn._key_dense.kernel,
-            f"{prefix}.self_attn.k_proj.weight",
-            hook_fn=_multi_head_transpose,
+            f"model.language_model.layers.{i}.self_attn.k_proj.weight",
+            hook_fn=lambda x, shape: np.transpose(x, axes=(1, 0)).reshape(
+                shape
+            ),
         )
         loader.port_weight(
             attn._value_dense.kernel,
-            f"{prefix}.self_attn.v_proj.weight",
-            hook_fn=_multi_head_transpose,
+            f"model.language_model.layers.{i}.self_attn.v_proj.weight",
+            hook_fn=lambda x, shape: np.transpose(x, axes=(1, 0)).reshape(
+                shape
+            ),
         )
         loader.port_weight(
             attn._gate_dense.kernel,
-            f"{prefix}.self_attn.gate_proj.weight",
-            hook_fn=_multi_head_transpose,
+            f"model.language_model.layers.{i}.self_attn.gate_proj.weight",
+            hook_fn=lambda x, shape: np.transpose(x, axes=(1, 0)).reshape(
+                shape
+            ),
         )
         loader.port_weight(
             attn._output_dense.kernel,
-            f"{prefix}.self_attn.o_proj.weight",
-            hook_fn=_multi_head_transpose,
+            f"model.language_model.layers.{i}.self_attn.o_proj.weight",
+            hook_fn=lambda x, shape: np.transpose(x, axes=(1, 0)).reshape(
+                shape
+            ),
         )
 
         loader.port_weight(
             layer._feedforward_gate_dense.kernel,
-            f"{prefix}.mlp.gate_proj.weight",
-            hook_fn=_transpose,
+            f"model.language_model.layers.{i}.mlp.gate_proj.weight",
+            hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
         )
         loader.port_weight(
             layer._feedforward_up_dense.kernel,
-            f"{prefix}.mlp.up_proj.weight",
-            hook_fn=_transpose,
+            f"model.language_model.layers.{i}.mlp.up_proj.weight",
+            hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
         )
         loader.port_weight(
             layer._feedforward_down_dense.kernel,
-            f"{prefix}.mlp.down_proj.weight",
-            hook_fn=_transpose,
+            f"model.language_model.layers.{i}.mlp.down_proj.weight",
+            hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
         )
 
     loader.port_weight(
@@ -246,25 +238,26 @@ def convert_weights(backbone, loader, transformers_config):
 
     if backbone.vision_encoder is not None:
         vis = backbone.vision_encoder
-        vis_prefix = "model.vision_tower"
 
         loader.port_weight(
             vis.patch_embedder.patch_embedding.kernel,
-            f"{vis_prefix}.patch_embedder.patch_embedding.weight",
-            hook_fn=_transpose,
+            "model.vision_tower.patch_embedder.patch_embedding.weight",
+            hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
         )
         loader.port_weight(
             vis.patch_embedder.position_embedding_table.embeddings,
-            f"{vis_prefix}.patch_embedder.position_embedding_table.weight",
+            "model.vision_tower.patch_embedder.position_embedding_table.weight",
         )
-        loader.port_weight(vis.ln_pre.gamma, f"{vis_prefix}.ln_pre.weight")
-        loader.port_weight(vis.ln_pre.beta, f"{vis_prefix}.ln_pre.bias")
-        loader.port_weight(vis.ln_post.gamma, f"{vis_prefix}.ln_post.weight")
-        loader.port_weight(vis.ln_post.beta, f"{vis_prefix}.ln_post.bias")
+        loader.port_weight(vis.ln_pre.gamma, "model.vision_tower.ln_pre.weight")
+        loader.port_weight(vis.ln_pre.beta, "model.vision_tower.ln_pre.bias")
+        loader.port_weight(
+            vis.ln_post.gamma, "model.vision_tower.ln_post.weight"
+        )
+        loader.port_weight(vis.ln_post.beta, "model.vision_tower.ln_post.bias")
 
         for i in range(vis.num_layers):
             blk = vis.blocks[i]
-            blk_prefix = f"{vis_prefix}.layers.{i}"
+            blk_prefix = f"model.vision_tower.layers.{i}"
 
             loader.port_weight(blk.norm1.gamma, f"{blk_prefix}.norm1.weight")
             loader.port_weight(blk.norm1.beta, f"{blk_prefix}.norm1.bias")
@@ -274,7 +267,7 @@ def convert_weights(backbone, loader, transformers_config):
             loader.port_weight(
                 blk.attn.q_proj.kernel,
                 f"{blk_prefix}.attn.q_proj.weight",
-                hook_fn=_transpose,
+                hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
             )
             loader.port_weight(
                 blk.attn.q_proj.bias, f"{blk_prefix}.attn.q_proj.bias"
@@ -282,7 +275,7 @@ def convert_weights(backbone, loader, transformers_config):
             loader.port_weight(
                 blk.attn.k_proj.kernel,
                 f"{blk_prefix}.attn.k_proj.weight",
-                hook_fn=_transpose,
+                hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
             )
             loader.port_weight(
                 blk.attn.k_proj.bias, f"{blk_prefix}.attn.k_proj.bias"
@@ -290,7 +283,7 @@ def convert_weights(backbone, loader, transformers_config):
             loader.port_weight(
                 blk.attn.v_proj.kernel,
                 f"{blk_prefix}.attn.v_proj.weight",
-                hook_fn=_transpose,
+                hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
             )
             loader.port_weight(
                 blk.attn.v_proj.bias, f"{blk_prefix}.attn.v_proj.bias"
@@ -298,7 +291,7 @@ def convert_weights(backbone, loader, transformers_config):
             loader.port_weight(
                 blk.attn.proj.kernel,
                 f"{blk_prefix}.attn.proj.weight",
-                hook_fn=_transpose,
+                hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
             )
             loader.port_weight(
                 blk.attn.proj.bias, f"{blk_prefix}.attn.proj.bias"
@@ -307,13 +300,13 @@ def convert_weights(backbone, loader, transformers_config):
             loader.port_weight(
                 blk.mlp.fc1.kernel,
                 f"{blk_prefix}.mlp.fc1.weight",
-                hook_fn=_transpose,
+                hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
             )
             loader.port_weight(blk.mlp.fc1.bias, f"{blk_prefix}.mlp.fc1.bias")
             loader.port_weight(
                 blk.mlp.fc2.kernel,
                 f"{blk_prefix}.mlp.fc2.weight",
-                hook_fn=_transpose,
+                hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
             )
             loader.port_weight(blk.mlp.fc2.bias, f"{blk_prefix}.mlp.fc2.bias")
 
@@ -322,17 +315,17 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             backbone.vision_adapter_fc1.kernel,
             "model.vision_adapter.fc1.weight",
-            hook_fn=_transpose,
+            hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
         )
         loader.port_weight(
             backbone.vision_adapter_fc2.kernel,
             "model.vision_adapter.fc2.weight",
-            hook_fn=_transpose,
+            hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
         )
         loader.port_weight(
             backbone.vision_projection.kernel,
             "model.vision_projection.weight",
-            hook_fn=_transpose,
+            hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
         )
         # `perception_emb_norm` is scaleless — no weight to port.
 

@@ -59,6 +59,8 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
             `False`.
         enable_qk_scale_and_gate: bool. Passed through to
             `MuseGlimmerTextAttention`. Defaults to `True`.
+        qk_norm_with_scale: bool. Passed through to
+            `MuseGlimmerTextAttention`. Defaults to `False`.
         use_sandwich_norm: bool. If `False`, skips
             `post_attention_layernorm`/`post_feedforward_layernorm`.
             Defaults to `True`.
@@ -81,6 +83,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         sliding_window_size=None,
         use_bidirectional_attention=False,
         enable_qk_scale_and_gate=True,
+        qk_norm_with_scale=False,
         use_sandwich_norm=True,
         kernel_initializer="glorot_uniform",
         dropout=0.0,
@@ -100,6 +103,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         self.sliding_window_size = sliding_window_size
         self.use_bidirectional_attention = use_bidirectional_attention
         self.enable_qk_scale_and_gate = enable_qk_scale_and_gate
+        self.qk_norm_with_scale = qk_norm_with_scale
         self.use_sandwich_norm = use_sandwich_norm
         self.dropout = dropout
         self.activation = keras.activations.get(hidden_activation)
@@ -126,6 +130,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
             rope_max_wavelength=self.rope_max_wavelength,
             sliding_window_size=self.sliding_window_size,
             enable_qk_scale_and_gate=self.enable_qk_scale_and_gate,
+            qk_norm_with_scale=self.qk_norm_with_scale,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
             dtype=self.dtype_policy,
@@ -382,6 +387,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
                     self.use_bidirectional_attention
                 ),
                 "enable_qk_scale_and_gate": self.enable_qk_scale_and_gate,
+                "qk_norm_with_scale": self.qk_norm_with_scale,
                 "use_sandwich_norm": self.use_sandwich_norm,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer

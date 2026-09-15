@@ -11,15 +11,7 @@ from keras_hub.src.utils.transformers import convert_muse_glimmer
 
 
 class FakeLoader:
-    """Minimal stand-in for `SafetensorLoader.port_weight`.
-
-    Generates a random tensor shaped like the real on-disk HF weight (a 2D
-    `nn.Linear`-style `(out, in)` shape when `hook_fn` is given, since real
-    HF checkpoints never store 3D kernels directly) and lets `hook_fn`
-    reshape it into KerasHub's convention, then assigns it and records
-    which HF keys were requested so tests can assert every expected weight
-    was actually ported.
-    """
+    """Minimal stand-in for `SafetensorLoader.port_weight`."""
 
     def __init__(self):
         self.ported_keys = []
@@ -33,7 +25,7 @@ class FakeLoader:
             # A 3D EinsumDense kernel is ported from a 2D HF `nn.Linear`
             # (out_features, in_features) weight — any 2D factorization of
             # the same total size round-trips correctly through the real
-            # `_multi_head_transpose` hook's transpose+reshape.
+            # transpose+reshape hook.
             total = keras_shape[0] * keras_shape[1] * keras_shape[2]
             hf_shape = (total // keras_shape[-1], keras_shape[-1])
         else:

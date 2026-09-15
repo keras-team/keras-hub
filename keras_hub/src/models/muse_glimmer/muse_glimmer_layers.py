@@ -136,7 +136,7 @@ class MuseGlimmerContextProjection(keras.layers.Layer):
     """Projects cross-model context hidden states into the hidden dimension.
 
     Matches HF's `MuseGlimmerAssistantContextProjection`: a bias-free dense
-    projection (`fc`) followed by a scaleless RMSNorm (`output_norm_enc`).
+    projection (`fc`) followed by a scaled RMSNorm (`output_norm_enc`).
     Used only by the assistant/drafter configuration of
     `MuseGlimmerBackbone`, which concatenates hidden states pulled from
     several layers of the separate main model before calling this layer.
@@ -161,10 +161,10 @@ class MuseGlimmerContextProjection(keras.layers.Layer):
         self.dense.build(input_shape)
         self.norm = MuseGlimmerRMSNorm(
             eps=self.eps,
-            with_scale=False,
             dtype=self.dtype_policy,
             name="output_norm_enc",
         )
+        self.norm.build((*input_shape[:-1], self.hidden_dim))
         self.built = True
 
     def call(self, x):
