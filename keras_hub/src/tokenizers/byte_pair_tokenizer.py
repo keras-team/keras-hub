@@ -267,7 +267,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     >>> tokenizer = keras_hub.tokenizers.BytePairTokenizer(vocab, merge)
     >>> outputs = tokenizer("butterfly")
     >>> np.array(outputs)
-    array([3, 8])
+    array([3, 8], dtype=int32)
     >>> seq1, seq2 = tokenizer(["butterfly", "butter"])
     >>> np.array(seq1)
     array([3, 8])
