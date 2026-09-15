@@ -1,6 +1,6 @@
-import contextlib
 import functools
 import math
+import sys
 import warnings
 
 import keras
@@ -299,13 +299,19 @@ def _grain_can_carry_preprocessing(ds, preprocess_samples):
     python lists, which `GrainDatasetAdapter` flattens down to scalars and then
     rejects as rank 0. `tf.data` carries both end to end, so a pipeline that
     preprocesses into either belongs there instead. Deciding needs the answer,
-    so this runs `preprocess_samples` over the first batch.
+    so this runs `preprocess_samples` over the first batch, which is why it
+    has to be free of side effects.
+
+    Raising counts as an answer too. Preprocessing written against tf tensors
+    fails on the numpy grain hands it, and `tf.data` is where that code was
+    meant to run, so send it there. If it fails again the traceback is the
+    user's own, rather than one routed out of grain's thread pool. With no
+    TensorFlow installed there is nowhere else to go, so grain keeps it.
     """
     try:
         outputs = _grain_preprocess(preprocess_samples, ds[0])
     except Exception:
-        # Let the real pass raise, where the traceback is the user's own.
-        return True
+        return tf is None
     return all(
         leaf is None or hasattr(leaf, "shape") for leaf in tree.flatten(outputs)
     )
@@ -335,35 +341,110 @@ def _apply_class_weight(class_weight, element):
     return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
 
-@contextlib.contextmanager
-def _silence_unknown_length_warning(ds, steps):
-    """Hide the spurious "ran out of data" warning for grain datasets.
+RAN_OUT_OF_DATA_WARNING = (
+    "Your input ran out of data; interrupting training. Make sure that your "
+    "dataset or generator can generate at least `steps_per_epoch * epochs` "
+    "batches. You may need to use the `.repeat()` function when building your "
+    "dataset."
+)
 
-    `GrainDatasetAdapter.num_batches` is always `None`, so Keras finds the
-    epoch size by running the iterator dry. Before keras-team/keras#23360 that
-    warned as if training had been cut short, once per epoch and again for
-    `evaluate()` and `predict()`. The warning only carries information when
-    the caller declared how many steps to expect, so any declared count in
-    `steps` keeps it, including a `validation_steps` the training data knows
-    nothing about.
 
-    TODO: drop this once the minimum supported Keras includes that fix, which
-    is unreleased as of Keras 3.15.1.
+# Batches grain reads ahead of the one being trained on. Grain's own default
+# is 500, sized for throughput pipelines rather than for the short datasets
+# `fit(x, y)` builds, where it costs whole passes of preprocessing that
+# nothing ever reads. Eight is what Keras samples to infer the batch spec.
+_READ_AHEAD_BATCHES = 8
+
+
+def _batches_in(ds):
+    """Batches in one pass over `ds`, or `None` when it does not say.
+
+    A dataset the caller already repeated has no end, which grain reports as
+    a length of `sys.maxsize`. That is not a number of batches, and repeating
+    such a dataset again raises.
     """
-    if any(s is not None for s in steps) or not _is_grain_dataset(ds):
-        yield
-        return
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            message="Your input ran out of data",
-            category=UserWarning,
-        )
-        yield
+    try:
+        length = len(ds)
+    except TypeError:
+        return None
+    return None if length >= sys.maxsize else length
+
+
+class _ShortDatasetWarner(keras.callbacks.Callback):
+    """Warns that a declared step count outruns the dataset it counts.
+
+    On `tf.data` Keras notices this itself, because the adapter reports
+    `num_batches` and the pass stops at the end of the data. A grain dataset
+    reports `None` and is repeated here to survive the epoch boundary, so it
+    never runs dry for Keras to notice.
+
+    Training warns once an epoch and validation once a validation run, which
+    is not the same thing under `validation_freq`.
+    """
+
+    def __init__(self, train, validation):
+        super().__init__()
+        self.train = train
+        self.validation = validation
+
+    def on_epoch_end(self, epoch, logs=None):
+        if self.train:
+            warnings.warn(RAN_OUT_OF_DATA_WARNING, stacklevel=2)
+
+    def on_test_end(self, logs=None):
+        if self.validation:
+            warnings.warn(RAN_OUT_OF_DATA_WARNING, stacklevel=2)
+
+
+def _declare_steps(ds, steps, passes=1):
+    """Return `ds`, the count to run it for, and whether `steps` outran it.
+
+    `GrainDatasetAdapter.num_batches` is always `None`, so Keras has no idea
+    how long a pass is. Left alone it finds out by running the iterator dry,
+    which warns as if training had been cut short on Keras 3.15.1 and, once a
+    count is declared, hands the next epoch a drained iterator. Both go away
+    by telling Keras the length up front, which the dataset does know.
+
+    Declaring it is what makes Keras hold one iterator across epochs, so the
+    dataset is repeated for as many passes as there are. The repeat is counted
+    rather than endless: an endless one would have grain's read ahead
+    preprocessing hundreds of batches past the last one anybody asks for.
+
+    A declared count that outruns the data is capped to it, the way `tf.data`
+    stops an over-long `steps_per_epoch` at the end of the data rather than
+    cycling, and reported so the caller still hears about it.
+    """
+    if not _is_grain_dataset(ds):
+        return ds, steps, False
+    length = _batches_in(ds)
+    if length is None:
+        # An `IterDataset`, or one the caller already repeated. Nothing to
+        # declare, so leave it to Keras.
+        return ds, steps, False
+    over = steps is not None and steps > length
+    steps = length if over or steps is None else steps
+    # `MapDataset.__iter__` reads ahead 500 elements by default, so Keras'
+    # adapter spends 45 batches of preprocessing on the 8 it samples to infer
+    # the batch spec. Bounding the buffer brings that down to 10, and stops
+    # the repeat above from multiplying it: 100 batches cost 119 calls rather
+    # than 261. `__len__` goes with the conversion, so the length is read
+    # first.
+    return (
+        ds.repeat(passes).to_iter_dataset(
+            grain.ReadOptions(prefetch_buffer_size=_READ_AHEAD_BATCHES)
+        ),
+        steps,
+        over,
+    )
 
 
 def _build_dataset(x, y, sample_weight, batch_size, preprocess_samples):
-    """Batch `x`, `y` and `sample_weight`, then map preprocessing over them."""
+    """Batch `x`, `y` and `sample_weight`, then map preprocessing over them.
+
+    Choosing between grain and `tf.data` runs `preprocess_samples` over the
+    first batch, so it runs once more than the batches it is mapped over and
+    must be free of side effects.
+    """
     ds = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
     built_here = _is_grain_dataset(ds) and ds is not x
     if built_here and not _grain_can_carry_preprocessing(
@@ -442,7 +523,12 @@ class PipelineModel(keras.Model):
         super().__init__(*args, **kwargs)
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
-        """An overridable function which preprocesses entire samples."""
+        """An overridable function which preprocesses entire samples.
+
+        This must be free of side effects. It is run over the first batch to
+        decide whether the pipeline can be built on grain, and then again over
+        every batch including that one.
+        """
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     # ========================================================================
@@ -509,25 +595,36 @@ class PipelineModel(keras.Model):
         elif class_weight is not None:
             kwargs["class_weight"] = class_weight
 
-        steps_per_epoch = kwargs.get("steps_per_epoch")
-        if steps_per_epoch and _is_grain_dataset(x):
-            # `num_batches` is `None` for a grain dataset, so `EpochIterator`
-            # holds one iterator across every epoch and the second epoch would
-            # train on a drained one. Cycling gives it the batches that the
-            # `tf.data` reset gives it today.
-            x = x.repeat()
+        passes = kwargs.get("epochs", 1)
+        x, steps_per_epoch, short_train = _declare_steps(
+            x, kwargs.get("steps_per_epoch"), passes
+        )
+        if steps_per_epoch is not None:
+            kwargs["steps_per_epoch"] = steps_per_epoch
 
-        with _silence_unknown_length_warning(
-            x, (steps_per_epoch, kwargs.get("validation_steps"))
-        ):
-            return super().fit(
-                x=x,
-                y=None,
-                batch_size=None,
-                sample_weight=None,
-                validation_data=validation_data,
-                **kwargs,
+        short_validation = False
+        if validation_data is not None:
+            validation_data, validation_steps, short_validation = (
+                _declare_steps(
+                    validation_data, kwargs.get("validation_steps"), passes
+                )
             )
+            if validation_steps is not None:
+                kwargs["validation_steps"] = validation_steps
+
+        if short_train or short_validation:
+            kwargs["callbacks"] = list(kwargs.get("callbacks") or []) + [
+                _ShortDatasetWarner(short_train, short_validation)
+            ]
+
+        return super().fit(
+            x=x,
+            y=None,
+            batch_size=None,
+            sample_weight=None,
+            validation_data=validation_data,
+            **kwargs,
+        )
 
     def evaluate(
         self,
@@ -550,13 +647,18 @@ class PipelineModel(keras.Model):
         x = _build_dataset(
             x, y, sample_weight, batch_size, self.preprocess_samples
         )
-        with _silence_unknown_length_warning(x, (kwargs.get("steps"),)):
-            return super().evaluate(
-                x=x,
-                y=None,
-                batch_size=None,
-                **kwargs,
-            )
+        x, steps, over = _declare_steps(x, kwargs.get("steps"))
+        if steps is not None:
+            kwargs["steps"] = steps
+        if over:
+            # One pass, so one warning, which is what `tf.data` gives here.
+            warnings.warn(RAN_OUT_OF_DATA_WARNING, stacklevel=2)
+        return super().evaluate(
+            x=x,
+            y=None,
+            batch_size=None,
+            **kwargs,
+        )
 
     def predict(
         self,
@@ -565,12 +667,17 @@ class PipelineModel(keras.Model):
         **kwargs,
     ):
         x = _build_dataset(x, None, None, batch_size, self.preprocess_samples)
-        with _silence_unknown_length_warning(x, (kwargs.get("steps"),)):
-            return super().predict(
-                x=x,
-                batch_size=None,
-                **kwargs,
-            )
+        x, steps, over = _declare_steps(x, kwargs.get("steps"))
+        if steps is not None:
+            kwargs["steps"] = steps
+        if over:
+            # One pass, so one warning, which is what `tf.data` gives here.
+            warnings.warn(RAN_OUT_OF_DATA_WARNING, stacklevel=2)
+        return super().predict(
+            x=x,
+            batch_size=None,
+            **kwargs,
+        )
 
     def train_on_batch(
         self,

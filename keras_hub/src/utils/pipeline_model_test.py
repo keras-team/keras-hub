@@ -8,9 +8,9 @@ import tensorflow as tf
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils import pipeline_model
 from keras_hub.src.utils.pipeline_model import PipelineModel
+from keras_hub.src.utils.pipeline_model import _batches_in
 from keras_hub.src.utils.pipeline_model import _build_dataset
 from keras_hub.src.utils.pipeline_model import _convert_inputs_to_dataset
-from keras_hub.src.utils.pipeline_model import _silence_unknown_length_warning
 
 try:
     import grain
@@ -463,6 +463,23 @@ class StringOutputPipeline(PipelineModel):
         return self.dense(inputs["features"])
 
 
+class TfOnlyPipeline(PipelineModel):
+    """This model preprocesses with tf ops that numpy inputs cannot satisfy."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dense = keras.layers.Dense(1)
+
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        # `get_shape` is a tf.Tensor method; a numpy array has no such thing.
+        if x.get_shape().rank != 2:
+            raise ValueError(f"Expected a batch of features. Received: {x}")
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def call(self, inputs):
+        return self.dense(inputs)
+
+
 class _BatchCounter(keras.callbacks.Callback):
     """Records how many batches each epoch actually trained on."""
 
@@ -622,6 +639,18 @@ class TestGrainPipeline(TestCase):
         )
         self.assertIsInstance(ds, tf.data.Dataset)
 
+    def test_tf_only_preprocessing_falls_back_to_tf_data(self):
+        # Preprocessing written against tf tensors raises on the numpy grain
+        # hands it. `tf.data` is where that code was meant to run.
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        ds = _build_dataset(x, y, None, 4, TfOnlyPipeline().preprocess_samples)
+        self.assertIsInstance(ds, tf.data.Dataset)
+
+        model = TfOnlyPipeline()
+        model.compile(loss="mse")
+        model.fit(x=x, y=y, batch_size=4)
+
     def test_dense_preprocessing_stays_on_grain(self):
         ds = _build_dataset(
             np.random.uniform(size=(8, 5)),
@@ -641,7 +670,7 @@ class TestGrainPipeline(TestCase):
             ),
             operations=[grain.transforms.Batch(4)],
         )
-        model = FeaturePipeline()
+        model = NoopPipeline()
         model.compile(loss="mse")
         with self.assertRaisesRegex(ValueError, "grain.MapDataset"):
             model.fit(loader)
@@ -673,25 +702,78 @@ class TestGrainPipeline(TestCase):
         messages = [str(w.message) for w in caught]
         self.assertFalse([m for m in messages if "ran out of data" in m])
 
-    def test_ran_out_of_data_warning_with_declared_steps(self):
-        # The warning does carry information when the caller said how many
-        # steps to expect, on any axis, so it is left alone in that case.
-        ds = _convert_inputs_to_dataset(
-            np.random.uniform(size=(8, 5)), None, None, batch_size=4
-        )
+    def test_steps_per_epoch_beyond_the_data(self):
+        # `tf.data` stops an over-long `steps_per_epoch` at the end of the
+        # data and warns once an epoch. A repeated grain dataset never runs
+        # dry, so the count is capped and the warning raised here instead.
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        counter = _BatchCounter()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            model.fit(
+                x=np.random.uniform(size=(8, 5)),
+                y=np.random.uniform(size=(8, 1)),
+                batch_size=4,
+                epochs=2,
+                steps_per_epoch=5,
+                callbacks=[counter],
+            )
+        self.assertEqual(counter.per_epoch, [2, 2])
+        messages = [str(w.message) for w in caught]
+        self.assertLen([m for m in messages if "ran out of data" in m], 2)
 
-        def caught_warnings(steps):
+    def test_repeated_dataset_is_left_to_the_caller(self):
+        # A dataset the caller already repeated has no end. Grain reports that
+        # as a length of `sys.maxsize`, and repeating it again raises, so the
+        # step count stays theirs to declare.
+        ds = _convert_inputs_to_dataset(
+            np.random.uniform(size=(8, 5)),
+            np.random.uniform(size=(8, 1)),
+            None,
+            batch_size=4,
+        ).repeat()
+        self.assertIsNone(_batches_in(ds))
+
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        model.fit(ds, epochs=2, steps_per_epoch=2)
+
+    def test_short_validation_warns_per_validation_run(self):
+        # Training warns once an epoch and validation once a validation run,
+        # which `validation_freq` makes two different counts.
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            model.fit(
+                x=x,
+                y=y,
+                batch_size=4,
+                epochs=4,
+                validation_data=(x, y),
+                validation_steps=9,
+                validation_freq=2,
+            )
+        messages = [str(w.message) for w in caught]
+        self.assertLen([m for m in messages if "ran out of data" in m], 2)
+
+    def test_steps_beyond_the_data_warns_once(self):
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        for call, kwargs in [
+            (model.evaluate, {"y": y}),
+            (model.predict, {}),
+        ]:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
-                with _silence_unknown_length_warning(ds, steps):
-                    warnings.warn("Your input ran out of data", UserWarning)
-            return caught
-
-        self.assertLen(caught_warnings((None, None)), 0)
-        self.assertLen(caught_warnings((10, None)), 1)
-        # A `validation_steps` shortfall says nothing about the training data,
-        # but it is still the caller declaring a count.
-        self.assertLen(caught_warnings((None, 10)), 1)
+                call(x=x, batch_size=4, steps=9, **kwargs)
+            messages = [str(w.message) for w in caught]
+            self.assertLen([m for m in messages if "ran out of data" in m], 1)
 
     def test_validation_steps_shortfall_still_warns(self):
         model = NoopPipeline()
