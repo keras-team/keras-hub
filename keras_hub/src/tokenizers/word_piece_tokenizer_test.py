@@ -92,6 +92,35 @@ class WordPieceTokenizerTest(TestCase):
             output, ["the", "qu", "##ick", "br", "##own", "fox", "."]
         )
 
+    def test_tokenize_rank_2(self):
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        tokenizer = self.make_tokenizer(vocabulary=vocab_data)
+        output = tokenizer([["the fox."], ["the."]])
+        self.assertAllEqual(output, [[[1, 6, 7]], [[1, 7]]])
+
+    def test_tokenize_rank_2_dense(self):
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        tokenizer = self.make_tokenizer(
+            vocabulary=vocab_data, sequence_length=4
+        )
+        output = tokenizer([["the fox.", "the."], ["fox.", "the fox."]])
+        self.assertEqual(tuple(output.shape), (2, 2, 4))
+        self.assertAllEqual(
+            output,
+            [
+                [[1, 6, 7, 0], [1, 7, 0, 0]],
+                [[6, 7, 0, 0], [1, 6, 7, 0]],
+            ],
+        )
+
+    def test_tokenize_ragged(self):
+        if not self._allow_python_workflow:
+            self.skipTest("Ragged nested list only supported on Python path.")
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        tokenizer = self.make_tokenizer(vocabulary=vocab_data)
+        output = tokenizer([["the fox.", "the."], ["fox."]])
+        self.assertAllEqual(output, [[[1, 6, 7], [1, 7]], [[6, 7]]])
+
     def test_dense_output(self):
         input_data = ["the quick brown fox."]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]

@@ -21,16 +21,8 @@ from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import restore_outer_shape
+from keras_hub.src.utils.tensor_utils import tf
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
-# A partially uninstalled tensorflow imports as an empty namespace package
-# rather than raising, so treat it as absent. See `tensor_utils` for details.
-# `_canonicalize_presplit_inputs` touches `tf` on the pure Python path.
-if tf is not None and not hasattr(tf, "executing_eagerly"):
-    tf = None
 try:
     import tensorflow_text as tf_text
 except ImportError:
@@ -738,6 +730,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             )
             samples = [[text] for text in inputs]
         else:
+            # Pre-split: rank-2 inputs are [batch, words] (each row is a
+            # list of already-split words), not a dense outer shape.
             samples, batched = self._canonicalize_presplit_inputs(inputs)
             outer_shape = None
 

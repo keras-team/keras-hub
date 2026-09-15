@@ -105,6 +105,30 @@ class UnicodeCodepointTokenizerTest(TestCase):
         self.assertLen(output.shape, 1)
         self.assertDTypeEqual(output, "int32")
 
+    def test_tokenize_rank_2(self):
+        tokenizer = self.make_tokenizer()
+        output = tokenizer([["hi"], ["go"]])
+        self.assertAllEqual(output, [[[104, 105]], [[103, 111]]])
+
+    def test_tokenize_rank_2_dense(self):
+        tokenizer = self.make_tokenizer(sequence_length=4)
+        output = tokenizer([["hi", "go"], ["no", "hi"]])
+        self.assertEqual(tuple(output.shape), (2, 2, 4))
+        self.assertAllEqual(
+            output,
+            [
+                [[104, 105, 0, 0], [103, 111, 0, 0]],
+                [[110, 111, 0, 0], [104, 105, 0, 0]],
+            ],
+        )
+
+    def test_tokenize_ragged(self):
+        if not self._allow_python_workflow:
+            self.skipTest("Ragged nested list only supported on Python path.")
+        tokenizer = self.make_tokenizer()
+        output = tokenizer([["hi", "go"], ["no"]])
+        self.assertAllEqual(output, [[[104, 105], [103, 111]], [[110, 111]]])
+
     def test_dense_output(self):
         input_data = ["ninja", "samurai", "▀▁▂▃"]
         tokenizer = self.make_tokenizer(sequence_length=10)

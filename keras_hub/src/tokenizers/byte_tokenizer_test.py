@@ -103,6 +103,34 @@ class ByteTokenizerTest(TestCase):
             ],
         )
 
+    def test_tokenize_ragged(self):
+        if not self._allow_python_workflow:
+            self.skipTest("Ragged nested list only supported on Python path.")
+        tokenizer = self.make_tokenizer()
+        output = tokenizer([["hi", "yo"], ["hey"]])
+        self.assertAllEqual(
+            output, [[[104, 105], [121, 111]], [[104, 101, 121]]]
+        )
+
+    def test_tokenize_ragged_dense(self):
+        if not self._allow_python_workflow:
+            self.skipTest("Ragged nested list only supported on Python path.")
+        tokenizer = self.make_tokenizer(sequence_length=4)
+        output = tokenizer([["hi", "yo"], ["hey"]])
+        self.assertLen(output, 2)
+        self.assertAllEqual(output[0], [[104, 105, 0, 0], [121, 111, 0, 0]])
+        self.assertAllEqual(output[1], [[104, 101, 121, 0]])
+
+    def test_tokenize_ragged_tf(self):
+        if not self._allow_python_workflow:
+            self.skipTest("tf.RaggedTensor only supported on Python path.")
+        tokenizer = self.make_tokenizer()
+        ragged = tf.ragged.constant([["hi", "yo"], ["hey"]])
+        output = tokenizer(ragged)
+        self.assertAllEqual(
+            output, [[[104, 105], [121, 111]], [[104, 101, 121]]]
+        )
+
     def test_dense_output(self):
         input_data = ["hello", "fun", "▀▁▂▃"]
         tokenizer = self.make_tokenizer(sequence_length=10)

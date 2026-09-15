@@ -13,17 +13,33 @@ from keras import ops
 from keras.src.utils.backend_utils import in_grain_data_pipeline
 from packaging import version
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
-# `pip uninstall tensorflow` can leave an empty `tensorflow/` directory behind,
-# which Python then imports as a namespace package: the import succeeds but the
-# module has no attributes, so `except ImportError` above never fires and the
-# first `tf.<attr>` raises `AttributeError` instead. Treat that as no
-# tensorflow, so the pure Python paths are used.
-if tf is not None and not hasattr(tf, "executing_eagerly"):
-    tf = None
+
+def try_import_tensorflow():
+    """Import TensorFlow with a guard for partially-uninstalled packages.
+
+    ``pip uninstall tensorflow`` can leave an empty ``tensorflow/``
+    directory behind, which Python then imports as a *namespace package*:
+    the import succeeds but the module has no attributes, so ``except
+    ImportError`` never fires and the first attribute access raises
+    ``AttributeError``.
+
+    This helper detects that situation and returns ``None`` so callers
+    get the same "no TensorFlow" semantics as a clean uninstall.
+
+    Returns:
+        The ``tensorflow`` module, or ``None`` if TensorFlow is not
+        usable.
+    """
+    try:
+        import tensorflow as _tf
+    except ImportError:
+        return None
+    if not hasattr(_tf, "executing_eagerly"):
+        return None
+    return _tf
+
+
+tf = try_import_tensorflow()
 try:
     import tensorflow_text as tf_text
 except ImportError:
@@ -435,16 +451,23 @@ def canonicalize_python_string_inputs(
 ):
     """Canonicalize string inputs for the Python path of a tokenizer.
 
-    Accepts a single string, a list/tuple of strings, or a string
-    tensor/array (backend, NumPy or TensorFlow) of any rank. `bytes` are
-    decoded with `encoding` and `errors`.
+    Accepts a single string, a list/tuple of strings, a string
+    tensor/array (backend, NumPy or TensorFlow) of any rank, a
+    ``tf.RaggedTensor`` of strings, or an inhomogeneous nested list of
+    strings such as ``[["hi", "yo"], ["hey"]]``.  ``bytes`` are decoded
+    with *encoding* and *errors*.
 
     Returns:
-        A tuple `(inputs, batched, outer_shape)`, where `inputs` is a flat
-        list of Python strings, `batched` is whether the input was a batch,
-        and `outer_shape` is the leading shape of a rank >= 2 input, or
-        `None` for rank 0 and rank 1 inputs. Callers should pass
-        `outer_shape` to `restore_outer_shape` to regroup their results.
+        A tuple ``(inputs, batched, outer_shape)``, where *inputs* is a
+        flat list of Python strings, *batched* is whether the input was a
+        batch, and *outer_shape* is either:
+
+        - ``None`` for rank 0 and rank 1 inputs,
+        - a **tuple** (the dense shape) for regular rank >= 2 inputs, or
+        - a **list** of row lengths for ragged / inhomogeneous inputs.
+
+        Callers should pass *outer_shape* to `restore_outer_shape` to
+        regroup their per-string results.
     """
 
     def to_str(x):
@@ -461,10 +484,36 @@ def canonicalize_python_string_inputs(
 
     if isinstance(inputs, (str, bytes, np.str_)):
         return [to_str(inputs)], False, None
+    # Handle tf.RaggedTensor: convert to a nested Python list so the
+    # ragged branch below can flatten it with row lengths.
+    if tf is not None and isinstance(inputs, tf.RaggedTensor):
+        inputs = inputs.to_list()
     if isinstance(inputs, (tuple, list)):
         if len(inputs) and isinstance(inputs[0], (tuple, list, np.ndarray)):
-            # A nested batch such as `[["a"], ["b"]]`. Fall through to the
-            # array branch below so the leading dimensions are preserved.
+            # A nested batch. Check whether all rows have the same
+            # length (homogeneous) before paying for np.array().
+            def _row_len(r):
+                return len(r) if isinstance(r, (list, tuple)) else r.shape[0]
+
+            first_len = _row_len(inputs[0])
+            is_ragged = any(_row_len(r) != first_len for r in inputs[1:])
+            if is_ragged:
+                # Inhomogeneous (ragged). Flatten with row lengths so
+                # callers can restore the structure.
+                flat = []
+                row_lengths = []
+                for row in inputs:
+                    if isinstance(row, (list, tuple)):
+                        row_strs = [to_str(x) for x in row]
+                    elif isinstance(row, np.ndarray):
+                        row_strs = [to_str(x) for x in row.tolist()]
+                    else:
+                        row_strs = [to_str(row)]
+                    flat.extend(row_strs)
+                    row_lengths.append(len(row_strs))
+                return flat, True, row_lengths
+            # Homogeneous nested batch — fall through to the array
+            # branch so the leading dimensions are preserved.
             inputs = np.array(inputs)
         else:
             return [to_str(x) for x in inputs], True, None
@@ -495,9 +544,21 @@ def restore_outer_shape(outputs, outer_shape):
     """Regroup flat per-string tokenizer outputs into `outer_shape`.
 
     `canonicalize_python_string_inputs` flattens rank >= 2 string inputs, so
-    the Python tokenizer paths produce one result per string. This restores
+    the Python tokenizer paths produce one result per string.  This restores
     the leading dimensions, matching the TF path for the same input.
+
+    ``outer_shape`` is either a **tuple** (dense shape for regular rank >= 2
+    inputs) or a **list** of row lengths (for ragged / inhomogeneous inputs
+    such as ``[["hi", "yo"], ["hey"]]``).
     """
+    if isinstance(outer_shape, list):
+        # Ragged: outer_shape is a list of per-row string counts.
+        result = []
+        idx = 0
+        for length in outer_shape:
+            result.append(outputs[idx : idx + length])
+            idx += length
+        return result
     if isinstance(outputs, np.ndarray):
         # Dense output, e.g. when `sequence_length` is set.
         return outputs.reshape(tuple(outer_shape) + outputs.shape[1:])

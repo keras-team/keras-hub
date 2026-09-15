@@ -29,3 +29,6 @@ class NoTensorflow(unittest.TestCase):
         self.assertEqual(outputs.ndim, 1)
         self.assertGreater(outputs.shape[0], 0)
         self.assertEqual(outputs.dtype, np.int32)
+        # Round trip: detokenize and verify we recover the original text.
+        decoded = tokenizer.detokenize(outputs)
+        self.assertEqual(decoded, "the quick brown fox")
