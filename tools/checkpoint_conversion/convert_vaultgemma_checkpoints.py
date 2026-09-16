@@ -12,14 +12,7 @@ import random
 import traceback
 
 os.environ["KERAS_BACKEND"] = "torch"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-import sys  # noqa: E402
-
-# Prevent macOS symbol collision between tensorflow and sentencepiece
-# C++ runtimes when running with the PyTorch backend.
-sys.modules["tensorflow"] = None
-sys.modules["tensorflow_text"] = None
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Hide any CUDA devices
 
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
