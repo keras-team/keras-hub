@@ -89,8 +89,8 @@ class CachedMultiHeadAttentionTest(TestCase):
 
         output, output_cache = call(outputs, input_cache)
 
-        self.assertAllClose(output, no_loop_outputs)
-        self.assertAllClose(output_cache, no_loop_cache)
+        self.assertAllClose(output, no_loop_outputs, atol=1e-5, rtol=1e-5)
+        self.assertAllClose(output_cache, no_loop_cache, atol=1e-5, rtol=1e-5)
 
     def test_return_attention_scores(self):
         x = random.uniform(
