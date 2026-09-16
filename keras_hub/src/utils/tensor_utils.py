@@ -1,9 +1,11 @@
+import codecs
 import contextlib
 import functools
 import inspect
 import math
 import re
 import threading
+import unicodedata
 
 import keras
 import numpy as np
@@ -11,10 +13,33 @@ from keras import ops
 from keras.src.utils.backend_utils import in_grain_data_pipeline
 from packaging import version
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+
+def try_import_tensorflow():
+    """Import TensorFlow with a guard for partially-uninstalled packages.
+
+    ``pip uninstall tensorflow`` can leave an empty ``tensorflow/``
+    directory behind, which Python then imports as a *namespace package*:
+    the import succeeds but the module has no attributes, so ``except
+    ImportError`` never fires and the first attribute access raises
+    ``AttributeError``.
+
+    This helper detects that situation and returns ``None`` so callers
+    get the same "no TensorFlow" semantics as a clean uninstall.
+
+    Returns:
+        The ``tensorflow`` module, or ``None`` if TensorFlow is not
+        usable.
+    """
+    try:
+        import tensorflow as _tf
+    except ImportError:
+        return None
+    if not hasattr(_tf, "executing_eagerly"):
+        return None
+    return _tf
+
+
+tf = try_import_tensorflow()
 try:
     import tensorflow_text as tf_text
 except ImportError:
@@ -419,6 +444,256 @@ def canonicalize_python_inputs(inputs):
         raise ValueError(
             f"Input should be a list or a list of lists. Received: {inputs}"
         )
+
+
+def canonicalize_python_string_inputs(
+    inputs, encoding="utf-8", errors="strict"
+):
+    """Canonicalize string inputs for the Python path of a tokenizer.
+
+    Accepts a single string, a list/tuple of strings, a string
+    tensor/array (backend, NumPy or TensorFlow) of any rank, a
+    ``tf.RaggedTensor`` of strings, or an inhomogeneous nested list of
+    strings such as ``[["hi", "yo"], ["hey"]]``.  ``bytes`` are decoded
+    with *encoding* and *errors*.
+
+    Returns:
+        A tuple ``(inputs, batched, outer_shape)``, where *inputs* is a
+        flat list of Python strings, *batched* is whether the input was a
+        batch, and *outer_shape* is either:
+
+        - ``None`` for rank 0 and rank 1 inputs,
+        - a **tuple** (the dense shape) for regular rank >= 2 inputs, or
+        - a **list** of row lengths for ragged / inhomogeneous inputs.
+
+        Callers should pass *outer_shape* to `restore_outer_shape` to
+        regroup their per-string results.
+    """
+
+    def to_str(x):
+        if isinstance(x, bytes):
+            return x.decode(encoding, errors=errors)
+        if isinstance(x, np.str_):
+            return str(x)
+        if isinstance(x, str):
+            return x
+        raise ValueError(
+            "If a list, tuple or array is provided as input, all elements "
+            f"must be strings. Received: {inputs}"
+        )
+
+    if isinstance(inputs, (str, bytes, np.str_)):
+        return [to_str(inputs)], False, None
+    # Handle tf.RaggedTensor: convert to a nested Python list so the
+    # ragged branch below can flatten it with row lengths.
+    if tf is not None and isinstance(inputs, tf.RaggedTensor):
+        inputs = inputs.to_list()
+    if isinstance(inputs, (tuple, list)):
+        if len(inputs) and isinstance(inputs[0], (tuple, list, np.ndarray)):
+            # A nested batch. Check whether all rows have the same
+            # length (homogeneous) before paying for np.array().
+            def _row_len(r):
+                if isinstance(r, (list, tuple)):
+                    return len(r)
+                if isinstance(r, np.ndarray):
+                    return r.shape[0]
+                raise ValueError(
+                    "If a nested list is provided, all elements must "
+                    "be lists, tuples or arrays. "
+                    f"Received: {inputs}"
+                )
+
+            first_len = _row_len(inputs[0])
+            is_ragged = any(_row_len(r) != first_len for r in inputs[1:])
+            if is_ragged:
+                # Inhomogeneous (ragged). Flatten with row lengths so
+                # callers can restore the structure.
+                flat = []
+                row_lengths = []
+                for row in inputs:
+                    if isinstance(row, (list, tuple)):
+                        row_strs = [to_str(x) for x in row]
+                    elif isinstance(row, np.ndarray):
+                        row_strs = [to_str(x) for x in row.tolist()]
+                    else:
+                        row_strs = [to_str(row)]
+                    flat.extend(row_strs)
+                    row_lengths.append(len(row_strs))
+                return flat, True, row_lengths
+            # Homogeneous nested batch — fall through to the array
+            # branch so the leading dimensions are preserved.
+            inputs = np.array(inputs)
+        else:
+            return [to_str(x) for x in inputs], True, None
+    if (
+        isinstance(inputs, np.ndarray)
+        or keras.ops.is_tensor(inputs)
+        or (tf is not None and isinstance(inputs, tf.Tensor))
+    ):
+        inputs = convert_to_numpy(inputs)
+        if inputs.ndim == 0:
+            return [to_str(inputs.item())], False, None
+        if inputs.ndim == 1:
+            return [to_str(x) for x in inputs.tolist()], True, None
+        # Rank >= 2. The TF path handles this (`keras_hub.metrics.Bleu`
+        # tokenizes a `(batch, num_references)` tensor), so flatten here and
+        # let the caller restore the leading dimensions.
+        return (
+            [to_str(x) for x in inputs.ravel().tolist()],
+            True,
+            inputs.shape,
+        )
+    raise ValueError(
+        f"Input should be a string or a list of strings. Received: {inputs}"
+    )
+
+
+def restore_outer_shape(outputs, outer_shape):
+    """Regroup flat per-string tokenizer outputs into `outer_shape`.
+
+    `canonicalize_python_string_inputs` flattens rank >= 2 string inputs, so
+    the Python tokenizer paths produce one result per string.  This restores
+    the leading dimensions, matching the TF path for the same input.
+
+    ``outer_shape`` is either a **tuple** (dense shape for regular rank >= 2
+    inputs) or a **list** of row lengths (for ragged / inhomogeneous inputs
+    such as ``[["hi", "yo"], ["hey"]]``).
+    """
+    if isinstance(outer_shape, list):
+        # Ragged: outer_shape is a list of per-row string counts.
+        result = []
+        idx = 0
+        for length in outer_shape:
+            result.append(outputs[idx : idx + length])
+            idx += length
+        return result
+    if isinstance(outputs, np.ndarray):
+        # Dense output, e.g. when `sequence_length` is set.
+        return outputs.reshape(tuple(outer_shape) + outputs.shape[1:])
+    for dim in reversed(tuple(outer_shape)[1:]):
+        if dim == 0:
+            # Empty inner dimension (e.g. shape (N, 0)). Each group is
+            # empty, so produce len(outputs) or outer_shape[0] empties.
+            n_groups = outer_shape[0] if len(outputs) == 0 else len(outputs)
+            outputs = [[] for _ in range(n_groups)]
+        else:
+            outputs = [
+                outputs[i : i + dim] for i in range(0, len(outputs), dim)
+            ]
+    return outputs
+
+
+def canonicalize_python_token_inputs(inputs):
+    """Canonicalize token id inputs for the Python path of a tokenizer.
+
+    Accepts a single integer, a list of integers, a list of lists of integers,
+    or a rank 0, 1 or 2 integer tensor/array (backend, NumPy or TensorFlow,
+    ragged or dense).
+
+    Returns:
+        A tuple `(inputs, batched)`, where `inputs` is a list of lists of
+        Python integers and `batched` is whether the input was a batch.
+    """
+    if tf is not None and isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+        if isinstance(inputs, tf.RaggedTensor):
+            inputs = inputs.to_list()
+        else:
+            inputs = np.array(inputs)
+    if isinstance(inputs, (int, np.integer)):
+        return [[int(inputs)]], False
+    if isinstance(inputs, (tuple, list)):
+        if not inputs or isinstance(inputs[0], (int, np.integer)):
+            # Unbatched list of ints.
+            return [[int(x) for x in inputs]], False
+        # Batched list of lists of ints.
+        return [[int(x) for x in convert_to_list(seq)] for seq in inputs], True
+    if isinstance(inputs, np.ndarray) or keras.ops.is_tensor(inputs):
+        inputs = convert_to_numpy(inputs)
+        if inputs.ndim == 0:
+            return [[inputs.item()]], False
+        if inputs.ndim == 1:
+            return [inputs.tolist()], False
+        if inputs.ndim == 2:
+            return inputs.tolist(), True
+        raise ValueError(
+            f"Array must be 0, 1 or 2 dimensional, got {inputs.shape}."
+        )
+    raise ValueError(
+        "Input should be an integer, a list of integers, backend "
+        f"tensor or numpy array. Received: {inputs}"
+    )
+
+
+# Unicode "Default_Ignorable_Code_Point" ranges. These are removed by
+# `tf_text.case_fold_utf8` (which applies NFKC_Casefold), so the Python case
+# folding below removes them too.
+_DEFAULT_IGNORABLE_RANGES = (
+    (0x00AD, 0x00AD),
+    (0x034F, 0x034F),
+    (0x061C, 0x061C),
+    (0x115F, 0x1160),
+    (0x17B4, 0x17B5),
+    (0x180B, 0x180F),
+    (0x200B, 0x200F),
+    (0x202A, 0x202E),
+    (0x2060, 0x206F),
+    (0x3164, 0x3164),
+    (0xFE00, 0xFE0F),
+    (0xFEFF, 0xFEFF),
+    (0xFFA0, 0xFFA0),
+    (0xFFF0, 0xFFF8),
+    (0x1BCA0, 0x1BCA3),
+    (0x1D173, 0x1D17A),
+    (0xE0000, 0xE0FFF),
+)
+
+
+def _is_default_ignorable(char):
+    cp = ord(char)
+    return any(lo <= cp <= hi for lo, hi in _DEFAULT_IGNORABLE_RANGES)
+
+
+def casefold_utf8(text):
+    """Python equivalent of `tf_text.case_fold_utf8`.
+
+    `tf_text.case_fold_utf8` applies the Unicode NFKC_Casefold mapping, which
+    is NFKC normalization plus full case folding, and drops default ignorable
+    code points (e.g. zero width spaces and soft hyphens).
+    """
+    text = unicodedata.normalize("NFKC", text).casefold()
+    # NFKC_Casefold is NFKC(casefold(NFKC(x))). The casefold() above can
+    # produce decomposed sequences, so a final NFKC pass recomposes them
+    # to match tf_text.case_fold_utf8.
+    text = unicodedata.normalize("NFKC", text)
+    if any(_is_default_ignorable(c) for c in text):
+        text = "".join(c for c in text if not _is_default_ignorable(c))
+    return text
+
+
+_REGISTERED_ERROR_HANDLERS = {}
+
+
+def get_decode_errors_name(errors, replacement_char=65533):
+    """Return a codecs error handler name for `str.encode`/`bytes.decode`.
+
+    Python equivalent of the `errors` and `replacement_char` arguments of
+    `tf.strings.unicode_decode`/`tf.strings.unicode_transcode`. `errors` is
+    one of `"strict"`, `"ignore"` or `"replace"`. For `"replace"`, a custom
+    handler replacing each invalid sequence with `chr(replacement_char)` is
+    registered with the `codecs` module and returned.
+    """
+    if errors != "replace" or replacement_char == 65533:
+        return errors
+    name = f"keras_hub_replace_{replacement_char}"
+    if name not in _REGISTERED_ERROR_HANDLERS:
+        replacement = chr(replacement_char)
+
+        def handler(exception):
+            return replacement, exception.end
+
+        codecs.register_error(name, handler)
+        _REGISTERED_ERROR_HANDLERS[name] = handler
+    return name
 
 
 def compute_padding_mask(token_ids, pad_token_id):
