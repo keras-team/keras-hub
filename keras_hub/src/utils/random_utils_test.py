@@ -26,6 +26,8 @@ class StableHashTest(TestCase):
         # `PYTHONHASHSEED` is randomized per process by default, which is
         # exactly what would break Grain worker determinism if we used the
         # builtin `hash()`.
+        if not sys.executable:
+            self.skipTest("sys.executable is not available.")
         module_path = random_utils_module.__file__
         script = (
             "import importlib.util;"
