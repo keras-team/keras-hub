@@ -42,6 +42,22 @@ class EfficientNetBackboneTest(TestCase):
             expected_output_shape=(8, 7, 7, 1280),
         )
 
+    def test_nores_option_is_serialized(self):
+        # `run_serialization_test` compares config to config, so a key missing
+        # from `get_config` matches on both sides. The default is all `False`,
+        # so it also has to be flipped to show up.
+        init_kwargs = dict(self.init_kwargs)
+        init_kwargs["stackwise_nores_option"] = [True] * 3 + [False] * 3
+        backbone = EfficientNetBackbone(**init_kwargs)
+        self.assertEqual(
+            backbone.get_config()["stackwise_nores_option"],
+            init_kwargs["stackwise_nores_option"],
+        )
+
+        revived = EfficientNetBackbone.from_config(backbone.get_config())
+        revived.set_weights(backbone.get_weights())
+        self.assertAllClose(backbone(self.input_data), revived(self.input_data))
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
