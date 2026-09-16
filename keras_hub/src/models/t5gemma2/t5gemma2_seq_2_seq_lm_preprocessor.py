@@ -247,7 +247,7 @@ class T5Gemma2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
             images = x.get("images", None)
         else:
             encoder_text = x
-            decoder_text = tf.fill((tf.shape(encoder_text)[0],), "")
+            decoder_text = self._empty_decoder_text(encoder_text)
             images = None
 
         if encoder_sequence_length is None:

@@ -59,6 +59,11 @@ class PreprocessingLayer(keras.layers.Layer):
         TensorFlow and TensorFlow Text must be installed. This is where that
         requirement is checked, so that layers can be constructed (and run on
         the Python path, e.g. inside a Grain pipeline) without TensorFlow.
+
+        The flag is per layer and is not inherited: a model preprocessor's
+        tokenizer, packers and converters each carry their own, so passing
+        `_allow_python_workflow=False` to a composite preprocessor only affects
+        its own `call`, not the layers it delegates to.
         """
         if in_tf_function():
             return True

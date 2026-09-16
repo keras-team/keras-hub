@@ -3,7 +3,6 @@ import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.preprocessor import Preprocessor
-from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
@@ -82,6 +81,14 @@ class Seq2SeqLMPreprocessor(Preprocessor):
         self.decoder_packer = None
         self.encoder_sequence_length = encoder_sequence_length
         self.decoder_sequence_length = decoder_sequence_length
+
+    def _empty_decoder_text(self, encoder_text):
+        """An empty decoder prompt with the same batch shape as the input."""
+        if tf is not None and tf.is_tensor(encoder_text):
+            return tf.fill(tf.shape(encoder_text), "")
+        if isinstance(encoder_text, (str, bytes)):
+            return ""
+        return [""] * len(encoder_text)
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -172,13 +179,8 @@ class Seq2SeqLMPreprocessor(Preprocessor):
             decoder_text = x["decoder_text"]
         else:
             encoder_text = x
-            # Initialize empty prompt for the decoder. This is only supported
-            # on the TensorFlow path; pass `decoder_text` explicitly otherwise.
-            assert_tf_installed(
-                f"{self.__class__.__name__}.generate_preprocess() without "
-                "`decoder_text`"
-            )
-            decoder_text = tf.fill((tf.shape(encoder_text)[0],), "")
+            # Initialize empty prompt for the decoder.
+            decoder_text = self._empty_decoder_text(encoder_text)
 
         if encoder_sequence_length is None:
             encoder_sequence_length = self.encoder_sequence_length

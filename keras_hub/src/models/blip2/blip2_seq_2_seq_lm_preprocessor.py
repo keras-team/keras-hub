@@ -8,7 +8,6 @@ from keras_hub.src.models.blip2.blip2_flan_t5_tokenizer import (
 )
 from keras_hub.src.models.blip2.blip2_image_converter import BLIP2ImageConverter
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
-from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -194,14 +193,8 @@ class BLIP2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
 
         images, encoder_text, decoder_text = self._parse_inputs(x)
         if decoder_text is None:
-            # Initialize an empty prompt for the decoder. This is only
-            # supported on the TensorFlow path; pass `decoder_text` explicitly
-            # otherwise.
-            assert_tf_installed(
-                "BLIP2Seq2SeqLMPreprocessor.generate_preprocess() without "
-                "`decoder_text`"
-            )
-            decoder_text = tf.fill((tf.shape(encoder_text)[0],), "")
+            # Initialize an empty prompt for the decoder.
+            decoder_text = self._empty_decoder_text(encoder_text)
 
         encoder_token_ids, encoder_padding_mask = self.encoder_packer(
             self.tokenizer(encoder_text),

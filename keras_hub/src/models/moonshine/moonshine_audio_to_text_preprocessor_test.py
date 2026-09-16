@@ -1,5 +1,4 @@
 import os
-from unittest import mock
 
 import keras
 import numpy as np
@@ -16,7 +15,6 @@ from keras_hub.src.models.moonshine.moonshine_tokenizer import (
 )
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tests.test_case import assert_grain_safe_types
-from keras_hub.src.utils import tensor_utils
 
 try:
     import grain
@@ -139,10 +137,3 @@ class MoonshineAudioToTextPreprocessorTest(TestCase):
     def test_serialization(self):
         instance = MoonshineAudioToTextPreprocessor(**self.init_kwargs)
         self.run_serialization_test(instance=instance)
-
-    def test_requires_tensorflow(self):
-        # `call` is TensorFlow only, so the layer asserts at construction
-        # rather than failing cryptically on first call.
-        with mock.patch.object(tensor_utils, "tf", None):
-            with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
-                MoonshineAudioToTextPreprocessor(**self.init_kwargs)

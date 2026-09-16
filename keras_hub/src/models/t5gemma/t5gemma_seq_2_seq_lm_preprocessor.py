@@ -4,7 +4,6 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.seq_2_seq_lm_preprocessor import Seq2SeqLMPreprocessor
 from keras_hub.src.models.t5gemma.t5gemma_backbone import T5GemmaBackbone
 from keras_hub.src.models.t5gemma.t5gemma_tokenizer import T5GemmaTokenizer
-from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -175,13 +174,7 @@ class T5GemmaSeq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
             decoder_text = x["decoder_text"]
         else:
             encoder_text = x
-            # Initialize empty prompt for the decoder. This is only supported
-            # on the TensorFlow path; pass `decoder_text` explicitly otherwise.
-            assert_tf_installed(
-                f"{self.__class__.__name__}.generate_preprocess() without "
-                "`decoder_text`"
-            )
-            decoder_text = tf.fill((tf.shape(encoder_text)[0],), "")
+            decoder_text = self._empty_decoder_text(encoder_text)
 
         if encoder_sequence_length is None:
             encoder_sequence_length = self.encoder_sequence_length
