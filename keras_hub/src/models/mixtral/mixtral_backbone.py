@@ -7,9 +7,6 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.mixtral.mixtral_decoder import (
     MixtralTransformerDecoder,
 )
-from keras_hub.src.models.mixtral.mixtral_layer_norm import (
-    MixtralLayerNormalization,
-)
 
 
 def _mixtral_kernel_initializer(stddev=0.02):
@@ -137,7 +134,7 @@ class MixtralBackbone(Backbone):
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = MixtralLayerNormalization(
+        self.layer_norm = keras.layers.RMSNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="sequence_output_layernorm",
