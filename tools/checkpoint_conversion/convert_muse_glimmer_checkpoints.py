@@ -56,6 +56,8 @@ VIDEO_URL = (
     "Big_Buck_Bunny_360_10s_1MB.mp4"
 )
 TEXT_PROMPT = "What is Keras?"
+IMAGE_PROMPT = "Describe this image."
+VIDEO_PROMPT = "Describe this video."
 
 MAX_NEW_TOKENS = 64
 
@@ -71,13 +73,13 @@ flags.DEFINE_bool(
 )
 
 
-def _load_test_image():
+def _load_image_asset():
     response = requests.get(IMAGE_URL, timeout=30)
     response.raise_for_status()
     return Image.open(BytesIO(response.content)).convert("RGB")
 
 
-def _load_test_video():
+def _load_video_asset():
     """Load a short video and return two frames plus metadata.
 
     Returns `(frames, video_metadata)` — `video_metadata` carries the real
@@ -123,13 +125,69 @@ def _load_test_video():
     return np.stack([frames[0], frames[-1]]), video_metadata
 
 
+def _load_test_assets():
+    """Load the image/video assets shared by every preset flow."""
+    raw_image = _load_image_asset()
+    raw_video, video_metadata = _load_video_asset()
+    return raw_image, raw_video, video_metadata
+
+
 def _count_keras_params(backbone):
     unique = {id(w): w for w in backbone.weights}.values()
     return sum(w.numpy().size for w in unique)
 
 
-def _expand_vision_prompt(prompt, token, num_tokens):
-    return prompt.replace(token, token * num_tokens)
+def _strip_chat_markers(text):
+    """Strip literal chat-format tokens KerasHub's decode doesn't skip."""
+    for marker in ("<|message|>", "<|eom|>", "<|start|>", "<|eot|>"):
+        text = text.replace(marker, "")
+    return text
+
+
+def _build_chat_prompt(hf_tokenizer, processor, description, modality):
+    """Render a chat-templated prompt, with its BOS text stripped."""
+    content = [{"type": "text", "text": description}]
+    if modality != "text":
+        content.insert(0, {"type": modality})
+    prompt = processor.apply_chat_template(
+        [{"role": "user", "content": content}],
+        tokenize=False,
+        add_generation_prompt=True,
+        reasoning_strength="low",
+    )
+    return prompt.removeprefix(hf_tokenizer.bos_token)
+
+
+def _build_hf_multimodal_inputs(
+    hf_tokenizer, processor, prompt, media, modality, video_metadata=None
+):
+    """Build HF generate() inputs for an image/video prompt."""
+    if modality == "image":
+        visual_inputs = processor.image_processor([media], return_tensors="pt")
+        grid_key, merge_size, placeholder = (
+            "image_grid_thw",
+            processor.image_processor.merge_size,
+            "<|patch|>",
+        )
+    else:
+        visual_inputs = processor.video_processor(
+            [media],
+            video_metadata=[video_metadata],
+            do_sample_frames=False,
+            return_tensors="pt",
+        )
+        grid_key, merge_size, placeholder = (
+            "video_grid_thw",
+            processor.video_processor.merge_size,
+            "<|video|>",
+        )
+    grid = visual_inputs[grid_key]
+    num_tokens = int(grid[0].prod().item()) // merge_size**2
+    expanded_prompt = prompt.replace(placeholder, placeholder * num_tokens)
+    text_inputs = hf_tokenizer([expanded_prompt], return_tensors="pt")
+    hf_inputs = {**text_inputs, **visual_inputs}
+    hf_inputs.pop("video_metadata", None)
+    return hf_inputs
 
 
 def _precompute_multimodal_outputs(
@@ -191,7 +249,13 @@ def _precompute_multimodal_outputs(
 def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
     results = {}
 
-    hf_ids = hf_tokenizer(TEXT_PROMPT, return_tensors="np")["input_ids"]
+    processor = AutoProcessor.from_pretrained(hf_preset)
+    text_prompt = _build_chat_prompt(
+        hf_tokenizer, processor, TEXT_PROMPT, modality="text"
+    )
+    results["text_prompt"] = text_prompt
+
+    hf_ids = hf_tokenizer(text_prompt, return_tensors="np")["input_ids"]
     results["text_token_ids"] = hf_ids
     with torch.no_grad():
         hf_out = hf_model(
@@ -208,29 +272,13 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
                 do_sample=False,
             )
         results["text_generated"] = hf_tokenizer.decode(
-            hf_gen[0], skip_special_tokens=True
+            hf_gen[0, hf_ids.shape[1] :], skip_special_tokens=True
         )
 
-    processor = AutoProcessor.from_pretrained(hf_preset)
-    raw_image = _load_test_image()
-    image_prompt = processor.apply_chat_template(
-        [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image"},
-                    {"type": "text", "text": "Describe this image."},
-                ],
-            }
-        ],
-        tokenize=False,
-        add_generation_prompt=True,
-        reasoning_strength="low",
+    raw_image, raw_video, video_metadata = _load_test_assets()
+    image_prompt = _build_chat_prompt(
+        hf_tokenizer, processor, IMAGE_PROMPT, modality="image"
     )
-    # The rendered template already spells out the BOS text; strip it so
-    # the tokenizer's own default BOS-adding behavior adds it exactly
-    # once, on both the HF and KerasHub sides.
-    image_prompt = image_prompt.removeprefix(hf_tokenizer.bos_token)
     results["image"] = _precompute_multimodal_outputs(
         hf_model,
         hf_tokenizer,
@@ -240,22 +288,9 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         "image",
     )
 
-    raw_video, video_metadata = _load_test_video()
-    video_prompt = processor.apply_chat_template(
-        [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "video"},
-                    {"type": "text", "text": "Describe this video."},
-                ],
-            }
-        ],
-        tokenize=False,
-        add_generation_prompt=True,
-        reasoning_strength="low",
+    video_prompt = _build_chat_prompt(
+        hf_tokenizer, processor, VIDEO_PROMPT, modality="video"
     )
-    video_prompt = video_prompt.removeprefix(hf_tokenizer.bos_token)
     results["video"] = _precompute_multimodal_outputs(
         hf_model,
         hf_tokenizer,
@@ -270,8 +305,6 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
 
 
 def test_parameter_count(keras_backbone, hf_param_count):
-    print("\n--- Parameter Count ---")
-
     keras_params = _count_keras_params(keras_backbone)
     print(f"\n  KerasHub params: {keras_params:,}")
     print(f"  HF params:       {hf_param_count:,}")
@@ -306,11 +339,9 @@ def _build_keras_multimodal_inputs(keras_model, result):
 
 
 def test_token_ids(keras_model, hf_results, label):
-    print(f"\n--- [{label}] Token ID Verification ---")
-
     if label == "TEXT":
         hf_ids = hf_results["text_token_ids"]
-        preprocessor_inputs = TEXT_PROMPT
+        preprocessor_inputs = hf_results["text_prompt"]
     else:
         result = hf_results[label.lower()]
         hf_ids = result["input_ids"]
@@ -331,6 +362,26 @@ def test_token_ids(keras_model, hf_results, label):
     print(f"  KerasHub token IDs: {keras_valid[:10].tolist()}")
     np.testing.assert_array_equal(keras_valid, hf_ids[0])
     print(f" ✓ [{label}] Token IDs match.")
+
+
+def _report_numerics(label, keras_logits, hf_logits):
+    abs_diff = np.abs(keras_logits - hf_logits)
+    print(f"\n  {label} logit mean absolute diff: {abs_diff.mean():.6f}")
+    print(f"  {label} logit max absolute diff:  {abs_diff.max():.6f}")
+    try:
+        np.testing.assert_allclose(
+            keras_logits, hf_logits, atol=1e-3, rtol=1e-3
+        )
+        print(f" ✓ [{label}] logits match within atol=1e-3, rtol=1e-3.")
+    except AssertionError:
+        tol = 1e-3 + 1e-3 * np.abs(hf_logits)
+        mismatched = int(np.sum(abs_diff > tol))
+        total = hf_logits.size
+        pct = 100.0 * (1.0 - mismatched / total)
+        print(
+            f"  [{label}] logits differ beyond tolerance — "
+            f"matching={pct:.2f}% ({total - mismatched}/{total})."
+        )
 
 
 def test_numerics(keras_model, hf_results, label):
@@ -369,30 +420,12 @@ def test_numerics(keras_model, hf_results, label):
     _report_numerics(label, keras_logits, result["logits"])
 
 
-def _report_numerics(label, keras_logits, hf_logits):
-    abs_diff = np.abs(keras_logits - hf_logits)
-    print(f"\n  {label} logit mean absolute diff: {abs_diff.mean():.6f}")
-    print(f"  {label} logit max absolute diff:  {abs_diff.max():.6f}")
-    try:
-        np.testing.assert_allclose(
-            keras_logits, hf_logits, atol=1e-3, rtol=1e-3
-        )
-        print(f" ✓ [{label}] logits match within atol=1e-3, rtol=1e-3.")
-    except AssertionError:
-        tol = 1e-3 + 1e-3 * np.abs(hf_logits)
-        mismatched = int(np.sum(abs_diff > tol))
-        total = hf_logits.size
-        pct = 100.0 * (1.0 - mismatched / total)
-        print(
-            f"  [{label}] logits differ beyond tolerance — "
-            f"matching={pct:.2f}% ({total - mismatched}/{total})."
-        )
-
-
 def test_generation(keras_model, hf_results, label):
     if label == "TEXT":
         max_length = hf_results["text_token_ids"].shape[1] + MAX_NEW_TOKENS
-        keras_output = keras_model.generate(TEXT_PROMPT, max_length=max_length)
+        keras_output = keras_model.generate(
+            hf_results["text_prompt"], max_length=max_length, strip_prompt=True
+        )
         hf_output = hf_results.get("text_generated", "N/A")
     else:
         result = hf_results[label.lower()]
@@ -409,7 +442,7 @@ def test_generation(keras_model, hf_results, label):
             keras_output = keras_output[0]
         hf_output = result.get("generated", "N/A")
 
-    keras_output = keras_output.replace("<|message|>", "")
+    keras_output = _strip_chat_markers(keras_output)
 
     print(f"\n  {label} KerasHub: {keras_output}")
     print(f"  {label} HF:       {hf_output}")
@@ -417,16 +450,25 @@ def test_generation(keras_model, hf_results, label):
 
 
 def validate_output(keras_model, hf_results):
+    print("\n--- Parameter Count ---")
+    test_parameter_count(keras_model.backbone, hf_results["hf_param_count"])
+
     labels = ("TEXT", "IMAGE", "VIDEO")
 
+    print("\n--- Token ID Verification ---")
     for label in labels:
         test_token_ids(keras_model, hf_results, label)
+
+    print("\n--- Numerics Verification ---")
+    for label in labels:
         test_numerics(keras_model, hf_results, label)
 
     if FLAGS.skip_generation:
         return
 
     keras_model.compile(sampler="greedy")
+
+    print("\n--- Text Generation ---")
     for label in labels:
         test_generation(keras_model, hf_results, label)
 
@@ -438,9 +480,7 @@ def save_preset(keras_model, preset_name):
 
 
 def _load_hf_assistant_models(hf_preset):
-    """The target model id is the assistant repo id with `-assistant`
-    removed.
-    """
+    """The target model id is the assistant id with `-assistant` removed."""
     target_preset = hf_preset.replace("-assistant", "")
     hf_target_model = AutoModelForImageTextToText.from_pretrained(
         target_preset,
@@ -497,146 +537,92 @@ def _build_assistant_target_context(
     return input_ids, context_hidden_states
 
 
-def _build_hf_multimodal_inputs(
-    hf_tokenizer, processor, prompt, media, modality, video_metadata=None
+def _precompute_assistant_multimodal_outputs(
+    hf_target_model,
+    hf_assistant_model,
+    hf_tokenizer,
+    processor,
+    prompt_text,
+    media,
+    modality,
+    video_metadata=None,
 ):
-    """Build HF generate() inputs for an image/video prompt.
+    prompt = _build_chat_prompt(hf_tokenizer, processor, prompt_text, modality)
+    hf_inputs = _build_hf_multimodal_inputs(
+        hf_tokenizer, processor, prompt, media, modality, video_metadata
+    )
+    media_key = "images" if modality == "image" else "videos"
 
-    Shared by `_precompute_multimodal_outputs` (numerics) and
-    `_precompute_assistant_generation_hf_data` (speculative generation).
-    """
-    if modality == "image":
-        visual_inputs = processor.image_processor([media], return_tensors="pt")
-        grid_key, merge_size, placeholder = (
-            "image_grid_thw",
-            processor.image_processor.merge_size,
-            "<|patch|>",
+    with torch.no_grad():
+        hf_spec_ids = hf_target_model.generate(
+            **hf_inputs,
+            assistant_model=hf_assistant_model,
+            speculation_type="dflash",
+            max_new_tokens=MAX_NEW_TOKENS,
+            do_sample=False,
         )
-    else:
-        visual_inputs = processor.video_processor(
-            [media],
-            video_metadata=[video_metadata],
-            do_sample_frames=False,
-            return_tensors="pt",
-        )
-        grid_key, merge_size, placeholder = (
-            "video_grid_thw",
-            processor.video_processor.merge_size,
-            "<|video|>",
-        )
-    grid = visual_inputs[grid_key]
-    num_tokens = int(grid[0].prod().item()) // merge_size**2
-    expanded_prompt = _expand_vision_prompt(prompt, placeholder, num_tokens)
-    text_inputs = hf_tokenizer([expanded_prompt], return_tensors="pt")
-    hf_inputs = {**text_inputs, **visual_inputs}
-    hf_inputs.pop("video_metadata", None)
-    return hf_inputs
+    prompt_length = hf_inputs["input_ids"].shape[1]
+    return {
+        "hf_generated": hf_tokenizer.decode(
+            hf_spec_ids[0, prompt_length:], skip_special_tokens=True
+        ),
+        "kh_inputs": {"prompts": [prompt], media_key: media},
+        "input_ids": hf_inputs["input_ids"],
+    }
 
 
-def _precompute_assistant_generation_hf_data(
+def _precompute_assistant_hf_outputs(
     hf_target_model, hf_assistant_model, hf_tokenizer, processor
 ):
-    """Runs up front so the HF models can be freed before loading
-    KerasHub models — the two never need to coexist in memory.
-    """
-    results = {}
-
-    hf_text_inputs = hf_tokenizer(TEXT_PROMPT, return_tensors="pt")
+    """Precompute HF speculative-generation outputs for text/image/video."""
+    text_prompt = _build_chat_prompt(
+        hf_tokenizer, processor, TEXT_PROMPT, modality="text"
+    )
+    hf_text_inputs = hf_tokenizer(text_prompt, return_tensors="pt")
     with torch.no_grad():
         hf_spec_ids = hf_target_model.generate(
             **hf_text_inputs,
             assistant_model=hf_assistant_model,
             speculation_type="dflash",
             max_new_tokens=MAX_NEW_TOKENS,
+            do_sample=False,
         )
-    results["TEXT"] = {
+    text_prompt_length = hf_text_inputs["input_ids"].shape[1]
+    text_result = {
         "hf_generated": hf_tokenizer.decode(
-            hf_spec_ids[0, hf_text_inputs["input_ids"].shape[1] :],
-            skip_special_tokens=True,
+            hf_spec_ids[0, text_prompt_length:], skip_special_tokens=True
         ),
-        "kh_inputs": TEXT_PROMPT,
-        "max_length": hf_text_inputs["input_ids"].shape[1] + MAX_NEW_TOKENS,
+        "kh_inputs": text_prompt,
+        "input_ids": hf_text_inputs["input_ids"],
     }
 
-    raw_image = _load_test_image()
-    image_prompt = processor.apply_chat_template(
-        [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image"},
-                    {"type": "text", "text": "Describe this image."},
-                ],
-            }
-        ],
-        tokenize=False,
-        add_generation_prompt=True,
-        reasoning_strength="low",
-    )
-    image_prompt = image_prompt.removeprefix(hf_tokenizer.bos_token)
-    hf_image_inputs = _build_hf_multimodal_inputs(
-        hf_tokenizer, processor, image_prompt, raw_image, "image"
-    )
-    with torch.no_grad():
-        hf_spec_ids = hf_target_model.generate(
-            **hf_image_inputs,
-            assistant_model=hf_assistant_model,
-            speculation_type="dflash",
-            max_new_tokens=MAX_NEW_TOKENS,
-        )
-    results["IMAGE"] = {
-        "hf_generated": hf_tokenizer.decode(
-            hf_spec_ids[0, hf_image_inputs["input_ids"].shape[1] :],
-            skip_special_tokens=True,
+    raw_image, raw_video, video_metadata = _load_test_assets()
+
+    return {
+        "TEXT": text_result,
+        "IMAGE": _precompute_assistant_multimodal_outputs(
+            hf_target_model,
+            hf_assistant_model,
+            hf_tokenizer,
+            processor,
+            IMAGE_PROMPT,
+            raw_image,
+            "image",
         ),
-        "kh_inputs": {"prompts": [image_prompt], "images": raw_image},
-        "max_length": (hf_image_inputs["input_ids"].shape[1] + MAX_NEW_TOKENS),
+        "VIDEO": _precompute_assistant_multimodal_outputs(
+            hf_target_model,
+            hf_assistant_model,
+            hf_tokenizer,
+            processor,
+            VIDEO_PROMPT,
+            raw_video,
+            "video",
+            video_metadata=video_metadata,
+        ),
     }
 
-    raw_video, video_metadata = _load_test_video()
-    video_prompt = processor.apply_chat_template(
-        [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "video"},
-                    {"type": "text", "text": "Describe this video."},
-                ],
-            }
-        ],
-        tokenize=False,
-        add_generation_prompt=True,
-        reasoning_strength="low",
-    )
-    video_prompt = video_prompt.removeprefix(hf_tokenizer.bos_token)
-    hf_video_inputs = _build_hf_multimodal_inputs(
-        hf_tokenizer,
-        processor,
-        video_prompt,
-        raw_video,
-        "video",
-        video_metadata=video_metadata,
-    )
-    with torch.no_grad():
-        hf_spec_ids = hf_target_model.generate(
-            **hf_video_inputs,
-            assistant_model=hf_assistant_model,
-            speculation_type="dflash",
-            max_new_tokens=MAX_NEW_TOKENS,
-        )
-    results["VIDEO"] = {
-        "hf_generated": hf_tokenizer.decode(
-            hf_spec_ids[0, hf_video_inputs["input_ids"].shape[1] :],
-            skip_special_tokens=True,
-        ),
-        "kh_inputs": {"prompts": [video_prompt], "videos": raw_video},
-        "max_length": (hf_video_inputs["input_ids"].shape[1] + MAX_NEW_TOKENS),
-    }
 
-    return results
-
-
-def _verify_assistant_generation(target_preset, kh_assistant, hf_gen_data):
+def test_assistant_generation(target_preset, kh_assistant, hf_gen_data):
     print("\n--- Section 3: Speculative generation ---")
     print("-> Loading KerasHub target model via from_preset(...)...")
     kh_target = keras_hub.models.MuseGlimmerCausalLM.from_preset(
@@ -647,12 +633,13 @@ def _verify_assistant_generation(target_preset, kh_assistant, hf_gen_data):
     for label, data in hf_gen_data.items():
         kh_output = kh_target.generate(
             data["kh_inputs"],
-            max_length=data["max_length"],
-            strip_prompt=(label != "TEXT"),
+            max_length=data["input_ids"].shape[1] + MAX_NEW_TOKENS,
+            strip_prompt=True,
             assistant_model=kh_assistant,
         )
         if isinstance(kh_output, (list, tuple)):
             kh_output = kh_output[0]
+        kh_output = _strip_chat_markers(kh_output)
         print(f"\n  [{label}] HF speculative:  {data['hf_generated']}")
         print(f"  [{label}] KH speculative:  {kh_output}")
 
@@ -660,7 +647,7 @@ def _verify_assistant_generation(target_preset, kh_assistant, hf_gen_data):
     gc.collect()
 
 
-def _run_assistant_preset(preset, hf_preset):
+def verify_assistant_mode(preset, hf_preset):
     target_preset = hf_preset.replace("-assistant", "")
     hf_target_model, hf_tokenizer, processor, hf_assistant_model = (
         _load_hf_assistant_models(hf_preset)
@@ -688,7 +675,7 @@ def _run_assistant_preset(preset, hf_preset):
     hf_gen_data = None
     if not FLAGS.skip_generation:
         print("-> Precomputing HF speculative-generation outputs...")
-        hf_gen_data = _precompute_assistant_generation_hf_data(
+        hf_gen_data = _precompute_assistant_hf_outputs(
             hf_target_model, hf_assistant_model, hf_tokenizer, processor
         )
 
@@ -746,23 +733,16 @@ def _run_assistant_preset(preset, hf_preset):
     )
     print("✓ Hidden states within tolerance (atol=1e-3, rtol=1e-3).")
 
-    if FLAGS.skip_generation:
-        print(
-            "\n--- Section 3: Speculative generation: SKIPPED "
-            "(--skip_generation) ---"
-        )
-    else:
-        _verify_assistant_generation(target_preset, kh_assistant, hf_gen_data)
+    if not FLAGS.skip_generation:
+        test_assistant_generation(target_preset, kh_assistant, hf_gen_data)
 
     # Parity was just verified in float32; always save in bfloat16.
-    print(f"\n-> Saving model in bfloat16 to ./{preset} ...")
     del kh_assistant
     gc.collect()
     kh_save = keras_hub.models.MuseGlimmerAssistantCausalLM.from_preset(
         f"hf://{hf_preset}", dtype="bfloat16"
     )
-    kh_save.save_to_preset(f"./{preset}")
-    print(f"-> Saved bfloat16 preset to ./{preset}")
+    save_preset(kh_save, preset)
 
 
 def main(_):
@@ -775,7 +755,7 @@ def main(_):
     hf_preset = PRESET_MAP[preset]
 
     if "assistant" in preset:
-        _run_assistant_preset(preset, hf_preset)
+        verify_assistant_mode(preset, hf_preset)
         return
 
     print("-> Loading HF model...")
@@ -807,7 +787,6 @@ def main(_):
     )
     print("   KerasHub model loaded!")
 
-    test_parameter_count(keras_model.backbone, hf_results["hf_param_count"])
     validate_output(keras_model, hf_results)
 
     # Parity was just verified in float32; always save in bfloat16.

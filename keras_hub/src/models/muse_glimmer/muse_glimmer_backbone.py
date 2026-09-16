@@ -112,6 +112,11 @@ class MuseGlimmerBackbone(Backbone):
             If `False`, skips the two post-sublayer sandwich norms.
             Defaults to `True`. The assistant/drafter configuration sets
             this to `False`.
+        use_centered_norm: bool. Passed through to every decoder layer.
+            If `False`, builds `input_layernorm`/`pre_feedforward_layernorm`
+            as plain RMSNorm instead of the centered `(1 + weight)`
+            variant. Defaults to `True`. The assistant/drafter
+            configuration sets this to `False`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to
             use for model computations and weights.
     """
@@ -143,6 +148,7 @@ class MuseGlimmerBackbone(Backbone):
         enable_qk_scale_and_gate=True,
         qk_norm_with_scale=False,
         use_sandwich_norm=True,
+        use_centered_norm=True,
         dtype=None,
         **kwargs,
     ):
@@ -244,6 +250,7 @@ class MuseGlimmerBackbone(Backbone):
                 enable_qk_scale_and_gate=enable_qk_scale_and_gate,
                 qk_norm_with_scale=qk_norm_with_scale,
                 use_sandwich_norm=use_sandwich_norm,
+                use_centered_norm=use_centered_norm,
                 dropout=dropout,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
@@ -371,6 +378,7 @@ class MuseGlimmerBackbone(Backbone):
         self.enable_qk_scale_and_gate = enable_qk_scale_and_gate
         self.qk_norm_with_scale = qk_norm_with_scale
         self.use_sandwich_norm = use_sandwich_norm
+        self.use_centered_norm = use_centered_norm
 
     def __call__(self, inputs, *args, **kwargs):
         """Inject empty vision inputs for text-only calls on a VLM backbone."""
@@ -437,6 +445,7 @@ class MuseGlimmerBackbone(Backbone):
                 "enable_qk_scale_and_gate": self.enable_qk_scale_and_gate,
                 "qk_norm_with_scale": self.qk_norm_with_scale,
                 "use_sandwich_norm": self.use_sandwich_norm,
+                "use_centered_norm": self.use_centered_norm,
             }
         )
         return config
