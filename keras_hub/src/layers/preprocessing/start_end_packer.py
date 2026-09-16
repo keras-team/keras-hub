@@ -12,11 +12,7 @@ from keras_hub.src.utils.tensor_utils import convert_to_list
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import pad
 from keras_hub.src.utils.tensor_utils import preprocessing_function
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.layers.StartEndPacker")
