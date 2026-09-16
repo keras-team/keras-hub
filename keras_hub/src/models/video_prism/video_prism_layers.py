@@ -1,6 +1,7 @@
 import keras
 from keras import ops
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
 )
@@ -223,28 +224,28 @@ class VideoPrismAttention(keras.layers.Layer):
         self.attention_logit_soft_cap = attention_logit_soft_cap
         self.use_per_dim_scale = use_per_dim_scale
 
-        self.query_dense = keras.layers.EinsumDense(
+        self.query_dense = EinsumDense(
             equation="btd,dnh->btnh",
             output_shape=(None, self.num_heads, self.key_dim),
             bias_axes="nh",
             dtype=self.dtype_policy,
             name="query",
         )
-        self.key_dense = keras.layers.EinsumDense(
+        self.key_dense = EinsumDense(
             equation="btd,dnh->btnh",
             output_shape=(None, self.num_heads, self.key_dim),
             bias_axes="nh",
             dtype=self.dtype_policy,
             name="key",
         )
-        self.value_dense = keras.layers.EinsumDense(
+        self.value_dense = EinsumDense(
             equation="btd,dnh->btnh",
             output_shape=(None, self.num_heads, self.key_dim),
             bias_axes="nh",
             dtype=self.dtype_policy,
             name="value",
         )
-        self.output_dense = keras.layers.EinsumDense(
+        self.output_dense = EinsumDense(
             equation="btnh,nhd->btd",
             output_shape=(None, self.hidden_dim),
             bias_axes="d",
