@@ -153,6 +153,9 @@ from keras_hub.src.models.qwen3_5.qwen3_5_image_converter import (
 from keras_hub.src.models.qwen3_5.qwen3_5_video_converter import (
     Qwen3_5VideoConverter as Qwen3_5VideoConverter,
 )
+from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
+    Qwen3ASRAudioConverter as Qwen3ASRAudioConverter,
+)
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter as ResNetImageConverter,
 )
