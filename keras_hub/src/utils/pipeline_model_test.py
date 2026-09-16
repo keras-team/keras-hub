@@ -1,11 +1,21 @@
 import os
+import warnings
 
 import keras
 import numpy as np
 import tensorflow as tf
 
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils import pipeline_model
 from keras_hub.src.utils.pipeline_model import PipelineModel
+from keras_hub.src.utils.pipeline_model import _batches_in
+from keras_hub.src.utils.pipeline_model import _build_dataset
+from keras_hub.src.utils.pipeline_model import _convert_inputs_to_dataset
+
+try:
+    import grain
+except ImportError:
+    grain = None
 
 
 class NoopPipeline(PipelineModel):
@@ -398,6 +408,523 @@ class TestFitArguments(TestCase):
             model.fit(ds, y=y)
         with self.assertRaises(ValueError):
             model.fit(ds, sample_weight=sw)
+
+
+class NumpyPipeline(PipelineModel):
+    """This model preprocesses with numpy only, never TensorFlow."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dense = keras.layers.Dense(1)
+        self.preprocess_count = 0
+
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        self.preprocess_count += 1
+        x = np.asarray(x, dtype="float32") / 255.0
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def call(self, inputs):
+        return self.dense(inputs)
+
+
+class RaggedOutputPipeline(PipelineModel):
+    """This model preprocesses to a ragged tensor, as a tokenizer with no
+    `sequence_length` does."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dense = keras.layers.Dense(1)
+
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        # Runs the same in the `tf.data` graph and eagerly under grain.
+        x = tf.RaggedTensor.from_tensor(tf.convert_to_tensor(x))
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def call(self, inputs):
+        return self.dense(inputs)
+
+
+class StringOutputPipeline(PipelineModel):
+    """This model preprocesses to a string tensor alongside its features."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dense = keras.layers.Dense(1)
+
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        x = tf.convert_to_tensor(x)
+        x = {
+            "features": tf.cast(x, "float32"),
+            "text": tf.fill([tf.shape(x)[0]], "hi"),
+        }
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def call(self, inputs):
+        return self.dense(inputs["features"])
+
+
+class TfOnlyPipeline(PipelineModel):
+    """This model preprocesses with tf ops that numpy inputs cannot satisfy."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dense = keras.layers.Dense(1)
+
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        # `get_shape` is a tf.Tensor method; a numpy array has no such thing.
+        if x.get_shape().rank != 2:
+            raise ValueError(f"Expected a batch of features. Received: {x}")
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def call(self, inputs):
+        return self.dense(inputs)
+
+
+class _BatchCounter(keras.callbacks.Callback):
+    """Records how many batches each epoch actually trained on."""
+
+    def __init__(self):
+        super().__init__()
+        self.per_epoch = []
+
+    def on_epoch_begin(self, epoch, logs=None):
+        self.per_epoch.append(0)
+
+    def on_train_batch_end(self, batch, logs=None):
+        self.per_epoch[-1] += 1
+
+
+class _ConstantSource:
+    """A random access source of constant samples, for `grain.DataLoader`."""
+
+    def __init__(self, length):
+        self.length = length
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, index):
+        return {
+            "x": np.ones((5,), dtype="float32"),
+            "y": np.ones((1,), dtype="float32"),
+        }
+
+
+class TestGrainPipeline(TestCase):
+    def setUp(self):
+        super().setUp()
+        if grain is None:
+            self.skipTest("Grain is not installed.")
+
+    def test_builds_a_grain_dataset(self):
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        ds = _convert_inputs_to_dataset(x, y, None, batch_size=4)
+        self.assertIsInstance(ds, grain.MapDataset)
+        self.assertLen(ds, 2)
+
+    def test_passes_through_a_grain_dataset(self):
+        x = np.random.uniform(size=(8, 5))
+        ds = _convert_inputs_to_dataset(x, None, None, batch_size=4)
+        self.assertIs(_convert_inputs_to_dataset(ds), ds)
+
+    def test_error_grain_dataset_and_invalid_arguments(self):
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        ds = _convert_inputs_to_dataset(x, None, None, batch_size=4)
+        model = FeaturePipeline()
+        model.compile(loss="mse")
+        with self.assertRaises(ValueError):
+            model.fit(ds, y=y)
+        with self.assertRaises(ValueError):
+            model.fit(ds, sample_weight=y)
+        with self.assertRaises(ValueError):
+            model.fit(ds, batch_size=4)
+
+    def test_python_string_list_input(self):
+        # A `list` enumerates the samples of a single string input.
+        x = [[str(v) for v in row] for row in np.random.uniform(size=(8, 5))]
+        y = np.random.uniform(size=(8, 1))
+        model = FeaturePipeline()
+        model.compile(loss="mse")
+        model.fit(x=x, y=y, batch_size=4)
+        model.evaluate(x=x, y=y, batch_size=4)
+        model.predict(x=x, batch_size=4)
+
+    def test_numpy_only_preprocessing(self):
+        x = np.random.uniform(0, 255, size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        model = NumpyPipeline()
+        model.compile(loss="mse")
+        model.fit(x=x, y=y, batch_size=4)
+        model.evaluate(x=x, y=y, batch_size=4)
+        model.predict(x=x, batch_size=4)
+
+    def test_fit_with_validation_data(self):
+        # `fit()` preprocesses `validation_data` and `evaluate()` reuses the
+        # iterator Keras caches from it.
+        x = np.random.uniform(0, 255, size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        model = NumpyPipeline()
+        model.compile(loss="mse")
+        history = model.fit(
+            x=x, y=y, validation_data=(x, y), batch_size=4, epochs=3, verbose=0
+        )
+        self.assertLen(history.history["val_loss"], 3)
+        self.assertAllClose(
+            history.history["val_loss"][-1],
+            model.evaluate(x=x, y=y, batch_size=4, verbose=0),
+        )
+
+    def test_dict_input(self):
+        x = {
+            "a": np.random.uniform(size=(8, 5)),
+            "b": np.random.uniform(size=(8, 5)),
+        }
+        ds = _convert_inputs_to_dataset(x, None, None, batch_size=4)
+        batch = ds[0]
+        self.assertEqual(set(batch.keys()), {"a", "b"})
+        self.assertEqual(batch["a"].shape, (4, 5))
+
+    def test_mismatched_batch_dimension_raises(self):
+        model = FeaturePipeline()
+        model.compile(loss="mse")
+        with self.assertRaisesRegex(ValueError, "same batch dimension"):
+            model.fit(
+                x=np.random.uniform(size=(8, 5)),
+                y=np.random.uniform(size=(4, 1)),
+                batch_size=4,
+            )
+
+    def test_ragged_input_falls_back_to_tf_data(self):
+        x = tf.ragged.constant([[1, 2, 3], [4, 5]])
+        ds = _convert_inputs_to_dataset(x, None, None, batch_size=2)
+        self.assertIsInstance(ds, tf.data.Dataset)
+
+    def test_ragged_preprocessing_falls_back_to_tf_data(self):
+        # Grain has no ragged type, so a ragged batch comes back as nested
+        # lists that `GrainDatasetAdapter` flattens into scalars and rejects.
+        # `tf.data` carries it end to end, so the pipeline goes there.
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        ds = _build_dataset(
+            x, y, None, 4, RaggedOutputPipeline().preprocess_samples
+        )
+        self.assertIsInstance(ds, tf.data.Dataset)
+
+        if keras.config.backend() == "torch":
+            # Keras' torch iterator rejects a ragged batch with `Invalid
+            # dtype: object` whatever produced it, so `tf.data` cannot carry
+            # one there either, on master included. The routing above is what
+            # this test owns.
+            self.skipTest("The torch iterator does not take ragged batches.")
+        model = RaggedOutputPipeline()
+        # XLA has no `RaggedTensorToTensor` kernel, and `jit_compile="auto"`
+        # picks XLA on a GPU, so `Dense` on a ragged batch fails to compile
+        # there. Nothing to do with which pipeline built the batch.
+        model.compile(loss="mse", jit_compile=False)
+        model.fit(x=x, y=y, batch_size=4)
+        model.evaluate(x=x, y=y, batch_size=4)
+        model.predict(x=x, batch_size=4)
+
+    def test_string_preprocessing_falls_back_to_tf_data(self):
+        # The routing is not about ragged in particular. Grain hands back a
+        # list for string output too, and it fails the same rank 0 way, so
+        # the same test decides for both. Feeding a string tensor to a model
+        # is not supported on any backend, on `tf.data` included, so this
+        # only pins where the pipeline is built.
+        ds = _build_dataset(
+            np.random.uniform(size=(8, 5)),
+            np.random.uniform(size=(8, 1)),
+            None,
+            4,
+            StringOutputPipeline().preprocess_samples,
+        )
+        self.assertIsInstance(ds, tf.data.Dataset)
+
+    def test_tf_only_preprocessing_falls_back_to_tf_data(self):
+        # Preprocessing written against tf tensors raises on the numpy grain
+        # hands it. `tf.data` is where that code was meant to run.
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        ds = _build_dataset(x, y, None, 4, TfOnlyPipeline().preprocess_samples)
+        self.assertIsInstance(ds, tf.data.Dataset)
+
+        model = TfOnlyPipeline()
+        model.compile(loss="mse")
+        model.fit(x=x, y=y, batch_size=4)
+
+    def test_dense_preprocessing_stays_on_grain(self):
+        ds = _build_dataset(
+            np.random.uniform(size=(8, 5)),
+            np.random.uniform(size=(8, 1)),
+            None,
+            4,
+            NoopPipeline().preprocess_samples,
+        )
+        self.assertIsInstance(ds, grain.MapDataset)
+
+    def test_error_grain_data_loader(self):
+        # `grain.DataLoader` has no `map`, so preprocessing cannot be applied.
+        loader = grain.DataLoader(
+            data_source=_ConstantSource(8),
+            sampler=grain.samplers.IndexSampler(
+                num_records=8, shuffle=False, num_epochs=1
+            ),
+            operations=[grain.transforms.Batch(4)],
+        )
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        with self.assertRaisesRegex(ValueError, "grain.MapDataset"):
+            model.fit(loader)
+        with self.assertRaisesRegex(ValueError, "grain.MapDataset"):
+            model.evaluate(loader)
+        with self.assertRaisesRegex(ValueError, "grain.MapDataset"):
+            model.predict(loader)
+        with self.assertRaisesRegex(ValueError, "grain.MapDataset"):
+            model.fit(
+                x=np.random.uniform(size=(8, 5)),
+                y=np.random.uniform(size=(8, 1)),
+                batch_size=4,
+                validation_data=loader,
+            )
+
+    def test_no_spurious_ran_out_of_data_warning(self):
+        # `GrainDatasetAdapter.num_batches` is `None`, so Keras finds the
+        # epoch size by running the iterator dry. Before
+        # keras-team/keras#23360 that warned as if training was cut short.
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            model.fit(x=x, y=y, batch_size=4, epochs=2)
+            model.evaluate(x=x, y=y, batch_size=4)
+            model.predict(x=x, batch_size=4)
+        messages = [str(w.message) for w in caught]
+        self.assertFalse([m for m in messages if "ran out of data" in m])
+
+    def test_steps_per_epoch_beyond_the_data(self):
+        # `tf.data` stops an over-long `steps_per_epoch` at the end of the
+        # data and warns once an epoch. A repeated grain dataset never runs
+        # dry, so the count is capped and the warning raised here instead.
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        counter = _BatchCounter()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            model.fit(
+                x=np.random.uniform(size=(8, 5)),
+                y=np.random.uniform(size=(8, 1)),
+                batch_size=4,
+                epochs=2,
+                steps_per_epoch=5,
+                callbacks=[counter],
+            )
+        self.assertEqual(counter.per_epoch, [2, 2])
+        messages = [str(w.message) for w in caught]
+        self.assertLen([m for m in messages if "ran out of data" in m], 2)
+
+    def test_repeated_dataset_is_left_to_the_caller(self):
+        # A dataset the caller already repeated has no end. Grain reports that
+        # as a length of `sys.maxsize`, and repeating it again raises, so the
+        # step count stays theirs to declare.
+        ds = _convert_inputs_to_dataset(
+            np.random.uniform(size=(8, 5)),
+            np.random.uniform(size=(8, 1)),
+            None,
+            batch_size=4,
+        ).repeat()
+        self.assertIsNone(_batches_in(ds))
+
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        model.fit(ds, epochs=2, steps_per_epoch=2)
+
+    def test_short_validation_warns_per_validation_run(self):
+        # Training warns once an epoch and validation once a validation run,
+        # which `validation_freq` makes two different counts.
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            model.fit(
+                x=x,
+                y=y,
+                batch_size=4,
+                epochs=4,
+                validation_data=(x, y),
+                validation_steps=9,
+                validation_freq=2,
+            )
+        messages = [str(w.message) for w in caught]
+        self.assertLen([m for m in messages if "ran out of data" in m], 2)
+
+    def test_steps_beyond_the_data_warns_once(self):
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        for call, kwargs in [
+            (model.evaluate, {"y": y}),
+            (model.predict, {}),
+        ]:
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                call(x=x, batch_size=4, steps=9, **kwargs)
+            messages = [str(w.message) for w in caught]
+            self.assertLen([m for m in messages if "ran out of data" in m], 1)
+
+    def test_validation_steps_shortfall_still_warns(self):
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            model.fit(
+                x=x,
+                y=y,
+                batch_size=4,
+                validation_data=(x, y),
+                validation_steps=100,
+            )
+        messages = [str(w.message) for w in caught]
+        self.assertTrue([m for m in messages if "ran out of data" in m])
+
+    def test_steps_per_epoch_keeps_every_epoch_fed(self):
+        # `num_batches` is `None` for a grain dataset, so `EpochIterator` holds
+        # one iterator across epochs. Without a repeat the second epoch would
+        # train on a drained one, `[2, 0, 2]` instead of `[2, 2, 2]`.
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        counter = _BatchCounter()
+        model.fit(
+            x=np.random.uniform(size=(8, 5)),
+            y=np.random.uniform(size=(8, 1)),
+            batch_size=4,
+            epochs=3,
+            steps_per_epoch=2,
+            callbacks=[counter],
+        )
+        self.assertEqual(counter.per_epoch, [2, 2, 2])
+
+    def test_class_weight(self):
+        # `GrainDatasetAdapter` takes no `class_weight`, so it is folded into
+        # `sample_weight` instead of reaching the adapter.
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        model.fit(
+            x=np.random.uniform(size=(8, 5)),
+            y=np.random.randint(0, 2, size=(8, 1)),
+            batch_size=4,
+            class_weight={0: 1.0, 1: 2.0},
+        )
+
+    def test_error_class_weight_with_sample_weight(self):
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        with self.assertRaisesRegex(ValueError, "at the same time"):
+            model.fit(
+                x=np.random.uniform(size=(8, 5)),
+                y=np.random.randint(0, 2, size=(8, 1)),
+                sample_weight=np.ones((8,)),
+                batch_size=4,
+                class_weight={0: 1.0, 1: 2.0},
+            )
+
+    def test_iter_dataset_input(self):
+        ds = _convert_inputs_to_dataset(
+            np.random.uniform(size=(8, 5)),
+            np.random.uniform(size=(8, 1)),
+            None,
+            batch_size=4,
+        ).to_iter_dataset()
+        self.assertIsInstance(ds, grain.IterDataset)
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        model.fit(ds)
+        model.evaluate(ds)
+        model.predict(ds)
+
+    def test_python_number_dtypes_match_tf_data(self):
+        # `from_tensor_slices` reads python numbers the way tf does. Numpy
+        # widens them, and torch picks MPS on Apple Silicon, which has no
+        # float64.
+        ds = _convert_inputs_to_dataset(
+            [[0.1, 0.9], [0.2, 0.8]], [1, 0], None, batch_size=2
+        )
+        x, y = next(iter(ds))
+        self.assertEqual(x.dtype, "float32")
+        self.assertEqual(y.dtype, "int32")
+
+    def test_given_dtypes_are_left_alone(self):
+        ds = _convert_inputs_to_dataset(
+            np.zeros((2, 2), dtype="float64"), None, None, batch_size=2
+        )
+        self.assertEqual(next(iter(ds)).dtype, "float64")
+
+
+class TestTfDataFallback(TestCase):
+    """The path taken on a machine with no grain installed.
+
+    CI installs grain, so without this the `tf.data` branch of
+    `_convert_inputs_to_dataset` and its unbatched-input error never run.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self._grain = pipeline_model.grain
+        pipeline_model.grain = None
+
+    def tearDown(self):
+        pipeline_model.grain = self._grain
+        super().tearDown()
+
+    def test_builds_a_tf_dataset(self):
+        ds = _convert_inputs_to_dataset(
+            np.random.uniform(size=(8, 5)),
+            np.random.uniform(size=(8, 1)),
+            None,
+            batch_size=4,
+        )
+        self.assertIsInstance(ds, tf.data.Dataset)
+
+    def test_fit_evaluate_predict(self):
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        model.fit(x=x, y=y, batch_size=4)
+        model.evaluate(x=x, y=y, batch_size=4)
+        model.predict(x=x, batch_size=4)
+
+    def test_fit_with_validation_data(self):
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        model.fit(x=x, y=y, batch_size=4, validation_data=(x, y))
+
+    def test_class_weight(self):
+        # `TFDatasetAdapter` applies this one itself.
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        model.fit(
+            x=np.random.uniform(size=(8, 5)),
+            y=np.random.randint(0, 2, size=(8, 1)),
+            batch_size=4,
+            class_weight={0: 1.0, 1: 2.0},
+        )
+
+    def test_unbatched_input_raises(self):
+        # The rank 0 message `tf.data` raises is remapped to our own.
+        model = FeaturePipeline()
+        with self.assertRaisesRegex(ValueError, "must have a batch dimension"):
+            model.fit(x=tf.constant("test"))
 
 
 class TestInputErrors(TestCase):

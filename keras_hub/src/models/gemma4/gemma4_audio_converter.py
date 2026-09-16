@@ -4,6 +4,13 @@ from keras import ops
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
+from keras_hub.src.utils.audio_utils import hann_window
+from keras_hub.src.utils.tensor_utils import (
+    convert_preprocessing_outputs_python,
+)
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
+from keras_hub.src.utils.tensor_utils import in_tf_function
+from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
 @keras_hub_export("keras_hub.layers.Gemma4AudioConverter")
@@ -93,7 +100,10 @@ class Gemma4AudioConverter(AudioConverter):
         frame_length=320,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
+        super().__init__(
+            _allow_python_workflow=_allow_python_workflow, **kwargs
+        )
 
         self._convert_input_args = False
         self._allow_non_tensor_positional_args = True
@@ -121,17 +131,18 @@ class Gemma4AudioConverter(AudioConverter):
         # HTK mel filterbank: shape (num_fft_bins // 2 + 1, num_mels).
         self.mel_filters = self._get_mel_filters()
 
-        # Periodic Hann window matching HF
-        length = self.frame_length + 1
-        window = np.hanning(length)
-        self.window = ops.convert_to_tensor(window[:-1], dtype="float32")
+        # Periodic Hann window matching HF. Kept as NumPy so the layer holds
+        # no backend tensors (Grain pickles layers into worker processes).
+        self.window = hann_window(
+            self.frame_length, periodic=True, dtype="float32"
+        )
 
         # Precompute indices for manual framing
         num_frames = self.num_samples // self.stride
         one_frame_indices = np.arange(self.frame_length)
         start_indices = np.arange(num_frames) * self.stride
         indices = start_indices[:, None] + one_frame_indices[None, :]
-        self.indices = ops.convert_to_tensor(indices, dtype="int32")
+        self.indices = indices.astype("int32")
 
         self.built = True
 
@@ -187,13 +198,18 @@ class Gemma4AudioConverter(AudioConverter):
         paddings = [[0, 0], [pad_left, 0]]
         audio = ops.pad(audio, paddings, mode="constant")
 
+        # `self.indices` and `self.window` are NumPy constants; materialize
+        # them as tensors for the graph/backend path.
+        indices = ops.convert_to_tensor(self.indices)
+        window = ops.cast(
+            ops.convert_to_tensor(self.window), self.compute_dtype
+        )
+
         def true_fn():
             max_idx = ops.shape(audio)[1]
-            safe_indices = ops.minimum(
-                self.indices, ops.maximum(max_idx - 1, 0)
-            )
+            safe_indices = ops.minimum(indices, ops.maximum(max_idx - 1, 0))
             frames = ops.take(audio, safe_indices, axis=1)
-            out_of_bounds = self.indices >= max_idx
+            out_of_bounds = indices >= max_idx
             out_of_bounds = ops.expand_dims(out_of_bounds, axis=0)
             return ops.where(out_of_bounds, ops.cast(0.0, frames.dtype), frames)
 
@@ -208,7 +224,7 @@ class Gemma4AudioConverter(AudioConverter):
         frames = ops.cond(max_idx > 0, true_fn, false_fn)
 
         # Apply window
-        frames = frames * self.window
+        frames = frames * window
 
         # Zero-pad to fft_length
         padding = self.num_fft_bins - self.frame_length
@@ -267,17 +283,80 @@ class Gemma4AudioConverter(AudioConverter):
         num_frames = self.num_samples // self.stride
         return (num_frames, self.num_mels)
 
-    def call(self, audio):
-        """Convert raw waveform(s) to log-mel spectrogram features.
+    def _extract_audio_features_python(self, audio):
+        """NumPy equivalent of `_extract_audio_features`.
 
         Args:
-            audio: array of shape ``(num_samples,)`` or
-                ``(batch_size, num_samples)``.
+            audio: NumPy array of shape ``(batch_size, num_samples)``.
 
         Returns:
-            Log-mel spectrogram of shape ``(num_frames, num_mels)`` or
-            ``(batch_size, num_frames, num_mels)``.
+            NumPy array of shape ``(batch_size, num_frames, num_mels)``.
         """
+        # Pad left by frame_length // 2 for semicausal padding
+        pad_left = self.frame_length // 2
+        audio = np.pad(audio, ((0, 0), (pad_left, 0)), mode="constant")
+
+        # Framing with zeros for out of bounds indices.
+        max_idx = audio.shape[1]
+        safe_indices = np.minimum(self.indices, max(max_idx - 1, 0))
+        frames = audio[:, safe_indices]
+        frames = np.where(self.indices[None, ...] >= max_idx, 0.0, frames)
+
+        # Apply window
+        frames = frames * self.window
+
+        # Zero-pad to fft_length
+        padding = self.num_fft_bins - self.frame_length
+        if padding > 0:
+            frames = np.pad(frames, ((0, 0), (0, 0), (0, padding)))
+        else:
+            frames = frames[..., : self.num_fft_bins]
+
+        # Magnitude spectrum of the real FFT.
+        magnitudes = np.abs(np.fft.rfft(frames, n=self.num_fft_bins, axis=-1))
+
+        # Mel filterbank matmul: (batch, num_frames, fft_bins) @
+        #   (fft_bins, num_mels) → (batch, num_frames, num_mels)
+        mel_spec = np.matmul(magnitudes, self.mel_filters)
+
+        # Log compression.
+        log_spec = np.log(mel_spec + self.mel_floor)
+
+        # Optional per-bin mean / stddev normalisation.
+        if self.per_bin_mean is not None:
+            mean = np.array(self.per_bin_mean, dtype="float32").reshape(
+                1, 1, -1
+            )
+            log_spec = log_spec - mean
+        if self.per_bin_stddev is not None:
+            stddev = np.array(self.per_bin_stddev, dtype="float32").reshape(
+                1, 1, -1
+            )
+            log_spec = log_spec / stddev
+
+        return log_spec.astype(self.compute_dtype)
+
+    def _call_python(self, audio):
+        audio = convert_to_numpy(audio)
+        audio = np.asarray(audio, dtype=self.compute_dtype)
+        rank_1_input = audio.ndim == 1
+        if rank_1_input:
+            audio = np.expand_dims(audio, axis=0)
+
+        # Trim to num_samples, then zero-pad any remaining deficit.
+        audio = audio[:, : self.num_samples]
+        padding = self.num_samples - audio.shape[1]
+        audio = np.pad(audio, ((0, 0), (0, padding)))
+
+        log_spec = self._extract_audio_features_python(audio)
+
+        if rank_1_input:
+            log_spec = np.squeeze(log_spec, axis=0)
+
+        return convert_preprocessing_outputs_python(log_spec)
+
+    @preprocessing_function
+    def _call_tf(self, audio):
         audio = ops.convert_to_tensor(audio, dtype=self.compute_dtype)
         rank_1_input = len(ops.shape(audio)) == 1
         if rank_1_input:
@@ -295,6 +374,22 @@ class Gemma4AudioConverter(AudioConverter):
             log_spec = ops.squeeze(log_spec, axis=0)
 
         return log_spec
+
+    def call(self, audio):
+        """Convert raw waveform(s) to log-mel spectrogram features.
+
+        Args:
+            audio: array of shape ``(num_samples,)`` or
+                ``(batch_size, num_samples)``.
+
+        Returns:
+            Log-mel spectrogram of shape ``(num_frames, num_mels)`` or
+            ``(batch_size, num_frames, num_mels)``.
+        """
+        if not self._allow_python_workflow or in_tf_function():
+            return self._call_tf(audio)
+        else:
+            return self._call_python(audio)
 
     def get_config(self):
         config = super().get_config()

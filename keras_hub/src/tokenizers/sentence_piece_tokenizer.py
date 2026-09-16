@@ -15,11 +15,8 @@ from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import tf
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 try:
     import tensorflow_text as tf_text
 except ImportError:
@@ -411,6 +408,14 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
         if not batched:
             batched_tokens = batched_tokens[0]
+            if not self.sequence_length and is_int_dtype(self.compute_dtype):
+                # An unbatched sequence is dense even without
+                # `sequence_length`, so return an array here too. Without
+                # this, the output would fall back to NumPy's default int64
+                # rather than the `compute_dtype` the TF path returns.
+                batched_tokens = np.array(
+                    batched_tokens, dtype=self.compute_dtype
+                )
         return batched_tokens
 
     def tokenize(self, inputs):
