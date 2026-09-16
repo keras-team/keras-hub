@@ -8,6 +8,7 @@ from keras_hub.src.models.sam3.sam3_pc_backbone import (
     SAM3PromptableConceptBackbone,
 )
 from keras_hub.src.models.sam3.sam3_tokenizer import SAM3Tokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -153,6 +154,8 @@ class SAM3PromptableConceptImageSegmenterPreprocessor(Preprocessor):
         point_pad_value=-10,
         **kwargs,
     ):
+        # `call` is implemented with TensorFlow ops only.
+        assert_tf_installed("SAM3PromptableConceptImageSegmenterPreprocessor")
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
         self.packer = None

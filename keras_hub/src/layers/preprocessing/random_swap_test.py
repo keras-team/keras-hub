@@ -1,4 +1,5 @@
 import sys
+from unittest import mock
 
 import grain
 import keras
@@ -9,6 +10,7 @@ from absl import flags
 
 from keras_hub.src.layers.preprocessing.random_swap import RandomSwap
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils import tensor_utils
 
 
 class RandomSwapTest(TestCase):
@@ -258,3 +260,13 @@ class RandomSwapTest(TestCase):
                 # The two paths draw from different RNG streams, but both
                 # must permute each row without adding or losing tokens.
                 self.assertEqual(sorted(out_row), sorted(row))
+
+    def test_skip_fn_requires_tensorflow(self):
+        # `skip_fn` forces the TensorFlow path, so the layer asserts at
+        # construction rather than failing cryptically on first call.
+        def skip_fn(word):
+            return tf.equal(word, "like")
+
+        with mock.patch.object(tensor_utils, "tf", None):
+            with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
+                RandomSwap(rate=0.5, max_swaps=1, skip_fn=skip_fn)

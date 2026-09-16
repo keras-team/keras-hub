@@ -17,7 +17,6 @@ from keras_hub.src.utils.tensor_utils import (
     convert_preprocessing_outputs_python,
 )
 from keras_hub.src.utils.tensor_utils import convert_to_numpy
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -162,10 +161,7 @@ class Gemma3nAudioConverter(AudioConverter):
         **kwargs,
     ):
         # === Config ===
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(**kwargs)
         self.seed = random.randint(1, int(1e9)) if seed is None else seed
         self.feature_size = feature_size
         self.sampling_rate = sampling_rate
@@ -594,7 +590,7 @@ class Gemma3nAudioConverter(AudioConverter):
             "pad_to_multiple_of": pad_to_multiple_of,
             "return_attention_mask": return_attention_mask,
         }
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(raw_speech, **kwargs)
         else:
             return self._call_python(raw_speech, **kwargs)

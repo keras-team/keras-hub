@@ -1,11 +1,6 @@
 import keras
 import numpy as np
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.audio_converter import AudioConverter
 from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
@@ -15,6 +10,7 @@ from keras_hub.src.utils.tensor_utils import (
 from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.layers.MoonshineAudioConverter")
@@ -94,10 +90,7 @@ class MoonshineAudioConverter(AudioConverter):
         do_normalize=False,
         **kwargs,
     ):
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(**kwargs)
         self._convert_input_args = False
         self._allow_non_tensor_positional_args = True
         self.sampling_rate = sampling_rate
@@ -388,7 +381,7 @@ class MoonshineAudioConverter(AudioConverter):
             "max_length": max_length,
             "pad_to_multiple_of": pad_to_multiple_of,
         }
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(inputs, **kwargs)
         else:
             return self._call_python(inputs, **kwargs)

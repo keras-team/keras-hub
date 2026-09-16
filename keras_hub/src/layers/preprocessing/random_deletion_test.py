@@ -1,4 +1,5 @@
 import sys
+from unittest import mock
 
 import grain
 import keras
@@ -9,6 +10,7 @@ from absl import flags
 
 from keras_hub.src.layers.preprocessing.random_deletion import RandomDeletion
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils import tensor_utils
 
 
 class RandomDeletionTest(TestCase):
@@ -242,3 +244,13 @@ class RandomDeletionTest(TestCase):
             for out_row in (python_row, tf_row):
                 self.assertGreaterEqual(len(out_row), len(row) - 1)
                 self.assertEqual(out_row, [t for t in row if t in out_row])
+
+    def test_skip_fn_requires_tensorflow(self):
+        # `skip_fn` forces the TensorFlow path, so the layer asserts at
+        # construction rather than failing cryptically on first call.
+        def skip_fn(word):
+            return tf.equal(word, "like")
+
+        with mock.patch.object(tensor_utils, "tf", None):
+            with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
+                RandomDeletion(rate=0.5, max_deletions=1, skip_fn=skip_fn)
