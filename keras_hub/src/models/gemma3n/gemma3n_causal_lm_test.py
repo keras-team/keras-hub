@@ -33,7 +33,7 @@ from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
 from keras_hub.src.utils.keras_utils import running_on_gpu
-
+import tensorflow as tf
 
 class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
     def setUp(self):
@@ -273,16 +273,23 @@ class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
             init_kwargs = self.multimodal_init_kwargs
             train_data = self.multimodal_train_data
             expected_vocab_size = self.tokenizer.vocabulary_size()
-        self.run_task_test(
-            cls=Gemma3nCausalLM,
-            init_kwargs=init_kwargs,
-            train_data=train_data,
-            expected_output_shape=(
-                2,
-                20 if modality_type != "multimodal" else 30,
-                expected_vocab_size,
-            ),
-        )
+        
+        original_jit = tf.config.optimizer.get_experimental_options().get("jit", False)
+        tf.config.optimizer.set_jit(False)
+        
+        try:
+            self.run_task_test(
+                cls=Gemma3nCausalLM,
+                init_kwargs=init_kwargs,
+                train_data=train_data,
+                expected_output_shape=(
+                    2,
+                    20 if modality_type != "multimodal" else 30,
+                    expected_vocab_size,
+                ),
+            )
+        finally:
+            tf.config.optimizer.set_jit(original_jit)
 
     def test_text_flash_attention_call(self):
         if (
