@@ -46,12 +46,13 @@ class Gemma4ImageConverterTest(tf.test.TestCase):
         self.assertIn("pixel_position_ids", outputs)
 
 
-if __name__ == "__main__":
-    tf.test.main()
-
     def test_requires_tensorflow(self):
-        # `call` is TensorFlow only, so the layer asserts at construction
+        # call is TensorFlow only, so the layer asserts at construction
         # rather than failing cryptically on first call.
         with mock.patch.object(tensor_utils, "tf", None):
-            with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
+            with self.assertRaisesRegex(ImportError, "requires tensorflow"):
                 Gemma4ImageConverter(patch_size=4, max_soft_tokens=1)
+
+
+if __name__ == "__main__":
+    tf.test.main()
