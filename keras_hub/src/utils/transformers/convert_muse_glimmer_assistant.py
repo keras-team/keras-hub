@@ -34,6 +34,7 @@ def convert_backbone_config(transformers_config):
         "enable_qk_scale_and_gate": False,
         "qk_norm_with_scale": True,
         "use_sandwich_norm": False,
+        "use_centered_norm": False,
     }
 
 

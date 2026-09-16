@@ -62,6 +62,7 @@ class TestMuseGlimmerAssistantConverter(TestCase):
         self.assertFalse(keras_config["enable_qk_scale_and_gate"])
         self.assertTrue(keras_config["qk_norm_with_scale"])
         self.assertFalse(keras_config["use_sandwich_norm"])
+        self.assertFalse(keras_config["use_centered_norm"])
 
     def test_convert_backbone_config_rope_theta_fallback(self):
         config = self._config()
