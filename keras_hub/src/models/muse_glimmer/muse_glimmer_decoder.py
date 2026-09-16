@@ -13,6 +13,9 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_attention import (
 from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
     MuseGlimmerCenteredRMSNorm,
 )
+from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
+    MuseGlimmerRMSNorm,
+)
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -37,6 +40,10 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
       layer is a plain two-norm pre-norm block, not a sandwich.
     - `enable_qk_scale_and_gate=False` is threaded into
       `MuseGlimmerTextAttention` (see that layer's docstring).
+    - `use_centered_norm=False` builds `input_layernorm`/
+      `pre_feedforward_layernorm` as plain `weight * normalized(x)` RMSNorm
+      (`MuseGlimmerAssistantRMSNorm`) instead of the main model's
+      `(1 + weight) * normalized(x)` centered variant.
 
     `context_hidden_states`, when passed to `call()`, is threaded into
     the self-attention layer unchanged (assistant/drafter only).
@@ -64,6 +71,9 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         use_sandwich_norm: bool. If `False`, skips
             `post_attention_layernorm`/`post_feedforward_layernorm`.
             Defaults to `True`.
+        use_centered_norm: bool. If `False`, builds `input_layernorm`/
+            `pre_feedforward_layernorm` as plain RMSNorm instead of the
+            centered `(1 + weight)` variant. Defaults to `True`.
         kernel_initializer: initializer for the dense projections.
         dropout: float. Dropout rate.
     """
@@ -85,6 +95,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         enable_qk_scale_and_gate=True,
         qk_norm_with_scale=False,
         use_sandwich_norm=True,
+        use_centered_norm=True,
         kernel_initializer="glorot_uniform",
         dropout=0.0,
         **kwargs,
@@ -105,6 +116,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         self.enable_qk_scale_and_gate = enable_qk_scale_and_gate
         self.qk_norm_with_scale = qk_norm_with_scale
         self.use_sandwich_norm = use_sandwich_norm
+        self.use_centered_norm = use_centered_norm
         self.dropout = dropout
         self.activation = keras.activations.get(hidden_activation)
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
@@ -113,11 +125,18 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
     def build(self, decoder_sequence_shape):
         self.hidden_dim = decoder_sequence_shape[-1]
 
-        self._input_layernorm = MuseGlimmerCenteredRMSNorm(
-            eps=self.rms_norm_eps,
-            dtype=self.dtype_policy,
-            name="input_layernorm",
-        )
+        if self.use_centered_norm:
+            self._input_layernorm = MuseGlimmerCenteredRMSNorm(
+                eps=self.rms_norm_eps,
+                dtype=self.dtype_policy,
+                name="input_layernorm",
+            )
+        else:
+            self._input_layernorm = MuseGlimmerRMSNorm(
+                eps=self.rms_norm_eps,
+                dtype=self.dtype_policy,
+                name="input_layernorm",
+            )
         self._input_layernorm.build(decoder_sequence_shape)
 
         self._self_attention_layer = MuseGlimmerTextAttention(
@@ -146,11 +165,18 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
             )
             self._post_attention_layernorm.build(decoder_sequence_shape)
 
-        self._pre_feedforward_layernorm = MuseGlimmerCenteredRMSNorm(
-            eps=self.rms_norm_eps,
-            dtype=self.dtype_policy,
-            name="pre_feedforward_layernorm",
-        )
+        if self.use_centered_norm:
+            self._pre_feedforward_layernorm = MuseGlimmerCenteredRMSNorm(
+                eps=self.rms_norm_eps,
+                dtype=self.dtype_policy,
+                name="pre_feedforward_layernorm",
+            )
+        else:
+            self._pre_feedforward_layernorm = MuseGlimmerRMSNorm(
+                eps=self.rms_norm_eps,
+                dtype=self.dtype_policy,
+                name="pre_feedforward_layernorm",
+            )
         self._pre_feedforward_layernorm.build(decoder_sequence_shape)
 
         self._feedforward_gate_dense = keras.layers.Dense(
@@ -226,15 +252,22 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
                 # `compute_causal_mask`/`_mask_sliding_window`, which both
                 # assume a single contiguous, non-persisted key range.
                 max_length = ops.shape(self_attention_cache)[2]
-                anchor_pos = ops.cast(
+                write_start = ops.cast(
                     0
                     if self_attention_cache_update_index is None
                     else self_attention_cache_update_index,
                     "int32",
                 )
+                # Matches `MuseGlimmerTextAttention.call()`'s RoPE offset
+                # (`start_index + context_len`): the number of context
+                # positions written THIS call is `context_hidden_states`'s
+                # own length, not always one — the checkpoint-conversion
+                # script seeds the whole context in a single call.
+                context_write_len = ops.shape(context_hidden_states)[1]
+                valid_context_len = write_start + context_write_len
                 context_positions = ops.arange(max_length, dtype="int32")
-                block_positions = (
-                    anchor_pos + 1 + ops.arange(q_len, dtype="int32")
+                block_positions = valid_context_len + ops.arange(
+                    q_len, dtype="int32"
                 )
                 key_positions = ops.concatenate(
                     [context_positions, block_positions], axis=0
@@ -246,9 +279,9 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
                     mask_2d = position_diff <= (self.sliding_window_size - 1)
                 else:
                     mask_2d = ops.ones_like(position_diff, dtype="bool")
-                # Cache slots at or before `anchor_pos` hold real,
+                # Cache slots below `valid_context_len` hold real,
                 # already-written context; later slots are unwritten.
-                context_valid = context_positions <= anchor_pos
+                context_valid = context_positions < valid_context_len
                 block_valid = ops.ones((q_len,), dtype="bool")
                 key_valid = ops.concatenate(
                     [context_valid, block_valid], axis=0
@@ -389,6 +422,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
                 "enable_qk_scale_and_gate": self.enable_qk_scale_and_gate,
                 "qk_norm_with_scale": self.qk_norm_with_scale,
                 "use_sandwich_norm": self.use_sandwich_norm,
+                "use_centered_norm": self.use_centered_norm,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
