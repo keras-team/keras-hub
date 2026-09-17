@@ -18,25 +18,35 @@ import argparse
 import os
 import sys
 
-import keras
-import numpy as np
-import torch
-from transformers import AutoModelForMaskedLM
-from transformers import AutoTokenizer
-
-from keras_hub.src.models.modernbert.modern_bert_masked_lm import (
-    ModernBertMaskedLM,
-)
-
+# This must run before `keras_hub` is imported, otherwise running the
+# script directly (`python tools/checkpoint_conversion/...`) picks up an
+# installed `keras_hub` instead of this checkout.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
+import keras  # noqa: E402
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
+from transformers import AutoModelForMaskedLM  # noqa: E402
+from transformers import AutoTokenizer  # noqa: E402
+
+from keras_hub.src.models.modernbert.modern_bert_masked_lm import (  # noqa: E402
+    ModernBertMaskedLM,
+)
+
 PRESET_MAP = {
     "modernbert_base_en": "answerdotai/ModernBERT-base",
     "modernbert_large_en": "answerdotai/ModernBERT-large",
 }
+
+# Tolerances for float32 CPU comparisons against the PyTorch reference.
+# These are deliberately well above the observed values so the checks are
+# not flaky, while still being tight enough to catch a real regression.
+EMBEDDING_ATOL = 1e-5
+BACKBONE_ATOL = 5e-2
+LOGITS_ATOL = 1e-3
 
 
 def get_huggingface_model_and_tokenizer(hf_repo):
@@ -132,8 +142,8 @@ def verify_embeddings(
     np.testing.assert_allclose(
         hf_embedding,
         keras_embedding,
-        atol=1e-5,
-        rtol=1e-5,
+        atol=EMBEDDING_ATOL,
+        rtol=EMBEDDING_ATOL,
     )
 
     print("✅ Embedding verification passed.")
@@ -185,6 +195,14 @@ def verify_backbone(
     print(f"Keras hidden mean : {keras_hidden.mean():.6e}")
     print(f"HF hidden std     : {hf_hidden.std():.6e}")
     print(f"Keras hidden std  : {keras_hidden.std():.6e}")
+
+    if max_diff > BACKBONE_ATOL:
+        raise ValueError(
+            f"Backbone max diff {max_diff:.6e} exceeds tolerance "
+            f"{BACKBONE_ATOL:.6e}. Mean diff was {mean_diff:.6e}."
+        )
+
+    print("✅ Backbone verification passed.")
 
     return max_diff
 
@@ -357,6 +375,12 @@ def verify_masked_lm(
 
     print(f"Keras logits std  : {keras_logits.std():.6e}")
 
+    if max_diff > LOGITS_ATOL:
+        raise ValueError(
+            f"MaskedLM logits max diff {max_diff:.6e} exceeds tolerance "
+            f"{LOGITS_ATOL:.6e}. Mean diff was {mean_diff:.6e}."
+        )
+
     # Top-1 / Top-5 verification.
     top1_matches = 0
     top5_matches = 0
@@ -403,12 +427,167 @@ def verify_masked_lm(
     )
 
 
+def verify_tokenizer(keras_lm, hf_tokenizer):
+    """Compare `ModernBertTokenizer` against HF's `AutoTokenizer`."""
+    print("\nTokenizer verification")
+
+    preprocessor = keras_lm.preprocessor
+
+    if preprocessor is None or preprocessor.tokenizer is None:
+        print("No KerasHub tokenizer attached; skipping.")
+        return
+
+    keras_tokenizer = preprocessor.tokenizer
+
+    for name in ("cls_token_id", "sep_token_id", "pad_token_id"):
+        keras_id = getattr(keras_tokenizer, name)
+        hf_id = getattr(hf_tokenizer, name)
+        if keras_id != hf_id:
+            raise ValueError(
+                f"Special token mismatch for {name}: "
+                f"KerasHub={keras_id}, Hugging Face={hf_id}."
+            )
+
+    if keras_tokenizer.mask_token_id != hf_tokenizer.mask_token_id:
+        raise ValueError(
+            "Special token mismatch for mask_token_id: "
+            f"KerasHub={keras_tokenizer.mask_token_id}, "
+            f"Hugging Face={hf_tokenizer.mask_token_id}."
+        )
+
+    print("Special token ids match Hugging Face.")
+
+    texts = [
+        "The quick brown fox jumps over the lazy dog.",
+        "ModernBERT uses local-global alternating attention.",
+        "Numbers like 1969 and punctuation -- all of it.",
+    ]
+
+    for text in texts:
+        hf_ids = hf_tokenizer(text)["input_ids"]
+
+        # HF wraps the sequence in [CLS] ... [SEP]; the KerasHub tokenizer
+        # emits raw BPE ids and leaves the boundary tokens to the
+        # preprocessor, so strip them before comparing.
+        hf_body_ids = [
+            token_id
+            for token_id in hf_ids
+            if token_id
+            not in (
+                hf_tokenizer.cls_token_id,
+                hf_tokenizer.sep_token_id,
+            )
+        ]
+
+        keras_ids = [int(i) for i in keras_tokenizer([text])[0]]
+
+        if keras_ids != hf_body_ids:
+            raise ValueError(
+                f"Tokenizer mismatch for {text!r}: "
+                f"KerasHub={keras_ids}, Hugging Face={hf_body_ids}."
+            )
+
+    print(f"✅ Tokenizer matches Hugging Face on {len(texts)} strings.")
+
+
+def verify_padded_batch(keras_lm, hf_model, hf_tokenizer, texts):
+    """Compare backbone outputs for a right-padded batch.
+
+    The single-sequence cases all produce an all-ones attention mask, so
+    the padding path is otherwise never exercised.
+    """
+    print("\nPadded batch verification")
+
+    hf_inputs = hf_tokenizer(
+        texts,
+        return_tensors="pt",
+        padding=True,
+    )
+
+    hf_inputs.pop("token_type_ids", None)
+
+    input_ids = hf_inputs["input_ids"].cpu().numpy().astype("int32")
+    padding_mask = hf_inputs["attention_mask"].cpu().numpy().astype("int32")
+
+    with torch.no_grad():
+        hf_hidden = (
+            hf_model.model(
+                input_ids=hf_inputs["input_ids"],
+                attention_mask=hf_inputs["attention_mask"],
+            )
+            .last_hidden_state.cpu()
+            .numpy()
+        )
+
+    keras_hidden = keras_lm.backbone(
+        {
+            "token_ids": input_ids,
+            "padding_mask": padding_mask,
+        },
+        training=False,
+    )
+
+    keras_hidden = keras.ops.convert_to_numpy(keras_hidden)
+
+    if np.isnan(keras_hidden).any():
+        raise ValueError("KerasHub produced NaNs on a padded batch.")
+
+    # Padded positions are meaningless in both frameworks, so only compare
+    # real tokens.
+    valid = padding_mask[..., None].astype("float32")
+
+    diff = (
+        np.abs(hf_hidden.astype("float32") - keras_hidden.astype("float32"))
+        * valid
+    )
+
+    max_diff = float(np.max(diff))
+
+    print(f"Batch shape: {input_ids.shape}")
+
+    for index in range(input_ids.shape[0]):
+        real_tokens = int(padding_mask[index].sum())
+        pad_tokens = int(input_ids.shape[1] - real_tokens)
+        print(
+            f"  row {index}: real={real_tokens} pad={pad_tokens} "
+            f"max diff={float(np.max(diff[index])):.6e}"
+        )
+
+    if max_diff > BACKBONE_ATOL:
+        raise ValueError(
+            f"Padded batch backbone diff {max_diff:.6e} exceeds "
+            f"tolerance {BACKBONE_ATOL:.6e}."
+        )
+
+    print(f"✅ Padded batch verification passed (max diff {max_diff:.6e}).")
+
+    return max_diff
+
+
 def verify_text(keras_lm, hf_model, hf_tokenizer, text):
     """Run numerical verification for one input string."""
 
     hf_inputs, input_ids, padding_mask = tokenize(
         hf_tokenizer,
         text,
+    )
+
+    seq_len = int(input_ids.shape[1])
+
+    # The sliding-window mask keeps tokens within `window // 2` of each
+    # other, so it only removes edges once the sequence is longer than
+    # `2 * radius + 1`. Below that, local layers == global layers and the
+    # local attention path is effectively untested.
+    window = getattr(keras_lm.backbone, "local_attention_window", None)
+
+    if window is None:
+        window_active = False
+    else:
+        window_active = seq_len > (2 * (window // 2) + 1)
+
+    print(
+        f"\nInput: seq_len={seq_len}, "
+        f"local sliding-window attention active: {window_active}"
     )
 
     embedding_diff = verify_embeddings(
@@ -448,6 +627,8 @@ def verify_text(keras_lm, hf_model, hf_tokenizer, text):
         ) = mlm_result
 
     return {
+        "seq_len": seq_len,
+        "window_active": window_active,
         "embedding_max_diff": embedding_diff,
         "backbone_max_diff": backbone_diff,
         "logits_max_diff": logits_diff,
@@ -464,7 +645,7 @@ def save_preset(keras_lm, preset_name):
     print(f"✅ Successfully saved and verified preset: ./{preset_name}\n")
 
 
-def main(preset):
+def main(preset, skip_save=False):
     """Run numerical verification."""
     hf_repo = PRESET_MAP.get(preset, preset)
 
@@ -473,6 +654,20 @@ def main(preset):
     )
 
     keras_lm = get_keras_model(preset)
+
+    # Verify the KerasHub tokenizer itself. The rest of this script feeds
+    # Hugging Face token ids straight into Keras, so without this check
+    # `ModernBertTokenizer` would never be exercised at all.
+    verify_tokenizer(keras_lm, hf_tokenizer)
+
+    # A long passage is required to make local (sliding-window) attention
+    # do anything: the window radius is `local_attention // 2` (64 for the
+    # released checkpoints), so anything shorter than ~65 tokens makes the
+    # local layers behave exactly like global ones.
+    long_context = (
+        "The quick brown fox jumps over the lazy dog while the bird "
+        "watches quietly from a nearby tree. " * 20
+    )
 
     test_cases = [
         "The capital of France is [MASK].",
@@ -483,6 +678,8 @@ def main(preset):
             "The quick brown fox jumps over the lazy dog while the " * 5
             + "[MASK] watches."
         ),
+        # Exercises local sliding-window attention.
+        long_context + "The [MASK] watches from the tree.",
     ]
 
     results = []
@@ -497,6 +694,18 @@ def main(preset):
             )
         )
 
+    # Padding is never exercised by the single-sequence cases above, since
+    # a lone string tokenizes to an all-ones attention mask.
+    verify_padded_batch(
+        keras_lm,
+        hf_model,
+        hf_tokenizer,
+        [
+            "The capital of France is Paris.",
+            long_context,
+        ],
+    )
+
     print("\n")
     print("NUMERICAL VERIFICATION SUMMARY")
 
@@ -508,11 +717,13 @@ def main(preset):
 
     total_top5 = sum(result["top5_matches"] for result in valid_logits_results)
 
-    total_masks = sum(
-        result["top1_matches"] * 0 for result in valid_logits_results
-    )
-
     print(f"Test cases run: {len(test_cases)}")
+
+    windowed = sum(1 for result in results if result["window_active"])
+    print(
+        f"Cases activating local sliding-window attention: "
+        f"{windowed}/{len(test_cases)}"
+    )
 
     max_embedding_diff = max(result["embedding_max_diff"] for result in results)
     max_backbone_diff = max(result["backbone_max_diff"] for result in results)
@@ -537,6 +748,11 @@ def main(preset):
 
     print(f"✅ Top-5 prediction matches: {total_top5}/{total_masks}")
 
+    assert windowed > 0, (
+        "No test case was long enough to activate local sliding-window "
+        "attention, so the local attention path went unverified."
+    )
+
     assert total_top1 == total_masks, (
         "At least one top-1 prediction differs from Hugging Face."
     )
@@ -544,7 +760,9 @@ def main(preset):
     assert total_top5 == total_masks, (
         "At least one top-5 prediction differs from Hugging Face."
     )
-    save_preset(keras_lm, preset)
+
+    if not skip_save:
+        save_preset(keras_lm, preset)
 
     print("✅ All numerical verification checks passed.")
 
@@ -558,6 +776,16 @@ if __name__ == "__main__":
         default="modernbert_base_en",
     )
 
+    parser.add_argument(
+        "--skip_save",
+        action="store_true",
+        help=(
+            "Skip writing the converted preset to ./<preset>. The saved "
+            "preset is large and lands in the repo root, which dirties "
+            "`git status` and trips the api_gen pre-commit hook."
+        ),
+    )
+
     args = parser.parse_args()
 
-    main(args.preset)
+    main(args.preset, skip_save=args.skip_save)
