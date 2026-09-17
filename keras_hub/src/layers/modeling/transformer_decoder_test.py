@@ -6,6 +6,7 @@ from keras.src.backend import set_keras_mask
 
 from keras_hub.src.layers.modeling.transformer_decoder import TransformerDecoder
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class TransformerDecoderTest(TestCase):
@@ -170,8 +171,12 @@ class TransformerDecoderTest(TestCase):
             return outputs, cache
 
         output, output_cache = call(outputs, input_cache)
-        self.assertAllClose(output, no_loop_outputs)
-        self.assertAllClose(output_cache, no_loop_cache)
+        # Stepping through the sequence one token at a time dispatches
+        # different kernels than a single full-sequence call, so the two
+        # accumulate float32 error differently on GPU.
+        tol = 5e-3 if running_on_gpu() else 1e-6
+        self.assertAllClose(output, no_loop_outputs, atol=tol, rtol=tol)
+        self.assertAllClose(output_cache, no_loop_cache, atol=tol, rtol=tol)
 
     def test_cache_call_is_correct_with_cross_attention(self):
         batch_size, seq_len, num_heads, key_dim = 2, 5, 2, 4
@@ -222,6 +227,9 @@ class TransformerDecoderTest(TestCase):
         output, self_cache, cross_cache = call(
             outputs, empty_cache, no_loop_cross_cache
         )
-        self.assertAllClose(output, no_loop_outputs)
-        self.assertAllClose(self_cache, no_loop_self_cache)
-        self.assertAllClose(cross_cache, no_loop_cross_cache)
+        tol = 5e-3 if running_on_gpu() else 1e-6
+        self.assertAllClose(output, no_loop_outputs, atol=tol, rtol=tol)
+        self.assertAllClose(self_cache, no_loop_self_cache, atol=tol, rtol=tol)
+        self.assertAllClose(
+            cross_cache, no_loop_cross_cache, atol=tol, rtol=tol
+        )
