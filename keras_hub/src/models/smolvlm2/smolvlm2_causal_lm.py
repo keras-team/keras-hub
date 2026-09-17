@@ -1,5 +1,4 @@
 import numpy as np
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -9,6 +8,11 @@ from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor import (
     SmolVLM2CausalLMPreprocessor,
 )
 from keras_hub.src.utils.tensor_utils import any_equal
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 @keras_hub_export("keras_hub.models.SmolVLM2CausalLM")

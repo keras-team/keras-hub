@@ -4,7 +4,6 @@ import re
 
 import keras
 import numpy as np
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -21,6 +20,11 @@ from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
     SmolVLM2VideoConverter,
 )
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 # HF-compatible video prompt templates.
 DEFAULT_VIDEO_INTRO = (
@@ -281,11 +285,14 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
     # ------------------------------------------------------------------
     def _compute_vision_indices(self, token_ids):
         """Return flat indices where token_ids == image_token_id."""
-        token_ids_np = (
-            token_ids.numpy()
-            if hasattr(token_ids, "numpy")
-            else np.array(token_ids)
-        )
+        if hasattr(token_ids, "detach"):
+            # Torch tensors may live on a non-CPU device (MPS/CUDA), where
+            # calling `.numpy()` directly raises a TypeError.
+            token_ids_np = token_ids.detach().cpu().numpy()
+        elif hasattr(token_ids, "numpy"):
+            token_ids_np = token_ids.numpy()
+        else:
+            token_ids_np = np.array(token_ids)
         image_token_id = getattr(self.tokenizer, "image_token_id", None)
         if image_token_id is None:
             return tf.zeros((0,), dtype=tf.int32)
