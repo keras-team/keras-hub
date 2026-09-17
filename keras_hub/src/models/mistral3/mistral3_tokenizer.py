@@ -1,0 +1,222 @@
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
+
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.mistral3.mistral3_backbone import Mistral3Backbone
+from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_hub.src.utils.tensor_utils import preprocessing_function
+
+try:
+    import tokenizers as hf_tokenizers
+    from tokenizers import decoders
+    from tokenizers import models as hf_models
+    from tokenizers import pre_tokenizers
+except ImportError:
+    hf_tokenizers = None
+
+# Tekken's pre-tokenization regex, shared by known Mistral3 checkpoints
+# (mirrors `mistral_common`'s `Tekkenizer._pat_str`). Presets override this
+# with the pattern read from the checkpoint's `tekken.json`.
+MISTRAL3_TEKKEN_SPLIT_PATTERN = (
+    r"[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*"
+    r"[\p{Ll}\p{Lm}\p{Lo}\p{M}]+|\p{N}| ?[^\s\p{L}\p{N}]+"
+    r"[\r\n/]*|\s*[\r\n]+|\s+(?!\S)|\s+"
+)
+
+
+@keras_hub_export(
+    [
+        "keras_hub.tokenizers.Mistral3Tokenizer",
+        "keras_hub.models.Mistral3Tokenizer",
+    ]
+)
+class Mistral3Tokenizer(BytePairTokenizer):
+    """Mistral3 Tekken tokenizer layer based on byte-level BPE.
+
+    Handles Mistral3's Tekken (tiktoken-style byte-level BPE) vocabulary. It
+    is based on `keras_hub.tokenizers.BytePairTokenizer`, uses the Tekken
+    pre-tokenization regex instead of the GPT-2/Llama3 pattern hardcoded in
+    the base class, and registers the special image tokens (`"[IMG]"`,
+    `"[IMG_BREAK]"`, `"[IMG_END]"`) used by multimodal Mistral3/Pixtral
+    models to mark image placeholder positions in a prompt.
+
+    Not a subclass of `keras_hub.models.MistralTekkenTokenizer`: that class
+    builds its `unsplittable_tokens` list inline in `__init__` before calling
+    the `BytePairTokenizer` constructor, which doesn't leave a clean
+    extension point for adding the vision tokens via inheritance.
+
+    The `vocabulary` and `merges` are usually produced from a `tekken.json`
+    file by the Hugging Face conversion path; see
+    `keras_hub.src.utils.transformers.convert_mistral3`.
+
+    If input is a batch of strings (rank > 0), the layer will output a
+    `tf.RaggedTensor` where the last dimension of the output is ragged.
+
+    If input is a scalar string (rank == 0), the layer will output a dense
+    `tf.Tensor` with static shape `[None]`.
+
+    Args:
+        vocabulary: A dict mapping token strings to integer ids, or a path to a
+            vocabulary JSON file.
+        merges: A list of BPE merge rules, or a path to a merges file.
+        split_pattern: str, optional. The Tekken pre-tokenization regex.
+            Defaults to the pattern shared by known Mistral3 checkpoints.
+        control_tokens: list of str, optional. Extra reserved control tokens
+            (e.g. `"[INST]"`) to register as unsplittable, in addition to the
+            start/end/vision tokens. Defaults to `None`.
+
+    Examples:
+    ```python
+    tokenizer = keras_hub.models.Mistral3Tokenizer.from_preset(
+        "hf://mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+    )
+    tokenizer("The quick brown fox jumped.")
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
+    ```
+    """
+
+    backbone_cls = Mistral3Backbone
+
+    def __init__(
+        self,
+        vocabulary=None,
+        merges=None,
+        split_pattern=None,
+        control_tokens=None,
+        **kwargs,
+    ):
+        self.split_pattern = split_pattern or MISTRAL3_TEKKEN_SPLIT_PATTERN
+        self.control_tokens = list(control_tokens) if control_tokens else []
+        self._add_special_token("<s>", "start_token")
+        self._add_special_token("</s>", "end_token")
+        self.pad_token_id = 0
+
+        # Tekken's control tokens (e.g. `"[INST]"`) occupy a reserved id
+        # block outside the BPE merges; register them as unsplittable, or
+        # literal occurrences in a prompt get shredded into byte-level
+        # tokens instead of mapping to their single reserved id.
+        unsplittable_tokens = [self.start_token, self.end_token]
+        for token in self.control_tokens:
+            if token not in unsplittable_tokens:
+                unsplittable_tokens.append(token)
+
+        self._add_special_token("[IMG]", "image_placeholder_token")
+        self._add_special_token("[IMG_BREAK]", "image_break_token")
+        self._add_special_token("[IMG_END]", "image_end_token")
+        unsplittable_tokens += [
+            self.image_placeholder_token,
+            self.image_break_token,
+            self.image_end_token,
+        ]
+
+        super().__init__(
+            vocabulary=vocabulary,
+            merges=merges,
+            unsplittable_tokens=unsplittable_tokens,
+            **kwargs,
+        )
+
+    def _set_vocabulary_and_merges_tokenizers(self, vocabulary, merges):
+        self.vocabulary = vocabulary.copy()
+        self.merges = list(merges)
+        _merges = []
+        for merge in self.merges:
+            if "#version:" in merge.lstrip():
+                continue
+            a, b = str(merge).split(" ")
+            _merges.append((a, b))
+        self._tokenizer = hf_tokenizers.Tokenizer(
+            hf_models.BPE(vocab=vocabulary, merges=_merges, fuse_unk=False)
+        )
+        if self.unsplittable_tokens:
+            self._tokenizer.add_special_tokens(self.unsplittable_tokens)
+        self._tokenizer.pre_tokenizer = pre_tokenizers.Sequence(
+            [
+                pre_tokenizers.Split(
+                    hf_tokenizers.Regex(self.split_pattern),
+                    behavior="isolated",
+                ),
+                pre_tokenizers.ByteLevel(
+                    add_prefix_space=self.add_prefix_space, use_regex=False
+                ),
+            ]
+        )
+        self._tokenizer.decoder = decoders.ByteLevel()
+
+        # Dummy attrs for serialization compatibility with the base class.
+        if not hasattr(self, "cache"):
+            self.byte2unicode = None
+            self.unicode2byte = None
+            self.cache = None
+            self.id_to_token_map = None
+            self.token_to_id_map = None
+            self.merge_ranks_lookup_default = None
+            self.merge_ranks = None
+
+    def _set_vocabulary_and_merges_tf(self, vocabulary, merges):
+        # The base class hardcodes the GPT-2 split regex in its `tf.data`
+        # path, which does not match Tekken. We instead bridge to the
+        # `tokenizers` backend from within the graph (see `_tokenize_tf`), so
+        # there is nothing to build here.
+        self.vocabulary = vocabulary.copy()
+        self.merges = list(merges)
+
+    def _maybe_initialized_tokenizers(self):
+        if getattr(self, "_tokenizer", None) is None:
+            self._set_vocabulary_and_merges_tokenizers(
+                self.vocabulary, self.merges
+            )
+
+    @preprocessing_function
+    def _tokenize_tf(self, inputs):
+        self._maybe_initialized_tokenizers()
+
+        def _encode(string_tensor):
+            values = string_tensor.numpy()
+            strings = [v.decode("utf-8") for v in values.tolist()]
+            encodings = self._tokenizer.encode_batch(
+                strings, add_special_tokens=False
+            )
+            return tf.ragged.constant(
+                [e.ids for e in encodings], dtype=self.compute_dtype
+            )
+
+        inputs = tf.convert_to_tensor(inputs)
+        unbatched = inputs.shape.rank == 0
+        if unbatched:
+            inputs = tf.expand_dims(inputs, 0)
+        tokens = tf.py_function(
+            _encode,
+            [inputs],
+            Tout=tf.RaggedTensorSpec(
+                shape=[None, None],
+                dtype=self.compute_dtype,
+                ragged_rank=1,
+            ),
+        )
+
+        if self.sequence_length:
+            output_shape = tokens.shape.as_list()
+            output_shape[-1] = self.sequence_length
+            tokens = tokens.to_tensor(
+                shape=output_shape,
+                default_value=getattr(self, "pad_token_id", 0),
+            )
+        if unbatched:
+            tokens = tokens[0]
+        return tokens
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "split_pattern": self.split_pattern,
+                "control_tokens": self.control_tokens,
+            }
+        )
+        # `unsplittable_tokens` is derived from the special tokens in the
+        # constructor, so it is not a separate config argument.
+        del config["unsplittable_tokens"]
+        return config

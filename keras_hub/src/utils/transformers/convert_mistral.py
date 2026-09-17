@@ -11,12 +11,11 @@ backbone_cls = MistralBackbone
 
 
 def convert_backbone_config(transformers_config):
-    rope_theta = transformers_config.get("rope_parameters", {}).get(
-        "rope_theta"
-    )
+    rope_parameters = transformers_config.get("rope_parameters") or {}
+    rope_theta = rope_parameters.get("rope_theta")
     if rope_theta is None:
         rope_theta = transformers_config["rope_theta"]
-    return {
+    backbone_config = {
         "vocabulary_size": transformers_config["vocab_size"],
         "num_layers": transformers_config["num_hidden_layers"],
         "num_query_heads": transformers_config["num_attention_heads"],
@@ -28,6 +27,22 @@ def convert_backbone_config(transformers_config):
         "sliding_window": transformers_config.get("sliding_window"),
         "head_dim": transformers_config.get("head_dim"),
     }
+    # Newer Mistral checkpoints (e.g. Ministral 3) scale rotary embeddings
+    # with YaRN instead of a plain rotary base; forward its extra
+    # parameters only when the checkpoint actually uses YaRN.
+    if rope_parameters.get("rope_type") == "yarn":
+        backbone_config.update(
+            {
+                "rope_type": "yarn",
+                "rope_scaling_factor": rope_parameters.get("factor", 1.0),
+                "beta_fast": rope_parameters.get("beta_fast", 32.0),
+                "beta_slow": rope_parameters.get("beta_slow", 1.0),
+                "original_max_position_embeddings": rope_parameters.get(
+                    "original_max_position_embeddings", 4096
+                ),
+            }
+        )
+    return backbone_config
 
 
 def convert_weights(backbone, loader, transformers_config):
