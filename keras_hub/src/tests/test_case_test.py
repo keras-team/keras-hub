@@ -11,6 +11,94 @@ from keras_hub.src.tests.test_case import grain_ragged_batch
 from keras_hub.src.tests.test_case import grain_source_from_tensor_slices
 
 
+class AssertionsTest(TestCase):
+    """The assertions must handle jagged and dict data, not just arrays.
+
+    `np.array()` raises on both, so every case below is one that the plain
+    `keras.src.testing.TestCase` implementation cannot express.
+    """
+
+    def test_ragged_lists(self):
+        self.assertAllEqual(
+            [[9, 10, 11, 12], [9, 12]], [[9, 10, 11, 12], [9, 12]]
+        )
+        self.assertAllClose([[1.0, 2.0], [3.0]], [[1.0, 2.0], [3.0]])
+
+    def test_ragged_lists_detect_mismatch(self):
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual([[9, 10], [9, 12]], [[9, 10], [9, 13]])
+        with self.assertRaises(AssertionError):
+            self.assertAllClose([[1.0, 2.0], [3.0]], [[1.0, 2.0], [4.0]])
+
+    def test_ragged_lists_detect_length_mismatch(self):
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual([[1, 2], [3]], [[1, 2], [3], [4]])
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual([[1, 2], [3]], [[1, 2], [3, 4]])
+
+    def test_detect_shape_mismatch(self):
+        # numpy broadcasts a scalar against an array and calls it equal, so
+        # these pass unless shapes are compared first.
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual(5, [5, 5])
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(5.0, [5.0, 5.0])
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual(np.zeros((2, 3)), np.zeros((3, 2)))
+
+    def test_detect_nesting_depth_mismatch(self):
+        # `[3]` vs `3` is a rank mismatch reached partway down the recursion.
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual([[1, 2], [3]], [[1, 2], 3])
+
+    def test_ragged_tensors(self):
+        ragged = tf.ragged.constant([[9, 10, 11, 12], [9, 12]])
+        self.assertAllEqual(ragged, [[9, 10, 11, 12], [9, 12]])
+        self.assertAllClose(ragged, [[9, 10, 11, 12], [9, 12]])
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual(ragged, [[9, 10, 11, 12], [9, 13]])
+
+    def test_dicts(self):
+        x = {"token_ids": np.array([[1, 2]]), "padding_mask": [[True, False]]}
+        self.assertAllClose(x, dict(x))
+        self.assertAllEqual(x, dict(x))
+
+    def test_dicts_detect_mismatch(self):
+        x = {"token_ids": np.array([[1, 2]])}
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(x, {"token_ids": np.array([[1, 3]])})
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(x, {"other_key": np.array([[1, 2]])})
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(x, np.array([[1, 2]]))
+
+    def test_nested_dicts_and_tuples(self):
+        x = ({"ids": [[1, 2, 3], [4]]}, np.array([0.5, 1.0]))
+        self.assertAllClose(x, ({"ids": [[1, 2, 3], [4]]}, [0.5, 1.0]))
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(x, ({"ids": [[1, 2, 3], [5]]}, [0.5, 1.0]))
+
+    def test_strings(self):
+        self.assertAllEqual(["a", "bb"], ["a", "bb"])
+        self.assertAllClose([["a"], ["b", "c"]], [["a"], ["b", "c"]])
+        self.assertAllEqual(tf.constant(["a", "bb"]), ["a", "bb"])
+        self.assertAllEqual(np.array([b"a", b"bb"]), ["a", "bb"])
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual(["a", "bb"], ["a", "cc"])
+
+    def test_assert_not_all_equal(self):
+        self.assertNotAllEqual([1, 2], [1, 3])
+        self.assertNotAllEqual([[1, 2], [3]], [[1, 2], [4]])
+        with self.assertRaises(AssertionError):
+            self.assertNotAllEqual([1, 2], [1, 2])
+
+    def test_assert_all_in_range(self):
+        self.assertAllInRange(np.array([0.0, 0.5, 1.0]), 0.0, 1.0)
+        self.assertAllInRange(ops.zeros((2, 2)), -1.0, 1.0)
+        with self.assertRaises(AssertionError):
+            self.assertAllInRange(np.array([0.0, 1.5]), 0.0, 1.0)
+
+
 class GrainSourceFromTensorSlicesTest(TestCase):
     def test_list_of_strings(self):
         ds = grain_source_from_tensor_slices(["a", "bb"])
