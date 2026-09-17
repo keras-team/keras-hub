@@ -1,19 +1,6 @@
-import glob
-import os
-
 import grain
 import numpy as np
 import tensorflow as tf
-
-libdevice = glob.glob(
-    "/usr/local/cuda*/nvvm/libdevice/libdevice.10.bc"
-)
-
-if libdevice:
-    cuda_root = libdevice[0].split("/nvvm/")[0]
-    os.environ["XLA_FLAGS"] = (
-        f"--xla_gpu_cuda_data_dir={cuda_root}"
-    )
 
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
@@ -59,9 +46,11 @@ class WhisperAudioConverterTest(TestCase):
     def test_python_matches_tf(self):
         converter = WhisperAudioConverter(**self.init_kwargs)
         audio = np.random.default_rng(42).random((2, 300)).astype("float32")
+        with tf.device("/CPU:0"):
+            tf_output = converter._call_tf(audio)
         self.assertAllClose(
             converter._call_python(audio),
-            converter._call_tf(audio),
+            tf_output,
             atol=1e-4,
         )
 
