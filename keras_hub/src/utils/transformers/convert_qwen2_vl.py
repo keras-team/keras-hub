@@ -3,6 +3,9 @@
 import numpy as np
 
 from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
+from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
+    Qwen2VLVisionEncoder,
+)
 from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = Qwen2VLBackbone
@@ -11,40 +14,91 @@ backbone_cls = Qwen2VLBackbone
 def convert_backbone_config(transformers_config):
     # Newer transformers nest text params under "text_config".
     tc = transformers_config.get("text_config", transformers_config)
-    vision_config = transformers_config.get("vision_config", {})
-    rope_params = tc.get("rope_parameters", {})
+    vision_config = transformers_config.get("vision_config", None)
+    rope_params = tc.get("rope_parameters", tc.get("rope_scaling", {}))
     rope_theta = tc.get("rope_theta", rope_params.get("rope_theta", 1000000))
-    return {
+    # M-RoPE section lives inside rope_parameters/rope_scaling in the HF
+    # config; HF defaults to [16, 24, 24].
+    mrope_section = rope_params.get("mrope_section", [16, 24, 24])
+
+    vision_encoder = None
+    if vision_config is not None:
+        vision_encoder = Qwen2VLVisionEncoder(
+            patch_size=vision_config.get("patch_size", 14),
+            temporal_patch_size=vision_config.get("temporal_patch_size", 2),
+            in_channels=vision_config.get("in_channels", 3),
+            embed_dim=vision_config.get(
+                "embed_dim", vision_config.get("hidden_size", 1280)
+            ),
+            out_dim=tc["hidden_size"],
+            depth=vision_config.get(
+                "depth", vision_config.get("num_hidden_layers", 32)
+            ),
+            num_heads=vision_config.get(
+                "num_heads", vision_config.get("num_attention_heads", 16)
+            ),
+            mlp_ratio=vision_config.get("mlp_ratio", 4),
+            spatial_merge_size=vision_config.get("spatial_merge_size", 2),
+        )
+
+    result = {
         "vocabulary_size": tc["vocab_size"],
         "num_layers": tc["num_hidden_layers"],
         "num_query_heads": tc["num_attention_heads"],
         "num_key_value_heads": tc["num_key_value_heads"],
         "hidden_dim": tc["hidden_size"],
         "intermediate_dim": tc["intermediate_size"],
-        "vision_patch_size": vision_config.get("patch_size", 14),
-        "vision_temporal_patch_size": vision_config.get(
-            "temporal_patch_size", 2
-        ),
-        "vision_in_channels": vision_config.get("in_channels", 3),
-        "vision_embed_dim": vision_config.get(
-            "embed_dim", vision_config.get("hidden_size", 1280)
-        ),
-        "vision_depth": vision_config.get(
-            "depth", vision_config.get("num_hidden_layers", 32)
-        ),
-        "vision_num_heads": vision_config.get(
-            "num_heads", vision_config.get("num_attention_heads", 16)
-        ),
-        "vision_mlp_ratio": vision_config.get("mlp_ratio", 4),
-        "spatial_merge_size": vision_config.get("spatial_merge_size", 2),
-        "image_token_id": transformers_config.get("image_token_id", 151655),
         "rope_max_wavelength": rope_theta,
+        "mrope_section": mrope_section,
         "layer_norm_epsilon": tc.get("rms_norm_eps", 1e-6),
         "tie_word_embeddings": transformers_config.get(
             "tie_word_embeddings", False
         ),
         "use_sliding_window_attention": tc.get("use_sliding_window", False),
         "sliding_window_size": tc.get("sliding_window", 32768),
+    }
+    if vision_encoder is not None:
+        result["vision_encoder"] = vision_encoder
+    return result
+
+
+def load_image_converter_config(preset, transformers_config):
+    """Return kwargs for ``Qwen2VLImageConverter``, or None if text-only."""
+    if "vision_config" not in transformers_config:
+        return None
+
+    vision_config = transformers_config["vision_config"]
+    preprocessor_config = load_json(preset, "preprocessor_config.json")
+
+    # HF nests pixel budgets under "size" with flat min_pixels/max_pixels
+    # also present.
+    size_config = preprocessor_config.get("size", {})
+    min_pixels = size_config.get(
+        "shortest_edge", preprocessor_config.get("min_pixels", 56 * 56)
+    )
+    max_pixels = size_config.get(
+        "longest_edge", preprocessor_config.get("max_pixels", 12845056)
+    )
+
+    return {
+        "min_pixels": min_pixels,
+        "max_pixels": max_pixels,
+        "patch_size": preprocessor_config.get(
+            "patch_size", vision_config.get("patch_size", 14)
+        ),
+        "temporal_patch_size": preprocessor_config.get(
+            "temporal_patch_size",
+            vision_config.get("temporal_patch_size", 2),
+        ),
+        "merge_size": preprocessor_config.get(
+            "merge_size", vision_config.get("spatial_merge_size", 2)
+        ),
+        "image_mean": preprocessor_config.get(
+            "image_mean", [0.48145466, 0.4578275, 0.40821073]
+        ),
+        "image_std": preprocessor_config.get(
+            "image_std", [0.26862954, 0.26130258, 0.27577711]
+        ),
     }
 
 
@@ -115,7 +169,7 @@ def convert_weights(backbone, loader, transformers_config):
         # Output projection
         loader.port_weight(
             keras_variable=(decoder._self_attention_layer._output_dense.kernel),
-            hf_weight_key=(f"model.layers.{i}.self_attn.o_proj.weight"),
+            hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
             hook_fn=transpose_and_reshape,
         )
 
@@ -149,10 +203,10 @@ def convert_weights(backbone, loader, transformers_config):
     )
 
     # ── vision encoder ──────────────────────────────────────────────
-    vision = backbone.get_layer("vision_encoder")
+    vision = backbone.vision_encoder
 
     # Patch embedding (Conv3D)
-    # HF: (embed_dim, C, T, H, W) → Keras: (T, H, W, C, embed_dim)
+    # HF: (embed_dim, C, T, kH, kW) → Keras: (T, kH, kW, C, embed_dim)
     loader.port_weight(
         keras_variable=vision.patch_embed.kernel,
         hf_weight_key="visual.patch_embed.proj.weight",

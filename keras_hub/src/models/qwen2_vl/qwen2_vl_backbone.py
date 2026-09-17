@@ -4,10 +4,12 @@ from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.qwen.qwen_decoder import QwenTransformerDecoder
 from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
-from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
-    Qwen2VLVisionEncoder,
+from keras_hub.src.models.qwen2_vl.qwen2_vl_decoder import (
+    Qwen2VLTransformerDecoder,
+)
+from keras_hub.src.models.qwen2_vl.qwen2_vl_layers import (
+    Qwen2VLInterleaveEmbeddings,
 )
 
 
@@ -21,8 +23,9 @@ class Qwen2VLBackbone(Backbone):
 
     Combines a 3D Vision Encoder (ViT with RoPE + PatchMerger) with a
     Qwen2 causal language model decoder. Vision tokens produced by the
-    encoder replace the ``image_token_id`` placeholder tokens in the text
-    sequence before being passed through the decoder layers.
+    encoder are interleaved into the text embedding sequence at positions
+    given by ``vision_indices``, and the decoder applies multimodal RoPE
+    (M-RoPE) using per-channel ``position_ids``.
 
     Args:
         vocabulary_size: int. Vocabulary size of the text model.
@@ -31,25 +34,12 @@ class Qwen2VLBackbone(Backbone):
         num_key_value_heads: int. Number of key/value attention heads (GQA).
         hidden_dim: int. LLM hidden dimension.
         intermediate_dim: int. Feed-forward intermediate dimension.
-        vision_patch_size: int. Spatial patch size for the vision encoder.
-            Defaults to ``14``.
-        vision_temporal_patch_size: int. Temporal patch size. Defaults to
-            ``2``.
-        vision_in_channels: int. Vision input channels. Defaults to ``3``.
-        vision_embed_dim: int. Vision encoder internal dimension. Defaults
-            to ``1280``.
-        vision_depth: int. Number of vision transformer blocks. Defaults to
-            ``32``.
-        vision_num_heads: int. Vision attention heads. Defaults to ``16``.
-        vision_mlp_ratio: float. Vision MLP hidden dim multiplier. Defaults
-            to ``4``.
-        spatial_merge_size: int. Spatial merge factor for PatchMerger.
-            Defaults to ``2``.
-        image_token_id: int. Token id used as image placeholder in the text
-            sequence. The number of ``image_token_id`` placeholders in the
-            input must exactly equal the number of merged vision tokens
-            produced by encoding ``patch_values`` with ``image_grid_thw``.
-            Defaults to ``151655``.
+        vision_encoder: A ``Qwen2VLVisionEncoder`` instance, or ``None`` for
+            a text-only model.
+        mrope_section: list of int or None. M-RoPE section sizes
+            ``[s_t, s_h, s_w]`` in rotary pairs, summing to ``head_dim // 2``.
+            Defaults to ``[16, 24, 24]`` (the value used by all released
+            Qwen2-VL checkpoints, whose ``head_dim`` is 128).
         rope_max_wavelength: int. RoPE base wavelength for the text model.
             Defaults to ``1000000``.
         rope_scaling_factor: float. RoPE scaling factor. Defaults to ``1.0``.
@@ -72,15 +62,8 @@ class Qwen2VLBackbone(Backbone):
         num_key_value_heads,
         hidden_dim,
         intermediate_dim,
-        vision_patch_size=14,
-        vision_temporal_patch_size=2,
-        vision_in_channels=3,
-        vision_embed_dim=1280,
-        vision_depth=32,
-        vision_num_heads=16,
-        vision_mlp_ratio=4,
-        spatial_merge_size=2,
-        image_token_id=151655,
+        vision_encoder=None,
+        mrope_section=None,
         rope_max_wavelength=1000000,
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
@@ -91,22 +74,12 @@ class Qwen2VLBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
-        # === Vision encoder ===
-        self.vision_encoder = Qwen2VLVisionEncoder(
-            patch_size=vision_patch_size,
-            temporal_patch_size=vision_temporal_patch_size,
-            in_channels=vision_in_channels,
-            embed_dim=vision_embed_dim,
-            hidden_size=hidden_dim,
-            depth=vision_depth,
-            num_heads=vision_num_heads,
-            mlp_ratio=vision_mlp_ratio,
-            spatial_merge_size=spatial_merge_size,
-            dtype=dtype,
-            name="vision_encoder",
-        )
+        if mrope_section is None and vision_encoder is not None:
+            # All released Qwen2-VL checkpoints use head_dim=128 and
+            # mrope_section=[16, 24, 24] (HF rope_parameters default).
+            mrope_section = [16, 24, 24]
 
-        # === Text decoder ===
+        # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
@@ -117,7 +90,7 @@ class Qwen2VLBackbone(Backbone):
         )
         self.transformer_layers = []
         for i in range(num_layers):
-            layer = QwenTransformerDecoder(
+            layer = Qwen2VLTransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
@@ -130,6 +103,7 @@ class Qwen2VLBackbone(Backbone):
                 dtype=dtype,
                 use_sliding_window_attention=use_sliding_window_attention,
                 sliding_window_size=sliding_window_size,
+                mrope_section=mrope_section,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
@@ -138,26 +112,88 @@ class Qwen2VLBackbone(Backbone):
             dtype=dtype,
             name="sequence_output_layernorm",
         )
+        self.vision_encoder = vision_encoder
+        text_only_model = vision_encoder is None
+        if not text_only_model:
+            self.interleave_embeddings = Qwen2VLInterleaveEmbeddings(
+                hidden_dim=hidden_dim,
+                dtype=dtype,
+                name="interleave_embeddings",
+            )
 
-        # === Functional model ===
-        # Only text inputs in functional graph; vision inputs handled in call()
-        token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        padding_mask = keras.Input(
+        # === Functional Model ===
+        if not text_only_model:
+            # Vision tensors are flat-packed across the batch: the leading
+            # dim is the total patch/image count, not the batch dim.
+            pixel_values_input = keras.Input(
+                shape=(
+                    vision_encoder.temporal_patch_size,
+                    vision_encoder.patch_size,
+                    vision_encoder.patch_size,
+                    vision_encoder.in_channels,
+                ),
+                name="pixel_values",
+            )
+            image_grid_thw_input = keras.Input(
+                shape=(3,), dtype="int32", name="image_grid_thw"
+            )
+            vision_indices_input = keras.Input(
+                shape=(), dtype="int32", name="vision_indices"
+            )
+            position_ids_input = keras.Input(
+                shape=(3, None), dtype="int32", name="position_ids"
+            )
+
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
 
-        # Text embedding path (vision merging happens in call())
-        token_embeddings = self.token_embedding(token_ids)
-        x = token_embeddings
+        # Text embeddings.
+        text_embeddings = self.token_embedding(token_id_input)
+
+        # Vision: encoder → interleave into text embeddings.
+        if not text_only_model:
+            img_embeddings = self.vision_encoder(
+                pixel_values_input, image_grid_thw_input
+            )
+            x = self.interleave_embeddings(
+                image_embeddings=img_embeddings,
+                text_embeddings=text_embeddings,
+                vision_indices=vision_indices_input,
+            )
+        else:
+            position_ids_input = None
+            x = text_embeddings
+
+        # Transformer layers.
         for transformer_layer in self.transformer_layers:
-            x = transformer_layer(x, decoder_padding_mask=padding_mask)
+            x = transformer_layer(
+                x,
+                decoder_padding_mask=padding_mask_input,
+                position_ids=position_ids_input,
+            )
+
         sequence_output = self.layer_norm(x)
 
+        inputs = {
+            "token_ids": token_id_input,
+            "padding_mask": padding_mask_input,
+        }
+        if not text_only_model:
+            inputs.update(
+                {
+                    "pixel_values": pixel_values_input,
+                    "image_grid_thw": image_grid_thw_input,
+                    "vision_indices": vision_indices_input,
+                    "position_ids": position_ids_input,
+                }
+            )
+
         super().__init__(
-            inputs={
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
-            },
+            inputs=inputs,
             outputs=sequence_output,
             dtype=dtype,
             **kwargs,
@@ -170,15 +206,7 @@ class Qwen2VLBackbone(Backbone):
         self.num_key_value_heads = num_key_value_heads
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
-        self.vision_patch_size = vision_patch_size
-        self.vision_temporal_patch_size = vision_temporal_patch_size
-        self.vision_in_channels = vision_in_channels
-        self.vision_embed_dim = vision_embed_dim
-        self.vision_depth = vision_depth
-        self.vision_num_heads = vision_num_heads
-        self.vision_mlp_ratio = vision_mlp_ratio
-        self.spatial_merge_size = spatial_merge_size
-        self.image_token_id = image_token_id
+        self.mrope_section = mrope_section
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -186,82 +214,60 @@ class Qwen2VLBackbone(Backbone):
         self.tie_word_embeddings = tie_word_embeddings
         self.use_sliding_window_attention = use_sliding_window_attention
         self.sliding_window_size = sliding_window_size
+        self.text_only_model = text_only_model
 
-    def call(self, inputs, training=None):
-        """Forward pass with vision token replacement.
+    def _inject_empty_vision_inputs(self, inputs):
+        """Inject default empty vision inputs for text-only calls.
 
-        Embeds text tokens, encodes vision patches, replaces
-        ``image_token_id`` placeholder positions in the embedding sequence
-        with the merged vision features, then runs the decoder.
-
-        Args:
-            inputs: Dict with keys ``"token_ids"``, ``"padding_mask"``,
-                ``"patch_values"`` (optional), ``"image_grid_thw"``
-                (optional).
-            training: bool or None.
-
-        Returns:
-            Hidden-state tensor of shape ``(batch, seq_len, hidden_dim)``.
+        When a multimodal backbone receives text-only inputs (no
+        ``pixel_values``, ``image_grid_thw``, ``vision_indices`` or
+        ``position_ids`` keys), this injects zero-sized vision tensors and
+        sequential position IDs (equivalent to standard 1-D RoPE) so the
+        functional graph receives all required keys. This follows the
+        Gemma3/Qwen3.5 pattern and allows users to call the backbone with
+        only ``token_ids`` and ``padding_mask``.
         """
-        token_ids = inputs["token_ids"]
-        padding_mask = inputs["padding_mask"]
-        patch_values = inputs.get("patch_values", None)
-        grid_thw = inputs.get("image_grid_thw", None)
-
-        # Embed text tokens → (batch, seq_len, hidden_dim)
-        x = self.token_embedding(token_ids)
-
-        # If vision inputs are present, encode and scatter into x.
-        if patch_values is not None and grid_thw is not None:
-            # vision_features: (total_merged_tokens, hidden_dim)
-            vision_features = self.vision_encoder(
-                patch_values, grid_thw, training=training
-            )
-            # Build a boolean mask of image placeholder positions.
-            # image_mask: (batch, seq_len)
-            image_mask = ops.equal(
-                token_ids,
-                ops.cast(self.image_token_id, token_ids.dtype),
-            )
-            # Flatten batch+seq dims, replace masked positions with
-            # vision features, then restore shape.
-            batch_size = ops.shape(x)[0]
-            seq_len = ops.shape(x)[1]
-            x_flat = ops.reshape(x, (-1, self.hidden_dim))
-            mask_flat = ops.reshape(image_mask, (-1,))
-            # vision_features is already in the right order (same order as
-            # the image placeholder tokens appear left-to-right).
-            vision_indices = ops.where(mask_flat)
-            if isinstance(vision_indices, (list, tuple)):
-                vision_indices = vision_indices[0]
-            vision_indices = ops.reshape(vision_indices, (-1, 1))
-            vision_indices = ops.cast(vision_indices, "int32")
-            n_placeholders = ops.shape(vision_indices)[0]
-            n_vision = ops.shape(vision_features)[0]
-            if n_placeholders != n_vision:
-                raise ValueError(
-                    f"Vision token count mismatch: the number of "
-                    f"image_token_id={self.image_token_id} placeholders "
-                    f"in token_ids ({n_placeholders}) does not equal the "
-                    f"number of merged vision tokens produced by the "
-                    f"vision encoder from patch_values/image_grid_thw "
-                    f"({n_vision}). Ensure the preprocessor inserts "
-                    f"exactly one placeholder per merged vision token."
+        if not isinstance(inputs, dict) or self.text_only_model:
+            return inputs
+        inputs = dict(inputs)  # shallow copy to avoid mutation
+        ve = self.vision_encoder
+        missing = (
+            "pixel_values" not in inputs
+            or "image_grid_thw" not in inputs
+            or "vision_indices" not in inputs
+            or "position_ids" not in inputs
+        )
+        if missing:
+            # Convert all values to tensors first — Keras rejects a
+            # nested call argument mixing tensors and non-tensors.
+            for key in inputs:
+                inputs[key] = ops.convert_to_tensor(inputs[key])
+        if "pixel_values" not in inputs:
+            inputs["pixel_values"] = ops.zeros(
+                (
+                    0,
+                    ve.temporal_patch_size,
+                    ve.patch_size,
+                    ve.patch_size,
+                    ve.in_channels,
                 )
-            x_flat = ops.scatter_update(x_flat, vision_indices, vision_features)
-            x = ops.reshape(x_flat, (batch_size, seq_len, self.hidden_dim))
-
-        # Decoder layers
-        for transformer_layer in self.transformer_layers:
-            x = transformer_layer(
-                x,
-                decoder_padding_mask=padding_mask,
-                training=training,
             )
+        if "image_grid_thw" not in inputs:
+            inputs["image_grid_thw"] = ops.zeros((0, 3), dtype="int32")
+        if "vision_indices" not in inputs:
+            inputs["vision_indices"] = ops.zeros((0,), dtype="int32")
+        if "position_ids" not in inputs:
+            batch_size = ops.shape(inputs["token_ids"])[0]
+            seq_len = ops.shape(inputs["token_ids"])[1]
+            inputs["position_ids"] = ops.broadcast_to(
+                ops.cast(ops.reshape(ops.arange(seq_len), (1, 1, -1)), "int32"),
+                (batch_size, 3, seq_len),
+            )
+        return inputs
 
-        # Final layer norm
-        x = self.layer_norm(x)
-        return x
+    def __call__(self, inputs, *args, **kwargs):
+        inputs = self._inject_empty_vision_inputs(inputs)
+        return super().__call__(inputs, *args, **kwargs)
 
     def get_config(self):
         config = super().get_config()
@@ -273,15 +279,7 @@ class Qwen2VLBackbone(Backbone):
                 "num_key_value_heads": self.num_key_value_heads,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
-                "vision_patch_size": self.vision_patch_size,
-                "vision_temporal_patch_size": self.vision_temporal_patch_size,
-                "vision_in_channels": self.vision_in_channels,
-                "vision_embed_dim": self.vision_embed_dim,
-                "vision_depth": self.vision_depth,
-                "vision_num_heads": self.vision_num_heads,
-                "vision_mlp_ratio": self.vision_mlp_ratio,
-                "spatial_merge_size": self.spatial_merge_size,
-                "image_token_id": self.image_token_id,
+                "mrope_section": self.mrope_section,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
@@ -291,6 +289,20 @@ class Qwen2VLBackbone(Backbone):
                     self.use_sliding_window_attention
                 ),
                 "sliding_window_size": self.sliding_window_size,
+                "vision_encoder": None
+                if self.vision_encoder is None
+                else keras.layers.serialize(self.vision_encoder),
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        config.update(
+            {
+                "vision_encoder": None
+                if config["vision_encoder"] is None
+                else keras.layers.deserialize(config["vision_encoder"]),
+            }
+        )
+        return super().from_config(config)

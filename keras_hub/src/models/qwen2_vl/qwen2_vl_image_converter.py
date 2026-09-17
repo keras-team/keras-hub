@@ -57,21 +57,22 @@ def smart_resize(
 class Qwen2VLImageConverter(ImageConverter):
     """Image preprocessor for Qwen2-VL.
 
-    Converts a raw NumPy image (H, W, C) or a list of frames into the flat
-    patch tensor and ``grid_thw`` metadata required by
-    ``Qwen2VLVisionEncoder``.
+    Converts a raw NumPy image ``(H, W, C)`` or video clip
+    ``(T, H, W, C)`` into the patch tensor and ``grid_thw`` metadata
+    required by ``Qwen2VLVisionEncoder``.
 
     Processing steps:
     1. Smart-resize to dimensions divisible by ``patch_size * merge_size``.
     2. Rescale pixel values to ``[0, 1]``.
     3. Normalize with CLIP mean/std.
     4. Pad temporal dimension to a multiple of ``temporal_patch_size``.
-    5. Reshape into flat patches of shape
+    5. Reshape into patches of shape
        ``(grid_t * grid_h * grid_w,
-         in_channels * temporal_patch_size * patch_size²)``.
+         temporal_patch_size, patch_size, patch_size, in_channels)``.
 
-    Returns a tuple ``(patches, grid_thw)`` where ``grid_thw`` is a
-    NumPy array of shape ``(num_images, 3)`` with ``[grid_t, grid_h, grid_w]``.
+    Returns a dict ``{"patches", "grid_thw"}`` where ``grid_thw`` is a
+    NumPy array of shape ``(num_images, 3)`` with ``[grid_t, grid_h,
+    grid_w]`` per image.
 
     Args:
         min_pixels: int. Minimum total pixel count after resize.
@@ -108,7 +109,7 @@ class Qwen2VLImageConverter(ImageConverter):
     ):
         # Force float32 for image preprocessing.
         user_dtype = kwargs.pop("dtype", None)
-        if user_dtype is not None:
+        if user_dtype is not None and user_dtype != "float32":
             warnings.warn(
                 f"Qwen2VLImageConverter forces dtype='float32' for "
                 f"preprocessing. The supplied dtype='{user_dtype}' "
@@ -126,8 +127,7 @@ class Qwen2VLImageConverter(ImageConverter):
         self._factor = patch_size * merge_size
 
     def call(self, image):
-        """Preprocess a single image, a list of video frames, or
-        a list of separate images.
+        """Preprocess a single image, a video clip, or a list of images.
 
         Args:
             image: NumPy array of shape ``(H, W, C)`` for a single image,
@@ -136,11 +136,11 @@ class Qwen2VLImageConverter(ImageConverter):
                 images. Pixel values should be in ``[0, 255]``.
 
         Returns:
-            Tuple ``(patches, grid_thw)``:
-            - ``patches``: float32 NumPy array of shape
-              ``(total_patches,
-                C * temporal_patch_size * patch_size²)``.
-            - ``grid_thw``: int32 NumPy array of shape
+            Dict with keys:
+            - ``"patches"``: float32 NumPy array of shape
+              ``(total_patches, temporal_patch_size, patch_size,
+              patch_size, C)``.
+            - ``"grid_thw"``: int32 NumPy array of shape
               ``(num_images, 3)`` with ``[grid_t, grid_h, grid_w]``
               per image.
         """
@@ -150,17 +150,23 @@ class Qwen2VLImageConverter(ImageConverter):
             all_patches = []
             all_grids = []
             for img in image:
-                p, g = self.call(img)
-                all_patches.append(p)
-                all_grids.append(g)
-            return (
-                np.concatenate(all_patches, axis=0),
-                np.concatenate(all_grids, axis=0),
-            )
+                out = self.call(img)
+                all_patches.append(out["patches"])
+                all_grids.append(out["grid_thw"])
+            return {
+                "patches": np.concatenate(all_patches, axis=0),
+                "grid_thw": np.concatenate(all_grids, axis=0),
+            }
 
         image = np.asarray(image, dtype="float32")
+        if image.ndim == 2:
+            image = np.stack([image] * 3, axis=-1)
         if image.ndim == 3:
             image = image[np.newaxis]
+
+        # Normalize inputs in [0, 1] to [0, 255] (HF expects 0-255).
+        if image.size > 0 and float(image.max()) <= 1.0:
+            image = image * 255.0
 
         height, width = image.shape[1], image.shape[2]
         resized_h, resized_w = smart_resize(
@@ -198,6 +204,7 @@ class Qwen2VLImageConverter(ImageConverter):
         grid_h = resized_h // self.patch_size
         grid_w = resized_w // self.patch_size
 
+        # (grid_t, tps, C, grid_h/ms, ms, p, grid_w/ms, ms, p)
         patches = patches.reshape(
             grid_t,
             self.temporal_patch_size,
@@ -209,17 +216,19 @@ class Qwen2VLImageConverter(ImageConverter):
             self.merge_size,
             self.patch_size,
         )
-        patches = patches.transpose(0, 3, 6, 4, 7, 2, 1, 5, 8)
+        # → (grid_t, grid_h/ms, grid_w/ms, ms, ms, tps, p, p, C)
+        patches = patches.transpose(0, 3, 6, 4, 7, 1, 5, 8, 2)
+        # → (total_patches, tps, p, p, C)
         patches = patches.reshape(
             grid_t * grid_h * grid_w,
-            channel
-            * self.temporal_patch_size
-            * self.patch_size
-            * self.patch_size,
+            self.temporal_patch_size,
+            self.patch_size,
+            self.patch_size,
+            channel,
         )
 
         grid_thw = np.array([[grid_t, grid_h, grid_w]], dtype="int32")
-        return patches, grid_thw
+        return {"patches": patches, "grid_thw": grid_thw}
 
     def _resize_frame(self, frame, target_h, target_w):
         """Resize a single frame using PIL (preferred) or NumPy fallback."""
@@ -245,8 +254,8 @@ class Qwen2VLImageConverter(ImageConverter):
                 "patch_size": self.patch_size,
                 "temporal_patch_size": self.temporal_patch_size,
                 "merge_size": self.merge_size,
-                "image_mean": list(self.image_mean),
-                "image_std": list(self.image_std),
+                "image_mean": self.image_mean.tolist(),
+                "image_std": self.image_std.tolist(),
             }
         )
         return config
