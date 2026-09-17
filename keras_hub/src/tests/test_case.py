@@ -38,6 +38,28 @@ def convert_to_comparible_type(x):
     return x
 
 
+def _to_host_numpy(x):
+    """Bring backend tensors in a nested structure back to host numpy.
+
+    `tf.data` cannot build a `TypeSpec` for a tensor that lives on an
+    accelerator (e.g. a torch CUDA tensor), so any such leaf is converted
+    before it is handed to `tf.data`. Containers are rebuilt as-is, so
+    non-tensor leaves (for example a plain list of integer labels) keep their
+    original structure.
+    """
+    if isinstance(x, tuple):
+        return tuple(_to_host_numpy(e) for e in x)
+    if isinstance(x, list):
+        return [_to_host_numpy(e) for e in x]
+    if isinstance(x, dict):
+        return {k: _to_host_numpy(v) for k, v in x.items()}
+    if isinstance(x, (tf.Tensor, tf.RaggedTensor, np.ndarray)):
+        return x
+    if ops.is_tensor(x):
+        return ops.convert_to_numpy(x)
+    return x
+
+
 def _to_grain_leaf(x):
     """Convert a single data leaf to a Grain friendly Python/NumPy object."""
     if isinstance(x, tf.RaggedTensor):
@@ -1250,7 +1272,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # Check serialization (without a full save).
         self.run_serialization_test(task)
         preprocessor = task.preprocessor
-        ds = tf.data.Dataset.from_tensor_slices(train_data).batch(batch_size)
+        # `tf.data` cannot consume tensors that live on an accelerator, so move
+        # them back to the host first.
+        ds = tf.data.Dataset.from_tensor_slices(_to_host_numpy(train_data))
+        ds = ds.batch(batch_size)
         x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
 
         # Test: the tree struct output by the
