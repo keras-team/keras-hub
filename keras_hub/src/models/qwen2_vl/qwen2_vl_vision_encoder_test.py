@@ -108,8 +108,11 @@ class Qwen2VLVisionEncoderTest(TestCase):
         joint = ops.convert_to_numpy(joint)
 
         n_a = out_a.shape[0]
-        np.testing.assert_allclose(joint[:n_a], out_a, atol=1e-5)
-        np.testing.assert_allclose(joint[n_a:], out_b, atol=1e-5)
+        # atol is loose enough for fp32 reduction-order noise on GPU
+        # (different total sequence lengths → different matmul tiling),
+        # but far tighter than a real cross-segment attention leak.
+        np.testing.assert_allclose(joint[:n_a], out_a, atol=5e-3, rtol=5e-3)
+        np.testing.assert_allclose(joint[n_a:], out_b, atol=5e-3, rtol=5e-3)
 
     def test_empty_input(self):
         """Zero-patch input returns an empty output (text-only path)."""
