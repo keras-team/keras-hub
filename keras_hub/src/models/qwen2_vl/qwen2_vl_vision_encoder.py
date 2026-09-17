@@ -1,117 +1,103 @@
-import numpy as np
-from keras import layers
+import math
+
+import keras
 from keras import ops
 
 
-def _quick_gelu(x):
-    """Quick GELU: x * sigmoid(1.702 * x)."""
-    return x * ops.sigmoid(ops.cast(1.702, x.dtype) * x)
+class Qwen2VLVisionAttention(keras.layers.Layer):
+    """Multi-head self-attention for vision tokens with 2D RoPE.
 
-
-def _rotate_half(x):
-    """Rotate last dim by splitting and negating halves."""
-    half = ops.shape(x)[-1] // 2
-    x1 = x[..., :half]
-    x2 = x[..., half:]
-    return ops.concatenate([-x2, x1], axis=-1)
-
-
-def _apply_rotary_pos_emb_vision(q, k, cos, sin):
-    """Apply RoPE to vision q and k.
+    Attention is computed independently per (image, temporal frame) segment
+    using ``cu_seqlens``, matching the HF implementation where each temporal
+    patch of each image attends only within itself.
 
     Args:
-        q: (seq_len, num_heads, head_dim)
-        k: (seq_len, num_heads, head_dim)
-        cos: (seq_len, head_dim)
-        sin: (seq_len, head_dim)
-    """
-    cos = ops.expand_dims(cos, axis=-2)
-    sin = ops.expand_dims(sin, axis=-2)
-    q_embed = (q * cos) + (_rotate_half(q) * sin)
-    k_embed = (k * cos) + (_rotate_half(k) * sin)
-    return q_embed, k_embed
-
-
-class Qwen2VLVisionRotaryEmbedding(layers.Layer):
-    """Vision RoPE: returns raw frequency table of shape (seqlen, dim//2).
-
-    Args:
-        dim: int. Half of the attention head dimension (head_dim // 2).
-        theta: float. RoPE base. Defaults to 10000.0.
-    """
-
-    def __init__(self, dim, theta=10000.0, dtype=None, **kwargs):
-        super().__init__(dtype=dtype, **kwargs)
-        self.dim = dim
-        self.theta = theta
-
-        inv_freq_init = 1.0 / (
-            theta ** (np.arange(0, dim, 2, dtype="float32") / dim)
-        )
-        self.inv_freq = self.add_weight(
-            name="inv_freq",
-            shape=(len(inv_freq_init),),
-            initializer="zeros",
-            trainable=False,
-        )
-        self.inv_freq.assign(inv_freq_init)
-
-    def call(self, seqlen):
-        seq = ops.cast(ops.arange(seqlen), "float32")
-        freqs = ops.outer(seq, ops.cast(self.inv_freq, "float32"))
-        return freqs
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({"dim": self.dim, "theta": self.theta})
-        return config
-
-
-class Qwen2VLVisionAttention(layers.Layer):
-    """Fused-QKV self-attention with RoPE for the vision encoder.
-
-    Has single qkv Dense (bias=True),
-    proj Dense (bias=True), manual scaled dot-product attention.
-
-    Args:
-        embed_dim: int. Vision encoder embedding dimension.
+        embed_dim: int. Input embedding dimension.
         num_heads: int. Number of attention heads.
     """
 
-    def __init__(self, embed_dim, num_heads, dtype=None, **kwargs):
-        super().__init__(dtype=dtype, **kwargs)
+    def __init__(self, embed_dim, num_heads, **kwargs):
+        super().__init__(**kwargs)
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
         self.scale = self.head_dim**-0.5
-        self.qkv = layers.Dense(
-            embed_dim * 3, use_bias=True, dtype=dtype, name="qkv"
-        )
-        self.proj = layers.Dense(
-            embed_dim, use_bias=True, dtype=dtype, name="proj"
-        )
 
     def build(self, input_shape):
+        # Fused QKV projection, matching HF `attn.qkv`.
+        self.qkv = keras.layers.Dense(
+            self.embed_dim * 3,
+            use_bias=True,
+            dtype=self.dtype_policy,
+            name="qkv",
+        )
         self.qkv.build(input_shape)
-        self.proj.build([None, self.embed_dim])
+
+        self.proj = keras.layers.Dense(
+            self.embed_dim,
+            use_bias=True,
+            dtype=self.dtype_policy,
+            name="proj",
+        )
+        self.proj.build((input_shape[0], self.embed_dim))
         self.built = True
 
-    def call(self, x, position_embeddings=None):
+    def call(self, x, position_embeddings, segment_ids=None):
+        """
+        Args:
+            x: Tensor of shape ``(seq_len, embed_dim)``.
+            position_embeddings: tuple of ``(cos, sin)``, each of shape
+                ``(seq_len, head_dim)``.
+            segment_ids: int32 tensor ``(seq_len,)`` assigning each patch to
+                an (image, frame) segment. Patches only attend to other
+                patches in the same segment (HF ``cu_seqlens`` semantics,
+                expressed as a mask so this stays traceable under
+                ``tf.function``). ``None`` means full attention over ``x``.
+        Returns:
+            Tensor of shape ``(seq_len, embed_dim)``.
+        """
         seq_len = ops.shape(x)[0]
+
         qkv = self.qkv(x)
         qkv = ops.reshape(qkv, (seq_len, 3, self.num_heads, self.head_dim))
-        q, k, v = qkv[:, 0], qkv[:, 1], qkv[:, 2]
-        if position_embeddings is not None:
-            cos, sin = position_embeddings
-            q, k = _apply_rotary_pos_emb_vision(q, k, cos, sin)
-        q = ops.transpose(q, (1, 0, 2))
+        q, k, v = qkv[:, 0], qkv[:, 1], qkv[:, 2]  # (S, H, D)
+
+        cos_emb, sin_emb = position_embeddings
+        cos_emb = ops.expand_dims(cos_emb, axis=1)  # (S, 1, D)
+        sin_emb = ops.expand_dims(sin_emb, axis=1)
+
+        def _apply_rope(t):
+            t_dtype = t.dtype
+            t = ops.cast(t, "float32")
+            half = self.head_dim // 2
+            t1, t2 = t[..., :half], t[..., half:]
+            rotated = ops.concatenate([-t2, t1], axis=-1)
+            return ops.cast(t * cos_emb + rotated * sin_emb, t_dtype)
+
+        q = _apply_rope(q)
+        k = _apply_rope(k)
+
+        q = ops.transpose(q, (1, 0, 2))  # (H, S, D)
         k = ops.transpose(k, (1, 0, 2))
         v = ops.transpose(v, (1, 0, 2))
-        attn = ops.matmul(q, ops.transpose(k, (0, 2, 1))) * self.scale
-        attn = ops.softmax(ops.cast(attn, "float32"), axis=-1)
-        attn = ops.cast(attn, q.dtype)
-        out = ops.matmul(attn, v)
-        out = ops.transpose(out, (1, 0, 2))
+
+        # Per-frame attention: mask out cross-segment attention. For a
+        # single segment the mask is all-true (no-op).
+        scores = ops.einsum("hid,hjd->hij", q, k) * self.scale
+        scores = ops.cast(scores, "float32")
+        if segment_ids is not None:
+            same = ops.equal(
+                ops.expand_dims(segment_ids, axis=1),
+                ops.expand_dims(segment_ids, axis=0),
+            )
+            scores = ops.where(
+                ops.expand_dims(same, axis=0), scores, float("-inf")
+            )
+        scores = ops.softmax(scores, axis=-1)
+        scores = ops.cast(scores, self.compute_dtype)
+        out = ops.einsum("hij,hjd->hid", scores, v)
+
+        out = ops.transpose(out, (1, 0, 2))  # (S, H, D)
         out = ops.reshape(out, (seq_len, self.embed_dim))
         return self.proj(out)
 
@@ -123,30 +109,33 @@ class Qwen2VLVisionAttention(layers.Layer):
         return config
 
 
-class Qwen2VLVisionMlp(layers.Layer):
-    """Two-layer MLP with quick_gelu for the vision transformer block.
+class Qwen2VLVisionMLP(keras.layers.Layer):
+    """Vision MLP: fc1 -> GELU -> fc2.
 
-    Args:
-        embed_dim: int. Input/output dimension.
-        mlp_dim: int. Hidden dimension.
+    HF uses ``QuickGELU`` (i.e. ``x * sigmoid(1.702x)``) in vision blocks.
     """
 
-    def __init__(self, embed_dim, mlp_dim, dtype=None, **kwargs):
-        super().__init__(dtype=dtype, **kwargs)
+    def __init__(self, embed_dim, mlp_dim, **kwargs):
+        super().__init__(**kwargs)
         self.embed_dim = embed_dim
         self.mlp_dim = mlp_dim
-        self.fc1 = layers.Dense(mlp_dim, use_bias=True, dtype=dtype, name="fc1")
-        self.fc2 = layers.Dense(
-            embed_dim, use_bias=True, dtype=dtype, name="fc2"
-        )
 
     def build(self, input_shape):
+        self.fc1 = keras.layers.Dense(
+            self.mlp_dim, use_bias=True, dtype=self.dtype_policy, name="fc1"
+        )
         self.fc1.build(input_shape)
-        self.fc2.build([None, self.mlp_dim])
+        self.fc2 = keras.layers.Dense(
+            self.embed_dim, use_bias=True, dtype=self.dtype_policy, name="fc2"
+        )
+        self.fc2.build((input_shape[0], self.mlp_dim))
         self.built = True
 
     def call(self, x):
-        return self.fc2(_quick_gelu(self.fc1(x)))
+        x = self.fc1(x)
+        # QuickGELU: x * sigmoid(1.702 * x)
+        x = x * ops.sigmoid(x * 1.702)
+        return self.fc2(x)
 
     def get_config(self):
         config = super().get_config()
@@ -154,51 +143,56 @@ class Qwen2VLVisionMlp(layers.Layer):
         return config
 
 
-class Qwen2VLVisionBlock(layers.Layer):
-    """Single vision transformer block.
+class Qwen2VLVisionBlock(keras.layers.Layer):
+    """Single vision transformer block: LN -> Attn -> LN -> MLP.
 
-    Pre-norm, fused-QKV attention, quick_gelu MLP.
-
-    Args:
-        embed_dim: int. Vision encoder embedding dimension.
-        num_heads: int. Number of attention heads.
-        mlp_ratio: float. MLP hidden dim multiplier. Defaults to 4.
+    Uses standard ``LayerNormalization`` (with bias) and QuickGELU MLP.
     """
 
-    def __init__(self, embed_dim, num_heads, mlp_ratio=4, dtype=None, **kwargs):
-        super().__init__(dtype=dtype, **kwargs)
+    def __init__(self, embed_dim, num_heads, mlp_dim, epsilon=1e-6, **kwargs):
+        super().__init__(**kwargs)
         self.embed_dim = embed_dim
         self.num_heads = num_heads
-        self.mlp_ratio = mlp_ratio
-        self.norm1 = layers.LayerNormalization(
-            epsilon=1e-6, dtype=dtype, name="norm1"
-        )
-        self.attn = Qwen2VLVisionAttention(
-            embed_dim=embed_dim, num_heads=num_heads, dtype=dtype, name="attn"
-        )
-        self.norm2 = layers.LayerNormalization(
-            epsilon=1e-6, dtype=dtype, name="norm2"
-        )
-        self.mlp = Qwen2VLVisionMlp(
-            embed_dim=embed_dim,
-            mlp_dim=int(embed_dim * mlp_ratio),
-            dtype=dtype,
-            name="mlp",
-        )
+        self.mlp_dim = mlp_dim
+        self.epsilon = epsilon
 
     def build(self, input_shape):
+        self.norm1 = keras.layers.LayerNormalization(
+            epsilon=self.epsilon, dtype="float32", name="norm1"
+        )
         self.norm1.build(input_shape)
+        self.attn = Qwen2VLVisionAttention(
+            embed_dim=self.embed_dim,
+            num_heads=self.num_heads,
+            dtype=self.dtype_policy,
+            name="attn",
+        )
         self.attn.build(input_shape)
+        self.norm2 = keras.layers.LayerNormalization(
+            epsilon=self.epsilon, dtype="float32", name="norm2"
+        )
         self.norm2.build(input_shape)
+        self.mlp = Qwen2VLVisionMLP(
+            embed_dim=self.embed_dim,
+            mlp_dim=self.mlp_dim,
+            dtype=self.dtype_policy,
+            name="mlp",
+        )
         self.mlp.build(input_shape)
         self.built = True
 
-    def call(self, x, position_embeddings=None):
-        x = x + self.attn(
-            self.norm1(x), position_embeddings=position_embeddings
-        )
-        x = x + self.mlp(self.norm2(x))
-        return x
+    def call(self, x, position_embeddings, segment_ids=None):
+        # Vision always runs in float32 for stability.
+        x = ops.cast(x, "float32")
+        normed = self.norm1(x)
+        normed = ops.cast(normed, self.compute_dtype)
+        attn_out = self.attn(normed, position_embeddings, segment_ids)
+        x = x + ops.cast(attn_out, "float32")
+
+        normed = self.norm2(x)
+        normed = ops.cast(normed, self.compute_dtype)
+        mlp_out = self.mlp(normed)
+        return x + ops.cast(mlp_out, "float32")
 
     def get_config(self):
         config = super().get_config()
@@ -206,92 +200,110 @@ class Qwen2VLVisionBlock(layers.Layer):
             {
                 "embed_dim": self.embed_dim,
                 "num_heads": self.num_heads,
-                "mlp_ratio": self.mlp_ratio,
+                "mlp_dim": self.mlp_dim,
+                "epsilon": self.epsilon,
             }
         )
         return config
 
 
-class Qwen2VLPatchMerger(layers.Layer):
-    """Merges spatial patches and projects to the LLM hidden dimension.
+class Qwen2VLPatchMerger(keras.layers.Layer):
+    """Patch merger: LayerNorm -> MLP to project merged spatial groups.
 
-    Consists of:
-    - LayerNorm on vision features.
-    - Reshape: group spatial_merge_size² adjacent tokens.
-    - Two-layer MLP (Linear → GELU → Linear).
+    Groups ``spatial_merge_size²`` patches into one token: LN on each patch,
+    concat the group, fc1 -> exact GELU -> fc2.
 
     Args:
-        hidden_size: int. Output dimension (LLM hidden size).
-        embed_dim: int. Vision encoder embedding dimension.
-        spatial_merge_size: int. Spatial merge factor. Defaults to 2.
+        embed_dim: int. Vision embed dimension.
+        out_dim: int. Output dimension (= text backbone hidden dim).
+        spatial_merge_size: int. Merge factor along each spatial dim.
+        epsilon: float. LayerNorm epsilon.
     """
 
     def __init__(
-        self, hidden_size, embed_dim, spatial_merge_size=2, dtype=None, **kwargs
+        self, embed_dim, out_dim, spatial_merge_size, epsilon, **kwargs
     ):
-        super().__init__(dtype=dtype, **kwargs)
-        self.hidden_size = hidden_size
+        super().__init__(**kwargs)
         self.embed_dim = embed_dim
+        self.out_dim = out_dim
         self.spatial_merge_size = spatial_merge_size
-        self.mlp_hidden = embed_dim * (spatial_merge_size**2)
-        self.ln_q = layers.LayerNormalization(
-            epsilon=1e-6, dtype=dtype, name="ln_q"
-        )
-        self.mlp_fc1 = layers.Dense(
-            self.mlp_hidden, use_bias=True, dtype=dtype, name="mlp_fc1"
-        )
-        self.mlp_fc2 = layers.Dense(
-            hidden_size, use_bias=True, dtype=dtype, name="mlp_fc2"
-        )
+        self.epsilon = epsilon
+        self.merged_dim = embed_dim * spatial_merge_size * spatial_merge_size
 
     def build(self, input_shape):
-        self.ln_q.build(input_shape)
-        self.mlp_fc1.build([None, self.mlp_hidden])
-        self.mlp_fc2.build([None, self.mlp_hidden])
+        self.ln_q = keras.layers.LayerNormalization(
+            epsilon=self.epsilon, dtype="float32", name="ln_q"
+        )
+        self.ln_q.build((None, self.embed_dim))
+        self.mlp_fc1 = keras.layers.Dense(
+            self.merged_dim,
+            use_bias=True,
+            dtype=self.dtype_policy,
+            name="mlp_fc1",
+        )
+        self.mlp_fc1.build((None, self.merged_dim))
+        self.mlp_fc2 = keras.layers.Dense(
+            self.out_dim,
+            use_bias=True,
+            dtype=self.dtype_policy,
+            name="mlp_fc2",
+        )
+        self.mlp_fc2.build((None, self.merged_dim))
         self.built = True
 
     def call(self, x):
+        """
+        Args:
+            x: Tensor ``(total_patches, embed_dim)``.
+        Returns:
+            Tensor ``(total_patches // merge_size², out_dim)``.
+        """
+        x = ops.cast(x, "float32")
         x = self.ln_q(x)
-        total = ops.shape(x)[0]
-        merge_sq = self.spatial_merge_size**2
-        x = ops.reshape(x, (total // merge_sq, self.mlp_hidden))
-        x = ops.gelu(self.mlp_fc1(x))
-        x = self.mlp_fc2(x)
-        return x
+        num_patches = ops.shape(x)[0]
+        ms2 = self.spatial_merge_size * self.spatial_merge_size
+        x = ops.reshape(x, (num_patches // ms2, ms2 * self.embed_dim))
+        x = ops.cast(x, self.compute_dtype)
+        x = self.mlp_fc1(x)
+        # HF uses nn.GELU() — exact, not the tanh approximation.
+        x = ops.gelu(x, approximate=False)
+        return self.mlp_fc2(x)
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "hidden_size": self.hidden_size,
                 "embed_dim": self.embed_dim,
+                "out_dim": self.out_dim,
                 "spatial_merge_size": self.spatial_merge_size,
+                "epsilon": self.epsilon,
             }
         )
         return config
 
 
-class Qwen2VLVisionEncoder(layers.Layer):
-    """Qwen2-VL Vision Encoder (3D ViT with RoPE and PatchMerger).
+class Qwen2VLVisionEncoder(keras.Model):
+    """Vision encoder for Qwen2-VL (ViT with spatial patch merger).
 
-    Accepts a flat patch tensor produced by ``Qwen2VLImageConverter``
-    of shape ``(total_patches, C * temp_patch * patch²)``
-    and a ``grid_thw`` tensor of shape ``(num_images, 3)``.
+    Processes image patches of shape ``(N, T, pH, pW, C)`` through:
 
-    Returns merged vision features of shape
-    ``(total_patches // spatial_merge_size², hidden_size)``.
+    1. Conv3D patch embedding
+    2. Per-frame ViT blocks with 2D axial RoPE
+    3. Spatial patch merger → text hidden dimension
 
     Args:
-        patch_size: int. Spatial patch size. Defaults to 14.
-        temporal_patch_size: int. Temporal patch size. Defaults to 2.
-        in_channels: int. Input image channels. Defaults to 3.
-        embed_dim: int. ViT internal embedding dimension. Defaults to 1280.
-        hidden_size: int. LLM hidden dimension (PatchMerger output).
-            Defaults to 3584.
-        depth: int. Number of vision transformer blocks. Defaults to 32.
-        num_heads: int. Number of attention heads. Defaults to 16.
-        mlp_ratio: float. MLP hidden dim multiplier. Defaults to 4.
-        spatial_merge_size: int. Spatial merge factor. Defaults to 2.
+        patch_size: int. Spatial patch size in pixels.
+        temporal_patch_size: int. Temporal patch size.
+        in_channels: int. Input channels (typically 3).
+        embed_dim: int. Vision hidden dimension.
+        out_dim: int. Output dimension (= text backbone ``hidden_dim``).
+        depth: int. Number of ViT blocks.
+        num_heads: int. Attention heads per ViT block.
+        mlp_ratio: float. MLP hidden dim = ``embed_dim * mlp_ratio``.
+        spatial_merge_size: int. Spatial merge factor.
+        theta: float. RoPE base frequency.
+        epsilon: float. LayerNorm epsilon.
+        dtype: compute dtype; the vision tower always runs in float32.
     """
 
     def __init__(
@@ -300,206 +312,261 @@ class Qwen2VLVisionEncoder(layers.Layer):
         temporal_patch_size=2,
         in_channels=3,
         embed_dim=1280,
-        hidden_size=3584,
+        out_dim=None,
         depth=32,
         num_heads=16,
         mlp_ratio=4,
         spatial_merge_size=2,
+        theta=10000.0,
+        epsilon=1e-6,
         dtype=None,
         **kwargs,
     ):
+        # Always run the vision encoder in float32 for numerical stability.
+        if dtype is not None and dtype != "float32":
+            dtype = "float32"
         super().__init__(dtype=dtype, **kwargs)
+
         self.patch_size = patch_size
         self.temporal_patch_size = temporal_patch_size
         self.in_channels = in_channels
         self.embed_dim = embed_dim
-        self.hidden_size = hidden_size
+        self.out_dim = out_dim if out_dim is not None else embed_dim
         self.depth = depth
         self.num_heads = num_heads
         self.mlp_ratio = mlp_ratio
         self.spatial_merge_size = spatial_merge_size
+        self.theta = theta
+        self.epsilon = epsilon
 
-        self.patch_embed = layers.Conv3D(
+        self.head_dim = embed_dim // num_heads
+        mlp_dim = int(embed_dim * mlp_ratio)
+
+        # Vision rotary inverse frequencies (matches HF `persistent=False`,
+        # i.e. computed at runtime, not a stored weight).
+        spatial_dim = self.head_dim // 2
+        self._inv_freq = [
+            1.0 / (math.pow(theta, i / spatial_dim))
+            for i in range(0, spatial_dim, 2)
+        ]
+
+        # Conv3D patch embedding (no bias, matching HF `visual.patch_embed`).
+        self.patch_embed = keras.layers.Conv3D(
             filters=embed_dim,
             kernel_size=(temporal_patch_size, patch_size, patch_size),
             strides=(temporal_patch_size, patch_size, patch_size),
             padding="valid",
             use_bias=False,
-            dtype=dtype,
+            dtype=self.dtype_policy,
             name="patch_embed",
         )
-        head_dim = embed_dim // num_heads
-        self.rotary_pos_emb = Qwen2VLVisionRotaryEmbedding(
-            dim=head_dim // 2, theta=10000.0, dtype=dtype, name="rotary_pos_emb"
-        )
+
         self.blocks = [
             Qwen2VLVisionBlock(
                 embed_dim=embed_dim,
                 num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
-                dtype=dtype,
+                mlp_dim=mlp_dim,
+                epsilon=epsilon,
+                dtype=self.dtype_policy,
                 name=f"blocks_{i}",
             )
             for i in range(depth)
         ]
+
         self.merger = Qwen2VLPatchMerger(
-            hidden_size=hidden_size,
             embed_dim=embed_dim,
+            out_dim=self.out_dim,
             spatial_merge_size=spatial_merge_size,
-            dtype=dtype,
+            epsilon=epsilon,
+            dtype=self.dtype_policy,
             name="merger",
         )
 
-        # Eagerly build all sublayers so their variables exist for
-        # weight loading.  This is necessary because the vision encoder
-        # is NOT part of the backbone's Functional graph — Keras will
-        # not auto-build it during deserialization.
-        self.build()
-
     def build(self, input_shape=None):
-        """Build all sublayers so their variables exist for weight loading."""
-        if self.built:
-            return
-        # Conv3D sees 5-D input after reshape+transpose in call().
-        conv_shape = (
-            None,
-            self.temporal_patch_size,
-            self.patch_size,
-            self.patch_size,
-            self.in_channels,
-        )
-        self.patch_embed.build(conv_shape)
-
-        # Blocks and merger operate on (seq_len, embed_dim).
-        block_shape = (None, self.embed_dim)
-        for block in self.blocks:
-            block.build(block_shape)
-        self.merger.build(block_shape)
-        self.built = True
+        """Build all sublayers so weights exist before any forward pass."""
+        if not self.patch_embed.built:
+            self.patch_embed.build(
+                (
+                    None,
+                    self.temporal_patch_size,
+                    self.patch_size,
+                    self.patch_size,
+                    self.in_channels,
+                )
+            )
+        for blk in self.blocks:
+            if not blk.built:
+                blk.build((None, self.embed_dim))
+        if not self.merger.built:
+            self.merger.build((None, self.embed_dim))
+        super().build(input_shape)
 
     def _rot_pos_emb(self, grid_thw):
-        """Build per-token (cos, sin) from grid_thw.
+        """Compute 2D axial RoPE (cos, sin) for all image patches.
 
-        Replicates HF rot_pos_emb: spatial-merge interleaved h/w pos ids,
-        indexed into the rotary frequency table.
+        Produces block-major (merge-block-ordered) h/w indices per image,
+        repeated for each temporal frame — matching HF
+        ``get_vision_position_ids``.
 
-        Args:
-            grid_thw: int tensor of shape (num_images, 3) — [t, h, w].
-
-        Returns:
-            Tuple (cos, sin) each of shape (total_tokens, head_dim).
-        """
-        pos_ids_list = []
-        # grid_thw is a NumPy array at preprocessing time; use len() so this
-        # works both eagerly and in traced graphs where shape[0] is known.
-        num_images = (
-            grid_thw.shape[0]
-            if hasattr(grid_thw, "shape")
-            else ops.shape(grid_thw)[0]
-        )
-        for i in range(int(num_images)):
-            t = grid_thw[i, 0]
-            h = grid_thw[i, 1]
-            w = grid_thw[i, 2]
-            hpos = ops.reshape(ops.arange(h), (h, 1))
-            hpos = ops.broadcast_to(hpos, (h, w))
-            hpos = ops.reshape(
-                hpos,
-                (
-                    h // self.spatial_merge_size,
-                    self.spatial_merge_size,
-                    w // self.spatial_merge_size,
-                    self.spatial_merge_size,
-                ),
-            )
-            hpos = ops.transpose(hpos, (0, 2, 1, 3))
-            hpos = ops.reshape(hpos, (-1,))
-            wpos = ops.reshape(ops.arange(w), (1, w))
-            wpos = ops.broadcast_to(wpos, (h, w))
-            wpos = ops.reshape(
-                wpos,
-                (
-                    h // self.spatial_merge_size,
-                    self.spatial_merge_size,
-                    w // self.spatial_merge_size,
-                    self.spatial_merge_size,
-                ),
-            )
-            wpos = ops.transpose(wpos, (0, 2, 1, 3))
-            wpos = ops.reshape(wpos, (-1,))
-            hw_ids = ops.stack([hpos, wpos], axis=-1)
-            hw_ids = ops.tile(hw_ids, [int(t), 1])
-            pos_ids_list.append(hw_ids)
-        pos_ids = ops.concatenate(pos_ids_list, axis=0)
-        max_grid_size = ops.max(grid_thw[:, 1:])
-        rotary_emb_full = self.rotary_pos_emb(max_grid_size)
-        rotary_emb = ops.take(
-            rotary_emb_full, ops.reshape(pos_ids, (-1,)), axis=0
-        )
-        rotary_emb = ops.reshape(rotary_emb, (ops.shape(pos_ids)[0], -1))
-        emb = ops.concatenate([rotary_emb, rotary_emb], axis=-1)
-        cos = ops.cos(emb)
-        sin = ops.sin(emb)
-        return cos, sin
-
-    def call(self, hidden_states, grid_thw=None):
-        """Forward pass.
+        Implemented with tensor ops only so it traces under ``tf.function``
+        (generate compiles ``generate_step``).
 
         Args:
-            hidden_states: Flat patch tensor of shape
-                ``(total_patches, C * temp_patch * patch²)``.
-                Each row is one flattened patch group as produced by
-                ``Qwen2VLImageConverter``.
-            grid_thw: Int tensor of shape ``(num_images, 3)``.
-
+            grid_thw: int tensor ``(num_images, 3)`` with [T, H, W] per image.
         Returns:
-            Merged features of shape
-            ``(total_patches // spatial_merge_size², hidden_size)``.
+            (cos_emb, sin_emb): each ``(total_tokens, head_dim)``.
         """
-        # Reshape flat patches into 5D for Conv3D:
-        # (N, in_channels, temporal_patch_size, patch_size, patch_size)
+        grid_thw = ops.cast(grid_thw, "int32")
+        ms = self.spatial_merge_size
+        n = grid_thw.shape[0]
+        max_hw = ops.max(grid_thw[:, 1:])
+        inv_freq = ops.cast(ops.array(self._inv_freq), "float32")
+        positions = ops.cast(ops.arange(max_hw), "float32")
+        freq_table = ops.einsum("i,j->ij", positions, inv_freq)  # (hw, hd//4)
+
+        all_embeds = []
+        for idx in range(n):
+            t_val = grid_thw[idx][0]
+            h_val = grid_thw[idx][1]
+            w_val = grid_thw[idx][2]
+            merged_h = h_val // ms
+            merged_w = w_val // ms
+
+            # Block-major merge ordering: (merged_h, merged_w, ms, ms).
+            row_idx = ops.expand_dims(
+                ops.arange(merged_h), axis=(1, 2, 3)
+            ) * ms + ops.expand_dims(
+                ops.arange(ms), axis=(0, 1, 3)
+            )  # (merged_h, 1, ms, 1)
+            col_idx = ops.expand_dims(
+                ops.arange(merged_w), axis=(0, 2, 3)
+            ) * ms + ops.expand_dims(
+                ops.arange(ms), axis=(0, 1, 2)
+            )  # (1, merged_w, 1, ms)
+            row_idx = ops.broadcast_to(row_idx, (merged_h, merged_w, ms, ms))
+            col_idx = ops.broadcast_to(col_idx, (merged_h, merged_w, ms, ms))
+            row_idx = ops.reshape(row_idx, (-1,))
+            col_idx = ops.reshape(col_idx, (-1,))
+
+            row_freqs = ops.take(freq_table, row_idx, axis=0)  # (h*w, hd//4)
+            col_freqs = ops.take(freq_table, col_idx, axis=0)
+            spatial_emb = ops.concatenate(
+                [row_freqs, col_freqs], axis=-1
+            )  # (h*w, head_dim//2)
+
+            # Tile the spatial embedding across all temporal frames.
+            n_hw = ops.shape(spatial_emb)[0]
+            h_dim = ops.shape(spatial_emb)[1]
+            spatial_emb = ops.broadcast_to(
+                ops.expand_dims(spatial_emb, axis=0), (t_val, n_hw, h_dim)
+            )
+            spatial_emb = ops.reshape(spatial_emb, (-1, h_dim))
+
+            all_embeds.append(spatial_emb)
+
+        rotary = ops.concatenate(all_embeds, axis=0)  # (N, head_dim // 2)
+        # Duplicate to full head_dim, matching HF `cat([emb, emb], -1)`.
+        rotary = ops.concatenate([rotary, rotary], axis=-1)
+        return ops.cos(rotary), ops.sin(rotary)
+
+    def _segment_ids(self, grid_thw):
+        """Per-patch (image, frame) segment ids for attention.
+
+        Each of the ``t`` frames of an image is its own attention segment
+        (HF ``cu_seqlens`` semantics). Returns a ``(total_patches,)`` int32
+        tensor; the loop bound ``num_images`` is a static shape so this
+        stays traceable under ``tf.function``.
+        """
+        grid_thw = ops.cast(grid_thw, "int32")
+        t_counts = grid_thw[:, 0]
+        hw = grid_thw[:, 1] * grid_thw[:, 2]
+        # Segment id of frame 0 for each image.
+        seg_offsets = ops.cumsum(t_counts) - t_counts
+        segments = []
+        for i in range(grid_thw.shape[0]):
+            t_i = t_counts[i]
+            hw_i = hw[i]
+            # Patch index within the image → frame index.
+            frame_of_patch = ops.arange(t_i * hw_i) // hw_i
+            segments.append(frame_of_patch + seg_offsets[i])
+        return ops.cast(ops.concatenate(segments, axis=0), "int32")
+
+    def call(self, pixel_values, grid_thw):
+        """Forward pass through the vision encoder.
+
+        Args:
+            pixel_values: patches ``(total_patches, T, pH, pW, C)`` or
+                batched ``(batch, total_patches, T, pH, pW, C)``.
+            grid_thw: int tensor ``(num_images, 3)`` or batched
+                ``(batch, num_images, 3)`` with [T, H, W] per image.
+        Returns:
+            Unbatched: ``(total_merged_tokens, out_dim)``.
+            Batched: ``(batch, total_merged_tokens, out_dim)``.
+        """
+        batched = len(ops.shape(pixel_values)) == 6
+        if batched:
+            # Collapse batch: (B, N, T, pH, pW, C) -> (B*N, T, pH, pW, C).
+            pixel_values = ops.reshape(
+                pixel_values,
+                (
+                    -1,
+                    self.temporal_patch_size,
+                    self.patch_size,
+                    self.patch_size,
+                    self.in_channels,
+                ),
+            )
+            grid_thw = ops.reshape(grid_thw, (-1, 3))
+
+        # Early return for zero-sized input (text-only on multimodal model).
+        if ops.shape(pixel_values)[0] == 0:
+            empty = ops.zeros((0, self.out_dim), dtype=self.compute_dtype)
+            if batched:
+                empty = ops.expand_dims(empty, axis=0)
+            return empty
+
+        # Patch embedding: each patch is one Conv3D "sample".
+        hidden_states = self.patch_embed(pixel_values)  # (N,1,1,1,E)
         hidden_states = ops.reshape(
-            hidden_states,
-            (
-                -1,
-                self.in_channels,
-                self.temporal_patch_size,
-                self.patch_size,
-                self.patch_size,
-            ),
+            hidden_states, (ops.shape(hidden_states)[0], self.embed_dim)
         )
-        # Conv3D expects (batch, d, h, w, channels) in channels-last Keras.
-        # Transpose from (N, C, T, P, P) → (N, T, P, P, C).
-        hidden_states = ops.transpose(hidden_states, (0, 2, 3, 4, 1))
-        hidden_states = self.patch_embed(hidden_states)
-        hidden_states = ops.reshape(hidden_states, (-1, self.embed_dim))
+        hidden_states = ops.cast(hidden_states, "float32")
 
-        position_embeddings = None
-        if grid_thw is not None:
-            cos, sin = self._rot_pos_emb(grid_thw)
-            position_embeddings = (cos, sin)
+        position_embeddings = self._rot_pos_emb(grid_thw)
+        segment_ids = self._segment_ids(grid_thw)
 
-        for block in self.blocks:
-            hidden_states = block(
-                hidden_states, position_embeddings=position_embeddings
+        for blk in self.blocks:
+            hidden_states = blk(hidden_states, position_embeddings, segment_ids)
+
+        merged = self.merger(hidden_states)
+
+        if batched:
+            merged = ops.expand_dims(merged, axis=0)
+        return merged
+
+    def compute_output_spec(self, pixel_values, grid_thw=None):
+        """Infer output spec for backbone functional-graph construction."""
+        if len(pixel_values.shape) == 6:  # batched
+            return keras.KerasTensor(
+                shape=(pixel_values.shape[0], None, self.out_dim),
+                dtype="float32",
             )
-
-        hidden_states = self.merger(hidden_states)
-        return hidden_states
+        return keras.KerasTensor(
+            shape=(None, self.out_dim),
+            dtype="float32",
+        )
 
     def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "patch_size": self.patch_size,
-                "temporal_patch_size": self.temporal_patch_size,
-                "in_channels": self.in_channels,
-                "embed_dim": self.embed_dim,
-                "hidden_size": self.hidden_size,
-                "depth": self.depth,
-                "num_heads": self.num_heads,
-                "mlp_ratio": self.mlp_ratio,
-                "spatial_merge_size": self.spatial_merge_size,
-            }
-        )
-        return config
+        return {
+            "patch_size": self.patch_size,
+            "temporal_patch_size": self.temporal_patch_size,
+            "in_channels": self.in_channels,
+            "embed_dim": self.embed_dim,
+            "out_dim": self.out_dim,
+            "depth": self.depth,
+            "num_heads": self.num_heads,
+            "mlp_ratio": self.mlp_ratio,
+            "spatial_merge_size": self.spatial_merge_size,
+            "theta": self.theta,
+            "epsilon": self.epsilon,
+        }

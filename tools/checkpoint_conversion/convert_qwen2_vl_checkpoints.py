@@ -25,6 +25,9 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import (  # noqa: E402
 from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (  # noqa: E402, E501
     Qwen2VLImageConverter,
 )
+from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (  # noqa: E402, E501
+    Qwen2VLVisionEncoder,
+)
 
 PRESET_MAP = {
     "qwen2_vl_2b_instruct": "Qwen/Qwen2-VL-2B-Instruct",
@@ -58,33 +61,46 @@ def transpose_2d(x):
 
 def build_backbone_config(hf_config):
     """Map HF ``config.json`` fields to ``Qwen2VLBackbone`` kwargs."""
-    vc = hf_config.get("vision_config", {})
-    return {
-        "vocabulary_size": hf_config["vocab_size"],
-        "num_layers": hf_config["num_hidden_layers"],
-        "num_query_heads": hf_config["num_attention_heads"],
-        "num_key_value_heads": hf_config["num_key_value_heads"],
-        "hidden_dim": hf_config["hidden_size"],
-        "intermediate_dim": hf_config["intermediate_size"],
-        "vision_patch_size": vc.get("patch_size", 14),
-        "vision_temporal_patch_size": vc.get("temporal_patch_size", 2),
-        "vision_in_channels": vc.get("in_channels", 3),
-        "vision_embed_dim": vc.get("embed_dim", vc.get("hidden_size", 1280)),
-        "vision_depth": vc.get("depth", vc.get("num_hidden_layers", 32)),
-        "vision_num_heads": vc.get(
-            "num_heads", vc.get("num_attention_heads", 16)
-        ),
-        "vision_mlp_ratio": vc.get("mlp_ratio", 4),
-        "spatial_merge_size": vc.get("spatial_merge_size", 2),
-        "image_token_id": hf_config.get("image_token_id", 151655),
-        "rope_max_wavelength": hf_config.get("rope_theta", 1000000),
-        "layer_norm_epsilon": hf_config.get("rms_norm_eps", 1e-6),
+    # Newer transformers nest text params under "text_config".
+    tc = hf_config.get("text_config", hf_config)
+    vc = hf_config.get("vision_config", None)
+
+    rope_params = tc.get("rope_parameters", tc.get("rope_scaling", {}))
+    mrope_section = rope_params.get("mrope_section", [16, 24, 24])
+
+    vision_encoder = None
+    if vc is not None:
+        vision_theta = vc.get("rope_parameters", {}).get("rope_theta", 10000.0)
+        vision_encoder = Qwen2VLVisionEncoder(
+            patch_size=vc.get("patch_size", 14),
+            temporal_patch_size=vc.get("temporal_patch_size", 2),
+            in_channels=vc.get("in_channels", 3),
+            embed_dim=vc.get("embed_dim", 1280),
+            out_dim=tc["hidden_size"],
+            depth=vc.get("depth", 32),
+            num_heads=vc.get("num_heads", 16),
+            mlp_ratio=vc.get("mlp_ratio", 4),
+            spatial_merge_size=vc.get("spatial_merge_size", 2),
+            theta=vision_theta,
+        )
+
+    config = {
+        "vocabulary_size": tc["vocab_size"],
+        "num_layers": tc["num_hidden_layers"],
+        "num_query_heads": tc["num_attention_heads"],
+        "num_key_value_heads": tc["num_key_value_heads"],
+        "hidden_dim": tc["hidden_size"],
+        "intermediate_dim": tc["intermediate_size"],
+        "mrope_section": mrope_section,
+        "rope_max_wavelength": tc.get("rope_theta", 1000000),
+        "layer_norm_epsilon": tc.get("rms_norm_eps", 1e-6),
         "tie_word_embeddings": hf_config.get("tie_word_embeddings", False),
-        "use_sliding_window_attention": hf_config.get(
-            "use_sliding_window", False
-        ),
-        "sliding_window_size": hf_config.get("sliding_window", 32768),
+        "use_sliding_window_attention": tc.get("use_sliding_window", False),
+        "sliding_window_size": tc.get("sliding_window", 32768),
     }
+    if vision_encoder is not None:
+        config["vision_encoder"] = vision_encoder
+    return config
 
 
 # Port weights
@@ -277,20 +293,18 @@ def verify_preprocessor(keras_tokenizer, hf_processor):
         tokenizer=keras_tokenizer,
         image_converter=image_converter,
         sequence_length=512,
-        spatial_merge_size=2,
     )
     dummy = np.random.randint(0, 255, (56, 56, 3), dtype=np.uint8)
     result = keras_pp_img.generate_preprocess(
-        {"text": "Describe this image", "images": dummy}
+        {"prompts": "Describe this image", "images": dummy}
     )
-    assert result["patch_values"] is not None
+    assert result["pixel_values"] is not None
     assert result["image_grid_thw"] is not None
-    grid_thw = result["image_grid_thw"]
+    grid_thw = np.asarray(result["image_grid_thw"])
     expected = int(np.prod(grid_thw[0]) // 4)
     actual = int(
         np.sum(
-            np.asarray(result["token_ids"])
-            == keras_tokenizer.image_pad_token_id
+            np.asarray(result["token_ids"]) == keras_tokenizer.image_token_id
         )
     )
     assert actual == expected, f"vision tokens: {actual} != {expected}"
@@ -376,6 +390,65 @@ def verify_backbone(keras_backbone, keras_tokenizer, hf_model, hf_tokenizer):
     print("  Backbone verification complete")
 
 
+def verify_multimodal(keras_backbone, keras_tokenizer, hf_model, hf_processor):
+    """Verify logits on a real image + text prompt (M-RoPE path)."""
+    print("\n── Multimodal verification ──")
+    from PIL import Image as PILImage
+
+    rng = np.random.default_rng(42)
+    image = PILImage.fromarray(
+        rng.integers(0, 255, (224, 224, 3), dtype=np.uint8)
+    )
+    prompt = (
+        "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>"
+        "Describe this image.<|im_end|>\n<|im_start|>assistant\n"
+    )
+
+    # HF forward.
+    hf_inputs = hf_processor(
+        text=[prompt], images=[image], return_tensors="pt"
+    ).to(device)
+    with torch.no_grad():
+        hf_logits = hf_model(**hf_inputs).logits.detach().cpu().float().numpy()
+
+    # KerasHub forward through the functional backbone.
+    image_converter = Qwen2VLImageConverter()
+    keras_pp = keras_hub.models.Qwen2VLCausalLMPreprocessor(
+        tokenizer=keras_tokenizer,
+        image_converter=image_converter,
+        sequence_length=int(hf_inputs["input_ids"].shape[1]),
+    )
+    k_in = keras_pp.generate_preprocess(
+        {"prompts": [prompt], "images": [np.asarray(image)]}
+    )
+    k_in = {
+        k: ops.convert_to_tensor(v, dtype="int32")
+        if v.dtype != "float32"
+        else ops.convert_to_tensor(v)
+        for k, v in k_in.items()
+    }
+    keras_hidden = ops.convert_to_numpy(keras_backbone(k_in))
+    keras_logits = ops.convert_to_numpy(
+        keras_backbone.token_embedding(
+            ops.convert_to_tensor(keras_hidden), reverse=True
+        )
+    )
+
+    # Compare on non-padded positions only.
+    num_real = int(np.asarray(k_in["padding_mask"]).sum())
+    hf_l = hf_logits[0, :num_real]
+    kh_l = keras_logits[0, :num_real]
+    try:
+        np.testing.assert_allclose(kh_l, hf_l, atol=1e-4, rtol=1e-4)
+        print("  Multimodal logits match (atol=1e-4)")
+    except AssertionError:
+        max_diff = float(np.max(np.abs(kh_l - hf_l)))
+        mean_diff = float(np.mean(np.abs(kh_l - hf_l)))
+        print(f"  Multimodal logits max diff:  {max_diff:.6e}")
+        print(f"  Multimodal logits mean diff: {mean_diff:.6e}")
+        print(traceback.format_exc())
+
+
 def main(_):
     preset = FLAGS.preset
     if preset not in PRESET_MAP:
@@ -418,6 +491,7 @@ def main(_):
     verify_tokenizer(keras_tokenizer, hf_tokenizer)
     verify_preprocessor(keras_tokenizer, hf_processor)
     verify_backbone(keras_backbone, keras_tokenizer, hf_model, hf_tokenizer)
+    verify_multimodal(keras_backbone, keras_tokenizer, hf_model, hf_processor)
 
     # Save preset
     save_dir = f"./{preset}"
