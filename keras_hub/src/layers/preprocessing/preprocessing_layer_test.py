@@ -1,10 +1,14 @@
+from unittest import mock
+
 import numpy as np
 import pytest
+import tensorflow as tf
 
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils import tensor_utils
 
 try:
     import grain
@@ -15,18 +19,12 @@ except ImportError:
 class LabelsLayer(PreprocessingLayer):
     """A layer with the `(x, y, sample_weight)` call signature."""
 
-    def __init__(self, **kwargs):
-        super().__init__(_allow_python_workflow=True, **kwargs)
-
     def call(self, x, y=None, sample_weight=None):
         return {"x": x, "y": y, "sample_weight": sample_weight}
 
 
 class FeaturesLayer(PreprocessingLayer):
     """A layer that takes a single input and no labels."""
-
-    def __init__(self, **kwargs):
-        super().__init__(_allow_python_workflow=True, **kwargs)
 
     def call(self, inputs):
         return {"inputs": inputs}
@@ -99,6 +97,31 @@ class PreprocessingLayerTest(TestCase):
         output = self.layer(x)
         self.assertIs(output["x"], x)
         self.assertIsNone(output["y"])
+
+    def test_python_workflow_is_the_default(self):
+        layer = LabelsLayer()
+        self.assertTrue(layer._allow_python_workflow)
+        self.assertFalse(layer._use_tf_workflow())
+        layer = LabelsLayer(_allow_python_workflow=False)
+        self.assertFalse(layer._allow_python_workflow)
+        self.assertTrue(layer._use_tf_workflow())
+
+    def test_tf_workflow_inside_tf_function(self):
+        layer = LabelsLayer()
+        ds = tf.data.Dataset.from_tensors(0)
+        ds = ds.map(lambda _: tf.constant(layer._use_tf_workflow()))
+        self.assertTrue(ds.get_single_element())
+
+    def test_tf_libs_checked_on_first_tf_workflow_use(self):
+        # Without tensorflow-text, layers can still be constructed and run on
+        # the Python path. The TensorFlow path raises an informative error on
+        # first use rather than at construction time.
+        with mock.patch.object(tensor_utils, "tf_text", None):
+            layer = LabelsLayer()
+            self.assertFalse(layer._use_tf_workflow())
+            layer = LabelsLayer(_allow_python_workflow=False)
+            with self.assertRaisesRegex(ImportError, "tensorflow-text"):
+                layer._use_tf_workflow()
 
     @pytest.mark.skipif(grain is None, reason="grain is not installed")
     def test_grain_map_over_tuple_elements(self):

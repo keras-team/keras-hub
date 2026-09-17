@@ -59,6 +59,13 @@ class SentencePieceTokenizerTest(TestCase):
         self.assertAllEqual(call_output, [6, 5, 3, 4])
         self.assertAllEqual(tokenize_output, [6, 5, 3, 4])
 
+    def test_tokenize_scalar_dtype(self):
+        # An unbatched sequence is dense, so it must come back with the
+        # layer's `compute_dtype` rather than NumPy's default int64.
+        output = self.tokenizer("the quick brown fox.")
+        self.assertLen(output.shape, 1)
+        self.assertDTypeEqual(output, "int32")
+
     def test_dense_output(self):
         input_data = ["the quick brown fox."]
         tokenizer = SentencePieceTokenizer(
