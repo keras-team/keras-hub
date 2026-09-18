@@ -16,6 +16,7 @@ from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
+from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 
 
@@ -38,21 +39,22 @@ def convert_to_comparible_type(x):
     return x
 
 
-def _to_host_numpy(x):
-    """Bring backend tensors in a nested structure back to host numpy.
+def _to_host_leaf(x):
+    """Bring a single data leaf back to host memory.
 
     `tf.data` cannot build a `TypeSpec` for a tensor that lives on an
-    accelerator (e.g. a torch CUDA tensor), so any such leaf is converted
-    before it is handed to `tf.data`. Containers are rebuilt as-is, so
-    non-tensor leaves (for example a plain list of integer labels) keep their
-    original structure.
+    accelerator (e.g. a torch CUDA tensor), so such leaves are converted
+    before they are handed to `tf.data`. Everything else, including plain
+    lists of labels, is passed through unchanged.
+
+    Native `tf` objects are deliberately left alone rather than routed
+    through `_to_grain_leaf`, which calls `RaggedTensor.to_list()`. A ragged
+    leaf such as the `images` entry in `Gemma3CausalLMTest.train_data`
+    becomes a non-rectangular list of lists, which
+    `from_tensor_slices` rejects.
     """
-    if isinstance(x, tuple):
-        return tuple(_to_host_numpy(e) for e in x)
     if isinstance(x, list):
-        return [_to_host_numpy(e) for e in x]
-    if isinstance(x, dict):
-        return {k: _to_host_numpy(v) for k, v in x.items()}
+        return [_to_host_leaf(e) for e in x]
     if isinstance(x, (tf.Tensor, tf.RaggedTensor, np.ndarray)):
         return x
     if ops.is_tensor(x):
@@ -1274,7 +1276,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         preprocessor = task.preprocessor
         # `tf.data` cannot consume tensors that live on an accelerator, so move
         # them back to the host first.
-        ds = tf.data.Dataset.from_tensor_slices(_to_host_numpy(train_data))
+        host_data = _map_leaves(_to_host_leaf, train_data)
+        ds = tf.data.Dataset.from_tensor_slices(host_data)
         ds = ds.batch(batch_size)
         x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
 
@@ -1293,13 +1296,18 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             output_shape = tree.map_structure(lambda x: x.shape, output)
             self.assertAllClose(output_shape, expected_output_shape)
         # With a dataset.
+        # These compare three different execution paths rather than an exact
+        # invariant. Preprocessing such as image resizing runs with different
+        # kernels in the `tf.data` path than in the backend, which diverges
+        # noticeably more on GPU.
+        tol = 1e-2 if running_on_gpu() else 1e-6
         output_ds = task.predict(ds)
-        self.assertAllClose(output, output_ds)
+        self.assertAllClose(output, output_ds, atol=tol, rtol=tol)
         # With split preprocessing.
         task.preprocessor = None
         output_split = task.predict(ds.map(preprocessor))
         task.preprocessor = preprocessor
-        self.assertAllClose(output, output_split)
+        self.assertAllClose(output, output_split, atol=tol, rtol=tol)
 
         # Test fit.
         task.fit(x, y, sample_weight=sw)
