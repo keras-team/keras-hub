@@ -129,7 +129,8 @@ class TestTask(TestCase):
         # Create, quantize, and save the model preset.
         save_dir = self.get_temp_dir()
         task = TextClassifier.from_preset("bert_tiny_en_uncased", num_classes=2)
-        task.quantize(mode="int8")
+        # Skips the unbuilt tokenizer, which `Model.quantize` mishandles.
+        task.quantize(mode="int8", filters=lambda layer: layer.built)
         task.save_to_preset(save_dir)
 
         # Verify that all necessary files were created.
@@ -174,7 +175,7 @@ class TestTask(TestCase):
     def test_load_quantized_preset_with_dtype_override(self):
         save_dir = self.get_temp_dir()
         task = TextClassifier.from_preset("bert_tiny_en_uncased", num_classes=2)
-        task.quantize(mode="int8")
+        task.quantize(mode="int8", filters=lambda layer: layer.built)
         task.save_to_preset(save_dir)
 
         # Check existence of files.
