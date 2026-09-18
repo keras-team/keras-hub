@@ -1,4 +1,3 @@
-import itertools
 import math
 
 import keras
@@ -392,29 +391,38 @@ def _get_window_index(grid_thw, window_patches):
     that patches within a window are contiguous, plus the cumulative
     sequence lengths of each window (`cu_window_seqlens`).
 
-    This is a best-effort reconstruction of `get_vision_window_index` (the
-    HF utility body lives in `vision_utils`, not surfaced by the gatherer)
-    following the well-documented Qwen2.5-VL-style windowing scheme
-    described in the migration report; numerics must still be validated
-    against real weights.
+    The helper pads ragged windows before it removes padding indices.
     """
     all_blocks = []
     offset = 0
     for frames, height, width in grid_thw:
         frames, height, width = int(frames), int(height), int(width)
-        grid = np.arange(height * width).reshape(height, width)
-        # `itertools.product` iterates in the same order as nested
-        # `for t: for h0: for w0:` loops (leftmost argument varies
-        # slowest), so this doesn't change window order.
-        for t, h0, w0 in itertools.product(
-            range(frames),
-            range(0, height, window_patches),
-            range(0, width, window_patches),
-        ):
-            block = grid[
-                h0 : h0 + window_patches, w0 : w0 + window_patches
-            ].reshape(-1)
-            all_blocks.append(block + t * height * width + offset)
+        padded_height = int(np.ceil(height / window_patches) * window_patches)
+        padded_width = int(np.ceil(width / window_patches) * window_patches)
+        num_window_rows = padded_height // window_patches
+        num_window_cols = padded_width // window_patches
+
+        grid = np.full(
+            (frames, padded_height, padded_width), -1, dtype=np.int64
+        )
+        frame_grid = np.arange(height * width).reshape(height, width)
+        grid[:, :height, :width] = frame_grid
+        frame_offsets = np.arange(frames)[:, None, None] * height * width
+        grid = np.where(grid >= 0, grid + frame_offsets, -1)
+
+        blocks = grid.reshape(
+            frames,
+            num_window_rows,
+            window_patches,
+            num_window_cols,
+            window_patches,
+        )
+        blocks = blocks.transpose(0, 1, 3, 2, 4).reshape(
+            -1, window_patches * window_patches
+        )
+        for block in blocks:
+            block = block[block >= 0] + offset
+            all_blocks.append(block)
         offset += frames * height * width
 
     window_index = np.concatenate(all_blocks, axis=0)
