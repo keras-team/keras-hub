@@ -154,10 +154,7 @@ class TransformersPresetLoader(PresetLoader):
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         architecture = self.config["architectures"][0]
         is_classifier = issubclass(cls, ImageClassifier)
-        is_assistant = architecture in (
-            "Gemma4AssistantForCausalLM",
-            "MuseGlimmerAssistantModel",
-        )
+        is_assistant = architecture in ("Gemma4AssistantForCausalLM",)
 
         if hasattr(self.converter, "convert_task_config"):
             task_config = self.converter.convert_task_config(self.config)
@@ -180,7 +177,7 @@ class TransformersPresetLoader(PresetLoader):
         if "ForImageClassification" in architecture:
             kwargs["num_classes"] = len(self.config["id2label"])
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
-        if load_task_weights and hasattr(self.converter, "convert_head"):
+        if load_task_weights:
             with SafetensorLoader(self.preset, prefix="") as loader:
                 self.converter.convert_head(task, loader, self.config)
         return task
