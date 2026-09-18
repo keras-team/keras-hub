@@ -504,7 +504,13 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
             for prompt_str in prompts_list
         ]
 
-        # 5. Pack to fixed length.
+        # 5. Pack to fixed length. `sequence_length` acts as a minimum
+        # pad target — truncating inside an expanded vision span would
+        # desynchronize `vision_indices` from `pixel_values`, so the
+        # packed length grows to fit the longest expanded sequence.
+        sequence_length = max(
+            sequence_length, max(len(s) for s in expanded_sequences)
+        )
         token_ids_ragged = tf.ragged.constant(expanded_sequences, dtype="int32")
         token_ids, padding_mask = self.packer(
             token_ids_ragged,
