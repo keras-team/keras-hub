@@ -8,7 +8,7 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     MuseGlimmerVisionPatchEmbedder,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
-    _get_window_index,
+    _window_layout,
 )
 from keras_hub.src.tests.test_case import TestCase
 
@@ -81,7 +81,7 @@ class MuseGlimmerVisionEncoderTest(TestCase):
 
         output = ops.convert_to_numpy(
             patch_embedder._bilinear_position_embeddings(
-                np.array([[1, 5, 5]], dtype="int32")
+                np.array([[1, 5, 5]], dtype="int32"), num_patches=25
             )
         )[:, 0]
 
@@ -148,70 +148,36 @@ class MuseGlimmerVisionEncoderTest(TestCase):
         self.assertAllClose(sin, expected_sin)
 
     def test_window_index_pads_ragged_windows(self):
-        window_index, cu_window_seqlens = _get_window_index(
-            np.array([[1, 3, 5]], dtype="int32"), window_patches=4
+        window_index, reverse_indices, window_segment_id = _window_layout(
+            ops.convert_to_tensor(np.array([[1, 3, 5]], dtype="int32")),
+            num_patches=15,
+            window_patches=4,
         )
 
-        self.assertAllEqual(
-            window_index,
-            np.array(
-                [
-                    0,
-                    1,
-                    2,
-                    3,
-                    5,
-                    6,
-                    7,
-                    8,
-                    10,
-                    11,
-                    12,
-                    13,
-                    4,
-                    9,
-                    14,
-                ],
-                dtype="int64",
-            ),
+        expected_window_index = np.array(
+            [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 4, 9, 14],
+            dtype="int32",
         )
-        self.assertAllEqual(
-            cu_window_seqlens,
-            np.array([0, 12, 15], dtype="int32"),
-        )
+        self.assertAllEqual(window_index, expected_window_index)
+        self.assertAllEqual(reverse_indices, np.argsort(expected_window_index))
+        self.assertAllEqual(window_segment_id, np.repeat([0, 1], [12, 3]))
 
     def test_window_index_offsets_each_video_frame(self):
-        window_index, cu_window_seqlens = _get_window_index(
-            np.array([[2, 3, 5]], dtype="int32"), window_patches=4
+        window_index, reverse_indices, window_segment_id = _window_layout(
+            ops.convert_to_tensor(np.array([[2, 3, 5]], dtype="int32")),
+            num_patches=30,
+            window_patches=4,
         )
 
         frame_index = np.array(
-            [
-                0,
-                1,
-                2,
-                3,
-                5,
-                6,
-                7,
-                8,
-                10,
-                11,
-                12,
-                13,
-                4,
-                9,
-                14,
-            ],
-            dtype="int64",
+            [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 4, 9, 14],
+            dtype="int32",
         )
+        expected_window_index = np.concatenate([frame_index, frame_index + 15])
+        self.assertAllEqual(window_index, expected_window_index)
+        self.assertAllEqual(reverse_indices, np.argsort(expected_window_index))
         self.assertAllEqual(
-            window_index,
-            np.concatenate([frame_index, frame_index + 15]),
-        )
-        self.assertAllEqual(
-            cu_window_seqlens,
-            np.array([0, 12, 15, 27, 30], dtype="int32"),
+            window_segment_id, np.repeat([0, 1, 2, 3], [12, 3, 12, 3])
         )
 
     def test_get_config(self):

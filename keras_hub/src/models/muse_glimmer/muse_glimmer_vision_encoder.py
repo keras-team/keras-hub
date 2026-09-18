@@ -5,6 +5,44 @@ import numpy as np
 from keras import ops
 
 
+def _per_patch_coordinates(grid_thw, num_patches):
+    """Per-patch `(row, col, height, width, frame_id, frame_start)` via
+    `ops.searchsorted` + gather, no Python loop.
+    """
+    if len(ops.shape(grid_thw)) == 1:
+        grid_thw = ops.expand_dims(grid_thw, axis=0)
+    grid_thw = ops.cast(grid_thw, "int32")
+    t, h, w = grid_thw[:, 0], grid_thw[:, 1], grid_thw[:, 2]
+
+    lengths = t * h * w
+    cumulative = ops.cumsum(lengths)
+    starts = ops.concatenate(
+        [ops.zeros((1,), dtype=cumulative.dtype), cumulative[:-1]]
+    )
+    positions = ops.arange(num_patches, dtype="int32")
+    image_id = ops.cast(
+        ops.searchsorted(cumulative, positions, side="right"), "int32"
+    )
+    local_offset = positions - ops.take(starts, image_id)
+
+    h_per_patch = ops.take(h, image_id)
+    w_per_patch = ops.take(w, image_id)
+    hw_per_patch = h_per_patch * w_per_patch
+    offset_in_frame = ops.mod(local_offset, hw_per_patch)
+    frame_within_image = ops.floor_divide(local_offset, hw_per_patch)
+
+    row = ops.floor_divide(offset_in_frame, w_per_patch)
+    col = ops.mod(offset_in_frame, w_per_patch)
+
+    frame_starts = ops.cumsum(t) - t
+    frame_id = ops.take(frame_starts, image_id) + frame_within_image
+    frame_start = ops.take(starts, image_id) + frame_within_image * (
+        hw_per_patch
+    )
+
+    return row, col, h_per_patch, w_per_patch, frame_id, frame_start
+
+
 class MuseGlimmerVisionRotaryEmbedding(keras.layers.Layer):
     """Axial 2D rotary position embedding for the vision tower.
 
@@ -82,73 +120,69 @@ class MuseGlimmerVisionPatchEmbedder(keras.layers.Layer):
         self.position_embedding_table.build((None,))
         self.built = True
 
-    def _bilinear_position_embeddings(self, grid_thw):
+    def _bilinear_position_embeddings(self, grid_thw, num_patches):
         """Interpolate the learned position table for each patch.
 
         The interpolation uses half-pixel coordinates and zero padding.
         The interpolation matches HuggingFace `grid_sample` behavior.
         """
         gh, gw = self.pos_emb_height, self.pos_emb_width
-        all_embeds = []
-        for t_val, h_val, w_val in grid_thw:
-            t_val, h_val, w_val = int(t_val), int(h_val), int(w_val)
-            h_index = ops.cast(ops.arange(h_val), "float32")
-            w_index = ops.cast(ops.arange(w_val), "float32")
-            h_source = (h_index + 0.5) * gh / h_val - 0.5
-            w_source = (w_index + 0.5) * gw / w_val - 0.5
-            h_floor = ops.floor(h_source)
-            w_floor = ops.floor(w_source)
-            offsets = ops.cast(ops.arange(2), "float32")
+        row, col, h_per_patch, w_per_patch, _, _ = _per_patch_coordinates(
+            grid_thw, num_patches
+        )
+        row = ops.cast(row, "float32")
+        col = ops.cast(col, "float32")
+        h_per_patch = ops.cast(h_per_patch, "float32")
+        w_per_patch = ops.cast(w_per_patch, "float32")
 
-            h_raw_taps = ops.expand_dims(h_floor, -1) + offsets
-            w_raw_taps = ops.expand_dims(w_floor, -1) + offsets
-            h_taps = ops.cast(ops.clip(h_raw_taps, 0, gh - 1), "int32")
-            w_taps = ops.cast(ops.clip(w_raw_taps, 0, gw - 1), "int32")
+        h_source = (row + 0.5) * gh / h_per_patch - 0.5
+        w_source = (col + 0.5) * gw / w_per_patch - 0.5
+        h_floor = ops.floor(h_source)
+        w_floor = ops.floor(w_source)
+        offsets = ops.cast(ops.arange(2), "float32")
 
-            h_distance = ops.abs(
-                ops.expand_dims(h_source, -1)
-                - ops.expand_dims(h_floor, -1)
-                - offsets
-            )
-            w_distance = ops.abs(
-                ops.expand_dims(w_source, -1)
-                - ops.expand_dims(w_floor, -1)
-                - offsets
-            )
-            h_weights = ops.clip(1.0 - h_distance, 0.0, 1.0)
-            w_weights = ops.clip(1.0 - w_distance, 0.0, 1.0)
-            h_weights = h_weights * ops.cast(
-                (h_raw_taps >= 0) & (h_raw_taps <= gh - 1), "float32"
-            )
-            w_weights = w_weights * ops.cast(
-                (w_raw_taps >= 0) & (w_raw_taps <= gw - 1), "float32"
-            )
+        h_raw_taps = ops.expand_dims(h_floor, -1) + offsets
+        w_raw_taps = ops.expand_dims(w_floor, -1) + offsets
+        h_taps = ops.cast(ops.clip(h_raw_taps, 0, gh - 1), "int32")
+        w_taps = ops.cast(ops.clip(w_raw_taps, 0, gw - 1), "int32")
 
-            corner_indices = ops.reshape(
-                ops.expand_dims(ops.expand_dims(h_taps, 1), -1) * gw
-                + ops.expand_dims(ops.expand_dims(w_taps, 0), 2),
-                (-1, 4),
-            )
-            corner_weights = ops.reshape(
-                ops.expand_dims(ops.expand_dims(h_weights, 1), -1)
-                * ops.expand_dims(ops.expand_dims(w_weights, 0), 2),
-                (-1, 4),
-            )
-            patch_embed = ops.sum(
-                self.position_embedding_table(corner_indices)
-                * ops.expand_dims(corner_weights, -1),
-                axis=1,
-            )
-            patch_embed = ops.tile(
-                ops.expand_dims(patch_embed, 0), [t_val, 1, 1]
-            )
-            patch_embed = ops.reshape(patch_embed, (-1, self.hidden_size))
-            all_embeds.append(patch_embed)
-        return ops.concatenate(all_embeds, axis=0)
+        h_distance = ops.abs(
+            ops.expand_dims(h_source, -1)
+            - ops.expand_dims(h_floor, -1)
+            - offsets
+        )
+        w_distance = ops.abs(
+            ops.expand_dims(w_source, -1)
+            - ops.expand_dims(w_floor, -1)
+            - offsets
+        )
+        h_weights = ops.clip(1.0 - h_distance, 0.0, 1.0)
+        w_weights = ops.clip(1.0 - w_distance, 0.0, 1.0)
+        h_weights = h_weights * ops.cast(
+            (h_raw_taps >= 0) & (h_raw_taps <= gh - 1), "float32"
+        )
+        w_weights = w_weights * ops.cast(
+            (w_raw_taps >= 0) & (w_raw_taps <= gw - 1), "float32"
+        )
+
+        corner_indices = ops.reshape(
+            ops.expand_dims(h_taps, -1) * gw + ops.expand_dims(w_taps, 1),
+            (-1, 4),
+        )
+        corner_weights = ops.reshape(
+            ops.expand_dims(h_weights, -1) * ops.expand_dims(w_weights, 1),
+            (-1, 4),
+        )
+        return ops.sum(
+            self.position_embedding_table(corner_indices)
+            * ops.expand_dims(corner_weights, -1),
+            axis=1,
+        )
 
     def call(self, pixel_values, grid_thw):
         embeddings = self.patch_embedding(pixel_values)
-        pos_embeds = self._bilinear_position_embeddings(grid_thw)
+        num_patches = ops.shape(pixel_values)[0]
+        pos_embeds = self._bilinear_position_embeddings(grid_thw, num_patches)
         return embeddings + ops.cast(pos_embeds, embeddings.dtype)
 
     def get_config(self):
@@ -214,7 +248,10 @@ class MuseGlimmerVisionAttention(keras.layers.Layer):
         x = (x * cos_emb) + (_rotate_half(x) * sin_emb)
         return ops.cast(x, x_dtype)
 
-    def call(self, x, position_embeddings, cu_seqlens):
+    def call(self, x, position_embeddings, segment_id):
+        # `segment_id`: shape (seq_len,). Rows only attend within their
+        # own segment (one image for full attention, one window for
+        # window attention).
         seq_len = ops.shape(x)[0]
         q = ops.reshape(
             self.q_proj(x), (seq_len, self.num_heads, self.head_dim)
@@ -234,18 +271,15 @@ class MuseGlimmerVisionAttention(keras.layers.Layer):
         k = ops.transpose(k, (1, 0, 2))
         v = ops.transpose(v, (1, 0, 2))
 
-        cu_np = np.array(cu_seqlens)
-        out_chunks = []
-        for ci in range(len(cu_np) - 1):
-            s, e = int(cu_np[ci]), int(cu_np[ci + 1])
-            q_c, k_c, v_c = q[:, s:e, :], k[:, s:e, :], v[:, s:e, :]
-            sc = ops.matmul(q_c, ops.transpose(k_c, (0, 2, 1)))
-            sc = sc * self._inv_scale
-            sc = ops.cast(
-                ops.softmax(ops.cast(sc, "float32"), axis=-1), v.dtype
-            )
-            out_chunks.append(ops.matmul(sc, v_c))
-        out = ops.concatenate(out_chunks, axis=1)
+        scores = ops.matmul(q, ops.transpose(k, (0, 2, 1)))
+        scores = ops.cast(scores, "float32") * self._inv_scale
+        same_segment = ops.equal(
+            ops.expand_dims(segment_id, 0), ops.expand_dims(segment_id, 1)
+        )
+        neg_inf = ops.cast(float("-inf"), "float32")
+        scores = ops.where(same_segment, scores, neg_inf)
+        probs = ops.cast(ops.softmax(scores, axis=-1), v.dtype)
+        out = ops.matmul(probs, v)
 
         out = ops.transpose(out, (1, 0, 2))
         out = ops.reshape(out, (seq_len, self.hidden_size))
@@ -340,8 +374,8 @@ class MuseGlimmerVisionEncoderLayer(keras.layers.Layer):
         self.mlp.build(input_shape)
         self.built = True
 
-    def call(self, x, position_embeddings, cu_seqlens):
-        x = x + self.attn(self.norm1(x), position_embeddings, cu_seqlens)
+    def call(self, x, position_embeddings, segment_id):
+        x = x + self.attn(self.norm1(x), position_embeddings, segment_id)
         x = x + self.mlp(self.norm2(x))
         return x
 
@@ -358,77 +392,100 @@ class MuseGlimmerVisionEncoderLayer(keras.layers.Layer):
         return config
 
 
-def get_vision_pixel_shuffle_index(grid_thw, merge_size):
-    """Permutation grouping `merge_size x merge_size` spatial blocks.
-
-    Matches `get_vision_pixel_shuffle_index` in `modeling_muse_glimmer.py`
-    exactly (frame-aware for `frames > 1`).
+def _window_layout(grid_thw, num_patches, window_patches):
+    """`window_index`/`reverse_indices`/`window_segment_id` grouping
+    each image's (pre-merge) patch grid into `window_patches x
+    window_patches` windows, for alternating window/full attention.
     """
-    indices = []
-    offset = 0
-    for frames, height, width in grid_thw:
-        frames, height, width = int(frames), int(height), int(width)
-        permutation = np.arange(height * width)
-        permutation = permutation.reshape(
-            height // merge_size, merge_size, width // merge_size, merge_size
-        )
-        permutation = permutation.transpose(0, 2, 1, 3).reshape(-1)
-        if frames > 1:
-            frame_offsets = (np.arange(frames) * height * width).reshape(
-                frames, 1
-            )
-            permutation = (permutation[None, :] + frame_offsets).reshape(-1)
-        indices.append(permutation + offset)
-        offset += frames * height * width
-    return np.concatenate(indices, axis=0)
+    if len(ops.shape(grid_thw)) == 1:
+        grid_thw = ops.expand_dims(grid_thw, axis=0)
+    grid_thw = ops.cast(grid_thw, "int32")
+    t, h, w = grid_thw[:, 0], grid_thw[:, 1], grid_thw[:, 2]
+    m = window_patches
+
+    lengths = t * h * w
+    cumulative = ops.cumsum(lengths)
+    starts = ops.concatenate(
+        [ops.zeros((1,), dtype=cumulative.dtype), cumulative[:-1]]
+    )
+    num_window_cols = ops.floor_divide(w + m - 1, m)
+    blocks_per_frame = ops.floor_divide(h + m - 1, m) * num_window_cols
+    blocks_total = blocks_per_frame * t
+    block_starts = ops.cumsum(blocks_total) - blocks_total
+
+    positions = ops.arange(num_patches, dtype="int32")
+    image_id = ops.cast(
+        ops.searchsorted(cumulative, positions, side="right"), "int32"
+    )
+    local_offset = positions - ops.take(starts, image_id)
+
+    h_p = ops.take(h, image_id)
+    w_p = ops.take(w, image_id)
+    hw_p = h_p * w_p
+    offset_in_frame = ops.mod(local_offset, hw_p)
+    frame_within_image = ops.floor_divide(local_offset, hw_p)
+
+    row = ops.floor_divide(offset_in_frame, w_p)
+    col = ops.mod(offset_in_frame, w_p)
+    block_row = ops.floor_divide(row, m)
+    block_col = ops.floor_divide(col, m)
+    local_row = row - block_row * m
+    local_col = col - block_col * m
+    row_height = ops.minimum(m, h_p - block_row * m)
+    col_width = ops.minimum(m, w_p - block_col * m)
+
+    offset_within_frame_reordered = (
+        block_row * m * w_p
+        + row_height * block_col * m
+        + local_row * col_width
+        + local_col
+    )
+    reverse_indices = ops.cast(
+        ops.take(starts, image_id)
+        + frame_within_image * hw_p
+        + offset_within_frame_reordered,
+        "int32",
+    )
+    window_index = ops.scatter(
+        ops.expand_dims(reverse_indices, -1), positions, (num_patches,)
+    )
+
+    orig_block_id = ops.cast(
+        ops.take(block_starts, image_id)
+        + frame_within_image * ops.take(blocks_per_frame, image_id)
+        + block_row * ops.take(num_window_cols, image_id)
+        + block_col,
+        "int32",
+    )
+    window_segment_id = ops.take(orig_block_id, window_index)
+
+    return window_index, reverse_indices, window_segment_id
 
 
-def _get_window_index(grid_thw, window_patches):
-    """Window-index permutation for alternating window/full attention.
-
-    Groups each image's (pre-merge) patch grid into
-    `window_patches x window_patches` windows and returns a permutation so
-    that patches within a window are contiguous, plus the cumulative
-    sequence lengths of each window (`cu_window_seqlens`).
-
-    The helper pads ragged windows before it removes padding indices.
+def _shuffle_index_positions(grid_thw, num_patches, merge_size):
+    """Pixel-shuffle merge permutation — the same block-transpose as
+    `get_vision_pixel_shuffle_index`, as arithmetic instead of an actual
+    reshape, so it traces without concrete `grid_thw` values.
     """
-    all_blocks = []
-    offset = 0
-    for frames, height, width in grid_thw:
-        frames, height, width = int(frames), int(height), int(width)
-        padded_height = int(np.ceil(height / window_patches) * window_patches)
-        padded_width = int(np.ceil(width / window_patches) * window_patches)
-        num_window_rows = padded_height // window_patches
-        num_window_cols = padded_width // window_patches
+    row, col, _, w_per_patch, _, frame_start = _per_patch_coordinates(
+        grid_thw, num_patches
+    )
+    offset_in_frame = row * w_per_patch + col
+    block_size = merge_size * merge_size
+    num_col_blocks = ops.floor_divide(w_per_patch, merge_size)
+    stride = num_col_blocks * block_size
 
-        grid = np.full(
-            (frames, padded_height, padded_width), -1, dtype=np.int64
-        )
-        frame_grid = np.arange(height * width).reshape(height, width)
-        grid[:, :height, :width] = frame_grid
-        frame_offsets = np.arange(frames)[:, None, None] * height * width
-        grid = np.where(grid >= 0, grid + frame_offsets, -1)
+    block_row = ops.floor_divide(offset_in_frame, stride)
+    remainder = ops.mod(offset_in_frame, stride)
+    block_col = ops.floor_divide(remainder, block_size)
+    remainder = ops.mod(remainder, block_size)
+    sub_row = ops.floor_divide(remainder, merge_size)
+    sub_col = ops.mod(remainder, merge_size)
 
-        blocks = grid.reshape(
-            frames,
-            num_window_rows,
-            window_patches,
-            num_window_cols,
-            window_patches,
-        )
-        blocks = blocks.transpose(0, 1, 3, 2, 4).reshape(
-            -1, window_patches * window_patches
-        )
-        for block in blocks:
-            block = block[block >= 0] + offset
-            all_blocks.append(block)
-        offset += frames * height * width
-
-    window_index = np.concatenate(all_blocks, axis=0)
-    window_sizes = [block.size for block in all_blocks]
-    cu_window_seqlens = np.concatenate([[0], np.cumsum(window_sizes)])
-    return window_index, cu_window_seqlens.astype(np.int32)
+    source_within_frame = (block_row * merge_size + sub_row) * w_per_patch + (
+        block_col * merge_size + sub_col
+    )
+    return frame_start + source_within_frame
 
 
 class MuseGlimmerVisionEncoder(keras.Model):
@@ -550,20 +607,16 @@ class MuseGlimmerVisionEncoder(keras.Model):
             self.ln_post.build((None, self.hidden_size))
         super().build(input_shape)
 
-    def _rot_pos_emb(self, grid_thw):
-        all_freqs = []
-        for t_val, h_val, w_val in grid_thw:
-            t_val, h_val, w_val = int(t_val), int(h_val), int(w_val)
-            row_idx = np.repeat(np.arange(h_val), w_val) + 1
-            col_idx = np.tile(np.arange(w_val), h_val) + 1
-            # HuggingFace flips raster coordinates and adds one before RoPE.
-            positions = ops.array(
-                np.stack([col_idx, row_idx], axis=-1), dtype="int32"
-            )
-            if t_val > 1:
-                positions = ops.tile(positions, (t_val, 1))
-            all_freqs.append(self.rotary_pos_emb.get_freqs(positions))
-        freqs = ops.concatenate(all_freqs, axis=0)
+    def _rot_pos_emb(self, grid_thw, num_patches=None):
+        if num_patches is None:
+            grid_thw_np = ops.convert_to_numpy(grid_thw)
+            if grid_thw_np.ndim == 1:
+                grid_thw_np = grid_thw_np[np.newaxis, :]
+            num_patches = int(np.sum(np.prod(grid_thw_np, axis=-1)))
+
+        row, col, _, _, _, _ = _per_patch_coordinates(grid_thw, num_patches)
+        positions = ops.stack([col + 1, row + 1], axis=-1)
+        freqs = self.rotary_pos_emb.get_freqs(positions)
         cos = self.rotary_pos_emb.recomposition_frequencies(ops.cos(freqs))
         sin = self.rotary_pos_emb.recomposition_frequencies(ops.sin(freqs))
         return cos, sin
@@ -580,41 +633,37 @@ class MuseGlimmerVisionEncoder(keras.Model):
             empty = ops.zeros((0, self.out_hidden_size))
             return ops.expand_dims(empty, axis=0) if batched else empty
 
-        grid_np = np.array(ops.convert_to_numpy(grid_thw))
-        if grid_np.ndim == 1:
-            grid_np = grid_np[np.newaxis, :]
-
-        hidden_states = self.patch_embedder(pixel_values, grid_np)
+        hidden_states = self.patch_embedder(pixel_values, grid_thw)
         hidden_states = self.ln_pre(hidden_states)
 
         window_patches = max(self.window_size // self.patch_size, 1)
-        window_index, cu_window_seqlens = _get_window_index(
-            grid_np, window_patches
+        window_index, reverse_indices, window_segment_id = _window_layout(
+            grid_thw, num_patches, window_patches
         )
         hidden_states = ops.take(hidden_states, window_index, axis=0)
 
-        cos, sin = self._rot_pos_emb(grid_np)
+        _, _, _, _, full_segment_id, _ = _per_patch_coordinates(
+            grid_thw, num_patches
+        )
+        shuffle_index = _shuffle_index_positions(
+            grid_thw, num_patches, self.merge_size
+        )
+
+        cos, sin = self._rot_pos_emb(grid_thw, num_patches)
         cos = ops.take(cos, window_index, axis=0)
         sin = ops.take(sin, window_index, axis=0)
 
-        lengths = []
-        for t_val, h_val, w_val in grid_np:
-            lengths.extend([int(h_val) * int(w_val)] * int(t_val))
-        cu_seqlens = np.concatenate([[0], np.cumsum(lengths)]).astype(np.int32)
-
         for layer, layer_type in zip(self.blocks, self.layer_types):
-            seqlens = (
-                cu_seqlens
+            segment_id = (
+                full_segment_id
                 if layer_type == "full_attention"
-                else cu_window_seqlens
+                else window_segment_id
             )
-            hidden_states = layer(hidden_states, (cos, sin), seqlens)
+            hidden_states = layer(hidden_states, (cos, sin), segment_id)
 
-        reverse_indices = np.argsort(window_index)
         hidden_states = ops.take(hidden_states, reverse_indices, axis=0)
         hidden_states = self.ln_post(hidden_states)
 
-        shuffle_index = get_vision_pixel_shuffle_index(grid_np, self.merge_size)
         hidden_states = ops.take(hidden_states, shuffle_index, axis=0)
         factor = self.merge_size
         dim = self.hidden_size
