@@ -39,6 +39,7 @@ class MixtralBackboneTest(TestCase):
         self.assertTrue(config["output_router_logits"])
         revived = MixtralBackbone.from_config(config)
         self.assertTrue(revived.output_router_logits)
+        self.assertTrue(revived.transformer_layers[0].output_router_logits)
 
     @pytest.mark.large
     def test_saved_model(self):
