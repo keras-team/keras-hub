@@ -6,4 +6,4 @@ __version__ = "0.32.0"
 
 @keras_hub_export("keras_hub.version")
 def version():
-    return __version__ 
+    return __version__
