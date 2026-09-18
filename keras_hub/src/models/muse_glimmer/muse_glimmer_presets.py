@@ -9,13 +9,10 @@ backbone_presets = {
                 "windowed-attention perception encoder, distilled from "
                 "Muse Spark for local agentic use."
             ),
-            "params": 29600000000,
-            "official_name": "MuseGlimmer",
+            "params": 29776626688,
             "path": "muse_glimmer",
         },
-        "kaggle_handle": (
-            "kaggle://keras/muse-glimmer/keras/muse_glimmer_30b/1"
-        ),
+        "kaggle_handle": "kaggle://keras/muse-glimmer/keras/muse_glimmer_30b/1",
     },
     "muse_glimmer_30b_assistant": {
         "metadata": {
@@ -28,12 +25,9 @@ backbone_presets = {
                 "exclusively as a draft model used from the target "
                 "model's generation loop."
             ),
-            "params": 2200000000,
-            "official_name": "MuseGlimmer",
+            "params": 2555985152,
             "path": "muse_glimmer",
         },
-        "kaggle_handle": (
-            "kaggle://keras/muse-glimmer/keras/muse_glimmer_30b_assistant/1"
-        ),
+        "kaggle_handle": "kaggle://keras/muse-glimmer/keras/muse_glimmer_30b_assistant/1",
     },
 }
