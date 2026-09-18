@@ -32,13 +32,14 @@ class MuseGlimmerRMSNorm(keras.layers.Layer):
         self.built = True
 
     def call(self, x):
-        scale = self.scale if self.with_scale else None
-        return ops.rms_normalization(
-            x,
-            scale=scale,
-            axis=-1,
-            epsilon=self.eps,
-        )
+        input_dtype = x.dtype
+        x = ops.cast(x, "float32")
+        mean_squared = ops.mean(ops.square(x), axis=-1, keepdims=True)
+        mean_squared = mean_squared + self.eps
+        x = x * ops.power(mean_squared, -0.5)
+        if self.with_scale:
+            x = x * ops.cast(self.scale, "float32")
+        return ops.cast(x, input_dtype)
 
     def get_config(self):
         config = super().get_config()

@@ -56,10 +56,10 @@ VIDEO_URL = (
     "Big_Buck_Bunny_360_10s_1MB.mp4"
 )
 TEXT_PROMPT = "What is Keras?"
-IMAGE_PROMPT = "Describe this image."
-VIDEO_PROMPT = "Describe this video."
+IMAGE_PROMPT = "<|image_start|><|patch|><|image_end|>Describe this image."
+VIDEO_PROMPT = "<|vid_start|><|video|><|vid_end|>Describe this video."
 
-MAX_NEW_TOKENS = 64
+MAX_NEW_TOKENS = 24
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -80,12 +80,10 @@ def _load_image_asset():
 
 
 def _load_video_asset():
-    """Load a short video and return two frames plus metadata.
+    """Download, decode, and subsample the test video's frames.
 
-    Returns `(frames, video_metadata)` — `video_metadata` carries the real
-    fps/frame-count read from the source container, so the HF video
-    processor doesn't have to guess (it otherwise defaults to `fps=24`
-    with a warning when this isn't provided).
+    Pinned to a small frame count. This keeps `t > 1` after temporal
+    patching, while bounding peak memory for the O(n^2) attention pass.
     """
     try:
         import av
@@ -113,16 +111,22 @@ def _load_video_asset():
         raise RuntimeError(
             "The Muse Glimmer test video has fewer than two frames."
         )
-
-    total_num_frames = len(frames)
+    frames = np.stack(frames)
+    total_num_frames = frames.shape[0]
+    num_frames = 2
+    if total_num_frames > num_frames:
+        indices = np.arange(0, total_num_frames, total_num_frames / num_frames)
+        indices = indices.astype(int)[:num_frames]
+    else:
+        indices = np.arange(total_num_frames)
     video_metadata = VideoMetadata(
         total_num_frames=total_num_frames,
         fps=fps,
-        height=frames[0].shape[0],
-        width=frames[0].shape[1],
-        frames_indices=[0, total_num_frames - 1],
+        height=frames.shape[1],
+        width=frames.shape[2],
+        frames_indices=indices.tolist(),
     )
-    return np.stack([frames[0], frames[-1]]), video_metadata
+    return frames[indices], video_metadata
 
 
 def _load_test_assets():
@@ -142,20 +146,6 @@ def _strip_chat_markers(text):
     for marker in ("<|message|>", "<|eom|>", "<|start|>", "<|eot|>"):
         text = text.replace(marker, "")
     return text
-
-
-def _build_chat_prompt(hf_tokenizer, processor, description, modality):
-    """Render a chat-templated prompt, with its BOS text stripped."""
-    content = [{"type": "text", "text": description}]
-    if modality != "text":
-        content.insert(0, {"type": modality})
-    prompt = processor.apply_chat_template(
-        [{"role": "user", "content": content}],
-        tokenize=False,
-        add_generation_prompt=True,
-        reasoning_strength="low",
-    )
-    return prompt.removeprefix(hf_tokenizer.bos_token)
 
 
 def _build_hf_multimodal_inputs(
@@ -250,12 +240,7 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
     results = {}
 
     processor = AutoProcessor.from_pretrained(hf_preset)
-    text_prompt = _build_chat_prompt(
-        hf_tokenizer, processor, TEXT_PROMPT, modality="text"
-    )
-    results["text_prompt"] = text_prompt
-
-    hf_ids = hf_tokenizer(text_prompt, return_tensors="np")["input_ids"]
+    hf_ids = hf_tokenizer(TEXT_PROMPT, return_tensors="np")["input_ids"]
     results["text_token_ids"] = hf_ids
     with torch.no_grad():
         hf_out = hf_model(
@@ -276,26 +261,20 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         )
 
     raw_image, raw_video, video_metadata = _load_test_assets()
-    image_prompt = _build_chat_prompt(
-        hf_tokenizer, processor, IMAGE_PROMPT, modality="image"
-    )
     results["image"] = _precompute_multimodal_outputs(
         hf_model,
         hf_tokenizer,
         processor,
-        image_prompt,
+        IMAGE_PROMPT,
         raw_image,
         "image",
     )
 
-    video_prompt = _build_chat_prompt(
-        hf_tokenizer, processor, VIDEO_PROMPT, modality="video"
-    )
     results["video"] = _precompute_multimodal_outputs(
         hf_model,
         hf_tokenizer,
         processor,
-        video_prompt,
+        VIDEO_PROMPT,
         raw_video,
         "video",
         video_metadata=video_metadata,
@@ -341,7 +320,7 @@ def _build_keras_multimodal_inputs(keras_model, result):
 def test_token_ids(keras_model, hf_results, label):
     if label == "TEXT":
         hf_ids = hf_results["text_token_ids"]
-        preprocessor_inputs = hf_results["text_prompt"]
+        preprocessor_inputs = TEXT_PROMPT
     else:
         result = hf_results[label.lower()]
         hf_ids = result["input_ids"]
@@ -358,16 +337,16 @@ def test_token_ids(keras_model, hf_results, label):
     keras_ids = ops.convert_to_numpy(keras_preprocessed["token_ids"])
     keras_mask = ops.convert_to_numpy(keras_preprocessed["padding_mask"])
     keras_valid = keras_ids[keras_mask.astype(bool)]
-    print(f"\n  HF token IDs:       {hf_ids[0][:10].tolist()}")
-    print(f"  KerasHub token IDs: {keras_valid[:10].tolist()}")
+    print(f"\nHF token IDs: {hf_ids[0][:10].tolist()}")
+    print(f"KH token IDs: {keras_valid[:10].tolist()}")
     np.testing.assert_array_equal(keras_valid, hf_ids[0])
     print(f" ✓ [{label}] Token IDs match.")
 
 
 def _report_numerics(label, keras_logits, hf_logits):
     abs_diff = np.abs(keras_logits - hf_logits)
-    print(f"\n  {label} logit mean absolute diff: {abs_diff.mean():.6f}")
-    print(f"  {label} logit max absolute diff:  {abs_diff.max():.6f}")
+    print(f"\nlogit mean absolute diff: {abs_diff.mean():.6f}")
+    print(f"logit max absolute diff:  {abs_diff.max():.6f}")
     try:
         np.testing.assert_allclose(
             keras_logits, hf_logits, atol=1e-3, rtol=1e-3
@@ -379,7 +358,7 @@ def _report_numerics(label, keras_logits, hf_logits):
         total = hf_logits.size
         pct = 100.0 * (1.0 - mismatched / total)
         print(
-            f"  [{label}] logits differ beyond tolerance — "
+            f"[{label}] logits differ beyond tolerance — "
             f"matching={pct:.2f}% ({total - mismatched}/{total})."
         )
 
@@ -413,6 +392,7 @@ def test_numerics(keras_model, hf_results, label):
 
     result = hf_results[label.lower()]
     keras_inputs = _build_keras_multimodal_inputs(keras_model, result)
+
     with torch.no_grad():
         keras_logits = ops.convert_to_numpy(keras_model(keras_inputs)).astype(
             np.float32
@@ -424,7 +404,7 @@ def test_generation(keras_model, hf_results, label):
     if label == "TEXT":
         max_length = hf_results["text_token_ids"].shape[1] + MAX_NEW_TOKENS
         keras_output = keras_model.generate(
-            hf_results["text_prompt"], max_length=max_length, strip_prompt=True
+            TEXT_PROMPT, max_length=max_length, strip_prompt=True
         )
         hf_output = hf_results.get("text_generated", "N/A")
     else:
@@ -542,12 +522,11 @@ def _precompute_assistant_multimodal_outputs(
     hf_assistant_model,
     hf_tokenizer,
     processor,
-    prompt_text,
+    prompt,
     media,
     modality,
     video_metadata=None,
 ):
-    prompt = _build_chat_prompt(hf_tokenizer, processor, prompt_text, modality)
     hf_inputs = _build_hf_multimodal_inputs(
         hf_tokenizer, processor, prompt, media, modality, video_metadata
     )
@@ -575,9 +554,7 @@ def _precompute_assistant_hf_outputs(
     hf_target_model, hf_assistant_model, hf_tokenizer, processor
 ):
     """Precompute HF speculative-generation outputs for text/image/video."""
-    text_prompt = _build_chat_prompt(
-        hf_tokenizer, processor, TEXT_PROMPT, modality="text"
-    )
+    text_prompt = TEXT_PROMPT
     hf_text_inputs = hf_tokenizer(text_prompt, return_tensors="pt")
     with torch.no_grad():
         hf_spec_ids = hf_target_model.generate(
@@ -623,13 +600,12 @@ def _precompute_assistant_hf_outputs(
 
 
 def test_assistant_generation(target_preset, kh_assistant, hf_gen_data):
-    print("\n--- Section 3: Speculative generation ---")
-    print("-> Loading KerasHub target model via from_preset(...)...")
+    print("-> Loading KerasHub target model...")
     kh_target = keras_hub.models.MuseGlimmerCausalLM.from_preset(
         f"hf://{target_preset}", dtype="float32"
     )
     kh_target.compile(sampler="greedy")
-
+    print("\n--- Section 3: Speculative generation ---")
     for label, data in hf_gen_data.items():
         kh_output = kh_target.generate(
             data["kh_inputs"],
@@ -682,7 +658,7 @@ def verify_assistant_mode(preset, hf_preset):
     del hf_target_model, hf_assistant_model
     gc.collect()
 
-    print("-> Loading KerasHub model via from_preset(...)...")
+    print("-> Loading KerasHub model...")
     kh_assistant = keras_hub.models.MuseGlimmerAssistantCausalLM.from_preset(
         f"hf://{hf_preset}", dtype="float32"
     )
@@ -736,7 +712,6 @@ def verify_assistant_mode(preset, hf_preset):
     if not FLAGS.skip_generation:
         test_assistant_generation(target_preset, kh_assistant, hf_gen_data)
 
-    # Parity was just verified in float32; always save in bfloat16.
     del kh_assistant
     gc.collect()
     kh_save = keras_hub.models.MuseGlimmerAssistantCausalLM.from_preset(

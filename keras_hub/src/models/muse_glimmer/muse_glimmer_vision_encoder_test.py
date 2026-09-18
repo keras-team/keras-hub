@@ -180,6 +180,40 @@ class MuseGlimmerVisionEncoderTest(TestCase):
             np.array([0, 12, 15], dtype="int32"),
         )
 
+    def test_window_index_offsets_each_video_frame(self):
+        window_index, cu_window_seqlens = _get_window_index(
+            np.array([[2, 3, 5]], dtype="int32"), window_patches=4
+        )
+
+        frame_index = np.array(
+            [
+                0,
+                1,
+                2,
+                3,
+                5,
+                6,
+                7,
+                8,
+                10,
+                11,
+                12,
+                13,
+                4,
+                9,
+                14,
+            ],
+            dtype="int64",
+        )
+        self.assertAllEqual(
+            window_index,
+            np.concatenate([frame_index, frame_index + 15]),
+        )
+        self.assertAllEqual(
+            cu_window_seqlens,
+            np.array([0, 12, 15, 27, 30], dtype="int32"),
+        )
+
     def test_get_config(self):
         encoder = MuseGlimmerVisionEncoder(**self.init_kwargs)
         config = encoder.get_config()
