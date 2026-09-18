@@ -81,40 +81,58 @@ class Qwen2VLVisionAttention(keras.layers.Layer):
         k = ops.transpose(k, (1, 0, 2))
         v = ops.transpose(v, (1, 0, 2))
 
-        # Per-frame attention: mask out cross-segment attention. The score
-        # matrix is computed in chunks over the query axis so peak memory is
-        # (heads, chunk, seq) rather than (heads, seq, seq) — HF avoids the
-        # O(S^2) buffer entirely via flash/varlen kernels or per-segment
-        # torch.split + sdpa.
+        # Per-frame attention: mask out cross-segment attention. For long
+        # sequences the score matrix is computed in fixed-size query chunks
+        # so peak memory is (heads, chunk, seq) rather than (heads, seq,
+        # seq) — HF avoids the O(S^2) buffer via flash/varlen kernels or
+        # per-segment torch.split + sdpa. Chunk starts are clamped so every
+        # slice is exactly `chunk` rows (dynamic slice *sizes* are not
+        # XLA-compilable inside generate_step); the overlapping tail chunk
+        # rewrites identical values.
         chunk = 2048
-        num_chunks = (seq_len + chunk - 1) // chunk
-        out = ops.zeros(
-            (self.num_heads, seq_len, self.head_dim), self.compute_dtype
-        )
 
-        def _attend_chunk(i, out):
-            s = i * chunk
-            n = ops.minimum(seq_len - s, chunk)
-            q_c = ops.slice(q, (0, s, 0), (self.num_heads, n, self.head_dim))
+        def _attend_queries(q_c, seg_c):
+            """(H, chunk, D) queries vs all keys -> (H, chunk, D)."""
             sc = ops.einsum("hid,hjd->hij", q_c, k) * self.scale
             sc = ops.cast(sc, "float32")
-            if segment_ids is not None:
-                seg_q = ops.slice(segment_ids, (s,), (n,))
+            if seg_c is not None:
                 same = ops.equal(
-                    ops.expand_dims(seg_q, axis=1),
+                    ops.expand_dims(seg_c, axis=1),
                     ops.expand_dims(segment_ids, axis=0),
                 )
                 sc = ops.where(ops.expand_dims(same, axis=0), sc, float("-inf"))
             sc = ops.softmax(sc, axis=-1)
             sc = ops.cast(sc, self.compute_dtype)
-            out_c = ops.einsum("hij,hjd->hid", sc, v)  # (H, n, D)
-            hi = ops.repeat(ops.arange(self.num_heads), n)
-            si = ops.tile(s + ops.arange(n), (self.num_heads,))
-            idx = ops.cast(ops.stack([hi, si], axis=1), "int32")
-            upd = ops.reshape(out_c, (-1, self.head_dim))
-            return ops.scatter_update(out, idx, upd)
+            return ops.einsum("hij,hjd->hid", sc, v)
 
-        out = ops.fori_loop(0, num_chunks, _attend_chunk, out)
+        def _full():
+            return _attend_queries(q, segment_ids)
+
+        def _chunked():
+            num_chunks = (seq_len + chunk - 1) // chunk
+            out = ops.zeros(
+                (self.num_heads, seq_len, self.head_dim), self.compute_dtype
+            )
+
+            def _attend_chunk(i, out):
+                s = ops.minimum(i * chunk, seq_len - chunk)
+                q_c = ops.slice(
+                    q, (0, s, 0), (self.num_heads, chunk, self.head_dim)
+                )
+                if segment_ids is None:
+                    seg_c = None
+                else:
+                    seg_c = ops.slice(segment_ids, (s,), (chunk,))
+                out_c = _attend_queries(q_c, seg_c)  # (H, chunk, D)
+                hi = ops.repeat(ops.arange(self.num_heads), chunk)
+                si = ops.tile(s + ops.arange(chunk), (self.num_heads,))
+                idx = ops.cast(ops.stack([hi, si], axis=1), "int32")
+                upd = ops.reshape(out_c, (-1, self.head_dim))
+                return ops.scatter_update(out, idx, upd)
+
+            return ops.fori_loop(0, num_chunks, _attend_chunk, out)
+
+        out = ops.cond(seq_len <= chunk, _full, _chunked)
 
         out = ops.transpose(out, (1, 0, 2))  # (S, H, D)
         out = ops.reshape(out, (seq_len, self.embed_dim))
