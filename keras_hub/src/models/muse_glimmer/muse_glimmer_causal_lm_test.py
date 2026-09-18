@@ -16,8 +16,14 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm import (
 from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm_preprocessor import (  # noqa: E501
     MuseGlimmerCausalLMPreprocessor,
 )
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    MuseGlimmerImageConverter,
+)
 from keras_hub.src.models.muse_glimmer.muse_glimmer_tokenizer import (
     MuseGlimmerTokenizer,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
+    MuseGlimmerVisionEncoder,
 )
 from keras_hub.src.tests.test_case import TestCase
 
@@ -88,6 +94,83 @@ class MuseGlimmerCausalLMTest(TestCase):
         self.assertAllEqual(
             outputs["padding_mask"][:, :5], prompt_ids["padding_mask"][:, :5]
         )
+
+    def test_generate_with_image_under_compiled_backend(self):
+        image_converter = MuseGlimmerImageConverter(
+            patch_size=4,
+            patch_temporal=2,
+            merge_size=2,
+            max_image_tokens=64,
+            scale=1 / 255.0,
+        )
+        tokenizer = self.preprocessor.tokenizer
+        vision_encoder = MuseGlimmerVisionEncoder(
+            num_layers=2,
+            hidden_size=8,
+            num_heads=2,
+            intermediate_size=16,
+            patch_size=4,
+            patch_temporal=2,
+            merge_size=2,
+            pos_emb_height=4,
+            pos_emb_width=4,
+            layer_types=["window_attention", "full_attention"],
+        )
+        backbone = MuseGlimmerBackbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=32,
+            intermediate_dim=32,
+            head_dim=8,
+            sliding_window_size=4,
+            layer_types=["sliding_attention", "full_attention"],
+            vision_encoder=vision_encoder,
+            projector_hidden_dim=16,
+        )
+        causal_lm = MuseGlimmerCausalLM(backbone=backbone, preprocessor=None)
+
+        image = np.random.randint(0, 255, (8, 8, 3)).astype("float32")
+        result = image_converter(image)
+        t, h, w = (int(v) for v in ops.convert_to_numpy(result["grid_thw"]))
+        num_image_tokens = (
+            t
+            * (h // image_converter.merge_size)
+            * (w // image_converter.merge_size)
+        )
+
+        # image_token_id (200092) exceeds this tiny vocab, so mark image
+        # positions with a valid id (0); vision_indices is what matters.
+        sequence_length = 16
+        prefix_ids = ops.convert_to_numpy(tokenizer("airplane"))
+        image_positions = np.arange(num_image_tokens) + len(prefix_ids)
+        token_ids = np.concatenate(
+            [prefix_ids, np.zeros((num_image_tokens,), dtype="int32")]
+        )[:sequence_length]
+        padding_mask = np.ones((sequence_length,), dtype="bool")
+        if len(token_ids) < sequence_length:
+            pad = sequence_length - len(token_ids)
+            token_ids = np.concatenate(
+                [token_ids, np.zeros((pad,), dtype="int32")]
+            )
+            padding_mask[sequence_length - pad :] = False
+        vision_indices = image_positions[
+            image_positions < sequence_length
+        ].astype("int32")
+
+        inputs = {
+            "token_ids": ops.convert_to_tensor(token_ids[None, :]),
+            "padding_mask": ops.convert_to_tensor(padding_mask[None, :]),
+            "pixel_values": ops.expand_dims(result["patches"], axis=0),
+            "image_grid_thw": ops.reshape(result["grid_thw"], (1, 1, 3)),
+            "vision_indices": ops.convert_to_tensor(vision_indices[None, :]),
+        }
+
+        output = causal_lm.generate(
+            inputs, max_length=sequence_length, stop_token_ids=None
+        )
+        self.assertEqual(ops.shape(output["token_ids"]), (1, sequence_length))
 
     def test_early_stopping(self):
         causal_lm = MuseGlimmerCausalLM(**self.init_kwargs)

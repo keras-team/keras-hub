@@ -17,11 +17,7 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_video_converter import (
 )
 from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.models.MuseGlimmerCausalLMPreprocessor")
@@ -110,8 +106,7 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
 
     def _num_merged_tokens(self, grid_thw, merge_size):
         counts = []
-        for t, h, w in np.asarray(grid_thw):
-            t, h, w = int(t), int(h), int(w)
+        for t, h, w in grid_thw:
             counts.append(t * (h // merge_size) * (w // merge_size))
         return counts
 
@@ -162,9 +157,10 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
                 result = self.image_converter(img)
                 pixel_values_list.append(tf.constant(result["patches"]))
                 grid_list.append(tf.constant(result["grid_thw"]))
-            image_grids = np.stack(
-                [np.asarray(g) for g in grid_list[: len(flat_images)]]
-            )
+            image_grids = [
+                [int(val) for val in np.asarray(g)]
+                for g in grid_list[: len(flat_images)]
+            ]
             num_image_tokens = self._num_merged_tokens(
                 image_grids, self.image_converter.merge_size
             )
@@ -186,9 +182,10 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
                 result = self.video_converter(vid)
                 pixel_values_list.append(tf.constant(result["patches"]))
                 grid_list.append(tf.constant(result["grid_thw"]))
-            video_grids = np.stack(
-                [np.asarray(g) for g in grid_list[video_grid_start:]]
-            )
+            video_grids = [
+                [int(val) for val in np.asarray(g)]
+                for g in grid_list[video_grid_start:]
+            ]
             num_video_tokens = self._num_merged_tokens(
                 video_grids, self.video_converter.merge_size
             )
