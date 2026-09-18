@@ -223,6 +223,15 @@ class Qwen2VLCausalLM(CausalLM):
         token_ids = inputs["token_ids"]
         padding_mask = inputs["padding_mask"]
 
+        # `<|endoftext|>` doubles as the pad token and is also a generation
+        # stop token — the sampler's stop check scans the pad region and
+        # would halt immediately. Pad positions are never fed to the model
+        # (masked in prefill, overwritten as tokens are generated), so
+        # re-label them with a benign id.
+        token_ids = ops.where(
+            padding_mask, token_ids, ops.zeros_like(token_ids)
+        )
+
         # Check for multimodal inputs.
         pixel_values = inputs.get("pixel_values", None)
         image_grid_thw = inputs.get("image_grid_thw", None)
