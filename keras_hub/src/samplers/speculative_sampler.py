@@ -19,7 +19,13 @@ class SpeculativeSampler(Sampler):
         (https://arxiv.org/abs/2211.17192) (Leviathan et al., 2022)
 
     The algorithm follows three phases per outer iteration:
-      1. **Draft phase**: The draft model auto-regressively generates K tokens.
+      1. **Draft phase**: `draft_next` is called K times in sequence to
+         produce K candidate tokens. Nothing about this phase requires the
+         draft model itself to be autoregressive: a one-shot block drafter
+         (e.g. a bidirectional block-diffusion assistant) can compute all K
+         candidates in a single forward pass on its first call and simply
+         return the i-th cached candidate on each subsequent call — see
+         `MuseGlimmerCausalLM.generate_step` for this pattern.
       2. **Verify phase**: The target model scores all K+1 positions in one
          parallel forward pass via `verify_next`.
       3. **Accept phase**: Tokens are accepted/rejected via rejection sampling
@@ -27,6 +33,20 @@ class SpeculativeSampler(Sampler):
 
     When `base_sampler` is provided, stochastic rejection sampling is used.
     Otherwise greedy acceptance is used.
+
+    `draft_cache` is opaque to this sampler beyond its outer tuple shape:
+    a 2-tuple `(draft_state, target_cache)`, 3-tuple
+    `(draft_state, target_cache, anchor_pos)`, or 4-tuple
+    `(draft_state, target_cache, anchor_pos, drafter_cache)` gets its
+    `target_cache` slot refreshed with the verified target cache after
+    each cycle, and for the 3-/4-tuple forms `anchor_pos` is advanced to
+    the new cycle-start position. The optional 4th element is fully
+    opaque — carried through unchanged, never inspected or modified here
+    — for a drafter that maintains its own persistent cache across
+    cycles (e.g. `MuseGlimmerCausalLM.generate_step`'s DFlash context
+    cache); `draft_next` alone is responsible for reading and updating
+    it. Any model's `draft_next`/`verify_next` closures may use this
+    convention; the sampler contains no per-model logic.
 
     Args:
         num_speculative_tokens: int. Number of draft tokens per outer
@@ -211,23 +231,24 @@ class SpeculativeSampler(Sampler):
             p_probs = target_probs[:, :k, :]
 
             # Refresh the target cache in draft_cache so the next draft cycle
-            # uses the updated K/V entries. Supports 2-tuple and 3-tuple forms.
-            from keras_hub.src.models.gemma4.gemma4_causal_lm import (
-                Gemma4CausalLM,
-            )
-
-            is_gemma4 = isinstance(model, Gemma4CausalLM)
+            # uses the updated K/V entries. Supports any model whose
+            # draft_cache is a 2-tuple `(draft_state, target_cache)`, a
+            # 3-tuple `(draft_state, target_cache, anchor_pos)`, or a
+            # 4-tuple `(draft_state, target_cache, anchor_pos, drafter_cache)`
+            # — the tuple shape alone identifies the convention, so no
+            # per-model check is needed. The optional 4th element is
+            # opaque to this sampler (e.g. a drafter's own persistent
+            # cache, entirely managed by that model's own `draft_next`);
+            # it is carried through unchanged here.
             if (
-                is_gemma4
-                and has_draft_cache
+                has_draft_cache
                 and has_cache
                 and isinstance(draft_cache, tuple)
                 and len(draft_cache) == 2
             ):
                 current_draft_cache = (current_draft_cache[0], updated_cache)
             elif (
-                is_gemma4
-                and has_draft_cache
+                has_draft_cache
                 and has_cache
                 and isinstance(draft_cache, tuple)
                 and len(draft_cache) == 3
@@ -236,6 +257,18 @@ class SpeculativeSampler(Sampler):
                     current_draft_cache[0],
                     updated_cache,
                     current_draft_cache[2],
+                )
+            elif (
+                has_draft_cache
+                and has_cache
+                and isinstance(draft_cache, tuple)
+                and len(draft_cache) == 4
+            ):
+                current_draft_cache = (
+                    current_draft_cache[0],
+                    updated_cache,
+                    current_draft_cache[2],
+                    current_draft_cache[3],
                 )
 
             # ── Phase 3: Accept / reject via rejection sampling ───────────
@@ -405,13 +438,15 @@ class SpeculativeSampler(Sampler):
                 ops.cast(max_length, "int32"),
             )
 
-            # Update fixed_pos to the new cycle-start position (new_index - 1)
-            # so the next cycle's draft steps share the correct RoPE anchor.
+            # Update anchor_pos to the new cycle-start position
+            # (new_index - 1) so the next cycle's draft steps share the
+            # correct positional anchor. Applies to both the 3-tuple and
+            # 4-tuple draft_cache forms; a 4th element (e.g. a drafter's
+            # own persistent cache) is carried through unchanged.
             if (
-                is_gemma4
-                and has_draft_cache
+                has_draft_cache
                 and isinstance(current_draft_cache, tuple)
-                and len(current_draft_cache) == 3
+                and len(current_draft_cache) in (3, 4)
             ):
                 # Seed the next draft cycle with the target's hidden state
                 # at the accepted position:
@@ -429,7 +464,7 @@ class SpeculativeSampler(Sampler):
                     new_seed_hidden,
                     current_draft_cache[1],
                     new_index - ops.cast(1, "int32"),
-                )
+                ) + current_draft_cache[3:]
 
             return (
                 final_prompt,
