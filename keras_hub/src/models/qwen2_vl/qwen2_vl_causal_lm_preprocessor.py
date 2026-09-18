@@ -420,10 +420,12 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
             images = x.get("images", None)
             videos = x.get("videos", None)
 
-        # Text-only: delegate to the base class entirely.
+        # Text-only: delegate to the base class entirely. The base class
+        # expects bare strings, so unwrap a `{"prompts": ...}` dict first.
         if images is None and videos is None:
+            prompts = x["prompts"] if isinstance(x, dict) else x
             return super().generate_preprocess(
-                x, sequence_length=sequence_length
+                prompts, sequence_length=sequence_length
             )
 
         # Multimodal path.
