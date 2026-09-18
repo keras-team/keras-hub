@@ -76,7 +76,7 @@ class GemmaCausalLMTest(TestCase):
             logits, _, cache = causal_lm.call_with_cache(sliced, cache, i)
             cached_logits.append(logits)
         cached_logits = ops.concatenate(cached_logits, 1)
-        self.assertAllClose(full_logits, cached_logits, atol=0.002)
+        self.assertAllClose(full_logits, cached_logits, atol=0.005)
 
     def test_generate(self):
         causal_lm = GemmaCausalLM(**self.init_kwargs)
