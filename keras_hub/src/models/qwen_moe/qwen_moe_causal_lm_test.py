@@ -70,7 +70,12 @@ class QwenMoeCausalLMTest(TestCase):
         ):
             self.skipTest("`flash_attention` testing requires the Jax backend.")
 
-        with patch("keras.ops.dot_product_attention") as mock_func:
+        # `wraps` runs the real kernel; a bare mock returns a `MagicMock`
+        # that downstream ops reject.
+        with patch(
+            "keras.ops.dot_product_attention",
+            wraps=keras.ops.dot_product_attention,
+        ) as mock_func:
             causal_lm = QwenMoeCausalLM(**self.init_kwargs)
             causal_lm.generate("the quick brown fox")
             if running_on_gpu():
