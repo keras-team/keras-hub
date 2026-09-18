@@ -14,11 +14,7 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
 )
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.layers.MuseGlimmerVideoConverter")
